@@ -1,12 +1,11 @@
 ---
-Address:
-  ENUM:
-    0:
-      Burn: UNIT
-    1:
-      Account:
-        NEWTYPE:
-          TYPENAME: ChainId
+Account:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - owner:
+        OPTION:
+          TYPENAME: Owner
 Amount:
   NEWTYPESTRUCT: U64
 ApplicationDescription:
@@ -458,6 +457,14 @@ PublicKey:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+Recipient:
+  ENUM:
+    0:
+      Burn: UNIT
+    1:
+      Account:
+        NEWTYPE:
+          TYPENAME: Account
 RoundNumber:
   NEWTYPESTRUCT: U64
 RpcMessage:
@@ -522,8 +529,8 @@ SystemEffect:
     0:
       Credit:
         STRUCT:
-          - recipient:
-              TYPENAME: ChainId
+          - account:
+              TYPENAME: Account
           - amount:
               TYPENAME: Amount
     1:
@@ -599,7 +606,7 @@ SystemOperation:
       Transfer:
         STRUCT:
           - recipient:
-              TYPENAME: Address
+              TYPENAME: Recipient
           - amount:
               TYPENAME: Amount
           - user_data:

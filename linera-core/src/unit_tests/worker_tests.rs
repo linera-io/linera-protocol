@@ -25,7 +25,9 @@ use linera_chain::{
     ChainError,
 };
 use linera_execution::{
-    system::{Address, Amount, Balance, SystemChannel, SystemEffect, SystemOperation, UserData},
+    system::{
+        Account, Amount, Balance, Recipient, SystemChannel, SystemEffect, SystemOperation, UserData,
+    },
     ApplicationId, ApplicationRegistry, ChainOwnership, ChannelId, Destination, Effect,
     ExecutionStateView, Operation, Query, Response, SystemExecutionState, SystemQuery,
     SystemResponse, UserApplicationId,
@@ -146,7 +148,7 @@ fn make_block(
 fn make_transfer_block_proposal(
     chain_id: ChainId,
     key_pair: &KeyPair,
-    recipient: Address,
+    recipient: Recipient,
     amount: Amount,
     incoming_messages: Vec<Message>,
     previous_confirmed_block: Option<&Certificate>,
@@ -189,7 +191,7 @@ fn make_certificate<S>(
 async fn make_transfer_certificate<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,
-    recipient: Address,
+    recipient: Recipient,
     amount: Amount,
     incoming_messages: Vec<Message>,
     committee: &Committee,
@@ -216,7 +218,7 @@ async fn make_transfer_certificate<S>(
 async fn make_transfer_certificate_for_epoch<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,
-    recipient: Address,
+    recipient: Recipient,
     amount: Amount,
     incoming_messages: Vec<Message>,
     epoch: Epoch,
@@ -251,15 +253,12 @@ async fn make_transfer_certificate_for_epoch<S>(
         Timestamp::from(0),
     );
     let effects = match recipient {
-        Address::Account(id) => vec![(
+        Recipient::Account(account) => vec![(
             ApplicationId::System,
-            Destination::Recipient(id),
-            Effect::System(SystemEffect::Credit {
-                recipient: id,
-                amount,
-            }),
+            Destination::Recipient(account.chain_id),
+            Effect::System(SystemEffect::Credit { account, amount }),
         )],
-        Address::Burn => Vec::new(),
+        Recipient::Burn => Vec::new(),
     };
     let state_hash = make_state_hash(system_state).await;
     let value = Value::ConfirmedBlock {
@@ -316,7 +315,7 @@ where
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let recipient = Address::Account(ChainId::root(2));
+    let recipient = Recipient::Account(Account::chain(ChainId::root(2)));
     let (_, mut worker) = init_worker_with_chains(
         client,
         vec![
@@ -390,7 +389,7 @@ where
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let recipient = Address::Account(ChainId::root(2));
+    let recipient = Recipient::Account(Account::chain(ChainId::root(2)));
     let (_, mut worker) = init_worker_with_chains(
         client,
         vec![
@@ -563,7 +562,7 @@ where
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let recipient = Address::Account(ChainId::root(2));
+    let recipient = Recipient::Account(Account::chain(ChainId::root(2)));
     let (_, mut worker) = init_worker_with_chains(
         client,
         vec![
@@ -636,7 +635,7 @@ where
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let recipient = Address::Account(ChainId::root(2));
+    let recipient = Recipient::Account(Account::chain(ChainId::root(2)));
     let (committee, mut worker) = init_worker_with_chains(
         client,
         vec![(
@@ -751,7 +750,7 @@ where
 {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
-    let recipient = Address::Account(ChainId::root(2));
+    let recipient = Recipient::Account(Account::chain(ChainId::root(2)));
     let (committee, mut worker) = init_worker_with_chains(
         client,
         vec![
@@ -805,7 +804,7 @@ where
                     ApplicationId::System,
                     Destination::Recipient(ChainId::root(2)),
                     Effect::System(SystemEffect::Credit {
-                        recipient: ChainId::root(2),
+                        account: Account::chain(ChainId::root(2)),
                         amount: Amount::from(1),
                     }),
                 ),
@@ -813,7 +812,7 @@ where
                     ApplicationId::System,
                     Destination::Recipient(ChainId::root(2)),
                     Effect::System(SystemEffect::Credit {
-                        recipient: ChainId::root(2),
+                        account: Account::chain(ChainId::root(2)),
                         amount: Amount::from(2),
                     }),
                 ),
@@ -858,7 +857,7 @@ where
                 ApplicationId::System,
                 Destination::Recipient(ChainId::root(2)),
                 Effect::System(SystemEffect::Credit {
-                    recipient: ChainId::root(2),
+                    account: Account::chain(ChainId::root(2)),
                     amount: Amount::from(3),
                 }),
             )],
@@ -926,7 +925,7 @@ where
         let block_proposal = make_transfer_block_proposal(
             ChainId::root(2),
             &recipient_key_pair,
-            Address::Account(ChainId::root(3)),
+            Recipient::Account(Account::chain(ChainId::root(3))),
             Amount::from(6),
             Vec::new(),
             None,
@@ -938,7 +937,7 @@ where
         let block_proposal = make_transfer_block_proposal(
             ChainId::root(2),
             &recipient_key_pair,
-            Address::Account(ChainId::root(3)),
+            Recipient::Account(Account::chain(ChainId::root(3))),
             Amount::from(5),
             vec![
                 Message {
@@ -950,7 +949,7 @@ where
                         index: 0,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
-                            recipient: ChainId::root(2),
+                            account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(1),
                         }),
                     },
@@ -964,7 +963,7 @@ where
                         index: 1,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
-                            recipient: ChainId::root(2),
+                            account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(2),
                         }),
                     },
@@ -978,7 +977,7 @@ where
                         index: 0,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
-                            recipient: ChainId::root(2),
+                            account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(2), // wrong
                         }),
                     },
@@ -997,7 +996,7 @@ where
         let block_proposal = make_transfer_block_proposal(
             ChainId::root(2),
             &recipient_key_pair,
-            Address::Account(ChainId::root(3)),
+            Recipient::Account(Account::chain(ChainId::root(3))),
             Amount::from(6),
             vec![
                 Message {
@@ -1009,7 +1008,7 @@ where
                         index: 1,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
-                            recipient: ChainId::root(2),
+                            account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(2),
                         }),
                     },
@@ -1023,7 +1022,7 @@ where
                         index: 0,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
-                            recipient: ChainId::root(2),
+                            account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(1),
                         }),
                     },
@@ -1037,7 +1036,7 @@ where
                         index: 0,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
-                            recipient: ChainId::root(2),
+                            account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(3),
                         }),
                     },
@@ -1056,7 +1055,7 @@ where
         let block_proposal = make_transfer_block_proposal(
             ChainId::root(2),
             &recipient_key_pair,
-            Address::Account(ChainId::root(3)),
+            Recipient::Account(Account::chain(ChainId::root(3))),
             Amount::from(6),
             vec![
                 Message {
@@ -1068,7 +1067,7 @@ where
                         index: 0,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
-                            recipient: ChainId::root(2),
+                            account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(3),
                         }),
                     },
@@ -1082,7 +1081,7 @@ where
                         index: 0,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
-                            recipient: ChainId::root(2),
+                            account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(1),
                         }),
                     },
@@ -1096,7 +1095,7 @@ where
                         index: 1,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
-                            recipient: ChainId::root(2),
+                            account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(2),
                         }),
                     },
@@ -1115,7 +1114,7 @@ where
         let block_proposal = make_transfer_block_proposal(
             ChainId::root(2),
             &recipient_key_pair,
-            Address::Account(ChainId::root(3)),
+            Recipient::Account(Account::chain(ChainId::root(3))),
             Amount::from(1),
             vec![Message {
                 application_id: ApplicationId::System,
@@ -1126,7 +1125,7 @@ where
                     index: 0,
                     timestamp: Timestamp::from(0),
                     effect: Effect::System(SystemEffect::Credit {
-                        recipient: ChainId::root(2),
+                        account: Account::chain(ChainId::root(2)),
                         amount: Amount::from(1),
                     }),
                 },
@@ -1147,7 +1146,7 @@ where
                     ApplicationId::System,
                     Destination::Recipient(ChainId::root(3)),
                     Effect::System(SystemEffect::Credit {
-                        recipient: ChainId::root(3),
+                        account: Account::chain(ChainId::root(3)),
                         amount: Amount::from(1),
                     }),
                 )],
@@ -1174,7 +1173,7 @@ where
         let block_proposal = make_transfer_block_proposal(
             ChainId::root(2),
             &recipient_key_pair,
-            Address::Account(ChainId::root(3)),
+            Recipient::Account(Account::chain(ChainId::root(3))),
             Amount::from(3),
             vec![Message {
                 application_id: ApplicationId::System,
@@ -1185,7 +1184,7 @@ where
                     index: 0,
                     timestamp: Timestamp::from(0),
                     effect: Effect::System(SystemEffect::Credit {
-                        recipient: ChainId::root(2),
+                        account: Account::chain(ChainId::root(2)),
                         amount: Amount::from(3),
                     }),
                 },
@@ -1229,7 +1228,7 @@ where
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let recipient = Address::Account(ChainId::root(2));
+    let recipient = Recipient::Account(Account::chain(ChainId::root(2)));
     let (_, mut worker) = init_worker_with_chains(
         client,
         vec![
@@ -1296,7 +1295,7 @@ where
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let recipient = Address::Account(ChainId::root(2));
+    let recipient = Recipient::Account(Account::chain(ChainId::root(2)));
     let (_, mut worker) = init_worker_with_chains(
         client,
         vec![(
@@ -1365,7 +1364,7 @@ where
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let recipient = Address::Account(ChainId::root(2));
+    let recipient = Recipient::Account(Account::chain(ChainId::root(2)));
     let (_, mut worker) = init_worker_with_chains(
         client,
         vec![
@@ -1449,7 +1448,7 @@ where
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Address::Account(ChainId::root(2)),
+        Recipient::Account(Account::chain(ChainId::root(2))),
         Amount::from(5),
         Vec::new(),
         &committee,
@@ -1513,7 +1512,7 @@ where
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Address::Account(ChainId::root(2)),
+        Recipient::Account(Account::chain(ChainId::root(2))),
         Amount::from(5),
         Vec::new(),
         &committee,
@@ -1584,7 +1583,7 @@ where
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &key_pair,
-        Address::Account(ChainId::root(2)),
+        Recipient::Account(Account::chain(ChainId::root(2))),
         Amount::from(1000),
         vec![Message {
             application_id: ApplicationId::System,
@@ -1595,7 +1594,7 @@ where
                 index: 0,
                 timestamp: Timestamp::from(0),
                 effect: Effect::System(SystemEffect::Credit {
-                    recipient: ChainId::root(1),
+                    account: Account::chain(ChainId::root(1)),
                     amount: Amount::from(995),
                 }),
             },
@@ -1737,7 +1736,7 @@ where
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Address::Account(ChainId::root(2)),
+        Recipient::Account(Account::chain(ChainId::root(2))),
         Amount::from(1),
         Vec::new(),
         &committee,
@@ -1816,7 +1815,7 @@ where
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &key_pair,
-        Address::Account(ChainId::root(1)),
+        Recipient::Account(Account::chain(ChainId::root(1))),
         Amount::from(1),
         Vec::new(),
         &committee,
@@ -1928,7 +1927,7 @@ where
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Address::Account(ChainId::root(2)),
+        Recipient::Account(Account::chain(ChainId::root(2))),
         Amount::from(10),
         Vec::new(),
         &committee,
@@ -2043,7 +2042,7 @@ where
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Address::Account(ChainId::root(2)),
+        Recipient::Account(Account::chain(ChainId::root(2))),
         Amount::from(10),
         Vec::new(),
         &committee,
@@ -2112,7 +2111,7 @@ where
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Address::Account(ChainId::root(2)),
+        Recipient::Account(Account::chain(ChainId::root(2))),
         Amount::from(10),
         Vec::new(),
         &committee,
@@ -2242,7 +2241,7 @@ where
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Address::Account(ChainId::root(2)),
+        Recipient::Account(Account::chain(ChainId::root(2))),
         Amount::from(5),
         Vec::new(),
         &committee,
@@ -2281,7 +2280,7 @@ where
     let certificate = make_transfer_certificate(
         ChainDescription::Root(2),
         &recipient_key_pair,
-        Address::Account(ChainId::root(3)),
+        Recipient::Account(Account::chain(ChainId::root(3))),
         Amount::from(1),
         vec![Message {
             application_id: ApplicationId::System,
@@ -2292,7 +2291,7 @@ where
                 index: 0,
                 timestamp: Timestamp::from(0),
                 effect: Effect::System(SystemEffect::Credit {
-                    recipient: ChainId::root(2),
+                    account: Account::chain(ChainId::root(2)),
                     amount: Amount::from(5),
                 }),
             },
@@ -2397,7 +2396,7 @@ where
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
-        Address::Account(ChainId::root(2)), // the recipient chain does not exist
+        Recipient::Account(Account::chain(ChainId::root(2))), // the recipient chain does not exist
         Amount::from(5),
         Vec::new(),
         &committee,
@@ -2598,7 +2597,7 @@ where
                     (
                         ApplicationId::System,
                         Operation::System(SystemOperation::Transfer {
-                            recipient: Address::Account(user_id),
+                            recipient: Recipient::Account(Account::chain(user_id)),
                             amount: Amount::from(2),
                             user_data: UserData::default(),
                         }),
@@ -2622,7 +2621,7 @@ where
                     ApplicationId::System,
                     Destination::Recipient(user_id),
                     Effect::System(SystemEffect::Credit {
-                        recipient: user_id,
+                        account: Account::chain(user_id),
                         amount: Amount::from(2),
                     }),
                 ),
@@ -2842,7 +2841,7 @@ where
                             index: 1,
                             timestamp: Timestamp::from(0),
                             effect: Effect::System(SystemEffect::Credit {
-                                recipient: user_id,
+                                account: Account::chain(user_id),
                                 amount: Amount::from(2),
                             }),
                         },
@@ -3014,7 +3013,7 @@ where
                 operations: vec![(
                     ApplicationId::System,
                     Operation::System(SystemOperation::Transfer {
-                        recipient: Address::Account(admin_id),
+                        recipient: Recipient::Account(Account::chain(admin_id)),
                         amount: Amount::from(1),
                         user_data: UserData::default(),
                     }),
@@ -3027,7 +3026,7 @@ where
                 ApplicationId::System,
                 Destination::Recipient(admin_id),
                 Effect::System(SystemEffect::Credit {
-                    recipient: admin_id,
+                    account: Account::chain(admin_id),
                     amount: Amount::from(1),
                 }),
             )],
@@ -3221,7 +3220,7 @@ where
                 operations: vec![(
                     ApplicationId::System,
                     Operation::System(SystemOperation::Transfer {
-                        recipient: Address::Account(admin_id),
+                        recipient: Recipient::Account(Account::chain(admin_id)),
                         amount: Amount::from(1),
                         user_data: UserData::default(),
                     }),
@@ -3234,7 +3233,7 @@ where
                 ApplicationId::System,
                 Destination::Recipient(admin_id),
                 Effect::System(SystemEffect::Credit {
-                    recipient: admin_id,
+                    account: Account::chain(admin_id),
                     amount: Amount::from(1),
                 }),
             )],
@@ -3381,7 +3380,7 @@ where
                         index: 0,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
-                            recipient: admin_id,
+                            account: Account::chain(admin_id),
                             amount: Amount::from(1),
                         }),
                     },
@@ -3445,7 +3444,7 @@ async fn test_cross_chain_helper() {
     let certificate0 = make_transfer_certificate_for_epoch(
         ChainDescription::Root(0),
         &key_pair0,
-        Address::Account(id1),
+        Recipient::Account(Account::chain(id1)),
         Amount::from(1),
         Vec::new(),
         Epoch::from(0),
@@ -3458,7 +3457,7 @@ async fn test_cross_chain_helper() {
     let certificate1 = make_transfer_certificate_for_epoch(
         ChainDescription::Root(0),
         &key_pair0,
-        Address::Account(id1),
+        Recipient::Account(Account::chain(id1)),
         Amount::from(1),
         Vec::new(),
         Epoch::from(0),
@@ -3471,7 +3470,7 @@ async fn test_cross_chain_helper() {
     let certificate2 = make_transfer_certificate_for_epoch(
         ChainDescription::Root(0),
         &key_pair0,
-        Address::Account(id1),
+        Recipient::Account(Account::chain(id1)),
         Amount::from(1),
         Vec::new(),
         Epoch::from(1),
@@ -3485,7 +3484,7 @@ async fn test_cross_chain_helper() {
     let certificate3 = make_transfer_certificate_for_epoch(
         ChainDescription::Root(0),
         &key_pair0,
-        Address::Account(id1),
+        Recipient::Account(Account::chain(id1)),
         Amount::from(1),
         Vec::new(),
         Epoch::from(0),

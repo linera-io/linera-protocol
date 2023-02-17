@@ -9,7 +9,7 @@ use linera_chain::{
 };
 use linera_core::{data_types::CrossChainRequest, node::NodeError};
 use linera_execution::{
-    system::{Address, SystemChannel, SystemEffect, SystemOperation},
+    system::{Recipient, SystemChannel, SystemEffect, SystemOperation},
     ApplicationDescription, ApplicationId, Destination, Effect, Operation,
 };
 use linera_rpc::RpcMessage;
@@ -26,7 +26,7 @@ fn get_registry() -> Result<Registry> {
     let samples = Samples::new();
     // 1. Record samples for types with custom deserializers.
     // 2. Trace the main entry point(s) + every enum separately.
-    tracer.trace_type::<Address>(&samples)?;
+    tracer.trace_type::<Recipient>(&samples)?;
     tracer.trace_type::<SystemChannel>(&samples)?;
     tracer.trace_type::<SystemOperation>(&samples)?;
     tracer.trace_type::<SystemEffect>(&samples)?;
