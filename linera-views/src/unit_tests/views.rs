@@ -3,11 +3,9 @@
 
 use crate::{
     common::{Batch, Context},
-    dynamo_db::DynamoDbContext,
     memory::MemoryContext,
     queue_view::QueueView,
     rocksdb::RocksdbContext,
-    test_utils::LocalStackTestContext,
     views::{View, ViewError},
 };
 use async_lock::Mutex;
@@ -17,6 +15,9 @@ use std::{
     sync::Arc,
 };
 use tempfile::TempDir;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+use crate::{dynamo_db::DynamoDbContext, test_utils::LocalStackTestContext};
 
 #[tokio::test]
 async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error> {
@@ -29,7 +30,7 @@ async fn test_queue_operations_with_rocksdb_context() -> Result<(), anyhow::Erro
 }
 
 #[tokio::test]
-#[ignore]
+#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
 async fn test_queue_operations_with_dynamodb_context() -> Result<(), anyhow::Error> {
     run_test_queue_operations_test_cases(DynamoDbContextFactory::default()).await
 }
@@ -214,12 +215,14 @@ impl TestContextFactory for RocksdbContextFactory {
     }
 }
 
+#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
 #[derive(Default)]
 struct DynamoDbContextFactory {
     localstack: Option<LocalStackTestContext>,
     table_counter: usize,
 }
 
+#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
 #[async_trait]
 impl TestContextFactory for DynamoDbContextFactory {
     type Context = DynamoDbContext<()>;

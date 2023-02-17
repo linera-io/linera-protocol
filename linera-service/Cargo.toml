@@ -8,6 +8,7 @@ edition = "2021"
 default = ["wasmer", "wasmtime"]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
+aws = ["linera-views/aws", "linera-core/aws", "linera-storage/aws"]
 
 [dependencies]
 anyhow = "1.0.57"

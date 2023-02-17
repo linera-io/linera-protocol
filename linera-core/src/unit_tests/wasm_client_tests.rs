@@ -9,8 +9,7 @@
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
 use crate::client::client_tests::{
-    MakeDynamoDbStoreClient, MakeMemoryStoreClient, MakeRocksdbStoreClient, StoreBuilder,
-    TestBuilder, GUARD,
+    MakeMemoryStoreClient, MakeRocksdbStoreClient, StoreBuilder, TestBuilder, GUARD,
 };
 use fungible::{AccountOwner, SignedTransfer, SignedTransferPayload, Transfer};
 use linera_base::data_types::*;
@@ -23,6 +22,9 @@ use linera_views::views::ViewError;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::BTreeMap, iter};
 use test_log::test;
+
+#[cfg(feature = "aws")]
+use crate::client::client_tests::MakeDynamoDbStoreClient;
 
 #[test(tokio::test)]
 async fn test_memory_create_application() -> Result<(), anyhow::Error> {
@@ -39,8 +41,8 @@ async fn test_rocksdb_create_application() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_create_application() -> Result<(), anyhow::Error> {
     for &wasm_runtime in WasmRuntime::ALL {
         run_test_create_application(MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime))
@@ -129,8 +131,8 @@ async fn test_rocksdb_run_application_with_dependency() -> Result<(), anyhow::Er
     Ok(())
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_run_application_with_dependency() -> Result<(), anyhow::Error> {
     for &wasm_runtime in WasmRuntime::ALL {
         run_test_run_application_with_dependency(MakeDynamoDbStoreClient::with_wasm_runtime(
@@ -251,8 +253,8 @@ async fn test_rocksdb_cross_chain_message() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_cross_chain_message() -> Result<(), anyhow::Error> {
     for &wasm_runtime in WasmRuntime::ALL {
         run_test_cross_chain_message(MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime))

@@ -19,14 +19,17 @@ use linera_execution::{
     system::{Amount, Balance, SystemOperation, UserData},
     ApplicationId, Operation, Query, Response, SystemQuery, SystemResponse, WasmRuntime,
 };
-use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient, Store};
-use linera_views::{test_utils::LocalStackTestContext, views::ViewError};
+use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
+use linera_views::views::ViewError;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
     sync::Arc,
 };
 use test_log::test;
+
+#[cfg(feature = "aws")]
+use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
 
 /// An validator used for testing. "Faulty" validators ignore block proposals (but not
 /// certificates or info queries) and have the wrong initial balance for all chains.
@@ -428,6 +431,7 @@ impl StoreBuilder for MakeRocksdbStoreClient {
     }
 }
 
+#[cfg(feature = "aws")]
 #[derive(Default)]
 pub struct MakeDynamoDbStoreClient {
     instance_counter: usize,
@@ -435,6 +439,7 @@ pub struct MakeDynamoDbStoreClient {
     wasm_runtime: Option<WasmRuntime>,
 }
 
+#[cfg(feature = "aws")]
 impl MakeDynamoDbStoreClient {
     /// Creates a [`MakeDynamoDbStoreClient`] that uses the specified [`WasmRuntime`] to run WASM
     /// applications.
@@ -447,6 +452,7 @@ impl MakeDynamoDbStoreClient {
     }
 }
 
+#[cfg(feature = "aws")]
 #[async_trait]
 impl StoreBuilder for MakeDynamoDbStoreClient {
     type Store = DynamoDbStoreClient;
@@ -474,8 +480,8 @@ async fn test_rocksdb_initiating_valid_transfer() -> Result<(), anyhow::Error> {
     run_test_initiating_valid_transfer(MakeRocksdbStoreClient::default()).await
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_initiating_valid_transfer() -> Result<(), anyhow::Error> {
     run_test_initiating_valid_transfer(MakeDynamoDbStoreClient::default()).await
 }
@@ -522,8 +528,8 @@ async fn test_rocksdb_rotate_key_pair() -> Result<(), anyhow::Error> {
     run_test_rotate_key_pair(MakeRocksdbStoreClient::default()).await
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_rotate_key_pair() -> Result<(), anyhow::Error> {
     run_test_rotate_key_pair(MakeDynamoDbStoreClient::default()).await
 }
@@ -575,8 +581,8 @@ async fn test_rocksdb_transfer_ownership() -> Result<(), anyhow::Error> {
     run_test_transfer_ownership(MakeRocksdbStoreClient::default()).await
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_transfer_ownership() -> Result<(), anyhow::Error> {
     run_test_transfer_ownership(MakeDynamoDbStoreClient::default()).await
 }
@@ -629,8 +635,8 @@ async fn test_rocksdb_share_ownership() -> Result<(), anyhow::Error> {
     run_test_share_ownership(MakeRocksdbStoreClient::default()).await
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_share_ownership() -> Result<(), anyhow::Error> {
     run_test_share_ownership(MakeDynamoDbStoreClient::default()).await
 }
@@ -704,8 +710,8 @@ async fn test_rocksdb_open_chain_then_close_it() -> Result<(), anyhow::Error> {
     run_test_open_chain_then_close_it(MakeRocksdbStoreClient::default()).await
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_open_chain_then_close_it() -> Result<(), anyhow::Error> {
     run_test_open_chain_then_close_it(MakeDynamoDbStoreClient::default()).await
 }
@@ -755,8 +761,8 @@ async fn test_rocksdb_transfer_then_open_chain() -> Result<(), anyhow::Error> {
     run_test_transfer_then_open_chain(MakeRocksdbStoreClient::default()).await
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_transfer_then_open_chain() -> Result<(), anyhow::Error> {
     run_test_transfer_then_open_chain(MakeDynamoDbStoreClient::default()).await
 }
@@ -830,8 +836,8 @@ async fn test_rocksdb_open_chain_then_transfer() -> Result<(), anyhow::Error> {
     run_test_open_chain_then_transfer(MakeRocksdbStoreClient::default()).await
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_open_chain_then_transfer() -> Result<(), anyhow::Error> {
     run_test_open_chain_then_transfer(MakeDynamoDbStoreClient::default()).await
 }
@@ -895,8 +901,8 @@ async fn test_rocksdb_close_chain() -> Result<(), anyhow::Error> {
     run_test_close_chain(MakeRocksdbStoreClient::default()).await
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_close_chain() -> Result<(), anyhow::Error> {
     run_test_close_chain(MakeDynamoDbStoreClient::default()).await
 }
@@ -951,8 +957,8 @@ async fn test_rocksdb_initiating_valid_transfer_too_many_faults() -> Result<(), 
     run_test_initiating_valid_transfer_too_many_faults(MakeRocksdbStoreClient::default()).await
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
     run_test_initiating_valid_transfer_too_many_faults(MakeDynamoDbStoreClient::default()).await
 }
@@ -993,8 +999,8 @@ async fn test_rocksdb_bidirectional_transfer() -> Result<(), anyhow::Error> {
     run_test_bidirectional_transfer(MakeRocksdbStoreClient::default()).await
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
     run_test_bidirectional_transfer(MakeDynamoDbStoreClient::default()).await
 }
@@ -1109,8 +1115,8 @@ async fn test_rocksdb_receiving_unconfirmed_transfer() -> Result<(), anyhow::Err
     run_test_receiving_unconfirmed_transfer(MakeRocksdbStoreClient::default()).await
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
     run_test_receiving_unconfirmed_transfer(MakeDynamoDbStoreClient::default()).await
 }
@@ -1162,8 +1168,8 @@ async fn test_rocksdb_receiving_unconfirmed_transfer_with_lagging_sender_balance
     .await
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_receiving_unconfirmed_transfer_with_lagging_sender_balances(
 ) -> Result<(), anyhow::Error> {
     run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
@@ -1265,8 +1271,8 @@ async fn test_rocksdb_change_voting_rights() -> Result<(), anyhow::Error> {
     run_test_change_voting_rights(MakeRocksdbStoreClient::default()).await
 }
 
+#[cfg(feature = "aws")]
 #[test(tokio::test)]
-#[ignore]
 async fn test_dynamo_db_change_voting_rights() -> Result<(), anyhow::Error> {
     run_test_change_voting_rights(MakeDynamoDbStoreClient::default()).await
 }

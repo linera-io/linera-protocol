@@ -47,11 +47,11 @@ pub mod memory;
 pub mod rocksdb;
 
 /// Helper definitions for DynamoDB storage.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
 pub mod dynamo_db;
 
 /// Helper types for interfacing with a LocalStack instance.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
 pub mod localstack;
 
 /// Helper types for tests.

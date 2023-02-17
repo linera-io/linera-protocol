@@ -5,7 +5,8 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [features]
-test = ["anyhow", "tokio/macros", "tokio/sync", "tokio/parking_lot"]
+test = ["anyhow", "tokio/macros", "tokio/sync", "tokio/parking_lot", "tokio/rt"]
+aws = ["aws-config", "aws-sdk-dynamodb", "aws-sdk-s3", "aws-smithy-http", "aws-types"]
 
 [dependencies]
 async-lock = "2.6.0"
@@ -20,17 +21,17 @@ thiserror = "1.0.31"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 linera-base = { path = "../linera-base" }
-tokio = "1.12.0"
+tokio = "1.22.0"
 anyhow = { version = "1.0.57", optional = true }
 log = "0.4.14"
 http = "0.2.7"
 rand = "0.8.5"
 rocksdb = "0.19.0"
-aws-config = "0.14.0"
-aws-sdk-dynamodb = "0.14.0"
-aws-sdk-s3 = "0.14.0"
-aws-smithy-http = "0.44.0"
-aws-types = "0.14.0"
+aws-config = { version = "0.14.0", optional = true }
+aws-sdk-dynamodb = { version = "0.14.0", optional = true }
+aws-sdk-s3 = { version = "0.14.0", optional = true }
+aws-smithy-http = { version = "0.44.0", optional = true }
+aws-types = { version = "0.14.0", optional = true }
 
 [dev-dependencies]
 linera-views = { path = ".", features = ["test"] }

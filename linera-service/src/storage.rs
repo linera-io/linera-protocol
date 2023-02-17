@@ -5,9 +5,14 @@ use crate::config::GenesisConfig;
 use anyhow::format_err;
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
-use linera_storage::{DynamoDbStoreClient, MemoryStoreClient, RocksdbStoreClient};
-use linera_views::dynamo_db::{TableName, TableStatus};
+use linera_storage::{MemoryStoreClient, RocksdbStoreClient};
 use std::{path::PathBuf, str::FromStr};
+
+#[cfg(feature = "aws")]
+use {
+    linera_storage::DynamoDbStoreClient,
+    linera_views::dynamo_db::{TableName, TableStatus},
+};
 
 /// The description of a storage implementation.
 #[derive(Debug)]
@@ -17,6 +22,7 @@ pub enum StorageConfig {
     Rocksdb {
         path: PathBuf,
     },
+    #[cfg(feature = "aws")]
     DynamoDb {
         table: TableName,
         use_localstack: bool,
@@ -30,6 +36,36 @@ pub trait Runnable<S> {
     async fn run(self, storage: S) -> Result<Self::Output, anyhow::Error>;
 }
 
+#[doc(hidden)]
+#[cfg(feature = "aws")]
+pub trait RunnableJob<Output>:
+    Runnable<MemoryStoreClient, Output = Output>
+    + Runnable<RocksdbStoreClient, Output = Output>
+    + Runnable<DynamoDbStoreClient, Output = Output>
+{
+}
+
+#[cfg(feature = "aws")]
+impl<Output, T> RunnableJob<Output> for T where
+    T: Runnable<MemoryStoreClient, Output = Output>
+        + Runnable<RocksdbStoreClient, Output = Output>
+        + Runnable<DynamoDbStoreClient, Output = Output>
+{
+}
+
+#[doc(hidden)]
+#[cfg(not(feature = "aws"))]
+pub trait RunnableJob<Output>:
+    Runnable<MemoryStoreClient, Output = Output> + Runnable<RocksdbStoreClient, Output = Output>
+{
+}
+
+#[cfg(not(feature = "aws"))]
+impl<Output, T> RunnableJob<Output> for T where
+    T: Runnable<MemoryStoreClient, Output = Output> + Runnable<RocksdbStoreClient, Output = Output>
+{
+}
+
 impl StorageConfig {
     pub async fn run_with_storage<Job, Output>(
         &self,
@@ -38,9 +74,7 @@ impl StorageConfig {
         job: Job,
     ) -> Result<Output, anyhow::Error>
     where
-        Job: Runnable<MemoryStoreClient, Output = Output>
-            + Runnable<RocksdbStoreClient, Output = Output>
-            + Runnable<DynamoDbStoreClient, Output = Output>,
+        Job: RunnableJob<Output>,
     {
         use StorageConfig::*;
         match self {
@@ -60,6 +94,7 @@ impl StorageConfig {
                 config.initialize_store(&mut client).await?;
                 job.run(client).await
             }
+            #[cfg(feature = "aws")]
             DynamoDb {
                 table,
                 use_localstack,
@@ -81,6 +116,7 @@ impl StorageConfig {
 
 const MEMORY: &str = "memory";
 const ROCKSDB: &str = "rocksdb:";
+#[cfg(feature = "aws")]
 const DYNAMO_DB: &str = "dynamodb:";
 
 impl FromStr for StorageConfig {
@@ -95,6 +131,7 @@ impl FromStr for StorageConfig {
                 path: s.to_string().into(),
             });
         }
+        #[cfg(feature = "aws")]
         if let Some(s) = input.strip_prefix(DYNAMO_DB) {
             let mut parts = s.splitn(2, ':');
             let table = parts
@@ -132,6 +169,13 @@ fn test_storage_config_from_str() {
             path: "foo.db".into()
         }
     );
+    assert!(StorageConfig::from_str("memory_").is_err());
+    assert!(StorageConfig::from_str("rocksdb_foo.db").is_err());
+}
+
+#[cfg(feature = "aws")]
+#[test]
+fn test_aws_storage_config_from_str() {
     assert_eq!(
         StorageConfig::from_str("dynamodb:table").unwrap(),
         StorageConfig::DynamoDb {
@@ -153,8 +197,6 @@ fn test_storage_config_from_str() {
             use_localstack: true,
         }
     );
-    assert!(StorageConfig::from_str("memory_").is_err());
-    assert!(StorageConfig::from_str("rocksdb_foo.db").is_err());
     assert!(StorageConfig::from_str("dynamodb").is_err());
     assert!(StorageConfig::from_str("dynamodb:").is_err());
     assert!(StorageConfig::from_str("dynamodb:1").is_err());
