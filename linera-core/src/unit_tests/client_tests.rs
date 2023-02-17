@@ -149,22 +149,17 @@ where
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.0.lock().await;
-        let result = async move {
-            let value = validator
-                .state
-                .recent_value(&certificate.value.value_hash)
-                .ok_or(NodeError::MissingCertificateValue)?
-                .clone();
-            let full_cert = certificate
-                .with_value(value)
-                .ok_or(WorkerError::InvalidLiteCertificate)?;
-            let response = validator
-                .state
-                .fully_handle_certificate(full_cert, vec![])
-                .await?;
-            Ok(response)
-        }
-        .await;
+        let result = match validator.state.recent_value(&certificate.value.value_hash) {
+            None => Err(NodeError::MissingCertificateValue),
+            Some(value) => match certificate.with_value(value.clone()) {
+                None => Err(WorkerError::InvalidLiteCertificate.into()),
+                Some(full_cert) => validator
+                    .state
+                    .fully_handle_certificate(full_cert, vec![])
+                    .await
+                    .map_err(NodeError::from),
+            },
+        };
         sender.send(result)
     }
 

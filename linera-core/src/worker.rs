@@ -407,7 +407,7 @@ where
     async fn process_confirmed_block(
         &mut self,
         certificate: Certificate,
-        mut chain: ChainStateView<Client::Context>,
+        blob_certificates: &[Certificate],
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let (block, effects, state_hash) = match &certificate.value {
             Value::ConfirmedBlock {
@@ -417,6 +417,31 @@ where
             } => (block, effects.clone(), *state_hash),
             _ => panic!("Expecting a confirmation certificate"),
         };
+        let mut chain = self.storage.load_active_chain(block.chain_id).await?;
+        // Find all certificates containing bytecode used when executing this block.
+        let blob_hashes: HashSet<_> = chain
+            .bytecode_for_block(block)
+            .await?
+            .into_values()
+            .map(|bytecode_location| bytecode_location.certificate_hash)
+            .collect();
+        for cert in blob_certificates {
+            ensure!(
+                blob_hashes.contains(&cert.hash),
+                WorkerError::UnneededCertificate {
+                    certificate_hash: cert.hash
+                }
+            );
+        }
+        // Write the certificates so that the bytecode is available during execution.
+        for cert in blob_certificates {
+            if let Err(ViewError::NotFound(_)) = self.storage.read_certificate(cert.hash).await {
+                // TODO(#443): We can't check the certificate's signatures, because it might be
+                // very old, with a committee that's not trusted anymore. We should store the
+                // blob without signatures.
+                self.storage.write_certificate(cert.clone()).await?;
+            }
+        }
         // Check that the chain is active and ready for this confirmation.
         let tip = chain.tip_state.get();
         if tip.next_block_height < block.height {
@@ -489,7 +514,6 @@ where
     async fn process_validated_block(
         &mut self,
         certificate: Certificate,
-        mut chain: ChainStateView<Client::Context>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let (block, round, effects, state_hash) = match &certificate.value {
             Value::ValidatedBlock {
@@ -502,6 +526,7 @@ where
         };
         // Check that the chain is active and ready for this confirmation.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
+        let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         let epoch = chain
             .execution_state
             .system
@@ -765,34 +790,13 @@ where
         blob_certificates: Vec<Certificate>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, certificate);
-        let block = certificate.value.block();
-        let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        // Find all certificates containing bytecode used when executing this block.
-        let blob_hashes = match &certificate.value {
-            Value::ValidatedBlock { .. } => HashSet::new(),
-            Value::ConfirmedBlock { .. } => chain
-                .bytecode_for_block(certificate.value.block())
-                .await?
-                .into_values()
-                .map(|bytecode_location| bytecode_location.certificate_hash)
-                .collect(),
-        };
-        for cert in &blob_certificates {
+        if matches!(certificate.value, Value::ValidatedBlock { .. }) {
             ensure!(
-                blob_hashes.contains(&cert.hash),
+                blob_certificates.is_empty(),
                 WorkerError::UnneededCertificate {
-                    certificate_hash: cert.hash
+                    certificate_hash: blob_certificates[0].hash,
                 }
             );
-        }
-        // Write the certificates so that the bytecode is available during execution.
-        for cert in &blob_certificates {
-            if let Err(ViewError::NotFound(_)) = self.storage.read_certificate(cert.hash).await {
-                // TODO(#443): We can't check the certificate's signatures, because it might be
-                // very old, with a committee that's not trusted anymore. We should store the
-                // blob without signatures.
-                self.storage.write_certificate(cert.clone()).await?;
-            }
         }
         let certificates_to_cache: Vec<_> = blob_certificates
             .iter()
@@ -803,14 +807,13 @@ where
         let (info, actions) = match &certificate.value {
             Value::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                let info = self
-                    .process_validated_block(certificate.clone(), chain)
-                    .await?;
+                let info = self.process_validated_block(certificate.clone()).await?;
                 (info, NetworkActions::default())
             }
             Value::ConfirmedBlock { .. } => {
                 // Execute the confirmed block.
-                self.process_confirmed_block(certificate, chain).await?
+                self.process_confirmed_block(certificate, &blob_certificates)
+                    .await?
             }
         };
         for cert in certificates_to_cache {
