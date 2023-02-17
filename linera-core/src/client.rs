@@ -960,7 +960,7 @@ where
     }
 
     /// Send tokens to a chain.
-    pub async fn transfer_to_chain(
+    pub async fn transfer_to_account(
         &mut self,
         owner: Option<Owner>,
         amount: Amount,
@@ -1271,7 +1271,7 @@ where
     /// Send money to a chain.
     /// Do not check balance. (This may block the client)
     /// Do not confirm the transaction.
-    pub async fn transfer_to_chain_unsafe_unconfirmed(
+    pub async fn transfer_to_account_unsafe_unconfirmed(
         &mut self,
         owner: Option<Owner>,
         amount: Amount,

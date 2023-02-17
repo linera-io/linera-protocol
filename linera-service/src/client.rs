@@ -593,7 +593,7 @@ where
                 info!("Starting transfer");
                 let time_start = Instant::now();
                 let certificate = chain_client
-                    .transfer_to_chain(
+                    .transfer_to_account(
                         /* TODO */ None,
                         amount,
                         Account::chain(recipient),
