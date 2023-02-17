@@ -23,7 +23,7 @@ use linera_execution::{
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::views::{HashableContainerView, ViewError};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;
 
 #[cfg(feature = "aws")]
@@ -138,6 +138,7 @@ where
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(publisher_key_pair.public().into()),
         balance: Balance::from(0),
+        balances: BTreeMap::new(),
         timestamp: Timestamp::from(1),
         registry: ApplicationRegistry::default(),
     };
@@ -259,6 +260,7 @@ where
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(creator_key_pair.public().into()),
         balance: Balance::from(0),
+        balances: BTreeMap::new(),
         timestamp: Timestamp::from(2),
         registry: ApplicationRegistry::default(),
     };

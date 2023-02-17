@@ -234,6 +234,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         committees: [(epoch, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(key_pair.public().into()),
         balance,
+        balances: BTreeMap::new(),
         timestamp: Timestamp::from(0),
         registry: ApplicationRegistry::default(),
     };
@@ -507,6 +508,7 @@ where
             committees: [(epoch, committee.clone())].into_iter().collect(),
             ownership: ChainOwnership::single(key_pair.public().into()),
             balance,
+            balances: BTreeMap::new(),
             timestamp: Timestamp::from(block_0_time),
             registry: ApplicationRegistry::default(),
         };
@@ -824,6 +826,7 @@ where
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public().into()),
                 balance: Balance::from(3),
+                balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
@@ -867,6 +870,7 @@ where
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public().into()),
                 balance: Balance::from(0),
+                balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
@@ -1155,6 +1159,7 @@ where
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(recipient_key_pair.public().into()),
                     balance: Balance::from(0),
+                    balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
                     registry: ApplicationRegistry::default(),
                 })
@@ -2523,6 +2528,7 @@ where
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(2),
+                balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
@@ -2630,6 +2636,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(0),
+                balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
@@ -2682,6 +2689,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(0),
+                balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
@@ -2871,6 +2879,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public().into()),
                 balance: Balance::from(2),
+                balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
@@ -3030,6 +3039,7 @@ where
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public().into()),
                 balance: Balance::from(2),
+                balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
@@ -3078,6 +3088,7 @@ where
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(0),
+                balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
@@ -3235,6 +3246,7 @@ where
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public().into()),
                 balance: Balance::from(2),
+                balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
@@ -3304,6 +3316,7 @@ where
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(0),
+                balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })
@@ -3387,6 +3400,7 @@ where
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public().into()),
                 balance: Balance::from(1),
+                balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
             })

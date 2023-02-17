@@ -56,6 +56,7 @@ where
             committees,
             ownership,
             balance,
+            balances,
             timestamp,
             registry,
         } = state;
@@ -79,6 +80,12 @@ where
         view.system.committees.set(committees);
         view.system.ownership.set(ownership);
         view.system.balance.set(balance);
+        for (owner, balance) in balances {
+            view.system
+                .balances
+                .insert(&owner, balance)
+                .expect("insertion of balances should not fail");
+        }
         view.system.timestamp.set(timestamp);
         view.system
             .registry
