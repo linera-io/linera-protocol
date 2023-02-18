@@ -16,7 +16,7 @@ use std::{
 };
 use tempfile::TempDir;
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+#[cfg(feature = "aws")]
 use crate::{dynamo_db::DynamoDbContext, test_utils::LocalStackTestContext};
 
 #[tokio::test]
@@ -30,7 +30,7 @@ async fn test_queue_operations_with_rocksdb_context() -> Result<(), anyhow::Erro
 }
 
 #[tokio::test]
-#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+#[cfg(feature = "aws")]
 async fn test_queue_operations_with_dynamodb_context() -> Result<(), anyhow::Error> {
     run_test_queue_operations_test_cases(DynamoDbContextFactory::default()).await
 }
@@ -215,14 +215,14 @@ impl TestContextFactory for RocksdbContextFactory {
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+#[cfg(feature = "aws")]
 #[derive(Default)]
 struct DynamoDbContextFactory {
     localstack: Option<LocalStackTestContext>,
     table_counter: usize,
 }
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+#[cfg(feature = "aws")]
 #[async_trait]
 impl TestContextFactory for DynamoDbContextFactory {
     type Context = DynamoDbContext<()>;

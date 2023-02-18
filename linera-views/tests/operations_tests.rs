@@ -15,7 +15,7 @@ use std::{
     sync::Arc,
 };
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+#[cfg(feature = "aws")]
 use linera_views::{dynamo_db::DynamoDbClient, test_utils::LocalStackTestContext};
 
 #[cfg(test)]
@@ -98,7 +98,7 @@ async fn test_ordering_rocksdb() {
     test_ordering_keys(key_value_operation).await;
 }
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+#[cfg(feature = "aws")]
 #[tokio::test]
 async fn test_ordering_dynamodb() {
     let localstack = LocalStackTestContext::new().await.unwrap();

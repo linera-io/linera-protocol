@@ -30,7 +30,7 @@ use std::{
     sync::Arc,
 };
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+#[cfg(feature = "aws")]
 use linera_views::{dynamo_db::DynamoDbContext, test_utils::LocalStackTestContext};
 
 #[allow(clippy::type_complexity)]
@@ -124,13 +124,13 @@ impl StateStore for RocksdbTestStore {
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+#[cfg(feature = "aws")]
 pub struct DynamoDbTestStore {
     localstack: LocalStackTestContext,
     accessed_chains: BTreeSet<usize>,
 }
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+#[cfg(feature = "aws")]
 impl DynamoDbTestStore {
     pub async fn new() -> Result<Self, anyhow::Error> {
         Ok(DynamoDbTestStore {
@@ -140,7 +140,7 @@ impl DynamoDbTestStore {
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+#[cfg(feature = "aws")]
 #[async_trait]
 impl StateStore for DynamoDbTestStore {
     type Context = DynamoDbContext<usize>;
@@ -678,7 +678,7 @@ async fn test_views_in_rocksdb() {
 }
 
 #[tokio::test]
-#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+#[cfg(feature = "aws")]
 async fn test_views_in_dynamo_db() -> Result<(), anyhow::Error> {
     let mut store = DynamoDbTestStore::new().await?;
     let config = TestConfig::default();
