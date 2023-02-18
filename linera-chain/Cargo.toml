@@ -17,7 +17,7 @@ linera-views = { path = "../linera-views" }
 log = "0.4.14"
 serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.31"
-tokio = "1.12.0"
+tokio = "1.25.0"
 
 [dev-dependencies]
 linera-base = { path = "../linera-base", features = ["test"] }
