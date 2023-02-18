@@ -32,7 +32,7 @@ parse_duration = "2.1.1"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.68"
 structopt = "0.3.23"
-tokio = "1.12.0"
+tokio = "1.25.0"
 tokio-stream = "0.1.11"
 tonic = "0.8"
 
@@ -47,7 +47,7 @@ linera-views = { path = "../linera-views", features = ["test"] }
 proptest = "1.0.0"
 tempfile = "3.2.0"
 test-strategy = "0.2.0"
-tokio = { version = "1.12.0", features = ["full", "test-util"] }
+tokio = { version = "1.25.0", features = ["full", "test-util"] }
 
 [[bin]]
 name = "client"
