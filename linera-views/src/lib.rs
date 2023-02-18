@@ -47,11 +47,11 @@ pub mod memory;
 pub mod rocksdb;
 
 /// Helper definitions for DynamoDB storage.
-#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+#[cfg(feature = "aws")]
 pub mod dynamo_db;
 
 /// Helper types for interfacing with a LocalStack instance.
-#[cfg(all(not(target_arch = "wasm32"), feature = "aws"))]
+#[cfg(feature = "aws")]
 pub mod localstack;
 
 /// Helper types for tests.
@@ -66,3 +66,6 @@ pub use {async_trait::async_trait, generic_array, serde, sha2};
 #[doc(hidden)]
 #[cfg(not(target_arch = "wasm32"))]
 pub use linera_base::crypto;
+
+#[cfg(all(feature = "aws", target_arch = "wasm32"))]
+compile_error!("Cannot build AWS features for the WASM target");
