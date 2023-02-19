@@ -312,7 +312,7 @@ where
             assert_eq!(view.queue.read_front(10).await.unwrap(), vec![7]);
         }
         if config.with_map {
-            assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
+            assert_eq!(view.map.get("Hello").await.unwrap(), Some(5));
         }
         if config.with_set {
             assert!(view.set.contains(&42).await.unwrap());
@@ -364,7 +364,7 @@ where
             assert_eq!(view.queue.read_front(10).await.unwrap(), Vec::<u64>::new());
         }
         if config.with_map {
-            assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), None);
+            assert_eq!(view.map.get("Hello").await.unwrap(), None);
         }
         if config.with_set {
             assert!(!view.set.contains(&42).await.unwrap());
@@ -454,8 +454,8 @@ where
             view.queue.push_back(13);
         }
         if config.with_map {
-            assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
-            assert_eq!(view.map.get(&"Hi".to_string()).await.unwrap(), None);
+            assert_eq!(view.map.get("Hello").await.unwrap(), Some(5));
+            assert_eq!(view.map.get("Hi").await.unwrap(), None);
         }
         if config.with_set {
             assert!(view.set.contains(&42).await.unwrap());
@@ -542,14 +542,14 @@ where
             let mut view = store.load(1).await.unwrap();
             let value = view
                 .map
-                .get_mut_or_default(&"Geia".to_string())
+                .get_mut_or_default("Geia")
                 .await
                 .unwrap();
             assert_eq!(*value, 0);
             *value = 42;
             let value = view
                 .map
-                .get_mut_or_default(&"Geia".to_string())
+                .get_mut_or_default("Geia")
                 .await
                 .unwrap();
             assert_eq!(*value, 42);
@@ -557,13 +557,13 @@ where
         }
         {
             let view = store.load(1).await.unwrap();
-            assert_eq!(view.map.get(&"Geia".to_string()).await.unwrap(), Some(42));
+            assert_eq!(view.map.get("Geia").await.unwrap(), Some(42));
         }
         {
             let mut view = store.load(1).await.unwrap();
             let value = view
                 .map
-                .get_mut_or_default(&"Geia".to_string())
+                .get_mut_or_default("Geia")
                 .await
                 .unwrap();
             assert_eq!(*value, 42);
@@ -571,7 +571,7 @@ where
             view.rollback();
             let value = view
                 .map
-                .get_mut_or_default(&"Geia".to_string())
+                .get_mut_or_default("Geia")
                 .await
                 .unwrap();
             assert_eq!(*value, 42);
@@ -583,7 +583,7 @@ where
             view.map.insert(&"Konnichiwa".to_string(), 5).unwrap();
             let value = view
                 .map
-                .get_mut(&"Konnichiwa".to_string())
+                .get_mut("Konnichiwa")
                 .await
                 .unwrap()
                 .unwrap();
@@ -593,7 +593,7 @@ where
         {
             let view = store.load(1).await.unwrap();
             assert_eq!(
-                view.map.get(&"Konnichiwa".to_string()).await.unwrap(),
+                view.map.get("Konnichiwa").await.unwrap(),
                 Some(6)
             );
         }
@@ -734,7 +734,7 @@ where
     {
         let view = store.load(1).await.unwrap();
         assert_eq!(view.queue.front().await.unwrap(), Some(8));
-        assert_eq!(view.map.get(&"Hello".to_string()).await.unwrap(), Some(5));
+        assert_eq!(view.map.get("Hello").await.unwrap(), Some(5));
         assert_eq!(
             view.collection.indices().await.unwrap(),
             vec!["hola".to_string()]
