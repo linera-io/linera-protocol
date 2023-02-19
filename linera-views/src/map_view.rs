@@ -111,7 +111,11 @@ where
     I: Serialize,
 {
     /// Set or insert a value.
-    pub fn insert(&mut self, index: &I, value: V) -> Result<(), ViewError> {
+    pub fn insert<Q>(&mut self, index: &Q, value: V) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
         *self.hash.get_mut() = None;
         let short_key = C::derive_short_key(index)?;
         self.updates.insert(short_key, Update::Set(value));
@@ -119,7 +123,11 @@ where
     }
 
     /// Remove a value.
-    pub fn remove(&mut self, index: &I) -> Result<(), ViewError> {
+    pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
         *self.hash.get_mut() = None;
         let short_key = C::derive_short_key(index)?;
         if self.was_cleared {
