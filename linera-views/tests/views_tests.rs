@@ -319,11 +319,7 @@ where
         }
         if config.with_collection {
             {
-                let subview = view
-                    .collection
-                    .load_entry_mut("hola")
-                    .await
-                    .unwrap();
+                let subview = view.collection.load_entry_mut("hola").await.unwrap();
                 subview.push(17);
                 subview.push(18);
                 assert_eq!(
@@ -340,11 +336,7 @@ where
                     .unwrap();
                 assert_eq!(count, 1);
             }
-            let subview = view
-                .collection
-                .try_load_entry("hola")
-                .await
-                .unwrap();
+            let subview = view.collection.try_load_entry("hola").await.unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
         }
     };
@@ -370,17 +362,9 @@ where
             assert!(!view.set.contains(&42).await.unwrap());
         }
         if config.with_collection {
-            let subview = view
-                .collection
-                .try_load_entry("hola")
-                .await
-                .unwrap();
+            let subview = view.collection.try_load_entry("hola").await.unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), Vec::<u32>::new());
-            let subview = view
-                .collection2
-                .load_entry_mut("ciao")
-                .await
-                .unwrap();
+            let subview = view.collection2.load_entry_mut("ciao").await.unwrap();
             let subsubview = subview.load_entry_mut("!").await.unwrap();
             subsubview.set(3);
             assert_eq!(subsubview.get(), &3);
@@ -405,11 +389,7 @@ where
             view.set.remove(&59).unwrap();
         }
         if config.with_collection {
-            let subview = view
-                .collection
-                .load_entry_mut("hola")
-                .await
-                .unwrap();
+            let subview = view.collection.load_entry_mut("hola").await.unwrap();
             subview.push(17);
             subview.push(18);
         }
@@ -462,22 +442,14 @@ where
             assert!(!view.set.contains(&59).await.unwrap());
         }
         if config.with_collection {
-            let subview = view
-                .collection
-                .try_load_entry("hola")
-                .await
-                .unwrap();
+            let subview = view.collection.try_load_entry("hola").await.unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
         }
         if config.with_flush {
             view.save().await.unwrap();
         }
         if config.with_collection {
-            let subview = view
-                .collection2
-                .load_entry_mut("ciao")
-                .await
-                .unwrap();
+            let subview = view.collection2.load_entry_mut("ciao").await.unwrap();
             let subsubview = subview.try_load_entry("!").await.unwrap();
             assert!(subview.try_load_entry("!").await.is_err());
             assert_eq!(subsubview.get(), &3);
@@ -503,17 +475,9 @@ where
         let mut view = store.load(1).await.unwrap();
         if config.with_collection {
             {
-                let mut subview = view
-                    .collection4
-                    .try_load_entry_mut("hola")
-                    .await
-                    .unwrap();
+                let mut subview = view.collection4.try_load_entry_mut("hola").await.unwrap();
                 assert_eq!(subview.read_front(10).await.unwrap(), Vec::<u64>::new());
-                assert!(view
-                    .collection4
-                    .try_load_entry_mut("hola")
-                    .await
-                    .is_err());
+                assert!(view.collection4.try_load_entry_mut("hola").await.is_err());
                 if config.with_queue {
                     subview.push_back(13);
                     assert_eq!(subview.front().await.unwrap(), Some(13));
@@ -523,35 +487,19 @@ where
                 }
             }
             {
-                let subview = view
-                    .collection4
-                    .try_load_entry("hola")
-                    .await
-                    .unwrap();
+                let subview = view.collection4.try_load_entry("hola").await.unwrap();
                 assert_eq!(subview.count(), 0);
-                assert!(view
-                    .collection4
-                    .try_load_entry("hola")
-                    .await
-                    .is_ok());
+                assert!(view.collection4.try_load_entry("hola").await.is_ok());
             }
         }
     }
     if config.with_map {
         {
             let mut view = store.load(1).await.unwrap();
-            let value = view
-                .map
-                .get_mut_or_default("Geia")
-                .await
-                .unwrap();
+            let value = view.map.get_mut_or_default("Geia").await.unwrap();
             assert_eq!(*value, 0);
             *value = 42;
-            let value = view
-                .map
-                .get_mut_or_default("Geia")
-                .await
-                .unwrap();
+            let value = view.map.get_mut_or_default("Geia").await.unwrap();
             assert_eq!(*value, 42);
             view.save().await.unwrap();
         }
@@ -561,19 +509,11 @@ where
         }
         {
             let mut view = store.load(1).await.unwrap();
-            let value = view
-                .map
-                .get_mut_or_default("Geia")
-                .await
-                .unwrap();
+            let value = view.map.get_mut_or_default("Geia").await.unwrap();
             assert_eq!(*value, 42);
             *value = 43;
             view.rollback();
-            let value = view
-                .map
-                .get_mut_or_default("Geia")
-                .await
-                .unwrap();
+            let value = view.map.get_mut_or_default("Geia").await.unwrap();
             assert_eq!(*value, 42);
         }
     }
@@ -581,31 +521,19 @@ where
         {
             let mut view = store.load(1).await.unwrap();
             view.map.insert("Konnichiwa", 5).unwrap();
-            let value = view
-                .map
-                .get_mut("Konnichiwa")
-                .await
-                .unwrap()
-                .unwrap();
+            let value = view.map.get_mut("Konnichiwa").await.unwrap().unwrap();
             *value = 6;
             view.save().await.unwrap();
         }
         {
             let view = store.load(1).await.unwrap();
-            assert_eq!(
-                view.map.get("Konnichiwa").await.unwrap(),
-                Some(6)
-            );
+            assert_eq!(view.map.get("Konnichiwa").await.unwrap(), Some(6));
         }
     }
     {
         let mut view = store.load(1).await.unwrap();
         if config.with_collection {
-            let subview = view
-                .collection
-                .try_load_entry("hola")
-                .await
-                .unwrap();
+            let subview = view.collection.try_load_entry("hola").await.unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), Vec::<u32>::new());
         }
         if config.with_queue {
@@ -702,11 +630,7 @@ where
         let mut view = store.load(1).await.unwrap();
         view.queue.push_back(8);
         view.map.insert("Hello", 5).unwrap();
-        let subview = view
-            .collection
-            .load_entry_mut("hola")
-            .await
-            .unwrap();
+        let subview = view.collection.load_entry_mut("hola").await.unwrap();
         subview.push(17);
         view.save().await.unwrap();
     }
@@ -714,11 +638,7 @@ where
         let mut view = store.load(1).await.unwrap();
         view.queue.push_back(7);
         view.map.insert("Hello", 4).unwrap();
-        let subview = view
-            .collection
-            .load_entry_mut("DobryDen")
-            .await
-            .unwrap();
+        let subview = view.collection.load_entry_mut("DobryDen").await.unwrap();
         subview.push(16);
         view.rollback();
         view.save().await.unwrap();

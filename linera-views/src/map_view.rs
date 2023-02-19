@@ -5,11 +5,10 @@ use crate::{
     common::{Batch, Context, HashOutput, KeyIterable, KeyValueIterable, Update},
     views::{HashableView, Hasher, View, ViewError},
 };
-use std::borrow::Borrow;
 use async_lock::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
+use std::{borrow::Borrow, collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
 
 /// Key tags to create the sub-keys of a MapView on top of the base key.
 #[repr(u8)]

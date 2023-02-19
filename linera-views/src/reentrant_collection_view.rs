@@ -8,6 +8,7 @@ use crate::{
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
+    borrow::Borrow,
     collections::{btree_map, BTreeMap},
     fmt::Debug,
     io::Write,
@@ -16,7 +17,6 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::{Mutex, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
-use std::borrow::Borrow;
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, possibly several subviews at a time.

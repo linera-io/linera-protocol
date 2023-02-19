@@ -8,8 +8,7 @@ use crate::{
 use async_lock::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
-use std::borrow::Borrow;
+use std::{borrow::Borrow, collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
 
 /// Key tags to create the sub-keys of a SetView on top of the base key.
 #[repr(u8)]

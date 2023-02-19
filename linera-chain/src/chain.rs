@@ -129,10 +129,7 @@ where
             .communication_states
             .load_entry_mut(&application_id)
             .await?;
-        let outbox = communication_state
-            .outboxes
-            .load_entry_mut(&target)
-            .await?;
+        let outbox = communication_state.outboxes.load_entry_mut(&target).await?;
         let updated = outbox.mark_messages_as_received(height).await?;
         if updated && outbox.queue.count() == 0 {
             communication_state.outboxes.remove_entry(&target)?;
@@ -285,10 +282,7 @@ where
             .communication_states
             .load_entry_mut(&application_id)
             .await?;
-        let inbox = communication_state
-            .inboxes
-            .load_entry_mut(origin)
-            .await?;
+        let inbox = communication_state.inboxes.load_entry_mut(origin).await?;
         for event in events {
             inbox.add_event(event).await.map_err(|error| match error {
                 InboxError::ViewError(error) => ChainError::ViewError(error),

@@ -9,13 +9,13 @@ use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
+    borrow::Borrow,
     collections::{btree_map, BTreeMap},
     fmt::Debug,
     io::Write,
     marker::PhantomData,
     mem,
 };
-use std::borrow::Borrow;
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, one subview at a time.
