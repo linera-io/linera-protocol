@@ -435,12 +435,10 @@ where
         }
         // Write the certificates so that the bytecode is available during execution.
         for cert in blob_certificates {
-            if let Err(ViewError::NotFound(_)) = self.storage.read_certificate(cert.hash).await {
-                // TODO(#443): We can't check the certificate's signatures, because it might be
-                // very old, with a committee that's not trusted anymore. We should store the
-                // blob without signatures.
-                self.storage.write_certificate(cert.clone()).await?;
-            }
+            // TODO(#443): We can't check the certificate's signatures, because it might be
+            // very old, with a committee that's not trusted anymore. We should store the
+            // blob without signatures.
+            self.storage.write_certificate(cert.clone()).await?;
         }
         // Check that the chain is active and ready for this confirmation.
         let tip = chain.tip_state.get();
