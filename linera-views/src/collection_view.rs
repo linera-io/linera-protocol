@@ -10,7 +10,6 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     collections::{btree_map, BTreeMap},
-    fmt::Debug,
     io::Write,
     marker::PhantomData,
     mem,
@@ -18,7 +17,6 @@ use std::{
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, one subview at a time.
-#[derive(Debug)]
 pub struct CollectionView<C, I, W> {
     context: C,
     was_cleared: bool,
@@ -65,7 +63,7 @@ impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Debug + Clone + Serialize + DeserializeOwned,
+    I: Send + Sync + Clone + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
     fn context(&self) -> &C {
@@ -144,8 +142,8 @@ impl<C, I, W> CollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
-    W: View<C> + Sync,
+    I: Serialize,
+    W: View<C>,
 {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
         self.context.base_tag_index(KeyTag::Index as u8, index)
@@ -247,6 +245,14 @@ where
     }
 
     /// Mark the entry so that it is removed in the next flush
+    pub async fn reset_entry_to_default(&mut self, index: I) -> Result<(), ViewError> {
+        *self.hash.get_mut() = None;
+        let view = self.load_entry_mut(index).await?;
+        view.clear();
+        Ok(())
+    }
+
+    /// Mark the entry so that it is removed in the next flush
     pub fn remove_entry(&mut self, index: I) -> Result<(), ViewError> {
         *self.hash.get_mut() = None;
         let short_key = C::derive_short_key(&index)?;
@@ -256,25 +262,6 @@ where
             self.updates.get_mut().insert(short_key, Update::Removed);
         }
         Ok(())
-    }
-
-    /// Mark the entry so that it is removed in the next flush
-    pub async fn reset_entry_to_default(&mut self, index: I) -> Result<(), ViewError> {
-        *self.hash.get_mut() = None;
-        let view = self.load_entry_mut(index).await?;
-        view.clear();
-        Ok(())
-    }
-
-    /// Return the list of indices in the collection.
-    pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
-        let mut indices = Vec::new();
-        self.for_each_index(|index: I| {
-            indices.push(index);
-            Ok(())
-        })
-        .await?;
-        Ok(indices)
     }
 
     /// Obtain the extra data.
@@ -287,7 +274,26 @@ impl<C, I, W> CollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Clone + Debug + Sync + Send + Serialize + DeserializeOwned,
+    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    W: View<C> + Sync,
+{
+    /// Return the list of indices in the collection.
+    pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
+        let mut indices = Vec::new();
+        self.for_each_index(|index: I| {
+            indices.push(index);
+            Ok(())
+        })
+        .await?;
+        Ok(indices)
+    }
+}
+
+impl<C, I, W> CollectionView<C, I, W>
+where
+    C: Context + Send,
+    ViewError: From<C::Error>,
+    I: Clone + Sync + Send + Serialize + DeserializeOwned,
     W: View<C> + Sync,
 {
     /// Execute a function on each serialized index (aka key). Keys are visited in a
@@ -352,7 +358,7 @@ impl<C, I, W> HashableView<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
+    I: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
     W: HashableView<C> + Send + Sync + 'static,
 {
     type Hasher = sha2::Sha512;
