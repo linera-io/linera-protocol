@@ -9,6 +9,7 @@ use async_lock::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
+use std::borrow::Borrow;
 
 /// Key tags to create the sub-keys of a SetView on top of the base key.
 #[repr(u8)]
@@ -109,7 +110,11 @@ where
     I: Serialize,
 {
     /// Set or insert a value.
-    pub fn insert(&mut self, index: &I) -> Result<(), ViewError> {
+    pub fn insert<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
         *self.hash.get_mut() = None;
         let short_key = C::derive_short_key(index)?;
         self.updates.insert(short_key, Update::Set(()));
@@ -117,7 +122,11 @@ where
     }
 
     /// Remove a value.
-    pub fn remove(&mut self, index: &I) -> Result<(), ViewError> {
+    pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
         *self.hash.get_mut() = None;
         let short_key = C::derive_short_key(index)?;
         if self.was_cleared {
@@ -138,10 +147,14 @@ impl<C, I> SetView<C, I>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    I: Serialize,
 {
     /// Return true if the given index exists in the set.
-    pub async fn contains(&self, index: &I) -> Result<bool, ViewError> {
+    pub async fn contains<Q>(&self, index: &Q) -> Result<bool, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
         let short_key = C::derive_short_key(index)?;
         if let Some(update) = self.updates.get(&short_key) {
             let value = match update {
@@ -159,7 +172,14 @@ where
             Some(_) => Ok(true),
         }
     }
+}
 
+impl<C, I> SetView<C, I>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+{
     /// Return the list of indices in the set.
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::<I>::new();
