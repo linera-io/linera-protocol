@@ -5,6 +5,7 @@ use crate::{
     common::{Batch, Context, HashOutput, KeyIterable, KeyValueIterable, Update},
     views::{HashableView, Hasher, View, ViewError},
 };
+use std::borrow::Borrow;
 use async_lock::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -143,7 +144,11 @@ where
     V: Clone + Sync + Serialize + DeserializeOwned + 'static,
 {
     /// Read the value at the given position, if any.
-    pub async fn get(&self, index: &I) -> Result<Option<V>, ViewError> {
+    pub async fn get<Q>(&self, index: &Q) -> Result<Option<V>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Sync + Clone + Send + Serialize + DeserializeOwned + ?Sized,
+    {
         let short_key = C::derive_short_key(index)?;
         if let Some(update) = self.updates.get(&short_key) {
             let value = match update {
@@ -172,7 +177,11 @@ where
     }
 
     /// Obtain a mutable reference to a value at a given position if available
-    pub async fn get_mut(&mut self, index: &I) -> Result<Option<&mut V>, ViewError> {
+    pub async fn get_mut<Q>(&mut self, index: &Q) -> Result<Option<&mut V>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Sync + Clone + Send + Serialize + DeserializeOwned + ?Sized,
+    {
         let short_key = C::derive_short_key(index)?;
         self.load_value(&short_key).await?;
         if let Some(update) = self.updates.get_mut(&short_key.clone()) {
@@ -338,7 +347,11 @@ where
 {
     /// Obtain a mutable reference to a value at a given position.
     /// Default value if the index is missing.
-    pub async fn get_mut_or_default(&mut self, index: &I) -> Result<&mut V, ViewError> {
+    pub async fn get_mut_or_default<Q>(&mut self, index: &Q) -> Result<&mut V, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Sync + Clone + Send + Serialize + DeserializeOwned + ?Sized,
+    {
         let short_key = C::derive_short_key(index)?;
         use std::collections::btree_map::Entry;
 
