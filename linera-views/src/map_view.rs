@@ -140,14 +140,14 @@ impl<C, I, V> MapView<C, I, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
-    V: Clone + Sync + Serialize + DeserializeOwned + 'static,
+    I: Serialize,
+    V: Clone + DeserializeOwned + 'static,
 {
     /// Read the value at the given position, if any.
     pub async fn get<Q>(&self, index: &Q) -> Result<Option<V>, ViewError>
     where
         I: Borrow<Q>,
-        Q: Sync + Send + Serialize + ?Sized,
+        Q: Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
         if let Some(update) = self.updates.get(&short_key) {
@@ -180,7 +180,7 @@ where
     pub async fn get_mut<Q>(&mut self, index: &Q) -> Result<Option<&mut V>, ViewError>
     where
         I: Borrow<Q>,
-        Q: Sync + Send + Serialize + ?Sized,
+        Q: Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
         self.load_value(&short_key).await?;
@@ -193,7 +193,15 @@ where
         }
         Ok(None)
     }
+}
 
+impl<C, I, V> MapView<C, I, V>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    V: Clone + Sync + Serialize + DeserializeOwned + 'static,
+{
     /// Return the list of indices in the map.
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::<I>::new();
@@ -342,8 +350,8 @@ impl<C, I, V> MapView<C, I, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
-    V: Clone + Sync + Default + Serialize + DeserializeOwned + 'static,
+    I: Serialize,
+    V: Default + DeserializeOwned + 'static,
 {
     /// Obtain a mutable reference to a value at a given position.
     /// Default value if the index is missing.
