@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     collections::{btree_map, BTreeMap},
+    fmt::Debug,
     io::Write,
     marker::PhantomData,
     mem,
@@ -17,6 +18,7 @@ use std::{
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, one subview at a time.
+#[derive(Debug)]
 pub struct CollectionView<C, I, W> {
     context: C,
     was_cleared: bool,
@@ -63,7 +65,7 @@ impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Clone + Serialize + DeserializeOwned,
+    I: Send + Sync + Debug + Clone + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
     fn context(&self) -> &C {
@@ -161,9 +163,9 @@ where
 
     /// Obtain a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
-    pub async fn load_entry_mut(&mut self, index: I) -> Result<&mut W, ViewError> {
+    pub async fn load_entry_mut(&mut self, index: &I) -> Result<&mut W, ViewError> {
         *self.hash.get_mut() = None;
-        let short_key = C::derive_short_key(&index)?;
+        let short_key = C::derive_short_key(index)?;
         match self.updates.get_mut().entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
@@ -200,8 +202,8 @@ where
 
     /// Same as `load_entry_mut` but for read-only access. May fail if one subview is
     /// already being visited.
-    pub async fn try_load_entry(&self, index: I) -> Result<ReadGuardedView<W>, ViewError> {
-        let short_key = C::derive_short_key(&index)?;
+    pub async fn try_load_entry(&self, index: &I) -> Result<ReadGuardedView<W>, ViewError> {
+        let short_key = C::derive_short_key(index)?;
         let mut updates = self
             .updates
             .try_write()
@@ -245,7 +247,7 @@ where
     }
 
     /// Mark the entry so that it is removed in the next flush
-    pub async fn reset_entry_to_default(&mut self, index: I) -> Result<(), ViewError> {
+    pub async fn reset_entry_to_default(&mut self, index: &I) -> Result<(), ViewError> {
         *self.hash.get_mut() = None;
         let view = self.load_entry_mut(index).await?;
         view.clear();
@@ -253,9 +255,9 @@ where
     }
 
     /// Mark the entry so that it is removed in the next flush
-    pub fn remove_entry(&mut self, index: I) -> Result<(), ViewError> {
+    pub fn remove_entry(&mut self, index: &I) -> Result<(), ViewError> {
         *self.hash.get_mut() = None;
-        let short_key = C::derive_short_key(&index)?;
+        let short_key = C::derive_short_key(index)?;
         if self.was_cleared {
             self.updates.get_mut().remove(&short_key);
         } else {
@@ -274,7 +276,7 @@ impl<C, I, W> CollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
     W: View<C> + Sync,
 {
     /// Return the list of indices in the collection.
@@ -293,7 +295,7 @@ impl<C, I, W> CollectionView<C, I, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Clone + Sync + Send + Serialize + DeserializeOwned,
+    I: Clone + Debug + Sync + Send + Serialize + DeserializeOwned,
     W: View<C> + Sync,
 {
     /// Execute a function on each serialized index (aka key). Keys are visited in a
@@ -358,7 +360,7 @@ impl<C, I, W> HashableView<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
+    I: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
     W: HashableView<C> + Send + Sync + 'static,
 {
     type Hasher = sha2::Sha512;
@@ -373,7 +375,7 @@ where
                 hasher.update_with_bcs_bytes(&indices.len())?;
                 for index in indices {
                     hasher.update_with_bcs_bytes(&index)?;
-                    let view = self.load_entry_mut(index).await?;
+                    let view = self.load_entry_mut(&index).await?;
                     let hash = view.hash().await?;
                     hasher.write_all(hash.as_ref())?;
                 }
@@ -395,7 +397,7 @@ where
                 hasher.update_with_bcs_bytes(&indices.len())?;
                 for index in indices {
                     hasher.update_with_bcs_bytes(&index)?;
-                    let view = self.try_load_entry(index).await?;
+                    let view = self.try_load_entry(&index).await?;
                     let hash = view.hash().await?;
                     hasher.write_all(hash.as_ref())?;
                 }

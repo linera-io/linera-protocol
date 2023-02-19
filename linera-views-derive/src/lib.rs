@@ -289,7 +289,7 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
                 async fn #field_name(&self, #index_name: #index_ident) -> Result<#entry_name<C>, async_graphql::Error> {
                     Ok(#entry_name {
                         #index_name: #index_name.clone(),
-                        guard: self.#field_name.try_load_entry(#index_name).await?,
+                        guard: self.#field_name.try_load_entry(&#index_name).await?,
                     })
                 }
             };
@@ -747,7 +747,7 @@ pub mod tests {
                 ) -> Result<SomeOtherViewEntry<C>, async_graphql::Error> {
                     Ok(SomeOtherViewEntry {
                         string: string.clone(),
-                        guard: self.collection.try_load_entry(string).await?,
+                        guard: self.collection.try_load_entry(&string).await?,
                     })
                 }
                 async fn set(&self) -> Result<Vec<HashSet<usize>>, async_graphql::Error> {

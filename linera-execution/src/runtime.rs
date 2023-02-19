@@ -313,7 +313,7 @@ where
         let state = self
             .execution_state_mut()
             .simple_users
-            .try_load_entry_mut(self.application_id())
+            .try_load_entry_mut(&self.application_id())
             .await?
             .get()
             .to_vec();
@@ -324,7 +324,7 @@ where
         let view = self
             .execution_state_mut()
             .view_users
-            .try_load_entry_mut(self.application_id())
+            .try_load_entry_mut(&self.application_id())
             .await?;
         self.active_view_user_states_mut()
             .insert(self.application_id(), view);
@@ -421,7 +421,7 @@ where
         let view = self
             .execution_state_mut()
             .simple_users
-            .try_load_entry_mut(self.application_id())
+            .try_load_entry_mut(&self.application_id())
             .await?;
         let state = view.get().to_vec();
         // Remember the view. This will prevent reentrancy.
