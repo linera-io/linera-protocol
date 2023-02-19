@@ -15,6 +15,7 @@ use std::{
     marker::PhantomData,
     mem,
 };
+use std::borrow::Borrow;
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, one subview at a time.
@@ -163,7 +164,11 @@ where
 
     /// Obtain a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
-    pub async fn load_entry_mut(&mut self, index: &I) -> Result<&mut W, ViewError> {
+    pub async fn load_entry_mut<Q>(&mut self, index: &Q) -> Result<&mut W, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
         *self.hash.get_mut() = None;
         let short_key = C::derive_short_key(index)?;
         match self.updates.get_mut().entry(short_key.clone()) {
@@ -202,7 +207,11 @@ where
 
     /// Same as `load_entry_mut` but for read-only access. May fail if one subview is
     /// already being visited.
-    pub async fn try_load_entry(&self, index: &I) -> Result<ReadGuardedView<W>, ViewError> {
+    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
         let short_key = C::derive_short_key(index)?;
         let mut updates = self
             .updates
@@ -247,7 +256,11 @@ where
     }
 
     /// Mark the entry so that it is removed in the next flush
-    pub async fn reset_entry_to_default(&mut self, index: &I) -> Result<(), ViewError> {
+    pub async fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
         *self.hash.get_mut() = None;
         let view = self.load_entry_mut(index).await?;
         view.clear();
@@ -255,7 +268,11 @@ where
     }
 
     /// Mark the entry so that it is removed in the next flush
-    pub fn remove_entry(&mut self, index: &I) -> Result<(), ViewError> {
+    pub fn remove_entry<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
         *self.hash.get_mut() = None;
         let short_key = C::derive_short_key(index)?;
         if self.was_cleared {
