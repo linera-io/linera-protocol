@@ -839,8 +839,8 @@ where
             final_certificate.value.confirmed_block() == Some(&proposal.content.block),
             "A different operation was executed in parallel (consider retrying the operation)"
         );
-        // Since the validators all executed and voted for the block, they have the needed
-        // bytecode. Leaving blob_certificates empty.
+        // Since `handle_block_proposal` succeeded, we have the needed bytecode.
+        // Leaving blob_certificates empty.
         self.process_certificate(final_certificate.clone(), vec![])
             .await?;
         self.pending_block = None;

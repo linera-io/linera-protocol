@@ -398,7 +398,7 @@ where
                             continue;
                         }
                         mut result @ Err(NodeError::ApplicationBytecodeNotFound { .. }) => {
-                            let mut blobs: Vec<Certificate> = vec![];
+                            let mut blobs = vec![];
                             while let Err(NodeError::ApplicationBytecodeNotFound {
                                 bytecode_location,
                                 ..
