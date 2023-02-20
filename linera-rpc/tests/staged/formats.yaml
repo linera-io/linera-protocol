@@ -452,6 +452,14 @@ Origin:
         TYPENAME: ChainId
     - medium:
         TYPENAME: Medium
+OutgoingEffect:
+  STRUCT:
+    - application_id:
+        TYPENAME: ApplicationId
+    - destination:
+        TYPENAME: Destination
+    - effect:
+        TYPENAME: Effect
 Owner:
   NEWTYPESTRUCT:
     TYPENAME: PublicKey
@@ -738,10 +746,7 @@ Value:
               TYPENAME: RoundNumber
           - effects:
               SEQ:
-                TUPLE:
-                  - TYPENAME: ApplicationId
-                  - TYPENAME: Destination
-                  - TYPENAME: Effect
+                TYPENAME: OutgoingEffect
           - state_hash:
               TYPENAME: CryptoHash
     1:
@@ -751,10 +756,7 @@ Value:
               TYPENAME: Block
           - effects:
               SEQ:
-                TUPLE:
-                  - TYPENAME: ApplicationId
-                  - TYPENAME: Destination
-                  - TYPENAME: Effect
+                TYPENAME: OutgoingEffect
           - state_hash:
               TYPENAME: CryptoHash
 

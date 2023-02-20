@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_types::{Block, BlockAndRound, BlockProposal, Certificate, LiteVote, Value, Vote},
+    data_types::{
+        Block, BlockAndRound, BlockProposal, Certificate, LiteVote, OutgoingEffect, Value, Vote,
+    },
     ChainError,
 };
 use linera_base::{
@@ -10,7 +12,7 @@ use linera_base::{
     data_types::{BlockHeight, Owner, RoundNumber},
     ensure,
 };
-use linera_execution::{ApplicationId, ChainOwnership, Destination, Effect};
+use linera_execution::ChainOwnership;
 use log::error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -264,7 +266,7 @@ impl ChainManager {
     pub fn create_vote(
         &mut self,
         proposal: BlockProposal,
-        effects: Vec<(ApplicationId, Destination, Effect)>,
+        effects: Vec<OutgoingEffect>,
         state_hash: CryptoHash,
         key_pair: Option<&KeyPair>,
     ) {
@@ -306,7 +308,7 @@ impl ChainManager {
     pub fn create_final_vote(
         &mut self,
         block: Block,
-        effects: Vec<(ApplicationId, Destination, Effect)>,
+        effects: Vec<OutgoingEffect>,
         state_hash: CryptoHash,
         certificate: Certificate,
         key_pair: Option<&KeyPair>,

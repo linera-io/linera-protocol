@@ -14,7 +14,7 @@ use linera_base::{
     crypto::KeyPair,
     data_types::{BlockHeight, ChainDescription, ChainId, EffectId, Epoch, Timestamp},
 };
-use linera_chain::data_types::{Event, Message, Origin, Value};
+use linera_chain::data_types::{Event, Message, Origin, OutgoingEffect, Value};
 use linera_execution::{
     system::{Balance, SystemChannel, SystemEffect, SystemOperation},
     ApplicationId, ApplicationRegistry, Bytecode, BytecodeId, BytecodeLocation, ChainOwnership,
@@ -146,11 +146,11 @@ where
     let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
     let publish_block_proposal = Value::ConfirmedBlock {
         block: publish_block,
-        effects: vec![(
-            ApplicationId::System,
-            Destination::Recipient(publisher_chain.into()),
-            Effect::System(publish_effect.clone()),
-        )],
+        effects: vec![OutgoingEffect {
+            application_id: ApplicationId::System,
+            destination: Destination::Recipient(publisher_chain.into()),
+            effect: Effect::System(publish_effect.clone()),
+        }],
         state_hash: publisher_state_hash,
     };
     let publish_certificate = make_certificate(&committee, &worker, publish_block_proposal);
@@ -211,11 +211,11 @@ where
     let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
     let broadcast_block_proposal = Value::ConfirmedBlock {
         block: broadcast_block,
-        effects: vec![(
-            ApplicationId::System,
-            broadcast_channel,
-            Effect::System(broadcast_effect.clone()),
-        )],
+        effects: vec![OutgoingEffect {
+            application_id: ApplicationId::System,
+            destination: broadcast_channel,
+            effect: Effect::System(broadcast_effect.clone()),
+        }],
         state_hash: publisher_state_hash,
     };
     let broadcast_certificate = make_certificate(&committee, &worker, broadcast_block_proposal);
@@ -270,11 +270,11 @@ where
     let creator_state = ExecutionStateView::from_system_state(creator_system_state.clone()).await;
     let subscribe_block_proposal = Value::ConfirmedBlock {
         block: subscribe_block,
-        effects: vec![(
-            ApplicationId::System,
-            Destination::Recipient(publisher_chain.into()),
-            Effect::System(subscribe_effect.clone()),
-        )],
+        effects: vec![OutgoingEffect {
+            application_id: ApplicationId::System,
+            destination: Destination::Recipient(publisher_chain.into()),
+            effect: Effect::System(subscribe_effect.clone()),
+        }],
         state_hash: creator_state.crypto_hash().await?,
     };
     let subscribe_certificate = make_certificate(&committee, &worker, subscribe_block_proposal);
@@ -316,13 +316,13 @@ where
     let publisher_state_hash = make_state_hash(publisher_system_state).await;
     let accept_block_proposal = Value::ConfirmedBlock {
         block: accept_block,
-        effects: vec![(
-            ApplicationId::System,
-            Destination::Recipient(creator_chain.into()),
-            Effect::System(SystemEffect::Notify {
+        effects: vec![OutgoingEffect {
+            application_id: ApplicationId::System,
+            destination: Destination::Recipient(creator_chain.into()),
+            effect: Effect::System(SystemEffect::Notify {
                 id: creator_chain.into(),
             }),
-        )],
+        }],
         state_hash: publisher_state_hash,
     };
     let accept_certificate = make_certificate(&committee, &worker, accept_block_proposal);

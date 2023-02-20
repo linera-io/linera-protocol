@@ -12,13 +12,13 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, LiteCertificate, Medium, Message, Origin, Target, Value,
+        Block, BlockProposal, Certificate, LiteCertificate, Medium, Message, Origin,
+        OutgoingEffect, Target, Value,
     },
     ChainManagerOutcome, ChainStateView,
 };
 use linera_execution::{
-    ApplicationId, Destination, Effect, Query, Response, UserApplicationDescription,
-    UserApplicationId,
+    ApplicationId, Query, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::{
@@ -305,7 +305,7 @@ where
     pub async fn stage_block_execution(
         &mut self,
         block: &Block,
-    ) -> Result<(Vec<(ApplicationId, Destination, Effect)>, ChainInfoResponse), WorkerError> {
+    ) -> Result<(Vec<OutgoingEffect>, ChainInfoResponse), WorkerError> {
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         let effects = chain.execute_block(block).await?;
         let info = ChainInfoResponse::new(&chain, None);
