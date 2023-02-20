@@ -14,6 +14,7 @@ use linera_chain::{
     data_types::{
         Block, BlockProposal, Certificate, LiteCertificate, Medium, Message, Origin,
         OutgoingEffect, Target, Value,
+        ValueType,
     },
     ChainManagerOutcome, ChainStateView,
 };
@@ -410,14 +411,13 @@ where
         certificate: Certificate,
         blobs: &[Value],
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let (block, effects, state_hash) = match &certificate.value {
-            Value::ConfirmedBlock {
-                block,
-                effects,
-                state_hash,
-            } => (block, effects.clone(), *state_hash),
-            _ => panic!("Expecting a confirmation certificate"),
-        };
+        assert!(
+            certificate.value.is_confirmed(),
+            "Expecting a confirmation certificate"
+        );
+        let block = certificate.value.block();
+        let effects = certificate.value.effects();
+        let state_hash = certificate.value.state_hash();
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         // Find all certificates containing bytecode used when executing this block.
         let blob_hashes: HashSet<_> = block
@@ -486,7 +486,7 @@ where
         self.storage.write_certificate(certificate.clone()).await?;
         // Execute the block.
         let verified_effects = chain.execute_block(block).await?;
-        ensure!(effects == verified_effects, WorkerError::IncorrectEffects);
+        ensure!(*effects == verified_effects, WorkerError::IncorrectEffects);
         // Advance to next block height.
         let tip = chain.tip_state.get_mut();
         tip.block_hash = Some(certificate.hash);
@@ -515,15 +515,13 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let (block, round, effects, state_hash) = match &certificate.value {
-            Value::ValidatedBlock {
-                block,
-                round,
-                effects,
-                state_hash,
-            } => (block, *round, effects.clone(), *state_hash),
-            _ => panic!("Expecting a validation certificate"),
+        let round = match certificate.value.value_type() {
+            ValueType::ValidatedBlock { round } => round,
+            ValueType::ConfirmedBlock => panic!("Expecting a validation certificate"),
         };
+        let block = certificate.value.block();
+        let effects = certificate.value.effects();
+        let state_hash = certificate.value.state_hash();
         // Check that the chain is active and ready for this confirmation.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
@@ -560,7 +558,7 @@ where
         }
         chain.manager.get_mut().create_final_vote(
             block.clone(),
-            effects,
+            effects.clone(),
             state_hash,
             certificate,
             self.key_pair(),
@@ -602,9 +600,8 @@ where
         // Process the received messages in certificates.
         let mut last_updated_height = None;
         for certificate in certificates {
-            let Value::ConfirmedBlock { block, effects, .. } = &certificate.value else {
-                unreachable!("already checked");
-            };
+            let block = certificate.value.block();
+            let effects = certificate.value.effects();
             // Update the staged chain state with the received block.
             chain
                 .receive_block(
@@ -667,19 +664,9 @@ where
     }
 
     fn cache_recent_value(&mut self, hash: CryptoHash, value: Value) {
-        if let Value::ValidatedBlock {
-            block,
-            effects,
-            state_hash,
-            ..
-        } = &value
-        {
+        if value.is_validated() {
             // Cache the corresponding confirmed block, too, in case we get a certificate.
-            let conf_value = Value::ConfirmedBlock {
-                block: block.clone(),
-                effects: effects.clone(),
-                state_hash: *state_hash,
-            };
+            let conf_value = value.clone().into_confirmed();
             let conf_hash = CryptoHash::new(&conf_value);
             self.recent_values.push(conf_hash, conf_value);
         }
@@ -794,27 +781,25 @@ where
         blobs: Vec<Value>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, certificate);
-        if matches!(certificate.value, Value::ValidatedBlock { .. }) {
-            ensure!(
-                blobs.is_empty(),
-                WorkerError::UnneededCertificate {
-                    certificate_hash: CryptoHash::new(&blobs[0]),
-                }
-            );
-        }
+        ensure!(
+            certificate.value.is_confirmed() || blobs.is_empty(),
+            WorkerError::UnneededCertificate {
+                certificate_hash: CryptoHash::new(&blobs[0]),
+            }
+        );
         let values_to_cache: Vec<_> = blobs
             .iter()
             .chain(iter::once(&certificate.value))
             .filter(|value| !self.recent_values.contains(&CryptoHash::new(*value)))
             .cloned()
             .collect();
-        let (info, actions) = match &certificate.value {
-            Value::ValidatedBlock { .. } => {
+        let (info, actions) = match certificate.value.value_type() {
+            ValueType::ValidatedBlock { .. } => {
                 // Confirm the validated block.
                 let info = self.process_validated_block(certificate).await?;
                 (info, NetworkActions::default())
             }
-            Value::ConfirmedBlock { .. } => {
+            ValueType::ConfirmedBlock => {
                 // Execute the confirmed block.
                 self.process_confirmed_block(certificate, &blobs).await?
             }
@@ -972,9 +957,10 @@ impl<'a> CrossChainUpdateHelper<'a> {
         let mut trusted_len = 0;
         for (i, certificate) in certificates.iter().enumerate() {
             // Certificates are confirming blocks.
-            let Value::ConfirmedBlock { block, .. } = &certificate.value else {
+            if !certificate.value.is_confirmed() {
                 return Err(WorkerError::InvalidCrossChainRequest);
             };
+            let block = certificate.value.block();
             // Make sure that the chain_id is correct.
             ensure!(
                 origin.sender == block.chain_id,

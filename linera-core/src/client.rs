@@ -472,11 +472,7 @@ where
                     .stage_block_execution(&proposal.content.block)
                     .await?;
                 let state_hash = response.info.state_hash.expect("was just computed");
-                let value = Value::ConfirmedBlock {
-                    block: proposal.content.block,
-                    effects,
-                    state_hash,
-                };
+                let value = Value::new_confirmed(proposal.content.block, effects, state_hash);
                 let certificate = Certificate::new(value, signatures);
                 // Certificate is valid because
                 // * `communicate_with_quorum` ensured a sufficient "weight" of
@@ -491,34 +487,13 @@ where
                     .await?;
                 let state_hash = response.info.state_hash.expect("was just computed");
                 let BlockAndRound { block, round } = proposal.content;
-                let value = Value::ValidatedBlock {
-                    block,
-                    round,
-                    effects,
-                    state_hash,
-                };
+                let value = Value::new_validated(block, effects, state_hash, round);
                 let certificate = Certificate::new(value, signatures);
                 Ok(Some(certificate))
             }
             CommunicateAction::FinalizeBlock(validity_certificate) => {
-                let (block, effects, state_hash) = match validity_certificate.value {
-                    Value::ValidatedBlock {
-                        block,
-                        effects,
-                        state_hash,
-                        ..
-                    } => (block, effects, state_hash),
-                    _ => unreachable!(),
-                };
-                let certificate = Certificate::new(
-                    Value::ConfirmedBlock {
-                        block,
-                        effects,
-                        state_hash,
-                    },
-                    signatures,
-                );
-                Ok(Some(certificate))
+                let conf_value = validity_certificate.value.into_confirmed();
+                Ok(Some(Certificate::new(conf_value, signatures)))
             }
             CommunicateAction::AdvanceToNextBlockHeight(_) => Ok(None),
         }
@@ -529,11 +504,11 @@ where
         certificate: Certificate,
         mode: ReceiveCertificateMode,
     ) -> Result<()> {
-        let block = certificate
-            .value
-            .confirmed_block()
-            .ok_or_else(|| anyhow!("Was expecting a confirmed chain operation"))?
-            .clone();
+        ensure!(
+            certificate.value.is_confirmed(),
+            "Was expecting a confirmed chain operation"
+        );
+        let block = certificate.value.block().clone();
         // Verify the certificate before doing any expensive networking.
         let (committees, max_epoch) = self.known_committees().await?;
         ensure!(
@@ -629,10 +604,10 @@ where
                     let mut certificates = Vec::new();
                     let mut new_tracker = tracker;
                     for certificate in response.info.requested_received_certificates {
-                        let block = certificate
-                            .value
-                            .confirmed_block()
-                            .ok_or(NodeError::InvalidChainInfoResponse)?;
+                        if !certificate.value.is_confirmed() {
+                            return Err(NodeError::InvalidChainInfoResponse);
+                        };
+                        let block = certificate.value.block().clone();
                         // Check that certificates are valid w.r.t one of our trusted
                         // committees.
                         if block.epoch > max_epoch {
@@ -832,10 +807,8 @@ where
                     )
                     .await?
                     .expect("a certificate");
-                assert_eq!(
-                    certificate.value.validated_block(),
-                    Some(&proposal.content.block)
-                );
+                assert!(certificate.value.is_validated());
+                assert_eq!(*certificate.value.block(), proposal.content.block);
                 self.communicate_chain_updates(
                     &committee,
                     self.chain_id,
@@ -858,7 +831,8 @@ where
         };
         // By now the block should be final.
         ensure!(
-            final_certificate.value.confirmed_block() == Some(&proposal.content.block),
+            final_certificate.value.is_confirmed()
+                && *final_certificate.value.block() == proposal.content.block,
             "A different operation was executed in parallel (consider retrying the operation)"
         );
         // Since `handle_block_proposal` succeeded, we have the needed bytecode.

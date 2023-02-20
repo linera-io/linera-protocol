@@ -355,9 +355,7 @@ where
             | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
                 proposal.content.block.height
             }
-            CommunicateAction::FinalizeBlock(certificate) => {
-                certificate.value.validated_block().unwrap().height
-            }
+            CommunicateAction::FinalizeBlock(certificate) => certificate.value.block().height,
             CommunicateAction::AdvanceToNextBlockHeight(seq) => *seq,
         };
         // Update the validator with missing information, if needed.
