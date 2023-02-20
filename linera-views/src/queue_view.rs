@@ -94,7 +94,7 @@ where
             match hash {
                 None => batch.delete_key(key),
                 Some(hash) => batch.put_key_value(key, &hash)?,
-	    }
+            }
             self.stored_hash = hash;
         }
         Ok(())
