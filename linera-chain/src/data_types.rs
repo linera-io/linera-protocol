@@ -46,7 +46,7 @@ pub struct Block {
     /// The timestamp when this block was created. This must be later than all messages received
     /// in this block, but no later than the current time.
     pub timestamp: Timestamp,
-    /// The user signing for the operations in the block. (Currently, this must the `owner`
+    /// The user signing for the operations in the block. (Currently, this must be the `owner`
     /// in the block proposal, or no one.)
     pub authenticated_signer: Option<Owner>,
     /// Certified hash (see `Certificate` below) of the previous block in the
@@ -167,6 +167,8 @@ pub struct Event {
     pub height: BlockHeight,
     /// The index of the effect.
     pub index: usize,
+    /// The authenticated signer for the operation that created the event, if any
+    pub authenticated_signer: Option<Owner>,
     /// The timestamp of the block that caused the effect.
     pub timestamp: Timestamp,
     /// The effect of the event (i.e. the actual payload of a message).
@@ -220,6 +222,7 @@ pub struct BlockProposal {
 pub struct OutgoingEffect {
     pub application_id: ApplicationId,
     pub destination: Destination,
+    pub authenticated_signer: Option<Owner>,
     pub effect: Effect,
 }
 

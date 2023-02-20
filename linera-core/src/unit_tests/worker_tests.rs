@@ -278,6 +278,7 @@ fn direct_outgoing_effect(recipient: ChainId, effect: SystemEffect) -> OutgoingE
     OutgoingEffect {
         application_id: ApplicationId::System,
         destination: Destination::Recipient(recipient),
+        authenticated_signer: None,
         effect: Effect::System(effect),
     }
 }
@@ -286,6 +287,7 @@ fn channel_outgoing_effect(name: ChannelName, effect: SystemEffect) -> OutgoingE
     OutgoingEffect {
         application_id: ApplicationId::System,
         destination: Destination::Subscribers(name),
+        authenticated_signer: None,
         effect: Effect::System(effect),
     }
 }
@@ -971,6 +973,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 0,
+                        authenticated_signer: None,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
@@ -985,7 +988,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 1,
-
+                        authenticated_signer: None,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
@@ -1000,6 +1003,7 @@ where
                         certificate_hash: certificate1.hash,
                         height: BlockHeight::from(1),
                         index: 0,
+                        authenticated_signer: None,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
@@ -1031,6 +1035,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 1,
+                        authenticated_signer: None,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
@@ -1045,6 +1050,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 0,
+                        authenticated_signer: None,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
@@ -1059,6 +1065,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(1),
                         index: 0,
+                        authenticated_signer: None,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
@@ -1090,6 +1097,7 @@ where
                         certificate_hash: certificate1.hash,
                         height: BlockHeight::from(1),
                         index: 0,
+                        authenticated_signer: None,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
@@ -1104,6 +1112,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 0,
+                        authenticated_signer: None,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
@@ -1118,6 +1127,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 1,
+                        authenticated_signer: None,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
@@ -1148,6 +1158,7 @@ where
                     certificate_hash: certificate0.hash,
                     height: BlockHeight::from(0),
                     index: 0,
+                    authenticated_signer: None,
                     timestamp: Timestamp::from(0),
                     effect: Effect::System(SystemEffect::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -1206,6 +1217,7 @@ where
                     certificate_hash: certificate1.hash,
                     height: BlockHeight::from(1),
                     index: 0,
+                    authenticated_signer: None,
                     timestamp: Timestamp::from(0),
                     effect: Effect::System(SystemEffect::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -1616,6 +1628,7 @@ where
                 certificate_hash: CryptoHash::new(&Dummy),
                 height: BlockHeight::from(0),
                 index: 0,
+                authenticated_signer: None,
                 timestamp: Timestamp::from(0),
                 effect: Effect::System(SystemEffect::Credit {
                     account: Account::chain(ChainId::root(1)),
@@ -1693,6 +1706,7 @@ where
             certificate_hash,
             height,
             index: 0,
+            authenticated_signer: None,
             timestamp,
             effect: Effect::System(SystemEffect::Credit { amount, .. }),
         } if certificate_hash == CryptoHash::new(&Dummy)
@@ -1894,6 +1908,7 @@ where
             certificate_hash,
             height,
             index: 0,
+            authenticated_signer: None,
             timestamp,
             effect: Effect::System(SystemEffect::Credit { amount, .. })
         } if certificate_hash == certificate.hash
@@ -2019,6 +2034,7 @@ where
             certificate_hash,
             height,
             index: 0,
+            authenticated_signer: None,
             timestamp,
             effect: Effect::System(SystemEffect::Credit { amount, .. })
         } if certificate_hash == certificate.hash
@@ -2313,6 +2329,7 @@ where
                 certificate_hash: certificate.hash,
                 height: BlockHeight::from(0),
                 index: 0,
+                authenticated_signer: None,
                 timestamp: Timestamp::from(0),
                 effect: Effect::System(SystemEffect::Credit {
                     account: Account::chain(ChainId::root(2)),
@@ -2685,6 +2702,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 1,
+                        authenticated_signer: None,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Subscribe {
                             id: user_id,
@@ -2847,6 +2865,7 @@ where
                             certificate_hash: certificate1.hash,
                             height: BlockHeight::from(1),
                             index: 0,
+                            authenticated_signer: None,
                             timestamp: Timestamp::from(0),
                             effect: Effect::System(SystemEffect::SetCommittees {
                                 admin_id,
@@ -2862,6 +2881,7 @@ where
                             certificate_hash: certificate1.hash,
                             height: BlockHeight::from(1),
                             index: 1,
+                            authenticated_signer: None,
                             timestamp: Timestamp::from(0),
                             effect: Effect::System(SystemEffect::Credit {
                                 account: Account::chain(user_id),
@@ -2876,6 +2896,7 @@ where
                             certificate_hash: certificate2.hash,
                             height: BlockHeight::from(2),
                             index: 0,
+                            authenticated_signer: None,
                             timestamp: Timestamp::from(0),
                             effect: Effect::System(SystemEffect::Notify { id: user_id }),
                         },
@@ -3403,6 +3424,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 0,
+                        authenticated_signer: None,
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(admin_id),

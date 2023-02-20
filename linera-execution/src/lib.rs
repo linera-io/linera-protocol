@@ -404,8 +404,11 @@ pub enum Response {
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct RawExecutionResult<Effect> {
-    /// Send messages to the given destinations.
-    pub effects: Vec<(Destination, Effect)>,
+    /// The signer who created the effects.
+    pub authenticated_signer: Option<Owner>,
+    /// Send messages to the given destinations, possibly forwarding the authenticated
+    /// signer.
+    pub effects: Vec<(Destination, bool, Effect)>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(ChannelName, ChainId)>,
     /// Unsubscribe chains to channels.
@@ -464,9 +467,17 @@ impl ExecutionResult {
     }
 }
 
+impl<Effect> RawExecutionResult<Effect> {
+    pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
+        self.authenticated_signer = authenticated_signer;
+        self
+    }
+}
+
 impl<Effect> Default for RawExecutionResult<Effect> {
     fn default() -> Self {
         Self {
+            authenticated_signer: None,
             effects: Vec::new(),
             subscribe: Vec::new(),
             unsubscribe: Vec::new(),

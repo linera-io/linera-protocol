@@ -52,7 +52,7 @@ impl From<contract::ExecutionResult> for RawExecutionResult<Vec<u8>> {
         let effects = result
             .effects
             .into_iter()
-            .map(|(destination, effect)| (destination.into(), effect))
+            .map(|(destination, authenticated, effect)| (destination.into(), authenticated, effect))
             .collect();
 
         let subscribe = result
@@ -68,6 +68,7 @@ impl From<contract::ExecutionResult> for RawExecutionResult<Vec<u8>> {
             .collect();
 
         RawExecutionResult {
+            authenticated_signer: None,
             effects,
             subscribe,
             unsubscribe,

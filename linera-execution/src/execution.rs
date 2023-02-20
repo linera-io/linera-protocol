@@ -156,7 +156,7 @@ where
             &mut results,
         );
         // Make the call to user code.
-        let result = match action {
+        let mut result = match action {
             UserAction::Initialize(context, argument) => {
                 application.initialize(context, &runtime, &argument).await?
             }
@@ -171,6 +171,8 @@ where
                     .await?
             }
         };
+        // Set the authenticated signer to be used in outgoing effects.
+        result.authenticated_signer = signer;
         // Check that applications were correctly stacked and unstacked.
         assert_eq!(applications.len(), 1);
         assert_eq!(applications[0].id, application_id);
@@ -185,6 +187,7 @@ where
         for effect in &result.effects {
             system_result.effects.push((
                 effect.0.clone(),
+                false,
                 SystemEffect::RegisterApplications {
                     applications: applications.clone(),
                 },
@@ -212,7 +215,9 @@ where
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match (application_id, operation) {
             (ApplicationId::System, Operation::System(op)) => {
-                let (result, new_application) = self.system.execute_operation(context, op).await?;
+                let (mut result, new_application) =
+                    self.system.execute_operation(context, op).await?;
+                result.authenticated_signer = context.authenticated_signer;
                 let mut results = vec![ExecutionResult::System(result)];
                 if let Some((application_id, argument)) = new_application {
                     let user_action = UserAction::Initialize(context, argument);

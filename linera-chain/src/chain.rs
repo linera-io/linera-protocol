@@ -235,6 +235,7 @@ where
             let OutgoingEffect {
                 application_id: app_id,
                 destination,
+                authenticated_signer,
                 effect,
             } = outgoing_effect;
             // Skip events that do not belong to this application.
@@ -270,6 +271,7 @@ where
                 certificate_hash,
                 height,
                 index,
+                authenticated_signer,
                 timestamp,
                 effect,
             });
@@ -404,7 +406,7 @@ where
                     height: message.event.height,
                     index: message.event.index,
                 },
-                authenticated_signer: None,
+                authenticated_signer: message.event.authenticated_signer,
             };
             let results = self
                 .execution_state
@@ -513,7 +515,7 @@ where
         // application.
         let mut recipients = HashSet::new();
         let mut channel_broadcasts = HashSet::new();
-        for (destination, effect) in application.effects {
+        for (destination, authenticated, effect) in application.effects {
             match &destination {
                 Destination::Recipient(id) => {
                     recipients.insert(*id);
@@ -522,9 +524,15 @@ where
                     channel_broadcasts.insert(name.clone());
                 }
             }
+            let authenticated_signer = if authenticated {
+                application.authenticated_signer
+            } else {
+                None
+            };
             effects.push(OutgoingEffect {
                 application_id,
                 destination,
+                authenticated_signer,
                 effect: effect.into(),
             });
         }

@@ -516,7 +516,9 @@ where
         // Interpret the results of the call.
         self.execution_results_mut().push(ExecutionResult::User(
             callee_id,
-            raw_result.execution_result,
+            raw_result
+                .execution_result
+                .with_authenticated_signer(authenticated_signer),
         ));
         let sessions =
             self.make_sessions(raw_result.create_sessions, callee_id, self.application_id());
@@ -585,7 +587,9 @@ where
         let inner_result = raw_result.inner;
         self.execution_results_mut().push(ExecutionResult::User(
             callee_id,
-            inner_result.execution_result,
+            inner_result
+                .execution_result
+                .with_authenticated_signer(authenticated_signer),
         ));
         let sessions = self.make_sessions(
             inner_result.create_sessions,

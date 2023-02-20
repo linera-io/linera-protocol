@@ -146,8 +146,9 @@ pub struct QueryContext {
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ExecutionResult {
-    /// Send messages to the given destinations.
-    pub effects: Vec<(Destination, Vec<u8>)>,
+    /// Send messages to the given destinations, possibly forwarding the authenticated
+    /// signer.
+    pub effects: Vec<(Destination, bool, Vec<u8>)>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(ChannelName, ChainId)>,
     /// Unsubscribe chains to channels.
@@ -162,7 +163,18 @@ impl ExecutionResult {
         effect: &impl Serialize,
     ) -> Self {
         let effect_bytes = bcs::to_bytes(effect).expect("Effect should be serializable");
-        self.effects.push((destination.into(), effect_bytes));
+        self.effects.push((destination.into(), false, effect_bytes));
+        self
+    }
+
+    /// Add an authenticated effect to the execution result.
+    pub fn with_authenticated_effect(
+        mut self,
+        destination: impl Into<Destination>,
+        effect: &impl Serialize,
+    ) -> Self {
+        let effect_bytes = bcs::to_bytes(effect).expect("Effect should be serializable");
+        self.effects.push((destination.into(), true, effect_bytes));
         self
     }
 }
