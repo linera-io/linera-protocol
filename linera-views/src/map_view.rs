@@ -428,3 +428,37 @@ where
         }
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use std::borrow::Borrow;
+
+    fn check_str<T: Borrow<str>>(s: T) {
+        let mut ser1 = Vec::new();
+        bcs::serialize_into(&mut ser1, "Hello").unwrap();
+        let mut ser2 = Vec::new();
+        bcs::serialize_into(&mut ser2, s.borrow()).unwrap();
+        assert_eq!(ser1, ser2);
+    }
+
+    fn check_array_u8<T: Borrow<[u8]>>(v: T) {
+        let mut ser1 = Vec::new();
+        bcs::serialize_into(&mut ser1, &vec![23_u8, 67_u8, 123_u8]).unwrap();
+        let mut ser2 = Vec::new();
+        bcs::serialize_into(&mut ser2, &v.borrow()).unwrap();
+        assert_eq!(ser1, ser2);
+    }
+
+    #[test]
+    fn test_serialization_borrow() {
+        let s = "Hello".to_string();
+        check_str(s);
+        let s = "Hello";
+        check_str(s);
+        //
+        let v = vec![23, 67, 123];
+        check_array_u8(v);
+        let v = [23, 67, 123];
+        check_array_u8(v);
+    }
+}
