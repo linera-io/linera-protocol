@@ -354,7 +354,7 @@ pub trait Context {
     fn derive_tag_key<I: Serialize>(&self, tag: u8, index: &I) -> Result<Vec<u8>, Self::Error>;
 
     /// Obtain the short `Vec<u8>` key from the key by serialization
-    fn derive_short_key<I: Serialize>(index: &I) -> Result<Vec<u8>, Self::Error>;
+    fn derive_short_key<I: Serialize + ?Sized>(index: &I) -> Result<Vec<u8>, Self::Error>;
 
     /// Obtain the `Vec<u8>` key from the key by appending to the base_key
     fn derive_key_bytes(&self, index: &[u8]) -> Vec<u8>;
@@ -453,7 +453,7 @@ where
         Ok(key)
     }
 
-    fn derive_short_key<I: Serialize>(index: &I) -> Result<Vec<u8>, Self::Error> {
+    fn derive_short_key<I: Serialize + ?Sized>(index: &I) -> Result<Vec<u8>, Self::Error> {
         let mut key = Vec::new();
         bcs::serialize_into(&mut key, index)?;
         Ok(key)

@@ -8,7 +8,7 @@ use crate::{
 use async_lock::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
+use std::{borrow::Borrow, collections::BTreeMap, fmt::Debug, marker::PhantomData, mem};
 
 /// Key tags to create the sub-keys of a MapView on top of the base key.
 #[repr(u8)]
@@ -110,7 +110,11 @@ where
     I: Serialize,
 {
     /// Set or insert a value.
-    pub fn insert(&mut self, index: &I, value: V) -> Result<(), ViewError> {
+    pub fn insert<Q>(&mut self, index: &Q, value: V) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
         *self.hash.get_mut() = None;
         let short_key = C::derive_short_key(index)?;
         self.updates.insert(short_key, Update::Set(value));
@@ -118,7 +122,11 @@ where
     }
 
     /// Remove a value.
-    pub fn remove(&mut self, index: &I) -> Result<(), ViewError> {
+    pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
         *self.hash.get_mut() = None;
         let short_key = C::derive_short_key(index)?;
         if self.was_cleared {
@@ -139,11 +147,15 @@ impl<C, I, V> MapView<C, I, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
-    V: Clone + Sync + Serialize + DeserializeOwned + 'static,
+    I: Serialize,
+    V: Clone + DeserializeOwned + 'static,
 {
     /// Read the value at the given position, if any.
-    pub async fn get(&self, index: &I) -> Result<Option<V>, ViewError> {
+    pub async fn get<Q>(&self, index: &Q) -> Result<Option<V>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
         let short_key = C::derive_short_key(index)?;
         if let Some(update) = self.updates.get(&short_key) {
             let value = match update {
@@ -172,7 +184,11 @@ where
     }
 
     /// Obtain a mutable reference to a value at a given position if available
-    pub async fn get_mut(&mut self, index: &I) -> Result<Option<&mut V>, ViewError> {
+    pub async fn get_mut<Q>(&mut self, index: &Q) -> Result<Option<&mut V>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
         let short_key = C::derive_short_key(index)?;
         self.load_value(&short_key).await?;
         if let Some(update) = self.updates.get_mut(&short_key.clone()) {
@@ -184,7 +200,15 @@ where
         }
         Ok(None)
     }
+}
 
+impl<C, I, V> MapView<C, I, V>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+    V: Clone + Sync + Serialize + DeserializeOwned + 'static,
+{
     /// Return the list of indices in the map.
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::<I>::new();
@@ -333,12 +357,16 @@ impl<C, I, V> MapView<C, I, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
-    V: Clone + Sync + Default + Serialize + DeserializeOwned + 'static,
+    I: Serialize,
+    V: Default + DeserializeOwned + 'static,
 {
     /// Obtain a mutable reference to a value at a given position.
     /// Default value if the index is missing.
-    pub async fn get_mut_or_default(&mut self, index: &I) -> Result<&mut V, ViewError> {
+    pub async fn get_mut_or_default<Q>(&mut self, index: &Q) -> Result<&mut V, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Sync + Send + Serialize + ?Sized,
+    {
         let short_key = C::derive_short_key(index)?;
         use std::collections::btree_map::Entry;
 
@@ -398,5 +426,39 @@ where
                 Ok(new_hash)
             }
         }
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use std::borrow::Borrow;
+
+    fn check_str<T: Borrow<str>>(s: T) {
+        let mut ser1 = Vec::new();
+        bcs::serialize_into(&mut ser1, "Hello").unwrap();
+        let mut ser2 = Vec::new();
+        bcs::serialize_into(&mut ser2, s.borrow()).unwrap();
+        assert_eq!(ser1, ser2);
+    }
+
+    fn check_array_u8<T: Borrow<[u8]>>(v: T) {
+        let mut ser1 = Vec::new();
+        bcs::serialize_into(&mut ser1, &vec![23_u8, 67_u8, 123_u8]).unwrap();
+        let mut ser2 = Vec::new();
+        bcs::serialize_into(&mut ser2, &v.borrow()).unwrap();
+        assert_eq!(ser1, ser2);
+    }
+
+    #[test]
+    fn test_serialization_borrow() {
+        let s = "Hello".to_string();
+        check_str(s);
+        let s = "Hello";
+        check_str(s);
+        //
+        let v = vec![23, 67, 123];
+        check_array_u8(v);
+        let v = [23, 67, 123];
+        check_array_u8(v);
     }
 }

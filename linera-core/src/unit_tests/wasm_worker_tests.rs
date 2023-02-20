@@ -396,13 +396,13 @@ where
     if use_view {
         creator_state
             .view_users
-            .try_load_entry_mut(application_id)
+            .try_load_entry_mut(&application_id)
             .await?
             .insert(chosen_key.clone(), initial_value_bytes);
     } else {
         creator_state
             .simple_users
-            .try_load_entry_mut(application_id)
+            .try_load_entry_mut(&application_id)
             .await?
             .set(initial_value_bytes);
     }
@@ -441,13 +441,13 @@ where
     if use_view {
         creator_state
             .view_users
-            .try_load_entry_mut(application_id)
+            .try_load_entry_mut(&application_id)
             .await?
             .insert(chosen_key.clone(), expected_state_bytes);
     } else {
         creator_state
             .simple_users
-            .try_load_entry_mut(application_id)
+            .try_load_entry_mut(&application_id)
             .await?
             .set(expected_state_bytes);
     }

@@ -72,7 +72,7 @@ where
         };
         Ok(InboxStateElement {
             origin: origin.clone(),
-            guard: self.inboxes.try_load_entry(origin).await?,
+            guard: self.inboxes.try_load_entry(&origin).await?,
         })
     }
 
@@ -91,7 +91,7 @@ where
         };
         Ok(OutboxStateElement {
             target: target.clone(),
-            guard: self.outboxes.try_load_entry(target).await?,
+            guard: self.outboxes.try_load_entry(&target).await?,
         })
     }
 
@@ -102,7 +102,7 @@ where
     async fn channel(&self, channel_name: ChannelName) -> Result<ChannelStateEntry<C>, Error> {
         Ok(ChannelStateEntry {
             channel_name: channel_name.clone(),
-            guard: self.channels.try_load_entry(channel_name).await?,
+            guard: self.channels.try_load_entry(&channel_name).await?,
         })
     }
 
