@@ -108,7 +108,7 @@ Some tests require the application examples from `linera-examples` to be compile
 can be done manually with
 ```
 cd linera-examples
-RUSTFLAGS="-C opt-level=z -C debuginfo=0" cargo build --release --target wasm32-unknown-unknown
+cargo build --release --target wasm32-unknown-unknown
 ```
 The Rust flags are suggested to reduce the size of the WASM bytecodes.
 

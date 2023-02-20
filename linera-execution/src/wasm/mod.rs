@@ -246,7 +246,6 @@ pub mod test {
         log::info!("Building example applications with cargo");
         let status = std::process::Command::new("cargo")
             .current_dir("../linera-examples")
-            .env("RUSTFLAGS", "-C opt-level=z -C debuginfo=0")
             .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
             .status()?;
         assert!(status.success());
