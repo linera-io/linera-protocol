@@ -35,9 +35,9 @@ use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTe
 /// An validator used for testing. "Faulty" validators ignore block proposals (but not
 /// certificates or info queries) and have the wrong initial balance for all chains.
 ///
-/// All methods are executed in a separate Tokio runtime, so that canceling a client task
-/// doesn't cause the validator's tasks to be canceled: In a real network, a validator also
-/// wouldn't cancel tasks if the client stopped waiting for the response.
+/// All methods are executed in spawned Tokio tasks, so that canceling a client task doesn't cause
+/// the validator's tasks to be canceled: In a real network, a validator also wouldn't cancel
+/// tasks if the client stopped waiting for the response.
 struct LocalValidator<S> {
     is_faulty: bool,
     state: WorkerState<S>,
@@ -56,7 +56,7 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.run_in_new_runtime(move |validator, sender| {
+        self.spawn_and_receive(move |validator, sender| {
             validator.do_handle_block_proposal(proposal, sender)
         })
         .await
@@ -66,7 +66,7 @@ where
         &mut self,
         certificate: LiteCertificate,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.run_in_new_runtime(move |validator, sender| {
+        self.spawn_and_receive(move |validator, sender| {
             validator.do_handle_lite_certificate(certificate, sender)
         })
         .await
@@ -77,7 +77,7 @@ where
         certificate: Certificate,
         blob_certificates: Vec<Certificate>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.run_in_new_runtime(move |validator, sender| {
+        self.spawn_and_receive(move |validator, sender| {
             validator.do_handle_certificate(certificate, blob_certificates, sender)
         })
         .await
@@ -87,7 +87,7 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.run_in_new_runtime(move |validator, sender| {
+        self.spawn_and_receive(move |validator, sender| {
             validator.do_handle_chain_info_query(query, sender)
         })
         .await
@@ -112,17 +112,16 @@ where
 
     /// Executes the future produced by `f` in a new thread in a new Tokio runtime.
     /// Returns the value that the future puts into the sender.
-    async fn run_in_new_runtime<F, R, T>(&self, f: F) -> T
+    async fn spawn_and_receive<F, R, T>(&self, f: F) -> T
     where
         T: Send + 'static,
-        R: Future<Output = Result<(), T>>,
+        R: Future<Output = Result<(), T>> + Send,
         F: FnOnce(Self, oneshot::Sender<T>) -> R + Send + 'static,
     {
         let validator = self.clone();
         let (sender, receiver) = oneshot::channel();
-        let _join_handle = std::thread::spawn(move || {
-            let runtime = tokio::runtime::Runtime::new().unwrap();
-            if runtime.block_on(f(validator, sender)).is_err() {
+        let _join_handle = tokio::spawn(async move {
+            if f(validator, sender).await.is_err() {
                 log::debug!("result could not be sent");
             }
         });
