@@ -11,6 +11,9 @@ members = [
 
 [profile.release]
 debug = true
+lto = true
+opt-level = 'z'
+strip = 'debuginfo'
 
 [profile.bench]
 debug = true
