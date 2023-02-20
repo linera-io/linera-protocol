@@ -766,17 +766,32 @@ ValidatorState:
     - network_address: STR
     - votes: U64
 Value:
+  STRUCT:
+    - block:
+        TYPENAME: Block
+    - effects:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ApplicationId
+            - TYPENAME: Destination
+            - TYPENAME: Effect
+    - state_hash:
+        TYPENAME: CryptoHash
+    - value_type:
+        TYPENAME: ValueType
+ValueType:
   ENUM:
     0:
       ValidatedBlock:
         STRUCT:
-          - block:
-              TYPENAME: Block
           - round:
               TYPENAME: RoundNumber
           - effects:
               SEQ:
-                TYPENAME: OutgoingEffect
+                TUPLE:
+                  - TYPENAME: ApplicationId
+                  - TYPENAME: Destination
+                  - TYPENAME: Effect
           - state_hash:
               TYPENAME: CryptoHash
     1:
@@ -786,7 +801,10 @@ Value:
               TYPENAME: Block
           - effects:
               SEQ:
-                TYPENAME: OutgoingEffect
+                TUPLE:
+                  - TYPENAME: ApplicationId
+                  - TYPENAME: Destination
+                  - TYPENAME: Effect
           - state_hash:
               TYPENAME: CryptoHash
 

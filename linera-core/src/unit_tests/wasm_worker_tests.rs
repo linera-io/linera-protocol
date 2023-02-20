@@ -145,16 +145,16 @@ where
         registry: ApplicationRegistry::default(),
     };
     let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
-    let publish_block_proposal = Value::ConfirmedBlock {
-        block: publish_block,
-        effects: vec![OutgoingEffect {
+    let publish_block_proposal = Value::new_confirmed(
+        publish_block,
+        vec![OutgoingEffect {
             application_id: ApplicationId::System,
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
             effect: Effect::System(publish_effect.clone()),
         }],
-        state_hash: publisher_state_hash,
-    };
+        publisher_state_hash,
+    );
     let publish_certificate = make_certificate(&committee, &worker, publish_block_proposal);
 
     let info = worker
@@ -212,16 +212,16 @@ where
         .published_bytecodes
         .insert(bytecode_id, bytecode_location);
     let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
-    let broadcast_block_proposal = Value::ConfirmedBlock {
-        block: broadcast_block,
-        effects: vec![OutgoingEffect {
+    let broadcast_block_proposal = Value::new_confirmed(
+        broadcast_block,
+        vec![OutgoingEffect {
             application_id: ApplicationId::System,
             destination: broadcast_channel,
             authenticated_signer: None,
             effect: Effect::System(broadcast_effect.clone()),
         }],
-        state_hash: publisher_state_hash,
-    };
+        publisher_state_hash,
+    );
     let broadcast_certificate = make_certificate(&committee, &worker, broadcast_block_proposal);
 
     let info = worker
@@ -272,16 +272,16 @@ where
         registry: ApplicationRegistry::default(),
     };
     let creator_state = ExecutionStateView::from_system_state(creator_system_state.clone()).await;
-    let subscribe_block_proposal = Value::ConfirmedBlock {
-        block: subscribe_block,
-        effects: vec![OutgoingEffect {
+    let subscribe_block_proposal = Value::new_confirmed(
+        subscribe_block,
+        vec![OutgoingEffect {
             application_id: ApplicationId::System,
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
             effect: Effect::System(subscribe_effect.clone()),
         }],
-        state_hash: creator_state.crypto_hash().await?,
-    };
+        creator_state.crypto_hash().await?,
+    );
     let subscribe_certificate = make_certificate(&committee, &worker, subscribe_block_proposal);
 
     let info = worker
@@ -320,9 +320,9 @@ where
     );
     publisher_system_state.timestamp = Timestamp::from(3);
     let publisher_state_hash = make_state_hash(publisher_system_state).await;
-    let accept_block_proposal = Value::ConfirmedBlock {
-        block: accept_block,
-        effects: vec![OutgoingEffect {
+    let accept_block_proposal = Value::new_confirmed(
+        accept_block,
+        vec![OutgoingEffect {
             application_id: ApplicationId::System,
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
@@ -330,8 +330,8 @@ where
                 id: creator_chain.into(),
             }),
         }],
-        state_hash: publisher_state_hash,
-    };
+        publisher_state_hash,
+    );
     let accept_certificate = make_certificate(&committee, &worker, accept_block_proposal);
 
     let info = worker
@@ -421,11 +421,8 @@ where
             .await?
             .set(initial_value_bytes);
     }
-    let create_block_proposal = Value::ConfirmedBlock {
-        block: create_block,
-        effects: vec![],
-        state_hash: creator_state.crypto_hash().await?,
-    };
+    let create_block_proposal =
+        Value::new_confirmed(create_block, vec![], creator_state.crypto_hash().await?);
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
     let info = worker
@@ -468,11 +465,8 @@ where
             .set(expected_state_bytes);
     }
     creator_state.system.timestamp.set(Timestamp::from(5));
-    let run_block_proposal = Value::ConfirmedBlock {
-        block: run_block,
-        effects: vec![],
-        state_hash: creator_state.crypto_hash().await?,
-    };
+    let run_block_proposal =
+        Value::new_confirmed(run_block, vec![], creator_state.crypto_hash().await?);
     let run_certificate = make_certificate(&committee, &worker, run_block_proposal);
 
     let info = worker

@@ -784,11 +784,7 @@ where
                                 .stage_block_execution(&block)
                                 .await?;
                         let state_hash = response.info.state_hash.expect("state was just computed");
-                        let value = Value::ConfirmedBlock {
-                            block,
-                            effects,
-                            state_hash,
-                        };
+                        let value = Value::new_confirmed(block, effects, state_hash);
                         values.insert(CryptoHash::new(&value), value);
                     }
                 }

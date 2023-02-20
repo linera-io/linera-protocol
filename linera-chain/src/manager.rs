@@ -3,7 +3,8 @@
 
 use crate::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, LiteVote, OutgoingEffect, Value, Vote,
+        Block, BlockAndRound, BlockProposal, Certificate, LiteVote, Value, ValueType, Vote,
+        OutgoingEffect,
     },
     ChainError,
 };
@@ -91,7 +92,7 @@ impl MultiOwnerManager {
             }
         }
         if let Some(cert) = &self.locked {
-            if let Value::ValidatedBlock { round, .. } = &cert.value {
+            if let ValueType::ValidatedBlock { round } = &cert.value.value_type() {
                 if current_round < *round {
                     current_round = *round;
                 }
@@ -176,17 +177,17 @@ impl ChainManager {
                     ChainError::InvalidBlockProposal
                 );
                 if let Some(vote) = &manager.pending {
-                    match &vote.value {
-                        Value::ConfirmedBlock { block, .. } if block != new_block => {
-                            log::error!("Attempting to sign a different block at the same height:\n{:?}\n{:?}", block, new_block);
-                            return Err(ChainError::PreviousBlockMustBeConfirmedFirst);
-                        }
-                        Value::ValidatedBlock { .. } => {
-                            return Err(ChainError::InvalidBlockProposal);
-                        }
-                        _ => {
-                            return Ok(Outcome::Skip);
-                        }
+                    if !vote.value.is_confirmed() {
+                        return Err(ChainError::InvalidBlockProposal);
+                    } else if vote.value.block() != new_block {
+                        log::error!(
+                            "Attempting to sign a different block at the same height:\n{:?}\n{:?}",
+                            vote.value.block(),
+                            new_block
+                        );
+                        return Err(ChainError::PreviousBlockMustBeConfirmedFirst);
+                    } else {
+                        return Ok(Outcome::Skip);
                     }
                 }
                 Ok(Outcome::Accept)
@@ -201,12 +202,15 @@ impl ChainManager {
                     }
                 }
                 if let Some(cert) = &manager.locked {
-                    match &cert.value {
-                        Value::ValidatedBlock { round, .. } if new_round <= *round => {
-                            return Err(ChainError::InsufficientRound(*round));
+                    match cert.value.value_type() {
+                        ValueType::ValidatedBlock { round } if new_round <= round => {
+                            return Err(ChainError::InsufficientRound(round));
                         }
-                        Value::ValidatedBlock { block, round, .. } if new_block != block => {
-                            return Err(ChainError::HasLockedBlock(block.height, *round));
+                        ValueType::ValidatedBlock { round } if new_block != cert.value.block() => {
+                            return Err(ChainError::HasLockedBlock(
+                                cert.value.block().height,
+                                round,
+                            ));
                         }
                         _ => (),
                     }
@@ -235,11 +239,11 @@ impl ChainManager {
         match self {
             ChainManager::Multi(manager) => {
                 if let Some(vote) = &manager.pending {
-                    match &vote.value {
-                        Value::ConfirmedBlock { block, .. } if block == new_block => {
+                    match vote.value.value_type() {
+                        ValueType::ConfirmedBlock if vote.value.block() == new_block => {
                             return Ok(Outcome::Skip);
                         }
-                        Value::ValidatedBlock { round, .. } if new_round < *round => {
+                        ValueType::ValidatedBlock { round } if new_round < round => {
                             return Err(ChainError::InsufficientRound(
                                 round.try_sub_one().unwrap(),
                             ));
@@ -248,8 +252,8 @@ impl ChainManager {
                     }
                 }
                 if let Some(cert) = &manager.locked {
-                    match &cert.value {
-                        Value::ValidatedBlock { round, .. } if new_round < *round => {
+                    match cert.value.value_type() {
+                        ValueType::ValidatedBlock { round } if new_round < round => {
                             return Err(ChainError::InsufficientRound(
                                 round.try_sub_one().unwrap(),
                             ));
@@ -275,11 +279,7 @@ impl ChainManager {
                 if let Some(key_pair) = key_pair {
                     // Vote to confirm.
                     let BlockAndRound { block, .. } = proposal.content;
-                    let value = Value::ConfirmedBlock {
-                        block,
-                        effects,
-                        state_hash,
-                    };
+                    let value = Value::new_confirmed(block, effects, state_hash);
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
                 }
@@ -291,12 +291,7 @@ impl ChainManager {
                 if let Some(key_pair) = key_pair {
                     // Vote to validate.
                     let BlockAndRound { block, round } = proposal.content;
-                    let value = Value::ValidatedBlock {
-                        block,
-                        round,
-                        effects,
-                        state_hash,
-                    };
+                    let value = Value::new_validated(block, effects, state_hash, round);
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
                 }
@@ -320,11 +315,7 @@ impl ChainManager {
                 manager.locked = Some(certificate);
                 if let Some(key_pair) = key_pair {
                     // Vote to confirm.
-                    let value = Value::ConfirmedBlock {
-                        block,
-                        effects,
-                        state_hash,
-                    };
+                    let value = Value::new_confirmed(block, effects, state_hash);
                     let vote = Vote::new(value, key_pair);
                     // Ok to overwrite validation votes with confirmation votes at equal or
                     // higher round.

@@ -124,13 +124,7 @@ fn make_block(
     let previous_block_hash = previous_confirmed_block.as_ref().map(|cert| cert.hash);
     let height = match &previous_confirmed_block {
         None => BlockHeight::default(),
-        Some(cert) => cert
-            .value
-            .confirmed_block()
-            .unwrap()
-            .height
-            .try_add_one()
-            .unwrap(),
+        Some(cert) => cert.value.block().height.try_add_one().unwrap(),
     };
     Block {
         epoch,
@@ -266,11 +260,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         Recipient::Burn => Vec::new(),
     };
     let state_hash = make_state_hash(system_state).await;
-    let value = Value::ConfirmedBlock {
-        block,
-        effects,
-        state_hash,
-    };
+    let value = Value::new_confirmed(block, effects, state_hash);
     make_certificate(committee, worker, value)
 }
 
@@ -536,11 +526,7 @@ where
             registry: ApplicationRegistry::default(),
         };
         let state_hash = make_state_hash(system_state).await;
-        let value = Value::ConfirmedBlock {
-            block,
-            effects: vec![],
-            state_hash,
-        };
+        let value = Value::new_confirmed(block, vec![], state_hash);
         make_certificate(&committee, &worker, value)
     };
     worker
@@ -796,8 +782,8 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        Value::ConfirmedBlock {
-            block: Block {
+        Value::new_confirmed(
+            Block {
                 epoch,
                 chain_id: ChainId::root(1),
                 incoming_messages: Vec::new(),
@@ -826,7 +812,7 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![
+            vec![
                 direct_outgoing_effect(
                     ChainId::root(2),
                     SystemEffect::Credit {
@@ -842,7 +828,7 @@ where
                     },
                 ),
             ],
-            state_hash: make_state_hash(SystemExecutionState {
+            make_state_hash(SystemExecutionState {
                 epoch: Some(epoch),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(ChainId::root(0)),
@@ -855,14 +841,14 @@ where
                 registry: ApplicationRegistry::default(),
             })
             .await,
-        },
+        ),
     );
 
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        Value::ConfirmedBlock {
-            block: Block {
+        Value::new_confirmed(
+            Block {
                 epoch,
                 chain_id: ChainId::root(1),
                 incoming_messages: Vec::new(),
@@ -880,14 +866,14 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![direct_outgoing_effect(
+            vec![direct_outgoing_effect(
                 ChainId::root(2),
                 SystemEffect::Credit {
                     account: Account::chain(ChainId::root(2)),
                     amount: Amount::from(3),
                 },
             )],
-            state_hash: make_state_hash(SystemExecutionState {
+            make_state_hash(SystemExecutionState {
                 epoch: Some(epoch),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(ChainId::root(0)),
@@ -900,7 +886,7 @@ where
                 registry: ApplicationRegistry::default(),
             })
             .await,
-        },
+        ),
     );
     // Missing earlier blocks
     assert!(worker
@@ -1176,16 +1162,16 @@ where
         let certificate = make_certificate(
             &committee,
             &worker,
-            Value::ConfirmedBlock {
-                block: block_proposal.content.block,
-                effects: vec![direct_outgoing_effect(
+            Value::new_confirmed(
+                block_proposal.content.block,
+                vec![direct_outgoing_effect(
                     ChainId::root(3),
                     SystemEffect::Credit {
                         account: Account::chain(ChainId::root(3)),
                         amount: Amount::from(1),
                     },
                 )],
-                state_hash: make_state_hash(SystemExecutionState {
+                make_state_hash(SystemExecutionState {
                     epoch: Some(epoch),
                     description: Some(ChainDescription::Root(2)),
                     admin_id: Some(ChainId::root(0)),
@@ -1198,7 +1184,7 @@ where
                     registry: ApplicationRegistry::default(),
                 })
                 .await,
-            },
+            ),
         );
         worker
             .handle_certificate(certificate.clone(), vec![])
@@ -2388,11 +2374,9 @@ where
         ChainInfoQuery::new(ChainId::root(2)).with_received_certificates_excluding_first_nth(0);
     let response = worker.handle_chain_info_query(query).await.unwrap();
     assert_eq!(response.info.requested_received_certificates.len(), 1);
-    assert!(matches!(response.info.requested_received_certificates[0]
-            .value
-            .confirmed_block()
-            .unwrap()
-            .operations[..], [(_, Operation::System(SystemOperation::Transfer { amount, .. }))] if amount == Amount::from(5)));
+    assert!(matches!(
+        response.info.requested_received_certificates[0].value.block().operations[..],
+        [(_, Operation::System(SystemOperation::Transfer { amount, .. }))] if amount == Amount::from(5)));
 }
 
 #[test(tokio::test)]
@@ -2520,8 +2504,8 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        Value::ConfirmedBlock {
-            block: Block {
+        Value::new_confirmed(
+            Block {
                 epoch: Epoch::from(0),
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
@@ -2540,7 +2524,7 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![
+            vec![
                 direct_outgoing_effect(
                     user_id,
                     SystemEffect::OpenChain {
@@ -2559,7 +2543,7 @@ where
                     },
                 ),
             ],
-            state_hash: make_state_hash(SystemExecutionState {
+            make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -2572,7 +2556,7 @@ where
                 registry: ApplicationRegistry::default(),
             })
             .await,
-        },
+        ),
     );
     worker
         .fully_handle_certificate(certificate0.clone(), vec![])
@@ -2620,8 +2604,8 @@ where
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        Value::ConfirmedBlock {
-            block: Block {
+        Value::new_confirmed(
+            Block {
                 epoch: Epoch::from(0),
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
@@ -2649,7 +2633,7 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![
+            vec![
                 channel_outgoing_effect(
                     SystemChannel::Admin.name(),
                     SystemEffect::SetCommittees {
@@ -2666,7 +2650,7 @@ where
                     },
                 ),
             ],
-            state_hash: make_state_hash(SystemExecutionState {
+            make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -2680,7 +2664,7 @@ where
                 registry: ApplicationRegistry::default(),
             })
             .await,
-        },
+        ),
     );
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
@@ -2691,8 +2675,8 @@ where
     let certificate2 = make_certificate(
         &committee,
         &worker,
-        Value::ConfirmedBlock {
-            block: Block {
+        Value::new_confirmed(
+            Block {
                 epoch: Epoch::from(1),
                 chain_id: admin_id,
                 incoming_messages: vec![Message {
@@ -2716,11 +2700,11 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![direct_outgoing_effect(
+            vec![direct_outgoing_effect(
                 user_id,
                 SystemEffect::Notify { id: user_id },
             )],
-            state_hash: make_state_hash(SystemExecutionState {
+            make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -2734,7 +2718,7 @@ where
                 registry: ApplicationRegistry::default(),
             })
             .await,
-        },
+        ),
     );
     worker
         .fully_handle_certificate(certificate2.clone(), vec![])
@@ -2853,8 +2837,8 @@ where
     let certificate3 = make_certificate(
         &committee,
         &worker,
-        Value::ConfirmedBlock {
-            block: Block {
+        Value::new_confirmed(
+            Block {
                 epoch: Epoch::from(0),
                 chain_id: user_id,
                 incoming_messages: vec![
@@ -2908,8 +2892,8 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: Vec::new(),
-            state_hash: make_state_hash(SystemExecutionState {
+            Vec::new(),
+            make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(user_description),
                 admin_id: Some(admin_id),
@@ -2928,7 +2912,7 @@ where
                 registry: ApplicationRegistry::default(),
             })
             .await,
-        },
+        ),
     );
     worker
         .fully_handle_certificate(certificate3, vec![])
@@ -3050,8 +3034,8 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        Value::ConfirmedBlock {
-            block: Block {
+        Value::new_confirmed(
+            Block {
                 epoch: Epoch::from(0),
                 chain_id: user_id,
                 incoming_messages: Vec::new(),
@@ -3069,14 +3053,14 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![direct_outgoing_effect(
+            vec![direct_outgoing_effect(
                 admin_id,
                 SystemEffect::Credit {
                     account: Account::chain(admin_id),
                     amount: Amount::from(1),
                 },
             )],
-            state_hash: make_state_hash(SystemExecutionState {
+            make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(admin_id),
@@ -3089,7 +3073,7 @@ where
                 registry: ApplicationRegistry::default(),
             })
             .await,
-        },
+        ),
     );
     // Have the admin chain create a new epoch without retiring the old one.
     let committees2 = BTreeMap::from_iter([
@@ -3099,8 +3083,8 @@ where
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        Value::ConfirmedBlock {
-            block: Block {
+        Value::new_confirmed(
+            Block {
                 epoch: Epoch::from(0),
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
@@ -3117,7 +3101,7 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![channel_outgoing_effect(
+            vec![channel_outgoing_effect(
                 SystemChannel::Admin.name(),
                 SystemEffect::SetCommittees {
                     admin_id,
@@ -3125,7 +3109,7 @@ where
                     committees: committees2.clone(),
                 },
             )],
-            state_hash: make_state_hash(SystemExecutionState {
+            make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -3138,7 +3122,7 @@ where
                 registry: ApplicationRegistry::default(),
             })
             .await,
-        },
+        ),
     );
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
@@ -3258,8 +3242,8 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        Value::ConfirmedBlock {
-            block: Block {
+        Value::new_confirmed(
+            Block {
                 epoch: Epoch::from(0),
                 chain_id: user_id,
                 incoming_messages: Vec::new(),
@@ -3277,14 +3261,14 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![direct_outgoing_effect(
+            vec![direct_outgoing_effect(
                 admin_id,
                 SystemEffect::Credit {
                     account: Account::chain(admin_id),
                     amount: Amount::from(1),
                 },
             )],
-            state_hash: make_state_hash(SystemExecutionState {
+            make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(admin_id),
@@ -3297,7 +3281,7 @@ where
                 registry: ApplicationRegistry::default(),
             })
             .await,
-        },
+        ),
     );
     // Have the admin chain create a new epoch and retire the old one immediately.
     let committees2 = BTreeMap::from_iter([
@@ -3308,8 +3292,8 @@ where
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        Value::ConfirmedBlock {
-            block: Block {
+        Value::new_confirmed(
+            Block {
                 epoch: Epoch::from(0),
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
@@ -3335,7 +3319,7 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![
+            vec![
                 channel_outgoing_effect(
                     SystemChannel::Admin.name(),
                     SystemEffect::SetCommittees {
@@ -3353,7 +3337,7 @@ where
                     },
                 ),
             ],
-            state_hash: make_state_hash(SystemExecutionState {
+            make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -3366,7 +3350,7 @@ where
                 registry: ApplicationRegistry::default(),
             })
             .await,
-        },
+        ),
     );
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
@@ -3413,8 +3397,8 @@ where
     let certificate2 = make_certificate(
         &committee,
         &worker,
-        Value::ConfirmedBlock {
-            block: Block {
+        Value::new_confirmed(
+            Block {
                 epoch: Epoch::from(1),
                 chain_id: admin_id,
                 incoming_messages: vec![Message {
@@ -3438,8 +3422,8 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: Vec::new(),
-            state_hash: make_state_hash(SystemExecutionState {
+            Vec::new(),
+            make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
@@ -3452,7 +3436,7 @@ where
                 registry: ApplicationRegistry::default(),
             })
             .await,
-        },
+        ),
     );
     worker
         .fully_handle_certificate(certificate2.clone(), vec![])

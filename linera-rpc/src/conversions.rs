@@ -978,12 +978,12 @@ pub mod tests {
     pub fn test_certificate() {
         let key_pair = KeyPair::generate();
         let certificate_validated = Certificate::new(
-            Value::ValidatedBlock {
-                block: get_block(),
-                round: Default::default(),
-                effects: vec![],
-                state_hash: CryptoHash::new(&Foo("test".into())),
-            },
+            Value::new_validated(
+                get_block(),
+                vec![],
+                CryptoHash::new(&Foo("test".into())),
+                Default::default(),
+            ),
             vec![(
                 ValidatorName::from(key_pair.public()),
                 Signature::new(&Foo("test".into()), &key_pair),

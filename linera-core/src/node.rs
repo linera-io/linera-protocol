@@ -391,47 +391,33 @@ where
     {
         let mut info = None;
         for certificate in certificates {
-            if let Value::ConfirmedBlock { block, .. } = &certificate.value {
-                if block.chain_id == chain_id {
-                    let error = match self.handle_certificate(certificate.clone(), vec![]).await {
-                        Ok(response) => {
-                            info = Some(response.info);
-                            // Continue with the next certificate.
-                            continue;
-                        }
-                        mut result @ Err(NodeError::ApplicationBytecodeNotFound { .. }) => {
-                            let mut blobs = vec![];
-                            while let Err(NodeError::ApplicationBytecodeNotFound {
-                                bytecode_location,
-                                ..
-                            }) = &result
-                            {
-                                let Some(blob) = self.try_download_blob_from(name, client, *bytecode_location).await else {
-                                    // The certificate is not as expected. Give up.
-                                    log::warn!(
-                                        "Failed to process network blob",
-                                    );
-                                    return info;
-                                };
-                                blobs.push(blob);
-                                // TODO(#443): we should store values/blobs separately to avoid overwriting
-                                // certificates without checking quorums (which requires the history of the
-                                // chain due to reconfigurations).
-                                result = self
-                                    .handle_certificate(certificate.clone(), blobs.clone())
-                                    .await;
-                            }
-                            match result {
-                                Ok(response) => {
-                                    info = Some(response.info);
-                                    // Continue with the next certificate.
-                                    continue;
-                                }
-                                Err(e) => e,
-                            }
-                        }
-                        Err(e) => e,
-                    };
+            if !certificate.value.is_confirmed() || certificate.value.block().chain_id != chain_id {
+                // The certificate is not as expected. Give up.
+                log::warn!("Failed to process network certificate {}", certificate.hash);
+                return info;
+            }
+            let mut result = self.handle_certificate(certificate.clone(), vec![]).await;
+            let mut blobs = vec![];
+            while let Err(NodeError::ApplicationBytecodeNotFound {
+                bytecode_location, ..
+            }) = &result
+            {
+                let Some(blob) = self.try_download_blob_from(name, client, *bytecode_location).await else {
+                    // The certificate is not as expected. Give up.
+                    log::warn!("Failed to process network blob");
+                    return info;
+                };
+                blobs.push(blob);
+                result = self
+                    .handle_certificate(certificate.clone(), blobs.clone())
+                    .await;
+            }
+            match result {
+                Ok(response) => {
+                    info = Some(response.info);
+                    // Continue with the next certificate.
+                }
+                Err(error) => {
                     // The certificate is not as expected. Give up.
                     log::warn!(
                         "Failed to process network certificate {}: {}",
@@ -440,10 +426,7 @@ where
                     );
                     return info;
                 }
-            }
-            // The certificate is not as expected. Give up.
-            log::warn!("Failed to process network certificate {}", certificate.hash);
-            return info;
+            };
         }
         // Done with all certificates.
         info
@@ -678,12 +661,10 @@ where
                 }
             }
             if let Some(cert) = manager.requested_locked {
-                if let Value::ValidatedBlock { block, .. } = &cert.value {
-                    if block.chain_id == chain_id {
-                        let hash = cert.hash;
-                        if let Err(error) = self.handle_certificate(cert, vec![]).await {
-                            log::warn!("Skipping certificate {}: {}", hash, error);
-                        }
+                if cert.value.is_validated() && cert.value.block().chain_id == chain_id {
+                    let hash = cert.hash;
+                    if let Err(error) = self.handle_certificate(cert, vec![]).await {
+                        log::warn!("Skipping certificate {}: {}", hash, error);
                     }
                 }
             }

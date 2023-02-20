@@ -14,7 +14,7 @@ use crate::{
 use async_trait::async_trait;
 use futures::{lock::Mutex, Future};
 use linera_base::{committee::Committee, crypto::*, data_types::*};
-use linera_chain::data_types::{Block, BlockProposal, Certificate, LiteCertificate, Value};
+use linera_chain::data_types::{BlockProposal, Certificate, LiteCertificate, Value};
 use linera_execution::{
     system::{Account, Amount, Balance, Recipient, SystemOperation, UserData},
     ApplicationId, Operation, Query, Response, SystemQuery, SystemResponse, WasmRuntime,
@@ -437,12 +437,13 @@ where
                         ..
                     } = response.info;
                     if let Some(cert) = requested_sent_certificates.pop() {
-                        if let Value::ConfirmedBlock { block, .. } = &cert.value {
-                            if block.chain_id == chain_id && block.height == block_height {
-                                cert.check(&self.initial_committee).unwrap();
-                                count += 1;
-                                certificate = Some(cert);
-                            }
+                        if cert.value.is_confirmed()
+                            && cert.value.block().chain_id == chain_id
+                            && cert.value.block().height == block_height
+                        {
+                            cert.check(&self.initial_committee).unwrap();
+                            count += 1;
+                            certificate = Some(cert);
                         }
                     }
                 }
@@ -976,11 +977,10 @@ where
             .value,
         certificate.value
     );
-    assert!(matches!(&certificate.value, Value::ConfirmedBlock{
-        block: Block {
-            operations,
-            ..
-        }, ..} if matches!(&operations[..], &[(_, Operation::System(SystemOperation::OpenChain { id, .. }))] if new_id == id)
+    assert!(certificate.value.is_confirmed());
+    assert!(matches!(
+        &certificate.value.block().operations[..],
+        &[(_, Operation::System(SystemOperation::OpenChain { id, .. }))] if new_id == id
     ));
     // Make a client to try the new chain.
     let mut client = builder
@@ -1102,15 +1102,10 @@ where
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await?;
     let certificate = sender.close_chain().await.unwrap();
+    assert!(certificate.value.is_confirmed());
     assert!(matches!(
-        &certificate.value,
-        Value::ConfirmedBlock {
-            block: Block {
-                operations,
-                ..
-            },
-            ..
-        } if matches!(&operations[..], &[(_, Operation::System(SystemOperation::CloseChain))])
+        &certificate.value.block().operations[..],
+        &[(_, Operation::System(SystemOperation::CloseChain))]
     ));
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());

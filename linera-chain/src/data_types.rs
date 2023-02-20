@@ -226,22 +226,23 @@ pub struct OutgoingEffect {
     pub effect: Effect,
 }
 
+/// The type of a value: whether it's a validated block in a particular round, or already
+/// confirmed.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+pub enum ValueType {
+    /// The block was validated but confirmation will require additional steps.
+    ValidatedBlock { round: RoundNumber },
+    /// The block is validated and confirmed (i.e. ready to be published).
+    ConfirmedBlock,
+}
+
 /// A statement to be certified by the validators.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum Value {
-    /// The block was validated but confirmation will require additional steps.
-    ValidatedBlock {
-        block: Block,
-        round: RoundNumber,
-        effects: Vec<OutgoingEffect>,
-        state_hash: CryptoHash,
-    },
-    /// The block is validated and confirmed (i.e. ready to be published).
-    ConfirmedBlock {
-        block: Block,
-        effects: Vec<OutgoingEffect>,
-        state_hash: CryptoHash,
-    },
+pub struct Value {
+    block: Block,
+    effects: Vec<OutgoingEffect>,
+    state_hash: CryptoHash,
+    value_type: ValueType,
 }
 
 /// The hash and chain ID of a `Value`.
@@ -395,47 +396,58 @@ impl Target {
 }
 
 impl Value {
-    pub fn chain_id(&self) -> ChainId {
-        match self {
-            Value::ConfirmedBlock { block, .. } => block.chain_id,
-            Value::ValidatedBlock { block, .. } => block.chain_id,
+    pub fn new_confirmed(
+        block: Block,
+        effects: Vec<OutgoingEffect>,
+        state_hash: CryptoHash,
+    ) -> Value {
+        Value {
+            block,
+            effects,
+            state_hash,
+            value_type: ValueType::ConfirmedBlock,
         }
+    }
+    pub fn new_validated(
+        block: Block,
+        effects: Vec<OutgoingEffect>,
+        state_hash: CryptoHash,
+        round: RoundNumber,
+    ) -> Value {
+        Value {
+            block,
+            effects,
+            state_hash,
+            value_type: ValueType::ValidatedBlock { round },
+        }
+    }
+
+    pub fn chain_id(&self) -> ChainId {
+        self.block.chain_id
     }
 
     pub fn block(&self) -> &Block {
-        match self {
-            Value::ConfirmedBlock { block, .. } => block,
-            Value::ValidatedBlock { block, .. } => block,
-        }
+        &self.block
     }
 
     pub fn state_hash(&self) -> CryptoHash {
-        match self {
-            Value::ConfirmedBlock { state_hash, .. } => *state_hash,
-            Value::ValidatedBlock { state_hash, .. } => *state_hash,
-        }
+        self.state_hash
     }
 
     pub fn effects(&self) -> &Vec<OutgoingEffect> {
-        match self {
-            Value::ConfirmedBlock { effects, .. } | Value::ValidatedBlock { effects, .. } => {
-                effects
-            }
-        }
+        &self.effects
     }
 
-    pub fn confirmed_block(&self) -> Option<&Block> {
-        match self {
-            Value::ConfirmedBlock { block, .. } => Some(block),
-            _ => None,
-        }
+    pub fn value_type(&self) -> ValueType {
+        self.value_type
     }
 
-    pub fn validated_block(&self) -> Option<&Block> {
-        match self {
-            Value::ValidatedBlock { block, .. } => Some(block),
-            _ => None,
-        }
+    pub fn is_confirmed(&self) -> bool {
+        matches!(self.value_type, ValueType::ConfirmedBlock)
+    }
+
+    pub fn is_validated(&self) -> bool {
+        matches!(self.value_type, ValueType::ValidatedBlock { .. })
     }
 
     pub fn lite(&self) -> LiteValue {
@@ -443,6 +455,10 @@ impl Value {
             value_hash: CryptoHash::new(self),
             chain_id: self.chain_id(),
         }
+    }
+
+    pub fn into_confirmed(self) -> Value {
+        Self::new_confirmed(self.block, self.effects, self.state_hash)
     }
 }
 
