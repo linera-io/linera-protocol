@@ -226,9 +226,15 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     assert_eq!(
         result,
         vec![
+            ExecutionResult::User(
+                app_id,
+                RawExecutionResult::default().with_authenticated_signer(Some(owner))
+            ),
             ExecutionResult::User(app_id, RawExecutionResult::default()),
-            ExecutionResult::User(app_id, RawExecutionResult::default()),
-            ExecutionResult::User(app_id, RawExecutionResult::default())
+            ExecutionResult::User(
+                app_id,
+                RawExecutionResult::default().with_authenticated_signer(Some(owner))
+            )
         ]
     );
 

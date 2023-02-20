@@ -116,7 +116,7 @@ record session-call-result {
 }
 
 record execution-result {
-    effects: list<tuple<destination, effect>>,
+    effects: list<tuple<destination, bool, effect>>,
     subscribe: list<tuple<channel-name, chain-id>>,
     unsubscribe: list<tuple<channel-name, chain-id>>,
 }

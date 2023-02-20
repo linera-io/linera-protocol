@@ -149,6 +149,7 @@ where
         effects: vec![OutgoingEffect {
             application_id: ApplicationId::System,
             destination: Destination::Recipient(publisher_chain.into()),
+            authenticated_signer: None,
             effect: Effect::System(publish_effect.clone()),
         }],
         state_hash: publisher_state_hash,
@@ -175,6 +176,7 @@ where
             certificate_hash: publish_certificate.hash,
             height: publish_block_height,
             index: 0,
+            authenticated_signer: None,
             timestamp: Timestamp::from(1),
             effect: Effect::System(publish_effect),
         },
@@ -214,6 +216,7 @@ where
         effects: vec![OutgoingEffect {
             application_id: ApplicationId::System,
             destination: broadcast_channel,
+            authenticated_signer: None,
             effect: Effect::System(broadcast_effect.clone()),
         }],
         state_hash: publisher_state_hash,
@@ -273,6 +276,7 @@ where
         effects: vec![OutgoingEffect {
             application_id: ApplicationId::System,
             destination: Destination::Recipient(publisher_chain.into()),
+            authenticated_signer: None,
             effect: Effect::System(subscribe_effect.clone()),
         }],
         state_hash: creator_state.crypto_hash().await?,
@@ -299,6 +303,7 @@ where
             certificate_hash: subscribe_certificate.hash,
             height: subscribe_block_height,
             index: 0,
+            authenticated_signer: None,
             timestamp: Timestamp::from(2),
             effect: subscribe_effect.into(),
         },
@@ -319,6 +324,7 @@ where
         effects: vec![OutgoingEffect {
             application_id: ApplicationId::System,
             destination: Destination::Recipient(creator_chain.into()),
+            authenticated_signer: None,
             effect: Effect::System(SystemEffect::Notify {
                 id: creator_chain.into(),
             }),
@@ -377,6 +383,7 @@ where
                 certificate_hash: broadcast_certificate.hash,
                 height: broadcast_block_height,
                 index: 0,
+                authenticated_signer: None,
                 timestamp: Timestamp::from(1),
                 effect: Effect::System(broadcast_effect),
             },

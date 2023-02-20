@@ -272,6 +272,9 @@ Event:
     - height:
         TYPENAME: BlockHeight
     - index: U64
+    - authenticated_signer:
+        OPTION:
+          TYPENAME: Owner
     - timestamp:
         TYPENAME: Timestamp
     - effect:
@@ -458,6 +461,9 @@ OutgoingEffect:
         TYPENAME: ApplicationId
     - destination:
         TYPENAME: Destination
+    - authenticated_signer:
+        OPTION:
+          TYPENAME: Owner
     - effect:
         TYPENAME: Effect
 Owner:

@@ -124,7 +124,7 @@ impl From<ExecutionResult> for super::ExecutionResult {
         let effects = result
             .effects
             .into_iter()
-            .map(|(destination, effect)| (destination.into(), effect))
+            .map(|(destination, authenticated, effect)| (destination.into(), authenticated, effect))
             .collect();
 
         let subscribe = result

@@ -25,6 +25,7 @@ fn make_event(
         certificate_hash,
         height: BlockHeight::from(height),
         index,
+        authenticated_signer: None,
         timestamp: Default::default(),
         effect: Effect::User(effect.into()),
     }
