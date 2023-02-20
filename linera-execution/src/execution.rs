@@ -323,11 +323,9 @@ where
         for index in self.system.registry.known_applications.indices().await? {
             let application_description =
                 self.system.registry.known_applications.get(&index).await?;
-            match application_description {
-                Some(application_description) => {
-                    applications.push((index, application_description))
-                }
-                None => {}
+
+            if let Some(application_description) = application_description {
+                applications.push((index, application_description));
             }
         }
         Ok(applications)

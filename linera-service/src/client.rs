@@ -7,9 +7,13 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
 use futures::StreamExt;
-use linera_base::{committee::ValidatorState, crypto::{CryptoHash, KeyPair}, data_types::{
-    BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName,
-}, hex_debug};
+use linera_base::{
+    committee::ValidatorState,
+    crypto::{CryptoHash, KeyPair},
+    data_types::{
+        BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName,
+    },
+};
 use linera_chain::data_types::{
     Block, BlockAndRound, BlockProposal, Certificate, SignatureAggregator, Value, Vote,
 };
@@ -958,7 +962,10 @@ where
                     .context("failed to create application")?;
 
                 info!("{}", "Application published successfully!".green().bold());
-                info!("Application Id: {}\n", format!("{:?}", application_id).bold());
+                info!(
+                    "Application Id: {}\n",
+                    format!("{:?}", application_id).bold()
+                );
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs())
             }
 
