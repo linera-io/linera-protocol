@@ -6,7 +6,7 @@
 mod state;
 
 use self::state::Counter;
-use async_graphql::{EmptyMutation, EmptySubscription,Schema};
+use async_graphql::{EmptyMutation, EmptySubscription, Schema};
 use async_trait::async_trait;
 use linera_sdk::{QueryContext, Service, SimpleStateStorage};
 use thiserror::Error;
@@ -72,7 +72,7 @@ mod tests {
     }
 
     #[webassembly_test]
-    fn invalid_query() {    
+    fn invalid_query() {
         let value = 4_u128;
         let counter = Counter { value };
 
