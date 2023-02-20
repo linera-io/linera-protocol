@@ -14,10 +14,9 @@ use linera_base::{
     ensure,
 };
 use linera_execution::{
-    system::SystemEffect, ApplicationId, BytecodeId, BytecodeLocation, ChannelName, Destination,
-    Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, Operation,
-    OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemOperation,
-    UserApplicationDescription, UserApplicationId,
+    system::SystemEffect, ApplicationId, ChannelName, Destination, Effect, EffectContext,
+    ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, OperationContext, Query,
+    QueryContext, RawExecutionResult, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     collection_view::CollectionView,
@@ -28,7 +27,7 @@ use linera_views::{
     views::{GraphQLView, HashableContainerView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 /// A view accessing the state of a chain.
 #[derive(Debug, HashableContainerView, GraphQLView)]
@@ -440,80 +439,6 @@ where
             .get_mut()
             .reset(self.execution_state.system.ownership.get());
         Ok(effects)
-    }
-
-    /// Returns the list of all bytecode locations required to execute this block.
-    ///
-    /// This is similar to `ApplicationRegistryView::find_dependencies`, but starts out from a
-    /// whole block and includes applications that are not in the registry yet and only will get
-    /// registered or created in this block.
-    pub async fn bytecode_for_block(
-        &mut self,
-        block: &Block,
-    ) -> Result<BTreeMap<BytecodeId, BytecodeLocation>, ChainError> {
-        // The applications that get registered in this block.
-        let mut registered_apps = HashMap::<UserApplicationId, UserApplicationDescription>::new();
-        // The stack of applications that need to be added together with their dependencies.
-        let mut app_ids = Vec::new();
-        for message in &block.incoming_messages {
-            if let Effect::System(SystemEffect::RegisterApplications { applications }) =
-                &message.event.effect
-            {
-                for app in applications {
-                    registered_apps.insert(app.into(), app.clone());
-                }
-            }
-            if let ApplicationId::User(app_id) = message.application_id {
-                app_ids.push(app_id);
-            }
-        }
-        // What we return in the end.
-        let mut bytecode_locations = BTreeMap::new();
-        for (app_id, op) in &block.operations {
-            if let Operation::System(SystemOperation::CreateApplication {
-                bytecode_id,
-                required_application_ids,
-                ..
-            }) = op
-            {
-                if let Some(bytecode_location) = self
-                    .execution_state
-                    .system
-                    .registry
-                    .published_bytecodes
-                    .get(bytecode_id)
-                    .await
-                    .map_err(|err| ChainError::ExecutionError(err.into()))?
-                {
-                    bytecode_locations.insert(*bytecode_id, bytecode_location);
-                }
-                app_ids.extend(required_application_ids.iter().copied());
-            }
-            if let ApplicationId::User(app_id) = app_id {
-                app_ids.push(*app_id);
-            }
-        }
-        // The entries already inserted in `result`.
-        let mut added_app_ids = HashSet::new();
-        while let Some(app_id) = app_ids.pop() {
-            if !added_app_ids.insert(app_id) {
-                continue;
-            }
-            // Look up the application either in the to-be-registered ones or the registry.
-            let app = if let Some(app) = registered_apps.get(&app_id) {
-                app.clone()
-            } else {
-                self.execution_state
-                    .system
-                    .registry
-                    .describe_application(app_id)
-                    .await
-                    .map_err(|err| ChainError::ExecutionError(err.into()))?
-            };
-            app_ids.extend(app.required_application_ids.iter().cloned());
-            bytecode_locations.insert(app.bytecode_id, app.bytecode_location);
-        }
-        Ok(bytecode_locations)
     }
 
     async fn process_execution_results(

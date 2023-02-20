@@ -419,9 +419,10 @@ where
         };
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         // Find all certificates containing bytecode used when executing this block.
-        let blob_hashes: HashSet<_> = chain
-            .bytecode_for_block(block)
-            .await?
+        let blob_hashes: HashSet<_> = block
+            .required_bytecode(&chain.execution_state.system.registry)
+            .await
+            .map_err(|err| WorkerError::ChainError(Box::new(err.into())))?
             .into_values()
             .map(|bytecode_location| bytecode_location.certificate_hash)
             .collect();

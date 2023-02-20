@@ -154,7 +154,7 @@ where
         let applications = self
             .system
             .registry
-            .describe_application_with_dependencies(application_id)
+            .describe_applications_with_dependencies(vec![application_id], &Default::default())
             .await?;
         for effect in &result.effects {
             system_result.effects.push((

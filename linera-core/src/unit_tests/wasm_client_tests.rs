@@ -290,8 +290,8 @@ where
         .await?;
 
     // Receive our own cert to broadcast the bytecode location.
-    sender.receive_certificate(pub_cert.clone()).await?;
-    sender.process_inbox().await?;
+    sender.receive_certificate(pub_cert.clone()).await.unwrap();
+    sender.process_inbox().await.unwrap();
 
     let sender_kp = linera_base::crypto::KeyPair::generate();
     let receiver_kp = linera_base::crypto::KeyPair::generate();
@@ -340,7 +340,7 @@ where
         }));
     receiver.synchronize_and_recompute_balance().await.unwrap();
     receiver.receive_certificate(cert).await.unwrap();
-    let certs = receiver.process_inbox().await?;
+    let certs = receiver.process_inbox().await.unwrap();
     assert_eq!(certs.len(), 1);
     let messages = &certs[0].value.block().incoming_messages;
     assert!(messages.iter().any(|msg| matches!(

@@ -14,7 +14,7 @@ use linera_views::{
     views::{HashableContainerView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -159,10 +159,19 @@ where
 
     /// Returns all the known locations of published bytecode.
     pub async fn bytecode_locations(
-        &mut self,
+        &self,
+    ) -> Result<Vec<(BytecodeId, BytecodeLocation)>, SystemExecutionError> {
+        let ids = self.published_bytecodes.indices().await?;
+        self.bytecode_locations_for(ids).await
+    }
+
+    /// Returns all locations of published bytecode with the given IDs.
+    pub async fn bytecode_locations_for(
+        &self,
+        ids: impl IntoIterator<Item = BytecodeId>,
     ) -> Result<Vec<(BytecodeId, BytecodeLocation)>, SystemExecutionError> {
         let mut locations = Vec::new();
-        for id in self.published_bytecodes.indices().await? {
+        for id in ids {
             if let Some(location) = self.published_bytecodes.get(&id).await? {
                 locations.push((id, location));
             }
@@ -221,7 +230,7 @@ where
 
     /// Retrieve an application's description.
     pub async fn describe_application(
-        &mut self,
+        &self,
         id: UserApplicationId,
     ) -> Result<UserApplicationDescription, SystemExecutionError> {
         self.known_applications
@@ -230,16 +239,14 @@ where
             .ok_or_else(|| SystemExecutionError::UnknownApplicationId(Box::new(id)))
     }
 
-    /// Retrieve the recursive dependencies of an application and apply a topological
-    /// sort.
+    /// Retrieve the recursive dependencies of applications and apply a topological sort.
     pub async fn find_dependencies(
-        &mut self,
-        id: UserApplicationId,
+        &self,
+        mut stack: Vec<UserApplicationId>,
+        registered_apps: &HashMap<UserApplicationId, UserApplicationDescription>,
     ) -> Result<Vec<UserApplicationId>, SystemExecutionError> {
         // What we return at the end.
         let mut result = Vec::new();
-        // The calling stack.
-        let mut stack = vec![id];
         // The entries already inserted in `result`.
         let mut sorted = HashSet::new();
         // The entries for which dependencies have already been pushed once to the stack.
@@ -257,15 +264,15 @@ where
                 continue;
             }
             // First time we see this entry:
-            // 1. Mark it so that its dependencies are no longer push to the stack.
+            // 1. Mark it so that its dependencies are no longer pushed to the stack.
             seen.insert(id);
             // 2. Schedule all the (yet unseen) dependencies, then this entry for a second visit.
             stack.push(id);
-            let app = self
-                .known_applications
-                .get(&id)
-                .await?
-                .ok_or_else(|| SystemExecutionError::UnknownApplicationId(Box::new(id)))?;
+            let app = if let Some(app) = registered_apps.get(&id) {
+                app.clone()
+            } else {
+                self.describe_application(id).await?
+            };
             for child in app.required_application_ids.iter().rev() {
                 if !seen.contains(child) {
                     stack.push(*child);
@@ -275,19 +282,20 @@ where
         Ok(result)
     }
 
-    /// Retrieve an application's description preceded by its recursive dependencies.
-    pub async fn describe_application_with_dependencies(
-        &mut self,
-        id: UserApplicationId,
+    /// Retrieve applications' descriptions preceded by their recursive dependencies.
+    pub async fn describe_applications_with_dependencies(
+        &self,
+        ids: Vec<UserApplicationId>,
+        registered_apps: &HashMap<UserApplicationId, UserApplicationDescription>,
     ) -> Result<Vec<UserApplicationDescription>, SystemExecutionError> {
-        let ids = self.find_dependencies(id).await?;
+        let ids_with_deps = self.find_dependencies(ids, registered_apps).await?;
         let mut result = Vec::new();
-        for id in ids {
-            let description = self
-                .known_applications
-                .get(&id)
-                .await?
-                .ok_or_else(|| SystemExecutionError::UnknownApplicationId(Box::new(id)))?;
+        for id in ids_with_deps {
+            let description = if let Some(description) = registered_apps.get(&id) {
+                description.clone()
+            } else {
+                self.describe_application(id).await?
+            };
             result.push(description);
         }
         Ok(result)
