@@ -35,6 +35,16 @@ pub enum ApplicationId {
     User(UserApplicationId),
 }
 
+impl ApplicationId {
+    pub fn user_application_id(&self) -> Option<&UserApplicationId> {
+        if let ApplicationId::User(app_id) = self {
+            Some(app_id)
+        } else {
+            None
+        }
+    }
+}
+
 /// A unique identifier for a user application.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct UserApplicationId {
@@ -286,12 +296,12 @@ where
     pub async fn describe_applications_with_dependencies(
         &self,
         ids: Vec<UserApplicationId>,
-        registered_apps: &HashMap<UserApplicationId, UserApplicationDescription>,
+        extra_registered_apps: &HashMap<UserApplicationId, UserApplicationDescription>,
     ) -> Result<Vec<UserApplicationDescription>, SystemExecutionError> {
-        let ids_with_deps = self.find_dependencies(ids, registered_apps).await?;
+        let ids_with_deps = self.find_dependencies(ids, extra_registered_apps).await?;
         let mut result = Vec::new();
         for id in ids_with_deps {
-            let description = if let Some(description) = registered_apps.get(&id) {
+            let description = if let Some(description) = extra_registered_apps.get(&id) {
                 description.clone()
             } else {
                 self.describe_application(id).await?

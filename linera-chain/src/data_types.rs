@@ -105,12 +105,7 @@ impl Block {
         self.operations
             .iter()
             .flat_map(|(app_id, op)| {
-                if let ApplicationId::User(app_id) = app_id {
-                    Some(app_id).into_iter()
-                } else {
-                    None.into_iter()
-                }
-                .chain(
+                app_id.user_application_id().into_iter().chain(
                     if let Operation::System(SystemOperation::CreateApplication {
                         required_application_ids,
                         ..
@@ -122,13 +117,11 @@ impl Block {
                     },
                 )
             })
-            .chain(self.incoming_messages.iter().filter_map(|message| {
-                if let ApplicationId::User(app_id) = &message.application_id {
-                    Some(app_id)
-                } else {
-                    None
-                }
-            }))
+            .chain(
+                self.incoming_messages
+                    .iter()
+                    .filter_map(|message| message.application_id.user_application_id()),
+            )
     }
 
     fn created_application_bytecode_ids(&self) -> impl Iterator<Item = &BytecodeId> + '_ {
