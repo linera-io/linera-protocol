@@ -10,9 +10,14 @@ use linera_base::{
     data_types::{BlockHeight, ChainId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName},
     ensure,
 };
-use linera_execution::{ApplicationId, ChannelName, Destination, Effect, Operation};
+use linera_execution::{
+    ApplicationId, ApplicationRegistryView, BytecodeId, BytecodeLocation, ChannelName, Destination,
+    Effect, ExecutionError, Operation, SystemEffect, SystemOperation, UserApplicationDescription,
+    UserApplicationId,
+};
+use linera_views::{common::Context, views::ViewError};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 #[cfg(test)]
 #[path = "unit_tests/data_types_tests.rs"]
@@ -44,6 +49,97 @@ pub struct Block {
     /// Certified hash (see `Certificate` below) of the previous block in the
     /// chain, if any.
     pub previous_block_hash: Option<CryptoHash>,
+}
+
+impl Block {
+    /// Returns the list of all bytecode locations required to execute this block.
+    ///
+    /// This is similar to `ApplicationRegistryView::find_dependencies`, but starts out from a
+    /// whole block and includes applications that are not in the registry yet and only will get
+    /// registered or created in this block.
+    pub async fn required_bytecode<C>(
+        &self,
+        registry: &ApplicationRegistryView<C>,
+    ) -> Result<BTreeMap<BytecodeId, BytecodeLocation>, ExecutionError>
+    where
+        C: Context + Clone + Send + Sync + 'static,
+        ViewError: From<C::Error>,
+    {
+        // The bytecode locations required for apps created in this block.
+        let created_app_locations = registry
+            .bytecode_locations_for(self.created_application_bytecode_ids().cloned())
+            .await?;
+        // The applications that get registered in this block.
+        let registered_apps = self
+            .registered_applications()
+            .map(|app| (UserApplicationId::from(app), app.clone()))
+            .collect();
+        // The bytecode locations for applications required for operations or incoming messages.
+        let required_locations = registry
+            .describe_applications_with_dependencies(
+                self.required_application_ids().cloned().collect(),
+                &registered_apps,
+            )
+            .await?
+            .into_iter()
+            .map(|app| (app.bytecode_id, app.bytecode_location));
+        Ok(required_locations.chain(created_app_locations).collect())
+    }
+
+    fn registered_applications(&self) -> impl Iterator<Item = &UserApplicationDescription> {
+        self.incoming_messages
+            .iter()
+            .filter_map(|message| {
+                if let Effect::System(SystemEffect::RegisterApplications { applications }) =
+                    &message.event.effect
+                {
+                    Some(applications)
+                } else {
+                    None
+                }
+            })
+            .flatten()
+    }
+
+    fn required_application_ids(&self) -> impl Iterator<Item = &UserApplicationId> + '_ {
+        self.operations
+            .iter()
+            .flat_map(|(app_id, op)| {
+                if let ApplicationId::User(app_id) = app_id {
+                    Some(app_id).into_iter()
+                } else {
+                    None.into_iter()
+                }
+                .chain(
+                    if let Operation::System(SystemOperation::CreateApplication {
+                        required_application_ids,
+                        ..
+                    }) = op
+                    {
+                        required_application_ids.iter()
+                    } else {
+                        [].iter()
+                    },
+                )
+            })
+            .chain(self.incoming_messages.iter().filter_map(|message| {
+                if let ApplicationId::User(app_id) = &message.application_id {
+                    Some(app_id)
+                } else {
+                    None
+                }
+            }))
+    }
+
+    fn created_application_bytecode_ids(&self) -> impl Iterator<Item = &BytecodeId> + '_ {
+        self.operations.iter().filter_map(|(_, op)| {
+            if let Operation::System(SystemOperation::CreateApplication { bytecode_id, .. }) = op {
+                Some(bytecode_id)
+            } else {
+                None
+            }
+        })
+    }
 }
 
 /// A block with a round number.

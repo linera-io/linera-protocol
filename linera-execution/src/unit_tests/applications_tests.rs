@@ -69,15 +69,40 @@ fn registry(graph: impl IntoIterator<Item = (usize, Vec<usize>)>) -> Application
 async fn test_topological_sort() {
     let mut view = ApplicationRegistryView::new().await;
     view.import(registry([(1, vec![2, 3])])).unwrap();
-    assert!(view.find_dependencies(app_id(1)).await.is_err());
+    assert!(view
+        .find_dependencies(vec![app_id(1)], &Default::default())
+        .await
+        .is_err());
     view.import(registry([(3, vec![2]), (2, vec![]), (0, vec![1])]))
         .unwrap();
-    let results = view.find_dependencies(app_id(1)).await.unwrap();
+    let results = view
+        .find_dependencies(vec![app_id(1)], &Default::default())
+        .await
+        .unwrap();
     assert_eq!(results, Vec::from_iter([2, 3, 1].into_iter().map(app_id)));
-    let results = view.find_dependencies(app_id(0)).await.unwrap();
+    let results = view
+        .find_dependencies(vec![app_id(0)], &Default::default())
+        .await
+        .unwrap();
     assert_eq!(
         results,
         Vec::from_iter([2, 3, 1, 0].into_iter().map(app_id))
+    );
+    let results = view
+        .find_dependencies(
+            vec![app_id(0), app_id(5)],
+            &vec![
+                (app_id(5), app_description(5, vec![4])),
+                (app_id(4), app_description(5, vec![2])),
+            ]
+            .into_iter()
+            .collect(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        results,
+        Vec::from_iter([2, 4, 5, 3, 1, 0].into_iter().map(app_id))
     );
 }
 
@@ -91,9 +116,15 @@ async fn test_topological_sort_with_loop() {
         (0, vec![1]),
     ]))
     .unwrap();
-    let results = view.find_dependencies(app_id(1)).await.unwrap();
+    let results = view
+        .find_dependencies(vec![app_id(1)], &Default::default())
+        .await
+        .unwrap();
     assert_eq!(results, Vec::from_iter([2, 3, 1].into_iter().map(app_id)));
-    let results = view.find_dependencies(app_id(0)).await.unwrap();
+    let results = view
+        .find_dependencies(vec![app_id(0)], &Default::default())
+        .await
+        .unwrap();
     assert_eq!(
         results,
         Vec::from_iter([2, 3, 1, 0].into_iter().map(app_id))
