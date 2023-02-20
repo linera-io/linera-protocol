@@ -215,6 +215,14 @@ pub struct BlockProposal {
     pub signature: Signature,
 }
 
+/// An effect together with routing information.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct OutgoingEffect {
+    pub application_id: ApplicationId,
+    pub destination: Destination,
+    pub effect: Effect,
+}
+
 /// A statement to be certified by the validators.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Value {
@@ -222,13 +230,13 @@ pub enum Value {
     ValidatedBlock {
         block: Block,
         round: RoundNumber,
-        effects: Vec<(ApplicationId, Destination, Effect)>,
+        effects: Vec<OutgoingEffect>,
         state_hash: CryptoHash,
     },
     /// The block is validated and confirmed (i.e. ready to be published).
     ConfirmedBlock {
         block: Block,
-        effects: Vec<(ApplicationId, Destination, Effect)>,
+        effects: Vec<OutgoingEffect>,
         state_hash: CryptoHash,
     },
 }
@@ -405,9 +413,7 @@ impl Value {
         }
     }
 
-    pub fn effects_and_state_hash(
-        &self,
-    ) -> (Vec<(ApplicationId, Destination, Effect)>, CryptoHash) {
+    pub fn effects_and_state_hash(&self) -> (Vec<OutgoingEffect>, CryptoHash) {
         match self {
             Value::ConfirmedBlock {
                 effects,
@@ -422,7 +428,7 @@ impl Value {
         }
     }
 
-    pub fn effects(&self) -> &Vec<(ApplicationId, Destination, Effect)> {
+    pub fn effects(&self) -> &Vec<OutgoingEffect> {
         match self {
             Value::ConfirmedBlock { effects, .. } | Value::ValidatedBlock { effects, .. } => {
                 effects

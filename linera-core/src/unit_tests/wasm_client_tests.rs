@@ -13,6 +13,7 @@ use crate::client::client_tests::{
 };
 use fungible::{AccountOwner, SignedTransfer, SignedTransferPayload, Transfer};
 use linera_base::data_types::*;
+use linera_chain::data_types::OutgoingEffect;
 use linera_execution::{
     system::Balance, ApplicationId, Bytecode, Destination, Effect, Operation, Query, Response,
     SystemEffect, UserApplicationDescription, WasmRuntime,
@@ -330,13 +331,13 @@ where
         .value
         .effects()
         .iter()
-        .any(|(app_id, destination, effect)| {
+        .any(|OutgoingEffect { application_id, destination, effect, .. }| {
             matches!(
                 effect,
                 Effect::System(SystemEffect::RegisterApplications { applications })
                 if matches!(applications[0], UserApplicationDescription{ bytecode_id: b_id, .. } if b_id == bytecode_id)
             ) && *destination == Destination::Recipient(receiver.chain_id())
-                && matches!(app_id, ApplicationId::System)
+                && matches!(application_id, ApplicationId::System)
         }));
     receiver.synchronize_and_recompute_balance().await.unwrap();
     receiver.receive_certificate(cert).await.unwrap();

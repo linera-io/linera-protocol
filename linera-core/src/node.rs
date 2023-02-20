@@ -14,12 +14,14 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, ChainId, ValidatorName},
 };
 use linera_chain::{
-    data_types::{Block, BlockProposal, Certificate, LiteCertificate, Origin, Value},
+    data_types::{
+        Block, BlockProposal, Certificate, LiteCertificate, Origin, OutgoingEffect, Value,
+    },
     ChainError, ChainManagerInfo,
 };
 use linera_execution::{
-    ApplicationId, BytecodeLocation, Destination, Effect, ExecutionError, Query, Response,
-    UserApplicationDescription, UserApplicationId,
+    ApplicationId, BytecodeLocation, ExecutionError, Query, Response, UserApplicationDescription,
+    UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -365,7 +367,7 @@ where
     pub(crate) async fn stage_block_execution(
         &self,
         block: &Block,
-    ) -> Result<(Vec<(ApplicationId, Destination, Effect)>, ChainInfoResponse), NodeError> {
+    ) -> Result<(Vec<OutgoingEffect>, ChainInfoResponse), NodeError> {
         let (effects, info) = self
             .node
             .clone()

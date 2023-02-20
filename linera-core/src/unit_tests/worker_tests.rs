@@ -20,7 +20,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockAndRound, BlockProposal, Certificate, Event, LiteVote, Medium, Message, Origin,
-        SignatureAggregator, Value,
+        OutgoingEffect, SignatureAggregator, Value,
     },
     ChainError,
 };
@@ -28,8 +28,8 @@ use linera_execution::{
     system::{
         Account, Amount, Balance, Recipient, SystemChannel, SystemEffect, SystemOperation, UserData,
     },
-    ApplicationId, ApplicationRegistry, ChainOwnership, ChannelId, Destination, Effect,
-    ExecutionStateView, Operation, Query, Response, SystemExecutionState, SystemQuery,
+    ApplicationId, ApplicationRegistry, ChainOwnership, ChannelId, ChannelName, Destination,
+    Effect, ExecutionStateView, Operation, Query, Response, SystemExecutionState, SystemQuery,
     SystemResponse, UserApplicationId,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
@@ -259,10 +259,9 @@ async fn make_transfer_certificate_for_epoch<S>(
         Timestamp::from(0),
     );
     let effects = match recipient {
-        Recipient::Account(account) => vec![(
-            ApplicationId::System,
-            Destination::Recipient(account.chain_id),
-            Effect::System(SystemEffect::Credit { account, amount }),
+        Recipient::Account(account) => vec![direct_outgoing_effect(
+            account.chain_id,
+            SystemEffect::Credit { account, amount },
         )],
         Recipient::Burn => Vec::new(),
     };
@@ -273,6 +272,22 @@ async fn make_transfer_certificate_for_epoch<S>(
         state_hash,
     };
     make_certificate(committee, worker, value)
+}
+
+fn direct_outgoing_effect(recipient: ChainId, effect: SystemEffect) -> OutgoingEffect {
+    OutgoingEffect {
+        application_id: ApplicationId::System,
+        destination: Destination::Recipient(recipient),
+        effect: Effect::System(effect),
+    }
+}
+
+fn channel_outgoing_effect(name: ChannelName, effect: SystemEffect) -> OutgoingEffect {
+    OutgoingEffect {
+        application_id: ApplicationId::System,
+        destination: Destination::Subscribers(name),
+        effect: Effect::System(effect),
+    }
 }
 
 trait IntoApplicationIdAndOperation {
@@ -810,21 +825,19 @@ where
                 timestamp: Timestamp::from(0),
             },
             effects: vec![
-                (
-                    ApplicationId::System,
-                    Destination::Recipient(ChainId::root(2)),
-                    Effect::System(SystemEffect::Credit {
+                direct_outgoing_effect(
+                    ChainId::root(2),
+                    SystemEffect::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::from(1),
-                    }),
+                    },
                 ),
-                (
-                    ApplicationId::System,
-                    Destination::Recipient(ChainId::root(2)),
-                    Effect::System(SystemEffect::Credit {
+                direct_outgoing_effect(
+                    ChainId::root(2),
+                    SystemEffect::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::from(2),
-                    }),
+                    },
                 ),
             ],
             state_hash: make_state_hash(SystemExecutionState {
@@ -865,13 +878,12 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![(
-                ApplicationId::System,
-                Destination::Recipient(ChainId::root(2)),
-                Effect::System(SystemEffect::Credit {
+            effects: vec![direct_outgoing_effect(
+                ChainId::root(2),
+                SystemEffect::Credit {
                     account: Account::chain(ChainId::root(2)),
                     amount: Amount::from(3),
-                }),
+                },
             )],
             state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(epoch),
@@ -973,6 +985,7 @@ where
                         certificate_hash: certificate0.hash,
                         height: BlockHeight::from(0),
                         index: 1,
+
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
@@ -1154,13 +1167,12 @@ where
             &worker,
             Value::ConfirmedBlock {
                 block: block_proposal.content.block,
-                effects: vec![(
-                    ApplicationId::System,
-                    Destination::Recipient(ChainId::root(3)),
-                    Effect::System(SystemEffect::Credit {
+                effects: vec![direct_outgoing_effect(
+                    ChainId::root(3),
+                    SystemEffect::Credit {
                         account: Account::chain(ChainId::root(3)),
                         amount: Amount::from(1),
-                    }),
+                    },
                 )],
                 state_hash: make_state_hash(SystemExecutionState {
                     epoch: Some(epoch),
@@ -2512,24 +2524,22 @@ where
                 timestamp: Timestamp::from(0),
             },
             effects: vec![
-                (
-                    ApplicationId::System,
-                    Destination::Recipient(user_id),
-                    Effect::System(SystemEffect::OpenChain {
+                direct_outgoing_effect(
+                    user_id,
+                    SystemEffect::OpenChain {
                         id: user_id,
                         owner: key_pair.public().into(),
                         epoch: Epoch::from(0),
                         committees: committees.clone(),
                         admin_id,
-                    }),
+                    },
                 ),
-                (
-                    ApplicationId::System,
-                    Destination::Recipient(admin_id),
-                    Effect::System(SystemEffect::Subscribe {
+                direct_outgoing_effect(
+                    admin_id,
+                    SystemEffect::Subscribe {
                         id: user_id,
                         channel_id: admin_channel_id.clone(),
-                    }),
+                    },
                 ),
             ],
             state_hash: make_state_hash(SystemExecutionState {
@@ -2623,22 +2633,20 @@ where
                 timestamp: Timestamp::from(0),
             },
             effects: vec![
-                (
-                    ApplicationId::System,
-                    Destination::Subscribers(SystemChannel::Admin.name()),
-                    Effect::System(SystemEffect::SetCommittees {
+                channel_outgoing_effect(
+                    SystemChannel::Admin.name(),
+                    SystemEffect::SetCommittees {
                         admin_id,
                         epoch: Epoch::from(1),
                         committees: committees2.clone(),
-                    }),
+                    },
                 ),
-                (
-                    ApplicationId::System,
-                    Destination::Recipient(user_id),
-                    Effect::System(SystemEffect::Credit {
+                direct_outgoing_effect(
+                    user_id,
+                    SystemEffect::Credit {
                         account: Account::chain(user_id),
                         amount: Amount::from(2),
-                    }),
+                    },
                 ),
             ],
             state_hash: make_state_hash(SystemExecutionState {
@@ -2690,10 +2698,9 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![(
-                ApplicationId::System,
-                Destination::Recipient(user_id),
-                Effect::System(SystemEffect::Notify { id: user_id }),
+            effects: vec![direct_outgoing_effect(
+                user_id,
+                SystemEffect::Notify { id: user_id },
             )],
             state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
@@ -3041,13 +3048,12 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![(
-                ApplicationId::System,
-                Destination::Recipient(admin_id),
-                Effect::System(SystemEffect::Credit {
+            effects: vec![direct_outgoing_effect(
+                admin_id,
+                SystemEffect::Credit {
                     account: Account::chain(admin_id),
                     amount: Amount::from(1),
-                }),
+                },
             )],
             state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
@@ -3090,14 +3096,13 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![(
-                ApplicationId::System,
-                Destination::Subscribers(SystemChannel::Admin.name()),
-                Effect::System(SystemEffect::SetCommittees {
+            effects: vec![channel_outgoing_effect(
+                SystemChannel::Admin.name(),
+                SystemEffect::SetCommittees {
                     admin_id,
                     epoch: Epoch::from(1),
                     committees: committees2.clone(),
-                }),
+                },
             )],
             state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
@@ -3251,13 +3256,12 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![(
-                ApplicationId::System,
-                Destination::Recipient(admin_id),
-                Effect::System(SystemEffect::Credit {
+            effects: vec![direct_outgoing_effect(
+                admin_id,
+                SystemEffect::Credit {
                     account: Account::chain(admin_id),
                     amount: Amount::from(1),
-                }),
+                },
             )],
             state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(0)),
@@ -3311,23 +3315,21 @@ where
                 timestamp: Timestamp::from(0),
             },
             effects: vec![
-                (
-                    ApplicationId::System,
-                    Destination::Subscribers(SystemChannel::Admin.name()),
-                    Effect::System(SystemEffect::SetCommittees {
+                channel_outgoing_effect(
+                    SystemChannel::Admin.name(),
+                    SystemEffect::SetCommittees {
                         admin_id,
                         epoch: Epoch::from(1),
                         committees: committees2.clone(),
-                    }),
+                    },
                 ),
-                (
-                    ApplicationId::System,
-                    Destination::Subscribers(SystemChannel::Admin.name()),
-                    Effect::System(SystemEffect::SetCommittees {
+                channel_outgoing_effect(
+                    SystemChannel::Admin.name(),
+                    SystemEffect::SetCommittees {
                         admin_id,
                         epoch: Epoch::from(1),
                         committees: committees3.clone(),
-                    }),
+                    },
                 ),
             ],
             state_hash: make_state_hash(SystemExecutionState {

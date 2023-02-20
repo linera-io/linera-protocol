@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_types::{Block, Event, Medium, Origin, Target},
+    data_types::{Block, Event, Medium, Origin, OutgoingEffect, Target},
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
     ChainError, ChainManager,
@@ -211,7 +211,7 @@ where
         origin: &Origin,
         height: BlockHeight,
         timestamp: Timestamp,
-        effects: Vec<(ApplicationId, Destination, Effect)>,
+        effects: Vec<OutgoingEffect>,
         certificate_hash: CryptoHash,
     ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
@@ -231,7 +231,12 @@ where
         );
         // Process immediate effects and create inbox events.
         let mut events = Vec::new();
-        for (index, (app_id, destination, effect)) in effects.into_iter().enumerate() {
+        for (index, outgoing_effect) in effects.into_iter().enumerate() {
+            let OutgoingEffect {
+                application_id: app_id,
+                destination,
+                effect,
+            } = outgoing_effect;
             // Skip events that do not belong to this application.
             if app_id != application_id {
                 continue;
@@ -349,7 +354,7 @@ where
     pub async fn execute_block(
         &mut self,
         block: &Block,
-    ) -> Result<Vec<(ApplicationId, Destination, Effect)>, ChainError> {
+    ) -> Result<Vec<OutgoingEffect>, ChainError> {
         assert_eq!(block.chain_id, self.chain_id());
         let chain_id = self.chain_id();
         ensure!(
@@ -445,7 +450,7 @@ where
 
     async fn process_execution_results(
         communication_states: &mut CollectionView<C, ApplicationId, CommunicationStateView<C>>,
-        effects: &mut Vec<(ApplicationId, Destination, Effect)>,
+        effects: &mut Vec<OutgoingEffect>,
         height: BlockHeight,
         results: Vec<ExecutionResult>,
     ) -> Result<(), ChainError> {
@@ -500,7 +505,7 @@ where
         application_id: ApplicationId,
         outboxes: &mut CollectionView<C, Target, OutboxStateView<C>>,
         channels: &mut CollectionView<C, ChannelName, ChannelStateView<C>>,
-        effects: &mut Vec<(ApplicationId, Destination, Effect)>,
+        effects: &mut Vec<OutgoingEffect>,
         height: BlockHeight,
         application: RawExecutionResult<E>,
     ) -> Result<(), ChainError> {
@@ -517,7 +522,11 @@ where
                     channel_broadcasts.insert(name.clone());
                 }
             }
-            effects.push((application_id, destination, effect.into()));
+            effects.push(OutgoingEffect {
+                application_id,
+                destination,
+                effect: effect.into(),
+            });
         }
 
         // Update the (regular) outboxes.
