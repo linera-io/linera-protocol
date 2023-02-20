@@ -798,6 +798,7 @@ pub mod tests {
             incoming_messages: vec![],
             operations: vec![],
             height: Default::default(),
+            authenticated_signer: None,
             timestamp: Default::default(),
             previous_block_hash: None,
         }

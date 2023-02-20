@@ -46,6 +46,9 @@ pub struct Block {
     /// The timestamp when this block was created. This must be later than all messages received
     /// in this block, but no later than the current time.
     pub timestamp: Timestamp,
+    /// The user signing for the operations in the block. (Currently, this must the `owner`
+    /// in the block proposal, or no one.)
+    pub authenticated_signer: Option<Owner>,
     /// Certified hash (see `Certificate` below) of the previous block in the
     /// chain, if any.
     pub previous_block_hash: Option<CryptoHash>,
@@ -202,6 +205,8 @@ pub enum Medium {
 }
 
 /// An authenticated proposal for a new block.
+// TODO(#456): the signature of the block owner is currently lost but it would be useful
+// to have it for auditing purposes.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct BlockProposal {

@@ -169,6 +169,7 @@ impl ClientContext {
                 )],
                 previous_block_hash: chain.block_hash,
                 height: chain.next_block_height,
+                authenticated_signer: None,
                 timestamp: chain.timestamp.max(Timestamp::now()),
             };
             debug!("Preparing block proposal: {:?}", block);
