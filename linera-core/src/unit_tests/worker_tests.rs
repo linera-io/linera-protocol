@@ -118,6 +118,7 @@ fn make_block(
     operations: Vec<impl IntoApplicationIdAndOperation>,
     incoming_messages: Vec<Message>,
     previous_confirmed_block: Option<&Certificate>,
+    authenticated_signer: Option<Owner>,
     timestamp: Timestamp,
 ) -> Block {
     let previous_block_hash = previous_confirmed_block.as_ref().map(|cert| cert.hash);
@@ -141,6 +142,7 @@ fn make_block(
             .collect(),
         previous_block_hash,
         height,
+        authenticated_signer,
         timestamp,
     }
 }
@@ -164,6 +166,7 @@ fn make_transfer_block_proposal(
         }],
         incoming_messages,
         previous_confirmed_block,
+        None,
         Timestamp::from(0),
     );
     BlockProposal::new(
@@ -252,6 +255,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         }],
         incoming_messages,
         previous_confirmed_block,
+        None,
         Timestamp::from(0),
     );
     let effects = match recipient {
@@ -474,6 +478,7 @@ where
             Vec::<SystemOperation>::new(),
             vec![],
             parent,
+            None,
             Timestamp::from(micros),
         )
     };
@@ -801,6 +806,7 @@ where
                 ],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
+                authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
             effects: vec![
@@ -856,6 +862,7 @@ where
                 )],
                 previous_block_hash: Some(certificate0.hash),
                 height: BlockHeight::from(1),
+                authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
             effects: vec![(
@@ -2501,6 +2508,7 @@ where
                 )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
+                authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
             effects: vec![
@@ -2611,6 +2619,7 @@ where
                 ],
                 previous_block_hash: Some(certificate0.hash),
                 height: BlockHeight::from(1),
+                authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
             effects: vec![
@@ -2678,6 +2687,7 @@ where
                 operations: Vec::new(),
                 previous_block_hash: Some(certificate1.hash),
                 height: BlockHeight::from(2),
+                authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
             effects: vec![(
@@ -2867,6 +2877,7 @@ where
                 operations: Vec::new(),
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
+                authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
             effects: Vec::new(),
@@ -3027,6 +3038,7 @@ where
                 )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
+                authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
             effects: vec![(
@@ -3075,6 +3087,7 @@ where
                 )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
+                authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
             effects: vec![(
@@ -3235,6 +3248,7 @@ where
                 )],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
+                authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
             effects: vec![(
@@ -3293,6 +3307,7 @@ where
                 ],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
+                authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
             effects: vec![
@@ -3396,6 +3411,7 @@ where
                 operations: Vec::new(),
                 previous_block_hash: Some(certificate1.hash),
                 height: BlockHeight::from(1),
+                authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
             effects: Vec::new(),

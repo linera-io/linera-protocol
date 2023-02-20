@@ -44,6 +44,9 @@ Block:
         TYPENAME: BlockHeight
     - timestamp:
         TYPENAME: Timestamp
+    - authenticated_signer:
+        OPTION:
+          TYPENAME: Owner
     - previous_block_hash:
         OPTION:
           TYPENAME: CryptoHash

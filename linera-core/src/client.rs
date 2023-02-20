@@ -894,6 +894,7 @@ where
             operations,
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
+            authenticated_signer: Some(self.identity().await?),
             timestamp,
         };
         let certificate = self.propose_block(block).await?;
@@ -940,6 +941,7 @@ where
             operations: Vec::new(),
             previous_block_hash: self.block_hash,
             height: self.next_block_height,
+            authenticated_signer: None,
             timestamp,
         };
         let (_, response) = self.node_client.stage_block_execution(&block).await?;

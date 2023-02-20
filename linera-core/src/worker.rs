@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use linera_base::{
     committee::Committee,
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, BlockHeight, ChainId, Epoch, Timestamp},
+    data_types::{ArithmeticError, BlockHeight, ChainId, Epoch, Owner, Timestamp},
     ensure,
 };
 use linera_chain::{
@@ -132,6 +132,9 @@ pub enum WorkerError {
     // Chain access control
     #[error("Block was not signed by an authorized owner")]
     InvalidOwner,
+
+    #[error("Operations in the block are not authenticated by the proper signer")]
+    InvalidSigner(Owner),
 
     // Chaining
     #[error(
@@ -711,7 +714,7 @@ where
             proposal.content.block.epoch == epoch,
             WorkerError::InvalidEpoch { chain_id, epoch }
         );
-        // Check authentication of the block.
+        // Check the authentication of the block.
         ensure!(
             chain.manager.get().has_owner(&proposal.owner),
             WorkerError::InvalidOwner
@@ -719,6 +722,10 @@ where
         proposal
             .signature
             .check(&proposal.content, proposal.owner.0)?;
+        // Check the authentication of the operations in the block.
+        if let Some(signer) = proposal.content.block.authenticated_signer {
+            ensure!(signer == proposal.owner, WorkerError::InvalidSigner(signer));
+        }
         // Check if the chain is ready for this new block proposal.
         // This should always pass for nodes without voting key.
         if chain.manager.get().check_proposed_block(

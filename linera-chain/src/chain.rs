@@ -419,7 +419,7 @@ where
                 chain_id,
                 height: block.height,
                 index,
-                authenticated_signer: None,
+                authenticated_signer: block.authenticated_signer,
             };
             let results = self
                 .execution_state

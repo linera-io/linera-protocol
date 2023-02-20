@@ -127,6 +127,7 @@ where
         vec![publish_operation],
         vec![],
         None,
+        None,
         Timestamp::from(1),
     );
     let publish_block_height = publish_block.height;
@@ -184,6 +185,7 @@ where
         Vec::<SystemOperation>::new(),
         vec![broadcast_message],
         Some(&publish_certificate),
+        None,
         Timestamp::from(1),
     );
     let bytecode_id = BytecodeId(EffectId {
@@ -249,6 +251,7 @@ where
         vec![subscribe_operation],
         vec![],
         None,
+        None,
         Timestamp::from(2),
     );
     let subscribe_block_height = subscribe_block.height;
@@ -306,6 +309,7 @@ where
         Vec::<SystemOperation>::new(),
         vec![accept_message],
         Some(&broadcast_certificate),
+        None,
         Timestamp::from(3),
     );
     publisher_system_state.timestamp = Timestamp::from(3);
@@ -378,6 +382,7 @@ where
             },
         }],
         Some(&subscribe_certificate),
+        None,
         Timestamp::from(4),
     );
     creator_system_state
@@ -436,6 +441,7 @@ where
         vec![(application_id, user_operation)],
         vec![],
         Some(&create_certificate),
+        None,
         Timestamp::from(5),
     );
     let expected_value = initial_value + increment;
