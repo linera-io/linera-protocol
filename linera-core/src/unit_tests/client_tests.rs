@@ -120,7 +120,7 @@ where
     {
         let validator = self.clone();
         let (sender, receiver) = oneshot::channel();
-        let _join_handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             if f(validator, sender).await.is_err() {
                 log::debug!("result could not be sent");
             }
