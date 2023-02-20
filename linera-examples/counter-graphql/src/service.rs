@@ -6,11 +6,21 @@
 mod state;
 
 use self::state::Counter;
+use async_graphql::{EmptyMutation, EmptySubscription,Schema};
 use async_trait::async_trait;
 use linera_sdk::{QueryContext, Service, SimpleStateStorage};
 use thiserror::Error;
 
 linera_sdk::service!(Counter);
+
+struct DummyObject;
+
+#[async_graphql::Object]
+impl DummyObject {
+    async fn hello(&self) -> String {
+        "Hello World!".to_string()
+    }
+}
 
 #[async_trait]
 impl Service for Counter {
@@ -22,10 +32,11 @@ impl Service for Counter {
         _context: &QueryContext,
         argument: &[u8],
     ) -> Result<Vec<u8>, Self::Error> {
-        match argument {
-            &[] => Ok(bcs::to_bytes(&self.value).expect("Serialization should not fail")),
-            _ => Err(Error::InvalidQuery),
-        }
+        let graphql_request: async_graphql::Request = serde_json::from_slice(argument).unwrap();
+        let dummy = DummyObject;
+        let schema = Schema::build(dummy, EmptyMutation, EmptySubscription).finish();
+        let res = schema.execute(graphql_request).await;
+        Ok(serde_json::to_vec(&res).unwrap())
     }
 }
 
@@ -61,7 +72,7 @@ mod tests {
     }
 
     #[webassembly_test]
-    fn invalid_query() {
+    fn invalid_query() {    
         let value = 4_u128;
         let counter = Counter { value };
 

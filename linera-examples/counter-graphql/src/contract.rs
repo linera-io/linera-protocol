@@ -5,13 +5,13 @@
 
 mod state;
 
-use std::num::ParseIntError;
 use self::state::Counter;
 use async_trait::async_trait;
 use linera_sdk::{
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
     OperationContext, Session, SessionCallResult, SessionId, SimpleStateStorage,
 };
+use std::num::ParseIntError;
 use thiserror::Error;
 
 linera_sdk::contract!(Counter);
@@ -91,7 +91,7 @@ pub enum Error {
 
     /// Could not parse the given argument into an u128.
     #[error("Parse error")]
-    ParseIntError(#[from] ParseIntError)
+    ParseIntError(#[from] ParseIntError),
 }
 
 #[cfg(test)]
