@@ -88,6 +88,15 @@ where
             self.new_back_values.clear();
         }
         self.front_delete_count = 0;
+        let hash = *self.hash.get_mut();
+        if self.stored_hash != hash {
+            let key = self.context.base_tag(KeyTag::Hash as u8);
+            match hash {
+                None => batch.delete_key(key),
+                Some(hash) => batch.put_key_value(key, &hash)?,
+            }
+            self.stored_hash = hash;
+        }
         Ok(())
     }
 
