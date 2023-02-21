@@ -509,13 +509,13 @@ where
         channels: &mut CollectionView<C, ChannelName, ChannelStateView<C>>,
         effects: &mut Vec<OutgoingEffect>,
         height: BlockHeight,
-        application: RawExecutionResult<E>,
+        raw_result: RawExecutionResult<E>,
     ) -> Result<(), ChainError> {
         // Record the effects of the execution. Effects are understood within an
         // application.
         let mut recipients = HashSet::new();
         let mut channel_broadcasts = HashSet::new();
-        for (destination, authenticated, effect) in application.effects {
+        for (destination, authenticated, effect) in raw_result.effects {
             match &destination {
                 Destination::Recipient(id) => {
                     recipients.insert(*id);
@@ -525,7 +525,7 @@ where
                 }
             }
             let authenticated_signer = if authenticated {
-                application.authenticated_signer
+                raw_result.authenticated_signer
             } else {
                 None
             };
@@ -544,7 +544,7 @@ where
         }
 
         // Update the channels.
-        for (name, id) in application.unsubscribe {
+        for (name, id) in raw_result.unsubscribe {
             let channel = channels.load_entry_mut(&name).await?;
             // Remove subscriber. Do not remove the channel outbox yet.
             channel.subscribers.remove(&id)?;
@@ -559,7 +559,7 @@ where
             }
             channel.block_height.set(Some(height));
         }
-        for (name, id) in application.subscribe {
+        for (name, id) in raw_result.subscribe {
             let channel = channels.load_entry_mut(&name).await?;
             // Add subscriber.
             if !channel.subscribers.contains(&id).await? {
