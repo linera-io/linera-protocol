@@ -13,6 +13,7 @@ use linera_sdk::{
 };
 use linera_views::{common::Context, views::ViewError};
 use serde::Deserialize;
+use std::sync::Arc;
 use thiserror::Error;
 
 /// Alias to the application type, so that the boilerplate module can reference it.
@@ -29,7 +30,7 @@ where
     type Storage = ViewStateStorage<Self>;
 
     async fn query_application(
-        &self,
+        self: Arc<Self>,
         _context: &QueryContext,
         argument: &[u8],
     ) -> Result<Vec<u8>, Self::Error> {

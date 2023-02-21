@@ -6,6 +6,7 @@
 mod state;
 
 use self::state::Counter;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use linera_sdk::{
@@ -28,7 +29,7 @@ where
     type Storage = ViewStateStorage<Self>;
 
     async fn query_application(
-        &self,
+        self: Arc<Self>,
         _context: &QueryContext,
         argument: &[u8],
     ) -> Result<Vec<u8>, Self::Error> {
@@ -55,6 +56,7 @@ mod tests {
     use futures_util::FutureExt;
     use linera_sdk::{ChainId, QueryContext, Service};
     use linera_views::{memory::get_memory_context, views::View};
+    use std::sync::Arc;
     use webassembly_test::webassembly_test;
 
     #[webassembly_test]
@@ -68,6 +70,7 @@ mod tests {
             .unwrap()
             .expect("Failed to load Counter");
         counter.value.set(value);
+        let counter = Arc::new(counter);
         let result = counter
             .query_application(&dummy_query_context(), &[])
             .now_or_never()
@@ -90,6 +93,7 @@ mod tests {
             .unwrap()
             .expect("Failed to load Counter");
         counter.value.set(value);
+        let counter = Arc::new(counter);
 
         let dummy_argument = [2];
         let result = counter

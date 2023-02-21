@@ -400,7 +400,7 @@ dependencies = [
  "futures",
  "hex",
  "linera-sdk",
- "serde",
+ "linera-views",
  "serde_json",
  "thiserror",
  "webassembly-test",

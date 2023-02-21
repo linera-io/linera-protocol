@@ -16,7 +16,7 @@ use crate::{
 };
 use linera_views::views::RootView;
 use serde::{de::DeserializeOwned, Serialize};
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
 
 /// The storage APIs used by a service.
 pub trait ServiceStateStorage {
@@ -36,7 +36,7 @@ where
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<Vec<u8>, String>> {
         ExportedFuture::new(async move {
-            let application: Application = system_api::load().await;
+            let application: Arc<Application> = Arc::new(system_api::load().await);
             application
                 .query_application(&context.into(), &argument)
                 .await
@@ -54,12 +54,12 @@ where
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<Vec<u8>, String>> {
         ExportedFuture::new(async move {
-            let application: Application = system_api::lock_and_load_view().await;
+            let application: Arc<Application> = Arc::new(system_api::lock_and_load_view().await);
             let result = application
                 .query_application(&context.into(), &argument)
                 .await;
             if result.is_ok() {
-                system_api::unlock_view(application).await;
+                system_api::unlock_view().await;
             }
             result.map_err(|error| error.to_string())
         })

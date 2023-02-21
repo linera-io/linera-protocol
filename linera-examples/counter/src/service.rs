@@ -8,6 +8,7 @@ mod state;
 use self::state::Counter;
 use async_trait::async_trait;
 use linera_sdk::{QueryContext, Service, SimpleStateStorage};
+use std::sync::Arc;
 use thiserror::Error;
 
 linera_sdk::service!(Counter);
@@ -18,7 +19,7 @@ impl Service for Counter {
     type Storage = SimpleStateStorage<Self>;
 
     async fn query_application(
-        &self,
+        self: Arc<Self>,
         _context: &QueryContext,
         argument: &[u8],
     ) -> Result<Vec<u8>, Self::Error> {
@@ -42,12 +43,13 @@ mod tests {
     use super::{Counter, Error};
     use futures::FutureExt;
     use linera_sdk::{ChainId, QueryContext, Service};
+    use std::sync::Arc;
     use webassembly_test::webassembly_test;
 
     #[webassembly_test]
     fn query() {
         let value = 61_098_721_u128;
-        let counter = Counter { value };
+        let counter = Arc::new(Counter { value });
 
         let result = counter
             .query_application(&dummy_query_context(), &[])
@@ -63,7 +65,7 @@ mod tests {
     #[webassembly_test]
     fn invalid_query() {
         let value = 4_u128;
-        let counter = Counter { value };
+        let counter = Arc::new(Counter { value });
 
         let dummy_argument = [2];
         let result = counter

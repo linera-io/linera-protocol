@@ -107,7 +107,7 @@ pub async fn lock_and_load_view<State: View<ReadableWasmContext>>() -> State {
 }
 
 /// Load the service state, without locking it for writes.
-pub async fn unlock_view<State: View<ReadableWasmContext>>(_state: State) {
+pub async fn unlock_view() {
     let future = system::Unlock::new();
     future::poll_fn(|_context| future.poll().into()).await;
 }
