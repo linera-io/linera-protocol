@@ -33,7 +33,9 @@ use wasmtime::*;
 /// Prints out a summary of executed tests and their results.
 fn main() -> Result<ExitCode> {
     let mut report = TestReport::default();
-    let engine = Engine::default();
+    let mut engine_config = Config::default();
+    engine_config.wasm_backtrace_details(WasmBacktraceDetails::Enable);
+    let engine = Engine::new(&engine_config)?;
     let mut linker = Linker::new(&engine);
     let test_module = load_test_module(&engine)?;
     let tests: Vec<_> = test_module.exports().filter_map(Test::new).collect();
@@ -125,11 +127,10 @@ impl TestReport {
     /// Report a test result.
     ///
     /// Reports that a test passed if `result` is `Ok` or that it failed otherwise.
-    pub fn result<T, E>(&mut self, result: Result<T, E>) {
-        if result.is_ok() {
-            self.pass();
-        } else {
-            self.fail();
+    pub fn result<T>(&mut self, result: Result<T, Trap>) {
+        match result {
+            Ok(_) => self.pass(),
+            Err(trap) => self.fail(trap),
         }
     }
 
@@ -140,9 +141,10 @@ impl TestReport {
     }
 
     /// Report that a test failed.
-    pub fn fail(&mut self) {
+    pub fn fail(&mut self, trap: Trap) {
         self.failed += 1;
-        eprintln!(" FAILED")
+        eprintln!(" FAILED");
+        eprintln!("{}", trap.to_string());
     }
 
     /// Report that a test was ignored.
