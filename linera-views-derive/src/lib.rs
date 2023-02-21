@@ -447,7 +447,9 @@ pub fn derive_view(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(HashableView)]
 pub fn derive_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    generate_hash_view_code(input).into()
+    let mut stream = generate_view_code(input.clone());
+    stream.extend(generate_hash_view_code(input));
+    stream.into()
 }
 
 #[proc_macro_derive(ContainerView)]

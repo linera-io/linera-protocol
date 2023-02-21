@@ -19,7 +19,7 @@ use linera_views::{
     map_view::MapView,
     register_view::RegisterView,
     set_view::SetView,
-    views::{HashableContainerView, View, ViewError},
+    views::{HashableView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -33,7 +33,7 @@ use thiserror::Error;
 use std::collections::BTreeSet;
 
 /// A view accessing the execution state of the system of a chain.
-#[derive(Debug, HashableContainerView)]
+#[derive(Debug, HashableView)]
 pub struct SystemExecutionStateView<C> {
     /// How the chain was created. May be unknown for inactive chains.
     pub description: RegisterView<C, Option<ChainDescription>>,
