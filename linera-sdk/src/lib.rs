@@ -98,8 +98,6 @@ pub trait Service {
 
     /// Allow an end user to execute read-only queries on the state of this application.
     /// NOTE: This is not meant to be metered and may not be exposed by validators.
-    // TODO: assume that these bytes are serde forms of impl GraphQLRequest
-    // GraphQLResponse
     async fn query_application(
         &self,
         context: &QueryContext,
