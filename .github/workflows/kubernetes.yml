@@ -17,7 +17,7 @@ env:
 
 jobs:
   integration-test-with-kind:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-4-cores
     steps:
       - uses: actions/checkout@v3
         with:
