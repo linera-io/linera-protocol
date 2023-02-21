@@ -670,7 +670,7 @@ where
         'outer: for (name, tracker, certificates) in responses {
             // Process received certificates.
             for certificate in certificates {
-                let hash = certificate.hash;
+                let hash = certificate.value.hash();
                 if let Err(e) = self
                     .receive_certificate_internal(
                         certificate.clone(),

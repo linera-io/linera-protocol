@@ -55,8 +55,7 @@ impl Store for MemoryStoreClient {
     }
 
     async fn write_value(&self, value: Value) -> Result<(), ViewError> {
-        let hash = CryptoHash::new(&value);
-        self.0.values.insert(hash, value);
+        self.0.values.insert(value.hash(), value);
         Ok(())
     }
 

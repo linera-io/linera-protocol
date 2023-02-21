@@ -121,7 +121,9 @@ fn make_block(
     authenticated_signer: Option<Owner>,
     timestamp: Timestamp,
 ) -> Block {
-    let previous_block_hash = previous_confirmed_block.as_ref().map(|cert| cert.hash);
+    let previous_block_hash = previous_confirmed_block
+        .as_ref()
+        .map(|cert| cert.value.hash());
     let height = match &previous_confirmed_block {
         None => BlockHeight::default(),
         Some(cert) => cert.value.block().height.try_add_one().unwrap(),
@@ -861,7 +863,7 @@ where
                         user_data: UserData::default(),
                     }),
                 )],
-                previous_block_hash: Some(certificate0.hash),
+                previous_block_hash: Some(certificate0.value.hash()),
                 height: BlockHeight::from(1),
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
@@ -956,7 +958,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
-                        certificate_hash: certificate0.hash,
+                        certificate_hash: certificate0.value.hash(),
                         height: BlockHeight::from(0),
                         index: 0,
                         authenticated_signer: None,
@@ -971,7 +973,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
-                        certificate_hash: certificate0.hash,
+                        certificate_hash: certificate0.value.hash(),
                         height: BlockHeight::from(0),
                         index: 1,
                         authenticated_signer: None,
@@ -986,7 +988,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
-                        certificate_hash: certificate1.hash,
+                        certificate_hash: certificate1.value.hash(),
                         height: BlockHeight::from(1),
                         index: 0,
                         authenticated_signer: None,
@@ -1018,7 +1020,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
-                        certificate_hash: certificate0.hash,
+                        certificate_hash: certificate0.value.hash(),
                         height: BlockHeight::from(0),
                         index: 1,
                         authenticated_signer: None,
@@ -1033,7 +1035,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
-                        certificate_hash: certificate0.hash,
+                        certificate_hash: certificate0.value.hash(),
                         height: BlockHeight::from(0),
                         index: 0,
                         authenticated_signer: None,
@@ -1048,7 +1050,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
-                        certificate_hash: certificate0.hash,
+                        certificate_hash: certificate0.value.hash(),
                         height: BlockHeight::from(1),
                         index: 0,
                         authenticated_signer: None,
@@ -1080,7 +1082,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
-                        certificate_hash: certificate1.hash,
+                        certificate_hash: certificate1.value.hash(),
                         height: BlockHeight::from(1),
                         index: 0,
                         authenticated_signer: None,
@@ -1095,7 +1097,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
-                        certificate_hash: certificate0.hash,
+                        certificate_hash: certificate0.value.hash(),
                         height: BlockHeight::from(0),
                         index: 0,
                         authenticated_signer: None,
@@ -1110,7 +1112,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
-                        certificate_hash: certificate0.hash,
+                        certificate_hash: certificate0.value.hash(),
                         height: BlockHeight::from(0),
                         index: 1,
                         authenticated_signer: None,
@@ -1141,7 +1143,7 @@ where
                 application_id: ApplicationId::System,
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
-                    certificate_hash: certificate0.hash,
+                    certificate_hash: certificate0.value.hash(),
                     height: BlockHeight::from(0),
                     index: 0,
                     authenticated_signer: None,
@@ -1200,7 +1202,7 @@ where
                 application_id: ApplicationId::System,
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
-                    certificate_hash: certificate1.hash,
+                    certificate_hash: certificate1.value.hash(),
                     height: BlockHeight::from(1),
                     index: 0,
                     authenticated_signer: None,
@@ -1701,7 +1703,10 @@ where
             && amount == Amount::from(995),
     ));
     assert_eq!(chain.confirmed_log.count(), 1);
-    assert_eq!(Some(certificate.hash), chain.tip_state.get().block_hash);
+    assert_eq!(
+        Some(certificate.value.hash()),
+        chain.tip_state.get().block_hash
+    );
     worker
         .storage
         .load_active_chain(ChainId::root(2))
@@ -1788,7 +1793,7 @@ where
     );
     assert_eq!(new_sender_chain.confirmed_log.count(), 1);
     assert_eq!(
-        Some(certificate.hash),
+        Some(certificate.value.hash()),
         new_sender_chain.tip_state.get().block_hash
     );
     let new_recipient_chain = worker
@@ -1897,7 +1902,7 @@ where
             authenticated_signer: None,
             timestamp,
             effect: Effect::System(SystemEffect::Credit { amount, .. })
-        } if certificate_hash == certificate.hash
+        } if certificate_hash == certificate.value.hash()
             && height == BlockHeight::from(0)
             && timestamp == Timestamp::from(0)
             && amount == Amount::from(1),
@@ -1907,7 +1912,10 @@ where
         chain.tip_state.get().next_block_height
     );
     assert_eq!(chain.confirmed_log.count(), 1);
-    assert_eq!(Some(certificate.hash), chain.tip_state.get().block_hash);
+    assert_eq!(
+        Some(certificate.value.hash()),
+        chain.tip_state.get().block_hash
+    );
 }
 
 #[test(tokio::test)]
@@ -2023,7 +2031,7 @@ where
             authenticated_signer: None,
             timestamp,
             effect: Effect::System(SystemEffect::Credit { amount, .. })
-        } if certificate_hash == certificate.hash
+        } if certificate_hash == certificate.value.hash()
             && height == BlockHeight::from(0)
             && timestamp == Timestamp::from(0)
             && amount == Amount::from(10),
@@ -2285,7 +2293,7 @@ where
     assert_eq!(ChainId::root(1), info.chain_id);
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
-    assert_eq!(Some(certificate.hash), info.block_hash);
+    assert_eq!(Some(certificate.value.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
     assert_eq!(
         worker
@@ -2312,7 +2320,7 @@ where
             application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(1)),
             event: Event {
-                certificate_hash: certificate.hash,
+                certificate_hash: certificate.value.hash(),
                 height: BlockHeight::from(0),
                 index: 0,
                 authenticated_signer: None,
@@ -2366,7 +2374,7 @@ where
         assert_eq!(recipient_chain.confirmed_log.count(), 1);
         assert_eq!(
             recipient_chain.tip_state.get().block_hash,
-            Some(certificate.hash)
+            Some(certificate.value.hash())
         );
         assert_eq!(recipient_chain.received_log.count(), 1);
     }
@@ -2439,7 +2447,7 @@ where
     assert_eq!(ChainId::root(1), info.chain_id);
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
-    assert_eq!(Some(certificate.hash), info.block_hash);
+    assert_eq!(Some(certificate.value.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
 }
 
@@ -2628,7 +2636,7 @@ where
                         }),
                     ),
                 ],
-                previous_block_hash: Some(certificate0.hash),
+                previous_block_hash: Some(certificate0.value.hash()),
                 height: BlockHeight::from(1),
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
@@ -2683,7 +2691,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(admin_id),
                     event: Event {
-                        certificate_hash: certificate0.hash,
+                        certificate_hash: certificate0.value.hash(),
                         height: BlockHeight::from(0),
                         index: 1,
                         authenticated_signer: None,
@@ -2695,7 +2703,7 @@ where
                     },
                 }],
                 operations: Vec::new(),
-                previous_block_hash: Some(certificate1.hash),
+                previous_block_hash: Some(certificate1.value.hash()),
                 height: BlockHeight::from(2),
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
@@ -2846,7 +2854,7 @@ where
                         application_id: ApplicationId::System,
                         origin: admin_channel_origin.clone(),
                         event: Event {
-                            certificate_hash: certificate1.hash,
+                            certificate_hash: certificate1.value.hash(),
                             height: BlockHeight::from(1),
                             index: 0,
                             authenticated_signer: None,
@@ -2862,7 +2870,7 @@ where
                         application_id: ApplicationId::System,
                         origin: Origin::chain(admin_id),
                         event: Event {
-                            certificate_hash: certificate1.hash,
+                            certificate_hash: certificate1.value.hash(),
                             height: BlockHeight::from(1),
                             index: 1,
                             authenticated_signer: None,
@@ -2877,7 +2885,7 @@ where
                         application_id: ApplicationId::System,
                         origin: Origin::chain(admin_id),
                         event: Event {
-                            certificate_hash: certificate2.hash,
+                            certificate_hash: certificate2.value.hash(),
                             height: BlockHeight::from(2),
                             index: 0,
                             authenticated_signer: None,
@@ -3405,7 +3413,7 @@ where
                     application_id: ApplicationId::System,
                     origin: Origin::chain(user_id),
                     event: Event {
-                        certificate_hash: certificate0.hash,
+                        certificate_hash: certificate0.value.hash(),
                         height: BlockHeight::from(0),
                         index: 0,
                         authenticated_signer: None,
@@ -3417,7 +3425,7 @@ where
                     },
                 }],
                 operations: Vec::new(),
-                previous_block_hash: Some(certificate1.hash),
+                previous_block_hash: Some(certificate1.value.hash()),
                 height: BlockHeight::from(1),
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),

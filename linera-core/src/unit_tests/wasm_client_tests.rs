@@ -347,7 +347,7 @@ where
     assert!(messages.iter().any(|msg| matches!(
         &msg.event.effect,
         Effect::System(SystemEffect::RegisterApplications { applications })
-        if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.hash)
+        if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.value.hash())
     )));
     assert!(messages
         .iter()
@@ -378,7 +378,7 @@ where
     assert!(!messages.iter().any(|msg| matches!(
         &msg.event.effect,
         Effect::System(SystemEffect::RegisterApplications { applications })
-        if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.hash)
+        if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.value.hash())
     )));
     assert!(messages
         .iter()

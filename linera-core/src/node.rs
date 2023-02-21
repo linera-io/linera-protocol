@@ -391,9 +391,10 @@ where
     {
         let mut info = None;
         for certificate in certificates {
+            let hash = certificate.value.hash();
             if !certificate.value.is_confirmed() || certificate.value.block().chain_id != chain_id {
                 // The certificate is not as expected. Give up.
-                log::warn!("Failed to process network certificate {}", certificate.hash);
+                log::warn!("Failed to process network certificate {}", hash);
                 return info;
             }
             let mut result = self.handle_certificate(certificate.clone(), vec![]).await;
@@ -419,11 +420,7 @@ where
                 }
                 Err(error) => {
                     // The certificate is not as expected. Give up.
-                    log::warn!(
-                        "Failed to process network certificate {}: {}",
-                        certificate.hash,
-                        error
-                    );
+                    log::warn!("Failed to process network certificate {}: {}", hash, error);
                     return info;
                 }
             };
@@ -544,7 +541,7 @@ where
                     ..
                 } = response.info;
                 if let Some(certificate) = requested_sent_certificates.pop() {
-                    if certificate.hash == location.certificate_hash {
+                    if certificate.value.hash() == location.certificate_hash {
                         return Some(certificate.value);
                     }
                 }
@@ -662,7 +659,7 @@ where
             }
             if let Some(cert) = manager.requested_locked {
                 if cert.value.is_validated() && cert.value.block().chain_id == chain_id {
-                    let hash = cert.hash;
+                    let hash = cert.value.hash();
                     if let Err(error) = self.handle_certificate(cert, vec![]).await {
                         log::warn!("Skipping certificate {}: {}", hash, error);
                     }
