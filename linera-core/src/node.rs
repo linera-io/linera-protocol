@@ -414,10 +414,7 @@ where
                     .await;
             }
             match result {
-                Ok(response) => {
-                    info = Some(response.info);
-                    // Continue with the next certificate.
-                }
+                Ok(response) => info = Some(response.info),
                 Err(error) => {
                     // The certificate is not as expected. Give up.
                     log::warn!("Failed to process network certificate {}: {}", hash, error);
@@ -533,6 +530,7 @@ where
             start: location.height,
             limit: Some(1),
         };
+        // TODO: Request only the blob, not a certificate.
         let query = ChainInfoQuery::new(location.chain_id).with_sent_certificates_in_range(range);
         if let Ok(response) = client.handle_chain_info_query(query).await {
             if response.check(name).is_ok() {

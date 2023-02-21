@@ -177,17 +177,16 @@ impl ChainManager {
                     ChainError::InvalidBlockProposal
                 );
                 if let Some(vote) = &manager.pending {
-                    if !vote.value.is_confirmed() {
-                        return Err(ChainError::InvalidBlockProposal);
-                    } else if vote.value.block() != new_block {
+                    ensure!(vote.value.is_confirmed(), ChainError::InvalidBlockProposal);
+                    if vote.value.block() == new_block {
+                        return Ok(Outcome::Skip);
+                    } else {
                         log::error!(
                             "Attempting to sign a different block at the same height:\n{:?}\n{:?}",
                             vote.value.block(),
                             new_block
                         );
                         return Err(ChainError::PreviousBlockMustBeConfirmedFirst);
-                    } else {
-                        return Ok(Outcome::Skip);
                     }
                 }
                 Ok(Outcome::Accept)
@@ -201,18 +200,13 @@ impl ChainManager {
                         return Err(ChainError::InsufficientRound(proposal.content.round));
                     }
                 }
-                if let Some(cert) = &manager.locked {
-                    match cert.value.value_type() {
-                        ValueType::ValidatedBlock { round } if new_round <= round => {
-                            return Err(ChainError::InsufficientRound(round));
-                        }
-                        ValueType::ValidatedBlock { round } if new_block != cert.value.block() => {
-                            return Err(ChainError::HasLockedBlock(
-                                cert.value.block().height,
-                                round,
-                            ));
-                        }
-                        _ => (),
+                if let Some(Certificate { value, .. }) = &manager.locked {
+                    if let ValueType::ValidatedBlock { round } = value.value_type() {
+                        ensure!(new_round > round, ChainError::InsufficientRound(round));
+                        ensure!(
+                            new_block == value.block(),
+                            ChainError::HasLockedBlock(value.block().height, round)
+                        );
                     }
                 }
                 Ok(Outcome::Accept)
@@ -238,27 +232,25 @@ impl ChainManager {
         }
         match self {
             ChainManager::Multi(manager) => {
-                if let Some(vote) = &manager.pending {
-                    match vote.value.value_type() {
-                        ValueType::ConfirmedBlock if vote.value.block() == new_block => {
-                            return Ok(Outcome::Skip);
+                if let Some(Vote { value, .. }) = &manager.pending {
+                    match value.value_type() {
+                        ValueType::ConfirmedBlock => {
+                            if value.block() == new_block {
+                                return Ok(Outcome::Skip);
+                            }
                         }
-                        ValueType::ValidatedBlock { round } if new_round < round => {
-                            return Err(ChainError::InsufficientRound(
-                                round.try_sub_one().unwrap(),
-                            ));
-                        }
-                        _ => (),
+                        ValueType::ValidatedBlock { round } => ensure!(
+                            new_round >= round,
+                            ChainError::InsufficientRound(round.try_sub_one().unwrap())
+                        ),
                     }
                 }
-                if let Some(cert) = &manager.locked {
-                    match cert.value.value_type() {
-                        ValueType::ValidatedBlock { round } if new_round < round => {
-                            return Err(ChainError::InsufficientRound(
-                                round.try_sub_one().unwrap(),
-                            ));
-                        }
-                        _ => (),
+                if let Some(Certificate { value, .. }) = &manager.locked {
+                    if let ValueType::ValidatedBlock { round } = value.value_type() {
+                        ensure!(
+                            new_round >= round,
+                            ChainError::InsufficientRound(round.try_sub_one().unwrap())
+                        );
                     }
                 }
                 Ok(Outcome::Accept)
@@ -300,22 +292,15 @@ impl ChainManager {
         }
     }
 
-    pub fn create_final_vote(
-        &mut self,
-        block: Block,
-        effects: Vec<OutgoingEffect>,
-        state_hash: CryptoHash,
-        certificate: Certificate,
-        key_pair: Option<&KeyPair>,
-    ) {
+    pub fn create_final_vote(&mut self, certificate: Certificate, key_pair: Option<&KeyPair>) {
         match self {
             ChainManager::Multi(manager) => {
                 // Record validity certificate. This is important to keep track of rounds
                 // for non-voting nodes.
+                let value = certificate.value.clone().into_confirmed();
                 manager.locked = Some(certificate);
                 if let Some(key_pair) = key_pair {
                     // Vote to confirm.
-                    let value = Value::new_confirmed(block, effects, state_hash);
                     let vote = Vote::new(value, key_pair);
                     // Ok to overwrite validation votes with confirmation votes at equal or
                     // higher round.
