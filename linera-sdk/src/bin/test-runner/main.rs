@@ -144,7 +144,7 @@ impl TestReport {
     pub fn fail(&mut self, trap: Trap) {
         self.failed += 1;
         eprintln!(" FAILED");
-        eprintln!("{}", trap.to_string());
+        eprintln!("{}", trap);
     }
 
     /// Report that a test was ignored.
