@@ -9,7 +9,7 @@ use colored::Colorize;
 use futures::StreamExt;
 use linera_base::{
     committee::ValidatorState,
-    crypto::{CryptoHash, KeyPair},
+    crypto::KeyPair,
     data_types::{
         BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName,
     },
@@ -785,7 +785,7 @@ where
                                 .await?;
                         let state_hash = response.info.state_hash.expect("state was just computed");
                         let value = Value::new_confirmed(block, effects, state_hash);
-                        values.insert(CryptoHash::new(&value), value);
+                        values.insert(value.hash(), value);
                     }
                 }
 

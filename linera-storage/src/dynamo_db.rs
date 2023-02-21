@@ -183,9 +183,8 @@ impl Store for DynamoDbStoreClient {
     }
 
     async fn write_value(&self, value: Value) -> Result<(), ViewError> {
-        let hash = CryptoHash::new(&value);
         let mut values = self.0.values().await?;
-        values.insert(&hash, value)?;
+        values.insert(&value.hash(), value)?;
         let mut batch = Batch::default();
         values.flush(&mut batch)?;
         self.0.context.write_batch(batch).await?;
@@ -203,8 +202,8 @@ impl Store for DynamoDbStoreClient {
     }
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
-        let hash = certificate.hash;
         let (cert, value) = certificate.split();
+        let hash = value.hash();
         let mut certificates = self.0.certificates().await?;
         let mut values = self.0.values().await?;
         certificates.insert(&hash, cert)?;

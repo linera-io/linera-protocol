@@ -165,8 +165,8 @@ pub enum WorkerError {
     MissingCertificateValue,
     #[error("The hash certificate doesn't match its value.")]
     InvalidLiteCertificate,
-    #[error("An additional certificate was provided that is not required: {certificate_hash}.")]
-    UnneededCertificate { certificate_hash: CryptoHash },
+    #[error("An additional value was provided that is not required: {value_hash}.")]
+    UnneededValue { value_hash: CryptoHash },
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -428,11 +428,10 @@ where
             .map(|bytecode_location| bytecode_location.certificate_hash)
             .collect();
         for value in blobs {
+            let value_hash = value.hash();
             ensure!(
-                blob_hashes.contains(&CryptoHash::new(value)),
-                WorkerError::UnneededCertificate {
-                    certificate_hash: CryptoHash::new(value)
-                }
+                blob_hashes.contains(&value_hash),
+                WorkerError::UnneededValue { value_hash }
             );
         }
         // Write the certificates so that the bytecode is available during execution.
@@ -489,9 +488,9 @@ where
         ensure!(*effects == verified_effects, WorkerError::IncorrectEffects);
         // Advance to next block height.
         let tip = chain.tip_state.get_mut();
-        tip.block_hash = Some(certificate.hash);
+        tip.block_hash = Some(certificate.value.hash());
         tip.next_block_height.try_add_assign_one()?;
-        chain.confirmed_log.push(certificate.hash);
+        chain.confirmed_log.push(certificate.value.hash());
         // We should always agree on the state hash.
         ensure!(
             *chain.execution_state_hash.get() == Some(state_hash),
@@ -610,7 +609,7 @@ where
                     block.height,
                     block.timestamp,
                     effects.clone(),
-                    certificate.hash,
+                    certificate.value.hash(),
                 )
                 .await?;
             last_updated_height = Some(block.height);
@@ -667,7 +666,7 @@ where
         if value.is_validated() {
             // Cache the corresponding confirmed block, too, in case we get a certificate.
             let conf_value = value.clone().into_confirmed();
-            let conf_hash = CryptoHash::new(&conf_value);
+            let conf_hash = conf_value.hash();
             self.recent_values.push(conf_hash, conf_value);
         }
         // Cache the certificate so that clients don't have to send the value again.
@@ -783,14 +782,14 @@ where
         log::trace!("{} <-- {:?}", self.nickname, certificate);
         ensure!(
             certificate.value.is_confirmed() || blobs.is_empty(),
-            WorkerError::UnneededCertificate {
-                certificate_hash: CryptoHash::new(&blobs[0]),
+            WorkerError::UnneededValue {
+                value_hash: blobs[0].hash(),
             }
         );
         let values_to_cache: Vec<_> = blobs
             .iter()
             .chain(iter::once(&certificate.value))
-            .filter(|value| !self.recent_values.contains(&CryptoHash::new(*value)))
+            .filter(|value| !self.recent_values.contains(&value.hash()))
             .cloned()
             .collect();
         let (info, actions) = match certificate.value.value_type() {
@@ -805,7 +804,7 @@ where
             }
         };
         for value in values_to_cache {
-            self.cache_recent_value(CryptoHash::new(&value), value);
+            self.cache_recent_value(value.hash(), value);
         }
         Ok((info, actions))
     }

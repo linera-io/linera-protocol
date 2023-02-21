@@ -9,7 +9,6 @@ use crate::{
 use futures::{future, StreamExt};
 use linera_base::{
     committee::Committee,
-    crypto::CryptoHash,
     data_types::{BlockHeight, ChainDescription, ChainId, EffectId, ValidatorName},
 };
 use linera_chain::data_types::{BlockProposal, Certificate, LiteVote, Value};
@@ -145,7 +144,7 @@ where
             {
                 let hash = bytecode_location.certificate_hash;
                 // TODO(#474): This check is not sufficient in case of bad actors.
-                if blobs.iter().any(|blob| CryptoHash::new(blob) == hash) {
+                if blobs.iter().any(|blob| blob.hash() == hash) {
                     log::warn!("validator requested {:?} but it was already sent", hash);
                     break;
                 }

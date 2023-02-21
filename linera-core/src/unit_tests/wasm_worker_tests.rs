@@ -166,7 +166,7 @@ where
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Timestamp::from(1), info.timestamp);
-    assert_eq!(Some(publish_certificate.hash), info.block_hash);
+    assert_eq!(Some(publish_certificate.value.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
 
     // Produce one more block to broadcast the bytecode ID.
@@ -174,7 +174,7 @@ where
         application_id: ApplicationId::System,
         origin: Origin::chain(publisher_chain.into()),
         event: Event {
-            certificate_hash: publish_certificate.hash,
+            certificate_hash: publish_certificate.value.hash(),
             height: publish_block_height,
             index: 0,
             authenticated_signer: None,
@@ -197,7 +197,7 @@ where
         index: 0,
     });
     let bytecode_location = BytecodeLocation {
-        certificate_hash: publish_certificate.hash,
+        certificate_hash: publish_certificate.value.hash(),
         chain_id: publisher_chain.into(),
         height: publish_block_height,
         operation_index: 0,
@@ -233,7 +233,7 @@ where
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(2), info.next_block_height);
     assert_eq!(Timestamp::from(1), info.timestamp);
-    assert_eq!(Some(broadcast_certificate.hash), info.block_hash);
+    assert_eq!(Some(broadcast_certificate.value.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
 
     // Subscribe to get the bytecode ID.
@@ -293,7 +293,7 @@ where
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Timestamp::from(2), info.timestamp);
-    assert_eq!(Some(subscribe_certificate.hash), info.block_hash);
+    assert_eq!(Some(subscribe_certificate.value.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
 
     // Accept subscription
@@ -301,7 +301,7 @@ where
         application_id: ApplicationId::System,
         origin: Origin::chain(creator_chain.into()),
         event: Event {
-            certificate_hash: subscribe_certificate.hash,
+            certificate_hash: subscribe_certificate.value.hash(),
             height: subscribe_block_height,
             index: 0,
             authenticated_signer: None,
@@ -343,7 +343,7 @@ where
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(3), info.next_block_height);
     assert_eq!(Timestamp::from(3), info.timestamp);
-    assert_eq!(Some(accept_certificate.hash), info.block_hash);
+    assert_eq!(Some(accept_certificate.value.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
 
     // Create an application.
@@ -381,7 +381,7 @@ where
                 SystemChannel::PublishedBytecodes.name(),
             ),
             event: Event {
-                certificate_hash: broadcast_certificate.hash,
+                certificate_hash: broadcast_certificate.value.hash(),
                 height: broadcast_block_height,
                 index: 0,
                 authenticated_signer: None,
@@ -434,7 +434,7 @@ where
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(2), info.next_block_height);
     assert_eq!(Timestamp::from(4), info.timestamp);
-    assert_eq!(Some(create_certificate.hash), info.block_hash);
+    assert_eq!(Some(create_certificate.value.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
 
     // Execute an application operation
@@ -477,7 +477,7 @@ where
     assert_eq!(ChainId::root(2), info.chain_id);
     assert_eq!(Balance::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(3), info.next_block_height);
-    assert_eq!(Some(run_certificate.hash), info.block_hash);
+    assert_eq!(Some(run_certificate.value.hash()), info.block_hash);
     assert_eq!(Timestamp::from(5), info.timestamp);
     assert!(info.manager.pending().is_none());
     Ok(())

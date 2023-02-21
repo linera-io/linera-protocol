@@ -237,12 +237,15 @@ pub enum ValueType {
 }
 
 /// A statement to be certified by the validators.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize)]
 pub struct Value {
     block: Block,
     effects: Vec<OutgoingEffect>,
     state_hash: CryptoHash,
     value_type: ValueType,
+    /// Hash of the certified value (used as key for storage).
+    #[serde(skip_serializing)]
+    hash: CryptoHash,
 }
 
 /// The hash and chain ID of a `Value`.
@@ -327,28 +330,22 @@ impl LiteCertificate {
 
     /// Returns the `Certificate` with the specified value, if it matches.
     pub fn with_value(self, value: Value) -> Option<Certificate> {
-        if self.value.chain_id != value.chain_id()
-            || self.value.value_hash != CryptoHash::new(&value)
-        {
+        if self.value.chain_id != value.chain_id() || self.value.value_hash != value.hash() {
             return None;
         }
         Some(Certificate {
             value,
-            hash: self.value.value_hash,
             signatures: self.signatures,
         })
     }
 }
 
 /// A certified statement from the committee.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct Certificate {
     /// The certified value.
     pub value: Value,
-    /// Hash of the certified value (used as key for storage).
-    #[serde(skip_serializing)]
-    pub hash: CryptoHash,
     /// Signatures on the value.
     pub signatures: Vec<(ValidatorName, Signature)>,
 }
@@ -395,18 +392,56 @@ impl Target {
     }
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(rename = "Value")]
+struct NetworkValue {
+    block: Block,
+    effects: Vec<OutgoingEffect>,
+    state_hash: CryptoHash,
+    value_type: ValueType,
+}
+
+impl<'a> Deserialize<'a> for Value {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'a>,
+    {
+        Ok(NetworkValue::deserialize(deserializer)?.into())
+    }
+}
+
+impl From<NetworkValue> for Value {
+    fn from(value: NetworkValue) -> Value {
+        let hash = CryptoHash::new(&value);
+        let NetworkValue {
+            block,
+            effects,
+            state_hash,
+            value_type,
+        } = value;
+        Value {
+            block,
+            effects,
+            state_hash,
+            value_type,
+            hash,
+        }
+    }
+}
+
 impl Value {
     pub fn new_confirmed(
         block: Block,
         effects: Vec<OutgoingEffect>,
         state_hash: CryptoHash,
     ) -> Value {
-        Value {
+        NetworkValue {
             block,
             effects,
             state_hash,
             value_type: ValueType::ConfirmedBlock,
         }
+        .into()
     }
     pub fn new_validated(
         block: Block,
@@ -414,12 +449,13 @@ impl Value {
         state_hash: CryptoHash,
         round: RoundNumber,
     ) -> Value {
-        Value {
+        NetworkValue {
             block,
             effects,
             state_hash,
             value_type: ValueType::ValidatedBlock { round },
         }
+        .into()
     }
 
     pub fn chain_id(&self) -> ChainId {
@@ -442,6 +478,10 @@ impl Value {
         self.value_type
     }
 
+    pub fn hash(&self) -> CryptoHash {
+        self.hash
+    }
+
     pub fn is_confirmed(&self) -> bool {
         matches!(self.value_type, ValueType::ConfirmedBlock)
     }
@@ -452,7 +492,7 @@ impl Value {
 
     pub fn lite(&self) -> LiteValue {
         LiteValue {
-            value_hash: CryptoHash::new(self),
+            value_hash: self.hash(),
             chain_id: self.chain_id(),
         }
     }
@@ -500,13 +540,11 @@ pub struct SignatureAggregator<'a> {
 impl<'a> SignatureAggregator<'a> {
     /// Start aggregating signatures for the given value into a certificate.
     pub fn new(value: Value, committee: &'a Committee) -> Self {
-        let hash = CryptoHash::new(&value);
         Self {
             committee,
             weight: 0,
             used_validators: HashSet::new(),
             partial: Certificate {
-                hash,
                 value,
                 signatures: Vec::new(),
             },
@@ -544,31 +582,9 @@ impl<'a> SignatureAggregator<'a> {
     }
 }
 
-impl<'a> Deserialize<'a> for Certificate {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::de::Deserializer<'a>,
-    {
-        #[derive(Deserialize)]
-        #[serde(rename = "Certificate")]
-        struct NetworkCertificate {
-            value: Value,
-            signatures: Vec<(ValidatorName, Signature)>,
-        }
-
-        let cert = NetworkCertificate::deserialize(deserializer)?;
-        Ok(Certificate::new(cert.value, cert.signatures))
-    }
-}
-
 impl Certificate {
     pub fn new(value: Value, signatures: Vec<(ValidatorName, Signature)>) -> Self {
-        let hash = CryptoHash::new(&value);
-        Self {
-            value,
-            hash,
-            signatures,
-        }
+        Self { value, signatures }
     }
 
     /// Verify the certificate.
@@ -587,7 +603,7 @@ impl Certificate {
 
     pub fn lite(&self) -> LiteValue {
         LiteValue {
-            value_hash: self.hash,
+            value_hash: self.value.hash(),
             chain_id: self.value.chain_id(),
         }
     }
@@ -635,6 +651,6 @@ fn check_signatures(
 
 impl BcsSignable for BlockAndRound {}
 
-impl BcsHashable for Value {}
+impl BcsHashable for NetworkValue {}
 
 impl BcsSignable for LiteValue {}
