@@ -16,7 +16,7 @@ use futures::{lock::Mutex, Future};
 use linera_base::{committee::Committee, crypto::*, data_types::*};
 use linera_chain::data_types::{Block, BlockProposal, Certificate, LiteCertificate, Value};
 use linera_execution::{
-    system::{Account, Amount, Balance, SystemOperation, UserData},
+    system::{Account, Amount, Balance, Recipient, SystemOperation, UserData},
     ApplicationId, Operation, Query, Response, SystemQuery, SystemResponse, WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
@@ -581,6 +581,84 @@ where
             .value,
         certificate.value
     );
+    Ok(())
+}
+
+#[test(tokio::test)]
+async fn test_memory_claim_amount() -> Result<(), anyhow::Error> {
+    run_test_claim_amount(MakeMemoryStoreClient).await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_claim_amount() -> Result<(), anyhow::Error> {
+    let _lock = GUARD.lock().await;
+    run_test_claim_amount(MakeRocksdbStoreClient::default()).await
+}
+
+#[cfg(feature = "aws")]
+#[test(tokio::test)]
+async fn test_dynamo_db_claim_amount() -> Result<(), anyhow::Error> {
+    run_test_claim_amount(MakeDynamoDbStoreClient::default()).await
+}
+
+async fn run_test_claim_amount<B>(store_builder: B) -> Result<(), anyhow::Error>
+where
+    B: StoreBuilder,
+    ViewError: From<<B::Store as Store>::ContextError>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut sender = builder
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
+        .await?;
+    let owner = sender.identity().await?;
+    let mut receiver = builder
+        .add_initial_chain(ChainDescription::Root(2), Balance::from(0))
+        .await?;
+    let cert = sender
+        .transfer_to_account(
+            None,
+            Amount::from(3),
+            Account::owner(ChainId::root(2), owner),
+            UserData(None),
+        )
+        .await
+        .unwrap();
+    assert_eq!(sender.local_balance().await.unwrap(), Balance::from(1));
+    receiver.receive_certificate(cert).await?;
+    receiver.process_inbox().await?;
+    // The received amount is not in the unprotected balance.
+    assert_eq!(receiver.local_balance().await.unwrap(), Balance::from(0));
+
+    // First attempt that should be skipped.
+    sender
+        .claim(
+            owner,
+            ChainId::root(2),
+            Recipient::Account(Account::chain(ChainId::root(1))),
+            Amount::from(5),
+            UserData(None),
+        )
+        .await
+        .unwrap();
+    // Second attempt with a correct amount.
+    let cert = sender
+        .claim(
+            owner,
+            ChainId::root(2),
+            Recipient::Account(Account::chain(ChainId::root(1))),
+            Amount::from(2),
+            UserData(None),
+        )
+        .await
+        .unwrap();
+
+    receiver.receive_certificate(cert).await?;
+    let cert = receiver.process_inbox().await?.pop().unwrap();
+
+    sender.receive_certificate(cert).await?;
+    sender.process_inbox().await?;
+    assert_eq!(sender.local_balance().await.unwrap(), Balance::from(3));
+
     Ok(())
 }
 

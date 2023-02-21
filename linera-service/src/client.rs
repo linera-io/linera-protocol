@@ -431,7 +431,7 @@ enum ClientCommand {
         #[structopt(long = "from")]
         sender: Account,
 
-        /// Recipient chain id
+        /// Recipient account
         #[structopt(long = "to")]
         recipient: Account,
 
