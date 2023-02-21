@@ -700,7 +700,7 @@ where
                     .await
                     .unwrap()
                     .into_iter()
-                    .map(|c| c.value.effects_and_state_hash().0.len())
+                    .map(|c| c.value.effects().len())
                     .sum::<usize>();
                 log::info!("Subscribed {} chains to new committees", n);
 
