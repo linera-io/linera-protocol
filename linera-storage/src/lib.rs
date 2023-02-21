@@ -29,7 +29,7 @@ use linera_execution::{
 use linera_execution::{ApplicationId, Operation, SystemOperation, WasmApplication, WasmRuntime};
 use linera_views::{
     common::Context,
-    views::{RootView, HashableRootView, ViewError},
+    views::{CryptoHashView, RootView, ViewError},
 };
 use std::{fmt::Debug, sync::Arc};
 

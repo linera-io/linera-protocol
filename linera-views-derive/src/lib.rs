@@ -200,7 +200,7 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
     let hash_type = syn::Ident::new(&format!("{}Hash", struct_name), Span::call_site());
     quote! {
         #[async_trait::async_trait]
-        impl #generics linera_views::views::HashableRootView<#first_generic> for #struct_name #generics
+        impl #generics linera_views::views::CryptoHashView<#first_generic> for #struct_name #generics
         where
             #first_generic: Context + Send + Sync + Clone + 'static,
             linera_views::views::ViewError: From<#first_generic::Error>,
@@ -453,21 +453,42 @@ pub fn derive_hash_view(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_derive(RootView)]
-pub fn derive_container_view(input: TokenStream) -> TokenStream {
+pub fn derive_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone());
     stream.extend(generate_save_delete_view_code(input));
     stream.into()
 }
 
-#[proc_macro_derive(HashableRootView)]
+#[proc_macro_derive(CryptoHashView)]
 #[cfg(not(target_arch = "wasm32"))]
-pub fn derive_hash_container_view(input: TokenStream) -> TokenStream {
+pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ItemStruct);
+    let mut stream = generate_view_code(input.clone());
+    stream.extend(generate_hash_view_code(input.clone()));
+    stream.extend(generate_crypto_hash_code(input));
+    stream.into()
+}
+
+#[proc_macro_derive(CryptoHashRootView)]
+#[cfg(not(target_arch = "wasm32"))]
+pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone());
     stream.extend(generate_save_delete_view_code(input.clone()));
     stream.extend(generate_hash_view_code(input.clone()));
     stream.extend(generate_crypto_hash_code(input));
+    stream.into()
+}
+
+#[proc_macro_derive(HashableRootView)]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(test)]
+pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ItemStruct);
+    let mut stream = generate_view_code(input.clone());
+    stream.extend(generate_save_delete_view_code(input.clone()));
+    stream.extend(generate_hash_view_code(input));
     stream.into()
 }
 

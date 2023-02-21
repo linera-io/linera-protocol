@@ -3,12 +3,8 @@
 
 use linera_base::data_types::{ArithmeticError, BlockHeight};
 use linera_views::{
-    common::Context,
-    queue_view::QueueView,
-    register_view::RegisterView,
-    views::{HashableRootView, ViewError},
+    common::Context, queue_view::QueueView, register_view::RegisterView, views::ViewError,
 };
-use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 #[path = "unit_tests/outbox_tests.rs"]
@@ -21,7 +17,7 @@ mod outbox_tests;
 /// we just send the certified blocks over and let the receivers figure out what were the
 /// messages for them.
 /// * When marking block heights as received, messages at lower heights are also marked (ie. dequeued).
-#[derive(Debug, HashableRootView, GraphQLView)]
+#[derive(Debug, View, GraphQLView)]
 pub struct OutboxStateView<C> {
     /// The minimum block height accepted in the future.
     pub next_height_to_schedule: RegisterView<C, BlockHeight>,

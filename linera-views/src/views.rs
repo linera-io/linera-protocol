@@ -7,7 +7,7 @@ use async_trait::async_trait;
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::crypto::CryptoHash;
 pub use linera_views_derive::{
-    RootView, GraphQLView, HashableRootView, HashableView, View,
+    CryptoHashRootView, CryptoHashView, GraphQLView, HashableView, RootView, View,
 };
 use serde::Serialize;
 use std::{fmt::Debug, io::Write};
@@ -152,10 +152,15 @@ pub trait RootView<C>: View<C> {
     async fn write_delete(self) -> Result<(), ViewError>;
 }
 
-/// A [`RootView`] that also supports hashing.
+/// A [`View`] that also supports crypto hash
 #[async_trait]
 #[cfg(not(target_arch = "wasm32"))]
-pub trait HashableRootView<C>: RootView<C> + HashableView<C> {
+pub trait CryptoHashView<C>: HashableView<C> {
     /// Computing the hash and attributing the type to it.
     async fn crypto_hash(&self) -> Result<CryptoHash, ViewError>;
 }
+
+/// A [`RootView`] that also supports crypto hash
+#[async_trait]
+#[cfg(not(target_arch = "wasm32"))]
+pub trait CryptoHashRootView<C>: RootView<C> + CryptoHashView<C> {}

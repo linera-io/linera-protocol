@@ -23,7 +23,7 @@ use linera_execution::{
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
 
-use linera_views::views::{HashableRootView, ViewError};
+use linera_views::views::{CryptoHashView, ViewError};
 use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;
 
