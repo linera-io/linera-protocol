@@ -29,7 +29,7 @@ use linera_execution::{
 use linera_execution::{ApplicationId, Operation, SystemOperation, WasmApplication, WasmRuntime};
 use linera_views::{
     common::Context,
-    views::{ContainerView, HashableContainerView, ViewError},
+    views::{RootView, HashableRootView, ViewError},
 };
 use std::{fmt::Debug, sync::Arc};
 

@@ -115,7 +115,7 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
 
     quote! {
         #[async_trait::async_trait]
-        impl #generics linera_views::views::ContainerView<#first_generic> for #struct_name #generics
+        impl #generics linera_views::views::RootView<#first_generic> for #struct_name #generics
         where
             #first_generic: Context + Send + Sync + Clone + 'static,
             linera_views::views::ViewError: From<#first_generic::Error>,
@@ -200,7 +200,7 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
     let hash_type = syn::Ident::new(&format!("{}Hash", struct_name), Span::call_site());
     quote! {
         #[async_trait::async_trait]
-        impl #generics linera_views::views::HashableContainerView<#first_generic> for #struct_name #generics
+        impl #generics linera_views::views::HashableRootView<#first_generic> for #struct_name #generics
         where
             #first_generic: Context + Send + Sync + Clone + 'static,
             linera_views::views::ViewError: From<#first_generic::Error>,
@@ -452,7 +452,7 @@ pub fn derive_hash_view(input: TokenStream) -> TokenStream {
     stream.into()
 }
 
-#[proc_macro_derive(ContainerView)]
+#[proc_macro_derive(RootView)]
 pub fn derive_container_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone());
@@ -460,7 +460,7 @@ pub fn derive_container_view(input: TokenStream) -> TokenStream {
     stream.into()
 }
 
-#[proc_macro_derive(HashableContainerView)]
+#[proc_macro_derive(HashableRootView)]
 #[cfg(not(target_arch = "wasm32"))]
 pub fn derive_hash_container_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
@@ -617,7 +617,7 @@ pub mod tests {
 
         let expected = quote!(
             #[async_trait::async_trait]
-            impl<C> linera_views::views::ContainerView<C> for TestView<C>
+            impl<C> linera_views::views::RootView<C> for TestView<C>
             where
                 C: Context + Send + Sync + Clone + 'static,
                 linera_views::views::ViewError: From<C::Error>,
@@ -664,7 +664,7 @@ pub mod tests {
 
         let expected = quote!(
             #[async_trait::async_trait]
-            impl<C> linera_views::views::HashableContainerView<C> for TestView<C>
+            impl<C> linera_views::views::HashableRootView<C> for TestView<C>
             where
                 C: Context + Send + Sync + Clone + 'static,
                 linera_views::views::ViewError: From<C::Error>,

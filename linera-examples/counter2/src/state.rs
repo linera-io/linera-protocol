@@ -4,11 +4,11 @@
 use linera_views::{
     common::Context,
     register_view::RegisterView,
-    views::{ContainerView, View},
+    views::{RootView, View},
 };
 
 /// The application state.
-#[derive(ContainerView, Debug)]
+#[derive(RootView, Debug)]
 pub struct Counter<C> {
     pub value: RegisterView<C, u128>,
 }

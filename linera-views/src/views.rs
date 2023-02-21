@@ -7,7 +7,7 @@ use async_trait::async_trait;
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::crypto::CryptoHash;
 pub use linera_views_derive::{
-    ContainerView, GraphQLView, HashableContainerView, HashableView, View,
+    RootView, GraphQLView, HashableRootView, HashableView, View,
 };
 use serde::Serialize;
 use std::{fmt::Debug, io::Write};
@@ -144,7 +144,7 @@ impl Hasher for sha2::Sha512 {
 
 /// A [`View`] whose staged modifications can be saved in storage.
 #[async_trait]
-pub trait ContainerView<C>: View<C> {
+pub trait RootView<C>: View<C> {
     /// Save the container view to a file
     async fn save(&mut self) -> Result<(), ViewError>;
 
@@ -152,10 +152,10 @@ pub trait ContainerView<C>: View<C> {
     async fn write_delete(self) -> Result<(), ViewError>;
 }
 
-/// A [`ContainerView`] that also supports hashing.
+/// A [`RootView`] that also supports hashing.
 #[async_trait]
 #[cfg(not(target_arch = "wasm32"))]
-pub trait HashableContainerView<C>: ContainerView<C> + HashableView<C> {
+pub trait HashableRootView<C>: RootView<C> + HashableView<C> {
     /// Computing the hash and attributing the type to it.
     async fn crypto_hash(&self) -> Result<CryptoHash, ViewError>;
 }

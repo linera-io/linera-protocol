@@ -15,7 +15,7 @@ use crate::{
     ApplicationCallResult, Contract, ContractLogger, ExecutionResult, ExportedFuture,
     SessionCallResult, SessionId, SimpleStateStorage, ViewStateStorage,
 };
-use linera_views::views::ContainerView;
+use linera_views::views::RootView;
 use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
 
@@ -159,7 +159,7 @@ where
 
 impl<Application> ContractStateStorage for ViewStateStorage<Application>
 where
-    Application: Contract + ContainerView<WasmContext>,
+    Application: Contract + RootView<WasmContext>,
 {
     fn initialize(
         context: contract::OperationContext,

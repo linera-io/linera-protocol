@@ -12,7 +12,7 @@ use linera_views::{
     common::Context,
     queue_view::QueueView,
     register_view::RegisterView,
-    views::{HashableContainerView, ViewError},
+    views::{HashableRootView, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -32,7 +32,7 @@ mod inbox_tests;
 /// * The cursors of added events (resp. removed events) must be increasing over time.
 /// * Reconciliation of added and removed events is allowed to skip some added events.
 /// However, the opposite is not true: every removed event must be eventually added.
-#[derive(Debug, HashableContainerView, GraphQLView)]
+#[derive(Debug, HashableRootView, GraphQLView)]
 pub struct InboxStateView<C> {
     /// We have already added all the messages below this height and index.
     pub next_cursor_to_add: RegisterView<C, Cursor>,

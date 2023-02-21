@@ -6,7 +6,7 @@ use linera_views::{
     common::Context,
     queue_view::QueueView,
     register_view::RegisterView,
-    views::{HashableContainerView, ViewError},
+    views::{HashableRootView, ViewError},
 };
 use serde::{Deserialize, Serialize};
 
@@ -21,7 +21,7 @@ mod outbox_tests;
 /// we just send the certified blocks over and let the receivers figure out what were the
 /// messages for them.
 /// * When marking block heights as received, messages at lower heights are also marked (ie. dequeued).
-#[derive(Debug, HashableContainerView, GraphQLView)]
+#[derive(Debug, HashableRootView, GraphQLView)]
 pub struct OutboxStateView<C> {
     /// The minimum block height accepted in the future.
     pub next_height_to_schedule: RegisterView<C, BlockHeight>,

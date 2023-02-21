@@ -22,7 +22,8 @@ use linera_execution::{
     UserApplicationDescription, UserApplicationId, WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
-use linera_views::views::{HashableContainerView, ViewError};
+
+use linera_views::views::{HashableRootView, ViewError};
 use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;
 

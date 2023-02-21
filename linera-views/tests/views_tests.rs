@@ -22,7 +22,7 @@ use linera_views::{
         get_random_key_value_operations, get_random_key_value_vec, random_shuffle,
         span_random_reordering_put_delete,
     },
-    views::{ContainerView, HashableContainerView, HashableView, Hasher, View, ViewError},
+    views::{RootView, HashableRootView, HashableView, Hasher, View, ViewError},
 };
 use rand::{Rng, RngCore, SeedableRng};
 use std::{
@@ -34,7 +34,7 @@ use std::{
 use linera_views::{dynamo_db::DynamoDbContext, test_utils::LocalStackTestContext};
 
 #[allow(clippy::type_complexity)]
-#[derive(HashableContainerView)]
+#[derive(HashableRootView)]
 pub struct StateView<C> {
     pub x1: RegisterView<C, u64>,
     pub x2: RegisterView<C, u32>,

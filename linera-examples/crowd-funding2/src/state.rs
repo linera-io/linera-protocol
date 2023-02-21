@@ -7,7 +7,7 @@ use linera_views::{
     common::Context,
     map_view::MapView,
     register_view::RegisterView,
-    views::{ContainerView, View},
+    views::{RootView, View},
 };
 use serde::{Deserialize, Serialize};
 
@@ -37,7 +37,7 @@ pub enum Status {
 }
 
 /// The crowd-funding2 campaign's state.
-#[derive(ContainerView)]
+#[derive(RootView)]
 pub struct CrowdFunding<C> {
     /// The status of the campaign.
     pub status: RegisterView<C, Status>,
