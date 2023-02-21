@@ -79,7 +79,7 @@ pub struct SystemExecutionState {
 /// A system operation.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum SystemOperation {
-    /// Transfer `amount` units of value from the given owner's account to the recipient.
+    /// Transfers `amount` units of value from the given owner's account to the recipient.
     /// If no owner is given, try to take the units out of the unattributed account.
     Transfer {
         owner: Option<Owner>,
@@ -87,7 +87,17 @@ pub enum SystemOperation {
         amount: Amount,
         user_data: UserData,
     },
-    /// Create (or activate) a new chain by installing the given authentication key.
+    /// Claims `amount` units of value from the given owner's account in
+    /// the remote `target` chain. Depending on its configuration (see also #464), the
+    /// `target` chain may refuse to process the message.
+    Claim {
+        owner: Owner,
+        target: ChainId,
+        recipient: Recipient,
+        amount: Amount,
+        user_data: UserData,
+    },
+    /// Creates (or activates) a new chain by installing the given authentication key.
     /// This will automatically subscribe to the future committees created by `admin_id`.
     OpenChain {
         id: ChainId,
@@ -96,13 +106,13 @@ pub enum SystemOperation {
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
     },
-    /// Close the chain.
+    /// Closes the chain.
     CloseChain,
-    /// Change the authentication key of the chain.
+    /// Changes the authentication key of the chain.
     ChangeOwner { new_owner: Owner },
-    /// Change the authentication key of the chain.
+    /// Changes the authentication key of the chain.
     ChangeMultipleOwners { new_owners: Vec<Owner> },
-    /// (admin chain only) Register a new committee. This will notify the subscribers of
+    /// (admin chain only) Registers a new committee. This will notify the subscribers of
     /// the admin chain so that they can migrate to the new epoch (by accepting the
     /// notification as an "incoming message" in a next block).
     CreateCommittee {
@@ -110,26 +120,26 @@ pub enum SystemOperation {
         epoch: Epoch,
         committee: Committee,
     },
-    /// Subscribe to a system channel.
+    /// Subscribes to a system channel.
     Subscribe {
         chain_id: ChainId,
         channel: SystemChannel,
     },
-    /// Unsubscribe to a system channel.
+    /// Unsubscribes to a system channel.
     Unsubscribe {
         chain_id: ChainId,
         channel: SystemChannel,
     },
-    /// (admin chain only) Remove a committee. Once this message is accepted by a chain,
+    /// (admin chain only) Removes a committee. Once this message is accepted by a chain,
     /// blocks from the retired epoch will not be accepted until they are followed (hence
     /// re-certified) by a block certified by a recent committee.
     RemoveCommittee { admin_id: ChainId, epoch: Epoch },
-    /// Publish a new application bytecode.
+    /// Publishes a new application bytecode.
     PublishBytecode {
         contract: Bytecode,
         service: Bytecode,
     },
-    /// Create a new application.
+    /// Creates a new application.
     CreateApplication {
         bytecode_id: BytecodeId,
         #[serde(with = "serde_bytes")]
@@ -145,9 +155,18 @@ pub enum SystemOperation {
 /// The effect of a system operation to be performed on a remote chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum SystemEffect {
-    /// Credit `amount` units of value to the recipient.
+    /// Credits `amount` units of value to the account.
     Credit { account: Account, amount: Amount },
-    /// Create (or activate) a new chain by installing the given authentication key.
+    /// Withdraws `amount` units of value from the account and starts a transfer to credit
+    /// the recipient. The effect must be properly authenticated. Receiver chains may
+    /// refuse it depending on their configuration.
+    Withdraw {
+        account: Account,
+        amount: Amount,
+        recipient: Recipient,
+        user_data: UserData,
+    },
+    /// Creates (or activate) a new chain by installing the given authentication key.
     OpenChain {
         id: ChainId,
         owner: Owner,
@@ -155,23 +174,23 @@ pub enum SystemEffect {
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
     },
-    /// Set the current epoch and the recognized committees.
+    /// Sets the current epoch and the recognized committees.
     SetCommittees {
         admin_id: ChainId,
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
     },
-    /// Subscribe to a channel.
+    /// Subscribes to a channel.
     Subscribe { id: ChainId, channel_id: ChannelId },
-    /// Unsubscribe to a channel.
+    /// Unsubscribes to a channel.
     Unsubscribe { id: ChainId, channel_id: ChannelId },
-    /// Notify that a new application bytecode was published.
+    /// Notifies that a new application bytecode was published.
     BytecodePublished { operation_index: usize },
-    /// Share the locations of published bytecodes.
+    /// Shares the locations of published bytecodes.
     BytecodeLocations {
         locations: Vec<(BytecodeId, BytecodeLocation)>,
     },
-    /// Share information about some applications to help the recipient use them.
+    /// Shares information about some applications to help the recipient use them.
     /// Applications must be registered after their dependencies.
     RegisterApplications {
         applications: Vec<UserApplicationDescription>,
@@ -316,12 +335,16 @@ pub enum SystemExecutionError {
     InvalidEpoch { chain_id: ChainId, epoch: Epoch },
     #[error("Transfer must have positive amount")]
     IncorrectTransferAmount,
-    #[error("Transfer from owned account must be authenticated")]
+    #[error("Transfer from owned account must be authenticated by the right signer")]
     UnauthenticatedTransferOwner,
     #[error(
         "The transferred amount must be not exceed the current chain balance: {current_balance}"
     )]
     InsufficientFunding { current_balance: u128 },
+    #[error("Claim must have positive amount")]
+    IncorrectClaimAmount,
+    #[error("Claim must be authenticated by the right signer")]
+    UnauthenticatedClaimOwner,
     #[error("Failed to create new committee")]
     InvalidCommitteeCreation,
     #[error("Failed to remove committee")]
@@ -497,6 +520,35 @@ where
                     ));
                 }
             }
+            Claim {
+                owner,
+                target,
+                recipient,
+                amount,
+                user_data,
+            } => {
+                ensure!(
+                    context.authenticated_signer.as_ref() == Some(owner),
+                    SystemExecutionError::UnauthenticatedClaimOwner
+                );
+                ensure!(
+                    *amount > Amount::zero(),
+                    SystemExecutionError::IncorrectClaimAmount
+                );
+                result.effects.push((
+                    Destination::Recipient(*target),
+                    true,
+                    SystemEffect::Withdraw {
+                        amount: *amount,
+                        account: Account {
+                            chain_id: *target,
+                            owner: Some(*owner),
+                        },
+                        user_data: user_data.clone(),
+                        recipient: *recipient,
+                    },
+                ));
+            }
             CreateCommittee {
                 admin_id,
                 epoch,
@@ -633,7 +685,14 @@ where
     }
 
     /// Execute the recipient's side of an operation, aka a "remote effect".
-    /// Effects must be executed by order of heights in the sender's chain.
+    ///
+    /// * Effects should not return an error unless it is a temporary failure (e.g.
+    /// storage) or a global system failure. An error will fail the entire cross-chain
+    /// request, allowing it to be retried later.
+    ///
+    /// * If execution is impossible for a deterministic reason (e.g. insufficient
+    /// funds), effects should fail silently and be skipped (similar to a transaction in
+    /// traditional blockchains).
     pub async fn execute_effect(
         &mut self,
         context: &EffectContext,
@@ -658,6 +717,34 @@ where
                             .try_add((*amount).into())
                             .unwrap_or_else(|_| Balance::max());
                     }
+                }
+            }
+            Withdraw {
+                amount,
+                account:
+                    Account {
+                        owner: Some(owner),
+                        chain_id,
+                    },
+                user_data: _,
+                recipient,
+            } if chain_id == &context.chain_id
+                && context.authenticated_signer.as_ref() == Some(owner) =>
+            {
+                let balance = self.balances.get_mut_or_default(owner).await?;
+                if balance.try_sub_assign((*amount).into()).is_ok() {
+                    if let Recipient::Account(account) = recipient {
+                        result.effects.push((
+                            Destination::Recipient(account.chain_id),
+                            false,
+                            SystemEffect::Credit {
+                                amount: *amount,
+                                account: *account,
+                            },
+                        ));
+                    }
+                } else {
+                    log::info!("Withdrawal request was skipped due to lack of funds.");
                 }
             }
             SetCommittees {
@@ -724,7 +811,9 @@ where
                 }
             }
             _ => {
-                log::error!("Skipping unexpected received effect: {effect:?}");
+                log::error!(
+                    "Skipping unexpected received effect: {effect:?} with context: {context:?}"
+                );
             }
         }
         Ok(result)

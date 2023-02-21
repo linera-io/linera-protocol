@@ -715,7 +715,7 @@ where
     }
 
     /// Send money.
-    async fn transfer(
+    pub async fn transfer(
         &mut self,
         owner: Option<Owner>,
         amount: Amount,
@@ -736,6 +736,32 @@ where
                 ApplicationId::System,
                 Operation::System(SystemOperation::Transfer {
                     owner,
+                    recipient,
+                    amount,
+                    user_data,
+                }),
+            )],
+        )
+        .await
+    }
+
+    /// Claim money in a remote chain.
+    pub async fn claim(
+        &mut self,
+        owner: Owner,
+        target: ChainId,
+        recipient: Recipient,
+        amount: Amount,
+        user_data: UserData,
+    ) -> Result<Certificate> {
+        let messages = self.pending_messages().await?;
+        self.execute_block(
+            messages,
+            vec![(
+                ApplicationId::System,
+                Operation::System(SystemOperation::Claim {
+                    owner,
+                    target,
                     recipient,
                     amount,
                     user_data,

@@ -551,6 +551,17 @@ SystemEffect:
           - amount:
               TYPENAME: Amount
     1:
+      Withdraw:
+        STRUCT:
+          - account:
+              TYPENAME: Account
+          - amount:
+              TYPENAME: Amount
+          - recipient:
+              TYPENAME: Recipient
+          - user_data:
+              TYPENAME: UserData
+    2:
       OpenChain:
         STRUCT:
           - id:
@@ -567,7 +578,7 @@ SystemEffect:
                   TYPENAME: Epoch
                 VALUE:
                   TYPENAME: Committee
-    2:
+    3:
       SetCommittees:
         STRUCT:
           - admin_id:
@@ -580,25 +591,25 @@ SystemEffect:
                   TYPENAME: Epoch
                 VALUE:
                   TYPENAME: Committee
-    3:
+    4:
       Subscribe:
         STRUCT:
           - id:
               TYPENAME: ChainId
           - channel_id:
               TYPENAME: ChannelId
-    4:
+    5:
       Unsubscribe:
         STRUCT:
           - id:
               TYPENAME: ChainId
           - channel_id:
               TYPENAME: ChannelId
-    5:
+    6:
       BytecodePublished:
         STRUCT:
           - operation_index: U64
-    6:
+    7:
       BytecodeLocations:
         STRUCT:
           - locations:
@@ -606,13 +617,13 @@ SystemEffect:
                 TUPLE:
                   - TYPENAME: BytecodeId
                   - TYPENAME: BytecodeLocation
-    7:
+    8:
       RegisterApplications:
         STRUCT:
           - applications:
               SEQ:
                 TYPENAME: UserApplicationDescription
-    8:
+    9:
       Notify:
         STRUCT:
           - id:
@@ -632,6 +643,19 @@ SystemOperation:
           - user_data:
               TYPENAME: UserData
     1:
+      Claim:
+        STRUCT:
+          - owner:
+              TYPENAME: Owner
+          - target:
+              TYPENAME: ChainId
+          - recipient:
+              TYPENAME: Recipient
+          - amount:
+              TYPENAME: Amount
+          - user_data:
+              TYPENAME: UserData
+    2:
       OpenChain:
         STRUCT:
           - id:
@@ -648,20 +672,20 @@ SystemOperation:
                   TYPENAME: Epoch
                 VALUE:
                   TYPENAME: Committee
-    2:
-      CloseChain: UNIT
     3:
+      CloseChain: UNIT
+    4:
       ChangeOwner:
         STRUCT:
           - new_owner:
               TYPENAME: Owner
-    4:
+    5:
       ChangeMultipleOwners:
         STRUCT:
           - new_owners:
               SEQ:
                 TYPENAME: Owner
-    5:
+    6:
       CreateCommittee:
         STRUCT:
           - admin_id:
@@ -670,35 +694,35 @@ SystemOperation:
               TYPENAME: Epoch
           - committee:
               TYPENAME: Committee
-    6:
+    7:
       Subscribe:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - channel:
               TYPENAME: SystemChannel
-    7:
+    8:
       Unsubscribe:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - channel:
               TYPENAME: SystemChannel
-    8:
+    9:
       RemoveCommittee:
         STRUCT:
           - admin_id:
               TYPENAME: ChainId
           - epoch:
               TYPENAME: Epoch
-    9:
+    10:
       PublishBytecode:
         STRUCT:
           - contract:
               TYPENAME: Bytecode
           - service:
               TYPENAME: Bytecode
-    10:
+    11:
       CreateApplication:
         STRUCT:
           - bytecode_id:
