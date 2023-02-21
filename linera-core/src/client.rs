@@ -722,13 +722,7 @@ where
         recipient: Recipient,
         user_data: UserData,
     ) -> Result<Certificate> {
-        let balance = self.synchronize_and_recompute_balance().await?;
-        ensure!(
-            Balance::from(amount) <= balance,
-            "Transferred amount ({}) is not backed by sufficient funds ({})",
-            amount,
-            balance
-        );
+        // TODO(#467): check the balance of `owner` before signing any block proposal.
         let messages = self.pending_messages().await?;
         self.execute_block(
             messages,
