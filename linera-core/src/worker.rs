@@ -416,8 +416,6 @@ where
             "Expecting a confirmation certificate"
         );
         let block = certificate.value.block();
-        let effects = certificate.value.effects();
-        let state_hash = certificate.value.state_hash();
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         // Find all certificates containing bytecode used when executing this block.
         let blob_hashes: HashSet<_> = block
@@ -485,7 +483,10 @@ where
         self.storage.write_certificate(certificate.clone()).await?;
         // Execute the block.
         let verified_effects = chain.execute_block(block).await?;
-        ensure!(*effects == verified_effects, WorkerError::IncorrectEffects);
+        ensure!(
+            *certificate.value.effects() == verified_effects,
+            WorkerError::IncorrectEffects
+        );
         // Advance to next block height.
         let tip = chain.tip_state.get_mut();
         tip.block_hash = Some(certificate.value.hash());
@@ -493,7 +494,7 @@ where
         chain.confirmed_log.push(certificate.value.hash());
         // We should always agree on the state hash.
         ensure!(
-            *chain.execution_state_hash.get() == Some(state_hash),
+            *chain.execution_state_hash.get() == Some(certificate.value.state_hash()),
             WorkerError::IncorrectStateHash
         );
         let info = ChainInfoResponse::new(&chain, self.key_pair());
@@ -519,8 +520,6 @@ where
             ValueType::ConfirmedBlock => panic!("Expecting a validation certificate"),
         };
         let block = certificate.value.block();
-        let effects = certificate.value.effects();
-        let state_hash = certificate.value.state_hash();
         // Check that the chain is active and ready for this confirmation.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
@@ -555,13 +554,10 @@ where
             // unchanged.
             return Ok(ChainInfoResponse::new(&chain, self.key_pair()));
         }
-        chain.manager.get_mut().create_final_vote(
-            block.clone(),
-            effects.clone(),
-            state_hash,
-            certificate,
-            self.key_pair(),
-        );
+        chain
+            .manager
+            .get_mut()
+            .create_final_vote(certificate, self.key_pair());
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
         Ok(info)
@@ -600,7 +596,6 @@ where
         let mut last_updated_height = None;
         for certificate in certificates {
             let block = certificate.value.block();
-            let effects = certificate.value.effects();
             // Update the staged chain state with the received block.
             chain
                 .receive_block(
@@ -608,7 +603,7 @@ where
                     &origin,
                     block.height,
                     block.timestamp,
-                    effects.clone(),
+                    certificate.value.effects().clone(),
                     certificate.value.hash(),
                 )
                 .await?;

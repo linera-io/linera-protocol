@@ -509,7 +509,7 @@ where
             certificate.value.is_confirmed(),
             "Was expecting a confirmed chain operation"
         );
-        let block = certificate.value.block().clone();
+        let block = certificate.value.block();
         // Verify the certificate before doing any expensive networking.
         let (committees, max_epoch) = self.known_committees().await?;
         ensure!(
@@ -608,7 +608,7 @@ where
                         if !certificate.value.is_confirmed() {
                             return Err(NodeError::InvalidChainInfoResponse);
                         };
-                        let block = certificate.value.block().clone();
+                        let block = certificate.value.block();
                         // Check that certificates are valid w.r.t one of our trusted
                         // committees.
                         if block.epoch > max_epoch {
@@ -673,7 +673,7 @@ where
                 let hash = certificate.value.hash();
                 if let Err(e) = self
                     .receive_certificate_internal(
-                        certificate.clone(),
+                        certificate,
                         ReceiveCertificateMode::AlreadyChecked,
                     )
                     .await
