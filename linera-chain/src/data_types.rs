@@ -416,21 +416,6 @@ impl Value {
         }
     }
 
-    pub fn effects_and_state_hash(&self) -> (Vec<OutgoingEffect>, CryptoHash) {
-        match self {
-            Value::ConfirmedBlock {
-                effects,
-                state_hash,
-                ..
-            }
-            | Value::ValidatedBlock {
-                effects,
-                state_hash,
-                ..
-            } => (effects.clone(), *state_hash),
-        }
-    }
-
     pub fn effects(&self) -> &Vec<OutgoingEffect> {
         match self {
             Value::ConfirmedBlock { effects, .. } | Value::ValidatedBlock { effects, .. } => {
