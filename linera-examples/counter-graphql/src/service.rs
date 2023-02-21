@@ -57,7 +57,6 @@ mod tests {
     use async_graphql::{Request, Response};
     use futures::FutureExt;
     use linera_sdk::{ChainId, QueryContext, Service};
-    use serde_json::json;
     use webassembly_test::webassembly_test;
 
     #[webassembly_test]
@@ -72,15 +71,7 @@ mod tests {
             .expect("Query should not await anything")
             .unwrap();
 
-        let response: Response = serde_json::from_slice(&result).unwrap();
-        let expected_response = Response::new("Hello World!".to_string());
-        // create expected response by hand
-        // match response.data {
-        //     ConstValue::String(s) => {
-        //         assert_eq!(s, "Hello World!".to_string())
-        //     },
-        //     v => panic!("was expecting string 'Hello World!'. instead got: {}", v)
-        // }
+        assert!(serde_json::from_slice::<Response>(&result).is_ok())
     }
 
     #[webassembly_test]

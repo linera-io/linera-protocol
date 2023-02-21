@@ -178,7 +178,7 @@ mod tests {
     fn create_and_initialize_counter() -> Counter {
         let mut counter = Counter::default();
         let initial_value = "00".to_string();
-        let initial_argument = hex::decode(&initial_value).unwrap();
+        let initial_argument = hex::decode(initial_value).unwrap();
 
         let result = counter
             .initialize(&dummy_operation_context(), &initial_argument)
