@@ -8,18 +8,26 @@ mod state;
 use self::state::Counter;
 use async_trait::async_trait;
 use linera_sdk::{
-    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-    OperationContext, Session, SessionCallResult, SessionId, SimpleStateStorage,
+    contract::system_api::WasmContext, ApplicationCallResult, CalleeContext, Contract,
+    EffectContext, ExecutionResult, OperationContext, Session, SessionCallResult, SessionId,
+    ViewStateStorage,
 };
+use linera_views::{common::Context, views::ViewError};
 use std::num::ParseIntError;
 use thiserror::Error;
 
-linera_sdk::contract!(Counter);
+/// TODO(#434): Remove the type alias
+type WritableCounter = Counter<WasmContext>;
+linera_sdk::contract!(WritableCounter);
 
 #[async_trait]
-impl Contract for Counter {
+impl<C> Contract for Counter<C>
+where
+    C: Context + Send + Sync + Clone + 'static,
+    ViewError: From<<C as Context>::Error>,
+{
     type Error = Error;
-    type Storage = SimpleStateStorage<Self>;
+    type Storage = ViewStateStorage<Self>;
 
     async fn initialize(
         &mut self,
@@ -27,7 +35,7 @@ impl Contract for Counter {
         argument: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
         let value_as_str: String = hex::encode(argument);
-        self.value = value_as_str.parse()?;
+        self.value.set(value_as_str.parse()?);
         Ok(ExecutionResult::default())
     }
 
@@ -36,8 +44,9 @@ impl Contract for Counter {
         _context: &OperationContext,
         operation: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        let increment: u128 = bcs::from_bytes(operation)?;
-        self.value += increment;
+        let increment: u64 = bcs::from_bytes(operation)?;
+        let value = self.value.get_mut();
+        *value += increment;
         Ok(ExecutionResult::default())
     }
 
@@ -55,10 +64,12 @@ impl Contract for Counter {
         argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
-        let increment: u128 = bcs::from_bytes(argument)?;
-        self.value += increment;
+        let increment: u64 = bcs::from_bytes(argument)?;
+        let mut value = *self.value.get();
+        value += increment;
+        self.value.set(value);
         Ok(ApplicationCallResult {
-            value: bcs::to_bytes(&self.value).expect("Serialization should not fail"),
+            value: bcs::to_bytes(&value).expect("Serialization should not fail"),
             ..ApplicationCallResult::default()
         })
     }
@@ -89,27 +100,32 @@ pub enum Error {
     #[error("Invalid serialized increment value")]
     InvalidIncrement(#[from] bcs::Error),
 
-    /// Could not parse the given argument into an u128.
+    /// Could not parse the given argument into an u64.
     #[error("Parse error")]
     ParseIntError(#[from] ParseIntError),
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Counter, Error};
+    use super::Error;
+    use crate::Counter;
     use futures::FutureExt;
     use linera_sdk::{
         ApplicationCallResult, BlockHeight, CalleeContext, ChainId, Contract, EffectContext,
         EffectId, ExecutionResult, OperationContext, Session,
     };
+    use linera_views::{
+        memory::{get_memory_context, MemoryContext},
+        views::View,
+    };
     use webassembly_test::webassembly_test;
 
     #[webassembly_test]
     fn operation() {
-        let initial_value = 0;
-        let mut counter = create_and_initialize_counter();
+        let initial_value = 72_u64;
+        let mut counter = create_and_initialize_counter(initial_value);
 
-        let increment = 42_308_u128;
+        let increment = 42_308_u64;
         let operation = bcs::to_bytes(&increment).expect("Increment value is not serializable");
 
         let result = counter
@@ -119,13 +135,13 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), ExecutionResult::default());
-        assert_eq!(counter.value, initial_value + increment);
+        assert_eq!(counter.value.get(), &(initial_value + increment));
     }
 
     #[webassembly_test]
     fn effect() {
-        let initial_value = 0;
-        let mut counter = create_and_initialize_counter();
+        let initial_value = 72_u64;
+        let mut counter = create_and_initialize_counter(initial_value);
 
         let result = counter
             .execute_effect(&dummy_effect_context(), &[])
@@ -133,15 +149,15 @@ mod tests {
             .expect("Execution of counter operation should not await anything");
 
         assert!(matches!(result, Err(Error::EffectsNotSupported)));
-        assert_eq!(counter.value, initial_value);
+        assert_eq!(counter.value.get(), &initial_value);
     }
 
     #[webassembly_test]
     fn cross_application_call() {
-        let initial_value = 0;
-        let mut counter = create_and_initialize_counter();
+        let initial_value = 2_845_u64;
+        let mut counter = create_and_initialize_counter(initial_value);
 
-        let increment = 8_u128;
+        let increment = 8_u64;
         let argument = bcs::to_bytes(&increment).expect("Increment value is not serializable");
 
         let result = counter
@@ -158,13 +174,13 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), expected_result);
-        assert_eq!(counter.value, expected_value);
+        assert_eq!(counter.value.get(), &expected_value);
     }
 
     #[webassembly_test]
     fn sessions() {
-        let initial_value = 0;
-        let mut counter = create_and_initialize_counter();
+        let initial_value = 72_u64;
+        let mut counter = create_and_initialize_counter(initial_value);
 
         let result = counter
             .call_session(&dummy_callee_context(), Session::default(), &[], vec![])
@@ -172,13 +188,18 @@ mod tests {
             .expect("Execution of counter operation should not await anything");
 
         assert!(matches!(result, Err(Error::SessionsNotSupported)));
-        assert_eq!(counter.value, initial_value);
+        assert_eq!(counter.value.get(), &initial_value);
     }
 
-    fn create_and_initialize_counter() -> Counter {
-        let mut counter = Counter::default();
-        let initial_value = "00".to_string();
-        let initial_argument = hex::decode(initial_value).unwrap();
+    fn create_and_initialize_counter(initial_value: u64) -> Counter<MemoryContext<()>> {
+        let context = get_memory_context()
+            .now_or_never()
+            .expect("Failed to acquire the guard");
+        let mut counter = Counter::load(context)
+            .now_or_never()
+            .unwrap()
+            .expect("Failed to load counter");
+        let initial_argument = hex::decode(initial_value.to_string()).unwrap();
 
         let result = counter
             .initialize(&dummy_operation_context(), &initial_argument)
@@ -187,7 +208,7 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), ExecutionResult::default());
-        assert_eq!(counter.value, 0);
+        assert_eq!(counter.value.get(), &initial_value);
 
         counter
     }

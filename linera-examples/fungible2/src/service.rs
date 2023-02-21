@@ -7,6 +7,7 @@ mod state;
 
 use self::state::FungibleToken;
 use linera_views::common::Context;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use linera_sdk::{
@@ -28,7 +29,7 @@ where
     type Storage = ViewStateStorage<Self>;
 
     async fn query_application(
-        &self,
+        self: Arc<Self>,
         _context: &QueryContext,
         argument: &[u8],
     ) -> Result<Vec<u8>, Self::Error> {

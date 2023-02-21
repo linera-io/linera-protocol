@@ -7,35 +7,36 @@ mod state;
 
 use self::state::Counter;
 use async_graphql::{EmptyMutation, EmptySubscription, Schema};
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use linera_sdk::{QueryContext, Service, SimpleStateStorage};
+use linera_sdk::{
+    service::system_api::ReadableWasmContext, QueryContext, Service, ViewStateStorage,
+};
+use linera_views::{common::Context, views::ViewError};
 use thiserror::Error;
 
-linera_sdk::service!(Counter);
-
-struct DummyObject;
-
-#[async_graphql::Object]
-impl DummyObject {
-    async fn hello(&self) -> String {
-        "Hello World!".to_string()
-    }
-}
+/// TODO(#434): Remove the type alias
+type ReadableCounter = Counter<ReadableWasmContext>;
+linera_sdk::service!(ReadableCounter);
 
 #[async_trait]
-impl Service for Counter {
+impl<C> Service for Counter<C>
+where
+    C: Context + Send + Sync + Clone + 'static,
+    ViewError: From<C::Error>,
+{
     type Error = Error;
-    type Storage = SimpleStateStorage<Self>;
+    type Storage = ViewStateStorage<Self>;
 
     async fn query_application(
-        &self,
+        self: Arc<Self>,
         _context: &QueryContext,
         argument: &[u8],
     ) -> Result<Vec<u8>, Self::Error> {
         let graphql_request: async_graphql::Request =
             serde_json::from_slice(argument).map_err(|_| Error::InvalidQuery)?;
-        let dummy = DummyObject;
-        let schema = Schema::build(dummy, EmptyMutation, EmptySubscription).finish();
+        let schema = Schema::build(self.clone(), EmptyMutation, EmptySubscription).finish();
         let res = schema.execute(graphql_request).await;
         Ok(serde_json::to_vec(&res).unwrap())
     }
@@ -57,13 +58,24 @@ mod tests {
     use async_graphql::{Request, Response};
     use futures::FutureExt;
     use linera_sdk::{ChainId, QueryContext, Service};
+    use linera_views::{memory::get_memory_context, views::View};
+    use std::sync::Arc;
     use webassembly_test::webassembly_test;
 
     #[webassembly_test]
     fn query() {
-        let req = Request::new("{ hello }");
+        let req = Request::new("{ data }");
         let req_bytes = serde_json::to_vec(&req).unwrap();
-        let counter = Counter { value: 0 };
+        let value = 61_098_721_u64;
+        let context = get_memory_context()
+            .now_or_never()
+            .expect("Failed to acquire the guard");
+        let mut counter = Counter::load(context)
+            .now_or_never()
+            .unwrap()
+            .expect("Failed to load Counter");
+        counter.value.set(value);
+        let counter = Arc::new(counter);
 
         let result = counter
             .query_application(&dummy_query_context(), &req_bytes)
@@ -76,12 +88,19 @@ mod tests {
 
     #[webassembly_test]
     fn invalid_query() {
-        let value = 4_u128;
-        let counter = Counter { value };
+        let value = 61_098_721_u64;
+        let context = get_memory_context()
+            .now_or_never()
+            .expect("Failed to acquire the guard");
+        let mut counter = Counter::load(context)
+            .now_or_never()
+            .unwrap()
+            .expect("Failed to load Counter");
+        counter.value.set(value);
+        let counter = Arc::new(counter);
 
-        let dummy_argument = [2];
         let result = counter
-            .query_application(&dummy_query_context(), &dummy_argument)
+            .query_application(&dummy_query_context(), &[])
             .now_or_never()
             .expect("Query should not await anything");
 

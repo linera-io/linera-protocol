@@ -8,6 +8,7 @@ mod state;
 use self::state::FungibleToken;
 use async_trait::async_trait;
 use linera_sdk::{QueryContext, Service, SimpleStateStorage};
+use std::sync::Arc;
 use thiserror::Error;
 
 linera_sdk::service!(FungibleToken);
@@ -18,7 +19,7 @@ impl Service for FungibleToken {
     type Storage = SimpleStateStorage<Self>;
 
     async fn query_application(
-        &self,
+        self: Arc<Self>,
         _context: &QueryContext,
         argument: &[u8],
     ) -> Result<Vec<u8>, Self::Error> {

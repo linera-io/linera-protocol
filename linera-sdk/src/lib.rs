@@ -14,7 +14,7 @@ use async_trait::async_trait;
 use custom_debug_derive::Debug;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::{error::Error, fmt};
+use std::{error::Error, fmt, sync::Arc};
 
 pub use self::{
     exported_future::ExportedFuture,
@@ -99,7 +99,7 @@ pub trait Service {
     /// Allow an end user to execute read-only queries on the state of this application.
     /// NOTE: This is not meant to be metered and may not be exposed by validators.
     async fn query_application(
-        &self,
+        self: Arc<Self>,
         context: &QueryContext,
         argument: &[u8],
     ) -> Result<Vec<u8>, Self::Error>;
