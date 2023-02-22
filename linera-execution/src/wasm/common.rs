@@ -331,7 +331,7 @@ where
     ///     session_data: &mut Vec<u8>,
     ///     argument: &[u8],
     ///     forwarded_sessions: Vec<SessionId>,
-    /// ) -> Result<A::SessionCallResult, WasmExecutionError>
+    /// ) -> Result<SessionCallResult, WasmExecutionError>
     /// ```
     pub fn call_session<'session_data>(
         mut self,
