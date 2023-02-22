@@ -685,7 +685,7 @@ pub mod tests {
 
         let expected = quote!(
             #[async_trait::async_trait]
-            impl<C> linera_views::views::HashableRootView<C> for TestView<C>
+            impl<C> linera_views::views::CryptoHashView<C> for TestView<C>
             where
                 C: Context + Send + Sync + Clone + 'static,
                 linera_views::views::ViewError: From<C::Error>,
