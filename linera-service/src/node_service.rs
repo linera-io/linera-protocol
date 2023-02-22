@@ -97,13 +97,7 @@ where
 
         let overviews = applications
             .into_iter()
-            .map(|application| {
-                ApplicationOverview::new(
-                    application.0,
-                    application.1,
-                    NonZeroU16::new(8080).unwrap(),
-                )
-            })
+            .map(ApplicationOverview::from)
             .collect();
 
         Ok(overviews)
@@ -117,22 +111,14 @@ pub struct ApplicationOverview {
     link: String,
 }
 
-impl ApplicationOverview {
-    fn new(
-        id: UserApplicationId,
-        description: UserApplicationDescription,
-        port: NonZeroU16,
-    ) -> Self {
+impl From<(UserApplicationId, UserApplicationDescription)> for ApplicationOverview {
+    fn from((id, description): (UserApplicationId, UserApplicationDescription)) -> Self {
         let id_bytes = bcs::to_bytes(&id).expect("user application ids should be bcs serializable");
         let encoded_id = hex::encode(id_bytes);
         Self {
             id,
             description,
-            link: format!(
-                "http://localhost:{}/applications/{}",
-                port.get(),
-                encoded_id
-            ),
+            link: format!("http://localhost:{}/applications/{}", 8080, encoded_id),
         }
     }
 }
