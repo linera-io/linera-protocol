@@ -771,10 +771,7 @@ Value:
         TYPENAME: Block
     - effects:
         SEQ:
-          TUPLE:
-            - TYPENAME: ApplicationId
-            - TYPENAME: Destination
-            - TYPENAME: Effect
+          TYPENAME: OutgoingEffect
     - state_hash:
         TYPENAME: CryptoHash
     - value_type:
@@ -786,25 +783,6 @@ ValueType:
         STRUCT:
           - round:
               TYPENAME: RoundNumber
-          - effects:
-              SEQ:
-                TUPLE:
-                  - TYPENAME: ApplicationId
-                  - TYPENAME: Destination
-                  - TYPENAME: Effect
-          - state_hash:
-              TYPENAME: CryptoHash
     1:
-      ConfirmedBlock:
-        STRUCT:
-          - block:
-              TYPENAME: Block
-          - effects:
-              SEQ:
-                TUPLE:
-                  - TYPENAME: ApplicationId
-                  - TYPENAME: Destination
-                  - TYPENAME: Effect
-          - state_hash:
-              TYPENAME: CryptoHash
+      ConfirmedBlock: UNIT
 
