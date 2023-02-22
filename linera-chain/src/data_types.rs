@@ -229,7 +229,7 @@ pub struct OutgoingEffect {
 /// The type of a value: whether it's a validated block in a particular round, or already
 /// confirmed.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
-pub enum ValueType {
+pub enum ValueKind {
     /// The block was validated but confirmation will require additional steps.
     ValidatedBlock { round: RoundNumber },
     /// The block is validated and confirmed (i.e. ready to be published).
@@ -242,7 +242,7 @@ pub struct Value {
     block: Block,
     effects: Vec<OutgoingEffect>,
     state_hash: CryptoHash,
-    value_type: ValueType,
+    kind: ValueKind,
     /// Hash of the certified value (used as key for storage).
     #[serde(skip_serializing)]
     hash: CryptoHash,
@@ -398,7 +398,7 @@ struct NetworkValue {
     block: Block,
     effects: Vec<OutgoingEffect>,
     state_hash: CryptoHash,
-    value_type: ValueType,
+    kind: ValueKind,
 }
 
 impl<'a> Deserialize<'a> for Value {
@@ -417,13 +417,13 @@ impl From<NetworkValue> for Value {
             block,
             effects,
             state_hash,
-            value_type,
+            kind,
         } = value;
         Value {
             block,
             effects,
             state_hash,
-            value_type,
+            kind,
             hash,
         }
     }
@@ -439,7 +439,7 @@ impl Value {
             block,
             effects,
             state_hash,
-            value_type: ValueType::ConfirmedBlock,
+            kind: ValueKind::ConfirmedBlock,
         }
         .into()
     }
@@ -453,7 +453,7 @@ impl Value {
             block,
             effects,
             state_hash,
-            value_type: ValueType::ValidatedBlock { round },
+            kind: ValueKind::ValidatedBlock { round },
         }
         .into()
     }
@@ -474,8 +474,8 @@ impl Value {
         &self.effects
     }
 
-    pub fn value_type(&self) -> ValueType {
-        self.value_type
+    pub fn kind(&self) -> ValueKind {
+        self.kind
     }
 
     pub fn hash(&self) -> CryptoHash {
@@ -483,11 +483,11 @@ impl Value {
     }
 
     pub fn is_confirmed(&self) -> bool {
-        matches!(self.value_type, ValueType::ConfirmedBlock)
+        matches!(self.kind, ValueKind::ConfirmedBlock)
     }
 
     pub fn is_validated(&self) -> bool {
-        matches!(self.value_type, ValueType::ValidatedBlock { .. })
+        matches!(self.kind, ValueKind::ValidatedBlock { .. })
     }
 
     pub fn lite(&self) -> LiteValue {

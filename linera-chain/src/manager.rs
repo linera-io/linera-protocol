@@ -3,8 +3,8 @@
 
 use crate::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, LiteVote, Value, ValueType, Vote,
-        OutgoingEffect,
+        Block, BlockAndRound, BlockProposal, Certificate, LiteVote, OutgoingEffect, Value,
+        ValueKind, Vote,
     },
     ChainError,
 };
@@ -92,7 +92,7 @@ impl MultiOwnerManager {
             }
         }
         if let Some(cert) = &self.locked {
-            if let ValueType::ValidatedBlock { round } = &cert.value.value_type() {
+            if let ValueKind::ValidatedBlock { round } = &cert.value.kind() {
                 if current_round < *round {
                     current_round = *round;
                 }
@@ -201,7 +201,7 @@ impl ChainManager {
                     }
                 }
                 if let Some(Certificate { value, .. }) = &manager.locked {
-                    if let ValueType::ValidatedBlock { round } = value.value_type() {
+                    if let ValueKind::ValidatedBlock { round } = value.kind() {
                         ensure!(new_round > round, ChainError::InsufficientRound(round));
                         ensure!(
                             new_block == value.block(),
@@ -233,20 +233,20 @@ impl ChainManager {
         match self {
             ChainManager::Multi(manager) => {
                 if let Some(Vote { value, .. }) = &manager.pending {
-                    match value.value_type() {
-                        ValueType::ConfirmedBlock => {
+                    match value.kind() {
+                        ValueKind::ConfirmedBlock => {
                             if value.block() == new_block {
                                 return Ok(Outcome::Skip);
                             }
                         }
-                        ValueType::ValidatedBlock { round } => ensure!(
+                        ValueKind::ValidatedBlock { round } => ensure!(
                             new_round >= round,
                             ChainError::InsufficientRound(round.try_sub_one().unwrap())
                         ),
                     }
                 }
                 if let Some(Certificate { value, .. }) = &manager.locked {
-                    if let ValueType::ValidatedBlock { round } = value.value_type() {
+                    if let ValueKind::ValidatedBlock { round } = value.kind() {
                         ensure!(
                             new_round >= round,
                             ChainError::InsufficientRound(round.try_sub_one().unwrap())
