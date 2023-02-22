@@ -3,7 +3,7 @@
 
 use crate::{
     common::{
-        Batch, Context, ContextFromDb, KeyIterable, KeyValueIterable, KeyValueOperations,
+        Batch, Context, ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient,
         WriteOperation,
     },
     localstack,
@@ -273,7 +273,7 @@ impl KeyValueIterable<DynamoDbContextError> for DynamoDbKeyValues {
 }
 
 #[async_trait]
-impl KeyValueOperations for DynamoDbClient {
+impl KeyValueStoreClient for DynamoDbClient {
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;

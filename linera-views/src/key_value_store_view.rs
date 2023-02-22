@@ -19,15 +19,15 @@ use std::{
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::common::{ContextFromDb, KeyValueOperations},
+    crate::common::{ContextFromDb, KeyValueStoreClient},
     crate::memory::{MemoryContext, MemoryStoreMap},
     async_lock::{MutexGuardArc, RwLock},
     std::sync::Arc,
 };
 
 /// We actually implement two types:
-/// 1) The first type KeyValueStoreView that implements View and the function of KeyValueOperations
-/// (though not KeyValueOperations).
+/// 1) The first type KeyValueStoreView that implements View and the function of KeyValueStoreClient
+/// (though not KeyValueStoreClient).
 ///
 /// 2) The second type ViewContainer encapsulates KeyValueStoreView and provides the following functionalities:
 /// * The Clone trait
@@ -44,7 +44,7 @@ enum KeyTag {
     Hash = 1,
 }
 
-/// A view that represents the function of KeyValueOperations (though not KeyValueOperations)
+/// A view that represents the function of KeyValueStoreClient (though not KeyValueStoreClient)
 ///
 /// Comment on the data set:
 /// In order to work, the view needs to store the updates and deleted_prefixes.
@@ -504,7 +504,7 @@ pub struct ViewContainer<C> {
 
 #[cfg(any(test, feature = "test"))]
 #[async_trait]
-impl<C> KeyValueOperations for ViewContainer<C>
+impl<C> KeyValueStoreClient for ViewContainer<C>
 where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,

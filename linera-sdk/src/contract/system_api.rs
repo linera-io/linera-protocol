@@ -6,7 +6,7 @@ use crate::{ApplicationId, ChainId, SessionId, SystemBalance, Timestamp};
 use async_trait::async_trait;
 use futures::future;
 use linera_views::{
-    common::{Batch, ContextFromDb, KeyValueOperations, WriteOperation},
+    common::{Batch, ContextFromDb, KeyValueStoreClient, WriteOperation},
     views::{RootView, View, ViewError},
 };
 use serde::{de::DeserializeOwned, Serialize};
@@ -70,7 +70,7 @@ impl WasmClient {
 }
 
 #[async_trait]
-impl KeyValueOperations for WasmClient {
+impl KeyValueStoreClient for WasmClient {
     type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
