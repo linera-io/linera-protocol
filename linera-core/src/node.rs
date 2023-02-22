@@ -403,7 +403,12 @@ where
                 bytecode_location, ..
             }) = &result
             {
-                let Some(blob) = self.try_download_blob_from(name, client, *bytecode_location).await else {
+                let Some(blob) = self.try_download_blob_from(
+                    name,
+                    client,
+                    certificate.value.chain_id(),
+                    *bytecode_location
+                ).await else {
                     // The certificate is not as expected. Give up.
                     log::warn!("Failed to process network blob");
                     return info;
@@ -499,6 +504,7 @@ where
     pub async fn download_blob<A>(
         &mut self,
         mut validators: Vec<(ValidatorName, A)>,
+        chain_id: ChainId,
         location: BytecodeLocation,
     ) -> Option<Value>
     where
@@ -508,7 +514,7 @@ where
         validators.shuffle(&mut rand::thread_rng());
         for (name, mut client) in validators {
             if let Some(blob) = self
-                .try_download_blob_from(name, &mut client, location)
+                .try_download_blob_from(name, &mut client, chain_id, location)
                 .await
             {
                 return Some(blob);
@@ -521,28 +527,16 @@ where
         &mut self,
         name: ValidatorName,
         client: &mut A,
+        chain_id: ChainId,
         location: BytecodeLocation,
     ) -> Option<Value>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
-        let range = BlockHeightRange {
-            start: location.height,
-            limit: Some(1),
-        };
-        // TODO: Request only the blob, not a certificate.
-        let query = ChainInfoQuery::new(location.chain_id).with_sent_certificates_in_range(range);
+        let query = ChainInfoQuery::new(chain_id).with_blob(location.certificate_hash);
         if let Ok(response) = client.handle_chain_info_query(query).await {
             if response.check(name).is_ok() {
-                let ChainInfo {
-                    mut requested_sent_certificates,
-                    ..
-                } = response.info;
-                if let Some(certificate) = requested_sent_certificates.pop() {
-                    if certificate.value.hash() == location.certificate_hash {
-                        return Some(certificate.value);
-                    }
-                }
+                return response.info.requested_blob;
             }
         }
         None

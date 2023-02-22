@@ -9,7 +9,7 @@ use linera_base::{
     data_types::{BlockHeight, ChainDescription, ChainId, Epoch, Timestamp, ValidatorName},
 };
 use linera_chain::{
-    data_types::{Certificate, Medium, Message, Origin},
+    data_types::{Certificate, Medium, Message, Origin, Value},
     ChainManagerInfo, ChainStateView,
 };
 use linera_execution::{system::Balance, ApplicationId, ExecutionRuntimeContext};
@@ -49,6 +49,8 @@ pub struct ChainInfoQuery {
     pub request_received_certificates_excluding_first_nth: Option<usize>,
     /// Query values from the chain manager, not just votes.
     pub request_manager_values: bool,
+    /// Query a value that contains a binary blob (e.g. bytecode) required by this chain.
+    pub request_blob: Option<CryptoHash>,
 }
 
 impl ChainInfoQuery {
@@ -61,6 +63,7 @@ impl ChainInfoQuery {
             request_sent_certificates_in_range: None,
             request_received_certificates_excluding_first_nth: None,
             request_manager_values: false,
+            request_blob: None,
         }
     }
 
@@ -91,6 +94,11 @@ impl ChainInfoQuery {
 
     pub fn with_manager_values(mut self) -> Self {
         self.request_manager_values = true;
+        self
+    }
+
+    pub fn with_blob(mut self, hash: CryptoHash) -> Self {
+        self.request_blob = Some(hash);
         self
     }
 }
@@ -126,6 +134,8 @@ pub struct ChainInfo {
     pub count_received_certificates: usize,
     /// The response to `request_received_certificates_excluding_first_nth`
     pub requested_received_certificates: Vec<Certificate>,
+    /// The requested blob, if any.
+    pub requested_blob: Option<Value>,
 }
 
 /// The response to an `ChainInfoQuery`
@@ -192,6 +202,7 @@ where
             requested_sent_certificates: Vec::new(),
             count_received_certificates: view.received_log.count(),
             requested_received_certificates: Vec::new(),
+            requested_blob: None,
         }
     }
 }

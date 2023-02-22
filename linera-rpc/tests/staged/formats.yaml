@@ -149,6 +149,9 @@ ChainInfo:
     - requested_received_certificates:
         SEQ:
           TYPENAME: Certificate
+    - requested_blob:
+        OPTION:
+          TYPENAME: Value
 ChainInfoQuery:
   STRUCT:
     - chain_id:
@@ -164,6 +167,9 @@ ChainInfoQuery:
     - request_received_certificates_excluding_first_nth:
         OPTION: U64
     - request_manager_values: BOOL
+    - request_blob:
+        OPTION:
+          TYPENAME: CryptoHash
 ChainInfoResponse:
   STRUCT:
     - info:
