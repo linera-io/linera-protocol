@@ -143,6 +143,9 @@ message ChainInfoQuery {
 
   // Query values from the chain manager, not just votes.
   bool request_manager_values = 7;
+
+  // Query a value that contains a binary blob (e.g. bytecode) required by this chain.
+  optional bytes request_blob = 8;
 }
 
 // The origin of a message, relative to a particular application. Used to identify each inbox.

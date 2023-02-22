@@ -859,6 +859,9 @@ where
             let certs = self.storage.read_certificates(keys).await?;
             info.requested_received_certificates = certs;
         }
+        if let Some(hash) = query.request_blob {
+            info.requested_blob = Some(self.storage.read_value(hash).await?);
+        }
         if query.request_manager_values {
             info.manager.add_values(chain.manager.get());
         }

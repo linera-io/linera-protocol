@@ -543,7 +543,7 @@ where
             {
                 if let Some(blob) = self
                     .node_client
-                    .download_blob(nodes.clone(), *bytecode_location)
+                    .download_blob(nodes.clone(), block.chain_id, *bytecode_location)
                     .await
                 {
                     blobs.push(blob);
