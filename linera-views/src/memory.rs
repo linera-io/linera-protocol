@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    common::{get_interval, Batch, ContextFromDb, KeyValueOperations, WriteOperation},
+    common::{get_interval, Batch, ContextFromDb, KeyValueStoreClient, WriteOperation},
     views::ViewError,
 };
 use async_lock::{Mutex, MutexGuardArc, RwLock};
@@ -38,7 +38,7 @@ pub async fn get_memory_context() -> MemoryContext<()> {
 }
 
 #[async_trait]
-impl KeyValueOperations for MemoryClient {
+impl KeyValueStoreClient for MemoryClient {
     type Error = MemoryContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;

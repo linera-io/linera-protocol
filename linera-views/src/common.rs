@@ -200,7 +200,7 @@ pub trait KeyValueIterable<Error> {
 
 /// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
 #[async_trait]
-pub trait KeyValueOperations {
+pub trait KeyValueStoreClient {
     /// The error type.
     type Error: Debug;
 
@@ -391,7 +391,7 @@ pub trait Context {
 }
 
 /// Implementation of the [`Context`] trait on top of a DB client implementing
-/// [`KeyValueOperations`].
+/// [`KeyValueStoreClient`].
 #[derive(Debug, Clone)]
 pub struct ContextFromDb<E, DB> {
     /// The DB client, usually shared between views.
@@ -406,7 +406,7 @@ pub struct ContextFromDb<E, DB> {
 impl<E, DB> Context for ContextFromDb<E, DB>
 where
     E: Clone + Send + Sync,
-    DB: KeyValueOperations + Clone + Send + Sync,
+    DB: KeyValueStoreClient + Clone + Send + Sync,
     DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<DB::Error>,
 {

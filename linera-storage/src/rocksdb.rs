@@ -8,7 +8,7 @@ use linera_base::{crypto::CryptoHash, data_types::ChainId};
 use linera_chain::data_types::Certificate;
 use linera_execution::{UserApplicationCode, UserApplicationId, WasmRuntime};
 use linera_views::{
-    common::{Batch, KeyValueOperations},
+    common::{Batch, KeyValueStoreClient},
     rocksdb::{RocksdbClient, RocksdbContext, RocksdbContextError, DB},
     views::{View, ViewError},
 };

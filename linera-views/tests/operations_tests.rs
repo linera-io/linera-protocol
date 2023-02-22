@@ -3,7 +3,7 @@
 
 use async_lock::{Mutex, RwLock};
 use linera_views::{
-    common::{Batch, KeyIterable, KeyValueOperations},
+    common::{Batch, KeyIterable, KeyValueStoreClient},
     key_value_store_view::ViewContainer,
     memory::MemoryContext,
     rocksdb::DB,
@@ -19,7 +19,7 @@ use std::{
 use linera_views::{dynamo_db::DynamoDbClient, test_utils::LocalStackTestContext};
 
 #[cfg(test)]
-async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
+async fn test_ordering_keys_key_value_vec<OP: KeyValueStoreClient + Sync>(
     key_value_operation: OP,
     key_value_vec: Vec<(Vec<u8>, Vec<u8>)>,
 ) {
@@ -72,7 +72,7 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueOperations + Sync>(
 }
 
 #[cfg(test)]
-async fn test_ordering_keys<OP: KeyValueOperations + Sync>(key_value_operation: OP) {
+async fn test_ordering_keys<OP: KeyValueStoreClient + Sync>(key_value_operation: OP) {
     let key_prefix = vec![0];
     let n = 1000;
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);

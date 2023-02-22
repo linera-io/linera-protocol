@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::common::{get_upper_bound, Batch, ContextFromDb, KeyValueOperations, WriteOperation};
+use crate::common::{get_upper_bound, Batch, ContextFromDb, KeyValueStoreClient, WriteOperation};
 use async_trait::async_trait;
 use std::{
     ops::{Bound, Bound::Excluded},
@@ -19,7 +19,7 @@ pub type RocksdbClient = Arc<DB>;
 pub type RocksdbContext<E> = ContextFromDb<E, RocksdbClient>;
 
 #[async_trait]
-impl KeyValueOperations for RocksdbClient {
+impl KeyValueStoreClient for RocksdbClient {
     type Error = RocksdbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
