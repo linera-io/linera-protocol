@@ -13,6 +13,9 @@ pub mod common;
 /// The main definitions.
 pub mod views;
 
+/// Wrapping a view to compute a hash
+pub mod hash_wrappable;
+
 /// The register_view
 pub mod register_view;
 
