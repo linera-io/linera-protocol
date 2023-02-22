@@ -11,7 +11,7 @@ use tempfile::tempdir;
 static README_GUARD: Mutex<()> = Mutex::new(());
 
 #[test]
-fn test_examples_in_readme() -> std::io::Result<()> {
+fn test_examples_in_readme_simple_network() -> std::io::Result<()> {
     let _guard = README_GUARD.lock().unwrap();
 
     let dir = tempdir().unwrap();
@@ -99,7 +99,7 @@ mod aws_test {
     const AWS_BUILD: &str = "cargo build --features aws";
 
     #[tokio::test]
-    async fn test_examples_in_readme_with_dynamo_db() -> anyhow::Result<()> {
+    async fn test_examples_in_readme_simple_network_with_dynamo_db() -> anyhow::Result<()> {
         let _localstack_guard = LocalStackTestContext::new().await?;
         let dir = tempdir().unwrap();
         let file = std::io::BufReader::new(std::fs::File::open("../README.md")?);
