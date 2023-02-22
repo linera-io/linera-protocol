@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest};
+use crate::data_types::{get_chain_info, ChainInfoQuery, ChainInfoResponse, CrossChainRequest};
 use async_trait::async_trait;
 use linera_base::{
     committee::Committee,
@@ -23,7 +23,7 @@ use linera_execution::{
 use linera_storage::Store;
 use linera_views::{
     log_view::LogView,
-    views::{RootView, View, ViewError},
+    views::{CryptoHashView, RootView, View, ViewError},
 };
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
@@ -306,7 +306,8 @@ where
     ) -> Result<(Vec<OutgoingEffect>, ChainInfoResponse), WorkerError> {
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         let effects = chain.execute_block(block).await?;
-        let info = ChainInfoResponse::new(&chain, None);
+        let info = get_chain_info(&chain).await?;
+        let info = ChainInfoResponse::new(info, None);
         // Do not save the new state.
         Ok((effects, info))
     }
@@ -444,7 +445,8 @@ where
         }
         if tip.next_block_height > block.height {
             // Block was already confirmed.
-            let info = ChainInfoResponse::new(&chain, self.key_pair());
+            let info = get_chain_info(&chain).await?;
+            let info = ChainInfoResponse::new(info, self.key_pair());
             let actions = self.create_network_actions(&mut chain).await?;
             return Ok((info, actions));
         }
@@ -490,10 +492,11 @@ where
         chain.confirmed_log.push(certificate.value.hash());
         // We should always agree on the state hash.
         ensure!(
-            *chain.execution_state_hash.get() == Some(certificate.value.state_hash()),
+            chain.execution_state.crypto_hash().await? == certificate.value.state_hash(),
             WorkerError::IncorrectStateHash
         );
-        let info = ChainInfoResponse::new(&chain, self.key_pair());
+        let info = get_chain_info(&chain).await?;
+        let info = ChainInfoResponse::new(info, self.key_pair());
         let mut actions = self.create_network_actions(&mut chain).await?;
         actions.notifications.push(Notification {
             chain_id: block.chain_id,
@@ -548,13 +551,15 @@ where
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.
-            return Ok(ChainInfoResponse::new(&chain, self.key_pair()));
+            let info = get_chain_info(&chain).await?;
+            return Ok(ChainInfoResponse::new(info, self.key_pair()));
         }
         chain
             .manager
             .get_mut()
             .create_final_vote(certificate, self.key_pair());
-        let info = ChainInfoResponse::new(&chain, self.key_pair());
+        let info = get_chain_info(&chain).await?;
+        let info = ChainInfoResponse::new(info, self.key_pair());
         chain.save().await?;
         Ok(info)
     }
@@ -712,7 +717,8 @@ where
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.
-            return Ok(ChainInfoResponse::new(&chain, self.key_pair()));
+            let info = get_chain_info(&chain).await?;
+            return Ok(ChainInfoResponse::new(info, self.key_pair()));
         }
         let time_till_block = proposal
             .content
@@ -728,7 +734,7 @@ where
         }
         let (effects, state_hash) = {
             let effects = chain.execute_block(&proposal.content.block).await?;
-            let hash = chain.execution_state_hash.get().expect("was just computed");
+            let hash = chain.execution_state.crypto_hash().await?;
             // Verify that the resulting chain would have no unconfirmed incoming
             // messages.
             chain.validate_incoming_messages().await?;
@@ -743,7 +749,8 @@ where
         if let Some(vote) = manager.pending() {
             self.cache_recent_value(vote.value.lite().value_hash, vote.value.clone());
         }
-        let info = ChainInfoResponse::new(&chain, self.key_pair());
+        let info = get_chain_info(&chain).await?;
+        let info = ChainInfoResponse::new(info, self.key_pair());
         chain.save().await?;
         Ok(info)
     }
@@ -806,7 +813,7 @@ where
     ) -> Result<ChainInfoResponse, WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, query);
         let mut chain = self.storage.load_chain(query.chain_id).await?;
-        let mut info = ChainInfo::from(&chain);
+        let mut info = get_chain_info(&chain).await?;
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
         }

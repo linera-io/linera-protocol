@@ -10,11 +10,14 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{Certificate, HashedValue, Medium, Message, Origin},
-    ChainManagerInfo, ChainStateView,
+    ChainError, ChainManagerInfo, ChainStateView,
 };
 use linera_execution::{system::Balance, ApplicationId, ExecutionRuntimeContext};
 use linera_storage::ChainRuntimeContext;
-use linera_views::{common::Context, views::ViewError};
+use linera_views::{
+    common::Context,
+    views::{CryptoHashView, ViewError},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -178,38 +181,34 @@ impl CrossChainRequest {
     }
 }
 
-impl<C, S> From<&ChainStateView<C>> for ChainInfo
+pub async fn get_chain_info<C, S>(view: &ChainStateView<C>) -> Result<ChainInfo, ChainError>
 where
     C: Context<Extra = ChainRuntimeContext<S>> + Clone + Send + Sync + 'static,
     ChainRuntimeContext<S>: ExecutionRuntimeContext,
     ViewError: From<C::Error>,
 {
-    fn from(view: &ChainStateView<C>) -> Self {
-        let system_state = &view.execution_state.system;
-        let tip_state = view.tip_state.get();
-        ChainInfo {
-            chain_id: view.chain_id(),
-            epoch: *system_state.epoch.get(),
-            description: *system_state.description.get(),
-            manager: ChainManagerInfo::from(view.manager.get()),
-            system_balance: *system_state.balance.get(),
-            block_hash: tip_state.block_hash,
-            next_block_height: tip_state.next_block_height,
-            timestamp: *view.execution_state.system.timestamp.get(),
-            state_hash: *view.execution_state_hash.get(),
-            requested_committees: None,
-            requested_pending_messages: Vec::new(),
-            requested_sent_certificates: Vec::new(),
-            count_received_certificates: view.received_log.count(),
-            requested_received_certificates: Vec::new(),
-            requested_blob: None,
-        }
-    }
+    let system_state = &view.execution_state.system;
+    let tip_state = view.tip_state.get();
+    Ok(ChainInfo {
+        chain_id: view.chain_id(),
+        epoch: *system_state.epoch.get(),
+        description: *system_state.description.get(),
+        manager: ChainManagerInfo::from(view.manager.get()),
+        system_balance: *system_state.balance.get(),
+        block_hash: tip_state.block_hash,
+        next_block_height: tip_state.next_block_height,
+        timestamp: *view.execution_state.system.timestamp.get(),
+        state_hash: Some(view.execution_state.crypto_hash().await?),
+        requested_committees: None,
+        requested_pending_messages: Vec::new(),
+        requested_sent_certificates: Vec::new(),
+        count_received_certificates: view.received_log.count(),
+        requested_received_certificates: Vec::new(),
+    })
 }
 
 impl ChainInfoResponse {
-    pub fn new(info: impl Into<ChainInfo>, key_pair: Option<&KeyPair>) -> Self {
-        let info = info.into();
+    pub fn new(info: ChainInfo, key_pair: Option<&KeyPair>) -> Self {
         let signature = key_pair.map(|kp| Signature::new(&info, kp));
         Self { info, signature }
     }

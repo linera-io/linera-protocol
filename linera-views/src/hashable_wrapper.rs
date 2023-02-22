@@ -1,17 +1,21 @@
+use crate::{
+    common::{Batch, Context},
+    generic_array::GenericArray,
+    sha2::{Digest, Sha512},
+    views::{CryptoHashView, HashableView, Hasher, View, ViewError},
+};
 use async_lock::Mutex;
-use crate::common::Batch;
-use crate::views::ViewError;
-use crate::views::{HashableView, Hasher};
-use crate::views::View;
-use crate::common::Context;
-use crate::common::HashOutput;
 use async_trait::async_trait;
+use linera_base::crypto::{BcsHashable, CryptoHash};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::ops::{Deref, DerefMut};
 
-pub struct WrappedHashableContainerView<C,W>
-{
+/// A hash for ContainerView and storing of the hash for memoization purposes
+#[derive(Debug)]
+pub struct WrappedHashableContainerView<C, W, O> {
     context: C,
-    stored_hash: Option<HashOutput>,
-    hash: Mutex<Option<HashOutput>>,
+    stored_hash: Option<O>,
+    hash: Mutex<Option<O>>,
     inner: W,
 }
 
@@ -25,17 +29,19 @@ enum KeyTag {
 }
 
 #[async_trait]
-impl<C,W> View<C> for WrappedHashableContainerView<C,W>
+impl<C, W, O> View<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: View<C>,
+    W: HashableView<C>,
+    O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
+    W::Hasher: Hasher<Output = O>,
 {
     fn context(&self) -> &C {
         &self.context
     }
 
-    async fn load(context: C) -> Result<Self,ViewError> {
+    async fn load(context: C) -> Result<Self, ViewError> {
         let key = context.base_tag(KeyTag::Hash as u8);
         let hash = context.read_key(&key).await?;
         let base_key = context.base_tag(KeyTag::Index as u8);
@@ -54,7 +60,7 @@ where
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        self.inner.flush(&mut batch)?;
+        self.inner.flush(batch)?;
         let hash = *self.hash.get_mut();
         if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
@@ -68,7 +74,7 @@ where
     }
 
     fn delete(self, batch: &mut Batch) {
-        self.inner.delete(&mut batch);
+        self.inner.delete(batch);
     }
 
     fn clear(&mut self) {
@@ -78,13 +84,15 @@ where
 }
 
 #[async_trait]
-impl<C, W> HashableView<C> for WrappedHashableContainerView<C,W>
+impl<C, W, O> HashableView<C> for WrappedHashableContainerView<C, W, O>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    W: HashableView<C>
+    W: HashableView<C> + Send + Sync,
+    O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
+    W::Hasher: Hasher<Output = O>,
 {
-    type Hasher = sha2::Sha512;
+    type Hasher = W::Hasher;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let hash = *self.hash.get_mut();
@@ -109,5 +117,38 @@ where
                 Ok(new_hash)
             }
         }
+    }
+}
+
+#[async_trait]
+impl<C, W> CryptoHashView<C>
+    for WrappedHashableContainerView<C, W, GenericArray<u8, <Sha512 as Digest>::OutputSize>>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    W: HashableView<C> + Send + Sync,
+    W::Hasher: Hasher<Output = GenericArray<u8, <Sha512 as Digest>::OutputSize>>,
+{
+    async fn crypto_hash(&self) -> Result<CryptoHash, ViewError> {
+        #[derive(Serialize, Deserialize)]
+        struct Wrappable(GenericArray<u8, <Sha512 as Digest>::OutputSize>);
+        impl BcsHashable for Wrappable {}
+        let hash = self.inner.hash().await?;
+        Ok(CryptoHash::new(&Wrappable(hash)))
+    }
+}
+
+impl<C, W, O> Deref for WrappedHashableContainerView<C, W, O> {
+    type Target = W;
+
+    fn deref(&self) -> &W {
+        &self.inner
+    }
+}
+
+impl<C, W, O> DerefMut for WrappedHashableContainerView<C, W, O> {
+    fn deref_mut(&mut self) -> &mut W {
+        *self.hash.get_mut() = None;
+        &mut self.inner
     }
 }

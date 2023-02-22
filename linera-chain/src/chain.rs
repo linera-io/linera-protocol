@@ -21,10 +21,11 @@ use linera_execution::{
 use linera_views::{
     collection_view::CollectionView,
     common::Context,
+    hashable_wrapper::WrappedHashableContainerView,
     log_view::LogView,
     register_view::RegisterView,
     set_view::SetView,
-    views::{CryptoHashView, GraphQLView, RootView, View, ViewError},
+    views::{GraphQLView, RootView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
@@ -33,9 +34,11 @@ use std::collections::{BTreeMap, HashSet};
 #[derive(Debug, RootView, GraphQLView)]
 pub struct ChainStateView<C> {
     /// Execution state, including system and user applications.
-    pub execution_state: ExecutionStateView<C>,
-    /// Hash of the execution state.
-    pub execution_state_hash: RegisterView<C, Option<CryptoHash>>,
+    pub execution_state: WrappedHashableContainerView<
+        C,
+        ExecutionStateView<C>,
+        <linera_views::sha2::Sha512 as linera_views::views::Hasher>::Output,
+    >,
 
     /// Block-chaining state.
     pub tip_state: RegisterView<C, ChainTipState>,
@@ -328,9 +331,6 @@ where
                     *admin_id,
                     timestamp,
                 );
-                // Recompute the state hash.
-                let hash = self.execution_state.crypto_hash().await?;
-                self.execution_state_hash.set(Some(hash));
                 // Last, reset the consensus state based on the current ownership.
                 self.manager
                     .get_mut()
@@ -440,9 +440,6 @@ where
             )
             .await?;
         }
-        // Recompute the state hash.
-        let hash = self.execution_state.crypto_hash().await?;
-        self.execution_state_hash.set(Some(hash));
         // Last, reset the consensus state based on the current ownership.
         self.manager
             .get_mut()

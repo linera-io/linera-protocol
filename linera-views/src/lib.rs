@@ -14,7 +14,7 @@ pub mod common;
 pub mod views;
 
 /// Wrapping a view to compute a hash
-pub mod hash_wrappable;
+pub mod hashable_wrapper;
 
 /// The register_view
 pub mod register_view;

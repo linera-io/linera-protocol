@@ -358,6 +358,19 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
             };
             (r#impl, None)
         }
+        "WrappedHashableContainerView" => {
+            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_ident = generic_arguments
+                .get(1)
+                .expect("no generic specified for 'WrappedHashableContainerView'");
+            let r#impl = quote! {
+                async fn #field_name(&self) -> &#generic_ident {
+                    use std::ops::Deref;
+                    self.#field_name.deref()
+                }
+            };
+            (r#impl, None)
+        }
         "QueueView" => {
             let generic_arguments = generic_argument_from_type_path(&type_path);
             let generic_ident = generic_arguments

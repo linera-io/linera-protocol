@@ -32,7 +32,7 @@ use linera_execution::{
 use linera_execution::{ApplicationId, Operation, SystemOperation, WasmApplication, WasmRuntime};
 use linera_views::{
     common::Context,
-    views::{CryptoHashView, RootView, ViewError},
+    views::{RootView, ViewError},
 };
 use std::{fmt::Debug, sync::Arc};
 
@@ -130,8 +130,6 @@ pub trait Store: Sized {
         system_state.ownership.set(ChainOwnership::single(owner));
         system_state.balance.set(balance);
         system_state.timestamp.set(timestamp);
-        let state_hash = chain.execution_state.crypto_hash().await?;
-        chain.execution_state_hash.set(Some(state_hash));
         chain
             .manager
             .get_mut()
