@@ -774,9 +774,9 @@ Value:
           TYPENAME: OutgoingEffect
     - state_hash:
         TYPENAME: CryptoHash
-    - value_type:
-        TYPENAME: ValueType
-ValueType:
+    - kind:
+        TYPENAME: ValueKind
+ValueKind:
   ENUM:
     0:
       ValidatedBlock:

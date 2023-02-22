@@ -13,8 +13,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockProposal, Certificate, LiteCertificate, Medium, Message, Origin,
-        OutgoingEffect, Target, Value,
-        ValueType,
+        OutgoingEffect, Target, Value, ValueKind,
     },
     ChainManagerOutcome, ChainStateView,
 };
@@ -515,9 +514,9 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let round = match certificate.value.value_type() {
-            ValueType::ValidatedBlock { round } => round,
-            ValueType::ConfirmedBlock => panic!("Expecting a validation certificate"),
+        let round = match certificate.value.kind() {
+            ValueKind::ValidatedBlock { round } => round,
+            ValueKind::ConfirmedBlock => panic!("Expecting a validation certificate"),
         };
         let block = certificate.value.block();
         // Check that the chain is active and ready for this confirmation.
@@ -787,13 +786,13 @@ where
             .filter(|value| !self.recent_values.contains(&value.hash()))
             .cloned()
             .collect();
-        let (info, actions) = match certificate.value.value_type() {
-            ValueType::ValidatedBlock { .. } => {
+        let (info, actions) = match certificate.value.kind() {
+            ValueKind::ValidatedBlock { .. } => {
                 // Confirm the validated block.
                 let info = self.process_validated_block(certificate).await?;
                 (info, NetworkActions::default())
             }
-            ValueType::ConfirmedBlock => {
+            ValueKind::ConfirmedBlock => {
                 // Execute the confirmed block.
                 self.process_confirmed_block(certificate, &blobs).await?
             }
