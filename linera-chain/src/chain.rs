@@ -24,13 +24,13 @@ use linera_views::{
     log_view::LogView,
     register_view::RegisterView,
     set_view::SetView,
-    views::{GraphQLView, HashableContainerView, View, ViewError},
+    views::{CryptoHashView, GraphQLView, RootView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 
 /// A view accessing the state of a chain.
-#[derive(Debug, HashableContainerView, GraphQLView)]
+#[derive(Debug, RootView, GraphQLView)]
 pub struct ChainStateView<C> {
     /// Execution state, including system and user applications.
     pub execution_state: ExecutionStateView<C>,
@@ -63,7 +63,7 @@ pub struct ChainTipState {
 }
 
 /// A view accessing the communication state of an application.
-#[derive(Debug, HashableContainerView)]
+#[derive(Debug, View)]
 pub struct CommunicationStateView<C> {
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: CollectionView<C, Origin, InboxStateView<C>>,
@@ -74,7 +74,7 @@ pub struct CommunicationStateView<C> {
 }
 
 /// The state of a channel followed by subscribers.
-#[derive(Debug, HashableContainerView, GraphQLView)]
+#[derive(Debug, View, GraphQLView)]
 pub struct ChannelStateView<C> {
     /// The current subscribers.
     pub subscribers: SetView<C, ChainId>,

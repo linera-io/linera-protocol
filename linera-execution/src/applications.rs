@@ -11,7 +11,7 @@ use linera_base::{
 use linera_views::{
     common::Context,
     map_view::MapView,
-    views::{HashableContainerView, View, ViewError},
+    views::{HashableView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -124,7 +124,7 @@ pub struct BytecodeLocation {
     pub operation_index: usize,
 }
 
-#[derive(Debug, HashableContainerView)]
+#[derive(Debug, HashableView)]
 pub struct ApplicationRegistryView<C> {
     /// The application bytecodes that have been published.
     pub published_bytecodes: MapView<C, BytecodeId, BytecodeLocation>,

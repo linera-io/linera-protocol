@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::future;
 use linera_views::{
     common::{Batch, ContextFromDb, KeyValueOperations, WriteOperation},
-    views::{ContainerView, View, ViewError},
+    views::{RootView, View, ViewError},
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::{fmt, future::Future};
@@ -150,7 +150,7 @@ pub async fn load_view_using<State: View<WasmContext>>() -> State {
 }
 
 /// Save the contract state and unlock it.
-pub async fn store_and_unlock_view<State: ContainerView<WasmContext>>(mut state: State) {
+pub async fn store_and_unlock_view<State: RootView<WasmContext>>(mut state: State) {
     state.save().await.expect("save operation failed");
 }
 

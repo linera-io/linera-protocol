@@ -23,7 +23,7 @@ use linera_execution::{
 use linera_storage::Store;
 use linera_views::{
     log_view::LogView,
-    views::{ContainerView, View, ViewError},
+    views::{RootView, View, ViewError},
 };
 use lru::LruCache;
 use serde::{Deserialize, Serialize};

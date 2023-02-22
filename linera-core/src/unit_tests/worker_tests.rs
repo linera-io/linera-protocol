@@ -33,7 +33,7 @@ use linera_execution::{
     SystemResponse, UserApplicationId,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
-use linera_views::views::{HashableContainerView, ViewError};
+use linera_views::views::{CryptoHashView, ViewError};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;

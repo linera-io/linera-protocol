@@ -14,7 +14,7 @@ use crate::{
     },
     ExportedFuture, Service, ServiceLogger, SimpleStateStorage, ViewStateStorage,
 };
-use linera_views::views::ContainerView;
+use linera_views::views::RootView;
 use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
 
@@ -47,7 +47,7 @@ where
 
 impl<Application> ServiceStateStorage for ViewStateStorage<Application>
 where
-    Application: Service + ContainerView<ReadableWasmContext>,
+    Application: Service + RootView<ReadableWasmContext>,
 {
     fn query_application(
         context: service::QueryContext,

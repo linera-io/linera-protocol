@@ -18,7 +18,7 @@ use linera_views::{
     register_view::RegisterView,
     views::{View, ViewError},
 };
-use linera_views_derive::HashableContainerView;
+use linera_views_derive::CryptoHashView;
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -30,7 +30,7 @@ use {
 };
 
 /// A view accessing the execution state of a chain.
-#[derive(Debug, HashableContainerView)]
+#[derive(Debug, CryptoHashView)]
 pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
