@@ -11,6 +11,7 @@
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
 mod async_boundary;
+mod async_determinism;
 mod common;
 #[cfg(feature = "wasmer")]
 #[path = "wasmer.rs"]
