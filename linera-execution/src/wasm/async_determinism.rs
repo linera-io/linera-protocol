@@ -32,10 +32,116 @@
 use super::async_boundary::HostFuture;
 use futures::{
     channel::{mpsc, oneshot},
-    future::{BoxFuture, FutureExt},
+    future::{self, BoxFuture, FutureExt},
     sink::SinkExt,
+    stream::{FuturesOrdered, Stream, StreamExt},
 };
-use std::future::Future;
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
+
+/// A queue of host futures called by a WASM guest module that finish in the same order they were
+/// created.
+///
+/// Futures are added to the queue through the [`QueuedHostFutureFactory`] associated to the
+/// [`HostFutureQueue`]. The futures are executed (polled) when the [`HostFutureQueue`] is polled
+/// (as a [`Stream`]).
+///
+/// [`QueuedHostFutureFactory`] wraps the future before sending it to [`HostFutureQueue`] so that
+/// it returns a closure that sends the future's output to the corresponding [`HostFuture`]. The
+/// [`HostFutureQueue`] runs that closure when it's time to complete the [`HostFuture`], ensuring
+/// that only one is completed after each item produced by the [`HostFutureQueue`]'s implementation
+/// of [`Stream`].
+pub struct HostFutureQueue<'futures> {
+    new_futures: mpsc::Receiver<BoxFuture<'futures, Box<dyn FnOnce() + Send>>>,
+    queue: FuturesOrdered<BoxFuture<'futures, Box<dyn FnOnce() + Send>>>,
+}
+
+impl<'futures> HostFutureQueue<'futures> {
+    /// Creates a new [`HostFutureQueue`] and its associated [`QueuedHostFutureFactory`].
+    ///
+    /// An initial empty future is added to the queue so that the first time the queue is polled it
+    /// returns an item, allowing the guest WASM module to be polled for the first time.
+    pub fn new() -> (Self, QueuedHostFutureFactory<'futures>) {
+        let (sender, receiver) = mpsc::channel(25);
+
+        let empty_completion: Box<dyn FnOnce() + Send> = Box::new(|| ());
+        let initial_future = future::ready(empty_completion).boxed();
+
+        (
+            HostFutureQueue {
+                new_futures: receiver,
+                queue: FuturesOrdered::from_iter([initial_future]),
+            },
+            QueuedHostFutureFactory { sender },
+        )
+    }
+
+    /// Polls the futures in the queue.
+    ///
+    /// Returns `true` if the next future in the queue has completed.
+    ///
+    /// If the next future has completed, its returned closure is executed in order to send the
+    /// future's result to its associated [`HostFuture`].
+    fn poll_futures(&mut self, context: &mut Context<'_>) -> bool {
+        match self.queue.poll_next_unpin(context) {
+            Poll::Ready(Some(future_completion)) => {
+                future_completion();
+                true
+            }
+            Poll::Ready(None) => false,
+            Poll::Pending => false,
+        }
+    }
+
+    /// Polls the [`mpsc::Receiver`] of futures to add to the queue.
+    ///
+    /// Returns true if the [`mpsc::Sender`] endpoint has been closed.
+    fn poll_incoming(&mut self, context: &mut Context<'_>) -> bool {
+        match self.new_futures.poll_next_unpin(context) {
+            Poll::Pending => false,
+            Poll::Ready(Some(new_future)) => {
+                self.queue.push_back(new_future);
+                false
+            }
+            Poll::Ready(None) => true,
+        }
+    }
+}
+
+impl<'futures> Stream for HostFutureQueue<'futures> {
+    type Item = ();
+
+    /// Polls the [`HostFutureQueue`], producing a `()` item if a future was completed.
+    ///
+    /// First the incoming channel of futures is polled, in order to add any newly created futures
+    /// to the queue. Then the futures are polled.
+    ///
+    /// # Note on [`Poll::Pending`]
+    ///
+    /// This function returns [`Poll::Pending`] correctly, because it's only returned if either:
+    ///
+    /// - No new futures were received (the [`mpsc::Receiver`] returned [`Poll::Pending`]) and the
+    ///   queue is empty, which means that this task will receive a wakeup when a new future is
+    ///   received;
+    /// - No queued future was completed (the [`FuturesOrdered`] returned [`Poll::Pending`]), which
+    ///   which means that all futures in the queue have scheduled wakeups for this task;
+    fn poll_next(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let incoming_closed = self.poll_incoming(context);
+
+        if incoming_closed && self.queue.is_empty() {
+            return Poll::Ready(None);
+        }
+
+        if self.poll_futures(context) {
+            Poll::Ready(Some(()))
+        } else {
+            Poll::Pending
+        }
+    }
+}
 
 /// A factory of [`HostFuture`]s that enforces determinism of the host futures they represent.
 ///
