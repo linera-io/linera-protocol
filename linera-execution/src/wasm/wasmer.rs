@@ -418,7 +418,7 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
     }
 
     fn lock_new(&mut self) -> Self::Lock {
-        HostFuture::new(self.storage().lock_view_user_state())
+        self.future_queue.add(self.storage().lock_view_user_state())
     }
 
     fn lock_poll(&mut self, future: &Self::Lock) -> writable_system::PollLock {
@@ -431,7 +431,8 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
     }
 
     fn read_key_bytes_new(&mut self, key: &[u8]) -> Self::ReadKeyBytes {
-        HostFuture::new(self.storage().read_key_bytes(key.to_owned()))
+        self.future_queue
+            .add(self.storage().read_key_bytes(key.to_owned()))
     }
 
     fn read_key_bytes_poll(
@@ -447,7 +448,8 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
     }
 
     fn find_keys_new(&mut self, key_prefix: &[u8]) -> Self::FindKeys {
-        HostFuture::new(self.storage().find_keys_by_prefix(key_prefix.to_owned()))
+        self.future_queue
+            .add(self.storage().find_keys_by_prefix(key_prefix.to_owned()))
     }
 
     fn find_keys_poll(&mut self, future: &Self::FindKeys) -> writable_system::PollFindKeys {
@@ -460,7 +462,7 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
     }
 
     fn find_key_values_new(&mut self, key_prefix: &[u8]) -> Self::FindKeyValues {
-        HostFuture::new(
+        self.future_queue.add(
             self.storage()
                 .find_key_values_by_prefix(key_prefix.to_owned()),
         )
@@ -494,7 +496,8 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
                 }
             }
         }
-        HostFuture::new(self.storage().write_batch_and_unlock(batch))
+        self.future_queue
+            .add(self.storage().write_batch_and_unlock(batch))
     }
 
     fn write_batch_poll(&mut self, future: &Self::WriteBatch) -> writable_system::PollWriteBatch {
