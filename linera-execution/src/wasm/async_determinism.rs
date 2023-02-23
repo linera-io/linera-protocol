@@ -212,9 +212,17 @@ impl<'futures> QueuedHostFutureFactory<'futures> {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::async_boundary::ContextForwarder, HostFutureQueue};
-    use futures::{future, stream::FuturesUnordered, FutureExt, StreamExt};
-    use std::time::Duration;
+    use super::{
+        super::async_boundary::{ContextForwarder, HostFuture},
+        HostFutureQueue,
+    };
+    use futures::{future, stream::FuturesUnordered, task::noop_waker, FutureExt, StreamExt};
+    use std::{
+        collections::VecDeque,
+        mem,
+        task::{Context, Poll},
+        time::Duration,
+    };
     use tokio::time;
 
     /// Test if futures that finish in a non-sequential order complete sequentially.
@@ -274,5 +282,113 @@ mod tests {
                 None | Some(None)
             ));
         }
+    }
+
+    /// Tests if polling is deterministic through the rule that only one future is ready per item
+    /// produced by the [`HostFutureQueue`].
+    ///
+    /// Creates some fake futures that complete after a certain number of poll attempts. These are
+    /// then enqueued on the queue, and the returned [`HostFuture`]s are repeatedly polled to check
+    /// that after the queue produces an item *only one* of the [`HostFuture`]s does not return
+    /// [`Poll::Pending`] while when the queue isn't polled or doesn't return an item, *all* of the
+    /// [`HostFuture`]s return [`Poll::Pending`].
+    ///
+    /// Since the test has tight control on when futures are polled (using
+    /// [`FutureExt::now_or_never`]), this test is not `async`. However, a context must be
+    /// forwarded to the futures, and a fake one is used for that. Even so, [`FuturesOrdered`] is
+    /// optimized to only poll its queued futures when they received a wakeup event, so artifical
+    /// wakeups must still be sent.
+    #[test]
+    fn only_one_future_is_ready_per_item_produced() {
+        let poll_counts = [3, 0, 2, 9, 2];
+        let futures = poll_counts
+            .into_iter()
+            .enumerate()
+            .map(|(index, poll_threshold)| {
+                let mut poll_count = 0;
+
+                future::poll_fn(move |context| {
+                    if poll_count == poll_threshold {
+                        Poll::Ready(index)
+                    } else {
+                        poll_count += 1;
+                        // `FuturesOrdered` uses a `FuturesUnordered` internally, which hijacks the
+                        // waker, and only polls again if a wakeup was scheduled. So even though at
+                        // the top level we're using a fake waker, we still need to schedule a
+                        // wakeup for the hijacked waker.
+                        context.waker().wake_by_ref();
+                        Poll::Pending
+                    }
+                })
+            });
+
+        let (mut future_queue, mut queued_future_factory) = HostFutureQueue::new();
+
+        // The queue should immediately produce the first item, to allow first poll of the guest
+        assert_eq!(future_queue.next().now_or_never(), Some(Some(())));
+
+        // Queue all the futures, and collect the returned `HostFuture`s so that they can be polled
+        // together
+        let mut queued_futures = futures
+            .map(|future| queued_future_factory.enqueue(future))
+            .collect();
+
+        // None of the `HostFuture`s should complete before the queue allows them
+        let host_future_results = mock_poll_host_futures(&mut queued_futures);
+        assert!(host_future_results.is_empty());
+
+        let mut expected_index = 0;
+
+        // Close connection to the `HostFutureQueue` so that it knows no new futures will arrive
+        mem::drop(queued_future_factory);
+
+        loop {
+            let next_future_is_ready = match future_queue.next().now_or_never() {
+                None => false,
+                Some(Some(())) => true,
+                Some(None) => break,
+            };
+
+            let host_future_results = mock_poll_host_futures(&mut queued_futures);
+
+            if next_future_is_ready {
+                assert_eq!(host_future_results, &[expected_index]);
+                expected_index += 1;
+            } else {
+                assert!(host_future_results.is_empty());
+            }
+        }
+    }
+
+    /// Polls the `host_futures` repeatedly, returning the `Output`s that were produced by the ones
+    /// that complete.
+    ///
+    /// Completed futures are removed from the [`VecDeque`].
+    fn mock_poll_host_futures<Output>(
+        host_futures: &mut VecDeque<HostFuture<'_, Output>>,
+    ) -> Vec<Output> {
+        const TIMES_TO_POLL: usize = 11;
+
+        let fake_waker = noop_waker();
+        let mut fake_context = Context::from_waker(&fake_waker);
+        let mut forwarder = ContextForwarder::default();
+        let _guard = forwarder.forward(&mut fake_context);
+
+        let mut outputs = Vec::new();
+
+        for _ in 0..TIMES_TO_POLL {
+            let mut index = 0;
+
+            while index < host_futures.len() {
+                if let Poll::Ready(output) = host_futures[index].poll(&mut forwarder) {
+                    outputs.push(output);
+                    host_futures.remove(index);
+                }
+
+                index += 1;
+            }
+        }
+
+        outputs
     }
 }
