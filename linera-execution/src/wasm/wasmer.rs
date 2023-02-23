@@ -25,7 +25,8 @@ mod conversions_to_wit;
 mod guest_futures;
 
 use super::{
-    async_boundary::{ContextForwarder, HostFuture, HostFutureQueue},
+    async_boundary::{ContextForwarder, HostFuture},
+    async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     WasmApplication, WasmExecutionError,
 };
@@ -74,8 +75,9 @@ impl WasmApplication {
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
         let mut imports = imports! {};
         let context_forwarder = ContextForwarder::default();
+        let (future_queue, queued_future_factory) = HostFutureQueue::new();
         let (system_api, storage_guard) =
-            SystemApi::new_writable(context_forwarder.clone(), storage);
+            SystemApi::new_writable(context_forwarder.clone(), storage, queued_future_factory);
         let system_api_setup =
             writable_system::add_to_imports(&mut store, &mut imports, system_api);
         let (contract, instance) =
@@ -105,8 +107,9 @@ impl WasmApplication {
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
         let mut imports = imports! {};
         let context_forwarder = ContextForwarder::default();
+        let (future_queue, queued_future_factory) = HostFutureQueue::new();
         let (system_api, storage_guard) =
-            SystemApi::new_queryable(context_forwarder.clone(), storage);
+            SystemApi::new_queryable(context_forwarder.clone(), storage, queued_future_factory);
         let system_api_setup =
             queryable_system::add_to_imports(&mut store, &mut imports, system_api);
         let (service, instance) = service::Service::instantiate(&mut store, &module, &mut imports)?;
@@ -270,7 +273,7 @@ impl<'storage> common::Service for Service<'storage> {
 pub struct SystemApi<S> {
     context: ContextForwarder,
     storage: Arc<Mutex<Option<S>>>,
-    future_queue: HostFutureQueue,
+    queued_future_factory: QueuedHostFutureFactory<'static>,
 }
 
 impl SystemApi<&'static dyn WritableStorage> {
@@ -286,10 +289,11 @@ impl SystemApi<&'static dyn WritableStorage> {
     ///
     /// The [`StorageGuard`] instance must be kept alive while the trait object is still expected to
     /// be alive and usable by the WASM application.
-    pub fn new_writable(
+    pub fn new_writable<'storage>(
         context: ContextForwarder,
-        storage: &dyn WritableStorage,
-    ) -> (Self, StorageGuard<'_, &'static dyn WritableStorage>) {
+        storage: &'storage dyn WritableStorage,
+        queued_future_factory: QueuedHostFutureFactory<'static>,
+    ) -> (Self, StorageGuard<'storage, &'static dyn WritableStorage>) {
         let storage_without_lifetime = unsafe { mem::transmute(storage) };
         let storage = Arc::new(Mutex::new(Some(storage_without_lifetime)));
 
@@ -302,7 +306,7 @@ impl SystemApi<&'static dyn WritableStorage> {
             SystemApi {
                 context,
                 storage,
-                future_queue: HostFutureQueue::new(),
+                queued_future_factory,
             },
             guard,
         )
@@ -311,10 +315,11 @@ impl SystemApi<&'static dyn WritableStorage> {
 
 impl SystemApi<&'static dyn QueryableStorage> {
     /// Same as `new_writable`. Didn't find how to factorizing the code.
-    pub fn new_queryable(
+    pub fn new_queryable<'storage>(
         context: ContextForwarder,
-        storage: &dyn QueryableStorage,
-    ) -> (Self, StorageGuard<'_, &'static dyn QueryableStorage>) {
+        storage: &'storage dyn QueryableStorage,
+        queued_future_factory: QueuedHostFutureFactory<'static>,
+    ) -> (Self, StorageGuard<'storage, &'static dyn QueryableStorage>) {
         let storage_without_lifetime = unsafe { mem::transmute(storage) };
         let storage = Arc::new(Mutex::new(Some(storage_without_lifetime)));
 
@@ -327,7 +332,7 @@ impl SystemApi<&'static dyn QueryableStorage> {
             SystemApi {
                 context,
                 storage,
-                future_queue: HostFutureQueue::new(),
+                queued_future_factory,
             },
             guard,
         )
@@ -385,7 +390,8 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
     }
 
     fn load_new(&mut self) -> Self::Load {
-        self.future_queue.add(self.storage().try_read_my_state())
+        self.queued_future_factory
+            .enqueue(self.storage().try_read_my_state())
     }
 
     fn load_poll(&mut self, future: &Self::Load) -> writable_system::PollLoad {
@@ -398,8 +404,8 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
     }
 
     fn load_and_lock_new(&mut self) -> Self::LoadAndLock {
-        self.future_queue
-            .add(self.storage().try_read_and_lock_my_state())
+        self.queued_future_factory
+            .enqueue(self.storage().try_read_and_lock_my_state())
     }
 
     fn load_and_lock_poll(&mut self, future: &Self::LoadAndLock) -> writable_system::PollLoad {
@@ -418,7 +424,8 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
     }
 
     fn lock_new(&mut self) -> Self::Lock {
-        self.future_queue.add(self.storage().lock_view_user_state())
+        self.queued_future_factory
+            .enqueue(self.storage().lock_view_user_state())
     }
 
     fn lock_poll(&mut self, future: &Self::Lock) -> writable_system::PollLock {
@@ -431,8 +438,8 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
     }
 
     fn read_key_bytes_new(&mut self, key: &[u8]) -> Self::ReadKeyBytes {
-        self.future_queue
-            .add(self.storage().read_key_bytes(key.to_owned()))
+        self.queued_future_factory
+            .enqueue(self.storage().read_key_bytes(key.to_owned()))
     }
 
     fn read_key_bytes_poll(
@@ -448,8 +455,8 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
     }
 
     fn find_keys_new(&mut self, key_prefix: &[u8]) -> Self::FindKeys {
-        self.future_queue
-            .add(self.storage().find_keys_by_prefix(key_prefix.to_owned()))
+        self.queued_future_factory
+            .enqueue(self.storage().find_keys_by_prefix(key_prefix.to_owned()))
     }
 
     fn find_keys_poll(&mut self, future: &Self::FindKeys) -> writable_system::PollFindKeys {
@@ -462,7 +469,7 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
     }
 
     fn find_key_values_new(&mut self, key_prefix: &[u8]) -> Self::FindKeyValues {
-        self.future_queue.add(
+        self.queued_future_factory.enqueue(
             self.storage()
                 .find_key_values_by_prefix(key_prefix.to_owned()),
         )
@@ -496,8 +503,8 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
                 }
             }
         }
-        self.future_queue
-            .add(self.storage().write_batch_and_unlock(batch))
+        self.queued_future_factory
+            .enqueue(self.storage().write_batch_and_unlock(batch))
     }
 
     fn write_batch_poll(&mut self, future: &Self::WriteBatch) -> writable_system::PollWriteBatch {
@@ -524,7 +531,7 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
             .collect();
         let argument = Vec::from(argument);
 
-        self.future_queue.add(async move {
+        self.queued_future_factory.enqueue(async move {
             storage
                 .try_call_application(
                     authenticated,
@@ -563,7 +570,7 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
             .collect();
         let argument = Vec::from(argument);
 
-        self.future_queue.add(async move {
+        self.queued_future_factory.enqueue(async move {
             storage
                 .try_call_session(authenticated, session.into(), &argument, forwarded_sessions)
                 .await
@@ -617,7 +624,8 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
     }
 
     fn load_new(&mut self) -> Self::Load {
-        self.future_queue.add(self.storage().try_read_my_state())
+        self.queued_future_factory
+            .enqueue(self.storage().try_read_my_state())
     }
 
     fn load_poll(&mut self, future: &Self::Load) -> queryable_system::PollLoad {
@@ -711,7 +719,7 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
         let storage = self.storage();
         let argument = Vec::from(argument);
 
-        self.future_queue.add(async move {
+        self.queued_future_factory.enqueue(async move {
             storage
                 .try_query_application(application.into(), &argument)
                 .await
