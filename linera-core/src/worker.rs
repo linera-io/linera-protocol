@@ -433,9 +433,6 @@ where
         }
         // Write the certificates so that the bytecode is available during execution.
         for value in blobs {
-            // TODO(#443): We can't check the certificate's signatures, because it might be
-            // very old, with a committee that's not trusted anymore. We should store the
-            // blob without signatures.
             self.storage.write_value(value.clone()).await?;
         }
         // Check that the chain is active and ready for this confirmation.
