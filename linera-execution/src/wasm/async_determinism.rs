@@ -209,3 +209,70 @@ impl<'futures> QueuedHostFutureFactory<'futures> {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{super::async_boundary::ContextForwarder, HostFutureQueue};
+    use futures::{future, stream::FuturesUnordered, FutureExt, StreamExt};
+    use std::time::Duration;
+    use tokio::time;
+
+    /// Test if futures that finish in a non-sequential order complete sequentially.
+    ///
+    /// Start some futures, with each one finishing in a different time without respecting the
+    /// creation order, and check that their respective [`HostFuture`]s complete in order.
+    #[tokio::test]
+    async fn futures_complete_in_order() {
+        time::pause();
+
+        let delays = [9, 4, 0, 7, 5, 6, 1, 3, 2, 8];
+        let futures = delays
+            .into_iter()
+            .enumerate()
+            .map(|(index, delay)| async move {
+                time::sleep(Duration::from_secs(delay)).await;
+                index
+            });
+
+        let (mut future_queue, mut queued_future_factory) = HostFutureQueue::new();
+
+        // The queue should immediately produce the first item, to allow first poll of the guest
+        assert_eq!(future_queue.next().now_or_never(), Some(Some(())));
+
+        // Queue all the futures, and collect the returned `HostFuture`s so that they can be polled
+        // together
+        let mut queued_futures = futures
+            .map(|future| queued_future_factory.enqueue(future))
+            .map(|host_future| {
+                // Convert a `HostFuture` into an `impl Future`
+                future::poll_fn(move |context| {
+                    let mut forwarder = ContextForwarder::default();
+                    let _guard = forwarder.forward(context);
+                    host_future.poll(&mut forwarder)
+                })
+            })
+            .collect::<FuturesUnordered<_>>();
+
+        // None of the `HostFuture`s should complete before the queue allows them
+        assert!(time::timeout(Duration::from_secs(4), queued_futures.next())
+            .await
+            .is_err());
+
+        for expected_index in 0..delays.len() {
+            // Wait until a future is ready
+            assert_eq!(future_queue.next().await, Some(()));
+
+            // The next completed future should respect its creation order
+            assert_eq!(
+                queued_futures.next().now_or_never(),
+                Some(Some(expected_index))
+            );
+
+            // No other future should be ready before the queue is polled again
+            assert!(matches!(
+                queued_futures.next().now_or_never(),
+                None | Some(None)
+            ));
+        }
+    }
+}
