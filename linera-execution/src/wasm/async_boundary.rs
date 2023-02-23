@@ -8,7 +8,7 @@ use super::{
     common::{ApplicationRuntimeContext, WasmRuntimeContext},
     WasmExecutionError,
 };
-use futures::future::BoxFuture;
+use futures::{future::BoxFuture, ready, stream::StreamExt};
 use std::{
     any::type_name,
     fmt::{self, Debug, Formatter},
@@ -123,7 +123,8 @@ where
 {
     type Output = Result<InnerFuture::Output, WasmExecutionError>;
 
-    /// Poll the guest future.
+    /// Polls the guest future after the [`HostFutureQueue`] in the [`WasmRuntimeContext`] indicates
+    /// that it's safe to do so without breaking determinism.
     ///
     /// Uses the runtime context to call the WASM future's `poll` method, as implemented in the
     /// [`GuestFutureInterface`]. The `task_context` is stored in the runtime context's
@@ -136,6 +137,8 @@ where
                 Poll::Ready(Err(error.into()))
             }
             GuestFuture::Active { future, context } => {
+                ready!(context.future_queue.poll_next_unpin(task_context));
+
                 let _context_guard = context.context_forwarder.forward(task_context);
                 future.poll(&context.application, &mut context.store)
             }
