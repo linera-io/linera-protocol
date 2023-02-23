@@ -180,6 +180,7 @@ impl ClientContext {
                     block: block.clone(),
                     round: RoundNumber::default(),
                 },
+                vec![],
                 key_pair,
             );
             proposals.push(proposal.into());

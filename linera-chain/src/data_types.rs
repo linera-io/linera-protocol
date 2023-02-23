@@ -213,6 +213,7 @@ pub enum Medium {
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct BlockProposal {
     pub content: BlockAndRound,
+    pub blobs: Vec<HashedValue>,
     pub owner: Owner,
     pub signature: Signature,
 }
@@ -509,10 +510,11 @@ impl HashedValue {
 }
 
 impl BlockProposal {
-    pub fn new(content: BlockAndRound, secret: &KeyPair) -> Self {
+    pub fn new(content: BlockAndRound, blobs: Vec<HashedValue>, secret: &KeyPair) -> Self {
         let signature = Signature::new(&content, secret);
         Self {
             content,
+            blobs,
             owner: Owner(secret.public()),
             signature,
         }

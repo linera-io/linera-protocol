@@ -12,8 +12,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, HashedValue, LiteCertificate, Medium, Message, Origin,
-        OutgoingEffect, Target, ValueKind,
+        Block, BlockAndRound, BlockProposal, Certificate, HashedValue, LiteCertificate, Medium,
+        Message, Origin, OutgoingEffect, Target, ValueKind,
     },
     ChainManagerOutcome, ChainStateView,
 };
@@ -416,22 +416,8 @@ where
         );
         let block = certificate.value.block();
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        // Find all certificates containing bytecode used when executing this block.
-        let blob_hashes: HashSet<_> = block
-            .required_bytecode(&chain.execution_state.system.registry)
-            .await
-            .map_err(|err| WorkerError::ChainError(Box::new(err.into())))?
-            .into_values()
-            .map(|bytecode_location| bytecode_location.certificate_hash)
-            .collect();
-        for value in blobs {
-            let value_hash = value.hash();
-            ensure!(
-                blob_hashes.contains(&value_hash),
-                WorkerError::UnneededValue { value_hash }
-            );
-        }
-        // Write the certificates so that the bytecode is available during execution.
+        ensure_blobs_are_required::<Client>(&chain, block, blobs).await?;
+        // Write the values so that the bytecode is available during execution.
         for value in blobs {
             self.storage.write_value(value.clone()).await?;
         }
@@ -477,7 +463,8 @@ where
         );
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
-        // Execute the block.
+        // Execute the block and update inboxes.
+        chain.remove_events(block).await?;
         let verified_effects = chain.execute_block(block).await?;
         ensure!(
             *certificate.value.effects() == verified_effects,
@@ -665,6 +652,35 @@ where
     }
 }
 
+/// Verifies that all blobs are referred to as bytecode locations by the block or the current
+/// chain state.
+async fn ensure_blobs_are_required<Client>(
+    chain: &ChainStateView<<Client as Store>::Context>,
+    block: &Block,
+    blobs: &[HashedValue],
+) -> Result<(), WorkerError>
+where
+    Client: Store,
+    ViewError: From<Client::ContextError>,
+{
+    // Find all certificates containing bytecode used when executing this block.
+    let blob_hashes: HashSet<_> = block
+        .required_bytecode(&chain.execution_state.system.registry)
+        .await
+        .map_err(|err| WorkerError::ChainError(Box::new(err.into())))?
+        .into_values()
+        .map(|bytecode_location| bytecode_location.certificate_hash)
+        .collect();
+    for value in blobs {
+        let value_hash = value.hash();
+        ensure!(
+            blob_hashes.contains(&value_hash),
+            WorkerError::UnneededValue { value_hash }
+        );
+    }
+    Ok(())
+}
+
 #[async_trait]
 impl<Client> ValidatorWorker for WorkerState<Client>
 where
@@ -676,7 +692,13 @@ where
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, proposal);
-        let chain_id = proposal.content.block.chain_id;
+        let BlockProposal {
+            content: BlockAndRound { block, round },
+            blobs,
+            owner,
+            signature,
+        } = &proposal;
+        let chain_id = block.chain_id;
         let mut chain = self.storage.load_active_chain(chain_id).await?;
         // Check the epoch.
         let epoch = chain
@@ -686,28 +708,26 @@ where
             .get()
             .expect("chain is active");
         ensure!(
-            proposal.content.block.epoch == epoch,
+            block.epoch == epoch,
             WorkerError::InvalidEpoch { chain_id, epoch }
         );
         // Check the authentication of the block.
         ensure!(
-            chain.manager.get().has_owner(&proposal.owner),
+            chain.manager.get().has_owner(owner),
             WorkerError::InvalidOwner
         );
-        proposal
-            .signature
-            .check(&proposal.content, proposal.owner.0)?;
+        signature.check(&proposal.content, owner.0)?;
         // Check the authentication of the operations in the block.
-        if let Some(signer) = proposal.content.block.authenticated_signer {
-            ensure!(signer == proposal.owner, WorkerError::InvalidSigner(signer));
+        if let Some(signer) = block.authenticated_signer {
+            ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
         }
         // Check if the chain is ready for this new block proposal.
         // This should always pass for nodes without voting key.
         if chain.manager.get().check_proposed_block(
             chain.tip_state.get().block_hash,
             chain.tip_state.get().next_block_height,
-            &proposal.content.block,
-            proposal.content.round,
+            block,
+            *round,
         )? == ChainManagerOutcome::Skip
         {
             // If we just processed the same pending block, return the chain info
@@ -717,11 +737,13 @@ where
                 NetworkActions::default(),
             ));
         }
-        let time_till_block = proposal
-            .content
-            .block
-            .timestamp
-            .saturating_diff_micros(Timestamp::now());
+        chain.remove_events(block).await?;
+        ensure_blobs_are_required::<Client>(&chain, block, blobs).await?;
+        // Write the values so that the bytecode is available during execution.
+        for value in blobs {
+            self.storage.write_value(value.clone()).await?;
+        }
+        let time_till_block = block.timestamp.saturating_diff_micros(Timestamp::now());
         ensure!(
             time_till_block <= self.grace_period_micros,
             WorkerError::InvalidTimestamp
@@ -730,7 +752,7 @@ where
             tokio::time::sleep(Duration::from_micros(time_till_block)).await;
         }
         let (effects, state_hash) = {
-            let effects = chain.execute_block(&proposal.content.block).await?;
+            let effects = chain.execute_block(block).await?;
             let hash = chain.execution_state_hash.get().expect("was just computed");
             // Verify that the resulting chain would have no unconfirmed incoming
             // messages.

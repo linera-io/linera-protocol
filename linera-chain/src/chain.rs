@@ -349,23 +349,9 @@ where
         Ok(())
     }
 
-    /// Execute a new block: first the incoming messages, then the main operation.
-    /// * Modifies the state of inboxes, outboxes, and channels, if needed.
-    /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown away.
-    /// * Returns the list of effects caused by the block being executed.
-    pub async fn execute_block(
-        &mut self,
-        block: &Block,
-    ) -> Result<Vec<OutgoingEffect>, ChainError> {
-        assert_eq!(block.chain_id, self.chain_id());
+    /// Removes the incoming messages in the block from the inboxes.
+    pub async fn remove_events(&mut self, block: &Block) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
-        ensure!(
-            *self.execution_state.system.timestamp.get() <= block.timestamp,
-            ChainError::InvalidBlockTimestamp
-        );
-        self.execution_state.system.timestamp.set(block.timestamp);
-        self.execution_state.add_fuel(10_000_000);
-        let mut effects = Vec::new();
         for message in &block.incoming_messages {
             log::trace!(
                 "Updating inbox {:?}::{:?} in chain {:?}",
@@ -397,6 +383,28 @@ where
                     error,
                 ))
             })?;
+        }
+        Ok(())
+    }
+
+    /// Execute a new block: first the incoming messages, then the main operation.
+    /// * Modifies the state of inboxes, outboxes, and channels, if needed.
+    /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown away.
+    /// * Returns the list of effects caused by the block being executed.
+    pub async fn execute_block(
+        &mut self,
+        block: &Block,
+    ) -> Result<Vec<OutgoingEffect>, ChainError> {
+        assert_eq!(block.chain_id, self.chain_id());
+        let chain_id = self.chain_id();
+        ensure!(
+            *self.execution_state.system.timestamp.get() <= block.timestamp,
+            ChainError::InvalidBlockTimestamp
+        );
+        self.execution_state.system.timestamp.set(block.timestamp);
+        self.execution_state.add_fuel(10_000_000);
+        let mut effects = Vec::new();
+        for message in &block.incoming_messages {
             // Execute the received effect.
             let context = EffectContext {
                 chain_id,

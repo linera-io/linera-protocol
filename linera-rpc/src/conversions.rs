@@ -248,10 +248,16 @@ impl TryFrom<BlockProposal> for grpc::BlockProposal {
     type Error = ProtoConversionError;
 
     fn try_from(block_proposal: BlockProposal) -> Result<Self, Self::Error> {
+        let blobs = block_proposal
+            .blobs
+            .iter()
+            .map(bcs::to_bytes)
+            .collect::<Result<_, bcs::Error>>()?;
         Ok(Self {
             content: bcs::to_bytes(&block_proposal.content)?,
             owner: Some(block_proposal.owner.into()),
             signature: Some(block_proposal.signature.into()),
+            blobs,
         })
     }
 }
@@ -260,10 +266,16 @@ impl TryFrom<grpc::BlockProposal> for BlockProposal {
     type Error = ProtoConversionError;
 
     fn try_from(block_proposal: grpc::BlockProposal) -> Result<Self, Self::Error> {
+        let blobs = block_proposal
+            .blobs
+            .iter()
+            .map(|bytes| bcs::from_bytes(bytes))
+            .collect::<Result<_, bcs::Error>>()?;
         Ok(Self {
             content: bcs::from_bytes(&block_proposal.content)?,
             owner: try_proto_convert!(block_proposal.owner),
             signature: try_proto_convert!(block_proposal.signature),
+            blobs,
         })
     }
 }
@@ -963,14 +975,10 @@ pub mod tests {
 
     #[test]
     pub fn test_lite_certificate() {
-        #[derive(Serialize, Deserialize)]
-        struct Dummy;
-        impl BcsSignable for Dummy {}
-
         let key_pair = KeyPair::generate();
         let certificate_validated = LiteCertificate {
             value: LiteValue {
-                value_hash: CryptoHash::new(&Dummy),
+                value_hash: CryptoHash::new(&Foo("value".into())),
                 chain_id: ChainId::root(0),
             },
             signatures: vec![(
@@ -1031,6 +1039,11 @@ pub mod tests {
             },
             owner: Owner::from(KeyPair::generate().public()),
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
+            blobs: vec![HashedValue::new_confirmed(
+                get_block(),
+                vec![],
+                CryptoHash::new(&Foo("execution state".into())),
+            )],
         };
 
         round_trip_check::<_, grpc::BlockProposal>(block_proposal);

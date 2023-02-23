@@ -68,6 +68,9 @@ BlockProposal:
   STRUCT:
     - content:
         TYPENAME: BlockAndRound
+    - blobs:
+        SEQ:
+          TYPENAME: Value
     - owner:
         TYPENAME: Owner
     - signature:
