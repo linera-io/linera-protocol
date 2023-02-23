@@ -164,8 +164,9 @@ where
     /// Obtain a `ChainStateView` for a given `ChainId`.
     pub async fn chain_state_view(
         &self,
-        chain_id: ChainId,
+        chain_id: Option<ChainId>,
     ) -> Result<Arc<ChainStateView<S::Context>>, NodeError> {
+        let chain_id = chain_id.unwrap_or(self.chain_id);
         let chain_state_view = self
             .node_client
             .storage_client()
