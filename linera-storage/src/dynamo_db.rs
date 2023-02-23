@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use futures::Future;
 use linera_base::{crypto::CryptoHash, data_types::ChainId};
-use linera_chain::data_types::{Certificate, LiteCertificate, Value};
+use linera_chain::data_types::{Certificate, HashedValue, LiteCertificate, Value};
 use linera_execution::{UserApplicationCode, UserApplicationId, WasmRuntime};
 use linera_views::{
     common::{Batch, Context},
@@ -176,15 +176,16 @@ impl Store for DynamoDbStoreClient {
         ChainStateView::load(db_context).await
     }
 
-    async fn read_value(&self, hash: CryptoHash) -> Result<Value, ViewError> {
+    async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
         let values = self.0.values().await?;
         let maybe_value = values.get(&hash).await?;
-        maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))
+        let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
+        Ok(value.with_hash(hash))
     }
 
-    async fn write_value(&self, value: Value) -> Result<(), ViewError> {
+    async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
         let mut values = self.0.values().await?;
-        values.insert(&value.hash(), value)?;
+        values.insert(&value.hash(), value.into())?;
         let mut batch = Batch::default();
         values.flush(&mut batch)?;
         self.0.context.write_batch(batch).await?;
@@ -198,7 +199,8 @@ impl Store for DynamoDbStoreClient {
         let certificates = self.0.certificates().await?;
         let maybe_cert = certificates.get(&hash).await?;
         let cert = maybe_cert.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
-        cert.with_value(value).ok_or(ViewError::InconsistentEntries)
+        cert.with_value(value.with_hash(hash))
+            .ok_or(ViewError::InconsistentEntries)
     }
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
@@ -207,7 +209,7 @@ impl Store for DynamoDbStoreClient {
         let mut certificates = self.0.certificates().await?;
         let mut values = self.0.values().await?;
         certificates.insert(&hash, cert)?;
-        values.insert(&hash, value)?;
+        values.insert(&hash, value.into())?;
         let mut batch = Batch::default();
         certificates.flush(&mut batch)?;
         values.flush(&mut batch)?;

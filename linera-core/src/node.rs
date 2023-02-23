@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, LiteCertificate, Origin, OutgoingEffect, Value,
+        Block, BlockProposal, Certificate, HashedValue, LiteCertificate, Origin, OutgoingEffect,
     },
     ChainError, ChainManagerInfo,
 };
@@ -53,7 +53,7 @@ pub trait ValidatorNode {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<Value>,
+        blobs: Vec<HashedValue>,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Handle information queries for this chain.
@@ -297,7 +297,7 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<Value>,
+        blobs: Vec<HashedValue>,
     ) -> Result<ChainInfoResponse, NodeError> {
         let node = self.node.clone();
         let mut node = node.lock().await;
@@ -506,7 +506,7 @@ where
         mut validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
         location: BytecodeLocation,
-    ) -> Option<Value>
+    ) -> Option<HashedValue>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
@@ -529,7 +529,7 @@ where
         client: &mut A,
         chain_id: ChainId,
         location: BytecodeLocation,
-    ) -> Option<Value>
+    ) -> Option<HashedValue>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {

@@ -10,7 +10,7 @@ use log::{debug, error, info, warn};
 use tokio::time;
 
 use linera_base::data_types::ChainId;
-use linera_chain::data_types::{BlockProposal, Certificate, LiteCertificate, Value};
+use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{NodeError, NotificationStream, ValidatorNode},
@@ -367,7 +367,7 @@ impl ValidatorNode for SimpleClient {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<Value>,
+        blobs: Vec<HashedValue>,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.send_recv_info((certificate, blobs).into()).await
     }

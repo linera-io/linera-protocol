@@ -3,7 +3,7 @@
 
 use crate::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, LiteVote, OutgoingEffect, Value,
+        Block, BlockAndRound, BlockProposal, Certificate, HashedValue, LiteVote, OutgoingEffect,
         ValueKind, Vote,
     },
     ChainError,
@@ -271,7 +271,7 @@ impl ChainManager {
                 if let Some(key_pair) = key_pair {
                     // Vote to confirm.
                     let BlockAndRound { block, .. } = proposal.content;
-                    let value = Value::new_confirmed(block, effects, state_hash);
+                    let value = HashedValue::new_confirmed(block, effects, state_hash);
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
                 }
@@ -283,7 +283,7 @@ impl ChainManager {
                 if let Some(key_pair) = key_pair {
                     // Vote to validate.
                     let BlockAndRound { block, round } = proposal.content;
-                    let value = Value::new_validated(block, effects, state_hash, round);
+                    let value = HashedValue::new_validated(block, effects, state_hash, round);
                     let vote = Vote::new(value, key_pair);
                     manager.pending = Some(vote);
                 }
@@ -334,7 +334,7 @@ pub struct SingleOwnerManagerInfo {
     /// Latest vote we cast.
     pub pending: Option<LiteVote>,
     /// The value we voted for, if requested.
-    pub requested_pending_value: Option<Value>,
+    pub requested_pending_value: Option<HashedValue>,
 }
 
 /// Chain manager information that is included in `ChainInfo` sent to clients, about chains
@@ -352,7 +352,7 @@ pub struct MultiOwnerManagerInfo {
     /// Latest vote we cast (either to validate or to confirm a block).
     pub pending: Option<LiteVote>,
     /// The value we voted for, if requested.
-    pub requested_pending_value: Option<Value>,
+    pub requested_pending_value: Option<HashedValue>,
     /// The current round.
     pub round: RoundNumber,
 }

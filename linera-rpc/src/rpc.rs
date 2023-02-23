@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::data_types::ChainId;
-use linera_chain::data_types::{BlockProposal, Certificate, LiteCertificate, LiteVote, Value};
+use linera_chain::data_types::{
+    BlockProposal, Certificate, HashedValue, LiteCertificate, LiteVote,
+};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     node::NodeError,
@@ -16,7 +18,7 @@ use serde::{Deserialize, Serialize};
 pub enum RpcMessage {
     // Inbound
     BlockProposal(Box<BlockProposal>),
-    Certificate(Box<Certificate>, Vec<Value>),
+    Certificate(Box<Certificate>, Vec<HashedValue>),
     LiteCertificate(Box<LiteCertificate>),
     ChainInfoQuery(Box<ChainInfoQuery>),
     // Outbound
@@ -58,8 +60,8 @@ impl From<LiteCertificate> for RpcMessage {
     }
 }
 
-impl From<(Certificate, Vec<Value>)> for RpcMessage {
-    fn from((certificate, blobs): (Certificate, Vec<Value>)) -> Self {
+impl From<(Certificate, Vec<HashedValue>)> for RpcMessage {
+    fn from((certificate, blobs): (Certificate, Vec<HashedValue>)) -> Self {
         RpcMessage::Certificate(Box::new(certificate), blobs)
     }
 }

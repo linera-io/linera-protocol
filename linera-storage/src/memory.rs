@@ -6,7 +6,7 @@ use async_lock::Mutex;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{crypto::CryptoHash, data_types::ChainId};
-use linera_chain::data_types::{Certificate, LiteCertificate, Value};
+use linera_chain::data_types::{Certificate, HashedValue, LiteCertificate, Value};
 use linera_execution::{UserApplicationCode, UserApplicationId};
 use linera_views::{
     memory::{MemoryContext, MemoryContextError, MemoryStoreMap},
@@ -48,14 +48,14 @@ impl Store for MemoryStoreClient {
         ChainStateView::load(db_context).await
     }
 
-    async fn read_value(&self, hash: CryptoHash) -> Result<Value, ViewError> {
+    async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
         let maybe_value = self.0.values.get(&hash);
         let entry = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
-        Ok(entry.value().clone())
+        Ok(entry.value().clone().with_hash(hash))
     }
 
-    async fn write_value(&self, value: Value) -> Result<(), ViewError> {
-        self.0.values.insert(value.hash(), value);
+    async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
+        self.0.values.insert(value.hash(), value.into());
         Ok(())
     }
 
@@ -65,7 +65,7 @@ impl Store for MemoryStoreClient {
         let maybe_value = self.0.values.get(&hash);
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         let cert = cert.value().clone();
-        let value = value.value().clone();
+        let value = value.value().clone().with_hash(hash);
         Ok(cert
             .with_value(value)
             .ok_or(ViewError::InconsistentEntries)?)
@@ -73,7 +73,7 @@ impl Store for MemoryStoreClient {
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
         let (cert, value) = certificate.split();
-        self.0.values.insert(cert.value.value_hash, value);
+        self.0.values.insert(cert.value.value_hash, value.into());
         self.0.certificates.insert(cert.value.value_hash, cert);
         Ok(())
     }

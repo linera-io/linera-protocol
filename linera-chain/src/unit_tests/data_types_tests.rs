@@ -32,7 +32,7 @@ fn test_signed_values() {
         authenticated_signer: None,
         previous_block_hash: None,
     };
-    let value = Value::new_confirmed(block, Vec::new(), CryptoHash::new(&Dummy));
+    let value = HashedValue::new_confirmed(block, Vec::new(), CryptoHash::new(&Dummy));
 
     let v = LiteVote::new(value.lite(), &key1);
     assert!(v.check().is_ok());
@@ -70,7 +70,7 @@ fn test_certificates() {
         authenticated_signer: None,
         timestamp: Default::default(),
     };
-    let value = Value::new_confirmed(block, Vec::new(), CryptoHash::new(&Dummy));
+    let value = HashedValue::new_confirmed(block, Vec::new(), CryptoHash::new(&Dummy));
 
     let v1 = LiteVote::new(value.lite(), &key1);
     let v2 = LiteVote::new(value.lite(), &key2);

@@ -237,14 +237,19 @@ pub enum ValueKind {
 }
 
 /// A statement to be certified by the validators.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
 pub struct Value {
-    block: Block,
-    effects: Vec<OutgoingEffect>,
-    state_hash: CryptoHash,
-    kind: ValueKind,
-    /// Hash of the certified value (used as key for storage).
-    #[serde(skip_serializing)]
+    pub block: Block,
+    pub effects: Vec<OutgoingEffect>,
+    pub state_hash: CryptoHash,
+    pub kind: ValueKind,
+}
+
+/// A statement to be certified by the validators, with its hash.
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct HashedValue {
+    value: Value,
+    /// Hash of the value (used as key for storage).
     hash: CryptoHash,
 }
 
@@ -258,14 +263,14 @@ pub struct LiteValue {
 /// A vote on a statement from a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Vote {
-    pub value: Value,
+    pub value: HashedValue,
     pub validator: ValidatorName,
     pub signature: Signature,
 }
 
 impl Vote {
     /// Use signing key to create a signed object.
-    pub fn new(value: Value, key_pair: &KeyPair) -> Self {
+    pub fn new(value: HashedValue, key_pair: &KeyPair) -> Self {
         let signature = Signature::new(&value.lite(), key_pair);
         Self {
             value,
@@ -295,7 +300,7 @@ pub struct LiteVote {
 
 impl LiteVote {
     /// Returns the full vote, with the value, if it matches.
-    pub fn with_value(self, value: Value) -> Option<Vote> {
+    pub fn with_value(self, value: HashedValue) -> Option<Vote> {
         if self.value != value.lite() {
             return None;
         }
@@ -329,7 +334,7 @@ impl LiteCertificate {
     }
 
     /// Returns the `Certificate` with the specified value, if it matches.
-    pub fn with_value(self, value: Value) -> Option<Certificate> {
+    pub fn with_value(self, value: HashedValue) -> Option<Certificate> {
         if self.value.chain_id != value.chain_id() || self.value.value_hash != value.hash() {
             return None;
         }
@@ -345,7 +350,7 @@ impl LiteCertificate {
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct Certificate {
     /// The certified value.
-    pub value: Value,
+    pub value: HashedValue,
     /// Signatures on the value.
     pub signatures: Vec<(ValidatorName, Signature)>,
 }
@@ -357,7 +362,7 @@ pub struct CertificateWithDependencies {
     /// Certificate that may require blobs (e.g. bytecode) for execution.
     pub certificate: Certificate,
     /// Values containing blobs (e.g. bytecode) that the other one depends on.
-    pub blobs: Vec<Value>,
+    pub blobs: Vec<HashedValue>,
 }
 
 impl Origin {
@@ -392,50 +397,51 @@ impl Target {
     }
 }
 
-#[derive(Deserialize, Serialize)]
-#[serde(rename = "Value")]
-struct NetworkValue {
-    block: Block,
-    effects: Vec<OutgoingEffect>,
-    state_hash: CryptoHash,
-    kind: ValueKind,
+impl Serialize for HashedValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.value.serialize(serializer)
+    }
 }
 
-impl<'a> Deserialize<'a> for Value {
+impl<'a> Deserialize<'a> for HashedValue {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::de::Deserializer<'a>,
     {
-        Ok(NetworkValue::deserialize(deserializer)?.into())
+        Ok(Value::deserialize(deserializer)?.into())
     }
 }
 
-impl From<NetworkValue> for Value {
-    fn from(value: NetworkValue) -> Value {
+impl From<Value> for HashedValue {
+    fn from(value: Value) -> HashedValue {
         let hash = CryptoHash::new(&value);
-        let NetworkValue {
-            block,
-            effects,
-            state_hash,
-            kind,
-        } = value;
-        Value {
-            block,
-            effects,
-            state_hash,
-            kind,
-            hash,
-        }
+        HashedValue { value, hash }
+    }
+}
+
+impl From<HashedValue> for Value {
+    fn from(hv: HashedValue) -> Value {
+        hv.value
     }
 }
 
 impl Value {
+    /// Creates a `HashedValue` without checking that this is the correct hash!
+    pub fn with_hash(self, hash: CryptoHash) -> HashedValue {
+        HashedValue { value: self, hash }
+    }
+}
+
+impl HashedValue {
     pub fn new_confirmed(
         block: Block,
         effects: Vec<OutgoingEffect>,
         state_hash: CryptoHash,
-    ) -> Value {
-        NetworkValue {
+    ) -> HashedValue {
+        Value {
             block,
             effects,
             state_hash,
@@ -448,8 +454,8 @@ impl Value {
         effects: Vec<OutgoingEffect>,
         state_hash: CryptoHash,
         round: RoundNumber,
-    ) -> Value {
-        NetworkValue {
+    ) -> HashedValue {
+        Value {
             block,
             effects,
             state_hash,
@@ -459,23 +465,23 @@ impl Value {
     }
 
     pub fn chain_id(&self) -> ChainId {
-        self.block.chain_id
+        self.value.block.chain_id
     }
 
     pub fn block(&self) -> &Block {
-        &self.block
+        &self.value.block
     }
 
     pub fn state_hash(&self) -> CryptoHash {
-        self.state_hash
+        self.value.state_hash
     }
 
     pub fn effects(&self) -> &Vec<OutgoingEffect> {
-        &self.effects
+        &self.value.effects
     }
 
     pub fn kind(&self) -> ValueKind {
-        self.kind
+        self.value.kind
     }
 
     pub fn hash(&self) -> CryptoHash {
@@ -483,11 +489,11 @@ impl Value {
     }
 
     pub fn is_confirmed(&self) -> bool {
-        matches!(self.kind, ValueKind::ConfirmedBlock)
+        matches!(self.value.kind, ValueKind::ConfirmedBlock)
     }
 
     pub fn is_validated(&self) -> bool {
-        matches!(self.kind, ValueKind::ValidatedBlock { .. })
+        matches!(self.value.kind, ValueKind::ValidatedBlock { .. })
     }
 
     pub fn lite(&self) -> LiteValue {
@@ -497,8 +503,8 @@ impl Value {
         }
     }
 
-    pub fn into_confirmed(self) -> Value {
-        Self::new_confirmed(self.block, self.effects, self.state_hash)
+    pub fn into_confirmed(self) -> HashedValue {
+        Self::new_confirmed(self.value.block, self.value.effects, self.value.state_hash)
     }
 }
 
@@ -539,7 +545,7 @@ pub struct SignatureAggregator<'a> {
 
 impl<'a> SignatureAggregator<'a> {
     /// Start aggregating signatures for the given value into a certificate.
-    pub fn new(value: Value, committee: &'a Committee) -> Self {
+    pub fn new(value: HashedValue, committee: &'a Committee) -> Self {
         Self {
             committee,
             weight: 0,
@@ -583,12 +589,12 @@ impl<'a> SignatureAggregator<'a> {
 }
 
 impl Certificate {
-    pub fn new(value: Value, signatures: Vec<(ValidatorName, Signature)>) -> Self {
+    pub fn new(value: HashedValue, signatures: Vec<(ValidatorName, Signature)>) -> Self {
         Self { value, signatures }
     }
 
     /// Verify the certificate.
-    pub fn check<'a>(&'a self, committee: &Committee) -> Result<&'a Value, ChainError> {
+    pub fn check<'a>(&'a self, committee: &Committee) -> Result<&'a HashedValue, ChainError> {
         check_signatures(&self.lite(), &self.signatures, committee)?;
         Ok(&self.value)
     }
@@ -608,7 +614,7 @@ impl Certificate {
         }
     }
 
-    pub fn split(self) -> (LiteCertificate, Value) {
+    pub fn split(self) -> (LiteCertificate, HashedValue) {
         (
             LiteCertificate {
                 value: self.lite(),
@@ -651,6 +657,6 @@ fn check_signatures(
 
 impl BcsSignable for BlockAndRound {}
 
-impl BcsHashable for NetworkValue {}
+impl BcsHashable for Value {}
 
 impl BcsSignable for LiteValue {}

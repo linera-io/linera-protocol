@@ -14,7 +14,7 @@ use crate::{
 use async_trait::async_trait;
 use futures::{lock::Mutex, Future};
 use linera_base::{committee::Committee, crypto::*, data_types::*};
-use linera_chain::data_types::{BlockProposal, Certificate, LiteCertificate, Value};
+use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_execution::{
     system::{Account, Amount, Balance, Recipient, SystemOperation, UserData},
     ApplicationId, Operation, Query, Response, SystemQuery, SystemResponse, WasmRuntime,
@@ -75,7 +75,7 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<Value>,
+        blobs: Vec<HashedValue>,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_handle_certificate(certificate, blobs, sender)
@@ -165,7 +165,7 @@ where
     async fn do_handle_certificate(
         self,
         certificate: Certificate,
-        blobs: Vec<Value>,
+        blobs: Vec<HashedValue>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.0.lock().await;

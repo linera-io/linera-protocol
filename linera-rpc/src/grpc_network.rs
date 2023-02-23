@@ -485,7 +485,7 @@ impl ValidatorNode for GrpcClient {
     async fn handle_certificate(
         &mut self,
         certificate: data_types::Certificate,
-        blobs: Vec<data_types::Value>,
+        blobs: Vec<data_types::HashedValue>,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         let cert_with_deps = data_types::CertificateWithDependencies { certificate, blobs };
         client_delegate!(self, handle_certificate, cert_with_deps)

@@ -19,7 +19,9 @@ use linera_base::{
     },
 };
 use linera_chain::{
-    data_types::{Block, BlockAndRound, BlockProposal, Certificate, LiteVote, Message, Value},
+    data_types::{
+        Block, BlockAndRound, BlockProposal, Certificate, HashedValue, LiteVote, Message,
+    },
     ChainManagerInfo, ChainStateView,
 };
 use linera_execution::{
@@ -473,7 +475,7 @@ where
                     .stage_block_execution(&proposal.content.block)
                     .await?;
                 let state_hash = response.info.state_hash.expect("was just computed");
-                let value = Value::new_confirmed(proposal.content.block, effects, state_hash);
+                let value = HashedValue::new_confirmed(proposal.content.block, effects, state_hash);
                 let certificate = Certificate::new(value, signatures);
                 // Certificate is valid because
                 // * `communicate_with_quorum` ensured a sufficient "weight" of
@@ -488,7 +490,7 @@ where
                     .await?;
                 let state_hash = response.info.state_hash.expect("was just computed");
                 let BlockAndRound { block, round } = proposal.content;
-                let value = Value::new_validated(block, effects, state_hash, round);
+                let value = HashedValue::new_validated(block, effects, state_hash, round);
                 let certificate = Certificate::new(value, signatures);
                 Ok(Some(certificate))
             }
@@ -744,7 +746,7 @@ where
     async fn process_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<Value>,
+        blobs: Vec<HashedValue>,
     ) -> Result<(), NodeError> {
         let info = self
             .node_client
