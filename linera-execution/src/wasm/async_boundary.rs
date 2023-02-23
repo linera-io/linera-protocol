@@ -75,7 +75,7 @@ impl<'future, Output> HostFuture<'future, Output> {
 }
 
 /// A future implemented in a WASM module.
-pub enum GuestFuture<Future, Application>
+pub enum GuestFuture<'context, Future, Application>
 where
     Application: ApplicationRuntimeContext,
 {
@@ -90,11 +90,11 @@ where
         future: Future,
 
         /// Types necessary to call the guest WASM module in order to poll the future.
-        context: WasmRuntimeContext<Application>,
+        context: WasmRuntimeContext<'context, Application>,
     },
 }
 
-impl<Future, Application> GuestFuture<Future, Application>
+impl<'context, Future, Application> GuestFuture<'context, Future, Application>
 where
     Application: ApplicationRuntimeContext,
 {
@@ -104,7 +104,7 @@ where
     /// that it can be returned when the [`GuestFuture`] is polled.
     pub fn new(
         creation_result: Result<Future, Application::Error>,
-        context: WasmRuntimeContext<Application>,
+        context: WasmRuntimeContext<'context, Application>,
     ) -> Self {
         match creation_result {
             Ok(future) => GuestFuture::Active { future, context },
@@ -113,7 +113,7 @@ where
     }
 }
 
-impl<InnerFuture, Application> Future for GuestFuture<InnerFuture, Application>
+impl<InnerFuture, Application> Future for GuestFuture<'_, InnerFuture, Application>
 where
     InnerFuture: GuestFutureInterface<Application> + Unpin,
     Application: ApplicationRuntimeContext + Unpin,

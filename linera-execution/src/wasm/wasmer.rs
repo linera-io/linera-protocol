@@ -69,7 +69,7 @@ impl WasmApplication {
     pub fn prepare_contract_runtime_with_wasmer<'storage>(
         &self,
         storage: &'storage dyn WritableStorage,
-    ) -> Result<WasmRuntimeContext<Contract<'storage>>, WasmExecutionError> {
+    ) -> Result<WasmRuntimeContext<'static, Contract<'storage>>, WasmExecutionError> {
         let mut store = Store::default();
         let module = Module::new(&store, &self.contract_bytecode)
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
@@ -92,6 +92,7 @@ impl WasmApplication {
         Ok(WasmRuntimeContext {
             context_forwarder,
             application,
+            future_queue,
             store,
             _storage_guard: storage_guard,
         })
@@ -101,7 +102,7 @@ impl WasmApplication {
     pub fn prepare_service_runtime_with_wasmer<'storage>(
         &self,
         storage: &'storage dyn QueryableStorage,
-    ) -> Result<WasmRuntimeContext<Service<'storage>>, WasmExecutionError> {
+    ) -> Result<WasmRuntimeContext<'static, Service<'storage>>, WasmExecutionError> {
         let mut store = Store::default();
         let module = Module::new(&store, &self.service_bytecode)
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
@@ -123,6 +124,7 @@ impl WasmApplication {
         Ok(WasmRuntimeContext {
             context_forwarder,
             application,
+            future_queue,
             store,
             _storage_guard: storage_guard,
         })
