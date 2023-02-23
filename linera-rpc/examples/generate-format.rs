@@ -4,7 +4,7 @@
 
 use linera_base::data_types::ChainDescription;
 use linera_chain::{
-    data_types::{Medium, Value, ValueKind},
+    data_types::{HashedValue, Medium, ValueKind},
     ChainManagerInfo,
 };
 use linera_core::{data_types::CrossChainRequest, node::NodeError};
@@ -32,7 +32,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<SystemEffect>(&samples)?;
     tracer.trace_type::<Operation>(&samples)?;
     tracer.trace_type::<Effect>(&samples)?;
-    tracer.trace_type::<Value>(&samples)?;
+    tracer.trace_type::<HashedValue>(&samples)?;
     tracer.trace_type::<ValueKind>(&samples)?;
     tracer.trace_type::<Medium>(&samples)?;
     tracer.trace_type::<Destination>(&samples)?;

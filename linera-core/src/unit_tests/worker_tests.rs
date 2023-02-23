@@ -19,8 +19,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, Event, LiteVote, Medium, Message, Origin,
-        OutgoingEffect, SignatureAggregator, Value,
+        Block, BlockAndRound, BlockProposal, Certificate, Event, HashedValue, LiteVote, Medium,
+        Message, Origin, OutgoingEffect, SignatureAggregator,
     },
     ChainError,
 };
@@ -177,7 +177,7 @@ fn make_transfer_block_proposal(
 fn make_certificate<S>(
     committee: &Committee,
     worker: &WorkerState<S>,
-    value: Value,
+    value: HashedValue,
 ) -> Certificate {
     let vote = LiteVote::new(value.lite(), worker.key_pair.as_ref().unwrap());
     let mut builder = SignatureAggregator::new(value, committee);
@@ -262,7 +262,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         Recipient::Burn => Vec::new(),
     };
     let state_hash = make_state_hash(system_state).await;
-    let value = Value::new_confirmed(block, effects, state_hash);
+    let value = HashedValue::new_confirmed(block, effects, state_hash);
     make_certificate(committee, worker, value)
 }
 
@@ -528,7 +528,7 @@ where
             registry: ApplicationRegistry::default(),
         };
         let state_hash = make_state_hash(system_state).await;
-        let value = Value::new_confirmed(block, vec![], state_hash);
+        let value = HashedValue::new_confirmed(block, vec![], state_hash);
         make_certificate(&committee, &worker, value)
     };
     worker
@@ -784,7 +784,7 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        Value::new_confirmed(
+        HashedValue::new_confirmed(
             Block {
                 epoch,
                 chain_id: ChainId::root(1),
@@ -849,7 +849,7 @@ where
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        Value::new_confirmed(
+        HashedValue::new_confirmed(
             Block {
                 epoch,
                 chain_id: ChainId::root(1),
@@ -1164,7 +1164,7 @@ where
         let certificate = make_certificate(
             &committee,
             &worker,
-            Value::new_confirmed(
+            HashedValue::new_confirmed(
                 block_proposal.content.block,
                 vec![direct_outgoing_effect(
                     ChainId::root(3),
@@ -2512,7 +2512,7 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        Value::new_confirmed(
+        HashedValue::new_confirmed(
             Block {
                 epoch: Epoch::from(0),
                 chain_id: admin_id,
@@ -2612,7 +2612,7 @@ where
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        Value::new_confirmed(
+        HashedValue::new_confirmed(
             Block {
                 epoch: Epoch::from(0),
                 chain_id: admin_id,
@@ -2683,7 +2683,7 @@ where
     let certificate2 = make_certificate(
         &committee,
         &worker,
-        Value::new_confirmed(
+        HashedValue::new_confirmed(
             Block {
                 epoch: Epoch::from(1),
                 chain_id: admin_id,
@@ -2845,7 +2845,7 @@ where
     let certificate3 = make_certificate(
         &committee,
         &worker,
-        Value::new_confirmed(
+        HashedValue::new_confirmed(
             Block {
                 epoch: Epoch::from(0),
                 chain_id: user_id,
@@ -3042,7 +3042,7 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        Value::new_confirmed(
+        HashedValue::new_confirmed(
             Block {
                 epoch: Epoch::from(0),
                 chain_id: user_id,
@@ -3091,7 +3091,7 @@ where
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        Value::new_confirmed(
+        HashedValue::new_confirmed(
             Block {
                 epoch: Epoch::from(0),
                 chain_id: admin_id,
@@ -3250,7 +3250,7 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        Value::new_confirmed(
+        HashedValue::new_confirmed(
             Block {
                 epoch: Epoch::from(0),
                 chain_id: user_id,
@@ -3300,7 +3300,7 @@ where
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        Value::new_confirmed(
+        HashedValue::new_confirmed(
             Block {
                 epoch: Epoch::from(0),
                 chain_id: admin_id,
@@ -3405,7 +3405,7 @@ where
     let certificate2 = make_certificate(
         &committee,
         &worker,
-        Value::new_confirmed(
+        HashedValue::new_confirmed(
             Block {
                 epoch: Epoch::from(1),
                 chain_id: admin_id,

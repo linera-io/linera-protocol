@@ -12,8 +12,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, LiteCertificate, Medium, Message, Origin,
-        OutgoingEffect, Target, Value, ValueKind,
+        Block, BlockProposal, Certificate, HashedValue, LiteCertificate, Medium, Message, Origin,
+        OutgoingEffect, Target, ValueKind,
     },
     ChainManagerOutcome, ChainStateView,
 };
@@ -64,7 +64,7 @@ pub trait ValidatorWorker {
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<Value>,
+        blobs: Vec<HashedValue>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
     /// Handle information queries on chains.
@@ -193,7 +193,7 @@ pub struct WorkerState<StorageClient> {
     /// will wait until that timestamp before voting.
     grace_period_micros: u64,
     /// Cached values by hash.
-    recent_values: LruCache<CryptoHash, Value>,
+    recent_values: LruCache<CryptoHash, HashedValue>,
 }
 
 impl<Client: Clone> Clone for WorkerState<Client> {
@@ -259,7 +259,7 @@ impl<Client> WorkerState<Client> {
         &self.storage
     }
 
-    pub(crate) fn recent_value(&mut self, hash: &CryptoHash) -> Option<&Value> {
+    pub(crate) fn recent_value(&mut self, hash: &CryptoHash) -> Option<&HashedValue> {
         self.recent_values.get(hash)
     }
 }
@@ -274,7 +274,7 @@ where
     pub(crate) async fn fully_handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<Value>,
+        blobs: Vec<HashedValue>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.fully_handle_certificate_with_notifications(certificate, blobs, None)
             .await
@@ -284,7 +284,7 @@ where
     pub(crate) async fn fully_handle_certificate_with_notifications(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<Value>,
+        blobs: Vec<HashedValue>,
         mut notifications: Option<&mut Vec<Notification>>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let (response, actions) = self.handle_certificate(certificate, blobs).await?;
@@ -408,7 +408,7 @@ where
     async fn process_confirmed_block(
         &mut self,
         certificate: Certificate,
-        blobs: &[Value],
+        blobs: &[HashedValue],
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         assert!(
             certificate.value.is_confirmed(),
@@ -656,7 +656,7 @@ where
         }
     }
 
-    fn cache_recent_value(&mut self, hash: CryptoHash, value: Value) {
+    fn cache_recent_value(&mut self, hash: CryptoHash, value: HashedValue) {
         if value.is_validated() {
             // Cache the corresponding confirmed block, too, in case we get a certificate.
             let conf_value = value.clone().into_confirmed();
@@ -771,7 +771,7 @@ where
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
-        blobs: Vec<Value>,
+        blobs: Vec<HashedValue>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, certificate);
         ensure!(

@@ -5,7 +5,7 @@ use crate::{chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Stor
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{crypto::CryptoHash, data_types::ChainId};
-use linera_chain::data_types::{Certificate, LiteCertificate, Value};
+use linera_chain::data_types::{Certificate, HashedValue, LiteCertificate, Value};
 use linera_execution::{UserApplicationCode, UserApplicationId, WasmRuntime};
 use linera_views::{
     common::{Batch, KeyValueStoreClient},
@@ -77,13 +77,14 @@ impl Store for RocksdbStoreClient {
         ChainStateView::load(db_context).await
     }
 
-    async fn read_value(&self, hash: CryptoHash) -> Result<Value, ViewError> {
+    async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
-        let maybe_value = self.0.db.read_key(&value_key).await?;
-        maybe_value.ok_or_else(|| ViewError::NotFound(format!("value for hash {:?}", hash)))
+        let maybe_value: Option<Value> = self.0.db.read_key(&value_key).await?;
+        let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
+        Ok(value.with_hash(hash))
     }
 
-    async fn write_value(&self, value: Value) -> Result<(), ViewError> {
+    async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         let mut batch = Batch::default();
         batch.put_key_value(value_key.to_vec(), &value)?;
@@ -102,7 +103,7 @@ impl Store for RocksdbStoreClient {
             maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(cert
             .clone()
-            .with_value(value)
+            .with_value(value.with_hash(hash))
             .ok_or(ViewError::InconsistentEntries)?)
     }
 

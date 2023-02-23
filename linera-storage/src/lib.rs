@@ -21,7 +21,7 @@ use linera_base::{
     data_types::{ChainDescription, ChainId, Epoch, Owner, Timestamp},
 };
 use linera_chain::{
-    data_types::{Certificate, Value},
+    data_types::{Certificate, HashedValue},
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -53,10 +53,10 @@ pub trait Store: Sized {
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>;
 
     /// Reads the value with the given hash.
-    async fn read_value(&self, hash: CryptoHash) -> Result<Value, ViewError>;
+    async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError>;
 
     /// Writes the given value.
-    async fn write_value(&self, value: Value) -> Result<(), ViewError>;
+    async fn write_value(&self, value: HashedValue) -> Result<(), ViewError>;
 
     /// Reads the certificate with the given hash.
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError>;

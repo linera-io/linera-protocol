@@ -787,7 +787,7 @@ impl TryFrom<grpc::Owner> for Owner {
 pub mod tests {
     use super::*;
     use linera_base::crypto::{BcsSignable, CryptoHash, KeyPair};
-    use linera_chain::data_types::{Block, BlockAndRound, Value};
+    use linera_chain::data_types::{Block, BlockAndRound, HashedValue};
     use linera_core::data_types::ChainInfo;
     use serde::{Deserialize, Serialize};
     use std::fmt::Debug;
@@ -986,7 +986,7 @@ pub mod tests {
     pub fn test_certificate() {
         let key_pair = KeyPair::generate();
         let certificate_validated = Certificate::new(
-            Value::new_validated(
+            HashedValue::new_validated(
                 get_block(),
                 vec![],
                 CryptoHash::new(&Foo("test".into())),

@@ -15,7 +15,7 @@ use linera_base::{
     },
 };
 use linera_chain::data_types::{
-    Block, BlockAndRound, BlockProposal, Certificate, SignatureAggregator, Value, Vote,
+    Block, BlockAndRound, BlockProposal, Certificate, HashedValue, SignatureAggregator, Vote,
 };
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
@@ -784,7 +784,7 @@ where
                                 .stage_block_execution(&block)
                                 .await?;
                         let state_hash = response.info.state_hash.expect("state was just computed");
-                        let value = Value::new_confirmed(block, effects, state_hash);
+                        let value = HashedValue::new_confirmed(block, effects, state_hash);
                         values.insert(value.hash(), value);
                     }
                 }

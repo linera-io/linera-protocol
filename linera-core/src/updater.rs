@@ -11,7 +11,7 @@ use linera_base::{
     committee::Committee,
     data_types::{BlockHeight, ChainDescription, ChainId, EffectId, ValidatorName},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, LiteVote, Value};
+use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteVote};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{
@@ -137,7 +137,7 @@ where
                 }
                 Err(err) => Err(err),
             };
-            let mut blobs: Vec<Value> = vec![];
+            let mut blobs: Vec<HashedValue> = vec![];
             while let Err(NodeError::ApplicationBytecodeNotFound {
                 bytecode_location, ..
             }) = &result

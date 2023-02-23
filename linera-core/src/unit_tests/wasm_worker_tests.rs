@@ -14,7 +14,7 @@ use linera_base::{
     crypto::KeyPair,
     data_types::{BlockHeight, ChainDescription, ChainId, EffectId, Epoch, Timestamp},
 };
-use linera_chain::data_types::{Event, Message, Origin, OutgoingEffect, Value};
+use linera_chain::data_types::{Event, HashedValue, Message, Origin, OutgoingEffect};
 use linera_execution::{
     system::{Balance, SystemChannel, SystemEffect, SystemOperation},
     ApplicationId, ApplicationRegistry, Bytecode, BytecodeId, BytecodeLocation, ChainOwnership,
@@ -145,7 +145,7 @@ where
         registry: ApplicationRegistry::default(),
     };
     let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
-    let publish_block_proposal = Value::new_confirmed(
+    let publish_block_proposal = HashedValue::new_confirmed(
         publish_block,
         vec![OutgoingEffect {
             application_id: ApplicationId::System,
@@ -212,7 +212,7 @@ where
         .published_bytecodes
         .insert(bytecode_id, bytecode_location);
     let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
-    let broadcast_block_proposal = Value::new_confirmed(
+    let broadcast_block_proposal = HashedValue::new_confirmed(
         broadcast_block,
         vec![OutgoingEffect {
             application_id: ApplicationId::System,
@@ -272,7 +272,7 @@ where
         registry: ApplicationRegistry::default(),
     };
     let creator_state = ExecutionStateView::from_system_state(creator_system_state.clone()).await;
-    let subscribe_block_proposal = Value::new_confirmed(
+    let subscribe_block_proposal = HashedValue::new_confirmed(
         subscribe_block,
         vec![OutgoingEffect {
             application_id: ApplicationId::System,
@@ -320,7 +320,7 @@ where
     );
     publisher_system_state.timestamp = Timestamp::from(3);
     let publisher_state_hash = make_state_hash(publisher_system_state).await;
-    let accept_block_proposal = Value::new_confirmed(
+    let accept_block_proposal = HashedValue::new_confirmed(
         accept_block,
         vec![OutgoingEffect {
             application_id: ApplicationId::System,
@@ -422,7 +422,7 @@ where
             .set(initial_value_bytes);
     }
     let create_block_proposal =
-        Value::new_confirmed(create_block, vec![], creator_state.crypto_hash().await?);
+        HashedValue::new_confirmed(create_block, vec![], creator_state.crypto_hash().await?);
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
     let info = worker
@@ -466,7 +466,7 @@ where
     }
     creator_state.system.timestamp.set(Timestamp::from(5));
     let run_block_proposal =
-        Value::new_confirmed(run_block, vec![], creator_state.crypto_hash().await?);
+        HashedValue::new_confirmed(run_block, vec![], creator_state.crypto_hash().await?);
     let run_certificate = make_certificate(&committee, &worker, run_block_proposal);
 
     let info = worker
