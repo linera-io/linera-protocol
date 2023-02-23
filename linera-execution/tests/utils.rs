@@ -20,8 +20,6 @@ pub fn create_dummy_user_application_description() -> UserApplicationDescription
         .into(),
         bytecode_location: BytecodeLocation {
             certificate_hash,
-            chain_id,
-            height: BlockHeight(1),
             operation_index: 0,
         },
         creation: EffectId {
