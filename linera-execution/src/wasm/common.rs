@@ -11,7 +11,7 @@ use crate::{
     system::Balance, ApplicationCallResult, CalleeContext, EffectContext, OperationContext,
     QueryContext, RawExecutionResult, SessionCallResult, SessionId,
 };
-use std::future::Future;
+use futures::future::{self, TryFutureExt};
 
 /// Types that are specific to the context of an application ready to be executedy by a WebAssembly
 /// runtime.
@@ -340,7 +340,10 @@ where
         session_data: &'session_data mut Vec<u8>,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> impl Future<Output = Result<SessionCallResult, WasmExecutionError>> + 'session_data
+    ) -> future::MapOk<
+        GuestFuture<A::CallSession, A>,
+        impl FnOnce((SessionCallResult, Vec<u8>)) -> SessionCallResult + 'session_data,
+    >
     where
         A: Unpin + 'session_data,
         A::Store: Unpin,
@@ -362,13 +365,10 @@ where
             &forwarded_sessions,
         );
 
-        async move {
-            let (session_call_result, updated_data) = GuestFuture::new(future, self).await?;
-
+        GuestFuture::new(future, self).map_ok(|(session_call_result, updated_data)| {
             *session_data = updated_data;
-
-            Ok(session_call_result)
-        }
+            session_call_result
+        })
     }
 }
 
