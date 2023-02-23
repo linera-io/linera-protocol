@@ -80,11 +80,17 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    async fn chain(&self, chain_id: ChainId) -> Result<Arc<ChainStateView<S::Context>>, Error> {
+    async fn chain(
+        &self,
+        chain_id: Option<ChainId>,
+    ) -> Result<Arc<ChainStateView<S::Context>>, Error> {
         Ok(self.0.lock().await.chain_state_view(chain_id).await?)
     }
 
-    async fn applications(&self, chain_id: ChainId) -> Result<Vec<ApplicationOverview>, Error> {
+    async fn applications(
+        &self,
+        chain_id: Option<ChainId>,
+    ) -> Result<Vec<ApplicationOverview>, Error> {
         let applications = self
             .0
             .lock()
