@@ -143,6 +143,7 @@ where
             }) = &result
             {
                 let hash = bytecode_location.certificate_hash;
+                // TODO(#474): This check is not sufficient in case of bad actors.
                 if blobs.iter().any(|blob| blob.hash == hash) {
                     log::warn!("validator requested {:?} but it was already sent", hash);
                     break;
@@ -163,10 +164,7 @@ where
                     // Succeed
                     return Ok(response.info);
                 }
-                Err(NodeError::InactiveChain(_))
-                | Err(NodeError::ApplicationBytecodeNotFound { .. })
-                    if retryable && count < self.retries =>
-                {
+                Err(NodeError::InactiveChain(_)) if retryable && count < self.retries => {
                     // Retry
                     tokio::time::sleep(self.delay).await;
                     count += 1;
@@ -307,10 +305,11 @@ where
             // Obtain chain state.
             let range = usize::from(initial_block_height)..usize::from(target_block_height);
             if !range.is_empty() {
-                let chain = self.store.load_chain(chain_id).await?;
+                let keys = {
+                    let chain = self.store.load_chain(chain_id).await?;
+                    chain.confirmed_log.read(range).await?
+                };
                 // Send the requested certificates in order.
-                let keys = chain.confirmed_log.read(range).await?;
-                drop(chain);
                 let certs = self.store.read_certificates(keys.into_iter()).await?;
                 for cert in certs {
                     self.send_certificate(cert, retryable).await?;
