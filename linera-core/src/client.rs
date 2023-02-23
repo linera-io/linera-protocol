@@ -33,7 +33,7 @@ use linera_storage::Store;
 use linera_views::views::ViewError;
 use log::info;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
     time::Duration,
 };
@@ -784,6 +784,41 @@ where
         );
         // Remember what we are trying to do
         self.pending_block = Some(block.clone());
+        // Collect blobs required for execution.
+        let bytecodes: HashSet<_> = block
+            .incoming_messages
+            .iter()
+            .flat_map(|message| {
+                if let Effect::System(SystemEffect::RegisterApplications { applications }) =
+                    &message.event.effect
+                {
+                    Some(
+                        applications
+                            .iter()
+                            .map(|app| (app.bytecode_location, message.origin.sender)),
+                    )
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .collect();
+        let committee = self.local_committee().await?;
+        let nodes = self.make_validator_nodes(&committee).await?;
+        let mut blobs = vec![];
+        for (location, chain_id) in bytecodes {
+            let storage = self.node_client.storage_client().await;
+            if let Ok(blob) = storage.read_value(location.certificate_hash).await {
+                blobs.push(blob);
+            } else if let Some(blob) = self
+                .node_client
+                .download_blob(nodes.clone(), chain_id, location)
+                .await
+            {
+                storage.write_value(blob.clone()).await?;
+                blobs.push(blob);
+            }
+        }
         // Build the initial query.
         let key_pair = self.key_pair().await?;
         let proposal = BlockProposal::new(
@@ -791,6 +826,7 @@ where
                 block,
                 round: next_round,
             },
+            blobs,
             key_pair,
         );
         // Try to execute the block locally first.
@@ -798,7 +834,6 @@ where
             .handle_block_proposal(proposal.clone())
             .await?;
         // Send the query to validators.
-        let committee = self.local_committee().await?;
         let final_certificate = match self.chain_info().await?.manager {
             ChainManagerInfo::Multi(_) => {
                 // Need two-round trips.

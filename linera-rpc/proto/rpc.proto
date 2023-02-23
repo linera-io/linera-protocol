@@ -164,14 +164,17 @@ message Medium {
 
 // An authenticated proposal for a new block.
 message BlockProposal {
-  // bcs signable
+  // BCS signable
   bytes content = 1;
 
-  // byte encoded public key
+  // Byte-encoded public key
   Owner owner = 2;
 
-  // signature value
+  // Signature value
   Signature signature = 3;
+
+  // Required bytecode
+  repeated bytes blobs = 4;
 }
 
 // A certified statement from the committee, without the value.
