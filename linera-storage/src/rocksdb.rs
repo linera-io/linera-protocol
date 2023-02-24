@@ -95,14 +95,15 @@ impl Store for RocksdbStoreClient {
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
-        let maybe_cert = self.0.db.read_key(&cert_key).await?;
-        let cert: LiteCertificate =
-            maybe_cert.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
-        let maybe_value = self.0.db.read_key(&value_key).await?;
+        let (cert_result, value_result) = tokio::join!(
+            self.0.db.read_key(&cert_key),
+            self.0.db.read_key(&value_key)
+        );
         let value: Value =
-            maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
+            value_result?.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
+        let cert: LiteCertificate =
+            cert_result?.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
         Ok(cert
-            .clone()
             .with_value(value.with_hash_unchecked(hash))
             .ok_or(ViewError::InconsistentEntries)?)
     }
