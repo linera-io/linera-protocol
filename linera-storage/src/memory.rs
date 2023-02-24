@@ -51,7 +51,7 @@ impl Store for MemoryStoreClient {
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
         let maybe_value = self.0.values.get(&hash);
         let entry = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
-        Ok(entry.value().clone().with_hash(hash))
+        Ok(entry.value().clone().with_hash_unchecked(hash))
     }
 
     async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
@@ -65,7 +65,7 @@ impl Store for MemoryStoreClient {
         let maybe_value = self.0.values.get(&hash);
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         let cert = cert.value().clone();
-        let value = value.value().clone().with_hash(hash);
+        let value = value.value().clone().with_hash_unchecked(hash);
         Ok(cert
             .with_value(value)
             .ok_or(ViewError::InconsistentEntries)?)

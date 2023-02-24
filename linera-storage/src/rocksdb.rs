@@ -81,7 +81,7 @@ impl Store for RocksdbStoreClient {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let maybe_value: Option<Value> = self.0.db.read_key(&value_key).await?;
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
-        Ok(value.with_hash(hash))
+        Ok(value.with_hash_unchecked(hash))
     }
 
     async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
@@ -103,7 +103,7 @@ impl Store for RocksdbStoreClient {
             maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(cert
             .clone()
-            .with_value(value.with_hash(hash))
+            .with_value(value.with_hash_unchecked(hash))
             .ok_or(ViewError::InconsistentEntries)?)
     }
 
