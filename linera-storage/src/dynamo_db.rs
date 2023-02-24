@@ -180,7 +180,7 @@ impl Store for DynamoDbStoreClient {
         let values = self.0.values().await?;
         let maybe_value = values.get(&hash).await?;
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
-        Ok(value.with_hash(hash))
+        Ok(value.with_hash_unchecked(hash))
     }
 
     async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
@@ -199,7 +199,7 @@ impl Store for DynamoDbStoreClient {
         let certificates = self.0.certificates().await?;
         let maybe_cert = certificates.get(&hash).await?;
         let cert = maybe_cert.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
-        cert.with_value(value.with_hash(hash))
+        cert.with_value(value.with_hash_unchecked(hash))
             .ok_or(ViewError::InconsistentEntries)
     }
 

@@ -430,7 +430,7 @@ impl From<HashedValue> for Value {
 
 impl Value {
     /// Creates a `HashedValue` without checking that this is the correct hash!
-    pub fn with_hash(self, hash: CryptoHash) -> HashedValue {
+    pub fn with_hash_unchecked(self, hash: CryptoHash) -> HashedValue {
         HashedValue { value: self, hash }
     }
 }
