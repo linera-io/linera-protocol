@@ -193,21 +193,35 @@ impl Store for DynamoDbStoreClient {
     }
 
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
-        let values = self.0.values().await?;
-        let maybe_value = values.get(&hash).await?;
-        let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
-        let certificates = self.0.certificates().await?;
-        let maybe_cert = certificates.get(&hash).await?;
-        let cert = maybe_cert.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
-        cert.with_value(value.with_hash_unchecked(hash))
+        let (value_result, cert_result) = tokio::join!(
+            async move {
+                self.0
+                    .values()
+                    .await?
+                    .get(&hash)
+                    .await?
+                    .ok_or_else(|| ViewError::not_found("value for hash", hash))
+            },
+            async move {
+                self.0
+                    .certificates()
+                    .await?
+                    .get(&hash)
+                    .await?
+                    .ok_or_else(|| ViewError::not_found("certificate for hash", hash))
+            }
+        );
+        cert_result?
+            .with_value(value_result?.with_hash_unchecked(hash))
             .ok_or(ViewError::InconsistentEntries)
     }
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
         let (cert, value) = certificate.split();
         let hash = value.hash();
-        let mut certificates = self.0.certificates().await?;
-        let mut values = self.0.values().await?;
+        let (certs_result, values_result) = tokio::join!(self.0.certificates(), self.0.values());
+        let mut certificates = certs_result?;
+        let mut values = values_result?;
         certificates.insert(&hash, cert)?;
         values.insert(&hash, value.into())?;
         let mut batch = Batch::default();
