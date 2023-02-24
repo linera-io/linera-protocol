@@ -15,6 +15,10 @@ linera-views = { path = "../../linera-views" }
 serde_json = "1.0.93"
 thiserror = "1.0.31"
 
+# TODO(#490): these will be removed down the line.
+[package.metadata.cargo-machete]
+ignored = ["async-graphql", "serde_json"]
+
 [dev-dependencies]
 linera-sdk = { path = "../../linera-sdk", features = ["test"] }
 webassembly-test = "0.1.0"

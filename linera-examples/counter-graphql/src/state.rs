@@ -7,8 +7,10 @@ use linera_views::{
     views::{GraphQLView, RootView, View},
 };
 
+use linera_sdk::Service;
+
 /// The application state.
-#[derive(RootView, GraphQLView, Debug)]
+#[derive(RootView, GraphQLView, Service, Debug)]
 pub struct Counter<C> {
     pub value: RegisterView<C, u64>,
 }
