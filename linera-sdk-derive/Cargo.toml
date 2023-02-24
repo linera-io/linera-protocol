@@ -1,0 +1,13 @@
+[package]
+name = "linera-sdk-derive"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0.107", features = ["full", "extra-traits"] }
+quote = "1.0"
+proc-macro2 = "1.0"

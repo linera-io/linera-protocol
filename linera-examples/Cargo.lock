@@ -1377,6 +1377,7 @@ dependencies = [
  "generic-array",
  "hex",
  "linera-base",
+ "linera-sdk-derive",
  "linera-views",
  "log",
  "serde",
@@ -1386,6 +1387,15 @@ dependencies = [
  "thiserror",
  "wasmtime",
  "wit-bindgen-guest-rust",
+]
+
+[[package]]
+name = "linera-sdk-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

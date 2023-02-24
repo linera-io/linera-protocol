@@ -21,6 +21,7 @@ pub use self::{
     extensions::FromBcsBytes,
     log::{ContractLogger, ServiceLogger},
 };
+pub use linera_sdk_derive::Service;
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 
