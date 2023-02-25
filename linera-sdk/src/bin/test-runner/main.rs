@@ -31,10 +31,12 @@ use wasmtime::*;
 /// Load a test WASM module and run all test functions annotated by [webassembly_test].
 ///
 /// Prints out a summary of executed tests and their results.
-fn main() -> Result<ExitCode> {
+#[tokio::main]
+async fn main() -> Result<ExitCode> {
     let mut report = TestReport::default();
     let mut engine_config = Config::default();
     engine_config.wasm_backtrace_details(WasmBacktraceDetails::Enable);
+    engine_config.async_support(true);
     let engine = Engine::new(&engine_config)?;
     let mut linker = Linker::new(&engine);
     let test_module = load_test_module(&engine)?;
@@ -45,7 +47,7 @@ fn main() -> Result<ExitCode> {
     eprintln!("\nrunning {} tests", tests.len());
 
     for test in tests {
-        test.run(&mut report, &linker, &test_module)?;
+        test.run(&mut report, &linker, &test_module).await?;
     }
 
     Ok(report.print())
@@ -92,7 +94,7 @@ impl<'a> Test<'a> {
     /// Run an test function exported from the WASM module and report its result.
     ///
     /// The test is executed in a clean WASM environment.
-    pub fn run(
+    pub async fn run(
         self,
         report: &mut TestReport,
         linker: &Linker<()>,
@@ -104,11 +106,11 @@ impl<'a> Test<'a> {
             report.ignore();
         } else {
             let mut store = Store::new(linker.engine(), ());
-            let instance = linker.instantiate(&mut store, test_module)?;
+            let instance = linker.instantiate_async(&mut store, test_module).await?;
 
             let function = instance.get_typed_func::<(), (), _>(&mut store, self.function)?;
 
-            report.result(function.call(&mut store, ()));
+            report.result(function.call_async(&mut store, ()).await);
         }
 
         Ok(())
