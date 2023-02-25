@@ -492,7 +492,7 @@ enum ClientCommand {
         #[structopt(long = "name")]
         name: ValidatorName,
 
-        /// Address
+        /// Network address
         #[structopt(long = "address")]
         network_address: String,
 
