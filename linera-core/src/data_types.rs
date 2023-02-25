@@ -204,6 +204,7 @@ where
         requested_sent_certificates: Vec::new(),
         count_received_certificates: view.received_log.count(),
         requested_received_certificates: Vec::new(),
+        requested_blob: None,
     })
 }
 
