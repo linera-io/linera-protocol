@@ -54,6 +54,10 @@ pub mod dynamo_db;
 #[cfg(feature = "aws")]
 pub mod localstack;
 
+/// Wrapping a view to compute a hash
+#[cfg(not(target_arch = "wasm32"))]
+pub mod hashable_wrapper;
+
 /// Helper types for tests.
 #[cfg(any(test, feature = "test"))]
 #[cfg(not(target_arch = "wasm32"))]
