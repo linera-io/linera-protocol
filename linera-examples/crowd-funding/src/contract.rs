@@ -5,16 +5,15 @@
 
 mod state;
 
-use self::state::{CrowdFunding, Status};
 use async_trait::async_trait;
-use crowd_funding::ApplicationCall;
-use fungible::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
+use crowd_funding::{ApplicationCall, Operation};
+use fungible::{Account, AccountOwner, Amount, Destination};
 use linera_sdk::{
     contract::system_api, ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext,
     ExecutionResult, FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
     SimpleStateStorage,
 };
-use serde::{Deserialize, Serialize};
+use state::{CrowdFunding, Status};
 use std::mem;
 use thiserror::Error;
 
@@ -49,7 +48,9 @@ impl Contract for CrowdFunding {
             bcs::from_bytes(operation_bytes).map_err(Error::InvalidOperation)?;
 
         match operation {
-            Operation::Pledge { transfer } => self.signed_pledge(transfer).await?,
+            Operation::PledgeWithTransfer { owner, amount } => {
+                self.execute_pledge_with_transfer(owner, amount).await?
+            }
             Operation::Collect => self.collect_pledges().await?,
             Operation::Cancel => self.cancel_campaign().await?,
         }
@@ -67,7 +68,7 @@ impl Contract for CrowdFunding {
 
     async fn handle_application_call(
         &mut self,
-        context: &CalleeContext,
+        _context: &CalleeContext,
         argument: &[u8],
         sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
@@ -75,8 +76,14 @@ impl Contract for CrowdFunding {
             bcs::from_bytes(argument).map_err(Error::InvalidCrossApplicationCall)?;
 
         match call {
-            ApplicationCall::Pledge => self.application_pledge(context, sessions).await?,
-            ApplicationCall::DelegatedPledge { transfer } => self.signed_pledge(transfer).await?,
+            ApplicationCall::PledgeWithSessions { source } => {
+                // In real-life applications, the source could be constrained so that a
+                // refund cannot be used as a transfer.
+                self.execute_pledge_with_sessions(source, sessions).await?
+            }
+            ApplicationCall::PledgeWithTransfer { owner, amount } => {
+                self.execute_pledge_with_transfer(owner, amount).await?
+            }
             ApplicationCall::Collect => self.collect_pledges().await?,
             ApplicationCall::Cancel => self.cancel_campaign().await?,
         }
@@ -96,36 +103,21 @@ impl Contract for CrowdFunding {
 }
 
 impl CrowdFunding {
-    /// Adds a pledge from a [`SignedTransfer`].
-    async fn signed_pledge(&mut self, transfer: SignedTransfer) -> Result<(), Error> {
-        let amount = transfer.payload.transfer.amount;
-        let source = AccountOwner::Key(transfer.source);
-
-        ensure!(transfer.payload.transfer.amount > 0, Error::EmptyPledge);
-        ensure!(
-            transfer.payload.token_id == self.parameters().token,
-            Error::IncorrectToken
-        );
-        ensure!(
-            transfer.payload.transfer.destination_chain == system_api::current_chain_id(),
-            Error::IncorrectDestination
-        );
-        ensure!(
-            transfer.payload.transfer.destination_account
-                == AccountOwner::Application(system_api::current_application_id()),
-            Error::IncorrectDestination
-        );
-
-        self.transfer(fungible::ApplicationCall::Delegated(transfer))
-            .await?;
-
-        self.finish_pledge(source, amount).await
+    /// Adds a pledge from a transfer.
+    async fn execute_pledge_with_transfer(
+        &mut self,
+        owner: AccountOwner,
+        amount: Amount,
+    ) -> Result<(), Error> {
+        ensure!(amount > 0, Error::EmptyPledge);
+        self.receive_from_account(owner, amount).await?;
+        self.finish_pledge(owner, amount).await
     }
 
     /// Adds a pledge sent from an application using token sessions.
-    async fn application_pledge(
+    async fn execute_pledge_with_sessions(
         &mut self,
-        context: &CalleeContext,
+        source: AccountOwner,
         sessions: Vec<SessionId>,
     ) -> Result<(), Error> {
         self.check_session_tokens(&sessions)?;
@@ -137,11 +129,6 @@ impl CrowdFunding {
 
         self.collect_session_tokens(sessions, session_balances)
             .await?;
-
-        let source_application = context
-            .authenticated_caller_id
-            .ok_or(Error::MissingSourceApplication)?;
-        let source = AccountOwner::Application(source_application);
 
         self.finish_pledge(source, amount).await
     }
@@ -159,57 +146,47 @@ impl CrowdFunding {
     }
 
     /// Gathers the balances in all the pledged sessions.
-    async fn query_session_balances(&mut self, sessions: &[SessionId]) -> Result<Vec<u128>, Error> {
-        let mut balances = Vec::with_capacity(sessions.len());
+    async fn query_session_balances(
+        &mut self,
+        sessions: &[SessionId],
+    ) -> Result<Vec<Amount>, Error> {
         let balance_query = bcs::to_bytes(&fungible::SessionCall::Balance)
             .map_err(Error::InvalidSessionBalanceQuery)?;
 
+        let mut amounts = Vec::new();
         for session in sessions {
             let (balance_bytes, _) = self
                 .call_session(false, *session, &balance_query, vec![])
                 .await;
-
-            balances
-                .push(u128::from_bcs_bytes(&balance_bytes).map_err(Error::InvalidSessionBalance)?);
+            amounts.push(
+                Amount::from_bcs_bytes(&balance_bytes).map_err(Error::InvalidSessionBalance)?,
+            );
         }
-
-        Ok(balances)
+        Ok(amounts)
     }
 
     /// Collects all tokens in the sessions and places them in custody of the campaign.
     async fn collect_session_tokens(
         &mut self,
         sessions: Vec<SessionId>,
-        balances: Vec<u128>,
+        balances: Vec<Amount>,
     ) -> Result<(), Error> {
-        let destination_account = AccountOwner::Application(system_api::current_application_id());
-        let destination_chain = system_api::current_chain_id();
-
         for (session, balance) in sessions.into_iter().zip(balances) {
-            let transfer = Transfer {
-                destination_account,
-                destination_chain,
-                amount: balance,
-            };
-            let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
-
-            self.call_session(false, session, &transfer_bytes, vec![])
-                .await;
+            self.receive_from_session(session, balance).await?;
         }
-
         Ok(())
     }
 
     /// Marks a pledge in the application state, so that it can be returned if the campaign is
     /// cancelled.
-    async fn finish_pledge(&mut self, source: AccountOwner, amount: u128) -> Result<(), Error> {
+    async fn finish_pledge(&mut self, source: AccountOwner, amount: Amount) -> Result<(), Error> {
         match self.status {
             Status::Active => {
                 *self.pledges.entry(source).or_insert(0) += amount;
 
                 Ok(())
             }
-            Status::Complete => self.send(amount, self.parameters().owner).await,
+            Status::Complete => self.send_to(amount, self.parameters().owner).await,
             Status::Cancelled => Err(Error::Cancelled),
         }
     }
@@ -226,7 +203,7 @@ impl CrowdFunding {
             Status::Cancelled => return Err(Error::Cancelled),
         }
 
-        self.send(total, self.parameters().owner).await?;
+        self.send_to(total, self.parameters().owner).await?;
         self.pledges.clear();
         self.status = Status::Complete;
 
@@ -243,21 +220,20 @@ impl CrowdFunding {
         );
 
         for (pledger, amount) in mem::take(&mut self.pledges) {
-            self.send(amount, pledger).await?;
+            self.send_to(amount, pledger).await?;
         }
 
         let balance = self.balance().await?;
-        self.send(balance, self.parameters().owner).await?;
+        self.send_to(balance, self.parameters().owner).await?;
         self.status = Status::Cancelled;
 
         Ok(())
     }
 
     /// Queries the token application to determine the total amount of tokens in custody.
-    async fn balance(&mut self) -> Result<u128, Error> {
-        let query_bytes = bcs::to_bytes(&fungible::ApplicationCall::Balance)
-            .map_err(Error::InvalidBalanceQuery)?;
-
+    async fn balance(&mut self) -> Result<Amount, Error> {
+        let query_bytes =
+            bcs::to_bytes(&fungible::SessionCall::Balance).map_err(Error::InvalidBalanceQuery)?;
         let (response, _sessions) = self
             .call_application(true, self.parameters().token, &query_bytes, vec![])
             .await;
@@ -266,38 +242,65 @@ impl CrowdFunding {
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
-    async fn send(&mut self, amount: u128, destination: AccountOwner) -> Result<(), Error> {
-        let transfer = ApplicationTransfer::Static(Transfer {
-            destination_account: destination,
-            destination_chain: system_api::current_chain_id(),
+    async fn send_to(&mut self, amount: Amount, owner: AccountOwner) -> Result<(), Error> {
+        let account = Account {
+            chain_id: system_api::current_chain_id(),
+            owner,
+        };
+        let destination = Destination::Account(account);
+        let transfer = fungible::ApplicationCall::Transfer {
+            owner: AccountOwner::Application(system_api::current_application_id()),
             amount,
-        });
-
-        self.transfer(fungible::ApplicationCall::Transfer(transfer))
-            .await
-    }
-
-    /// Calls into the Fungible Token application to execute the `transfer`.
-    async fn transfer(&mut self, transfer: fungible::ApplicationCall) -> Result<(), Error> {
+            destination,
+        };
         let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
-
         self.call_application(true, self.parameters().token, &transfer_bytes, vec![])
             .await;
-
         Ok(())
     }
-}
 
-/// Operations that can be sent to the application.
-#[derive(Deserialize, Serialize)]
-#[allow(clippy::large_enum_variant)]
-pub enum Operation {
-    /// Pledge some tokens to the campaign.
-    Pledge { transfer: SignedTransfer },
-    /// Collect the pledges after the campaign has reached its target.
-    Collect,
-    /// Cancel the campaign and refund all pledges after the campaign has reached its deadline.
-    Cancel,
+    /// Calls into the Fungible Token application to receive tokens from the given account.
+    async fn receive_from_account(
+        &mut self,
+        owner: AccountOwner,
+        amount: Amount,
+    ) -> Result<(), Error> {
+        let account = Account {
+            chain_id: system_api::current_chain_id(),
+            owner: AccountOwner::Application(system_api::current_application_id()),
+        };
+        let destination = Destination::Account(account);
+        let transfer = fungible::ApplicationCall::Transfer {
+            owner,
+            amount,
+            destination,
+        };
+        let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
+        self.call_application(true, self.parameters().token, &transfer_bytes, vec![])
+            .await;
+        Ok(())
+    }
+
+    /// Calls into the Fungible Token application to receive tokens from the given account.
+    async fn receive_from_session(
+        &mut self,
+        session: SessionId,
+        amount: Amount,
+    ) -> Result<(), Error> {
+        let account = Account {
+            chain_id: system_api::current_chain_id(),
+            owner: AccountOwner::Application(system_api::current_application_id()),
+        };
+        let destination = Destination::Account(account);
+        let transfer = fungible::SessionCall::Transfer {
+            amount,
+            destination,
+        };
+        let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
+        self.call_session(false, session, &transfer_bytes, vec![])
+            .await;
+        Ok(())
+    }
 }
 
 /// An error that can occur during the contract execution.

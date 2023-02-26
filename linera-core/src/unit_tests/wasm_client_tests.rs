@@ -11,8 +11,7 @@
 use crate::client::client_tests::{
     MakeMemoryStoreClient, MakeRocksdbStoreClient, StoreBuilder, TestBuilder, ROCKSDB_SEMAPHORE,
 };
-use fungible::{AccountOwner, SignedTransfer, SignedTransferPayload, Transfer};
-use linera_base::data_types::*;
+use linera_base::data_types::{ChainDescription, ChainId, Owner};
 use linera_chain::data_types::OutgoingEffect;
 use linera_execution::{
     system::Balance, ApplicationId, Bytecode, Destination, Effect, Operation, Query, Response,
@@ -21,7 +20,7 @@ use linera_execution::{
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::BTreeMap, iter};
+use std::collections::BTreeMap;
 use test_case::test_case;
 
 #[cfg(feature = "aws")]
@@ -430,31 +429,25 @@ where
     sender.receive_certificate(pub_cert.clone()).await.unwrap();
     sender.process_inbox().await.unwrap();
 
-    let sender_kp = linera_base::crypto::KeyPair::generate();
-    let receiver_kp = linera_base::crypto::KeyPair::generate();
+    let sender_owner =
+        fungible::AccountOwner::User(convert(&Owner::from(sender.key_pair().await?.public()))?);
+    let receiver_owner =
+        fungible::AccountOwner::User(convert(&Owner::from(receiver.key_pair().await?.public()))?);
 
-    let accounts: BTreeMap<AccountOwner, u128> =
-        iter::once((AccountOwner::Key(convert(&sender_kp.public())?), 1_000_000)).collect();
+    let accounts = BTreeMap::from_iter([(sender_owner, 1_000_000 as fungible::Amount)]);
     let initial_value_bytes = bcs::to_bytes(&accounts)?;
     let (application_id, _cert) = sender
         .create_application(bytecode_id, vec![], initial_value_bytes, vec![])
         .await?;
 
     // Make a transfer using the fungible app.
-    let mut payload = SignedTransferPayload {
-        token_id: convert(&application_id)?,
-        source_chain: convert(&sender.chain_id())?,
-        nonce: Default::default(),
-        transfer: Transfer {
-            destination_account: AccountOwner::Key(convert(&receiver_kp.public())?),
-            destination_chain: convert(&receiver.chain_id())?,
-            amount: 100,
+    let transfer = fungible::Operation::Transfer {
+        owner: sender_owner,
+        amount: 100,
+        target_account: fungible::Account {
+            chain_id: convert(&receiver.chain_id())?,
+            owner: receiver_owner,
         },
-    };
-    let transfer = SignedTransfer {
-        source: convert(&sender_kp.public())?,
-        signature: convert(&linera_base::crypto::Signature::new(&payload, &sender_kp))?,
-        payload: payload.clone(),
     };
     let cert = sender
         .execute_operation(
@@ -491,12 +484,13 @@ where
             && msg.application_id == ApplicationId::User(application_id)));
 
     // Make another transfer.
-    payload.nonce = payload.nonce.next().unwrap();
-    payload.transfer.amount = 200;
-    let transfer = SignedTransfer {
-        source: convert(&sender_kp.public())?,
-        signature: convert(&linera_base::crypto::Signature::new(&payload, &sender_kp))?,
-        payload,
+    let transfer = fungible::Operation::Transfer {
+        owner: sender_owner,
+        amount: 200,
+        target_account: fungible::Account {
+            chain_id: convert(&receiver.chain_id())?,
+            owner: receiver_owner,
+        },
     };
     let cert = sender
         .execute_operation(
@@ -520,5 +514,41 @@ where
         .iter()
         .any(|msg| matches!(&msg.event.effect, Effect::User(_))
             && msg.application_id == ApplicationId::User(application_id)));
+
+    // Try another transfer in the other direction except that the amount is too large.
+    let transfer = fungible::Operation::Transfer {
+        owner: receiver_owner,
+        amount: 301,
+        target_account: fungible::Account {
+            chain_id: convert(&sender.chain_id())?,
+            owner: sender_owner,
+        },
+    };
+    assert!(receiver
+        .execute_operation(
+            ApplicationId::User(application_id),
+            Operation::User(bcs::to_bytes(&transfer)?),
+        )
+        .await
+        .is_err());
+    receiver.clear_pending_block().await;
+
+    // Try another transfer in the other direction with the correct amount.
+    let transfer = fungible::Operation::Transfer {
+        owner: receiver_owner,
+        amount: 300,
+        target_account: fungible::Account {
+            chain_id: convert(&sender.chain_id())?,
+            owner: sender_owner,
+        },
+    };
+    receiver
+        .execute_operation(
+            ApplicationId::User(application_id),
+            Operation::User(bcs::to_bytes(&transfer)?),
+        )
+        .await
+        .unwrap();
+
     Ok(())
 }
