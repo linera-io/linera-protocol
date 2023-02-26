@@ -13,9 +13,6 @@ pub mod common;
 /// The main definitions.
 pub mod views;
 
-/// Wrapping a view to compute a hash
-pub mod hashable_wrapper;
-
 /// The register_view
 pub mod register_view;
 
@@ -56,6 +53,10 @@ pub mod dynamo_db;
 /// Helper types for interfacing with a LocalStack instance.
 #[cfg(feature = "aws")]
 pub mod localstack;
+
+/// Wrapping a view to compute a hash
+#[cfg(not(target_arch = "wasm32"))]
+pub mod hashable_wrapper;
 
 /// Helper types for tests.
 #[cfg(any(test, feature = "test"))]
