@@ -24,11 +24,9 @@ impl Service for FungibleToken {
         argument: &[u8],
     ) -> Result<Vec<u8>, Self::Error> {
         let account = bcs::from_bytes(argument)?;
-
-        Ok(
-            bcs::to_bytes(&self.balance(&account))
-                .expect("Serialization of `u128` should not fail"),
-        )
+        let bytes = bcs::to_bytes(&self.balance(&account))
+            .expect("Serialization of amounts should not fail");
+        Ok(bytes)
     }
 }
 

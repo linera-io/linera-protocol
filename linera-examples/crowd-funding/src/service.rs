@@ -5,10 +5,10 @@
 
 mod state;
 
-use self::state::CrowdFunding;
 use async_trait::async_trait;
-use linera_sdk::{QueryContext, Service, SimpleStateStorage};
-use serde::Deserialize;
+use crowd_funding::Query;
+use linera_sdk::{Amount, QueryContext, Service, SimpleStateStorage};
+use state::CrowdFunding;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -40,24 +40,9 @@ impl Service for CrowdFunding {
 
 impl CrowdFunding {
     /// Returns the total amount of tokens pledged to this campaign.
-    fn pledged(&self) -> u128 {
+    fn pledged(&self) -> Amount {
         self.pledges.values().sum()
     }
-}
-
-/// Queries that can be made to the [`CrowdFunding`] application service.
-#[derive(Clone, Copy, Debug, Deserialize)]
-pub enum Query {
-    /// The current [`Status`] of the crowd-funding campaign.
-    Status,
-    /// The total amount pledged to the crowd-funding campaign.
-    Pledged,
-    /// The crowd-funding campaign's target.
-    Target,
-    /// The crowd-funding campaign's deadline.
-    Deadline,
-    /// The recipient of the pledged amount.
-    Owner,
 }
 
 /// An error that can occur during the service execution.

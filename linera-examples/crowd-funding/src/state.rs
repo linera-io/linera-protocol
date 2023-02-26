@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fungible::AccountOwner;
-use linera_sdk::{ApplicationId, Timestamp};
+use linera_sdk::{Amount, ApplicationId, Timestamp};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -16,7 +16,7 @@ pub struct Parameters {
     /// The deadline of the campaign, after which it can be cancelled if it hasn't met its target.
     pub deadline: Timestamp,
     /// The funding target of the campaign.
-    pub target: u128,
+    pub target: Amount,
 }
 
 /// The status of a crowd-funding campaign.
@@ -37,7 +37,7 @@ pub struct CrowdFunding {
     /// The status of the campaign.
     pub status: Status,
     /// The map of pledges that will be collected if the campaign succeeds.
-    pub pledges: BTreeMap<AccountOwner, u128>,
+    pub pledges: BTreeMap<AccountOwner, Amount>,
     /// The parameters that determine the details the campaign.
     pub parameters: Option<Parameters>,
 }
