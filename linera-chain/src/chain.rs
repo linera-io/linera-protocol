@@ -21,7 +21,6 @@ use linera_execution::{
 use linera_views::{
     collection_view::CollectionView,
     common::Context,
-    hashable_wrapper::WrappedHashableContainerView,
     log_view::LogView,
     register_view::RegisterView,
     set_view::SetView,
@@ -34,11 +33,7 @@ use std::collections::{BTreeMap, HashSet};
 #[derive(Debug, RootView, GraphQLView)]
 pub struct ChainStateView<C> {
     /// Execution state, including system and user applications.
-    pub execution_state: WrappedHashableContainerView<
-        C,
-        ExecutionStateView<C>,
-        <linera_views::sha2::Sha512 as linera_views::views::Hasher>::Output,
-    >,
+    pub execution_state: ExecutionStateView<C>,
     /// Hash of the execution state.
     pub execution_state_hash: RegisterView<C, Option<CryptoHash>>,
 
