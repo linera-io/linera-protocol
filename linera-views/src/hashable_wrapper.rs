@@ -1,13 +1,10 @@
 use crate::{
     common::{Batch, Context},
-    generic_array::GenericArray,
-    sha2::{Digest, Sha512},
-    views::{CryptoHashView, HashableView, Hasher, View, ViewError},
+    views::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
-use linera_base::crypto::{BcsHashable, CryptoHash};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use std::ops::{Deref, DerefMut};
 
 /// A hash for ContainerView and storing of the hash for memoization purposes
@@ -117,24 +114,6 @@ where
                 Ok(new_hash)
             }
         }
-    }
-}
-
-#[async_trait]
-impl<C, W> CryptoHashView<C>
-    for WrappedHashableContainerView<C, W, GenericArray<u8, <Sha512 as Digest>::OutputSize>>
-where
-    C: Context + Send + Sync,
-    ViewError: From<C::Error>,
-    W: HashableView<C> + Send + Sync,
-    W::Hasher: Hasher<Output = GenericArray<u8, <Sha512 as Digest>::OutputSize>>,
-{
-    async fn crypto_hash(&self) -> Result<CryptoHash, ViewError> {
-        #[derive(Serialize, Deserialize)]
-        struct Wrappable(GenericArray<u8, <Sha512 as Digest>::OutputSize>);
-        impl BcsHashable for Wrappable {}
-        let hash = self.inner.hash().await?;
-        Ok(CryptoHash::new(&Wrappable(hash)))
     }
 }
 
