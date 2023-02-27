@@ -8,7 +8,10 @@ use crate::{
 use async_lock::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{fmt::Debug, ops::Range};
+use std::{
+    fmt::Debug,
+    ops::{Bound, Range, RangeBounds},
+};
 
 /// Key tags to create the sub-keys of a LogView on top of the base key.
 #[repr(u8)]
@@ -163,38 +166,47 @@ where
         Ok(values)
     }
     /// Read the logged values in the given range (including staged ones).
-    pub async fn read(&self, mut range: Range<usize>) -> Result<Vec<T>, ViewError> {
+    pub async fn read<R>(&self, range: R) -> Result<Vec<T>, ViewError>
+    where
+        R: RangeBounds<usize>,
+    {
         let effective_stored_count = if self.was_cleared {
             0
         } else {
             self.stored_count
         };
-        if range.end > self.count() {
-            range.end = self.count();
+        let end = match range.end_bound() {
+            Bound::Included(end) => *end + 1,
+            Bound::Excluded(end) => *end,
+            Bound::Unbounded => self.count(),
         }
-        if range.start >= range.end {
+        .min(self.count());
+        let start = match range.start_bound() {
+            Bound::Included(start) => *start,
+            Bound::Excluded(start) => *start + 1,
+            Bound::Unbounded => 0,
+        };
+        if start >= end {
             return Ok(Vec::new());
         }
-        let mut values = Vec::new();
-        values.reserve(range.end - range.start);
-        if range.start < effective_stored_count {
-            if range.end <= effective_stored_count {
-                values.extend(self.read_context(range.start..range.end).await?);
+        if start < effective_stored_count {
+            if end <= effective_stored_count {
+                self.read_context(start..end).await
             } else {
+                let mut values = self.read_context(start..effective_stored_count).await?;
                 values.extend(
-                    self.read_context(range.start..effective_stored_count)
-                        .await?,
+                    self.new_values[0..(end - effective_stored_count)]
+                        .iter()
+                        .cloned(),
                 );
-                values.extend(self.new_values[0..(range.end - effective_stored_count)].to_vec());
+                Ok(values)
             }
         } else {
-            values.extend(
-                self.new_values
-                    [(range.start - effective_stored_count)..(range.end - effective_stored_count)]
+            Ok(
+                self.new_values[(start - effective_stored_count)..(end - effective_stored_count)]
                     .to_vec(),
-            );
+            )
         }
-        Ok(values)
     }
 
     async fn compute_hash(&self) -> Result<<sha2::Sha512 as Hasher>::Output, ViewError> {
