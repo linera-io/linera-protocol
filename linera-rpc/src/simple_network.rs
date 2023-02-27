@@ -210,7 +210,12 @@ where
                 }
                 RpcMessage::ChainInfoQuery(message) => {
                     match self.server.state.handle_chain_info_query(*message).await {
-                        Ok(info) => Ok(Some(info.into())),
+                        Ok((info, actions)) => {
+                            // Cross-shard requests
+                            self.handle_network_actions(actions).await;
+                            // Response
+                            Ok(Some(info.into()))
+                        }
                         Err(error) => Err(error.into()),
                     }
                 }

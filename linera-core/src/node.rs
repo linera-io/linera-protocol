@@ -321,7 +321,8 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let response = self
+        // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
+        let (response, _actions) = self
             .node
             .clone()
             .lock()
