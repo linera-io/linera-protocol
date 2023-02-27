@@ -694,9 +694,9 @@ where
         log::trace!("{} <-- {:?}", self.nickname, proposal);
         let BlockProposal {
             content: BlockAndRound { block, round },
-            blobs,
             owner,
             signature,
+            blobs,
         } = &proposal;
         let chain_id = block.chain_id;
         let mut chain = self.storage.load_active_chain(chain_id).await?;

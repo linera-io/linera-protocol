@@ -180,8 +180,8 @@ impl ClientContext {
                     block: block.clone(),
                     round: RoundNumber::default(),
                 },
-                vec![],
                 key_pair,
+                vec![],
             );
             proposals.push(proposal.into());
             if proposals.len() >= max_proposals {

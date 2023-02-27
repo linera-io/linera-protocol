@@ -826,8 +826,8 @@ where
                 block,
                 round: next_round,
             },
-            blobs,
             key_pair,
+            blobs,
         );
         // Try to execute the block locally first.
         self.node_client
