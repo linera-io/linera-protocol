@@ -33,7 +33,7 @@ use linera_storage::Store;
 use linera_views::views::ViewError;
 use log::info;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap},
     sync::Arc,
     time::Duration,
 };
@@ -785,39 +785,15 @@ where
         // Remember what we are trying to do
         self.pending_block = Some(block.clone());
         // Collect blobs required for execution.
-        let bytecodes: HashSet<_> = block
-            .incoming_messages
-            .iter()
-            .flat_map(|message| {
-                if let Effect::System(SystemEffect::RegisterApplications { applications }) =
-                    &message.event.effect
-                {
-                    Some(
-                        applications
-                            .iter()
-                            .map(|app| (app.bytecode_location, message.origin.sender)),
-                    )
-                } else {
-                    None
-                }
-            })
-            .flatten()
-            .collect();
         let committee = self.local_committee().await?;
         let nodes = self.make_validator_nodes(&committee).await?;
         let mut blobs = vec![];
-        for (location, chain_id) in bytecodes {
-            let storage = self.node_client.storage_client().await;
-            if let Ok(blob) = storage.read_value(location.certificate_hash).await {
-                blobs.push(blob);
-            } else if let Some(blob) = self
-                .node_client
-                .download_blob(nodes.clone(), chain_id, location)
-                .await
-            {
-                storage.write_value(blob.clone()).await?;
-                blobs.push(blob);
-            }
+        for (app, chain_id) in block.registered_applications() {
+            blobs.extend(
+                self.node_client
+                    .read_or_download_blob(nodes.clone(), chain_id, app.bytecode_location)
+                    .await?,
+            );
         }
         // Build the initial query.
         let key_pair = self.key_pair().await?;

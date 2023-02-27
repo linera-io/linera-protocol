@@ -68,13 +68,13 @@ BlockProposal:
   STRUCT:
     - content:
         TYPENAME: BlockAndRound
-    - blobs:
-        SEQ:
-          TYPENAME: Value
     - owner:
         TYPENAME: Owner
     - signature:
         TYPENAME: Signature
+    - blobs:
+        SEQ:
+          TYPENAME: Value
 Bytecode:
   STRUCT:
     - bytes: BYTES

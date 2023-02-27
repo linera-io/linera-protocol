@@ -464,7 +464,7 @@ where
         // Persist certificate.
         self.storage.write_certificate(certificate.clone()).await?;
         // Execute the block and update inboxes.
-        chain.remove_events(block).await?;
+        chain.remove_events_from_inboxes(block).await?;
         let verified_effects = chain.execute_block(block).await?;
         ensure!(
             *certificate.value.effects() == verified_effects,
@@ -737,7 +737,9 @@ where
                 NetworkActions::default(),
             ));
         }
-        chain.remove_events(block).await?;
+        // Update the inboxes so that we can verify the provided blobs are legitimately required.
+        // Actual execution happens below, after other validity checks.
+        chain.remove_events_from_inboxes(block).await?;
         ensure_blobs_are_required::<Client>(&chain, block, blobs).await?;
         // Write the values so that the bytecode is available during execution.
         for value in blobs {

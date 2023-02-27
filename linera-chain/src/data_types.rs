@@ -75,7 +75,7 @@ impl Block {
         // The applications that get registered in this block.
         let registered_apps = self
             .registered_applications()
-            .map(|app| (UserApplicationId::from(app), app.clone()))
+            .map(|(app, _)| (UserApplicationId::from(app), app.clone()))
             .collect();
         // The bytecode locations for applications required for operations or incoming messages.
         let required_locations = registry
@@ -89,14 +89,16 @@ impl Block {
         Ok(required_locations.chain(created_app_locations).collect())
     }
 
-    fn registered_applications(&self) -> impl Iterator<Item = &UserApplicationDescription> {
+    pub fn registered_applications(
+        &self,
+    ) -> impl Iterator<Item = (&UserApplicationDescription, ChainId)> {
         self.incoming_messages
             .iter()
             .filter_map(|message| {
                 if let Effect::System(SystemEffect::RegisterApplications { applications }) =
                     &message.event.effect
                 {
-                    Some(applications)
+                    Some(applications.iter().map(|app| (app, message.origin.sender)))
                 } else {
                     None
                 }
