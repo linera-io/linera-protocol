@@ -183,7 +183,8 @@ where
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.0.lock().await;
         let result = validator.state.handle_chain_info_query(query).await;
-        sender.send(result.map_err(Into::into))
+        // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
+        sender.send(result.map_err(Into::into).map(|(info, _actions)| info))
     }
 }
 

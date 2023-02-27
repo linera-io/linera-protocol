@@ -71,7 +71,7 @@ pub trait ValidatorWorker {
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
-    ) -> Result<ChainInfoResponse, WorkerError>;
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
     /// Handle a (trusted!) cross-chain request.
     async fn handle_cross_chain_request(
@@ -803,7 +803,7 @@ where
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
-    ) -> Result<ChainInfoResponse, WorkerError> {
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, query);
         let mut chain = self.storage.load_chain(query.chain_id).await?;
         let mut info = ChainInfo::from(&chain);
@@ -864,7 +864,9 @@ where
         }
         let response = ChainInfoResponse::new(info, self.key_pair());
         log::trace!("{} --> {:?}", self.nickname, response);
-        Ok(response)
+        // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
+        let actions = self.create_network_actions(&mut chain).await?;
+        Ok((response, actions))
     }
 
     async fn handle_cross_chain_request(

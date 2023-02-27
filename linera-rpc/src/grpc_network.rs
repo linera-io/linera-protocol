@@ -415,17 +415,18 @@ where
             "server handler [handle_chain_info_query] received delegating request [{:?}]",
             request
         );
-        Ok(Response::new(
-            match self
-                .state
-                .clone()
-                .handle_chain_info_query(request.into_inner().try_into()?)
-                .await
-            {
-                Ok(chain_info_response) => chain_info_response.try_into()?,
-                Err(error) => NodeError::from(error).try_into()?,
-            },
-        ))
+        match self
+            .state
+            .clone()
+            .handle_chain_info_query(request.into_inner().try_into()?)
+            .await
+        {
+            Ok((info, actions)) => {
+                self.handle_network_actions(actions).await;
+                Ok(Response::new(info.try_into()?))
+            }
+            Err(error) => Ok(Response::new(NodeError::from(error).try_into()?)),
+        }
     }
 
     async fn handle_cross_chain_request(
