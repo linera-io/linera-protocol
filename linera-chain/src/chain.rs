@@ -46,11 +46,17 @@ pub struct ChainStateView<C> {
     /// Hashes of all certified blocks for this sender.
     /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
     pub confirmed_log: LogView<C, CryptoHash>,
-    /// Hashes of all certified blocks known as a receiver (local ordering).
-    pub received_log: LogView<C, CryptoHash>,
+    /// Sender chain and height of all certified blocks known as a receiver (local ordering).
+    pub received_log: LogView<C, ChainAndHeight>,
 
     /// Communication state of applications.
     pub communication_states: CollectionView<C, ApplicationId, CommunicationStateView<C>>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, SimpleObject)]
+pub struct ChainAndHeight {
+    pub chain_id: ChainId,
+    pub height: BlockHeight,
 }
 
 /// Block-chaining state.
@@ -299,7 +305,10 @@ where
             })?;
         }
         // Remember the certificate for future validator/client synchronizations.
-        self.received_log.push(certificate_hash);
+        self.received_log.push(ChainAndHeight {
+            chain_id: origin.sender,
+            height,
+        });
         Ok(())
     }
 
@@ -335,14 +344,6 @@ where
                 self.manager
                     .get_mut()
                     .reset(self.execution_state.system.ownership.get());
-            }
-            Effect::System(SystemEffect::RegisterApplications { applications }) => {
-                // Nothing to execute but need to track the dependency to the bytecodes of
-                // the applications.
-                for application in applications {
-                    self.received_log
-                        .push(application.bytecode_location.certificate_hash);
-                }
             }
             _ => (),
         }

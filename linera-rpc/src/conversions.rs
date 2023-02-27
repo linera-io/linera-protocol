@@ -495,8 +495,8 @@ impl TryFrom<grpc::ChainInfoQuery> for ChainInfoQuery {
             request_sent_certificates_in_range: map_invert!(
                 chain_info_query.request_sent_certificates_in_range
             ),
-            request_received_certificates_excluding_first_nth: map_as!(
-                chain_info_query.request_received_certificates_excluding_first_nth,
+            request_received_log_excluding_first_nth: map_as!(
+                chain_info_query.request_received_log_excluding_first_nth,
                 usize
             ),
             test_next_block_height: map_into!(chain_info_query.test_next_block_height),
@@ -518,8 +518,8 @@ impl TryFrom<ChainInfoQuery> for grpc::ChainInfoQuery {
         let request_sent_certificates_in_range =
             map_into!(chain_info_query.request_sent_certificates_in_range);
 
-        let request_received_certificates_excluding_first_nth = map_as!(
-            chain_info_query.request_received_certificates_excluding_first_nth,
+        let request_received_log_excluding_first_nth = map_as!(
+            chain_info_query.request_received_log_excluding_first_nth,
             u64
         );
 
@@ -529,7 +529,7 @@ impl TryFrom<ChainInfoQuery> for grpc::ChainInfoQuery {
             request_pending_messages: chain_info_query.request_pending_messages,
             test_next_block_height,
             request_sent_certificates_in_range,
-            request_received_certificates_excluding_first_nth,
+            request_received_log_excluding_first_nth,
             request_manager_values: chain_info_query.request_manager_values,
             request_blob: chain_info_query
                 .request_blob
@@ -932,8 +932,8 @@ pub mod tests {
             requested_committees: None,
             requested_pending_messages: vec![],
             requested_sent_certificates: vec![],
-            count_received_certificates: 0,
-            requested_received_certificates: vec![],
+            count_received_log: 0,
+            requested_received_log: vec![],
             requested_blob: None,
         };
 
@@ -966,7 +966,7 @@ pub mod tests {
                 start: BlockHeight::from(3),
                 limit: Some(5),
             }),
-            request_received_certificates_excluding_first_nth: None,
+            request_received_log_excluding_first_nth: None,
             request_manager_values: false,
             request_blob: None,
         };

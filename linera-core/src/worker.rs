@@ -889,10 +889,14 @@ where
             let certs = self.storage.read_certificates(keys).await?;
             info.requested_sent_certificates = certs;
         }
-        if let Some(start) = query.request_received_certificates_excluding_first_nth {
-            let keys = chain.received_log.read(start..).await?;
-            let certs = self.storage.read_certificates(keys).await?;
-            info.requested_received_certificates = certs;
+        if let Some(start) = query.request_received_log_excluding_first_nth {
+            info.requested_received_log = chain
+                .received_log
+                .read(start..)
+                .await?
+                .into_iter()
+                .map(|cah| (cah.chain_id, cah.height))
+                .collect();
         }
         if let Some(hash) = query.request_blob {
             info.requested_blob = Some(self.storage.read_value(hash).await?);

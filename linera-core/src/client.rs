@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_types::{ChainInfo, ChainInfoQuery},
+    data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery},
     node::{LocalNodeClient, NodeError, NotificationStream, ValidatorNode},
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::WorkerState,
@@ -600,13 +600,25 @@ where
                 Box::pin(async move {
                     // Retrieve newly received certificates from this validator.
                     let query = ChainInfoQuery::new(chain_id)
-                        .with_received_certificates_excluding_first_nth(tracker);
+                        .with_received_log_excluding_first_nth(tracker);
                     let response = client.handle_chain_info_query(query).await?;
                     // Responses are authenticated for accountability.
                     response.check(name)?;
                     let mut certificates = Vec::new();
                     let mut new_tracker = tracker;
-                    for certificate in response.info.requested_received_certificates {
+                    for (chain_id, height) in response.info.requested_received_log {
+                        let query = ChainInfoQuery::new(chain_id).with_sent_certificates_in_range(
+                            BlockHeightRange {
+                                start: height,
+                                limit: Some(1),
+                            },
+                        );
+
+                        let mut response = client.handle_chain_info_query(query).await?;
+                        let Some(certificate) = response.info
+                            .requested_sent_certificates.pop() else {
+                            break;
+                        };
                         if !certificate.value.is_confirmed() {
                             return Err(NodeError::InvalidChainInfoResponse);
                         };

@@ -45,8 +45,8 @@ pub struct ChainInfoQuery {
     pub request_pending_messages: bool,
     /// Query a range of certificates sent from the chain.
     pub request_sent_certificates_in_range: Option<BlockHeightRange>,
-    /// Query new certificates received from the chain.
-    pub request_received_certificates_excluding_first_nth: Option<usize>,
+    /// Query new certificate sender chain IDs and block heights received from the chain.
+    pub request_received_log_excluding_first_nth: Option<usize>,
     /// Query values from the chain manager, not just votes.
     pub request_manager_values: bool,
     /// Query a value that contains a binary blob (e.g. bytecode) required by this chain.
@@ -61,7 +61,7 @@ impl ChainInfoQuery {
             request_committees: false,
             request_pending_messages: false,
             request_sent_certificates_in_range: None,
-            request_received_certificates_excluding_first_nth: None,
+            request_received_log_excluding_first_nth: None,
             request_manager_values: false,
             request_blob: None,
         }
@@ -87,8 +87,8 @@ impl ChainInfoQuery {
         self
     }
 
-    pub fn with_received_certificates_excluding_first_nth(mut self, n: usize) -> Self {
-        self.request_received_certificates_excluding_first_nth = Some(n);
+    pub fn with_received_log_excluding_first_nth(mut self, n: usize) -> Self {
+        self.request_received_log_excluding_first_nth = Some(n);
         self
     }
 
@@ -130,10 +130,10 @@ pub struct ChainInfo {
     pub requested_pending_messages: Vec<Message>,
     /// The response to `request_sent_certificates_in_range`
     pub requested_sent_certificates: Vec<Certificate>,
-    /// The current number of received certificates (useful for `request_received_certificates_excluding_first_nth`)
-    pub count_received_certificates: usize,
+    /// The current number of received certificates (useful for `request_received_log_excluding_first_nth`)
+    pub count_received_log: usize,
     /// The response to `request_received_certificates_excluding_first_nth`
-    pub requested_received_certificates: Vec<Certificate>,
+    pub requested_received_log: Vec<(ChainId, BlockHeight)>,
     /// The requested blob, if any.
     pub requested_blob: Option<HashedValue>,
 }
@@ -200,8 +200,8 @@ where
             requested_committees: None,
             requested_pending_messages: Vec::new(),
             requested_sent_certificates: Vec::new(),
-            count_received_certificates: view.received_log.count(),
-            requested_received_certificates: Vec::new(),
+            count_received_log: view.received_log.count(),
+            requested_received_log: Vec::new(),
             requested_blob: None,
         }
     }
