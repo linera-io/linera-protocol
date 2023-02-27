@@ -350,7 +350,7 @@ where
     }
 
     /// Removes the incoming messages in the block from the inboxes.
-    pub async fn remove_events(&mut self, block: &Block) -> Result<(), ChainError> {
+    pub async fn remove_events_from_inboxes(&mut self, block: &Block) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         for message in &block.incoming_messages {
             log::trace!(

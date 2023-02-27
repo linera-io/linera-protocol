@@ -503,6 +503,27 @@ where
         }
     }
 
+    /// If the blob is in local storage, returns it. Otherwise downloads and stores it.
+    pub async fn read_or_download_blob<A>(
+        &mut self,
+        validators: Vec<(ValidatorName, A)>,
+        chain_id: ChainId,
+        location: BytecodeLocation,
+    ) -> Result<Option<HashedValue>, NodeError>
+    where
+        A: ValidatorNode + Send + Sync + 'static + Clone,
+    {
+        let storage = self.storage_client().await;
+        if let Ok(blob) = storage.read_value(location.certificate_hash).await {
+            return Ok(Some(blob));
+        }
+        if let Some(blob) = self.download_blob(validators, chain_id, location).await {
+            storage.write_value(blob.clone()).await?;
+            return Ok(Some(blob));
+        }
+        Ok(None)
+    }
+
     pub async fn download_blob<A>(
         &mut self,
         mut validators: Vec<(ValidatorName, A)>,
