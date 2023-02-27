@@ -22,6 +22,7 @@ metrics = { version = "0.20.1", optional = true }
 serde = { version = "1.0.130", features = ["derive"] }
 sha3 = "0.10.6"
 thiserror = "1.0.31"
+linked-hash-map = "0.5.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 linera-base = { path = "../linera-base" }
