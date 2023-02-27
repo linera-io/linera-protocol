@@ -1338,7 +1338,8 @@ where
         None,
     );
 
-    let chain_info_response = worker.handle_block_proposal(block_proposal).await.unwrap();
+    let (chain_info_response, _actions) =
+        worker.handle_block_proposal(block_proposal).await.unwrap();
     chain_info_response
         .check(ValidatorName(worker.key_pair.unwrap().public()))
         .unwrap();
@@ -1414,7 +1415,7 @@ where
         None,
     );
 
-    let response = worker
+    let (response, _actions) = worker
         .handle_block_proposal(block_proposal.clone())
         .await
         .unwrap();
@@ -1422,7 +1423,7 @@ where
         .check(ValidatorName(worker.key_pair.as_ref().unwrap().public()))
         .as_ref()
         .unwrap();
-    let replay_response = worker.handle_block_proposal(block_proposal).await.unwrap();
+    let (replay_response, _actions) = worker.handle_block_proposal(block_proposal).await.unwrap();
     // Workaround lack of equality.
     assert_eq!(
         CryptoHash::new(&response.info),

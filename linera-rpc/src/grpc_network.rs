@@ -333,7 +333,10 @@ where
                 .handle_block_proposal(request.into_inner().try_into()?)
                 .await
             {
-                Ok(chain_info_response) => chain_info_response.try_into()?,
+                Ok((info, actions)) => {
+                    self.handle_network_actions(actions).await;
+                    info.try_into()?
+                }
                 Err(error) => NodeError::from(error).try_into()?,
             },
         ))

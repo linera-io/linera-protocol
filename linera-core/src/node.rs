@@ -260,7 +260,8 @@ where
     ) -> Result<ChainInfoResponse, NodeError> {
         let node = self.node.clone();
         let mut node = node.lock().await;
-        let response = node.state.handle_block_proposal(proposal).await?;
+        // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
+        let (response, _actions) = node.state.handle_block_proposal(proposal).await?;
         Ok(response)
     }
 
