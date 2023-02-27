@@ -139,7 +139,8 @@ where
         } else {
             validator.state.handle_block_proposal(proposal).await
         };
-        sender.send(result.map_err(Into::into))
+        // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
+        sender.send(result.map_err(Into::into).map(|(info, _actions)| info))
     }
 
     async fn do_handle_lite_certificate(

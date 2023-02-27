@@ -182,7 +182,12 @@ where
             let reply = match message {
                 RpcMessage::BlockProposal(message) => {
                     match self.server.state.handle_block_proposal(*message).await {
-                        Ok(info) => Ok(Some(info.into())),
+                        Ok((info, actions)) => {
+                            // Cross-shard requests
+                            self.handle_network_actions(actions).await;
+                            // Response
+                            Ok(Some(info.into()))
+                        }
                         Err(error) => Err(error.into()),
                     }
                 }

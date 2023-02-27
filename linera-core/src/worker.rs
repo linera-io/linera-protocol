@@ -52,7 +52,7 @@ pub trait ValidatorWorker {
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
-    ) -> Result<ChainInfoResponse, WorkerError>;
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
     /// Process a certificate, e.g. to extend a chain with a confirmed block.
     async fn handle_lite_certificate(
@@ -674,7 +674,7 @@ where
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
-    ) -> Result<ChainInfoResponse, WorkerError> {
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         log::trace!("{} <-- {:?}", self.nickname, proposal);
         let chain_id = proposal.content.block.chain_id;
         let mut chain = self.storage.load_active_chain(chain_id).await?;
@@ -712,7 +712,10 @@ where
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.
-            return Ok(ChainInfoResponse::new(&chain, self.key_pair()));
+            return Ok((
+                ChainInfoResponse::new(&chain, self.key_pair()),
+                NetworkActions::default(),
+            ));
         }
         let time_till_block = proposal
             .content
@@ -745,7 +748,9 @@ where
         }
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
-        Ok(info)
+        // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
+        let actions = self.create_network_actions(&mut chain).await?;
+        Ok((info, actions))
     }
 
     /// Process a certificate, e.g. to extend a chain with a confirmed block.
