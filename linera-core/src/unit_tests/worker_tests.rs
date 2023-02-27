@@ -171,8 +171,8 @@ fn make_transfer_block_proposal(
             block,
             round: RoundNumber::default(),
         },
-        vec![],
         key_pair,
+        vec![],
     )
 }
 
@@ -501,8 +501,8 @@ where
                 block,
                 round: RoundNumber::default(),
             },
-            vec![],
             &key_pair,
+            vec![],
         )
     };
 
@@ -606,7 +606,7 @@ where
     let unknown_key = KeyPair::generate();
 
     let unknown_sender_block_proposal =
-        BlockProposal::new(block_proposal.content, vec![], &unknown_key);
+        BlockProposal::new(block_proposal.content, &unknown_key, vec![]);
     assert!(worker
         .handle_block_proposal(unknown_sender_block_proposal)
         .await

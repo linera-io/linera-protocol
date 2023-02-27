@@ -213,9 +213,9 @@ pub enum Medium {
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct BlockProposal {
     pub content: BlockAndRound,
-    pub blobs: Vec<HashedValue>,
     pub owner: Owner,
     pub signature: Signature,
+    pub blobs: Vec<HashedValue>,
 }
 
 /// An effect together with routing information.
@@ -510,13 +510,13 @@ impl HashedValue {
 }
 
 impl BlockProposal {
-    pub fn new(content: BlockAndRound, blobs: Vec<HashedValue>, secret: &KeyPair) -> Self {
+    pub fn new(content: BlockAndRound, secret: &KeyPair, blobs: Vec<HashedValue>) -> Self {
         let signature = Signature::new(&content, secret);
         Self {
             content,
-            blobs,
             owner: Owner(secret.public()),
             signature,
+            blobs,
         }
     }
 }
