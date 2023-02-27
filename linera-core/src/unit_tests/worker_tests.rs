@@ -2393,13 +2393,13 @@ where
         );
         assert_eq!(recipient_chain.received_log.count(), 1);
     }
-    let query =
-        ChainInfoQuery::new(ChainId::root(2)).with_received_certificates_excluding_first_nth(0);
+    let query = ChainInfoQuery::new(ChainId::root(2)).with_received_log_excluding_first_nth(0);
     let (response, _actions) = worker.handle_chain_info_query(query).await.unwrap();
-    assert_eq!(response.info.requested_received_certificates.len(), 1);
-    assert!(matches!(
-        response.info.requested_received_certificates[0].value.block().operations[..],
-        [(_, Operation::System(SystemOperation::Transfer { amount, .. }))] if amount == Amount::from(5)));
+    assert_eq!(response.info.requested_received_log.len(), 1);
+    assert_eq!(
+        response.info.requested_received_log[0],
+        (ChainId::root(1), BlockHeight::from(0))
+    );
 }
 
 #[test(tokio::test)]
