@@ -106,8 +106,8 @@ impl WasmApplication {
 
         let module = Module::new(&engine, &self.service_bytecode)?;
         let context_forwarder = ContextForwarder::default();
-        let (future_queue, queued_future_factory) = HostFutureQueue::new();
-        let state = ServiceState::new(storage, context_forwarder.clone(), queued_future_factory);
+        let (future_queue, _queued_future_factory) = HostFutureQueue::new();
+        let state = ServiceState::new(storage, context_forwarder.clone());
         let mut store = Store::new(&engine, state);
         let (service, _instance) =
             service::Service::instantiate(&mut store, &module, &mut linker, ServiceState::data)?;
@@ -138,10 +138,11 @@ pub struct ServiceState<'storage> {
 }
 
 /// Type alias of the system API exported to contracts.
-type ContractSystemApi<'storage> = SystemApi<'storage, &'storage dyn WritableStorage>;
+type ContractSystemApi<'storage> =
+    SystemApi<&'storage dyn WritableStorage, QueuedHostFutureFactory<'storage>>;
 
 /// Type alias of the system API exported to services.
-type ServiceSystemApi<'storage> = SystemApi<'storage, &'storage dyn QueryableStorage>;
+type ServiceSystemApi<'storage> = SystemApi<&'storage dyn QueryableStorage, ()>;
 
 impl<'storage> ContractState<'storage> {
     /// Create a new instance of [`ContractState`].
@@ -181,14 +182,10 @@ impl<'storage> ServiceState<'storage> {
     ///
     /// Uses `storage` to export the system API, and the `context` to be able to correctly handle
     /// asynchronous calls from the guest WASM module.
-    pub fn new(
-        storage: &'storage dyn QueryableStorage,
-        context: ContextForwarder,
-        queued_future_factory: QueuedHostFutureFactory<'storage>,
-    ) -> Self {
+    pub fn new(storage: &'storage dyn QueryableStorage, context: ContextForwarder) -> Self {
         Self {
             data: ServiceData::default(),
-            system_api: SystemApi::new(context, storage, queued_future_factory),
+            system_api: SystemApi::new(context, storage, ()),
             system_tables: QueryableSystemTables::default(),
         }
     }
@@ -350,20 +347,16 @@ impl<'storage> common::Service for Service<'storage> {
 }
 
 /// Implementation to forward system calls from the guest WASM module to the host implementation.
-pub struct SystemApi<'context, S> {
+pub struct SystemApi<S, Q> {
     context: ContextForwarder,
     storage: S,
-    queued_future_factory: QueuedHostFutureFactory<'context>,
+    queued_future_factory: Q,
 }
 
-impl<'context, S> SystemApi<'context, S> {
+impl<S, Q> SystemApi<S, Q> {
     /// Create a new [`SystemApi`] instance using the provided asynchronous `context` and exporting
     /// the API from `storage`.
-    pub fn new(
-        context: ContextForwarder,
-        storage: S,
-        queued_future_factory: QueuedHostFutureFactory<'context>,
-    ) -> Self {
+    pub fn new(context: ContextForwarder, storage: S, queued_future_factory: Q) -> Self {
         SystemApi {
             context,
             storage,
@@ -372,7 +365,9 @@ impl<'context, S> SystemApi<'context, S> {
     }
 }
 
-impl<'storage> WritableSystem for SystemApi<'storage, &'storage dyn WritableStorage> {
+impl<'storage> WritableSystem
+    for SystemApi<&'storage dyn WritableStorage, QueuedHostFutureFactory<'storage>>
+{
     type Load = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
     type LoadAndLock = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
     type Lock = HostFuture<'storage, Result<(), ExecutionError>>;
@@ -608,7 +603,7 @@ impl<'storage> WritableSystem for SystemApi<'storage, &'storage dyn WritableStor
     }
 }
 
-impl<'storage> QueryableSystem for SystemApi<'storage, &'storage dyn QueryableStorage> {
+impl<'storage> QueryableSystem for SystemApi<&'storage dyn QueryableStorage, ()> {
     type Load = HostFuture<'storage, Result<Vec<u8>, ExecutionError>>;
     type Lock = HostFuture<'storage, Result<(), ExecutionError>>;
     type Unlock = HostFuture<'storage, Result<(), ExecutionError>>;
