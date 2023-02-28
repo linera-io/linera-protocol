@@ -7,23 +7,42 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{crypto::CryptoHash, data_types::ChainId};
 use linera_chain::data_types::{Certificate, HashedValue, LiteCertificate, Value};
-use linera_execution::{UserApplicationCode, UserApplicationId};
+use linera_execution::{UserApplicationCode, UserApplicationId, WasmRuntime};
 use linera_views::{
     memory::{MemoryContext, MemoryContextError, MemoryStoreMap},
     views::{View, ViewError},
 };
 use std::{collections::BTreeMap, sync::Arc};
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct MemoryStore {
     chains: DashMap<ChainId, Arc<Mutex<MemoryStoreMap>>>,
     certificates: DashMap<CryptoHash, LiteCertificate>,
     values: DashMap<CryptoHash, Value>,
     user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
+    wasm_runtime: Option<WasmRuntime>,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct MemoryStoreClient(Arc<MemoryStore>);
+
+impl MemoryStoreClient {
+    pub fn new(wasm_runtime: Option<WasmRuntime>) -> Self {
+        MemoryStoreClient(Arc::new(MemoryStore::new(wasm_runtime)))
+    }
+}
+
+impl MemoryStore {
+    pub fn new(wasm_runtime: Option<WasmRuntime>) -> Self {
+        Self {
+            chains: DashMap::new(),
+            certificates: DashMap::new(),
+            values: DashMap::new(),
+            user_applications: Arc::default(),
+            wasm_runtime,
+        }
+    }
+}
 
 #[async_trait]
 impl Store for MemoryStoreClient {
@@ -81,5 +100,9 @@ impl Store for MemoryStoreClient {
         self.0.values.insert(cert.value.value_hash, value.into());
         self.0.certificates.insert(cert.value.value_hash, cert);
         Ok(())
+    }
+
+    fn wasm_runtime(&self) -> Option<WasmRuntime> {
+        self.0.wasm_runtime
     }
 }

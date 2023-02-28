@@ -29,7 +29,10 @@ use crate::client::client_tests::MakeDynamoDbStoreClient;
 
 #[test(tokio::test)]
 async fn test_memory_create_application() -> Result<(), anyhow::Error> {
-    run_test_create_application(MakeMemoryStoreClient).await
+    for &wasm_runtime in WasmRuntime::ALL {
+        run_test_create_application(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await?
+    }
+    Ok(())
 }
 
 #[test(tokio::test)]
@@ -117,7 +120,13 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_run_application_with_dependency() -> Result<(), anyhow::Error> {
-    run_test_run_application_with_dependency(MakeMemoryStoreClient).await
+    for &wasm_runtime in WasmRuntime::ALL {
+        run_test_run_application_with_dependency(MakeMemoryStoreClient::with_wasm_runtime(
+            wasm_runtime,
+        ))
+        .await?
+    }
+    Ok(())
 }
 
 #[test(tokio::test)]
@@ -241,7 +250,10 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_cross_chain_message() -> Result<(), anyhow::Error> {
-    run_test_cross_chain_message(MakeMemoryStoreClient).await
+    for &wasm_runtime in WasmRuntime::ALL {
+        run_test_cross_chain_message(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await?
+    }
+    Ok(())
 }
 
 #[test(tokio::test)]

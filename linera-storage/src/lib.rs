@@ -26,15 +26,16 @@ use linera_chain::{
 };
 use linera_execution::{
     system::Balance, ChainOwnership, ExecutionError, ExecutionRuntimeContext, UserApplicationCode,
-    UserApplicationDescription, UserApplicationId,
+    UserApplicationDescription, UserApplicationId, WasmRuntime,
 };
-#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-use linera_execution::{ApplicationId, Operation, SystemOperation, WasmApplication, WasmRuntime};
 use linera_views::{
     common::Context,
     views::{CryptoHashView, RootView, ViewError},
 };
 use std::{fmt::Debug, sync::Arc};
+
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+use linera_execution::{ApplicationId, Operation, SystemOperation, WasmApplication};
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
@@ -140,11 +141,8 @@ pub trait Store: Sized {
         Ok(())
     }
 
-    /// Selects the WebAssembly runtime to use for applications.
-    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-    fn wasm_runtime(&self) -> WasmRuntime {
-        WasmRuntime::default()
-    }
+    /// Selects the WebAssembly runtime to use for applications (if any).
+    fn wasm_runtime(&self) -> Option<WasmRuntime>;
 
     /// Creates a [`UserApplication`] instance using the bytecode in storage referenced by the
     /// `application_description`.
@@ -153,6 +151,9 @@ pub trait Store: Sized {
         &self,
         application_description: &UserApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError> {
+        let Some(wasm_runtime) = self.wasm_runtime() else {
+            panic!("A WASM runtime is required to load user applications.");
+        };
         let UserApplicationDescription {
             bytecode_id,
             bytecode_location,
@@ -175,7 +176,7 @@ pub trait Store: Sized {
             )) => Ok(Arc::new(WasmApplication::new(
                 contract.clone(),
                 service.clone(),
-                self.wasm_runtime(),
+                wasm_runtime,
             ))),
             _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
         }

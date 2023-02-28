@@ -302,7 +302,7 @@ impl IntoApplicationIdAndOperation for (UserApplicationId, Vec<u8>) {
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_bad_signature() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_block_proposal_bad_signature(client).await;
 }
 
@@ -376,7 +376,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_zero_amount() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_block_proposal_zero_amount(client).await;
 }
 
@@ -447,7 +447,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_ticks() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_block_proposal_ticks(client).await;
 }
 
@@ -546,7 +546,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_unknown_sender() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_block_proposal_unknown_sender(client).await;
 }
 
@@ -619,7 +619,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_with_chaining() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_block_proposal_with_chaining(client).await;
 }
 
@@ -732,7 +732,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_with_incoming_messages() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_block_proposal_with_incoming_messages(client).await;
 }
 
@@ -1224,7 +1224,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_exceed_balance() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_block_proposal_exceed_balance(client).await;
 }
 
@@ -1291,7 +1291,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_block_proposal(client).await;
 }
 
@@ -1360,7 +1360,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_replay() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_block_proposal_replay(client).await;
 }
 
@@ -1432,7 +1432,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_unknown_sender() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_certificate_unknown_sender(client).await;
 }
 
@@ -1489,7 +1489,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_bad_block_height() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_certificate_bad_block_height(client).await;
 }
 
@@ -1558,7 +1558,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_with_anticipated_incoming_message() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_certificate_with_anticipated_incoming_message(client).await;
 }
 
@@ -1716,7 +1716,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_receiver_balance_overflow() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_certificate_receiver_balance_overflow(client).await;
 }
 
@@ -1809,7 +1809,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_receiver_equal_sender() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_certificate_receiver_equal_sender(client).await;
 }
 
@@ -1920,7 +1920,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_cross_chain_request() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_cross_chain_request(client).await;
 }
 
@@ -2043,7 +2043,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_cross_chain_request_no_recipient_chain() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_cross_chain_request_no_recipient_chain(client).await;
 }
 
@@ -2112,7 +2112,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_cross_chain_request_no_recipient_chain_on_client() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
 }
 
@@ -2198,7 +2198,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_to_active_recipient() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_certificate_to_active_recipient(client).await;
 }
 
@@ -2389,7 +2389,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_to_inactive_recipient() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_handle_certificate_to_inactive_recipient(client).await;
 }
 
@@ -2453,7 +2453,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_chain_creation_with_committee_creation() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_chain_creation_with_committee_creation(client).await;
 }
 
@@ -2988,7 +2988,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfers_and_committee_creation() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_transfers_and_committee_creation(client).await;
 }
 
@@ -3196,7 +3196,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfers_and_committee_removal() {
-    let client = MemoryStoreClient::default();
+    let client = MemoryStoreClient::new(None);
     run_test_transfers_and_committee_removal(client).await;
 }
 
@@ -3474,7 +3474,7 @@ where
 #[test(tokio::test)]
 async fn test_cross_chain_helper() {
     // Make a committee and worker (only used for signing certificates)
-    let (committee, worker) = init_worker(MemoryStoreClient::default(), true);
+    let (committee, worker) = init_worker(MemoryStoreClient::new(None), true);
     let committees = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
 
     let key_pair0 = KeyPair::generate();
