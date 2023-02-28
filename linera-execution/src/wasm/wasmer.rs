@@ -108,9 +108,9 @@ impl WasmApplication {
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
         let mut imports = imports! {};
         let context_forwarder = ContextForwarder::default();
-        let (future_queue, queued_future_factory) = HostFutureQueue::new();
+        let (future_queue, _queued_future_factory) = HostFutureQueue::new();
         let (system_api, storage_guard) =
-            SystemApi::new_queryable(context_forwarder.clone(), storage, queued_future_factory);
+            SystemApi::new_queryable(context_forwarder.clone(), storage);
         let system_api_setup =
             queryable_system::add_to_imports(&mut store, &mut imports, system_api);
         let (service, instance) = service::Service::instantiate(&mut store, &module, &mut imports)?;
@@ -272,13 +272,13 @@ impl<'storage> common::Service for Service<'storage> {
 }
 
 /// Implementation to forward system calls from the guest WASM module to the host implementation.
-pub struct SystemApi<S> {
+pub struct SystemApi<S, Q> {
     context: ContextForwarder,
     storage: Arc<Mutex<Option<S>>>,
-    queued_future_factory: QueuedHostFutureFactory<'static>,
+    queued_future_factory: Q,
 }
 
-impl SystemApi<&'static dyn WritableStorage> {
+impl SystemApi<&'static dyn WritableStorage, QueuedHostFutureFactory<'static>> {
     /// Create a new [`SystemApi`] instance, ensuring that the lifetime of the [`WritableStorage`]
     /// trait object is respected.
     ///
@@ -315,12 +315,11 @@ impl SystemApi<&'static dyn WritableStorage> {
     }
 }
 
-impl SystemApi<&'static dyn QueryableStorage> {
+impl SystemApi<&'static dyn QueryableStorage, ()> {
     /// Same as `new_writable`. Didn't find how to factorizing the code.
     pub fn new_queryable<'storage>(
         context: ContextForwarder,
         storage: &'storage dyn QueryableStorage,
-        queued_future_factory: QueuedHostFutureFactory<'static>,
     ) -> (Self, StorageGuard<'storage, &'static dyn QueryableStorage>) {
         let storage_without_lifetime = unsafe { mem::transmute(storage) };
         let storage = Arc::new(Mutex::new(Some(storage_without_lifetime)));
@@ -334,14 +333,14 @@ impl SystemApi<&'static dyn QueryableStorage> {
             SystemApi {
                 context,
                 storage,
-                queued_future_factory,
+                queued_future_factory: (),
             },
             guard,
         )
     }
 }
 
-impl<S: Copy> SystemApi<S> {
+impl<S: Copy, Q> SystemApi<S, Q> {
     /// Safely obtain the [`WritableStorage`] trait object instance to handle a system call.
     ///
     /// # Panics
@@ -360,7 +359,9 @@ impl<S: Copy> SystemApi<S> {
     }
 }
 
-impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage> {
+impl writable_system::WritableSystem
+    for SystemApi<&'static dyn WritableStorage, QueuedHostFutureFactory<'static>>
+{
     type Load = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
     type LoadAndLock = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
     type Lock = HostFuture<'static, Result<(), ExecutionError>>;
@@ -596,7 +597,7 @@ impl writable_system::WritableSystem for SystemApi<&'static dyn WritableStorage>
     }
 }
 
-impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStorage> {
+impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStorage, ()> {
     type Load = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
     type Lock = HostFuture<'static, Result<(), ExecutionError>>;
     type Unlock = HostFuture<'static, Result<(), ExecutionError>>;
