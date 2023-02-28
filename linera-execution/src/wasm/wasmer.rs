@@ -626,8 +626,7 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
     }
 
     fn load_new(&mut self) -> Self::Load {
-        self.queued_future_factory
-            .enqueue(self.storage().try_read_my_state())
+        HostFuture::new(self.storage().try_read_my_state())
     }
 
     fn load_poll(&mut self, future: &Self::Load) -> queryable_system::PollLoad {
@@ -721,7 +720,7 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
         let storage = self.storage();
         let argument = Vec::from(argument);
 
-        self.queued_future_factory.enqueue(async move {
+        HostFuture::new(async move {
             storage
                 .try_query_application(application.into(), &argument)
                 .await
