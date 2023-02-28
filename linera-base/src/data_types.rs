@@ -156,6 +156,14 @@ impl std::str::FromStr for ValidatorName {
     }
 }
 
+impl std::str::FromStr for Epoch {
+    type Err = CryptoError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Epoch(s.parse()?))
+    }
+}
+
 impl BlockHeight {
     #[inline]
     pub fn max() -> Self {

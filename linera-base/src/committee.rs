@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::data_types::ValidatorName;
+use async_graphql::InputObject;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -16,7 +17,7 @@ pub struct ValidatorState {
 }
 
 /// A set of validators (identified by their public keys) and their voting rights.
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Serialize, Deserialize, InputObject)]
 pub struct Committee {
     /// The validators in the committee.
     pub validators: BTreeMap<ValidatorName, ValidatorState>,

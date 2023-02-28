@@ -1,6 +1,6 @@
 use crate::{
     chain::{ChannelStateView, CommunicationStateView},
-    data_types::{Event, Medium, Origin, Target},
+    data_types::{Certificate, Event, Medium, Origin, Target},
     inbox::InboxStateView,
     outbox::OutboxStateView,
     ChainManager,
@@ -12,6 +12,7 @@ use linera_views::{collection_view::ReadGuardedView, common::Context, views::Vie
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 
+scalar!(Certificate);
 scalar!(ChainManager);
 scalar!(Event);
 scalar!(Medium);

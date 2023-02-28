@@ -8,7 +8,7 @@ use generic_array::typenum::Unsigned;
 #[cfg(not(target_arch = "wasm32"))]
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use std::{num::ParseIntError, str::FromStr};
 use thiserror::Error;
 
 #[cfg(any(test, feature = "test"))]
@@ -53,6 +53,8 @@ pub enum CryptoError {
         expected = dalek::PUBLIC_KEY_LENGTH,
     )]
     IncorrectPublicKeySize(usize),
+    #[error("Could not parse integer")]
+    ParseIntError(#[from] ParseIntError),
 }
 
 impl PublicKey {
