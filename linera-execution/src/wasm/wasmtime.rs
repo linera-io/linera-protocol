@@ -126,16 +126,22 @@ impl WasmApplication {
 /// Data stored by the runtime that's necessary for handling calls to and from the WASM module.
 pub struct ContractState<'storage> {
     data: ContractData,
-    system_api: SystemApi<'storage, &'storage dyn WritableStorage>,
-    system_tables: WritableSystemTables<SystemApi<'storage, &'storage dyn WritableStorage>>,
+    system_api: ContractSystemApi<'storage>,
+    system_tables: WritableSystemTables<ContractSystemApi<'storage>>,
 }
 
 /// Data stored by the runtime that's necessary for handling queries to and from the WASM module.
 pub struct ServiceState<'storage> {
     data: ServiceData,
-    system_api: SystemApi<'storage, &'storage dyn QueryableStorage>,
-    system_tables: QueryableSystemTables<SystemApi<'storage, &'storage dyn QueryableStorage>>,
+    system_api: ServiceSystemApi<'storage>,
+    system_tables: QueryableSystemTables<ServiceSystemApi<'storage>>,
 }
+
+/// Type alias of the system API exported to contracts.
+type ContractSystemApi<'storage> = SystemApi<'storage, &'storage dyn WritableStorage>;
+
+/// Type alias of the system API exported to services.
+type ServiceSystemApi<'storage> = SystemApi<'storage, &'storage dyn QueryableStorage>;
 
 impl<'storage> ContractState<'storage> {
     /// Create a new instance of [`ContractState`].
@@ -163,8 +169,8 @@ impl<'storage> ContractState<'storage> {
     pub fn system_api(
         &mut self,
     ) -> (
-        &mut SystemApi<'storage, &'storage dyn WritableStorage>,
-        &mut WritableSystemTables<SystemApi<'storage, &'storage dyn WritableStorage>>,
+        &mut ContractSystemApi<'storage>,
+        &mut WritableSystemTables<ContractSystemApi<'storage>>,
     ) {
         (&mut self.system_api, &mut self.system_tables)
     }
@@ -196,8 +202,8 @@ impl<'storage> ServiceState<'storage> {
     pub fn system_api(
         &mut self,
     ) -> (
-        &mut SystemApi<'storage, &'storage dyn QueryableStorage>,
-        &mut QueryableSystemTables<SystemApi<'storage, &'storage dyn QueryableStorage>>,
+        &mut ServiceSystemApi<'storage>,
+        &mut QueryableSystemTables<ServiceSystemApi<'storage>>,
     ) {
         (&mut self.system_api, &mut self.system_tables)
     }
