@@ -39,8 +39,11 @@ async fn test_memory_handle_certificates_to_create_application_both() -> Result<
 async fn test_memory_handle_certificates_to_create_application(
     use_view: bool,
 ) -> Result<(), anyhow::Error> {
-    let client = MemoryStoreClient::default();
-    run_test_handle_certificates_to_create_application(client, use_view).await
+    for &wasm_runtime in WasmRuntime::ALL {
+        let client = MemoryStoreClient::new(Some(wasm_runtime));
+        run_test_handle_certificates_to_create_application(client, use_view).await?;
+    }
+    Ok(())
 }
 
 #[test(tokio::test)]

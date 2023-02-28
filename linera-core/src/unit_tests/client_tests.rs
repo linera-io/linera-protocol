@@ -457,14 +457,28 @@ where
 /// Need a guard to avoid "too many open files" error
 static GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-pub struct MakeMemoryStoreClient;
+#[derive(Default)]
+pub struct MakeMemoryStoreClient {
+    wasm_runtime: Option<WasmRuntime>,
+}
 
 #[async_trait]
 impl StoreBuilder for MakeMemoryStoreClient {
     type Store = MemoryStoreClient;
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
-        Ok(MemoryStoreClient::default())
+        Ok(MemoryStoreClient::new(self.wasm_runtime))
+    }
+}
+
+impl MakeMemoryStoreClient {
+    /// Creates a [`MakeMemoryStoreClient`] that uses the specified [`WasmRuntime`] to run WASM
+    /// applications.
+    #[allow(dead_code)]
+    pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
+        MakeMemoryStoreClient {
+            wasm_runtime: wasm_runtime.into(),
+        }
     }
 }
 
@@ -538,7 +552,7 @@ impl StoreBuilder for MakeDynamoDbStoreClient {
 
 #[test(tokio::test)]
 async fn test_memory_initiating_valid_transfer() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer(MakeMemoryStoreClient).await
+    run_test_initiating_valid_transfer(MakeMemoryStoreClient::default()).await
 }
 
 #[test(tokio::test)]
@@ -587,7 +601,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_claim_amount() -> Result<(), anyhow::Error> {
-    run_test_claim_amount(MakeMemoryStoreClient).await
+    run_test_claim_amount(MakeMemoryStoreClient::default()).await
 }
 
 #[test(tokio::test)]
@@ -665,7 +679,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_rotate_key_pair() -> Result<(), anyhow::Error> {
-    run_test_rotate_key_pair(MakeMemoryStoreClient).await
+    run_test_rotate_key_pair(MakeMemoryStoreClient::default()).await
 }
 
 #[test(tokio::test)]
@@ -723,7 +737,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfer_ownership() -> Result<(), anyhow::Error> {
-    run_test_transfer_ownership(MakeMemoryStoreClient).await
+    run_test_transfer_ownership(MakeMemoryStoreClient::default()).await
 }
 
 #[test(tokio::test)]
@@ -782,7 +796,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_share_ownership() -> Result<(), anyhow::Error> {
-    run_test_share_ownership(MakeMemoryStoreClient).await
+    run_test_share_ownership(MakeMemoryStoreClient::default()).await
 }
 
 #[test(tokio::test)]
@@ -867,7 +881,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_open_chain_then_close_it() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_close_it(MakeMemoryStoreClient).await
+    run_test_open_chain_then_close_it(MakeMemoryStoreClient::default()).await
 }
 
 #[test(tokio::test)]
@@ -918,7 +932,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfer_then_open_chain() -> Result<(), anyhow::Error> {
-    run_test_transfer_then_open_chain(MakeMemoryStoreClient).await
+    run_test_transfer_then_open_chain(MakeMemoryStoreClient::default()).await
 }
 
 #[test(tokio::test)]
@@ -1002,7 +1016,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_open_chain_then_transfer() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_transfer(MakeMemoryStoreClient).await
+    run_test_open_chain_then_transfer(MakeMemoryStoreClient::default()).await
 }
 
 #[test(tokio::test)]
@@ -1077,7 +1091,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_close_chain() -> Result<(), anyhow::Error> {
-    run_test_close_chain(MakeMemoryStoreClient).await
+    run_test_close_chain(MakeMemoryStoreClient::default()).await
 }
 
 #[test(tokio::test)]
@@ -1133,7 +1147,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_too_many_faults(MakeMemoryStoreClient).await
+    run_test_initiating_valid_transfer_too_many_faults(MakeMemoryStoreClient::default()).await
 }
 
 #[test(tokio::test)]
@@ -1176,7 +1190,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_bidirectional_transfer() -> Result<(), anyhow::Error> {
-    run_test_bidirectional_transfer(MakeMemoryStoreClient).await
+    run_test_bidirectional_transfer(MakeMemoryStoreClient::default()).await
 }
 
 #[test(tokio::test)]
@@ -1302,7 +1316,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer(MakeMemoryStoreClient).await
+    run_test_receiving_unconfirmed_transfer(MakeMemoryStoreClient::default()).await
 }
 
 #[test(tokio::test)]
@@ -1351,8 +1365,10 @@ where
 #[test(tokio::test)]
 async fn test_memory_receiving_unconfirmed_transfer_with_lagging_sender_balances(
 ) -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(MakeMemoryStoreClient)
-        .await
+    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
+        MakeMemoryStoreClient::default(),
+    )
+    .await
 }
 
 #[test(tokio::test)]
@@ -1467,7 +1483,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_change_voting_rights() -> Result<(), anyhow::Error> {
-    run_test_change_voting_rights(MakeMemoryStoreClient).await
+    run_test_change_voting_rights(MakeMemoryStoreClient::default()).await
 }
 
 #[test(tokio::test)]

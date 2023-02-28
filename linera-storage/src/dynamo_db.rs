@@ -28,7 +28,6 @@ struct DynamoDbStore {
     context: DynamoDbContext<()>,
     guards: ChainGuards,
     user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
-    #[cfg_attr(not(any(feature = "wasmer", feature = "wasmtime")), allow(dead_code))]
     wasm_runtime: Option<WasmRuntime>,
 }
 
@@ -231,8 +230,7 @@ impl Store for DynamoDbStoreClient {
         Ok(())
     }
 
-    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-    fn wasm_runtime(&self) -> WasmRuntime {
-        self.0.wasm_runtime.unwrap_or_default()
+    fn wasm_runtime(&self) -> Option<WasmRuntime> {
+        self.0.wasm_runtime
     }
 }
