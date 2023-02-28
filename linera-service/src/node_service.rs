@@ -1,6 +1,5 @@
 use async_graphql::{
-    futures_util::Stream, http::GraphiQLSource, EmptyMutation, Error, Object, Schema, SimpleObject,
-    Subscription,
+    futures_util::Stream, http::GraphiQLSource, Error, Object, Schema, SimpleObject, Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{
@@ -12,19 +11,24 @@ use axum::{
     Extension, Router, Server,
 };
 use futures::lock::Mutex;
-use linera_base::data_types::ChainId;
-use linera_chain::ChainStateView;
+use linera_base::{
+    committee::Committee,
+    data_types::{ChainId, Epoch, Owner},
+};
+use linera_chain::{data_types::Certificate, ChainStateView};
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
     worker::Notification,
 };
 use linera_execution::{
-    ApplicationId, Query, Response, UserApplicationDescription, UserApplicationId,
+    system::{Amount, Recipient, SystemChannel, UserData},
+    ApplicationId, Bytecode, BytecodeId, Operation, Query, Response, SystemOperation,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use log::{error, info};
-use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{collections::BTreeMap, net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 
 /// Our root GraphQL query type.
@@ -32,6 +36,9 @@ struct QueryRoot<P, S>(Arc<Mutex<ChainClient<P, S>>>);
 
 /// Our root GraphQL subscription type.
 struct SubscriptionRoot<P, S>(Arc<Mutex<ChainClient<P, S>>>);
+
+/// Our root GraphQL mutation type.
+struct MutationRoot<P, S>(Arc<Mutex<ChainClient<P, S>>>);
 
 #[derive(Debug, ThisError)]
 enum NodeServiceError {
@@ -70,6 +77,184 @@ where
         chain_ids: Vec<ChainId>,
     ) -> Result<impl Stream<Item = Notification>, Error> {
         Ok(self.0.lock().await.subscribe_all(chain_ids).await?)
+    }
+}
+
+impl<P, S> MutationRoot<P, S>
+where
+    P: ValidatorNodeProvider + Send + Sync + 'static,
+    S: Store + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
+    async fn execute_system_operation(
+        &self,
+        system_operation: SystemOperation,
+    ) -> Result<Certificate, Error> {
+        let application_id = ApplicationId::System;
+        let operation = Operation::System(system_operation);
+        let mut client = self.0.lock().await;
+        client.process_inbox().await?;
+        Ok(client.execute_operation(application_id, operation).await?)
+    }
+}
+
+#[Object]
+impl<P, S> MutationRoot<P, S>
+where
+    P: ValidatorNodeProvider + Send + Sync + 'static,
+    S: Store + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
+    /// Transfers `amount` units of value from the given owner's account to the recipient.
+    /// If no owner is given, try to take the units out of the unattributed account.
+    async fn transfer(
+        &self,
+        owner: Option<Owner>,
+        recipient: Recipient,
+        amount: Amount,
+        user_data: Option<UserData>,
+    ) -> Result<Certificate, Error> {
+        let operation = SystemOperation::Transfer {
+            owner,
+            recipient,
+            amount,
+            user_data: user_data.unwrap_or_default(),
+        };
+        self.execute_system_operation(operation).await
+    }
+
+    /// Claims `amount` units of value from the given owner's account in
+    /// the remote `target` chain. Depending on its configuration (see also #464), the
+    /// `target` chain may refuse to process the message.
+    async fn claim(
+        &self,
+        owner: Owner,
+        target: ChainId,
+        recipient: Recipient,
+        amount: Amount,
+        user_data: Option<UserData>,
+    ) -> Result<Certificate, Error> {
+        let operation = SystemOperation::Claim {
+            owner,
+            target,
+            recipient,
+            amount,
+            user_data: user_data.unwrap_or_default(),
+        };
+        self.execute_system_operation(operation).await
+    }
+
+    /// Creates (or activates) a new chain by installing the given authentication key.
+    /// This will automatically subscribe to the future committees created by `admin_id`.
+    async fn open_chain(
+        &self,
+        id: ChainId,
+        owner: Owner,
+        admin_id: ChainId,
+        epoch: Epoch,
+        committees: BTreeMap<Epoch, Committee>,
+    ) -> Result<Certificate, Error> {
+        let operation = SystemOperation::OpenChain {
+            id,
+            owner,
+            admin_id,
+            epoch,
+            committees,
+        };
+        self.execute_system_operation(operation).await
+    }
+
+    /// Closes the chain.
+    async fn close_chain(&self) -> Result<Certificate, Error> {
+        let operation = SystemOperation::CloseChain;
+        self.execute_system_operation(operation).await
+    }
+
+    /// Changes the authentication key of the chain.
+    async fn change_owner(&self, new_owner: Owner) -> Result<Certificate, Error> {
+        let operation = SystemOperation::ChangeOwner { new_owner };
+        self.execute_system_operation(operation).await
+    }
+
+    /// Changes the authentication key of the chain.
+    async fn change_multiple_owners(&self, new_owners: Vec<Owner>) -> Result<Certificate, Error> {
+        let operation = SystemOperation::ChangeMultipleOwners { new_owners };
+        self.execute_system_operation(operation).await
+    }
+
+    /// (admin chain only) Registers a new committee. This will notify the subscribers of
+    /// the admin chain so that they can migrate to the new epoch (by accepting the
+    /// notification as an "incoming message" in a next block).
+    async fn create_committee(
+        &self,
+        admin_id: ChainId,
+        epoch: Epoch,
+        committee: Committee,
+    ) -> Result<Certificate, Error> {
+        let operation = SystemOperation::CreateCommittee {
+            admin_id,
+            epoch,
+            committee,
+        };
+        self.execute_system_operation(operation).await
+    }
+
+    /// Subscribes to a system channel.
+    async fn subscribe(
+        &self,
+        chain_id: ChainId,
+        channel: SystemChannel,
+    ) -> Result<Certificate, Error> {
+        let operation = SystemOperation::Subscribe { chain_id, channel };
+        self.execute_system_operation(operation).await
+    }
+
+    /// Unsubscribes to a system channel.
+    async fn unsubscribe(
+        &self,
+        chain_id: ChainId,
+        channel: SystemChannel,
+    ) -> Result<Certificate, Error> {
+        let operation = SystemOperation::Unsubscribe { chain_id, channel };
+        self.execute_system_operation(operation).await
+    }
+
+    /// (admin chain only) Removes a committee. Once this message is accepted by a chain,
+    /// blocks from the retired epoch will not be accepted until they are followed (hence
+    /// re-certified) by a block certified by a recent committee.
+    async fn remove_committee(
+        &self,
+        admin_id: ChainId,
+        epoch: Epoch,
+    ) -> Result<Certificate, Error> {
+        let operation = SystemOperation::RemoveCommittee { admin_id, epoch };
+        self.execute_system_operation(operation).await
+    }
+
+    /// Publishes a new application bytecode.
+    async fn publish_bytecodes(
+        &self,
+        contract: Bytecode,
+        service: Bytecode,
+    ) -> Result<Certificate, Error> {
+        let operation = SystemOperation::PublishBytecode { contract, service };
+        self.execute_system_operation(operation).await
+    }
+
+    async fn create_application(
+        &self,
+        bytecode_id: BytecodeId,
+        parameters: Vec<u8>,
+        initialization_argument: Vec<u8>,
+        required_application_ids: Vec<UserApplicationId>,
+    ) -> Result<Certificate, Error> {
+        let operation = SystemOperation::CreateApplication {
+            bytecode_id,
+            parameters,
+            initialization_argument,
+            required_application_ids,
+        };
+        self.execute_system_operation(operation).await
     }
 }
 
@@ -141,7 +326,7 @@ where
 {
     let schema = Schema::build(
         QueryRoot(client.0.clone()),
-        EmptyMutation,
+        MutationRoot(client.0.clone()),
         SubscriptionRoot(client.0.clone()),
     )
     .finish();
@@ -216,7 +401,7 @@ where
 
         let schema = Schema::build(
             QueryRoot(client.clone()),
-            EmptyMutation,
+            MutationRoot(client.clone()),
             SubscriptionRoot(client.clone()),
         )
         .finish();

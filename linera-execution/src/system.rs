@@ -29,6 +29,7 @@ use std::{
 };
 use thiserror::Error;
 
+use async_graphql::Enum;
 #[cfg(any(test, feature = "test"))]
 use std::collections::BTreeSet;
 
@@ -211,7 +212,7 @@ pub struct SystemResponse {
 }
 
 /// The channels available in the system application.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Enum, Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum SystemChannel {
     /// Channel used to broadcast reconfigurations.
     Admin,

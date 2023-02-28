@@ -1,6 +1,7 @@
 use crate::{
-    system::Balance, ApplicationId, ChainOwnership, ChannelId, ChannelName, ExecutionStateView,
-    SystemExecutionStateView, UserApplicationDescription, UserApplicationId,
+    system::{Amount, Balance, Recipient, UserData},
+    ApplicationId, Bytecode, BytecodeId, ChainOwnership, ChannelId, ChannelName,
+    ExecutionStateView, SystemExecutionStateView, UserApplicationDescription, UserApplicationId,
 };
 use async_graphql::{scalar, Error};
 use linera_base::{
@@ -10,12 +11,17 @@ use linera_base::{
 use linera_views::{common::Context, views::ViewError};
 use std::collections::BTreeMap;
 
+scalar!(Amount);
 scalar!(ApplicationId);
+scalar!(Bytecode);
+scalar!(BytecodeId);
 scalar!(Balance);
 scalar!(ChainOwnership);
 scalar!(ChannelName);
+scalar!(Recipient);
 scalar!(UserApplicationDescription);
 scalar!(UserApplicationId);
+scalar!(UserData);
 
 #[async_graphql::Object]
 impl<C: Send + Sync + Context> ExecutionStateView<C>
