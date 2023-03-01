@@ -488,4 +488,92 @@ mod tests {
 
         assert_eq!(input, output);
     }
+
+    /// Test if a bytecode is properly sanitized.
+    ///
+    /// Checks if a function without a `return` instruction is changed to have that instruction at
+    /// the end, and that the changed bytecode is still valid.
+    #[test]
+    fn sanitizes_bytecode_without_return_instruction() {
+        let wat = r#"
+            (module
+              (type (;0;) (func (param i32) (result i32)))
+              (func $my_function (;0;) (type 0) (param i32) (result i32)
+                (local i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32)
+                global.get $__stack_pointer
+                local.set 1
+                i32.const 16
+                local.set 2
+                local.get 1
+                local.get 2
+                i32.sub
+                local.set 3
+                local.get 3
+                local.get 0
+                i32.store
+                local.get 3
+                local.get 0
+                i32.store offset=4
+                i32.const 1
+                local.set 4
+                local.get 3
+                local.get 4
+                i32.store offset=8
+                i32.const 1
+                local.set 5
+                local.get 0
+                local.get 5
+                i32.add
+                local.set 6
+                local.get 6
+                local.get 0
+                i32.lt_s
+                local.set 7
+                i32.const 31
+                local.set 8
+                local.get 6
+                local.get 8
+                i32.shr_s
+                local.set 9
+                i32.const -2147483648
+                local.set 10
+                local.get 9
+                local.get 10
+                i32.xor
+                local.set 11
+                local.get 11
+                local.get 6
+                local.get 7
+                select
+                local.set 12
+                local.get 3
+                local.get 12
+                i32.store offset=12
+                local.get 3
+                i32.load offset=12
+                local.set 13
+                local.get 13
+
+              )
+              (table (;0;) 1 1 funcref)
+              (memory (;0;) 16)
+              (global $__stack_pointer (;0;) (mut i32) i32.const 1048576)
+              (global (;1;) i32 i32.const 1048576)
+              (global (;2;) i32 i32.const 1048576)
+              (export "memory" (memory 0))
+              (export "my_function" (func $my_function))
+              (export "__data_end" (global 1))
+              (export "__heap_base" (global 2))
+            )
+        "#;
+
+        let input = Bytecode::new(wasmer::wat2wasm(wat.as_bytes()).unwrap().into_owned());
+        let output = sanitize(input.clone()).unwrap();
+
+        assert_ne!(input, output);
+
+        // Check that the sanitized output can be used by a runtime
+        let store = wasmer::Store::default();
+        wasmer::Module::new(&store, &output).unwrap();
+    }
 }
