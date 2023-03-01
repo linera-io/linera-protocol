@@ -40,7 +40,7 @@ impl<C, T> View<C> for LogView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Serialize,
+    T: Send + Sync + Serialize,
 {
     fn context(&self) -> &C {
         &self.context
@@ -139,7 +139,7 @@ impl<C, T> LogView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + DeserializeOwned + Serialize,
+    T: Clone + DeserializeOwned + Serialize,
 {
     /// Read the logged values in the given range (including staged ones).
     pub async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {

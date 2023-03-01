@@ -53,7 +53,7 @@ impl<C, I, W> View<C> for ReentrantCollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Debug + Clone + Serialize + DeserializeOwned,
+    I: Send + Sync + Debug + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
     fn context(&self) -> &C {
@@ -134,12 +134,7 @@ where
     }
 }
 
-impl<C, I, W> ReentrantCollectionView<C, I, W>
-where
-    C: Context + Send,
-    ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
-    W: View<C> + Send + Sync,
+impl<C: Context, I, W> ReentrantCollectionView<C, I, W>
 {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
         self.context.base_tag_index(KeyTag::Index as u8, index)
@@ -154,7 +149,15 @@ where
         batch.put_key_value(key, &())?;
         Ok(())
     }
+}
 
+impl<C, I, W> ReentrantCollectionView<C, I, W>
+where
+    C: Context + Send,
+    ViewError: From<C::Error>,
+    I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
+    W: View<C> + Send + Sync,
+{
     /// Obtain a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn try_load_entry_mut<Q>(

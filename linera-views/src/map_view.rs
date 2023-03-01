@@ -35,8 +35,8 @@ impl<C, I, V> View<C> for MapView<C, I, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Clone + Serialize,
-    V: Clone + Send + Sync + Serialize,
+    I: Send + Sync + Serialize,
+    V: Send + Sync + Serialize,
 {
     fn context(&self) -> &C {
         &self.context
@@ -206,7 +206,7 @@ impl<C, I, V> MapView<C, I, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Sync + Send + Serialize + DeserializeOwned,
+    I: Sync + Serialize + DeserializeOwned,
     V: Sync + Serialize + DeserializeOwned + 'static,
 {
     /// Return the list of indices in the map.
@@ -398,8 +398,8 @@ impl<C, I, V> HashableView<C> for MapView<C, I, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Clone + Send + Sync + Serialize + DeserializeOwned,
-    V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
+    I: Send + Sync + Serialize + DeserializeOwned,
+    V: Send + Sync + Serialize + DeserializeOwned + 'static,
 {
     type Hasher = sha2::Sha512;
 

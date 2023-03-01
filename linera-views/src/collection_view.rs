@@ -66,7 +66,7 @@ impl<C, I, W> View<C> for CollectionView<C, I, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Debug + Clone + Serialize + DeserializeOwned,
+    I: Send + Sync + Debug + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
     fn context(&self) -> &C {
