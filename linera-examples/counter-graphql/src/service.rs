@@ -119,7 +119,7 @@ mod tests {
 
     fn dummy_query_context() -> QueryContext {
         QueryContext {
-            chain_id: ChainId([0; 8].into()),
+            chain_id: ChainId([0; 4].into()),
         }
     }
 }

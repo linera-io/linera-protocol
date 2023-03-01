@@ -210,7 +210,7 @@ mod tests {
 
     fn dummy_operation_context() -> OperationContext {
         OperationContext {
-            chain_id: ChainId([0; 8].into()),
+            chain_id: ChainId([0; 4].into()),
             height: BlockHeight(0),
             index: 0,
         }
@@ -218,10 +218,10 @@ mod tests {
 
     fn dummy_effect_context() -> EffectContext {
         EffectContext {
-            chain_id: ChainId([0; 8].into()),
+            chain_id: ChainId([0; 4].into()),
             height: BlockHeight(0),
             effect_id: EffectId {
-                chain_id: ChainId([1; 8].into()),
+                chain_id: ChainId([1; 4].into()),
                 height: BlockHeight(1),
                 index: 1,
             },
@@ -230,7 +230,7 @@ mod tests {
 
     fn dummy_callee_context() -> CalleeContext {
         CalleeContext {
-            chain_id: ChainId([0; 8].into()),
+            chain_id: ChainId([0; 4].into()),
             authenticated_caller_id: None,
         }
     }

@@ -2253,7 +2253,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde-name",
- "sha2 0.9.9",
+ "sha3",
  "test-strategy",
  "thiserror",
 ]
@@ -2396,7 +2396,7 @@ dependencies = [
  "serde",
  "serde-name",
  "serde_with",
- "sha2 0.9.9",
+ "sha3",
  "thiserror",
  "tokio",
  "wasmtime",
@@ -3862,6 +3862,16 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest 0.10.6",
+]
+
+[[package]]
+name = "sha3"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bdf0c33fae925bdc080598b84bc15c55e7b9a4a43b3c704da051f977469691c9"
+dependencies = [
+ "digest 0.10.6",
+ "keccak",
 ]
 
 [[package]]

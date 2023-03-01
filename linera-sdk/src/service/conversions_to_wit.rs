@@ -21,34 +21,26 @@ impl From<log::Level> for system::LogLevel {
 
 impl From<CryptoHash> for system::CryptoHash {
     fn from(hash_value: CryptoHash) -> Self {
-        let parts = <[u64; 8]>::from(hash_value);
+        let parts = <[u64; 4]>::from(hash_value);
 
         system::CryptoHash {
             part1: parts[0],
             part2: parts[1],
             part3: parts[2],
             part4: parts[3],
-            part5: parts[4],
-            part6: parts[5],
-            part7: parts[6],
-            part8: parts[7],
         }
     }
 }
 
 impl From<CryptoHash> for super::CryptoHash {
     fn from(hash_value: CryptoHash) -> Self {
-        let parts = <[u64; 8]>::from(hash_value);
+        let parts = <[u64; 4]>::from(hash_value);
 
         super::CryptoHash {
             part1: parts[0],
             part2: parts[1],
             part3: parts[2],
             part4: parts[3],
-            part5: parts[4],
-            part6: parts[5],
-            part7: parts[6],
-            part8: parts[7],
         }
     }
 }
