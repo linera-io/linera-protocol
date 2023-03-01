@@ -2261,8 +2261,10 @@ dependencies = [
  "serde_bytes",
  "thiserror",
  "tokio",
+ "wasm-encoder 0.24.1",
  "wasmer",
  "wasmer-middlewares",
+ "wasmparser 0.101.1",
  "wasmtime",
  "wit-bindgen-host-wasmer-rust",
  "wit-bindgen-host-wasmtime-rust",
@@ -4547,6 +4549,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm-encoder"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68f7d56227d910901ce12dfd19acc40c12687994dfb3f57c90690f80be946ec5"
+dependencies = [
+ "leb128",
+]
+
+[[package]]
 name = "wasmer"
 version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4690,6 +4701,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5d3e08b13876f96dd55608d03cd4883a0545884932d5adf11925876c96daef"
 dependencies = [
  "indexmap",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.101.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf2f22ef84ac5666544afa52f326f13e16f3d019d2e61e704fd8091c9358b130"
+dependencies = [
+ "indexmap",
+ "url",
 ]
 
 [[package]]
@@ -4889,7 +4910,7 @@ dependencies = [
  "leb128",
  "memchr",
  "unicode-width",
- "wasm-encoder",
+ "wasm-encoder 0.20.0",
 ]
 
 [[package]]

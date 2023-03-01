@@ -13,6 +13,7 @@
 mod async_boundary;
 mod async_determinism;
 mod common;
+mod sanitizer;
 #[cfg(feature = "wasmer")]
 #[path = "wasmer.rs"]
 mod wasmer;

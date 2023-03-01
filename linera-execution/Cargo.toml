@@ -7,8 +7,8 @@ edition = "2021"
 [features]
 default = ["wasmer", "wasmtime"]
 test = ["tokio/macros", "async-lock"]
-wasmer = ["dep:wasmer", "wasmer-middlewares", "wit-bindgen-host-wasmer-rust"]
-wasmtime = ["dep:wasmtime", "wit-bindgen-host-wasmtime-rust"]
+wasmer = ["dep:wasmer", "wasm-encoder", "wasmer-middlewares", "wasmparser", "wit-bindgen-host-wasmer-rust"]
+wasmtime = ["dep:wasmtime", "wasm-encoder", "wasmparser", "wit-bindgen-host-wasmtime-rust"]
 
 [dependencies]
 anyhow = "1.0.57"
@@ -28,8 +28,10 @@ serde = { version = "1.0.130", features = ["derive"] }
 serde_bytes = "0.11.8"
 thiserror = "1.0.31"
 tokio = { version = "1.25.0", features = ["fs"] }
+wasm-encoder = { version = "0.24.1", optional = true }
 wasmer = { version = "3.0.0-rc.2", optional = true }
 wasmer-middlewares = { version = "3.1.1", optional = true }
+wasmparser = { version = "0.101.1", optional = true }
 wasmtime = { version = "1.0", optional = true }
 wit-bindgen-host-wasmer-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "081e2839303345c96a4ebd1eee259683593de1a0", optional = true }
 wit-bindgen-host-wasmtime-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "081e2839303345c96a4ebd1eee259683593de1a0", optional = true }
