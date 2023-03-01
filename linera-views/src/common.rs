@@ -18,8 +18,7 @@ use std::{
 mod common_tests;
 
 /// This is the standard hash used by sha2
-pub type HashOutput =
-    generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>;
+pub type HashOutput = generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>;
 
 #[derive(Debug)]
 pub(crate) enum Update<T> {
@@ -74,6 +73,7 @@ pub enum WriteOperation {
 }
 
 /// A batch of writes inside a transaction;
+#[derive(Default)]
 pub struct Batch {
     /// The entries of batch
     pub operations: Vec<WriteOperation>,
@@ -82,7 +82,9 @@ pub struct Batch {
 impl Batch {
     /// Create an empty batch
     pub fn new() -> Self {
-        Self { operations: Vec::new() }
+        Self {
+            operations: Vec::new(),
+        }
     }
 
     /// building a batch from a function
