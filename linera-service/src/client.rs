@@ -25,7 +25,7 @@ use linera_core::{
 };
 use linera_execution::{
     system::{Account, Amount, Balance, Recipient, SystemOperation, UserData},
-    ApplicationId, Bytecode, Operation, WasmRuntime,
+    ApplicationId, Bytecode, Operation, WasmRuntime, WithWasmDefault,
 };
 use linera_rpc::{
     config::NetworkProtocol, grpc_network::GrpcMassClient, mass::MassClient,
@@ -1012,7 +1012,8 @@ async fn main() -> Result<(), anyhow::Error> {
         }
         command => {
             let genesis_config = context.genesis_config.clone();
-            let wasm_runtime = options.wasm_runtime;
+            let wasm_runtime = options.wasm_runtime.with_wasm_default();
+
             options
                 .storage_config
                 .run_with_storage(&genesis_config, wasm_runtime, Job(context, command))

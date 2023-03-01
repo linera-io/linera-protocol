@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use linera_base::{crypto::KeyPair, data_types::ValidatorName};
 use linera_core::worker::WorkerState;
-use linera_execution::WasmRuntime;
+use linera_execution::{WasmRuntime, WithWasmDefault};
 use linera_rpc::{
     config::{
         CrossChainConfig, NetworkProtocol, NotificationConfig, ShardConfig, ShardId,
@@ -378,6 +378,7 @@ async fn main() {
                 shard,
                 grace_period_micros: grace_period,
             };
+            let wasm_runtime = wasm_runtime.with_wasm_default();
             storage_config
                 .run_with_storage(&genesis_config, wasm_runtime, job)
                 .await

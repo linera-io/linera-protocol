@@ -649,6 +649,22 @@ impl WasmRuntime {
     ];
 }
 
+pub trait WithWasmDefault {
+    fn with_wasm_default(self) -> Self;
+}
+
+impl WithWasmDefault for Option<WasmRuntime> {
+    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+    fn with_wasm_default(self) -> Self {
+        Some(self.unwrap_or_default())
+    }
+
+    #[cfg(not(any(feature = "wasmer", feature = "wasmtime")))]
+    fn with_wasm_default(self) -> Self {
+        None
+    }
+}
+
 impl FromStr for WasmRuntime {
     type Err = InvalidWasmRuntime;
 
