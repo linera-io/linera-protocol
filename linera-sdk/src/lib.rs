@@ -201,43 +201,35 @@ pub struct ChannelName(pub Vec<u8>);
 )]
 pub struct BlockHeight(pub u64);
 
-/// A Sha512 value.
+/// A Sha3-256 value.
 #[serde_as]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Deserialize, Serialize)]
-pub struct CryptoHash(#[serde_as(as = "[_; 64]")] [u8; 64]);
+pub struct CryptoHash(#[serde_as(as = "[_; 32]")] [u8; 32]);
 
-impl From<[u64; 8]> for CryptoHash {
-    fn from(eight_u64s: [u64; 8]) -> Self {
-        let mut bytes = [0u8; 64];
+impl From<[u64; 4]> for CryptoHash {
+    fn from(integers: [u64; 4]) -> Self {
+        let mut bytes = [0u8; 32];
 
-        bytes[0..8].copy_from_slice(&eight_u64s[0].to_le_bytes());
-        bytes[8..16].copy_from_slice(&eight_u64s[1].to_le_bytes());
-        bytes[16..24].copy_from_slice(&eight_u64s[2].to_le_bytes());
-        bytes[24..32].copy_from_slice(&eight_u64s[3].to_le_bytes());
-        bytes[32..40].copy_from_slice(&eight_u64s[4].to_le_bytes());
-        bytes[40..48].copy_from_slice(&eight_u64s[5].to_le_bytes());
-        bytes[48..56].copy_from_slice(&eight_u64s[6].to_le_bytes());
-        bytes[56..64].copy_from_slice(&eight_u64s[7].to_le_bytes());
+        bytes[0..8].copy_from_slice(&integers[0].to_le_bytes());
+        bytes[8..16].copy_from_slice(&integers[1].to_le_bytes());
+        bytes[16..24].copy_from_slice(&integers[2].to_le_bytes());
+        bytes[24..32].copy_from_slice(&integers[3].to_le_bytes());
 
         CryptoHash(bytes)
     }
 }
 
-impl From<CryptoHash> for [u64; 8] {
+impl From<CryptoHash> for [u64; 4] {
     fn from(crypto_hash: CryptoHash) -> Self {
         let bytes = crypto_hash.0;
-        let mut eight_u64s = [0u64; 8];
+        let mut integers = [0u64; 4];
 
-        eight_u64s[0] = u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices"));
-        eight_u64s[1] = u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices"));
-        eight_u64s[2] = u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices"));
-        eight_u64s[3] = u64::from_le_bytes(bytes[24..32].try_into().expect("incorrect indices"));
-        eight_u64s[4] = u64::from_le_bytes(bytes[32..40].try_into().expect("incorrect indices"));
-        eight_u64s[5] = u64::from_le_bytes(bytes[40..48].try_into().expect("incorrect indices"));
-        eight_u64s[6] = u64::from_le_bytes(bytes[48..56].try_into().expect("incorrect indices"));
-        eight_u64s[7] = u64::from_le_bytes(bytes[56..64].try_into().expect("incorrect indices"));
+        integers[0] = u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices"));
+        integers[1] = u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices"));
+        integers[2] = u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices"));
+        integers[3] = u64::from_le_bytes(bytes[24..32].try_into().expect("incorrect indices"));
 
-        eight_u64s
+        integers
     }
 }
 

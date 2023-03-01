@@ -16,7 +16,7 @@ hex = "0.4.3"
 proptest = { version = "1.0.0", optional = true }
 serde = { version = "1.0.130", features = ["derive"] }
 serde-name = "0.2.0"
-sha2 = "0.9.8"
+sha3 = "0.10.6"
 test-strategy = { version = "0.2.0", optional = true }
 thiserror = "1.0.31"
 

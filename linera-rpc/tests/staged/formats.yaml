@@ -247,7 +247,7 @@ CryptoHash:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
-      SIZE: 64
+      SIZE: 32
 Destination:
   ENUM:
     0:

@@ -122,10 +122,6 @@ record crypto-hash {
     part2: u64,
     part3: u64,
     part4: u64,
-    part5: u64,
-    part6: u64,
-    part7: u64,
-    part8: u64,
 }
 
 record system-balance {

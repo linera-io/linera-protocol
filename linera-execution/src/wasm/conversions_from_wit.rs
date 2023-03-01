@@ -104,16 +104,12 @@ impl From<contract::ChannelName> for ChannelName {
 
 impl From<contract::CryptoHash> for CryptoHash {
     fn from(guest: contract::CryptoHash) -> Self {
-        let mut bytes = [0u8; 64];
+        let mut bytes = [0u8; 32];
 
         bytes[0..8].copy_from_slice(&guest.part1.to_le_bytes());
         bytes[8..16].copy_from_slice(&guest.part2.to_le_bytes());
         bytes[16..24].copy_from_slice(&guest.part3.to_le_bytes());
         bytes[24..32].copy_from_slice(&guest.part4.to_le_bytes());
-        bytes[32..40].copy_from_slice(&guest.part5.to_le_bytes());
-        bytes[40..48].copy_from_slice(&guest.part6.to_le_bytes());
-        bytes[48..56].copy_from_slice(&guest.part7.to_le_bytes());
-        bytes[56..64].copy_from_slice(&guest.part8.to_le_bytes());
 
         CryptoHash::try_from(&bytes[..]).expect("Incorrect byte count for `CryptoHash`")
     }
@@ -171,16 +167,12 @@ impl From<writable_system::CryptoHash> for ChainId {
 
 impl From<writable_system::CryptoHash> for CryptoHash {
     fn from(guest: writable_system::CryptoHash) -> Self {
-        let mut bytes = [0u8; 64];
+        let mut bytes = [0u8; 32];
 
         bytes[0..8].copy_from_slice(&guest.part1.to_le_bytes());
         bytes[8..16].copy_from_slice(&guest.part2.to_le_bytes());
         bytes[16..24].copy_from_slice(&guest.part3.to_le_bytes());
         bytes[24..32].copy_from_slice(&guest.part4.to_le_bytes());
-        bytes[32..40].copy_from_slice(&guest.part5.to_le_bytes());
-        bytes[40..48].copy_from_slice(&guest.part6.to_le_bytes());
-        bytes[48..56].copy_from_slice(&guest.part7.to_le_bytes());
-        bytes[56..64].copy_from_slice(&guest.part8.to_le_bytes());
 
         CryptoHash::try_from(&bytes[..]).expect("Incorrect byte count for `CryptoHash`")
     }
@@ -222,16 +214,12 @@ impl From<queryable_system::CryptoHash> for ChainId {
 
 impl From<queryable_system::CryptoHash> for CryptoHash {
     fn from(guest: queryable_system::CryptoHash) -> Self {
-        let mut bytes = [0u8; 64];
+        let mut bytes = [0u8; 32];
 
         bytes[0..8].copy_from_slice(&guest.part1.to_le_bytes());
         bytes[8..16].copy_from_slice(&guest.part2.to_le_bytes());
         bytes[16..24].copy_from_slice(&guest.part3.to_le_bytes());
         bytes[24..32].copy_from_slice(&guest.part4.to_le_bytes());
-        bytes[32..40].copy_from_slice(&guest.part5.to_le_bytes());
-        bytes[40..48].copy_from_slice(&guest.part6.to_le_bytes());
-        bytes[48..56].copy_from_slice(&guest.part7.to_le_bytes());
-        bytes[56..64].copy_from_slice(&guest.part8.to_le_bytes());
 
         CryptoHash::try_from(&bytes[..]).expect("Incorrect byte count for `CryptoHash`")
     }

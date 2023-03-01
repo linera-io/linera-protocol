@@ -88,10 +88,6 @@ impl From<super::CryptoHash> for CryptoHash {
             crypto_hash.part2,
             crypto_hash.part3,
             crypto_hash.part4,
-            crypto_hash.part5,
-            crypto_hash.part6,
-            crypto_hash.part7,
-            crypto_hash.part8,
         ])
     }
 }
@@ -122,10 +118,6 @@ impl From<system::CryptoHash> for CryptoHash {
             hash_value.part2,
             hash_value.part3,
             hash_value.part4,
-            hash_value.part5,
-            hash_value.part6,
-            hash_value.part7,
-            hash_value.part8,
         ])
     }
 }

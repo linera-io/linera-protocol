@@ -27,10 +27,6 @@ impl From<super::CryptoHash> for CryptoHash {
             hash_value.part2,
             hash_value.part3,
             hash_value.part4,
-            hash_value.part5,
-            hash_value.part6,
-            hash_value.part7,
-            hash_value.part8,
         ])
     }
 }
@@ -42,10 +38,6 @@ impl From<queryable_system::CryptoHash> for CryptoHash {
             hash_value.part2,
             hash_value.part3,
             hash_value.part4,
-            hash_value.part5,
-            hash_value.part6,
-            hash_value.part7,
-            hash_value.part8,
         ])
     }
 }

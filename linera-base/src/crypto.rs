@@ -28,9 +28,12 @@ pub struct KeyPair(dalek::Keypair);
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash)]
 pub struct PublicKey(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 
-/// A Sha512 value.
+type HasherOutputSize = <sha3::Sha3_256 as sha3::digest::OutputSizeUser>::OutputSize;
+type HasherOutput = generic_array::GenericArray<u8, HasherOutputSize>;
+
+/// A Sha3-256 value.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
-pub struct CryptoHash(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>);
+pub struct CryptoHash(HasherOutput);
 
 /// A signature value.
 #[derive(Eq, PartialEq, Copy, Clone)]
@@ -45,7 +48,7 @@ pub enum CryptoError {
     NonHexDigits(#[from] hex::FromHexError),
     #[error(
         "Byte slice has length {0} but a `CryptoHash` requires exactly {expected} bytes",
-        expected = <sha2::Sha512 as sha2::Digest>::OutputSize::to_usize(),
+        expected = HasherOutputSize::to_usize(),
     )]
     IncorrectHashSize(usize),
     #[error(
@@ -148,7 +151,7 @@ impl<'de> Deserialize<'de> for CryptoHash {
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "CryptoHash")]
-            struct Foo(generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>);
+            struct Foo(HasherOutput);
 
             let value = Foo::deserialize(deserializer)?;
             Ok(Self(value.0))
@@ -234,7 +237,7 @@ impl TryFrom<&[u8]> for PublicKey {
             return Err(CryptoError::IncorrectPublicKeySize(value.len()));
         }
         let mut pubkey = [0u8; dalek::PUBLIC_KEY_LENGTH];
-        pubkey.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
+        pubkey.copy_from_slice(value);
         Ok(PublicKey(pubkey))
     }
 }
@@ -252,25 +255,13 @@ impl TryFrom<&[u8]> for CryptoHash {
     type Error = CryptoError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        if value.len() != <sha2::Sha512 as sha2::Digest>::output_size() {
+        if value.len() != HasherOutputSize::to_usize() {
             return Err(CryptoError::IncorrectHashSize(value.len()));
         }
-        let mut bytes =
-            generic_array::GenericArray::<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>::default(
-            );
-        bytes.copy_from_slice(&value[..<sha2::Sha512 as sha2::Digest>::output_size()]);
+        let mut bytes = HasherOutput::default();
+        bytes.copy_from_slice(value);
         Ok(Self(bytes))
     }
-}
-
-/// Error when attempting to convert a string into a [`CryptoHash`].
-#[derive(Clone, Copy, Debug, Error)]
-pub enum HashFromStrError {
-    #[error("Invalid length for hex-encoded hash value")]
-    InvalidLength,
-
-    #[error("String contains non-hexadecimal digits")]
-    NonHexDigits(#[from] hex::FromHexError),
 }
 
 impl std::fmt::Display for Signature {
@@ -369,16 +360,14 @@ impl CryptoHash {
     where
         T: BcsHashable,
     {
-        use sha2::Digest;
+        use sha3::digest::Digest;
 
-        let mut hasher = sha2::Sha512::default();
+        let mut hasher = sha3::Sha3_256::default();
         value.write(&mut hasher);
         CryptoHash(hasher.finalize())
     }
 
-    pub fn as_bytes(
-        &self,
-    ) -> &generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize> {
+    pub fn as_bytes(&self) -> &HasherOutput {
         &self.0
     }
 }
@@ -453,13 +442,13 @@ impl Arbitrary for CryptoHash {
     type Strategy = strategy::Map<VecStrategy<RangeInclusive<u8>>, fn(Vec<u8>) -> CryptoHash>;
 
     fn arbitrary_with((): Self::Parameters) -> Self::Strategy {
-        vec(u8::MIN..=u8::MAX, 64).prop_map(|vector| {
-            let bytes: [u8; 64] = vector.try_into().expect("Incorrect vector size");
-
-            CryptoHash(generic_array::GenericArray::clone_from_slice(&bytes))
+        vec(u8::MIN..=u8::MAX, HasherOutputSize::to_usize()).prop_map(|vector| {
+            CryptoHash(generic_array::GenericArray::clone_from_slice(&vector[..]))
         })
     }
 }
+
+impl BcsHashable for PublicKey {}
 
 #[test]
 #[allow(clippy::disallowed_names)]
