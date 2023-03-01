@@ -185,7 +185,7 @@ impl Store for DynamoDbStoreClient {
     async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
         let mut values = self.0.values().await?;
         values.insert(&value.hash(), value.into())?;
-        let mut batch = Batch::default();
+        let mut batch = Batch::new();
         values.flush(&mut batch)?;
         self.0.context.write_batch(batch).await?;
         Ok(())
@@ -223,7 +223,7 @@ impl Store for DynamoDbStoreClient {
         let mut values = values_result?;
         certificates.insert(&hash, cert)?;
         values.insert(&hash, value.into())?;
-        let mut batch = Batch::default();
+        let mut batch = Batch::new();
         certificates.flush(&mut batch)?;
         values.flush(&mut batch)?;
         self.0.context.write_batch(batch).await?;

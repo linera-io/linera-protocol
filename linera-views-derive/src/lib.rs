@@ -122,7 +122,7 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
         {
             async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
                 use linera_views::common::Batch;
-                let mut batch = Batch::default();
+                let mut batch = Batch::new();
                 #(#flushes)*
                 self.context().write_batch(batch).await?;
                 Ok(())
@@ -658,7 +658,7 @@ pub mod tests {
             {
                 async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
                     use linera_views::common::Batch;
-                    let mut batch = Batch::default();
+                    let mut batch = Batch::new();
                     self.register.flush(&mut batch)?;
                     self.collection.flush(&mut batch)?;
                     self.context().write_batch(batch).await?;

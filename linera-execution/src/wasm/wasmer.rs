@@ -494,7 +494,7 @@ impl writable_system::WritableSystem
         &mut self,
         list_oper: Vec<writable_system::WriteOperation>,
     ) -> Self::WriteBatch {
-        let mut batch = Batch::default();
+        let mut batch = Batch::new();
         for x in list_oper {
             match x {
                 writable_system::WriteOperation::Delete(key) => batch.delete_key(key.to_vec()),

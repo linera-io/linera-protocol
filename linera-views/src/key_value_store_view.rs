@@ -534,7 +534,7 @@ where
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         let mut kvsv = self.kvsv.write().await;
         kvsv.write_batch(batch).await?;
-        let mut batch = Batch::default();
+        let mut batch = Batch::new();
         kvsv.flush(&mut batch)?;
         kvsv.context().write_batch(batch).await?;
         Ok(())

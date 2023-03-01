@@ -73,19 +73,23 @@ pub enum WriteOperation {
 }
 
 /// A batch of writes inside a transaction;
-#[derive(Default)]
 pub struct Batch {
     /// The entries of batch
     pub operations: Vec<WriteOperation>,
 }
 
 impl Batch {
+    /// Create an empty batch
+    pub fn new() -> Self {
+        Self { operations: Vec::new() }
+    }
+
     /// building a batch from a function
     pub async fn build<F>(builder: F) -> Result<Self, ViewError>
     where
         F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>> + Send + Sync,
     {
-        let mut batch = Batch::default();
+        let mut batch = Batch::new();
         builder(&mut batch).await?;
         Ok(batch)
     }

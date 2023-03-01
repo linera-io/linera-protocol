@@ -98,7 +98,7 @@ impl UserApplication for TestApplication {
         let state = storage.read_key_bytes(chosen_key.clone()).await?;
         let mut state = state.unwrap_or_default();
         state.extend(operation);
-        let mut batch = Batch::default();
+        let mut batch = Batch::new();
         batch.put_key_value_bytes(chosen_key, state);
         storage
             .write_batch_and_unlock(batch)
