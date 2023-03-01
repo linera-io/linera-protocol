@@ -600,6 +600,12 @@ pub struct Bytecode {
 }
 
 impl Bytecode {
+    /// Creates a new [`Bytecode`] instance using the provided `bytes`.
+    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+    pub(crate) fn new(bytes: Vec<u8>) -> Self {
+        Bytecode { bytes }
+    }
+
     /// Load bytecode from a WASM module file.
     pub async fn load_from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let bytes = tokio::fs::read(path).await?;
