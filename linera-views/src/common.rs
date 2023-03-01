@@ -17,7 +17,8 @@ use std::{
 #[path = "unit_tests/common_tests.rs"]
 mod common_tests;
 
-pub(crate) type HashOutput =
+/// This is the standard hash used by sha2
+pub type HashOutput =
     generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>;
 
 #[derive(Debug)]
