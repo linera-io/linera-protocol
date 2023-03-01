@@ -27,7 +27,7 @@ use crate::{
     SessionId, UserApplication, WasmRuntime, WritableStorage,
 };
 use async_trait::async_trait;
-use std::{io, path::Path};
+use std::path::Path;
 use thiserror::Error;
 
 /// A user application in a compiled WebAssembly module.
@@ -56,12 +56,16 @@ impl WasmApplication {
         contract_bytecode_file: impl AsRef<Path>,
         service_bytecode_file: impl AsRef<Path>,
         runtime: WasmRuntime,
-    ) -> Result<Self, io::Error> {
-        Ok(WasmApplication {
-            contract_bytecode: Bytecode::load_from_file(contract_bytecode_file).await?,
-            service_bytecode: Bytecode::load_from_file(service_bytecode_file).await?,
+    ) -> Result<Self, WasmExecutionError> {
+        Ok(WasmApplication::new(
+            Bytecode::load_from_file(contract_bytecode_file)
+                .await
+                .map_err(anyhow::Error::from)?,
+            Bytecode::load_from_file(service_bytecode_file)
+                .await
+                .map_err(anyhow::Error::from)?,
             runtime,
-        })
+        ))
     }
 }
 
@@ -270,9 +274,13 @@ pub mod test {
     pub async fn build_example_application(
         name: &str,
         wasm_runtime: impl Into<Option<WasmRuntime>>,
-    ) -> Result<WasmApplication, std::io::Error> {
+    ) -> Result<WasmApplication, anyhow::Error> {
         let (contract, service) = get_example_bytecode_paths(name)?;
-        WasmApplication::from_files(&contract, &service, wasm_runtime.into().unwrap_or_default())
-            .await
+        Ok(WasmApplication::from_files(
+            &contract,
+            &service,
+            wasm_runtime.into().unwrap_or_default(),
+        )
+        .await?)
     }
 }
