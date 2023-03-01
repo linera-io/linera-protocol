@@ -120,9 +120,13 @@ where
     let name_counter = if use_view { "counter2" } else { "counter" };
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths(name_counter)?;
+    let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
+    let service_bytecode = Bytecode::load_from_file(service_path).await?;
+
+    // Publish some bytecode.
     let publish_operation = SystemOperation::PublishBytecode {
-        contract: Bytecode::load_from_file(contract_path).await?,
-        service: Bytecode::load_from_file(service_path).await?,
+        contract: contract_bytecode,
+        service: service_bytecode,
     };
     let publish_effect = SystemEffect::BytecodePublished { operation_index: 0 };
     let publish_block = make_block(

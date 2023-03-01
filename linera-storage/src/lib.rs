@@ -177,7 +177,7 @@ pub trait Store: Sized {
                 contract.clone(),
                 service.clone(),
                 wasm_runtime,
-            ))),
+            )?)),
             _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
         }
     }

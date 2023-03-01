@@ -21,6 +21,7 @@ mod wasmer;
 #[path = "wasmtime.rs"]
 mod wasmtime;
 
+use self::sanitizer::sanitize;
 use crate::{
     ApplicationCallResult, Bytecode, CalleeContext, EffectContext, ExecutionError,
     OperationContext, QueryContext, QueryableStorage, RawExecutionResult, SessionCallResult,
@@ -43,12 +44,12 @@ impl WasmApplication {
         contract_bytecode: Bytecode,
         service_bytecode: Bytecode,
         runtime: WasmRuntime,
-    ) -> Self {
-        WasmApplication {
-            contract_bytecode,
+    ) -> Result<Self, WasmExecutionError> {
+        Ok(WasmApplication {
+            contract_bytecode: sanitize(contract_bytecode)?,
             service_bytecode,
             runtime,
-        }
+        })
     }
 
     /// Create a new [`WasmApplication`] using the WebAssembly module in `bytecode_file`.
@@ -57,7 +58,7 @@ impl WasmApplication {
         service_bytecode_file: impl AsRef<Path>,
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
-        Ok(WasmApplication::new(
+        WasmApplication::new(
             Bytecode::load_from_file(contract_bytecode_file)
                 .await
                 .map_err(anyhow::Error::from)?,
@@ -65,7 +66,7 @@ impl WasmApplication {
                 .await
                 .map_err(anyhow::Error::from)?,
             runtime,
-        ))
+        )
     }
 }
 
