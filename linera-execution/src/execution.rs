@@ -6,7 +6,7 @@ use crate::{
     system::SystemExecutionStateView,
     ApplicationId, Effect, EffectContext, ExecutionError, ExecutionResult, ExecutionRuntimeContext,
     Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemEffect,
-    UserApplicationId,
+    UserApplicationId, WritableStorage,
 };
 use linera_base::{
     data_types::{ChainId, Owner},
@@ -199,13 +199,14 @@ where
             parameters: description.parameters,
             signer,
         }];
+        let available_fuel = *self.available_fuel.get();
         let runtime = ExecutionRuntime::new(
             chain_id,
             &mut applications,
             self,
             &mut session_manager,
             &mut results,
-            10_000_000,
+            available_fuel,
         );
         // Make the call to user code.
         let mut result = match action {
@@ -225,6 +226,9 @@ where
         };
         // Set the authenticated signer to be used in outgoing effects.
         result.authenticated_signer = signer;
+        // Update the amount of available fuel after execution has consumed some or all of it
+        let remaining_fuel = runtime.remaining_fuel();
+        self.available_fuel.set(remaining_fuel);
         // Check that applications were correctly stacked and unstacked.
         assert_eq!(applications.len(), 1);
         assert_eq!(applications[0].id, application_id);
