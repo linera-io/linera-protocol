@@ -19,6 +19,8 @@ use std::sync::Arc;
 /// called correctly.
 #[tokio::test]
 async fn test_counter_wasm_application() -> anyhow::Result<()> {
+    let mut operation_fuel = None;
+
     for wasm_runtime in WasmRuntime::ALL {
         let state = SystemExecutionState {
             description: Some(ChainDescription::Root(0)),
@@ -61,6 +63,12 @@ async fn test_counter_wasm_application() -> anyhow::Result<()> {
                 result,
                 vec![ExecutionResult::User(app_id, RawExecutionResult::default())]
             );
+        }
+
+        if operation_fuel.is_none() {
+            operation_fuel = Some(*view.available_fuel.get());
+        } else {
+            assert_eq!(operation_fuel, Some(*view.available_fuel.get()));
         }
 
         let context = QueryContext {
