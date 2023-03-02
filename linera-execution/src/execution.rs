@@ -129,6 +129,12 @@ where
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
+    /// Adds `fuel` to the amount of `available_fuel` in the chain.
+    pub fn add_fuel(&mut self, fuel: u64) {
+        let updated_amount = self.available_fuel.get().saturating_add(fuel);
+        self.available_fuel.set(updated_amount);
+    }
+
     async fn run_user_action(
         &mut self,
         application_id: UserApplicationId,
