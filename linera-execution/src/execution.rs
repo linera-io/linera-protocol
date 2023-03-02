@@ -6,7 +6,7 @@ use crate::{
     system::SystemExecutionStateView,
     ApplicationId, Effect, EffectContext, ExecutionError, ExecutionResult, ExecutionRuntimeContext,
     Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemEffect,
-    UserApplicationDescription, UserApplicationId,
+    UserApplicationId,
 };
 use linera_base::{
     data_types::{ChainId, Owner},
@@ -22,7 +22,10 @@ use linera_views_derive::CryptoHashView;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::{system::SystemExecutionState, TestExecutionRuntimeContext},
+    crate::{
+        system::SystemExecutionState, TestExecutionRuntimeContext, UserApplicationCode,
+        UserApplicationDescription,
+    },
     async_lock::Mutex,
     linera_views::{common::Context, memory::MemoryContext},
     std::collections::BTreeMap,
@@ -103,6 +106,40 @@ where
     pub fn with_fuel(mut self, fuel: u64) -> Self {
         self.available_fuel.set(fuel);
         self
+    }
+
+    /// Simulates the initialization of an application.
+    pub async fn simulate_initialization(
+        &mut self,
+        application: UserApplicationCode,
+        application_description: UserApplicationDescription,
+        initialization_argument: Vec<u8>,
+    ) -> Result<(), ExecutionError> {
+        let chain_id = application_description.creation.chain_id;
+        let context = OperationContext {
+            chain_id,
+            authenticated_signer: None,
+            height: application_description.creation.height,
+            index: application_description.creation.index,
+        };
+
+        let action = UserAction::Initialize(&context, initialization_argument);
+
+        let application_id = self
+            .system
+            .registry
+            .register_application(application_description)
+            .await?;
+
+        self.context()
+            .extra()
+            .user_applications()
+            .insert(application_id, application);
+
+        self.run_user_action(application_id, chain_id, action)
+            .await?;
+
+        Ok(())
     }
 }
 
