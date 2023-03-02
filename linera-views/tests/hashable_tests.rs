@@ -4,7 +4,7 @@
 use linera_views::{
     common::{Context, HashOutput},
     hashable_wrapper::WrappedHashableContainerView,
-    memory::make_test_context,
+    memory::create_test_context,
     register_view::RegisterView,
     views::{HashableView, View},
 };
@@ -16,10 +16,10 @@ struct TestType<C> {
     pub wrap: WrappedHashableContainerView<C, RegisterView<C, String>, HashOutput>,
 }
 
-// TODO: Implement the same for CryptoHash
+// TODO(Implement the same for CryptoHash)
 #[tokio::test]
 async fn check_hashable_container_hash() {
-    let context = make_test_context().await;
+    let context = create_test_context().await;
     let test = TestType::load(context).await.unwrap();
     let hash1 = test.inner.hash().await.unwrap();
     let hash2 = test.wrap.hash().await.unwrap();

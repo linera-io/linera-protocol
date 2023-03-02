@@ -206,8 +206,8 @@ impl<C, I, V> MapView<C, I, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
-    V: Clone + Sync + Serialize + DeserializeOwned + 'static,
+    I: Sync + Send + Serialize + DeserializeOwned,
+    V: Sync + Serialize + DeserializeOwned + 'static,
 {
     /// Return the list of indices in the map.
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {

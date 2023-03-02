@@ -115,7 +115,7 @@ mod tests {
         EffectId, ExecutionResult, OperationContext, Session,
     };
     use linera_views::{
-        memory::{make_test_context, MemoryContext},
+        memory::{create_test_context, MemoryContext},
         views::View,
     };
     use webassembly_test::webassembly_test;
@@ -192,7 +192,7 @@ mod tests {
     }
 
     fn create_and_initialize_counter(initial_value: u64) -> Counter<MemoryContext<()>> {
-        let context = make_test_context()
+        let context = create_test_context()
             .now_or_never()
             .expect("Failed to acquire the guard");
         let mut counter = Counter::load(context)
