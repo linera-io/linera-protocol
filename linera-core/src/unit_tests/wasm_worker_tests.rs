@@ -151,7 +151,7 @@ where
         timestamp: Timestamp::from(1),
         registry: ApplicationRegistry::default(),
     };
-    let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
+    let publisher_state_hash = make_state_hash(publisher_system_state.clone(), 10_000_000).await;
     let publish_block_proposal = HashedValue::new_confirmed(
         publish_block,
         vec![OutgoingEffect {
@@ -216,7 +216,7 @@ where
         .registry
         .published_bytecodes
         .insert(bytecode_id, bytecode_location);
-    let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
+    let publisher_state_hash = make_state_hash(publisher_system_state.clone(), 20_000_000).await;
     let broadcast_block_proposal = HashedValue::new_confirmed(
         broadcast_block,
         vec![OutgoingEffect {
@@ -276,7 +276,9 @@ where
         timestamp: Timestamp::from(2),
         registry: ApplicationRegistry::default(),
     };
-    let creator_state = ExecutionStateView::from_system_state(creator_system_state.clone()).await;
+    let creator_state = ExecutionStateView::from_system_state(creator_system_state.clone())
+        .await
+        .with_fuel(10_000_000);
     let subscribe_block_proposal = HashedValue::new_confirmed(
         subscribe_block,
         vec![OutgoingEffect {
@@ -324,7 +326,7 @@ where
         Timestamp::from(3),
     );
     publisher_system_state.timestamp = Timestamp::from(3);
-    let publisher_state_hash = make_state_hash(publisher_system_state).await;
+    let publisher_state_hash = make_state_hash(publisher_system_state, 30_000_000).await;
     let accept_block_proposal = HashedValue::new_confirmed(
         accept_block,
         vec![OutgoingEffect {
@@ -407,7 +409,9 @@ where
         .known_applications
         .insert(application_id, application_description);
     creator_system_state.timestamp = Timestamp::from(4);
-    let mut creator_state = ExecutionStateView::from_system_state(creator_system_state).await;
+    let mut creator_state = ExecutionStateView::from_system_state(creator_system_state)
+        .await
+        .with_fuel(20_000_000);
     // chosen_key is formed of two parts:
     // * 4 bytes equal to 0 that correspond to the base_key of the first index since "counter"
     //   has just one RegisterView<C,u128>
@@ -454,6 +458,7 @@ where
         None,
         Timestamp::from(5),
     );
+    creator_state.add_fuel(10_000_000);
     let expected_value = initial_value + increment;
     let expected_state_bytes = bcs::to_bytes(&expected_value)?;
     if use_view {

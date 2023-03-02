@@ -364,6 +364,7 @@ where
             ChainError::InvalidBlockTimestamp
         );
         self.execution_state.system.timestamp.set(block.timestamp);
+        self.execution_state.add_fuel(10_000_000);
         let mut effects = Vec::new();
         for message in &block.incoming_messages {
             log::trace!(

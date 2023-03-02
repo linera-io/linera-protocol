@@ -28,7 +28,8 @@ async fn test_counter_wasm_application() -> anyhow::Result<()> {
             ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
                 state,
             )
-            .await;
+            .await
+            .with_fuel(10_000_000);
         let app_desc = create_dummy_user_application_description();
         let app_id = view
             .system
