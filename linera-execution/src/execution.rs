@@ -156,6 +156,7 @@ where
             self,
             &mut session_manager,
             &mut results,
+            10_000_000,
         );
         // Make the call to user code.
         let mut result = match action {
@@ -304,6 +305,7 @@ where
                     self,
                     &mut session_manager,
                     &mut results,
+                    0,
                 );
                 // Run the query.
                 let response = application

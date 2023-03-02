@@ -97,18 +97,19 @@ where
         execution_state: &'a mut ExecutionStateView<C>,
         session_manager: &'a mut SessionManager,
         execution_results: &'a mut Vec<ExecutionResult>,
+        fuel: u64,
     ) -> Self {
         assert_eq!(chain_id, execution_state.context().extra().chain_id());
         Self {
             chain_id,
             applications: Arc::new(Mutex::new(applications)),
+            remaining_fuel: Arc::new(AtomicU64::new(fuel)),
             execution_state: Arc::new(Mutex::new(execution_state)),
             session_manager: Arc::new(Mutex::new(session_manager)),
             active_simple_user_states: Arc::default(),
             active_view_user_states: Arc::default(),
             active_sessions: Arc::default(),
             execution_results: Arc::new(Mutex::new(execution_results)),
-            remaining_fuel: Arc::new(AtomicU64::new(10_000_000)),
         }
     }
 
