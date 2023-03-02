@@ -98,6 +98,12 @@ where
             .expect("serialization of registry components should not fail");
         view
     }
+
+    /// Sets the amount of `available_fuel` using the builder pattern.
+    pub fn with_fuel(mut self, fuel: u64) -> Self {
+        self.available_fuel.set(fuel);
+        self
+    }
 }
 
 enum UserAction<'a> {
