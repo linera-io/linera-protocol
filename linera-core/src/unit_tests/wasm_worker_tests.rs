@@ -18,13 +18,16 @@ use linera_chain::data_types::{Event, HashedValue, Message, Origin, OutgoingEffe
 use linera_execution::{
     system::{Balance, SystemChannel, SystemEffect, SystemOperation},
     ApplicationId, ApplicationRegistry, Bytecode, BytecodeId, BytecodeLocation, ChainOwnership,
-    ChannelId, Destination, Effect, ExecutionStateView, SystemExecutionState,
-    UserApplicationDescription, UserApplicationId, WasmRuntime,
+    ChannelId, Destination, Effect, ExecutionStateView, Operation, OperationContext,
+    SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmApplication,
+    WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
-
 use linera_views::views::{CryptoHashView, ViewError};
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 use test_log::test;
 
 #[cfg(feature = "aws")]
@@ -116,12 +119,17 @@ where
     )
     .await;
 
-    // Publish some bytecode.
+    // Load some bytecode.
     let name_counter = if use_view { "counter2" } else { "counter" };
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths(name_counter)?;
     let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
     let service_bytecode = Bytecode::load_from_file(service_path).await?;
+    let application = Arc::new(WasmApplication::new(
+        contract_bytecode.clone(),
+        service_bytecode.clone(),
+        WasmRuntime::default(),
+    )?);
 
     // Publish some bytecode.
     let publish_operation = SystemOperation::PublishBytecode {
@@ -407,29 +415,22 @@ where
     creator_system_state
         .registry
         .known_applications
-        .insert(application_id, application_description);
+        .insert(application_id, application_description.clone());
     creator_system_state.timestamp = Timestamp::from(4);
     let mut creator_state = ExecutionStateView::from_system_state(creator_system_state)
         .await
         .with_fuel(20_000_000);
+    creator_state
+        .simulate_initialization(
+            application,
+            application_description,
+            initial_value_bytes.clone(),
+        )
+        .await?;
     // chosen_key is formed of two parts:
     // * 4 bytes equal to 0 that correspond to the base_key of the first index since "counter"
     //   has just one RegisterView<C,u128>
     // * 1 byte equal to zero that corresponds to the KeyTag::Value of RegisterView
-    let chosen_key = vec![0, 0, 0, 0, 0];
-    if use_view {
-        creator_state
-            .view_users
-            .try_load_entry_mut(&application_id)
-            .await?
-            .insert(chosen_key.clone(), initial_value_bytes);
-    } else {
-        creator_state
-            .simple_users
-            .try_load_entry_mut(&application_id)
-            .await?
-            .set(initial_value_bytes);
-    }
     let create_block_proposal =
         HashedValue::new_confirmed(create_block, vec![], creator_state.crypto_hash().await?);
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
@@ -452,28 +453,26 @@ where
     let run_block = make_block(
         Epoch::from(0),
         creator_chain.into(),
-        vec![(application_id, user_operation)],
+        vec![(application_id, user_operation.clone())],
         vec![],
         Some(&create_certificate),
         None,
         Timestamp::from(5),
     );
+    let operation_context = OperationContext {
+        chain_id: creator_chain.into(),
+        authenticated_signer: None,
+        height: run_block.height,
+        index: 0,
+    };
     creator_state.add_fuel(10_000_000);
-    let expected_value = initial_value + increment;
-    let expected_state_bytes = bcs::to_bytes(&expected_value)?;
-    if use_view {
-        creator_state
-            .view_users
-            .try_load_entry_mut(&application_id)
-            .await?
-            .insert(chosen_key.clone(), expected_state_bytes);
-    } else {
-        creator_state
-            .simple_users
-            .try_load_entry_mut(&application_id)
-            .await?
-            .set(expected_state_bytes);
-    }
+    creator_state
+        .execute_operation(
+            ApplicationId::User(application_id),
+            &operation_context,
+            &Operation::User(user_operation),
+        )
+        .await?;
     creator_state.system.timestamp.set(Timestamp::from(5));
     let run_block_proposal =
         HashedValue::new_confirmed(run_block, vec![], creator_state.crypto_hash().await?);
