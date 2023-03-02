@@ -38,6 +38,8 @@ pub struct ExecutionStateView<C> {
     pub simple_users: ReentrantCollectionView<C, UserApplicationId, RegisterView<C, Vec<u8>>>,
     /// User applications (View based).
     pub view_users: ReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
+    /// Fuel available for running applications.
+    pub available_fuel: RegisterView<C, u64>,
 }
 
 #[cfg(any(test, feature = "test"))]
