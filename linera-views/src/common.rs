@@ -17,8 +17,8 @@ use std::{
 #[path = "unit_tests/common_tests.rs"]
 mod common_tests;
 
-pub(crate) type HashOutput =
-    generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>;
+/// This is the standard hash used by sha2
+pub type HashOutput = generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>;
 
 #[derive(Debug)]
 pub(crate) enum Update<T> {
@@ -80,12 +80,17 @@ pub struct Batch {
 }
 
 impl Batch {
+    /// Create an empty batch
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// building a batch from a function
     pub async fn build<F>(builder: F) -> Result<Self, ViewError>
     where
         F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>> + Send + Sync,
     {
-        let mut batch = Batch::default();
+        let mut batch = Batch::new();
         builder(&mut batch).await?;
         Ok(batch)
     }

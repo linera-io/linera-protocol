@@ -135,7 +135,7 @@ where
             }
             Operation::CommitAndReload => {
                 let context = context.clone();
-                let mut batch = Batch::default();
+                let mut batch = Batch::new();
                 queue.flush(&mut batch)?;
                 context.write_batch(batch).await?;
                 queue = QueueView::load(context).await?;

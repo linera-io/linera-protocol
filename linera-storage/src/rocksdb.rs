@@ -85,7 +85,7 @@ impl Store for RocksdbStoreClient {
 
     async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
-        let mut batch = Batch::default();
+        let mut batch = Batch::new();
         batch.put_key_value(value_key.to_vec(), &value)?;
         self.0.db.write_batch(batch).await?;
         Ok(())
@@ -112,7 +112,7 @@ impl Store for RocksdbStoreClient {
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let (cert, value) = certificate.split();
-        let mut batch = Batch::default();
+        let mut batch = Batch::new();
         batch.put_key_value(cert_key.to_vec(), &cert)?;
         batch.put_key_value(value_key.to_vec(), &value)?;
         self.0.db.write_batch(batch).await?;

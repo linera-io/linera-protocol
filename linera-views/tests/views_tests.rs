@@ -688,14 +688,14 @@ async fn test_collection_removal() -> anyhow::Result<()> {
     let mut collection = CollectionViewType::load(context.clone()).await?;
     let entry = collection.load_entry_mut(&1).await?;
     entry.set(1);
-    let mut batch = Batch::default();
+    let mut batch = Batch::new();
     collection.flush(&mut batch)?;
     collection.context().write_batch(batch).await?;
 
     // Remove the entry from the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
     collection.remove_entry(&1).unwrap();
-    let mut batch = Batch::default();
+    let mut batch = Batch::new();
     collection.flush(&mut batch)?;
     collection.context().write_batch(batch).await?;
 
@@ -720,7 +720,7 @@ async fn test_removal_api_first_second_condition(
     let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;
     let entry = collection.load_entry_mut(&1).await?;
     entry.set(100);
-    let mut batch = Batch::default();
+    let mut batch = Batch::new();
     collection.flush(&mut batch)?;
     collection.context().write_batch(batch).await?;
 
@@ -741,7 +741,7 @@ async fn test_removal_api_first_second_condition(
     }
 
     // We commit
-    let mut batch = Batch::default();
+    let mut batch = Batch::new();
     collection.flush(&mut batch)?;
     collection.context().write_batch(batch).await?;
 
