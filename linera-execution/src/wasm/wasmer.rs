@@ -108,8 +108,12 @@ impl WasmApplication {
         let context_forwarder = ContextForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
         let (internal_error_sender, internal_error_receiver) = oneshot::channel();
-        let (system_api, storage_guard) =
-            SystemApi::new_writable(context_forwarder.clone(), storage, queued_future_factory);
+        let (system_api, storage_guard) = SystemApi::new_writable(
+            context_forwarder.clone(),
+            storage,
+            queued_future_factory,
+            internal_error_sender,
+        );
         let system_api_setup =
             writable_system::add_to_imports(&mut store, &mut imports, system_api);
         let (contract, instance) =
@@ -147,7 +151,7 @@ impl WasmApplication {
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
         let (internal_error_sender, internal_error_receiver) = oneshot::channel();
         let (system_api, storage_guard) =
-            SystemApi::new_queryable(context_forwarder.clone(), storage);
+            SystemApi::new_queryable(context_forwarder.clone(), storage, internal_error_sender);
         let system_api_setup =
             queryable_system::add_to_imports(&mut store, &mut imports, system_api);
         let (service, instance) = service::Service::instantiate(&mut store, &module, &mut imports)?;
@@ -331,6 +335,7 @@ pub struct SystemApi<S, Q> {
     context: ContextForwarder,
     storage: Arc<Mutex<Option<S>>>,
     queued_future_factory: Q,
+    internal_error_sender: Option<oneshot::Sender<ExecutionError>>,
 }
 
 impl SystemApi<&'static dyn WritableStorage, QueuedHostFutureFactory<'static>> {
@@ -350,6 +355,7 @@ impl SystemApi<&'static dyn WritableStorage, QueuedHostFutureFactory<'static>> {
         context: ContextForwarder,
         storage: &'storage dyn WritableStorage,
         queued_future_factory: QueuedHostFutureFactory<'static>,
+        internal_error_sender: oneshot::Sender<ExecutionError>,
     ) -> (Self, StorageGuard<'storage, &'static dyn WritableStorage>) {
         let storage_without_lifetime = unsafe { mem::transmute(storage) };
         let storage = Arc::new(Mutex::new(Some(storage_without_lifetime)));
@@ -364,6 +370,7 @@ impl SystemApi<&'static dyn WritableStorage, QueuedHostFutureFactory<'static>> {
                 context,
                 storage,
                 queued_future_factory,
+                internal_error_sender: Some(internal_error_sender),
             },
             guard,
         )
@@ -375,6 +382,7 @@ impl SystemApi<&'static dyn QueryableStorage, ()> {
     pub fn new_queryable<'storage>(
         context: ContextForwarder,
         storage: &'storage dyn QueryableStorage,
+        internal_error_sender: oneshot::Sender<ExecutionError>,
     ) -> (Self, StorageGuard<'storage, &'static dyn QueryableStorage>) {
         let storage_without_lifetime = unsafe { mem::transmute(storage) };
         let storage = Arc::new(Mutex::new(Some(storage_without_lifetime)));
@@ -389,6 +397,7 @@ impl SystemApi<&'static dyn QueryableStorage, ()> {
                 context,
                 storage,
                 queued_future_factory: (),
+                internal_error_sender: Some(internal_error_sender),
             },
             guard,
         )

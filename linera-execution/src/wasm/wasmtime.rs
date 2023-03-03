@@ -92,7 +92,12 @@ impl WasmApplication {
         let context_forwarder = ContextForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
         let (internal_error_sender, internal_error_receiver) = oneshot::channel();
-        let state = ContractState::new(storage, context_forwarder.clone(), queued_future_factory);
+        let state = ContractState::new(
+            storage,
+            context_forwarder.clone(),
+            queued_future_factory,
+            internal_error_sender,
+        );
         let mut store = Store::new(&engine, state);
         let (contract, _instance) =
             contract::Contract::instantiate(&mut store, &module, &mut linker, ContractState::data)?;
@@ -126,7 +131,7 @@ impl WasmApplication {
         let context_forwarder = ContextForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
         let (internal_error_sender, internal_error_receiver) = oneshot::channel();
-        let state = ServiceState::new(storage, context_forwarder.clone());
+        let state = ServiceState::new(storage, context_forwarder.clone(), internal_error_sender);
         let mut store = Store::new(&engine, state);
         let (service, _instance) =
             service::Service::instantiate(&mut store, &module, &mut linker, ServiceState::data)?;
@@ -173,10 +178,16 @@ impl<'storage> ContractState<'storage> {
         storage: &'storage dyn WritableStorage,
         context: ContextForwarder,
         queued_future_factory: QueuedHostFutureFactory<'storage>,
+        internal_error_sender: oneshot::Sender<ExecutionError>,
     ) -> Self {
         Self {
             data: ContractData::default(),
-            system_api: SystemApi::new(context, storage, queued_future_factory),
+            system_api: SystemApi::new(
+                context,
+                storage,
+                queued_future_factory,
+                internal_error_sender,
+            ),
             system_tables: WritableSystemTables::default(),
         }
     }
@@ -202,10 +213,14 @@ impl<'storage> ServiceState<'storage> {
     ///
     /// Uses `storage` to export the system API, and the `context` to be able to correctly handle
     /// asynchronous calls from the guest WASM module.
-    pub fn new(storage: &'storage dyn QueryableStorage, context: ContextForwarder) -> Self {
+    pub fn new(
+        storage: &'storage dyn QueryableStorage,
+        context: ContextForwarder,
+        internal_error_sender: oneshot::Sender<ExecutionError>,
+    ) -> Self {
         Self {
             data: ServiceData::default(),
-            system_api: SystemApi::new(context, storage, ()),
+            system_api: SystemApi::new(context, storage, (), internal_error_sender),
             system_tables: QueryableSystemTables::default(),
         }
     }
@@ -371,16 +386,23 @@ pub struct SystemApi<S, Q> {
     context: ContextForwarder,
     storage: S,
     queued_future_factory: Q,
+    internal_error_sender: Option<oneshot::Sender<ExecutionError>>,
 }
 
 impl<S, Q> SystemApi<S, Q> {
     /// Create a new [`SystemApi`] instance using the provided asynchronous `context` and exporting
     /// the API from `storage`.
-    pub fn new(context: ContextForwarder, storage: S, queued_future_factory: Q) -> Self {
+    pub fn new(
+        context: ContextForwarder,
+        storage: S,
+        queued_future_factory: Q,
+        internal_error_sender: oneshot::Sender<ExecutionError>,
+    ) -> Self {
         SystemApi {
             context,
             storage,
             queued_future_factory,
+            internal_error_sender: Some(internal_error_sender),
         }
     }
 }
