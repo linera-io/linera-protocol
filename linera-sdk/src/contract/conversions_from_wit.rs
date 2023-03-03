@@ -228,13 +228,10 @@ impl From<PollFindKeyValues> for Poll<Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError>
     }
 }
 
-impl From<PollWriteBatch> for Poll<Result<(), ViewError>> {
+impl From<PollWriteBatch> for Poll<()> {
     fn from(poll_write_batch: PollWriteBatch) -> Self {
         match poll_write_batch {
-            PollWriteBatch::Ready(Ok(())) => Poll::Ready(Ok(())),
-            PollWriteBatch::Ready(Err(error)) => {
-                Poll::Ready(Err(ViewError::WasmHostGuestError(error)))
-            }
+            PollWriteBatch::Ready => Poll::Ready(()),
             PollWriteBatch::Pending => Poll::Pending,
         }
     }

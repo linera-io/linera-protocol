@@ -589,8 +589,11 @@ impl writable_system::WritableSystem
         use writable_system::PollWriteBatch;
         match future.poll(&mut self.context) {
             Poll::Pending => PollWriteBatch::Pending,
-            Poll::Ready(Ok(())) => PollWriteBatch::Ready(Ok(())),
-            Poll::Ready(Err(error)) => PollWriteBatch::Ready(Err(error.to_string())),
+            Poll::Ready(Ok(())) => PollWriteBatch::Ready,
+            Poll::Ready(Err(error)) => {
+                self.report_internal_error(error);
+                PollWriteBatch::Pending
+            }
         }
     }
 

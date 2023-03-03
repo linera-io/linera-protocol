@@ -110,7 +110,8 @@ impl KeyValueStoreClient for WasmClient {
             }
         }
         let future = system::WriteBatch::new(&list_oper);
-        future::poll_fn(|_context| future.poll().into()).await
+        let () = future::poll_fn(|_context| future.poll().into()).await;
+        Ok(())
     }
 }
 

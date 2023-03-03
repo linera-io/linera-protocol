@@ -84,7 +84,7 @@ resource write-batch {
 
 variant poll-write-batch {
     pending,
-    ready(result<unit, string>),
+    ready,
 }
 
 resource try-call-application {
