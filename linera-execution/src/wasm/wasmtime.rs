@@ -405,6 +405,17 @@ impl<S, Q> SystemApi<S, Q> {
             internal_error_sender: Some(internal_error_sender),
         }
     }
+
+    /// Reports an error to the [`GuestFuture`] responsible for executing the application.
+    ///
+    /// This causes the [`GuestFuture`] to return that error the next time it is polled.
+    fn report_internal_error(&mut self, error: ExecutionError) {
+        if let Some(sender) = self.internal_error_sender.take() {
+            sender
+                .send(error)
+                .expect("Internal error receiver has unexpectedly been dropped");
+        }
+    }
 }
 
 impl<'storage> WritableSystem
