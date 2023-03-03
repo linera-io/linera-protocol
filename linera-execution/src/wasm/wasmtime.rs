@@ -37,6 +37,7 @@ use super::{
 use crate::{CallResult, ExecutionError, QueryableStorage, SessionId, WritableStorage};
 use linera_views::common::Batch;
 use std::task::Poll;
+use tokio::sync::oneshot;
 use wasmtime::{Config, Engine, Linker, Module, Store, Trap};
 use wit_bindgen_host_wasmtime_rust::Le;
 
@@ -90,6 +91,7 @@ impl WasmApplication {
         let module = Module::new(&engine, &self.contract_bytecode)?;
         let context_forwarder = ContextForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
+        let (internal_error_sender, internal_error_receiver) = oneshot::channel();
         let state = ContractState::new(storage, context_forwarder.clone(), queued_future_factory);
         let mut store = Store::new(&engine, state);
         let (contract, _instance) =
@@ -104,6 +106,7 @@ impl WasmApplication {
             context_forwarder,
             application,
             future_queue,
+            internal_error_receiver,
             store,
             extra: (),
         })
@@ -122,6 +125,7 @@ impl WasmApplication {
         let module = Module::new(&engine, &self.service_bytecode)?;
         let context_forwarder = ContextForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
+        let (internal_error_sender, internal_error_receiver) = oneshot::channel();
         let state = ServiceState::new(storage, context_forwarder.clone());
         let mut store = Store::new(&engine, state);
         let (service, _instance) =
@@ -132,6 +136,7 @@ impl WasmApplication {
             context_forwarder,
             application,
             future_queue,
+            internal_error_receiver,
             store,
             extra: (),
         })

@@ -13,6 +13,7 @@ use crate::{
     QueryContext, RawExecutionResult, SessionCallResult, SessionId,
 };
 use futures::future::{self, TryFutureExt};
+use tokio::sync::oneshot;
 
 /// Types that are specific to the context of an application ready to be executedy by a WebAssembly
 /// runtime.
@@ -207,6 +208,9 @@ where
 
     /// A queue of host futures called by the guest that must complete deterministically.
     pub(crate) future_queue: HostFutureQueue<'context>,
+
+    /// A channel to receive any errors reported by system APIs.
+    pub(crate) internal_error_receiver: oneshot::Receiver<ExecutionError>,
 
     /// The application's memory state.
     pub(crate) store: A::Store,

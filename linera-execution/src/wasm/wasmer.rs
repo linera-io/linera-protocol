@@ -33,7 +33,7 @@ use super::{
 use crate::{CallResult, ExecutionError, QueryableStorage, SessionId, WritableStorage};
 use linera_views::common::Batch;
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex};
 use wasmer::{
     imports, wasmparser::Operator, CompilerConfig, Cranelift, EngineBuilder, Instance, Module,
     RuntimeError, Store,
@@ -107,6 +107,7 @@ impl WasmApplication {
         let mut imports = imports! {};
         let context_forwarder = ContextForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
+        let (internal_error_sender, internal_error_receiver) = oneshot::channel();
         let (system_api, storage_guard) =
             SystemApi::new_writable(context_forwarder.clone(), storage, queued_future_factory);
         let system_api_setup =
@@ -124,6 +125,7 @@ impl WasmApplication {
             context_forwarder,
             application,
             future_queue,
+            internal_error_receiver,
             store,
             extra: WasmerContractExtra {
                 instance,
@@ -143,6 +145,7 @@ impl WasmApplication {
         let mut imports = imports! {};
         let context_forwarder = ContextForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
+        let (internal_error_sender, internal_error_receiver) = oneshot::channel();
         let (system_api, storage_guard) =
             SystemApi::new_queryable(context_forwarder.clone(), storage);
         let system_api_setup =
@@ -159,6 +162,7 @@ impl WasmApplication {
             context_forwarder,
             application,
             future_queue,
+            internal_error_receiver,
             store,
             extra: storage_guard,
         })
