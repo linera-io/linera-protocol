@@ -82,9 +82,7 @@ pub struct Batch {
 impl Batch {
     /// Create an empty batch
     pub fn new() -> Self {
-        Self {
-            operations: Vec::new(),
-        }
+        Self::default()
     }
 
     /// building a batch from a function
