@@ -10,7 +10,7 @@ use super::{
     super::{
         async_boundary::GuestFutureInterface,
         common::{Contract, Service},
-        WasmExecutionError,
+        ExecutionError, WasmExecutionError,
     },
     contract::{
         CallApplication, CallSession, ExecuteEffect, ExecuteOperation, Initialize,
@@ -39,14 +39,16 @@ macro_rules! impl_guest_future_interface {
                     &self,
                     application: &A,
                     store: &mut A::Store,
-                ) -> Poll<Result<Self::Output, WasmExecutionError>> {
+                ) -> Poll<Result<Self::Output, ExecutionError>> {
                     match application.$poll_func(store, self) {
-                        Ok($poll_type::Ready(Ok(result))) => Poll::Ready(Ok(result.into())),
+                        Ok($poll_type::Ready(Ok(result))) => {
+                            Poll::Ready(Ok(result.into()))
+                        }
                         Ok($poll_type::Ready(Err(message))) => {
-                            Poll::Ready(Err(WasmExecutionError::UserApplication(message)))
+                            Poll::Ready(Err(WasmExecutionError::UserApplication(message).into()))
                         }
                         Ok($poll_type::Pending) => Poll::Pending,
-                        Err(error) => Poll::Ready(Err(error.into())),
+                        Err(error) => Poll::Ready(Err(ExecutionError::WasmError(error.into()))),
                     }
                 }
             }

@@ -6,7 +6,7 @@
 
 use super::{
     common::{ApplicationRuntimeContext, WasmRuntimeContext},
-    WasmExecutionError,
+    ExecutionError,
 };
 use futures::{future::BoxFuture, ready, stream::StreamExt};
 use std::{
@@ -121,7 +121,7 @@ where
     Application::Error: Unpin,
     Application::Extra: Unpin,
 {
-    type Output = Result<InnerFuture::Output, WasmExecutionError>;
+    type Output = Result<InnerFuture::Output, ExecutionError>;
 
     /// Polls the guest future after the [`HostFutureQueue`] in the [`WasmRuntimeContext`] indicates
     /// that it's safe to do so without breaking determinism.
@@ -134,7 +134,7 @@ where
         match self.get_mut() {
             GuestFuture::FailedToCreate(runtime_error) => {
                 let error = runtime_error.take().expect("Unexpected poll after error");
-                Poll::Ready(Err(error.into()))
+                Poll::Ready(Err(ExecutionError::WasmError(error.into())))
             }
             GuestFuture::Active { future, context } => {
                 ready!(context.future_queue.poll_next_unpin(task_context));
@@ -156,12 +156,12 @@ where
 
     /// Poll the guest future to attempt to progress it.
     ///
-    /// May return an [`WasmExecutionError`] if the guest WASM module panics, for example.
+    /// May return an [`ExecutionError`] if the guest WASM module panics, for example.
     fn poll(
         &self,
         application: &Application,
         store: &mut Application::Store,
-    ) -> Poll<Result<Self::Output, WasmExecutionError>>;
+    ) -> Poll<Result<Self::Output, ExecutionError>>;
 }
 
 /// A type to keep track of a [`std::task::Context`] so that it can be forwarded to any async code

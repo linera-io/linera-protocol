@@ -6,7 +6,7 @@
 use super::{
     async_boundary::{ContextForwarder, GuestFuture, GuestFutureInterface},
     async_determinism::HostFutureQueue,
-    WasmExecutionError,
+    ExecutionError, WasmExecutionError,
 };
 use crate::{
     system::Balance, ApplicationCallResult, CalleeContext, EffectContext, OperationContext,
@@ -230,7 +230,7 @@ where
     ///     mut self,
     ///     context: &OperationContext,
     ///     argument: &[u8],
-    /// ) -> Result<RawExecutionResult<Vec<u8>>, WasmExecutionError>
+    /// ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>
     /// ```
     pub fn initialize(
         mut self,
@@ -254,7 +254,7 @@ where
     ///     mut self,
     ///     context: &OperationContext,
     ///     operation: &[u8],
-    /// ) -> Result<RawExecutionResult<Vec<u8>>, WasmExecutionError>
+    /// ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>
     /// ```
     pub fn execute_operation(
         mut self,
@@ -278,7 +278,7 @@ where
     ///     mut self,
     ///     context: &EffectContext,
     ///     effect: &[u8],
-    /// ) -> Result<RawExecutionResult<Vec<u8>>, WasmExecutionError>
+    /// ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>
     /// ```
     pub fn execute_effect(
         mut self,
@@ -303,7 +303,7 @@ where
     ///     context: &CalleeContext,
     ///     argument: &[u8],
     ///     forwarded_sessions: Vec<SessionId>,
-    /// ) -> Result<ApplicationCallResult, WasmExecutionError>
+    /// ) -> Result<ApplicationCallResult, ExecutionError>
     /// ```
     pub fn call_application(
         mut self,
@@ -339,7 +339,7 @@ where
     ///     session_data: &mut Vec<u8>,
     ///     argument: &[u8],
     ///     forwarded_sessions: Vec<SessionId>,
-    /// ) -> Result<SessionCallResult, WasmExecutionError>
+    /// ) -> Result<SessionCallResult, ExecutionError>
     /// ```
     pub fn call_session<'session_data>(
         mut self,
@@ -394,7 +394,7 @@ where
     ///     mut self,
     ///     context: &QueryContext,
     ///     argument: &[u8],
-    /// ) -> Result<Vec<u8>, WasmExecutionError>
+    /// ) -> Result<Vec<u8>, ExecutionError>
     /// ```
     pub fn query_application(
         mut self,
