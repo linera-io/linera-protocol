@@ -5,7 +5,7 @@
 
 use super::writable_system::{
     self as system, PollCallResult, PollFindKeyValues, PollFindKeys, PollLoad, PollLock,
-    PollReadKeyBytes, PollWriteBatch,
+    PollReadKeyBytes, PollUnit,
 };
 use crate::{
     ApplicationId, BlockHeight, BytecodeId, CalleeContext, ChainId, CryptoHash, EffectContext,
@@ -228,11 +228,11 @@ impl From<PollFindKeyValues> for Poll<Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError>
     }
 }
 
-impl From<PollWriteBatch> for Poll<()> {
-    fn from(poll_write_batch: PollWriteBatch) -> Self {
+impl From<PollUnit> for Poll<()> {
+    fn from(poll_write_batch: PollUnit) -> Self {
         match poll_write_batch {
-            PollWriteBatch::Ready => Poll::Ready(()),
-            PollWriteBatch::Pending => Poll::Pending,
+            PollUnit::Ready => Poll::Ready(()),
+            PollUnit::Pending => Poll::Pending,
         }
     }
 }

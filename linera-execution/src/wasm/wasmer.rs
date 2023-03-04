@@ -585,14 +585,14 @@ impl writable_system::WritableSystem
             .enqueue(self.storage().write_batch_and_unlock(batch))
     }
 
-    fn write_batch_poll(&mut self, future: &Self::WriteBatch) -> writable_system::PollWriteBatch {
-        use writable_system::PollWriteBatch;
+    fn write_batch_poll(&mut self, future: &Self::WriteBatch) -> writable_system::PollUnit {
+        use writable_system::PollUnit;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollWriteBatch::Pending,
-            Poll::Ready(Ok(())) => PollWriteBatch::Ready,
+            Poll::Pending => PollUnit::Pending,
+            Poll::Ready(Ok(())) => PollUnit::Ready,
             Poll::Ready(Err(error)) => {
                 self.report_internal_error(error);
-                PollWriteBatch::Pending
+                PollUnit::Pending
             }
         }
     }

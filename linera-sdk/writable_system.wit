@@ -79,10 +79,10 @@ variant write-operation {
 
 resource write-batch {
     static new: func(key: list<write-operation>) -> write-batch
-    poll: func() -> poll-write-batch
+    poll: func() -> poll-unit
 }
 
-variant poll-write-batch {
+variant poll-unit {
     pending,
     ready,
 }
