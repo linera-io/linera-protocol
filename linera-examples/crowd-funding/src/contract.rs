@@ -9,7 +9,7 @@ use self::state::{CrowdFunding, Status};
 use async_trait::async_trait;
 use crowd_funding::ApplicationCall;
 use fungible::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
-use futures::{future, stream, StreamExt, TryFutureExt, TryStreamExt};
+use futures::{stream, StreamExt, TryStreamExt};
 use linera_sdk::{
     contract::system_api, ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext,
     ExecutionResult, FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
@@ -164,14 +164,9 @@ impl CrowdFunding {
             .map_err(Error::InvalidSessionBalanceQuery)?;
 
         stream::iter(sessions)
-            .then(|session| {
-                system_api::call_session(false, *session, &balance_query, vec![])
-                    .map_err(Error::SessionBalance)
-            })
-            .and_then(|(balance_bytes, _)| {
-                future::ready(
-                    u128::from_bcs_bytes(&balance_bytes).map_err(Error::InvalidSessionBalance),
-                )
+            .then(|session| system_api::call_session(false, *session, &balance_query, vec![]))
+            .map(|(balance_bytes, _)| {
+                u128::from_bcs_bytes(&balance_bytes).map_err(Error::InvalidSessionBalance)
             })
             .try_collect()
             .await
@@ -195,9 +190,7 @@ impl CrowdFunding {
                 };
                 let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
 
-                system_api::call_session(false, session, &transfer_bytes, vec![])
-                    .map_err(Error::Transfer)
-                    .await?;
+                system_api::call_session(false, session, &transfer_bytes, vec![]).await;
 
                 Ok(())
             })
@@ -263,9 +256,7 @@ impl CrowdFunding {
             .map_err(Error::InvalidBalanceQuery)?;
 
         let (response, _sessions) =
-            system_api::call_application(true, self.parameters().token, &query_bytes, vec![])
-                .await
-                .map_err(Error::Balance)?;
+            system_api::call_application(true, self.parameters().token, &query_bytes, vec![]).await;
 
         bcs::from_bytes(&response).map_err(Error::InvalidBalance)
     }
@@ -286,9 +277,7 @@ impl CrowdFunding {
     async fn transfer(&self, transfer: fungible::ApplicationCall) -> Result<(), Error> {
         let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
 
-        system_api::call_application(true, self.parameters().token, &transfer_bytes, vec![])
-            .await
-            .map_err(Error::Transfer)?;
+        system_api::call_application(true, self.parameters().token, &transfer_bytes, vec![]).await;
 
         Ok(())
     }
@@ -349,10 +338,6 @@ pub enum Error {
     #[error("Applications must identify themselves to perform transfers")]
     MissingSourceApplication,
 
-    /// Fungible Token application did not execute the requested transfer.
-    #[error("Failed to transfer tokens: {0}")]
-    Transfer(String),
-
     /// An invalid transfer was constructed.
     #[error("Transfer is invalid because it can't be serialized")]
     InvalidTransfer(bcs::Error),
@@ -361,10 +346,6 @@ pub enum Error {
     #[error("Can't check balance because the query can't be serialized")]
     InvalidBalanceQuery(bcs::Error),
 
-    /// Fungible Token application did not return the campaign's balance.
-    #[error("Failed to read application balance: {0}")]
-    Balance(String),
-
     /// Fungible Token application returned an invalid balance.
     #[error("Received an invalid balance from token application")]
     InvalidBalance(bcs::Error),
@@ -372,10 +353,6 @@ pub enum Error {
     /// [`fungible::SessionCall::Balance`] could not be serialized.
     #[error("Can't check session balance because the query can't be serialized")]
     InvalidSessionBalanceQuery(bcs::Error),
-
-    /// Fungible Token application did not return the session's balance.
-    #[error("Failed to read session balance: {0}")]
-    SessionBalance(String),
 
     /// Fungible Token application returned an invalid session balance.
     #[error("Received an invalid session balance from token application")]

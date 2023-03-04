@@ -55,9 +55,7 @@ impl Contract for MetaCounter {
         effect: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
         log::trace!("executing {:?} via {:?}", effect, Self::counter_id()?);
-        system_api::call_application(true, Self::counter_id()?, effect, vec![])
-            .await
-            .map_err(Error::InternalCall)?;
+        system_api::call_application(true, Self::counter_id()?, effect, vec![]).await;
         Ok(ExecutionResult::default())
     }
 
@@ -92,9 +90,6 @@ pub enum Error {
 
     #[error("MetaCounter application doesn't support any cross-application sessions")]
     SessionsNotSupported,
-
-    #[error("Error with the internal call to Counter: {0}")]
-    InternalCall(String),
 
     #[error("Error during the initialization")]
     Initialization,

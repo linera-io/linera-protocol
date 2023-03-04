@@ -186,7 +186,7 @@ pub async fn call_application(
     application: ApplicationId,
     argument: &[u8],
     forwarded_sessions: Vec<SessionId>,
-) -> Result<(Vec<u8>, Vec<SessionId>), String> {
+) -> (Vec<u8>, Vec<SessionId>) {
     let forwarded_sessions: Vec<_> = forwarded_sessions
         .into_iter()
         .map(system::SessionId::from)
@@ -208,7 +208,7 @@ pub async fn call_session(
     session: SessionId,
     argument: &[u8],
     forwarded_sessions: Vec<SessionId>,
-) -> Result<(Vec<u8>, Vec<SessionId>), String> {
+) -> (Vec<u8>, Vec<SessionId>) {
     let forwarded_sessions: Vec<_> = forwarded_sessions
         .into_iter()
         .map(system::SessionId::from)

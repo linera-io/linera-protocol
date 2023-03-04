@@ -148,11 +148,10 @@ impl From<PollLoad> for Poll<Result<Vec<u8>, String>> {
     }
 }
 
-impl From<PollCallResult> for Poll<Result<(Vec<u8>, Vec<SessionId>), String>> {
-    fn from(poll_call_result: PollCallResult) -> Poll<Result<(Vec<u8>, Vec<SessionId>), String>> {
+impl From<PollCallResult> for Poll<(Vec<u8>, Vec<SessionId>)> {
+    fn from(poll_call_result: PollCallResult) -> Poll<(Vec<u8>, Vec<SessionId>)> {
         match poll_call_result {
-            PollCallResult::Ready(Ok(result)) => Poll::Ready(Ok(result.into())),
-            PollCallResult::Ready(Err(message)) => Poll::Ready(Err(message)),
+            PollCallResult::Ready(result) => Poll::Ready(result.into()),
             PollCallResult::Pending => Poll::Pending,
         }
     }

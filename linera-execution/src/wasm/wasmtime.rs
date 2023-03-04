@@ -615,8 +615,11 @@ impl<'storage> WritableSystem
         use writable_system::PollCallResult;
         match future.poll(&mut self.context) {
             Poll::Pending => PollCallResult::Pending,
-            Poll::Ready(Ok(result)) => PollCallResult::Ready(Ok(result.into())),
-            Poll::Ready(Err(error)) => PollCallResult::Ready(Err(error.to_string())),
+            Poll::Ready(Ok(result)) => PollCallResult::Ready(result.into()),
+            Poll::Ready(Err(error)) => {
+                self.report_internal_error(error);
+                PollCallResult::Pending
+            }
         }
     }
 
@@ -649,8 +652,11 @@ impl<'storage> WritableSystem
         use writable_system::PollCallResult;
         match future.poll(&mut self.context) {
             Poll::Pending => PollCallResult::Pending,
-            Poll::Ready(Ok(result)) => PollCallResult::Ready(Ok(result.into())),
-            Poll::Ready(Err(error)) => PollCallResult::Ready(Err(error.to_string())),
+            Poll::Ready(Ok(result)) => PollCallResult::Ready(result.into()),
+            Poll::Ready(Err(error)) => {
+                self.report_internal_error(error);
+                PollCallResult::Pending
+            }
         }
     }
 

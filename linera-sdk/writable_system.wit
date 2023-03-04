@@ -111,7 +111,7 @@ resource try-call-session {
 
 variant poll-call-result {
     pending,
-    ready(result<call-result, string>),
+    ready(call-result),
 }
 
 record call-result {
