@@ -28,6 +28,7 @@ use linera_views::{
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use std::{
+    borrow::Borrow,
     collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
     iter,
     num::NonZeroUsize,
@@ -640,7 +641,19 @@ where
         }
     }
 
-    fn cache_recent_value(&mut self, hash: CryptoHash, value: HashedValue) {
+    pub fn get_recent_value(&mut self, hash: &CryptoHash) -> Option<&HashedValue> {
+        self.recent_values.get(hash)
+    }
+
+    pub fn cache_recent_value<V>(&mut self, value_or_ref: V)
+    where
+        V: OwnedOrRef<HashedValue> + Borrow<HashedValue>,
+    {
+        let hash = value_or_ref.borrow().hash();
+        if self.recent_values.contains(&hash) {
+            return;
+        }
+        let value = value_or_ref.into_owned();
         if value.is_validated() {
             // Cache the corresponding confirmed block, too, in case we get a certificate.
             let conf_value = value.clone().into_confirmed();
@@ -768,7 +781,7 @@ where
         manager.create_vote(proposal, effects, state_hash, self.key_pair());
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some(vote) = manager.pending() {
-            self.cache_recent_value(vote.value.lite().value_hash, vote.value.clone());
+            self.cache_recent_value(&vote.value);
         }
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
@@ -824,7 +837,7 @@ where
             }
         };
         for value in values_to_cache {
-            self.cache_recent_value(value.hash(), value);
+            self.cache_recent_value(value);
         }
         Ok((info, actions))
     }
@@ -1032,5 +1045,23 @@ impl<'a> CrossChainUpdateHelper<'a> {
             vec![]
         };
         Ok(certificates)
+    }
+}
+
+/// A reference or owned instance of `T`.
+pub trait OwnedOrRef<T> {
+    /// Moves and returns the value if it is owned, otherwise clones it.
+    fn into_owned(self) -> T;
+}
+
+impl<T: Clone> OwnedOrRef<T> for &T {
+    fn into_owned(self) -> T {
+        self.clone()
+    }
+}
+
+impl<T> OwnedOrRef<T> for T {
+    fn into_owned(self) -> T {
+        self
     }
 }

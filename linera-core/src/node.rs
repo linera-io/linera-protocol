@@ -8,7 +8,7 @@ use crate::{
     worker::{Notification, ValidatorWorker, WorkerError, WorkerState},
 };
 use async_trait::async_trait;
-use futures::{lock::Mutex, Stream};
+use futures::{future, lock::Mutex, Stream};
 use linera_base::{
     crypto::CryptoError,
     data_types::{ArithmeticError, BlockHeight, ChainId, ValidatorName},
@@ -405,7 +405,7 @@ where
                 bytecode_location, ..
             }) = &result
             {
-                let Some(blob) = self.try_download_blob_from(
+                let Some(blob) = Self::try_download_blob_from(
                     name,
                     client,
                     certificate.value.chain_id(),
@@ -503,23 +503,69 @@ where
         }
     }
 
-    /// If the blob is in local storage, returns it. Otherwise downloads and stores it.
-    pub async fn read_or_download_blob<A>(
+    /// Downloads and stores the specified blobs, unless they are already in the cache or storage.
+    ///
+    /// Does not fail if a blob can't be downloaded; it just gets omitted from the result.
+    pub async fn read_or_download_blobs<A>(
         &mut self,
         validators: Vec<(ValidatorName, A)>,
+        blob_locations: impl Iterator<Item = (ChainId, BytecodeLocation)>,
+    ) -> Result<Vec<HashedValue>, NodeError>
+    where
+        A: ValidatorNode + Send + Sync + 'static + Clone,
+    {
+        let mut blobs = vec![];
+        let mut tasks = vec![];
+        let mut node = self.node.lock().await;
+        for (chain_id, location) in blob_locations {
+            if let Some(blob) = node.state.get_recent_value(&location.certificate_hash) {
+                blobs.push(blob.clone());
+            } else {
+                let validators = validators.clone();
+                let storage = node.state.storage_client().clone();
+                tasks.push(Self::read_or_download_blob(
+                    storage, validators, chain_id, location,
+                ));
+            }
+        }
+        drop(node); // Free the lock while awaiting the tasks.
+        if tasks.is_empty() {
+            return Ok(blobs);
+        }
+        let results = future::join_all(tasks).await;
+        let mut node = self.node.lock().await;
+        for result in results {
+            if let Some(blob) = result? {
+                node.state.cache_recent_value(&blob);
+                blobs.push(blob);
+            }
+        }
+        Ok(blobs)
+    }
+
+    pub async fn read_or_download_blob<A>(
+        storage: S,
+        mut validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
         location: BytecodeLocation,
     ) -> Result<Option<HashedValue>, NodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
-        let storage = self.storage_client().await;
-        if let Ok(blob) = storage.read_value(location.certificate_hash).await {
-            return Ok(Some(blob));
+        match storage.read_value(location.certificate_hash).await {
+            Ok(blob) => return Ok(Some(blob)),
+            Err(ViewError::NotFound(..)) => {}
+            Err(err) => Err(err)?,
         }
-        if let Some(blob) = self.download_blob(validators, chain_id, location).await {
-            storage.write_value(blob.clone()).await?;
-            return Ok(Some(blob));
+        // Sequentially try each validator in random order.
+        validators.shuffle(&mut rand::thread_rng());
+        for (name, mut client) in validators {
+            if let Some(blob) =
+                Self::try_download_blob_from(name, &mut client, chain_id, location).await
+            {
+                storage.write_value(blob.clone()).await?;
+                return Ok(Some(blob));
+            }
         }
         Ok(None)
     }
@@ -536,9 +582,8 @@ where
         // Sequentially try each validator in random order.
         validators.shuffle(&mut rand::thread_rng());
         for (name, mut client) in validators {
-            if let Some(blob) = self
-                .try_download_blob_from(name, &mut client, chain_id, location)
-                .await
+            if let Some(blob) =
+                Self::try_download_blob_from(name, &mut client, chain_id, location).await
             {
                 return Some(blob);
             }
@@ -547,7 +592,6 @@ where
     }
 
     async fn try_download_blob_from<A>(
-        &mut self,
         name: ValidatorName,
         client: &mut A,
         chain_id: ChainId,

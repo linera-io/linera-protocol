@@ -787,14 +787,15 @@ where
         // Collect blobs required for execution.
         let committee = self.local_committee().await?;
         let nodes = self.make_validator_nodes(&committee).await?;
-        let mut blobs = vec![];
-        for (app, chain_id) in block.registered_applications() {
-            blobs.extend(
-                self.node_client
-                    .read_or_download_blob(nodes.clone(), chain_id, app.bytecode_location)
-                    .await?,
-            );
-        }
+        let blobs = self
+            .node_client
+            .read_or_download_blobs(
+                nodes,
+                block
+                    .registered_applications()
+                    .map(|(app, chain_id)| (chain_id, app.bytecode_location)),
+            )
+            .await?;
         // Build the initial query.
         let key_pair = self.key_pair().await?;
         let proposal = BlockProposal::new(
