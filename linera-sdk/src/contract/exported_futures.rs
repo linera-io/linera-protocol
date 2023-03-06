@@ -176,7 +176,9 @@ where
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<ExecutionResult, String>> {
         ExportedFuture::new(async move {
-            let mut application: Application = system_api::load_and_lock_view().await;
+            let mut application: Application = system_api::load_and_lock_view()
+                .await
+                .expect("Failed to lock contract view");
             let result = application.initialize(&context.into(), &argument).await;
             if result.is_ok() {
                 system_api::store_and_unlock_view(application).await;
@@ -190,7 +192,9 @@ where
         operation: Vec<u8>,
     ) -> ExportedFuture<Result<ExecutionResult, String>> {
         ExportedFuture::new(async move {
-            let mut application: Application = system_api::load_and_lock_view().await;
+            let mut application: Application = system_api::load_and_lock_view()
+                .await
+                .expect("Failed to lock contract view");
             let result = application
                 .execute_operation(&context.into(), &operation)
                 .await;
@@ -206,7 +210,9 @@ where
         effect: Vec<u8>,
     ) -> ExportedFuture<Result<ExecutionResult, String>> {
         ExportedFuture::new(async move {
-            let mut application: Application = system_api::load_and_lock_view().await;
+            let mut application: Application = system_api::load_and_lock_view()
+                .await
+                .expect("Failed to lock contract view");
             let result = application.execute_effect(&context.into(), &effect).await;
             if result.is_ok() {
                 system_api::store_and_unlock_view(application).await;
@@ -221,7 +227,9 @@ where
         forwarded_sessions: Vec<contract::SessionId>,
     ) -> ExportedFuture<Result<ApplicationCallResult, String>> {
         ExportedFuture::new(async move {
-            let mut application: Application = system_api::load_and_lock_view().await;
+            let mut application: Application = system_api::load_and_lock_view()
+                .await
+                .expect("Failed to lock contract view");
 
             let forwarded_sessions = forwarded_sessions
                 .into_iter()
@@ -245,7 +253,9 @@ where
         forwarded_sessions: Vec<contract::SessionId>,
     ) -> ExportedFuture<Result<SessionCallResult, String>> {
         ExportedFuture::new(async move {
-            let mut application: Application = system_api::load_and_lock_view().await;
+            let mut application: Application = system_api::load_and_lock_view()
+                .await
+                .expect("Failed to lock contract view");
 
             let forwarded_sessions = forwarded_sessions
                 .into_iter()

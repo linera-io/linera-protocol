@@ -38,7 +38,13 @@ store-and-unlock: func(value: list<u8>) -> bool
 
 resource lock {
     static new: func() -> lock
-    poll: func() -> poll-unit
+    poll: func() -> poll-lock
+}
+
+variant poll-lock {
+    pending,
+    ready-locked,
+    ready-not-locked,
 }
 
 resource read-key-bytes {

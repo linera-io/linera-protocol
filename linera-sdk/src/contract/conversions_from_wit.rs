@@ -5,7 +5,7 @@
 
 use super::writable_system::{
     self as system, PollCallResult, PollFindKeyValues, PollFindKeys, PollLoad, PollLoadAndLock,
-    PollReadKeyBytes, PollUnit,
+    PollLock, PollReadKeyBytes, PollUnit,
 };
 use crate::{
     ApplicationId, BlockHeight, BytecodeId, CalleeContext, ChainId, CryptoHash, EffectContext,
@@ -143,6 +143,16 @@ impl From<PollLoad> for Poll<Vec<u8>> {
         match poll_get {
             PollLoad::Ready(bytes) => Poll::Ready(bytes),
             PollLoad::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl From<PollLock> for Poll<bool> {
+    fn from(poll_lock: PollLock) -> Poll<bool> {
+        match poll_lock {
+            PollLock::ReadyLocked => Poll::Ready(true),
+            PollLock::ReadyNotLocked => Poll::Ready(false),
+            PollLock::Pending => Poll::Pending,
         }
     }
 }

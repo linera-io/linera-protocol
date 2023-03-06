@@ -130,12 +130,13 @@ impl WasmContextExt for WasmContext {
 }
 
 /// Load the contract state and lock it for writes.
-pub async fn load_and_lock_view<State: View<WasmContext>>() -> State {
+pub async fn load_and_lock_view<State: View<WasmContext>>() -> Option<State> {
     let future = system::Lock::new();
-    // Ensure that the unit type is returned, and not some other type that is dropped immediately.
-    #[allow(clippy::let_unit_value)]
-    let () = future::poll_fn(|_context| future.poll().into()).await;
-    load_view_using::<State>().await
+    if future::poll_fn(|_context| future.poll().into()).await {
+        Some(load_view_using::<State>().await)
+    } else {
+        None
+    }
 }
 
 /// Helper function to load the contract state or create a new one if it doesn't exist.
