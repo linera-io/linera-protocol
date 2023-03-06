@@ -10,32 +10,33 @@ use linera_views::{
     views::{RootView, View, ViewError},
 };
 use serde::{de::DeserializeOwned, Serialize};
-use std::{fmt, future::Future};
+use std::fmt;
 
-/// Load the contract state, without locking it for writes.
+/// Loads the contract state, without locking it for writes.
 pub async fn load<State>() -> State
 where
     State: Default + DeserializeOwned,
 {
     let future = system::Load::new();
-    load_using(future::poll_fn(|_context| future.poll().into())).await
+    let state_bytes = future::poll_fn(|_context| future.poll().into()).await;
+    deserialize_state(state_bytes)
 }
 
-/// Load the contract state and lock it for writes.
+/// Loads the contract state and locks it for writes.
 pub async fn load_and_lock<State>() -> State
 where
     State: Default + DeserializeOwned,
 {
     let future = system::LoadAndLock::new();
-    load_using(future::poll_fn(|_context| future.poll().into())).await
+    let state_bytes = future::poll_fn(|_context| future.poll().into()).await;
+    deserialize_state(state_bytes)
 }
 
-/// Helper function to load the contract state or create a new one if it doesn't exist.
-async fn load_using<State>(future: impl Future<Output = Vec<u8>>) -> State
+/// Deserializes the contract state or creates a new one if the `bytes` vector is empty.
+fn deserialize_state<State>(bytes: Vec<u8>) -> State
 where
     State: Default + DeserializeOwned,
 {
-    let bytes = future.await;
     if bytes.is_empty() {
         State::default()
     } else {
