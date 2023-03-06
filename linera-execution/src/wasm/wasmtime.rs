@@ -460,8 +460,11 @@ impl<'storage> WritableSystem
         use writable_system::PollLoad;
         match future.poll(&mut self.context) {
             Poll::Pending => PollLoad::Pending,
-            Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
-            Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
+            Poll::Ready(Ok(bytes)) => PollLoad::Ready(bytes),
+            Poll::Ready(Err(error)) => {
+                self.report_internal_error(error);
+                PollLoad::Pending
+            }
         }
     }
 
@@ -474,8 +477,11 @@ impl<'storage> WritableSystem
         use writable_system::PollLoad;
         match future.poll(&mut self.context) {
             Poll::Pending => PollLoad::Pending,
-            Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
-            Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
+            Poll::Ready(Ok(bytes)) => PollLoad::Ready(bytes),
+            Poll::Ready(Err(error)) => {
+                self.report_internal_error(error);
+                PollLoad::Pending
+            }
         }
     }
 

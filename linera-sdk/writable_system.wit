@@ -26,7 +26,7 @@ resource load-and-lock {
 
 variant poll-load {
     pending,
-    ready(result<list<u8>, string>),
+    ready(list<u8>),
 }
 
 store-and-unlock: func(value: list<u8>) -> bool

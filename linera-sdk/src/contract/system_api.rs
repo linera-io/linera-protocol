@@ -31,11 +31,11 @@ where
 }
 
 /// Helper function to load the contract state or create a new one if it doesn't exist.
-async fn load_using<State>(future: impl Future<Output = Result<Vec<u8>, String>>) -> State
+async fn load_using<State>(future: impl Future<Output = Vec<u8>>) -> State
 where
     State: Default + DeserializeOwned,
 {
-    let bytes = future.await.expect("Failed to load contract state");
+    let bytes = future.await;
     if bytes.is_empty() {
         State::default()
     } else {

@@ -139,8 +139,8 @@ impl From<system::SystemBalance> for SystemBalance {
     }
 }
 
-impl From<PollLoad> for Poll<Result<Vec<u8>, String>> {
-    fn from(poll_get: PollLoad) -> Poll<Result<Vec<u8>, String>> {
+impl From<PollLoad> for Poll<Vec<u8>> {
+    fn from(poll_get: PollLoad) -> Poll<Vec<u8>> {
         match poll_get {
             PollLoad::Ready(bytes) => Poll::Ready(bytes),
             PollLoad::Pending => Poll::Pending,
