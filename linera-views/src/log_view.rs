@@ -210,8 +210,7 @@ where
     }
 
     async fn compute_hash(&self) -> Result<<sha2::Sha512 as Hasher>::Output, ViewError> {
-        let count = self.count();
-        let elements = self.read(0..count).await?;
+        let elements = self.read(..).await?;
         let mut hasher = sha2::Sha512::default();
         hasher.update_with_bcs_bytes(&elements)?;
         Ok(hasher.finalize())

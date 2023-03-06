@@ -444,6 +444,9 @@ where
         if config.with_collection {
             let subview = view.collection.try_load_entry("hola").await.unwrap();
             assert_eq!(subview.read(0..10).await.unwrap(), vec![17, 18]);
+            assert_eq!(subview.read(..).await.unwrap(), vec![17, 18]);
+            assert_eq!(subview.read(1..).await.unwrap(), vec![18]);
+            assert_eq!(subview.read(..=0).await.unwrap(), vec![17]);
         }
         if config.with_flush {
             view.save().await.unwrap();
