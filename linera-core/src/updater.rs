@@ -137,22 +137,21 @@ where
                 }
                 Err(err) => Err(err),
             };
-            let mut blobs: Vec<HashedValue> = vec![];
-            while let Err(NodeError::ApplicationBytecodeNotFound {
-                bytecode_location, ..
-            }) = &result
-            {
-                let hash = bytecode_location.certificate_hash;
-                // TODO(#474): This check is not sufficient in case of bad actors.
-                if blobs.iter().any(|blob| blob.hash() == hash) {
-                    log::warn!("validator requested {:?} but it was already sent", hash);
-                    break;
+            if let Err(NodeError::ApplicationBytecodesNotFound(locations)) = &result {
+                let mut blobs: Vec<HashedValue> = vec![];
+                for location in locations {
+                    let hash = location.certificate_hash;
+                    // TODO(#474): This check is not sufficient in case of bad actors.
+                    if blobs.iter().any(|blob| blob.hash() == hash) {
+                        log::warn!("validator requested {:?} but it was already sent", hash);
+                        break;
+                    }
+                    match self.store.read_value(hash).await {
+                        Ok(blob) => blobs.push(blob),
+                        Err(ViewError::NotFound(_)) => break,
+                        Err(err) => Err(err)?,
+                    };
                 }
-                match self.store.read_value(hash).await {
-                    Ok(blob) => blobs.push(blob),
-                    Err(ViewError::NotFound(_)) => break,
-                    Err(err) => Err(err)?,
-                };
                 result = self
                     .client
                     .handle_certificate(certificate.clone(), blobs.clone())
@@ -193,7 +192,7 @@ where
                     return Ok(response.info);
                 }
                 Err(NodeError::MissingCrossChainUpdate { .. })
-                | Err(NodeError::ApplicationBytecodeNotFound { .. })
+                | Err(NodeError::ApplicationBytecodesNotFound(_))
                     if !has_send_chain_information_for_senders =>
                 {
                     // Some received certificates may be missing for this validator
@@ -231,7 +230,7 @@ where
                         });
                     }
                 }
-                Err(NodeError::ApplicationBytecodeNotFound { .. }) => {
+                Err(NodeError::ApplicationBytecodesNotFound(_)) => {
                     if count < self.retries {
                         tokio::time::sleep(self.delay).await;
                         count += 1;

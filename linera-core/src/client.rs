@@ -535,22 +535,20 @@ where
             .download_certificates(nodes.clone(), block.chain_id, block.height)
             .await?;
         // Process the received operations. Download required blobs if necessary.
-        let mut blobs = vec![];
-        while let Err(err) = self
-            .process_certificate(certificate.clone(), blobs.clone())
-            .await
-        {
-            if let NodeError::ApplicationBytecodeNotFound {
-                bytecode_location, ..
-            } = &err
-            {
-                if let Some(blob) = self
-                    .node_client
-                    .download_blob(nodes.clone(), block.chain_id, *bytecode_location)
-                    .await
-                {
-                    blobs.push(blob);
-                    continue; // Got the required blob; retry.
+        if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
+            if let NodeError::ApplicationBytecodesNotFound(locations) = &err {
+                let mut blobs = vec![];
+                for location in locations {
+                    if let Some(blob) = self
+                        .node_client
+                        .download_blob(nodes.clone(), block.chain_id, *location)
+                        .await
+                    {
+                        blobs.push(blob);
+                    }
+                }
+                if !blobs.is_empty() {
+                    self.process_certificate(certificate.clone(), blobs).await?;
                 }
             }
             // The certificate is not as expected. Give up.
