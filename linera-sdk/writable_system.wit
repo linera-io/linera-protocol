@@ -19,14 +19,19 @@ resource load {
     poll: func() -> poll-load
 }
 
-resource load-and-lock {
-    static new: func() -> load-and-lock
-    poll: func() -> poll-load
-}
-
 variant poll-load {
     pending,
     ready(list<u8>),
+}
+
+resource load-and-lock {
+    static new: func() -> load-and-lock
+    poll: func() -> poll-load-and-lock
+}
+
+variant poll-load-and-lock {
+    pending,
+    ready(option<list<u8>>),
 }
 
 store-and-unlock: func(value: list<u8>) -> bool

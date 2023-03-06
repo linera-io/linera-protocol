@@ -35,7 +35,7 @@ use super::{
     WasmApplication, WasmExecutionError,
 };
 use crate::{CallResult, ExecutionError, QueryableStorage, SessionId, WritableStorage};
-use linera_views::common::Batch;
+use linera_views::{common::Batch, views::ViewError};
 use std::task::Poll;
 use tokio::sync::oneshot;
 use wasmtime::{Config, Engine, Linker, Module, Store, Trap};
@@ -473,14 +473,20 @@ impl<'storage> WritableSystem
             .enqueue(self.storage.try_read_and_lock_my_state())
     }
 
-    fn load_and_lock_poll(&mut self, future: &Self::LoadAndLock) -> writable_system::PollLoad {
-        use writable_system::PollLoad;
+    fn load_and_lock_poll(
+        &mut self,
+        future: &Self::LoadAndLock,
+    ) -> writable_system::PollLoadAndLock {
+        use writable_system::PollLoadAndLock;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollLoad::Pending,
-            Poll::Ready(Ok(bytes)) => PollLoad::Ready(bytes),
+            Poll::Pending => PollLoadAndLock::Pending,
+            Poll::Ready(Ok(bytes)) => PollLoadAndLock::Ready(Some(bytes)),
+            Poll::Ready(Err(ExecutionError::ViewError(ViewError::NotFound(_)))) => {
+                PollLoadAndLock::Ready(None)
+            }
             Poll::Ready(Err(error)) => {
                 self.report_internal_error(error);
-                PollLoad::Pending
+                PollLoadAndLock::Pending
             }
         }
     }
