@@ -60,10 +60,7 @@ impl WasmClient {
         future::poll_fn(|_context| future.poll().into()).await
     }
 
-    async fn find_key_values_by_prefix_load(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
+    async fn find_key_values_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
         let future = system::FindKeyValues::new(key_prefix);
         future::poll_fn(|_context| future.poll().into()).await
     }
@@ -89,7 +86,7 @@ impl KeyValueStoreClient for WasmClient {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, ViewError> {
-        let key_values = self.find_key_values_by_prefix_load(key_prefix).await?;
+        let key_values = self.find_key_values_by_prefix_load(key_prefix).await;
         Ok(key_values)
     }
 

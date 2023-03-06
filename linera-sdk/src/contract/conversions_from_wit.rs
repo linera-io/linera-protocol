@@ -11,7 +11,6 @@ use crate::{
     ApplicationId, BlockHeight, BytecodeId, CalleeContext, ChainId, CryptoHash, EffectContext,
     EffectId, OperationContext, Session, SessionId, SystemBalance,
 };
-use linera_views::views::ViewError;
 use std::task::Poll;
 
 impl From<super::OperationContext> for OperationContext {
@@ -199,13 +198,10 @@ impl From<PollFindKeys> for Poll<Vec<Vec<u8>>> {
     }
 }
 
-impl From<PollFindKeyValues> for Poll<Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError>> {
+impl From<PollFindKeyValues> for Poll<Vec<(Vec<u8>, Vec<u8>)>> {
     fn from(poll_find_key_values: PollFindKeyValues) -> Self {
         match poll_find_key_values {
-            PollFindKeyValues::Ready(Ok(key_values)) => Poll::Ready(Ok(key_values)),
-            PollFindKeyValues::Ready(Err(error)) => {
-                Poll::Ready(Err(ViewError::WasmHostGuestError(error)))
-            }
+            PollFindKeyValues::Ready(key_values) => Poll::Ready(key_values),
             PollFindKeyValues::Pending => Poll::Pending,
         }
     }

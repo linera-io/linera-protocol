@@ -63,7 +63,7 @@ resource find-key-values {
 
 variant poll-find-key-values {
     pending,
-    ready(result<list<tuple<list<u8>,list<u8>>>, string>),
+    ready(list<tuple<list<u8>,list<u8>>>),
 }
 
 variant write-operation {
