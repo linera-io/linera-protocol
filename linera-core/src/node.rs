@@ -260,7 +260,7 @@ where
     ) -> Result<ChainInfoResponse, NodeError> {
         let node = self.node.clone();
         let mut node = node.lock().await;
-        // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
+        // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
         let (response, _actions) = node.state.handle_block_proposal(proposal).await?;
         Ok(response)
     }
@@ -322,7 +322,7 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
-        // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
+        // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
         let (response, _actions) = self
             .node
             .clone()
