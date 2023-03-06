@@ -43,7 +43,7 @@ resource read-key-bytes {
 
 variant poll-read-key-bytes {
     pending,
-    ready(result<option<list<u8>>, string>),
+    ready(option<list<u8>>),
 }
 
 resource find-keys {

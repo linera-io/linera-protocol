@@ -77,8 +77,7 @@ impl KeyValueStoreClient for WasmClient {
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let future = system::ReadKeyBytes::new(key);
-        let r = future::poll_fn(|_context| future.poll().into()).await;
-        r
+        Ok(future::poll_fn(|_context| future.poll().into()).await)
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, ViewError> {

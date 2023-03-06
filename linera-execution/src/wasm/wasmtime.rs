@@ -520,8 +520,11 @@ impl<'storage> WritableSystem
         use writable_system::PollReadKeyBytes;
         match future.poll(&mut self.context) {
             Poll::Pending => PollReadKeyBytes::Pending,
-            Poll::Ready(Ok(opt_list)) => PollReadKeyBytes::Ready(Ok(opt_list)),
-            Poll::Ready(Err(error)) => PollReadKeyBytes::Ready(Err(error.to_string())),
+            Poll::Ready(Ok(opt_list)) => PollReadKeyBytes::Ready(opt_list),
+            Poll::Ready(Err(error)) => {
+                self.report_internal_error(error);
+                PollReadKeyBytes::Pending
+            }
         }
     }
 
