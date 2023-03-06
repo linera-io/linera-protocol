@@ -490,12 +490,15 @@ impl<'storage> WritableSystem
             .enqueue(self.storage.lock_view_user_state())
     }
 
-    fn lock_poll(&mut self, future: &Self::Lock) -> writable_system::PollLock {
-        use writable_system::PollLock;
+    fn lock_poll(&mut self, future: &Self::Lock) -> writable_system::PollUnit {
+        use writable_system::PollUnit;
         match future.poll(&mut self.context) {
-            Poll::Pending => PollLock::Pending,
-            Poll::Ready(Ok(())) => PollLock::Ready(Ok(())),
-            Poll::Ready(Err(error)) => PollLock::Ready(Err(error.to_string())),
+            Poll::Pending => PollUnit::Pending,
+            Poll::Ready(Ok(())) => PollUnit::Ready,
+            Poll::Ready(Err(error)) => {
+                self.report_internal_error(error);
+                PollUnit::Pending
+            }
         }
     }
 
