@@ -536,7 +536,9 @@ where
         let mut node = self.node.lock().await;
         for result in results {
             if let Some(blob) = result? {
-                node.state.cache_recent_value(&blob);
+                if node.state.get_recent_value(&blob.hash()).is_none() {
+                    node.state.cache_recent_value(blob.clone());
+                }
                 blobs.push(blob);
             }
         }

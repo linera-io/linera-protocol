@@ -28,7 +28,6 @@ use linera_views::{
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use std::{
-    borrow::Borrow,
     collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
     iter,
     num::NonZeroUsize,
@@ -645,15 +644,11 @@ where
         self.recent_values.get(hash)
     }
 
-    pub fn cache_recent_value<V>(&mut self, value_or_ref: V)
-    where
-        V: OwnedOrRef<HashedValue> + Borrow<HashedValue>,
-    {
-        let hash = value_or_ref.borrow().hash();
+    pub fn cache_recent_value(&mut self, value: HashedValue) {
+        let hash = value.hash();
         if self.recent_values.contains(&hash) {
             return;
         }
-        let value = value_or_ref.into_owned();
         if value.is_validated() {
             // Cache the corresponding confirmed block, too, in case we get a certificate.
             let conf_value = value.clone().into_confirmed();
@@ -781,7 +776,9 @@ where
         manager.create_vote(proposal, effects, state_hash, self.key_pair());
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some(vote) = manager.pending() {
-            self.cache_recent_value(&vote.value);
+            if !self.recent_values.contains(&vote.value.hash()) {
+                self.cache_recent_value(vote.value.clone());
+            }
         }
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
@@ -1045,23 +1042,5 @@ impl<'a> CrossChainUpdateHelper<'a> {
             vec![]
         };
         Ok(certificates)
-    }
-}
-
-/// A reference or owned instance of `T`.
-pub trait OwnedOrRef<T> {
-    /// Moves and returns the value if it is owned, otherwise clones it.
-    fn into_owned(self) -> T;
-}
-
-impl<T: Clone> OwnedOrRef<T> for &T {
-    fn into_owned(self) -> T {
-        self.clone()
-    }
-}
-
-impl<T> OwnedOrRef<T> for T {
-    fn into_owned(self) -> T {
-        self
     }
 }
