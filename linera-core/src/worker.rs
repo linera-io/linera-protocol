@@ -4,6 +4,7 @@
 
 use crate::data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest};
 use async_trait::async_trait;
+use futures::{future, FutureExt};
 use linera_base::{
     committee::Committee,
     crypto::{CryptoHash, KeyPair},
@@ -15,10 +16,10 @@ use linera_chain::{
         Block, BlockAndRound, BlockProposal, Certificate, HashedValue, LiteCertificate, Medium,
         Message, Origin, OutgoingEffect, Target, ValueKind,
     },
-    ChainManagerOutcome, ChainStateView,
+    ChainError, ChainManagerOutcome, ChainStateView,
 };
 use linera_execution::{
-    ApplicationId, Query, Response, UserApplicationDescription, UserApplicationId,
+    ApplicationId, BytecodeLocation, Query, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::{
@@ -29,7 +30,6 @@ use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
-    iter,
     num::NonZeroUsize,
     sync::Arc,
     time::Duration,
@@ -166,6 +166,8 @@ pub enum WorkerError {
     InvalidLiteCertificate,
     #[error("An additional value was provided that is not required: {value_hash}.")]
     UnneededValue { value_hash: CryptoHash },
+    #[error("The following values containing application bytecode are missing: {0:?}.")]
+    ApplicationBytecodesNotFound(Vec<BytecodeLocation>),
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -419,6 +421,7 @@ where
         ensure_blobs_are_required::<Client>(&chain, block, blobs).await?;
         // Write the values so that the bytecode is available during execution.
         for value in blobs {
+            self.cache_recent_value(value.clone());
             self.storage.write_value(value.clone()).await?;
         }
         // Check that the chain is active and ready for this confirmation.
@@ -448,6 +451,34 @@ where
                 epoch: block.epoch,
             }
         );
+
+        let required_bytecode = block
+            .required_bytecode(&chain.execution_state.system.registry)
+            .await
+            .map_err(ChainError::from)?;
+        let tasks: Vec<_> = required_bytecode
+            .into_values()
+            .filter(|location| !self.recent_values.contains(&location.certificate_hash))
+            .map(|location| {
+                self.storage
+                    .read_value(location.certificate_hash)
+                    .map(move |result| (location, result))
+            })
+            .collect();
+        let mut locations = vec![];
+        for (location, result) in future::join_all(tasks).await {
+            match result {
+                Ok(_value) => {} // Value is not missing.
+                Err(ViewError::NotFound(_)) => locations.push(location),
+                Err(err) => Err(err)?,
+            }
+        }
+        if !locations.is_empty() {
+            return Err(WorkerError::ApplicationBytecodesNotFound(
+                locations.into_iter().collect(),
+            ));
+        }
+
         let committee = chain
             .execution_state
             .system
@@ -816,26 +847,20 @@ where
                 value_hash: blobs[0].hash(),
             }
         );
-        let values_to_cache: Vec<_> = blobs
-            .iter()
-            .chain(iter::once(&certificate.value))
-            .filter(|value| !self.recent_values.contains(&value.hash()))
-            .cloned()
-            .collect();
         let (info, actions) = match certificate.value.kind() {
             ValueKind::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                let info = self.process_validated_block(certificate).await?;
-                (info, NetworkActions::default())
+                self.process_validated_block(certificate.clone())
+                    .await
+                    .map(|info| (info, NetworkActions::default()))?
             }
             ValueKind::ConfirmedBlock => {
                 // Execute the confirmed block.
-                self.process_confirmed_block(certificate, &blobs).await?
+                self.process_confirmed_block(certificate.clone(), &blobs)
+                    .await?
             }
         };
-        for value in values_to_cache {
-            self.cache_recent_value(value);
-        }
+        self.cache_recent_value(certificate.value);
         Ok((info, actions))
     }
 

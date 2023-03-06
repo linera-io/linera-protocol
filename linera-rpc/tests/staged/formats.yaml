@@ -399,57 +399,62 @@ NodeError:
           - bytecode_location:
               TYPENAME: BytecodeLocation
     9:
+      ApplicationBytecodesNotFound:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BytecodeLocation
+    10:
       CannotDownloadCertificates:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - target_next_block_height:
               TYPENAME: BlockHeight
-    10:
-      MissingVoteInValidatorResponse: UNIT
     11:
+      MissingVoteInValidatorResponse: UNIT
+    12:
       InactiveLocalChain:
         NEWTYPE:
           TYPENAME: ChainId
-    12:
-      InvalidLocalBlockChaining: UNIT
     13:
-      InvalidChainInfoResponse: UNIT
+      InvalidLocalBlockChaining: UNIT
     14:
+      InvalidChainInfoResponse: UNIT
+    15:
       ProposedBlockToInactiveChain:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - retries: U64
-    15:
+    16:
       ProposedBlockWithLaggingMessages:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - retries: U64
-    16:
+    17:
       ProposedBlockWithLaggingBytecode:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - retries: U64
-    17:
-      InvalidDecoding: UNIT
     18:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     19:
+      UnexpectedMessage: UNIT
+    20:
       ClientIoError:
         STRUCT:
           - error: STR
-    20:
+    21:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    21:
+    22:
       SubscriptionError:
         STRUCT:
           - transport: STR
-    22:
+    23:
       MissingCertificateValue: UNIT
 Operation:
   ENUM:

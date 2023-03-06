@@ -101,6 +101,11 @@ impl ViewError {
     pub fn not_found<T: Debug>(msg: &str, key: T) -> ViewError {
         ViewError::NotFound(format!("{} {:?}", msg, key))
     }
+
+    /// Returns whether the error is that the item was not found.
+    pub fn is_not_found(&self) -> bool {
+        matches!(self, ViewError::NotFound(_))
+    }
 }
 
 /// A view that supports hashing its values.

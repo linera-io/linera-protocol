@@ -20,8 +20,7 @@ use linera_chain::{
     ChainError, ChainManagerInfo,
 };
 use linera_execution::{
-    ApplicationId, BytecodeLocation, ExecutionError, Query, Response, UserApplicationDescription,
-    UserApplicationId,
+    ApplicationId, BytecodeLocation, Query, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -108,11 +107,8 @@ pub enum NodeError {
     },
 
     // This error must be normalized during conversions.
-    #[error("Failed to load bytecode of {application_id:?} from storage {bytecode_location:?}")]
-    ApplicationBytecodeNotFound {
-        application_id: UserApplicationId,
-        bytecode_location: BytecodeLocation,
-    },
+    #[error("The following values containing application bytecode are missing: {0:?}.")]
+    ApplicationBytecodesNotFound(Vec<BytecodeLocation>),
 
     #[error(
         "Failed to download the requested certificate(s) for chain {chain_id:?} \
@@ -212,12 +208,6 @@ impl From<ChainError> for NodeError {
                 height,
             },
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
-            ChainError::ExecutionError(ExecutionError::ApplicationBytecodeNotFound(app)) => {
-                NodeError::ApplicationBytecodeNotFound {
-                    application_id: (&*app).into(),
-                    bytecode_location: app.bytecode_location,
-                }
-            }
             error => Self::ChainError {
                 error: error.to_string(),
             },
@@ -230,6 +220,9 @@ impl From<WorkerError> for NodeError {
         match error {
             WorkerError::ChainError(error) => (*error).into(),
             WorkerError::MissingCertificateValue => Self::MissingCertificateValue,
+            WorkerError::ApplicationBytecodesNotFound(locations) => {
+                NodeError::ApplicationBytecodesNotFound(locations)
+            }
             error => Self::WorkerError {
                 error: error.to_string(),
             },
@@ -400,25 +393,22 @@ where
                 return info;
             }
             let mut result = self.handle_certificate(certificate.clone(), vec![]).await;
-            let mut blobs = vec![];
-            while let Err(NodeError::ApplicationBytecodeNotFound {
-                bytecode_location, ..
-            }) = &result
-            {
-                let Some(blob) = Self::try_download_blob_from(
+            if let Err(NodeError::ApplicationBytecodesNotFound(locations)) = &result {
+                let mut blobs = vec![];
+                for location in locations {
+                    let Some(blob) = Self::try_download_blob_from(
                     name,
                     client,
                     certificate.value.chain_id(),
-                    *bytecode_location
+                    *location
                 ).await else {
                     // The certificate is not as expected. Give up.
                     log::warn!("Failed to process network blob");
                     return info;
                 };
-                blobs.push(blob);
-                result = self
-                    .handle_certificate(certificate.clone(), blobs.clone())
-                    .await;
+                    blobs.push(blob);
+                }
+                result = self.handle_certificate(certificate.clone(), blobs).await;
             }
             match result {
                 Ok(response) => info = Some(response.info),
