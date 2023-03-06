@@ -190,13 +190,10 @@ impl From<PollReadKeyBytes> for Poll<Option<Vec<u8>>> {
     }
 }
 
-impl From<PollFindKeys> for Poll<Result<Vec<Vec<u8>>, ViewError>> {
+impl From<PollFindKeys> for Poll<Vec<Vec<u8>>> {
     fn from(poll_find_keys: PollFindKeys) -> Self {
         match poll_find_keys {
-            PollFindKeys::Ready(Ok(keys)) => Poll::Ready(Ok(keys)),
-            PollFindKeys::Ready(Err(error)) => {
-                Poll::Ready(Err(ViewError::WasmHostGuestError(error)))
-            }
+            PollFindKeys::Ready(keys) => Poll::Ready(keys),
             PollFindKeys::Pending => Poll::Pending,
         }
     }

@@ -53,7 +53,7 @@ resource find-keys {
 
 variant poll-find-keys {
     pending,
-    ready(result<list<list<u8>>, string>),
+    ready(list<list<u8>>),
 }
 
 resource find-key-values {

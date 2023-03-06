@@ -553,8 +553,11 @@ impl writable_system::WritableSystem
         use writable_system::PollFindKeys;
         match future.poll(&mut self.context) {
             Poll::Pending => PollFindKeys::Pending,
-            Poll::Ready(Ok(keys)) => PollFindKeys::Ready(Ok(keys)),
-            Poll::Ready(Err(error)) => PollFindKeys::Ready(Err(error.to_string())),
+            Poll::Ready(Ok(keys)) => PollFindKeys::Ready(keys),
+            Poll::Ready(Err(error)) => {
+                self.report_internal_error(error);
+                PollFindKeys::Pending
+            }
         }
     }
 
