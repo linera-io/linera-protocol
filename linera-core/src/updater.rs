@@ -11,11 +11,11 @@ use linera_base::{
     committee::Committee,
     data_types::{BlockHeight, ChainDescription, ChainId, EffectId, ValidatorName},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteVote};
+use linera_chain::data_types::{BlockProposal, Certificate, LiteVote};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     hash::Hash,
     time::Duration,
 };
@@ -138,23 +138,30 @@ where
                 Err(err) => Err(err),
             };
             if let Err(NodeError::ApplicationBytecodesNotFound(locations)) = &result {
-                let mut blobs: Vec<HashedValue> = vec![];
+                let required = certificate.value.block().bytecode_locations();
                 for location in locations {
-                    let hash = location.certificate_hash;
-                    // TODO(#474): This check is not sufficient in case of bad actors.
-                    if blobs.iter().any(|blob| blob.hash() == hash) {
-                        log::warn!("validator requested {:?} but it was already sent", hash);
-                        break;
+                    if !required.contains_key(location) {
+                        let hash = location.certificate_hash;
+                        log::warn!("validator requested {:?} but it is not required", hash);
+                        return Err(NodeError::InvalidChainInfoResponse);
                     }
-                    match self.store.read_value(hash).await {
-                        Ok(blob) => blobs.push(blob),
-                        Err(ViewError::NotFound(_)) => break,
-                        Err(err) => Err(err)?,
-                    };
                 }
+                let unique_locations: BTreeSet<_> = locations.iter().cloned().collect();
+                if locations.len() > unique_locations.len() {
+                    log::warn!("locations requested by validator contain duplicates");
+                    return Err(NodeError::InvalidChainInfoResponse);
+                }
+                let blobs = future::join_all(
+                    unique_locations
+                        .into_iter()
+                        .map(|location| self.store.read_value(location.certificate_hash)),
+                )
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?;
                 result = self
                     .client
-                    .handle_certificate(certificate.clone(), blobs.clone())
+                    .handle_certificate(certificate.clone(), blobs)
                     .await;
             }
             match result {

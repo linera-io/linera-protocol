@@ -11,11 +11,8 @@ use linera_base::{
     ensure,
 };
 use linera_execution::{
-    ApplicationId, ApplicationRegistryView, BytecodeId, BytecodeLocation, ChannelName, Destination,
-    Effect, ExecutionError, Operation, SystemEffect, SystemOperation, UserApplicationDescription,
-    UserApplicationId,
+    ApplicationId, BytecodeLocation, ChannelName, Destination, Effect, Operation, SystemEffect,
 };
-use linera_views::{common::Context, views::ViewError};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 
@@ -55,88 +52,40 @@ pub struct Block {
 }
 
 impl Block {
-    /// Returns the list of all bytecode locations required to execute this block.
-    ///
-    /// This is similar to `ApplicationRegistryView::find_dependencies`, but starts out from a
-    /// whole block and includes applications that are not in the registry yet and only will get
-    /// registered or created in this block.
-    pub async fn required_bytecode<C>(
-        &self,
-        registry: &ApplicationRegistryView<C>,
-    ) -> Result<BTreeMap<BytecodeId, BytecodeLocation>, ExecutionError>
-    where
-        C: Context + Clone + Send + Sync + 'static,
-        ViewError: From<C::Error>,
-    {
-        // The bytecode locations required for apps created in this block.
-        let created_app_locations = registry
-            .bytecode_locations_for(self.created_application_bytecode_ids().cloned())
-            .await?;
-        // The applications that get registered in this block.
-        let registered_apps = self
-            .registered_applications()
-            .map(|(app, _)| (UserApplicationId::from(app), app.clone()))
-            .collect();
-        // The bytecode locations for applications required for operations or incoming messages.
-        let required_locations = registry
-            .describe_applications_with_dependencies(
-                self.required_application_ids().cloned().collect(),
-                &registered_apps,
-            )
-            .await?
-            .into_iter()
-            .map(|app| (app.bytecode_id, app.bytecode_location));
-        Ok(required_locations.chain(created_app_locations).collect())
-    }
-
-    pub fn registered_applications(
-        &self,
-    ) -> impl Iterator<Item = (&UserApplicationDescription, ChainId)> {
-        self.incoming_messages
-            .iter()
-            .filter_map(|message| {
-                if let Effect::System(SystemEffect::RegisterApplications { applications }) =
-                    &message.event.effect
-                {
-                    Some(applications.iter().map(|app| (app, message.origin.sender)))
-                } else {
-                    None
+    /// Returns all bytecode locations referred to in this block, with the sender chain ID.
+    pub fn bytecode_locations(&self) -> BTreeMap<BytecodeLocation, ChainId> {
+        let mut locations = BTreeMap::new();
+        for message in &self.incoming_messages {
+            match &message.event.effect {
+                Effect::System(SystemEffect::BytecodePublished { operation_index }) => {
+                    locations.insert(
+                        BytecodeLocation {
+                            certificate_hash: message.event.certificate_hash,
+                            operation_index: *operation_index,
+                        },
+                        message.origin.sender,
+                    );
                 }
-            })
-            .flatten()
-    }
-
-    fn required_application_ids(&self) -> impl Iterator<Item = &UserApplicationId> + '_ {
-        self.operations
-            .iter()
-            .flat_map(|(app_id, op)| {
-                app_id.user_application_id().into_iter().chain(
-                    if let Operation::System(SystemOperation::CreateApplication {
-                        required_application_ids,
-                        ..
-                    }) = op
-                    {
-                        required_application_ids.iter()
-                    } else {
-                        [].iter()
-                    },
-                )
-            })
-            .chain(
-                self.incoming_messages
-                    .iter()
-                    .filter_map(|message| message.application_id.user_application_id()),
-            )
-    }
-
-    fn created_application_bytecode_ids(&self) -> impl Iterator<Item = &BytecodeId> + '_ {
-        self.operations.iter().filter_map(|(_, op)| {
-            if let Operation::System(SystemOperation::CreateApplication { bytecode_id, .. }) = op {
-                Some(bytecode_id)
-            } else {
-                None
+                Effect::System(SystemEffect::BytecodeLocations {
+                    locations: new_locations,
+                }) => {
+                    locations.extend(
+                        new_locations
+                            .iter()
+                            .map(|(_id, location)| (*location, message.origin.sender)),
+                    );
+                }
+                Effect::System(SystemEffect::RegisterApplications { applications }) => {
+                    locations.extend(
+                        applications
+                            .iter()
+                            .map(|app| (app.bytecode_location, message.origin.sender)),
+                    );
+                }
+                _ => {}
             }
-        })
+        }
+        locations
     }
 }
 
