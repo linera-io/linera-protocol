@@ -110,7 +110,7 @@ resource try-call-session {
         session: session-id,
         argument: list<u8>,
         forwarded-sessions: list<session-id>,
-    ) -> try-call-application
+    ) -> try-call-session
 
     poll: func() -> poll-call-result
 }
