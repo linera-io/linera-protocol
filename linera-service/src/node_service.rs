@@ -1,5 +1,8 @@
 use async_graphql::{
-    futures_util::Stream, http::GraphiQLSource, Error, Object, Schema, SimpleObject, Subscription,
+    futures_util::Stream,
+    http::GraphiQLSource,
+    parser::types::{DocumentOperations, ExecutableDocument, OperationType},
+    Error, Object, Request, Schema, ServerError, SimpleObject, Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{
@@ -28,6 +31,7 @@ use linera_execution::{
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use log::{error, info};
+use serde_json::Value;
 use std::{collections::BTreeMap, net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 
@@ -50,6 +54,24 @@ enum NodeServiceError {
     JsonError(#[from] serde_json::Error),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
+    #[error("missing graphql operation")]
+    MissingOperation,
+    #[error("unsupported query type: subscription")]
+    UnsupportedQueryType,
+    #[error("graphql operations of different types submitted")]
+    HeterogeneousOperations,
+    #[error("failed to parse graphql query: {error}")]
+    GraphQLServerError { error: String },
+    #[error("malformed application response")]
+    MalformedApplicationResponse,
+}
+
+impl From<ServerError> for NodeServiceError {
+    fn from(value: ServerError) -> Self {
+        NodeServiceError::GraphQLServerError {
+            error: value.to_string(),
+        }
+    }
 }
 
 impl IntoResponse for NodeServiceError {
@@ -59,6 +81,13 @@ impl IntoResponse for NodeServiceError {
             NodeServiceError::BcsError(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             NodeServiceError::JsonError(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             NodeServiceError::Internal(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+            NodeServiceError::MalformedApplicationResponse => {
+                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
+            }
+            NodeServiceError::MissingOperation
+            | NodeServiceError::HeterogeneousOperations
+            | NodeServiceError::UnsupportedQueryType => (StatusCode::BAD_REQUEST, self.to_string()),
+            NodeServiceError::GraphQLServerError { error } => (StatusCode::BAD_REQUEST, error),
         };
         tuple.into_response()
     }
@@ -335,6 +364,8 @@ where
 }
 
 /// Execute a GraphQL query against an application.
+/// Pattern matches on the `OperationType` of the query and routes the query
+/// accordingly.
 async fn application_handler<P, S>(
     Path(user_application_id): Path<String>,
     client: Extension<Arc<Mutex<ChainClient<P, S>>>>,
@@ -345,10 +376,56 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    let mut req = req.into_inner();
+
+    let parsed_query = req.parsed_query()?;
+    let operation_type = operation_type(parsed_query)?;
+
     let user_application_id_bytes = hex::decode(user_application_id)?;
     let user_application_id: UserApplicationId = bcs::from_bytes(&user_application_id_bytes)?;
     let application_id = ApplicationId::User(user_application_id);
-    let serialized_request = serde_json::to_vec(&req.into_inner())?;
+
+    let response = match operation_type {
+        OperationType::Query => user_application_query(application_id, client, &req).await?,
+        OperationType::Mutation => user_application_mutation(application_id, client, &req).await?,
+        OperationType::Subscription => return Err(NodeServiceError::UnsupportedQueryType),
+    };
+
+    Ok(response.into())
+}
+
+/// Given a parsed GraphQL query (or `ExecutableDocument`), return the `OperationType`.
+///
+/// Errors:
+///
+/// If we have no `OperationTypes` or the `OperationTypes` heterogeneous, i.e. a query
+/// was submitted with a `mutation` and `subscription`.
+fn operation_type(document: &ExecutableDocument) -> Result<OperationType, NodeServiceError> {
+    match &document.operations {
+        DocumentOperations::Single(op) => Ok(op.node.ty),
+        DocumentOperations::Multiple(ops) => {
+            let mut op_types = ops.values().map(|v| v.node.ty);
+            let first = op_types.next().ok_or(NodeServiceError::MissingOperation)?;
+            op_types
+                .all(|x| x == first)
+                .then_some(first)
+                .ok_or(NodeServiceError::HeterogeneousOperations)
+        }
+    }
+}
+
+/// Handles queries for user applications.
+async fn user_application_query<P, S>(
+    application_id: ApplicationId,
+    client: Extension<Arc<Mutex<ChainClient<P, S>>>>,
+    req: &Request,
+) -> Result<async_graphql::Response, NodeServiceError>
+where
+    P: ValidatorNodeProvider + Send + Sync + 'static,
+    S: Store + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
+    let serialized_request = serde_json::to_vec(&req)?;
     let query = Query::User(serialized_request);
     let response = client
         .0
@@ -360,8 +437,43 @@ where
         Response::System(_) => unreachable!("cannot get a system response for a user query"),
         Response::User(user) => user,
     };
-    let graphql_response: async_graphql::Response = serde_json::from_slice(&user_response_bytes)?;
-    Ok(graphql_response.into())
+    Ok(serde_json::from_slice(&user_response_bytes)?)
+}
+
+/// Handles mutations for user applications.
+async fn user_application_mutation<P, S>(
+    application_id: ApplicationId,
+    client: Extension<Arc<Mutex<ChainClient<P, S>>>>,
+    req: &Request,
+) -> Result<async_graphql::Response, NodeServiceError>
+where
+    P: ValidatorNodeProvider + Send + Sync + 'static,
+    S: Store + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
+    let graphql_res = user_application_query(application_id, client.clone(), req).await?;
+    let res_json = graphql_res.data.into_json()?;
+    let bcs_bytes =
+        bytes_from_res(res_json).ok_or(NodeServiceError::MalformedApplicationResponse)?;
+    let operation = Operation::User(bcs_bytes);
+
+    let mut client = client.0.lock().await;
+    client.process_inbox().await?;
+    let certificate = client.execute_operation(application_id, operation).await?;
+    let value = async_graphql::Value::from_json(serde_json::to_value(certificate)?)?;
+    Ok(async_graphql::Response::new(value))
+}
+
+/// Extracts the underlying byte vector from a serialized GraphQL response
+/// from an application.
+fn bytes_from_res(json: Value) -> Option<Vec<u8>> {
+    Some(
+        json.get("executeOperation")?
+            .as_array()?
+            .iter()
+            .map(|v| v.as_u64().unwrap() as u8)
+            .collect(),
+    )
 }
 
 /// An HTML response constructing the GraphiQL web page.
