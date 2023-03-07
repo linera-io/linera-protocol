@@ -9,7 +9,7 @@ use linera_base::{
     data_types::{BlockHeight, ChainDescription, ChainId, Epoch, Timestamp, ValidatorName},
 };
 use linera_chain::{
-    data_types::{Certificate, HashedValue, Medium, Message, Origin},
+    data_types::{Certificate, ChainAndHeight, HashedValue, Medium, Message, Origin},
     ChainManagerInfo, ChainStateView,
 };
 use linera_execution::{system::Balance, ApplicationId, ExecutionRuntimeContext};
@@ -133,7 +133,7 @@ pub struct ChainInfo {
     /// The current number of received certificates (useful for `request_received_log_excluding_first_nth`)
     pub count_received_log: usize,
     /// The response to `request_received_certificates_excluding_first_nth`
-    pub requested_received_log: Vec<(ChainId, BlockHeight)>,
+    pub requested_received_log: Vec<ChainAndHeight>,
     /// The requested blob, if any.
     pub requested_blob: Option<HashedValue>,
 }

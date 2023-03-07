@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_types::{Block, Event, Medium, Origin, OutgoingEffect, Target},
+    data_types::{Block, ChainAndHeight, Event, Medium, Origin, OutgoingEffect, Target},
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
     ChainError, ChainManager,
@@ -51,12 +51,6 @@ pub struct ChainStateView<C> {
 
     /// Communication state of applications.
     pub communication_states: CollectionView<C, ApplicationId, CommunicationStateView<C>>,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, SimpleObject)]
-pub struct ChainAndHeight {
-    pub chain_id: ChainId,
-    pub height: BlockHeight,
 }
 
 /// Block-chaining state.
