@@ -6,6 +6,7 @@
 mod state;
 
 use self::state::Counter;
+use crate::state::CounterOperation;
 use async_trait::async_trait;
 use linera_sdk::{
     contract::system_api::WasmContext, ApplicationCallResult, CalleeContext, Contract,
@@ -44,9 +45,9 @@ where
         _context: &OperationContext,
         operation: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        let increment: u64 = bcs::from_bytes(operation)?;
+        let operation: CounterOperation = bcs::from_bytes(operation)?;
         let value = self.value.get_mut();
-        *value += increment;
+        *value += operation.increment;
         Ok(ExecutionResult::default())
     }
 

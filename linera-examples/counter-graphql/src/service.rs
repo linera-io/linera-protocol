@@ -5,8 +5,8 @@
 
 mod state;
 
-use self::state::Counter;
-use async_graphql::{EmptyMutation, EmptySubscription, Schema};
+use self::state::{Counter, CounterOperation};
+use async_graphql::{EmptySubscription, Object, Schema};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -36,7 +36,7 @@ where
     ) -> Result<Vec<u8>, Self::Error> {
         let graphql_request: async_graphql::Request =
             serde_json::from_slice(argument).map_err(|_| Error::InvalidQuery)?;
-        let schema = Schema::build(self.clone(), EmptyMutation, EmptySubscription).finish();
+        let schema = Schema::build(self.clone(), MutationRoot {}, EmptySubscription).finish();
         let res = schema.execute(graphql_request).await;
         Ok(serde_json::to_vec(&res).unwrap())
     }
@@ -50,6 +50,16 @@ pub enum Error {
         "Invalid query argument; Counter application only supports JSON encoded GraphQL queries"
     )]
     InvalidQuery,
+}
+
+struct MutationRoot;
+
+#[Object]
+impl MutationRoot {
+    #[allow(unused)]
+    async fn execute_operation(&self, operation: CounterOperation) -> Vec<u8> {
+        bcs::to_bytes(&operation).unwrap()
+    }
 }
 
 #[cfg(test)]
