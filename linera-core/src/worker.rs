@@ -16,7 +16,7 @@ use linera_chain::{
         Block, BlockAndRound, BlockProposal, Certificate, HashedValue, LiteCertificate, Medium,
         Message, Origin, OutgoingEffect, Target, ValueKind,
     },
-    ChainError, ChainManagerOutcome, ChainStateView,
+    ChainManagerOutcome, ChainStateView,
 };
 use linera_execution::{
     ApplicationId, BytecodeLocation, Query, Response, UserApplicationDescription, UserApplicationId,
@@ -418,7 +418,7 @@ where
         );
         let block = certificate.value.block();
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        ensure_blobs_are_required::<Client>(&chain, block, blobs).await?;
+        ensure_blobs_are_required::<Client>(block, blobs).await?;
         // Write the values so that the bytecode is available during execution.
         for value in blobs {
             self.cache_recent_value(value.clone());
@@ -452,12 +452,9 @@ where
             }
         );
 
-        let required_bytecode = block
-            .required_bytecode(&chain.execution_state.system.registry)
-            .await
-            .map_err(ChainError::from)?;
-        let tasks: Vec<_> = required_bytecode
-            .into_values()
+        let tasks: Vec<_> = block
+            .bytecode_locations()
+            .into_keys()
             .filter(|location| !self.recent_values.contains(&location.certificate_hash))
             .map(|location| {
                 self.storage
@@ -691,10 +688,8 @@ where
     }
 }
 
-/// Verifies that all blobs are referred to as bytecode locations by the block or the current
-/// chain state.
+/// Verifies that all blobs are referred to as bytecode locations by the block.
 async fn ensure_blobs_are_required<Client>(
-    chain: &ChainStateView<<Client as Store>::Context>,
     block: &Block,
     blobs: &[HashedValue],
 ) -> Result<(), WorkerError>
@@ -704,10 +699,8 @@ where
 {
     // Find all certificates containing bytecode used when executing this block.
     let blob_hashes: HashSet<_> = block
-        .required_bytecode(&chain.execution_state.system.registry)
-        .await
-        .map_err(|err| WorkerError::ChainError(Box::new(err.into())))?
-        .into_values()
+        .bytecode_locations()
+        .into_keys()
         .map(|bytecode_location| bytecode_location.certificate_hash)
         .collect();
     for value in blobs {
@@ -779,7 +772,7 @@ where
         // Update the inboxes so that we can verify the provided blobs are legitimately required.
         // Actual execution happens below, after other validity checks.
         chain.remove_events_from_inboxes(block).await?;
-        ensure_blobs_are_required::<Client>(&chain, block, blobs).await?;
+        ensure_blobs_are_required::<Client>(block, blobs).await?;
         // Write the values so that the bytecode is available during execution.
         for value in blobs {
             self.storage.write_value(value.clone()).await?;

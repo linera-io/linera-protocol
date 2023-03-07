@@ -4,13 +4,16 @@
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery},
-    node::{LocalNodeClient, NodeError, NotificationStream, ValidatorNode},
+    node::{self, LocalNodeClient, NodeError, NotificationStream, ValidatorNode},
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::WorkerState,
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
-use futures::stream::{select_all, FuturesUnordered, StreamExt};
+use futures::{
+    future,
+    stream::{select_all, FuturesUnordered, StreamExt},
+};
 use linera_base::{
     committee::{Committee, ValidatorState},
     crypto::{CryptoHash, KeyPair},
@@ -537,16 +540,14 @@ where
         // Process the received operations. Download required blobs if necessary.
         if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
             if let NodeError::ApplicationBytecodesNotFound(locations) = &err {
-                let mut blobs = vec![];
-                for location in locations {
-                    if let Some(blob) = self
-                        .node_client
-                        .download_blob(nodes.clone(), block.chain_id, *location)
-                        .await
-                    {
-                        blobs.push(blob);
-                    }
-                }
+                let blobs: Vec<HashedValue> =
+                    future::join_all(locations.iter().map(|location| {
+                        node::download_blob(nodes.clone(), block.chain_id, *location)
+                    }))
+                    .await
+                    .into_iter()
+                    .flatten()
+                    .collect();
                 if !blobs.is_empty() {
                     self.process_certificate(certificate.clone(), blobs).await?;
                 }
@@ -798,12 +799,7 @@ where
         let nodes = self.make_validator_nodes(&committee).await?;
         let blobs = self
             .node_client
-            .read_or_download_blobs(
-                nodes,
-                block
-                    .registered_applications()
-                    .map(|(app, chain_id)| (chain_id, app.bytecode_location)),
-            )
+            .read_or_download_blobs(nodes, block.bytecode_locations())
             .await?;
         // Build the initial query.
         let key_pair = self.key_pair().await?;

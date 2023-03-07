@@ -394,19 +394,24 @@ where
             }
             let mut result = self.handle_certificate(certificate.clone(), vec![]).await;
             if let Err(NodeError::ApplicationBytecodesNotFound(locations)) = &result {
-                let mut blobs = vec![];
-                for location in locations {
-                    let Some(blob) = Self::try_download_blob_from(
-                    name,
-                    client,
-                    certificate.value.chain_id(),
-                    *location
-                ).await else {
-                    // The certificate is not as expected. Give up.
-                    log::warn!("Failed to process network blob");
-                    return info;
-                };
-                    blobs.push(blob);
+                let chain_id = certificate.value.chain_id();
+                let mut blobs = Vec::new();
+                for maybe_blob in
+                    future::join_all(locations.iter().map(|location| {
+                        let mut client = client.clone();
+                        async move {
+                            try_download_blob_from(name, &mut client, chain_id, *location).await
+                        }
+                    }))
+                    .await
+                {
+                    if let Some(blob) = maybe_blob {
+                        blobs.push(blob);
+                    } else {
+                        // The certificate is not as expected. Give up.
+                        log::warn!("Failed to process network blob");
+                        return info;
+                    }
                 }
                 result = self.handle_certificate(certificate.clone(), blobs).await;
             }
@@ -499,7 +504,7 @@ where
     pub async fn read_or_download_blobs<A>(
         &mut self,
         validators: Vec<(ValidatorName, A)>,
-        blob_locations: impl Iterator<Item = (ChainId, BytecodeLocation)>,
+        blob_locations: impl IntoIterator<Item = (BytecodeLocation, ChainId)>,
     ) -> Result<Vec<HashedValue>, NodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
@@ -507,7 +512,7 @@ where
         let mut blobs = vec![];
         let mut tasks = vec![];
         let mut node = self.node.lock().await;
-        for (chain_id, location) in blob_locations {
+        for (location, chain_id) in blob_locations {
             if let Some(blob) = node.state.get_recent_value(&location.certificate_hash) {
                 blobs.push(blob.clone());
             } else {
@@ -552,53 +557,13 @@ where
         // Sequentially try each validator in random order.
         validators.shuffle(&mut rand::thread_rng());
         for (name, mut client) in validators {
-            if let Some(blob) =
-                Self::try_download_blob_from(name, &mut client, chain_id, location).await
+            if let Some(blob) = try_download_blob_from(name, &mut client, chain_id, location).await
             {
                 storage.write_value(blob.clone()).await?;
                 return Ok(Some(blob));
             }
         }
         Ok(None)
-    }
-
-    pub async fn download_blob<A>(
-        &mut self,
-        mut validators: Vec<(ValidatorName, A)>,
-        chain_id: ChainId,
-        location: BytecodeLocation,
-    ) -> Option<HashedValue>
-    where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
-    {
-        // Sequentially try each validator in random order.
-        validators.shuffle(&mut rand::thread_rng());
-        for (name, mut client) in validators {
-            if let Some(blob) =
-                Self::try_download_blob_from(name, &mut client, chain_id, location).await
-            {
-                return Some(blob);
-            }
-        }
-        None
-    }
-
-    async fn try_download_blob_from<A>(
-        name: ValidatorName,
-        client: &mut A,
-        chain_id: ChainId,
-        location: BytecodeLocation,
-    ) -> Option<HashedValue>
-    where
-        A: ValidatorNode + Send + Sync + 'static + Clone,
-    {
-        let query = ChainInfoQuery::new(chain_id).with_blob(location.certificate_hash);
-        if let Ok(response) = client.handle_chain_info_query(query).await {
-            if response.check(name).is_ok() {
-                return response.info.requested_blob;
-            }
-        }
-        None
     }
 
     async fn try_download_certificates_from<A>(
@@ -719,4 +684,40 @@ where
         }
         Ok(())
     }
+}
+
+pub async fn download_blob<A>(
+    mut validators: Vec<(ValidatorName, A)>,
+    chain_id: ChainId,
+    location: BytecodeLocation,
+) -> Option<HashedValue>
+where
+    A: ValidatorNode + Send + Sync + 'static + Clone,
+{
+    // Sequentially try each validator in random order.
+    validators.shuffle(&mut rand::thread_rng());
+    for (name, mut client) in validators {
+        if let Some(blob) = try_download_blob_from(name, &mut client, chain_id, location).await {
+            return Some(blob);
+        }
+    }
+    None
+}
+
+async fn try_download_blob_from<A>(
+    name: ValidatorName,
+    client: &mut A,
+    chain_id: ChainId,
+    location: BytecodeLocation,
+) -> Option<HashedValue>
+where
+    A: ValidatorNode + Send + Sync + 'static + Clone,
+{
+    let query = ChainInfoQuery::new(chain_id).with_blob(location.certificate_hash);
+    if let Ok(response) = client.handle_chain_info_query(query).await {
+        if response.check(name).is_ok() {
+            return response.info.requested_blob;
+        }
+    }
+    None
 }
