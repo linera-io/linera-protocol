@@ -140,6 +140,13 @@ impl Block {
     }
 }
 
+/// A chain ID with a block height.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, SimpleObject)]
+pub struct ChainAndHeight {
+    pub chain_id: ChainId,
+    pub height: BlockHeight,
+}
+
 /// A block with a round number.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct BlockAndRound {

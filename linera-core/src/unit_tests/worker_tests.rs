@@ -19,8 +19,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, Event, HashedValue, LiteVote, Medium,
-        Message, Origin, OutgoingEffect, SignatureAggregator,
+        Block, BlockAndRound, BlockProposal, Certificate, ChainAndHeight, Event, HashedValue,
+        LiteVote, Medium, Message, Origin, OutgoingEffect, SignatureAggregator,
     },
     ChainError,
 };
@@ -2398,7 +2398,10 @@ where
     assert_eq!(response.info.requested_received_log.len(), 1);
     assert_eq!(
         response.info.requested_received_log[0],
-        (ChainId::root(1), BlockHeight::from(0))
+        ChainAndHeight {
+            chain_id: ChainId::root(1),
+            height: BlockHeight::from(0)
+        }
     );
 }
 

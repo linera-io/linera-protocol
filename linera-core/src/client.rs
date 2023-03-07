@@ -606,13 +606,12 @@ where
                     response.check(name)?;
                     let mut certificates = Vec::new();
                     let mut new_tracker = tracker;
-                    for (chain_id, height) in response.info.requested_received_log {
-                        let query = ChainInfoQuery::new(chain_id).with_sent_certificates_in_range(
-                            BlockHeightRange {
-                                start: height,
+                    for cah in response.info.requested_received_log {
+                        let query = ChainInfoQuery::new(cah.chain_id)
+                            .with_sent_certificates_in_range(BlockHeightRange {
+                                start: cah.height,
                                 limit: Some(1),
-                            },
-                        );
+                            });
 
                         let mut response = client.handle_chain_info_query(query).await?;
                         let Some(certificate) = response.info
