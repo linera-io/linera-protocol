@@ -256,7 +256,7 @@ impl CrowdFunding {
             .map_err(Error::InvalidBalanceQuery)?;
 
         let (response, _sessions) =
-            system_api::call_application(true, self.parameters().token, &query_bytes, vec![]).await;
+            system_api::call_application(true, self.parameters().token, &query_bytes, vec![]);
 
         bcs::from_bytes(&response).map_err(Error::InvalidBalance)
     }
@@ -277,7 +277,7 @@ impl CrowdFunding {
     async fn transfer(&self, transfer: fungible::ApplicationCall) -> Result<(), Error> {
         let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
 
-        system_api::call_application(true, self.parameters().token, &transfer_bytes, vec![]).await;
+        system_api::call_application(true, self.parameters().token, &transfer_bytes, vec![]);
 
         Ok(())
     }

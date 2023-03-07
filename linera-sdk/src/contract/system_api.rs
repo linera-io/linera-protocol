@@ -177,7 +177,7 @@ pub fn current_system_time() -> Timestamp {
 }
 
 /// Calls another application.
-pub async fn call_application(
+pub fn call_application(
     authenticated: bool,
     application: ApplicationId,
     argument: &[u8],
@@ -188,14 +188,13 @@ pub async fn call_application(
         .map(system::SessionId::from)
         .collect();
 
-    let future = system::TryCallApplication::new(
+    system::try_call_application(
         authenticated,
         application.into(),
         argument,
         &forwarded_sessions,
-    );
-
-    future::poll_fn(|_context| future.poll().into()).await
+    )
+    .into()
 }
 
 /// Calls another application's session.

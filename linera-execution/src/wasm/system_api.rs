@@ -24,7 +24,6 @@ macro_rules! impl_writable_system {
             type FindKeyValues =
                 HostFuture<$storage, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
             type WriteBatch = HostFuture<$storage, Result<(), ExecutionError>>;
-            type TryCallApplication = HostFuture<$storage, Result<CallResult, ExecutionError>>;
             type TryCallSession = HostFuture<$storage, Result<CallResult, ExecutionError>>;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
@@ -212,14 +211,13 @@ macro_rules! impl_writable_system {
                 }
             }
 
-            fn try_call_application_new(
+            fn try_call_application(
                 &mut self,
                 authenticated: bool,
                 application: writable_system::ApplicationId,
                 argument: &[u8],
                 forwarded_sessions: &[Le<writable_system::SessionId>],
-            ) -> Result<Self::TryCallApplication, Self::Error> {
-                let storage = self.storage();
+            ) -> Result<writable_system::CallResult, Self::Error> {
                 let forwarded_sessions = forwarded_sessions
                     .iter()
                     .map(Le::get)
@@ -227,27 +225,13 @@ macro_rules! impl_writable_system {
                     .collect();
                 let argument = Vec::from(argument);
 
-                Ok(self.queued_future_factory.enqueue(async move {
-                    storage
-                        .try_call_application(
-                            authenticated,
-                            application.into(),
-                            &argument,
-                            forwarded_sessions,
-                        )
-                        .await
-                }))
-            }
-
-            fn try_call_application_poll(
-                &mut self,
-                future: &Self::TryCallApplication,
-            ) -> Result<writable_system::PollCallResult, Self::Error> {
-                use writable_system::PollCallResult;
-                match future.poll(self.context()) {
-                    Poll::Pending => Ok(PollCallResult::Pending),
-                    Poll::Ready(result) => Ok(PollCallResult::Ready(result?.into())),
-                }
+                Self::block_on(self.storage().try_call_application(
+                    authenticated,
+                    application.into(),
+                    &argument,
+                    forwarded_sessions,
+                ))
+                .map(writable_system::CallResult::from)
             }
 
             fn try_call_session_new(
