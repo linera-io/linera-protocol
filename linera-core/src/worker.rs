@@ -418,12 +418,6 @@ where
         );
         let block = certificate.value.block();
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        ensure_blobs_are_required::<Client>(block, blobs).await?;
-        // Write the values so that the bytecode is available during execution.
-        for value in blobs {
-            self.cache_recent_value(value.clone());
-            self.storage.write_value(value.clone()).await?;
-        }
         // Check that the chain is active and ready for this confirmation.
         let tip = chain.tip_state.get();
         if tip.next_block_height < block.height {
@@ -451,31 +445,6 @@ where
                 epoch: block.epoch,
             }
         );
-
-        let tasks: Vec<_> = block
-            .bytecode_locations()
-            .into_keys()
-            .filter(|location| !self.recent_values.contains(&location.certificate_hash))
-            .map(|location| {
-                self.storage
-                    .read_value(location.certificate_hash)
-                    .map(move |result| (location, result))
-            })
-            .collect();
-        let mut locations = vec![];
-        for (location, result) in future::join_all(tasks).await {
-            match result {
-                Ok(_value) => {} // Value is not missing.
-                Err(ViewError::NotFound(_)) => locations.push(location),
-                Err(err) => Err(err)?,
-            }
-        }
-        if !locations.is_empty() {
-            return Err(WorkerError::ApplicationBytecodesNotFound(
-                locations.into_iter().collect(),
-            ));
-        }
-
         let committee = chain
             .execution_state
             .system
@@ -489,7 +458,12 @@ where
             tip.block_hash == block.previous_block_hash,
             WorkerError::InvalidBlockChaining
         );
-        // Persist certificate.
+        self.check_no_missing_bytecode(block, blobs).await?;
+        // Persist certificate and blobs.
+        for value in blobs {
+            self.cache_recent_value(value.clone());
+            self.storage.write_value(value.clone()).await?;
+        }
         self.storage.write_certificate(certificate.clone()).await?;
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
@@ -519,6 +493,57 @@ where
         // Persist chain.
         chain.save().await?;
         Ok((info, actions))
+    }
+
+    /// Returns an error if the block requires bytecode we don't have, or if unrelated bytecode
+    /// blobs were provided.
+    async fn check_no_missing_bytecode(
+        &self,
+        block: &Block,
+        blobs: &[HashedValue],
+    ) -> Result<(), WorkerError> {
+        let required_locations = block.bytecode_locations();
+        // Find all certificates containing bytecode used when executing this block.
+        let required_hashes: HashSet<_> = required_locations
+            .keys()
+            .map(|bytecode_location| bytecode_location.certificate_hash)
+            .collect();
+        for value in blobs {
+            let value_hash = value.hash();
+            ensure!(
+                required_hashes.contains(&value_hash),
+                WorkerError::UnneededValue { value_hash }
+            );
+        }
+        let blob_hashes: HashSet<_> = blobs.iter().map(|blob| blob.hash()).collect();
+
+        let tasks: Vec<_> = required_locations
+            .into_keys()
+            .filter(|location| {
+                !self.recent_values.contains(&location.certificate_hash)
+                    && !blob_hashes.contains(&location.certificate_hash)
+            })
+            .map(|location| {
+                self.storage
+                    .read_value(location.certificate_hash)
+                    .map(move |result| (location, result))
+            })
+            .collect();
+        let mut locations = vec![];
+        for (location, result) in future::join_all(tasks).await {
+            match result {
+                Ok(_value) => {} // Value is not missing.
+                Err(ViewError::NotFound(_)) => locations.push(location),
+                Err(err) => Err(err)?,
+            }
+        }
+        if locations.is_empty() {
+            Ok(())
+        } else {
+            Err(WorkerError::ApplicationBytecodesNotFound(
+                locations.into_iter().collect(),
+            ))
+        }
     }
 
     /// Process a validated block issued from a multi-owner chain.
@@ -688,31 +713,6 @@ where
     }
 }
 
-/// Verifies that all blobs are referred to as bytecode locations by the block.
-async fn ensure_blobs_are_required<Client>(
-    block: &Block,
-    blobs: &[HashedValue],
-) -> Result<(), WorkerError>
-where
-    Client: Store,
-    ViewError: From<Client::ContextError>,
-{
-    // Find all certificates containing bytecode used when executing this block.
-    let blob_hashes: HashSet<_> = block
-        .bytecode_locations()
-        .into_keys()
-        .map(|bytecode_location| bytecode_location.certificate_hash)
-        .collect();
-    for value in blobs {
-        let value_hash = value.hash();
-        ensure!(
-            blob_hashes.contains(&value_hash),
-            WorkerError::UnneededValue { value_hash }
-        );
-    }
-    Ok(())
-}
-
 #[async_trait]
 impl<Client> ValidatorWorker for WorkerState<Client>
 where
@@ -772,7 +772,7 @@ where
         // Update the inboxes so that we can verify the provided blobs are legitimately required.
         // Actual execution happens below, after other validity checks.
         chain.remove_events_from_inboxes(block).await?;
-        ensure_blobs_are_required::<Client>(block, blobs).await?;
+        self.check_no_missing_bytecode(block, blobs).await?;
         // Write the values so that the bytecode is available during execution.
         for value in blobs {
             self.storage.write_value(value.clone()).await?;
