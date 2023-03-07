@@ -164,8 +164,10 @@ impl CrowdFunding {
             .map_err(Error::InvalidSessionBalanceQuery)?;
 
         stream::iter(sessions)
-            .then(|session| system_api::call_session(false, *session, &balance_query, vec![]))
-            .map(|(balance_bytes, _)| {
+            .map(|session| {
+                let (balance_bytes, _) =
+                    system_api::call_session(false, *session, &balance_query, vec![]);
+
                 u128::from_bcs_bytes(&balance_bytes).map_err(Error::InvalidSessionBalance)
             })
             .try_collect()
@@ -190,7 +192,7 @@ impl CrowdFunding {
                 };
                 let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
 
-                system_api::call_session(false, session, &transfer_bytes, vec![]).await;
+                system_api::call_session(false, session, &transfer_bytes, vec![]);
 
                 Ok(())
             })

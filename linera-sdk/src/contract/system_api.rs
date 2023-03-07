@@ -198,7 +198,7 @@ pub fn call_application(
 }
 
 /// Calls another application's session.
-pub async fn call_session(
+pub fn call_session(
     authenticated: bool,
     session: SessionId,
     argument: &[u8],
@@ -209,10 +209,7 @@ pub async fn call_session(
         .map(system::SessionId::from)
         .collect();
 
-    let future =
-        system::TryCallSession::new(authenticated, session.into(), argument, &forwarded_sessions);
-
-    future::poll_fn(|_context| future.poll().into()).await
+    system::try_call_session(authenticated, session.into(), argument, &forwarded_sessions).into()
 }
 
 /// Requests the host to log a message.
