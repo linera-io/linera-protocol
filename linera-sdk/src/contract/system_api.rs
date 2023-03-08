@@ -13,12 +13,11 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{fmt, task::Poll};
 
 /// Loads the contract state, without locking it for writes.
-pub async fn load<State>() -> State
+pub fn load<State>() -> State
 where
     State: Default + DeserializeOwned,
 {
-    let future = system::Load::new();
-    let state_bytes = future::poll_fn(|_context| future.poll().into()).await;
+    let state_bytes = system::load();
     deserialize_state(state_bytes)
 }
 

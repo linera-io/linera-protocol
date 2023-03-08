@@ -14,15 +14,7 @@ enum log-level {
     error,
 }
 
-resource load {
-    static new: func() -> load
-    poll: func() -> poll-load
-}
-
-variant poll-load {
-    pending,
-    ready(list<u8>),
-}
+load: func() -> list<u8>
 
 resource load-and-lock {
     static new: func() -> load-and-lock

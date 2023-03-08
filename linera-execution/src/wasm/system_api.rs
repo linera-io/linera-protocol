@@ -16,7 +16,6 @@ macro_rules! impl_writable_system {
         impl$(<$param>)? WritableSystem for $contract_system_api {
             type Error = ExecutionError;
 
-            type Load = HostFuture<$storage, Result<Vec<u8>, ExecutionError>>;
             type LoadAndLock = HostFuture<$storage, Result<Vec<u8>, ExecutionError>>;
             type Lock = HostFuture<$storage, Result<(), ExecutionError>>;
             type ReadKeyBytes = HostFuture<$storage, Result<Option<Vec<u8>>, ExecutionError>>;
@@ -51,21 +50,8 @@ macro_rules! impl_writable_system {
                 Ok(self.storage().read_system_timestamp().micros())
             }
 
-            fn load_new(&mut self) -> Result<Self::Load, Self::Error> {
-                Ok(self
-                    .queued_future_factory
-                    .enqueue(self.storage().try_read_my_state()))
-            }
-
-            fn load_poll(
-                &mut self,
-                future: &Self::Load,
-            ) -> Result<writable_system::PollLoad, Self::Error> {
-                use writable_system::PollLoad;
-                match future.poll(self.context()) {
-                    Poll::Pending => Ok(PollLoad::Pending),
-                    Poll::Ready(bytes) => Ok(PollLoad::Ready(bytes?)),
-                }
+            fn load(&mut self) -> Result<Vec<u8>, Self::Error> {
+                Self::block_on(self.storage().try_read_my_state())
             }
 
             fn load_and_lock_new(&mut self) -> Result<Self::LoadAndLock, Self::Error> {
