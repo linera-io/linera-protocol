@@ -14,6 +14,8 @@ mod async_boundary;
 mod async_determinism;
 mod common;
 mod sanitizer;
+#[macro_use]
+mod system_api;
 #[cfg(feature = "wasmer")]
 #[path = "wasmer.rs"]
 mod wasmer;
