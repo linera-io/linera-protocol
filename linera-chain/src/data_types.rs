@@ -11,10 +11,10 @@ use linera_base::{
     ensure,
 };
 use linera_execution::{
-    ApplicationId, BytecodeLocation, ChannelName, Destination, Effect, Operation, SystemEffect,
+    ApplicationId, BytecodeLocation, ChannelName, Destination, Effect, Operation,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 #[cfg(test)]
 #[path = "unit_tests/data_types_tests.rs"]
@@ -52,37 +52,17 @@ pub struct Block {
 }
 
 impl Block {
-    /// Returns all bytecode locations referred to in this block, with the sender chain ID.
-    pub fn bytecode_locations(&self) -> BTreeMap<BytecodeLocation, ChainId> {
-        let mut locations = BTreeMap::new();
+    /// Returns all bytecode locations referred to in this block's incoming messages, with the
+    /// sender chain ID.
+    pub fn bytecode_locations(&self) -> HashMap<BytecodeLocation, ChainId> {
+        let mut locations = HashMap::new();
         for message in &self.incoming_messages {
-            match &message.event.effect {
-                Effect::System(SystemEffect::BytecodePublished { operation_index }) => {
-                    locations.insert(
-                        BytecodeLocation {
-                            certificate_hash: message.event.certificate_hash,
-                            operation_index: *operation_index,
-                        },
-                        message.origin.sender,
-                    );
-                }
-                Effect::System(SystemEffect::BytecodeLocations {
-                    locations: new_locations,
-                }) => {
-                    locations.extend(
-                        new_locations
-                            .iter()
-                            .map(|(_id, location)| (*location, message.origin.sender)),
-                    );
-                }
-                Effect::System(SystemEffect::RegisterApplications { applications }) => {
-                    locations.extend(
-                        applications
-                            .iter()
-                            .map(|app| (app.bytecode_location, message.origin.sender)),
-                    );
-                }
-                _ => {}
+            if let Effect::System(sys_effect) = &message.event.effect {
+                locations.extend(
+                    sys_effect
+                        .bytecode_locations(message.event.certificate_hash)
+                        .map(|location| (location, message.origin.sender)),
+                );
             }
         }
         locations

@@ -431,7 +431,7 @@ where
             let actions = self.create_network_actions(&mut chain).await?;
             return Ok((info, actions));
         }
-        // Verify the certificate. Returns a catch-all error to make client code more robust.
+        // Verify the certificate.
         let epoch = chain
             .execution_state
             .system
@@ -458,6 +458,7 @@ where
             tip.block_hash == block.previous_block_hash,
             WorkerError::InvalidBlockChaining
         );
+        // Verify that all required bytecode blobs are available, and no unrelated ones provided.
         self.check_no_missing_bytecode(block, blobs).await?;
         // Persist certificate and blobs.
         for value in blobs {
@@ -504,14 +505,14 @@ where
     ) -> Result<(), WorkerError> {
         let required_locations = block.bytecode_locations();
         // Find all certificates containing bytecode used when executing this block.
-        let required_hashes: HashSet<_> = required_locations
+        let mut required_hashes: HashSet<_> = required_locations
             .keys()
             .map(|bytecode_location| bytecode_location.certificate_hash)
             .collect();
         for value in blobs {
             let value_hash = value.hash();
             ensure!(
-                required_hashes.contains(&value_hash),
+                required_hashes.remove(&value_hash),
                 WorkerError::UnneededValue { value_hash }
             );
         }
@@ -524,6 +525,7 @@ where
                     && !blob_hashes.contains(&location.certificate_hash)
             })
             .map(|location| {
+                // TODO(#515): Don't read the value just to check existence.
                 self.storage
                     .read_value(location.certificate_hash)
                     .map(move |result| (location, result))
@@ -772,6 +774,7 @@ where
         // Update the inboxes so that we can verify the provided blobs are legitimately required.
         // Actual execution happens below, after other validity checks.
         chain.remove_events_from_inboxes(block).await?;
+        // Verify that all required bytecode blobs are available, and no unrelated ones provided.
         self.check_no_missing_bytecode(block, blobs).await?;
         // Write the values so that the bytecode is available during execution.
         for value in blobs {

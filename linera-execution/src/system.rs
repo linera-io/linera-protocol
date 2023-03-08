@@ -11,6 +11,7 @@ use crate::{
 use custom_debug_derive::Debug;
 use linera_base::{
     committee::Committee,
+    crypto::CryptoHash,
     data_types::{ArithmeticError, ChainDescription, ChainId, EffectId, Epoch, Owner, Timestamp},
     ensure, hex_debug,
 };
@@ -25,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     fmt::{self, Display, Formatter},
+    iter,
     str::FromStr,
 };
 use thiserror::Error;
@@ -198,6 +200,37 @@ pub enum SystemEffect {
     },
     /// Does nothing. Used to debug the intended recipients of a block.
     Notify { id: ChainId },
+}
+
+impl SystemEffect {
+    /// Returns an iterator over all bytecode locations this effect introduces to the receiving
+    /// chain, given the hash of the certificate that it originates from.
+    pub fn bytecode_locations(
+        &self,
+        certificate_hash: CryptoHash,
+    ) -> Box<dyn Iterator<Item = BytecodeLocation> + '_> {
+        match self {
+            SystemEffect::BytecodePublished { operation_index } => {
+                Box::new(iter::once(BytecodeLocation {
+                    certificate_hash,
+                    operation_index: *operation_index,
+                }))
+            }
+            SystemEffect::BytecodeLocations {
+                locations: new_locations,
+            } => Box::new(new_locations.iter().map(|(_id, location)| *location)),
+            SystemEffect::RegisterApplications { applications } => {
+                Box::new(applications.iter().map(|app| app.bytecode_location))
+            }
+            SystemEffect::Credit { .. }
+            | SystemEffect::Withdraw { .. }
+            | SystemEffect::OpenChain { .. }
+            | SystemEffect::SetCommittees { .. }
+            | SystemEffect::Subscribe { .. }
+            | SystemEffect::Unsubscribe { .. }
+            | SystemEffect::Notify { .. } => Box::new(iter::empty()),
+        }
+    }
 }
 
 /// A query to the system state.
