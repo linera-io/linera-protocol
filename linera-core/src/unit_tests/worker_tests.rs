@@ -3498,7 +3498,7 @@ where
 
     {
         // The admin chain has an anticipated message.
-        let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
+        let admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
         assert!(admin_chain.validate_incoming_messages().await.is_err());
     }
 
@@ -3511,7 +3511,7 @@ where
 
     {
         // The admin chain has no more anticipated messages.
-        let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
+        let admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
         admin_chain.validate_incoming_messages().await.unwrap();
     }
 }

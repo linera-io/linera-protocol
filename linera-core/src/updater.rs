@@ -331,11 +331,11 @@ where
     ) -> Result<(), NodeError> {
         let mut info = BTreeMap::new();
         {
-            let mut chain = self.store.load_chain(chain_id).await?;
+            let chain = self.store.load_chain(chain_id).await?;
             for id in chain.communication_states.indices().await? {
-                let state = chain.communication_states.load_entry_mut(&id).await?;
+                let state = chain.communication_states.try_load_entry(&id).await?;
                 for origin in state.inboxes.indices().await? {
-                    let inbox = state.inboxes.load_entry_mut(&origin).await?;
+                    let inbox = state.inboxes.try_load_entry(&origin).await?;
                     let next_height = info.entry(origin.sender).or_default();
                     let inbox_next_height = inbox.next_block_height_to_receive()?;
                     if inbox_next_height > *next_height {
