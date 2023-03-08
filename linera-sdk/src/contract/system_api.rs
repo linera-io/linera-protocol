@@ -10,7 +10,7 @@ use linera_views::{
     views::{RootView, View, ViewError},
 };
 use serde::{de::DeserializeOwned, Serialize};
-use std::{fmt, task::Poll};
+use std::fmt;
 
 /// Loads the contract state, without locking it for writes.
 pub fn load<State>() -> State
@@ -22,13 +22,11 @@ where
 }
 
 /// Loads the contract state and locks it for writes.
-pub async fn load_and_lock<State>() -> Option<State>
+pub fn load_and_lock<State>() -> Option<State>
 where
     State: Default + DeserializeOwned,
 {
-    let future = system::LoadAndLock::new();
-    let state_bytes =
-        future::poll_fn(|_context| Poll::<Option<Vec<u8>>>::from(future.poll())).await?;
+    let state_bytes = system::load_and_lock()?;
     Some(deserialize_state(state_bytes))
 }
 
