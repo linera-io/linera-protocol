@@ -108,7 +108,7 @@ impl WasmApplication {
         let context_forwarder = ContextForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
         let (internal_error_sender, internal_error_receiver) = oneshot::channel();
-        let (system_api, storage_guard) = SystemApi::new_writable(
+        let (system_api, storage_guard) = ContractSystemApi::new(
             context_forwarder.clone(),
             storage,
             queued_future_factory,
@@ -149,9 +149,8 @@ impl WasmApplication {
         let mut imports = imports! {};
         let context_forwarder = ContextForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
-        let (internal_error_sender, internal_error_receiver) = oneshot::channel();
-        let (system_api, storage_guard) =
-            SystemApi::new_queryable(context_forwarder.clone(), storage, internal_error_sender);
+        let (_internal_error_sender, internal_error_receiver) = oneshot::channel();
+        let (system_api, storage_guard) = ServiceSystemApi::new(context_forwarder.clone(), storage);
         let system_api_setup =
             queryable_system::add_to_imports(&mut store, &mut imports, system_api);
         let (service, instance) = service::Service::instantiate(&mut store, &module, &mut imports)?;
@@ -330,17 +329,24 @@ impl<'storage> common::Service for Service<'storage> {
     }
 }
 
-/// Implementation to forward system calls from the guest WASM module to the host implementation.
-pub struct SystemApi<S, Q> {
+/// Helper type with common functionality across the contract and service system API
+/// implementations.
+struct SystemApi<S> {
     context: ContextForwarder,
     storage: Arc<Mutex<Option<S>>>,
-    queued_future_factory: Q,
+}
+
+/// Implementation to forward contract system calls from the guest WASM module to the host
+/// implementation.
+pub struct ContractSystemApi {
+    shared: SystemApi<&'static dyn WritableStorage>,
+    queued_future_factory: QueuedHostFutureFactory<'static>,
     internal_error_sender: Option<oneshot::Sender<ExecutionError>>,
 }
 
-impl SystemApi<&'static dyn WritableStorage, QueuedHostFutureFactory<'static>> {
-    /// Create a new [`SystemApi`] instance, ensuring that the lifetime of the [`WritableStorage`]
-    /// trait object is respected.
+impl ContractSystemApi {
+    /// Creates a new [`ContractSystemApi`] instance, ensuring that the lifetime of the
+    /// [`WritableStorage`] trait object is respected.
     ///
     /// # Safety
     ///
@@ -351,7 +357,7 @@ impl SystemApi<&'static dyn WritableStorage, QueuedHostFutureFactory<'static>> {
     ///
     /// The [`StorageGuard`] instance must be kept alive while the trait object is still expected to
     /// be alive and usable by the WASM application.
-    pub fn new_writable<'storage>(
+    pub fn new<'storage>(
         context: ContextForwarder,
         storage: &'storage dyn WritableStorage,
         queued_future_factory: QueuedHostFutureFactory<'static>,
@@ -366,46 +372,16 @@ impl SystemApi<&'static dyn WritableStorage, QueuedHostFutureFactory<'static>> {
         };
 
         (
-            SystemApi {
-                context,
-                storage,
+            ContractSystemApi {
+                shared: SystemApi { context, storage },
                 queued_future_factory,
                 internal_error_sender: Some(internal_error_sender),
             },
             guard,
         )
     }
-}
 
-impl SystemApi<&'static dyn QueryableStorage, ()> {
-    /// Same as `new_writable`. Didn't find how to factorizing the code.
-    pub fn new_queryable<'storage>(
-        context: ContextForwarder,
-        storage: &'storage dyn QueryableStorage,
-        internal_error_sender: oneshot::Sender<ExecutionError>,
-    ) -> (Self, StorageGuard<'storage, &'static dyn QueryableStorage>) {
-        let storage_without_lifetime = unsafe { mem::transmute(storage) };
-        let storage = Arc::new(Mutex::new(Some(storage_without_lifetime)));
-
-        let guard = StorageGuard {
-            storage: storage.clone(),
-            _lifetime: PhantomData,
-        };
-
-        (
-            SystemApi {
-                context,
-                storage,
-                queued_future_factory: (),
-                internal_error_sender: Some(internal_error_sender),
-            },
-            guard,
-        )
-    }
-}
-
-impl<S: Copy, Q> SystemApi<S, Q> {
-    /// Safely obtain the [`WritableStorage`] trait object instance to handle a system call.
+    /// Safely obtains the [`WritableStorage`] trait object instance to handle a system call.
     ///
     /// # Panics
     ///
@@ -413,13 +389,19 @@ impl<S: Copy, Q> SystemApi<S, Q> {
     /// is executed in a single thread) or if the trait object is no longer alive (or more
     /// accurately, if the [`StorageGuard`] returned by [`Self::new`] was dropped to indicate it's
     /// no longer alive).
-    fn storage(&self) -> S {
+    fn storage(&self) -> &'static dyn WritableStorage {
         *self
+            .shared
             .storage
             .try_lock()
             .expect("Unexpected concurrent storage access by application")
             .as_ref()
             .expect("Application called storage after it should have stopped")
+    }
+
+    /// Returns the [`ContextForwarder`] to be used for asynchronous system calls.
+    fn context(&mut self) -> &mut ContextForwarder {
+        &mut self.shared.context
     }
 
     /// Reports an error to the [`GuestFuture`] responsible for executing the application.
@@ -434,9 +416,7 @@ impl<S: Copy, Q> SystemApi<S, Q> {
     }
 }
 
-impl writable_system::WritableSystem
-    for SystemApi<&'static dyn WritableStorage, QueuedHostFutureFactory<'static>>
-{
+impl writable_system::WritableSystem for ContractSystemApi {
     type Load = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
     type LoadAndLock = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
     type Lock = HostFuture<'static, Result<(), ExecutionError>>;
@@ -474,7 +454,7 @@ impl writable_system::WritableSystem
 
     fn load_poll(&mut self, future: &Self::Load) -> writable_system::PollLoad {
         use writable_system::PollLoad;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollLoad::Pending,
             Poll::Ready(Ok(bytes)) => PollLoad::Ready(bytes),
             Poll::Ready(Err(error)) => {
@@ -494,7 +474,7 @@ impl writable_system::WritableSystem
         future: &Self::LoadAndLock,
     ) -> writable_system::PollLoadAndLock {
         use writable_system::PollLoadAndLock;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollLoadAndLock::Pending,
             Poll::Ready(Ok(bytes)) => PollLoadAndLock::Ready(Some(bytes)),
             Poll::Ready(Err(ExecutionError::ViewError(ViewError::NotFound(_)))) => {
@@ -520,7 +500,7 @@ impl writable_system::WritableSystem
 
     fn lock_poll(&mut self, future: &Self::Lock) -> writable_system::PollLock {
         use writable_system::PollLock;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollLock::Pending,
             Poll::Ready(Ok(())) => PollLock::ReadyLocked,
             Poll::Ready(Err(ExecutionError::ViewError(ViewError::TryLockError(_)))) => {
@@ -543,7 +523,7 @@ impl writable_system::WritableSystem
         future: &Self::ReadKeyBytes,
     ) -> writable_system::PollReadKeyBytes {
         use writable_system::PollReadKeyBytes;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollReadKeyBytes::Pending,
             Poll::Ready(Ok(opt_list)) => PollReadKeyBytes::Ready(opt_list),
             Poll::Ready(Err(error)) => {
@@ -560,7 +540,7 @@ impl writable_system::WritableSystem
 
     fn find_keys_poll(&mut self, future: &Self::FindKeys) -> writable_system::PollFindKeys {
         use writable_system::PollFindKeys;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollFindKeys::Pending,
             Poll::Ready(Ok(keys)) => PollFindKeys::Ready(keys),
             Poll::Ready(Err(error)) => {
@@ -582,7 +562,7 @@ impl writable_system::WritableSystem
         future: &Self::FindKeyValues,
     ) -> writable_system::PollFindKeyValues {
         use writable_system::PollFindKeyValues;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollFindKeyValues::Pending,
             Poll::Ready(Ok(key_values)) => PollFindKeyValues::Ready(key_values),
             Poll::Ready(Err(error)) => {
@@ -614,7 +594,7 @@ impl writable_system::WritableSystem
 
     fn write_batch_poll(&mut self, future: &Self::WriteBatch) -> writable_system::PollUnit {
         use writable_system::PollUnit;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollUnit::Pending,
             Poll::Ready(Ok(())) => PollUnit::Ready,
             Poll::Ready(Err(error)) => {
@@ -656,7 +636,7 @@ impl writable_system::WritableSystem
         future: &Self::TryCallApplication,
     ) -> writable_system::PollCallResult {
         use writable_system::PollCallResult;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollCallResult::Pending,
             Poll::Ready(Ok(result)) => PollCallResult::Ready(result.into()),
             Poll::Ready(Err(error)) => {
@@ -693,7 +673,7 @@ impl writable_system::WritableSystem
         future: &Self::TryCallApplication,
     ) -> writable_system::PollCallResult {
         use writable_system::PollCallResult;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollCallResult::Pending,
             Poll::Ready(Ok(result)) => PollCallResult::Ready(result.into()),
             Poll::Ready(Err(error)) => {
@@ -708,7 +688,70 @@ impl writable_system::WritableSystem
     }
 }
 
-impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStorage, ()> {
+/// Implementation to forward service system calls from the guest WASM module to the host
+/// implementation.
+pub struct ServiceSystemApi {
+    shared: SystemApi<&'static dyn QueryableStorage>,
+}
+
+impl ServiceSystemApi {
+    /// Creates a new [`ServiceSystemApi`] instance, ensuring that the lifetime of the
+    /// [`QueryableStorage`] trait object is respected.
+    ///
+    /// # Safety
+    ///
+    /// This method uses a [`mem::transmute`] call to erase the lifetime of the `storage` trait
+    /// object reference. However, this is safe because the lifetime is transfered to the returned
+    /// [`StorageGuard`], which removes the unsafe reference from memory when it is dropped,
+    /// ensuring the lifetime is respected.
+    ///
+    /// The [`StorageGuard`] instance must be kept alive while the trait object is still expected to
+    /// be alive and usable by the WASM application.
+    pub fn new<'storage>(
+        context: ContextForwarder,
+        storage: &'storage dyn QueryableStorage,
+    ) -> (Self, StorageGuard<'storage, &'static dyn QueryableStorage>) {
+        let storage_without_lifetime = unsafe { mem::transmute(storage) };
+        let storage = Arc::new(Mutex::new(Some(storage_without_lifetime)));
+
+        let guard = StorageGuard {
+            storage: storage.clone(),
+            _lifetime: PhantomData,
+        };
+
+        (
+            ServiceSystemApi {
+                shared: SystemApi { context, storage },
+            },
+            guard,
+        )
+    }
+
+    /// Safely obtains the [`QueryableStorage`] trait object instance to handle a system call.
+    ///
+    /// # Panics
+    ///
+    /// If there is a concurrent call from the WASM application (which is impossible as long as it
+    /// is executed in a single thread) or if the trait object is no longer alive (or more
+    /// accurately, if the [`StorageGuard`] returned by [`Self::new`] was dropped to indicate it's
+    /// no longer alive).
+    fn storage(&self) -> &'static dyn QueryableStorage {
+        *self
+            .shared
+            .storage
+            .try_lock()
+            .expect("Unexpected concurrent storage access by application")
+            .as_ref()
+            .expect("Application called storage after it should have stopped")
+    }
+
+    /// Returns the [`ContextForwarder`] to be used for asynchronous system calls.
+    fn context(&mut self) -> &mut ContextForwarder {
+        &mut self.shared.context
+    }
+}
+
+impl queryable_system::QueryableSystem for ServiceSystemApi {
     type Load = HostFuture<'static, Result<Vec<u8>, ExecutionError>>;
     type Lock = HostFuture<'static, Result<(), ExecutionError>>;
     type Unlock = HostFuture<'static, Result<(), ExecutionError>>;
@@ -743,7 +786,7 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
 
     fn load_poll(&mut self, future: &Self::Load) -> queryable_system::PollLoad {
         use queryable_system::PollLoad;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollLoad::Pending,
             Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
             Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
@@ -756,7 +799,7 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
 
     fn lock_poll(&mut self, future: &Self::Lock) -> queryable_system::PollLock {
         use queryable_system::PollLock;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollLock::Pending,
             Poll::Ready(Ok(())) => PollLock::Ready(Ok(())),
             Poll::Ready(Err(error)) => PollLock::Ready(Err(error.to_string())),
@@ -769,7 +812,7 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
 
     fn unlock_poll(&mut self, future: &Self::Lock) -> queryable_system::PollUnlock {
         use queryable_system::PollUnlock;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollUnlock::Pending,
             Poll::Ready(Ok(())) => PollUnlock::Ready(Ok(())),
             Poll::Ready(Err(error)) => PollUnlock::Ready(Err(error.to_string())),
@@ -785,7 +828,7 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
         future: &Self::ReadKeyBytes,
     ) -> queryable_system::PollReadKeyBytes {
         use queryable_system::PollReadKeyBytes;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollReadKeyBytes::Pending,
             Poll::Ready(Ok(opt_list)) => PollReadKeyBytes::Ready(Ok(opt_list)),
             Poll::Ready(Err(error)) => PollReadKeyBytes::Ready(Err(error.to_string())),
@@ -798,7 +841,7 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
 
     fn find_keys_poll(&mut self, future: &Self::FindKeys) -> queryable_system::PollFindKeys {
         use queryable_system::PollFindKeys;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollFindKeys::Pending,
             Poll::Ready(Ok(keys)) => PollFindKeys::Ready(Ok(keys)),
             Poll::Ready(Err(error)) => PollFindKeys::Ready(Err(error.to_string())),
@@ -817,7 +860,7 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
         future: &Self::FindKeyValues,
     ) -> queryable_system::PollFindKeyValues {
         use queryable_system::PollFindKeyValues;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollFindKeyValues::Pending,
             Poll::Ready(Ok(key_values)) => PollFindKeyValues::Ready(Ok(key_values)),
             Poll::Ready(Err(error)) => PollFindKeyValues::Ready(Err(error.to_string())),
@@ -844,7 +887,7 @@ impl queryable_system::QueryableSystem for SystemApi<&'static dyn QueryableStora
         future: &Self::TryQueryApplication,
     ) -> queryable_system::PollLoad {
         use queryable_system::PollLoad;
-        match future.poll(&mut self.context) {
+        match future.poll(self.context()) {
             Poll::Pending => PollLoad::Pending,
             Poll::Ready(Ok(result)) => PollLoad::Ready(Ok(result)),
             Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
