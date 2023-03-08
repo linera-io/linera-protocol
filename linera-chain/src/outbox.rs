@@ -31,7 +31,7 @@ where
     C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
 {
-    pub async fn block_heights(&mut self) -> Result<Vec<BlockHeight>, ViewError> {
+    pub async fn block_heights(&self) -> Result<Vec<BlockHeight>, ViewError> {
         let count = self.queue.count();
         let heights = self.queue.read_front(count).await?;
         Ok(heights)
