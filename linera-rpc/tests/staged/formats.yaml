@@ -95,6 +95,12 @@ Certificate:
           TUPLE:
             - TYPENAME: ValidatorName
             - TYPENAME: Signature
+ChainAndHeight:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - height:
+        TYPENAME: BlockHeight
 ChainDescription:
   ENUM:
     0:
@@ -147,9 +153,7 @@ ChainInfo:
     - count_received_log: U64
     - requested_received_log:
         SEQ:
-          TUPLE:
-            - TYPENAME: ChainId
-            - TYPENAME: BlockHeight
+          TYPENAME: ChainAndHeight
     - requested_blob:
         OPTION:
           TYPENAME: Value
