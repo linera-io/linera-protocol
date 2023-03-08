@@ -107,7 +107,7 @@ impl From<&UserApplicationDescription> for UserApplicationId {
 pub struct BytecodeId(pub EffectId);
 
 /// A reference to where the application bytecode is stored.
-#[derive(Clone, Copy, Debug, Ord, PartialOrd, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct BytecodeLocation {
     /// The certificate that published the bytecode.
     pub certificate_hash: CryptoHash,

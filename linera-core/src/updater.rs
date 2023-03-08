@@ -15,7 +15,7 @@ use linera_chain::data_types::{BlockProposal, Certificate, LiteVote};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     hash::Hash,
     time::Duration,
 };
@@ -146,7 +146,7 @@ where
                         return Err(NodeError::InvalidChainInfoResponse);
                     }
                 }
-                let unique_locations: BTreeSet<_> = locations.iter().cloned().collect();
+                let unique_locations: HashSet<_> = locations.iter().cloned().collect();
                 if locations.len() > unique_locations.len() {
                     log::warn!("locations requested by validator contain duplicates");
                     return Err(NodeError::InvalidChainInfoResponse);

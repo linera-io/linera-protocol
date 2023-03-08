@@ -4,7 +4,7 @@
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery},
-    node::{self, LocalNodeClient, NodeError, NotificationStream, ValidatorNode},
+    node::{LocalNodeClient, NodeError, NotificationStream, ValidatorNode},
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::WorkerState,
 };
@@ -540,14 +540,13 @@ where
         // Process the received operations. Download required blobs if necessary.
         if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
             if let NodeError::ApplicationBytecodesNotFound(locations) = &err {
-                let blobs: Vec<HashedValue> =
-                    future::join_all(locations.iter().map(|location| {
-                        node::download_blob(nodes.clone(), block.chain_id, *location)
-                    }))
-                    .await
-                    .into_iter()
-                    .flatten()
-                    .collect();
+                let blobs: Vec<HashedValue> = future::join_all(locations.iter().map(|location| {
+                    LocalNodeClient::<S>::download_blob(nodes.clone(), block.chain_id, *location)
+                }))
+                .await
+                .into_iter()
+                .flatten()
+                .collect();
                 if !blobs.is_empty() {
                     self.process_certificate(certificate.clone(), blobs).await?;
                 }
