@@ -48,6 +48,7 @@ linera-rpc = { path = "../linera-rpc", features = ["test"] }
 linera-storage = { path = "../linera-storage", default-features = false, features = ["test"] }
 linera-views = { path = "../linera-views", features = ["test"] }
 proptest = "1.0.0"
+reqwest = { version = "0.11.14", features = ["json"] }
 tempfile = "3.2.0"
 test-strategy = "0.2.0"
 tokio = { version = "1.25.0", features = ["full", "test-util"] }
