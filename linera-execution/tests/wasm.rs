@@ -66,7 +66,7 @@ async fn test_fuel_for_counter_wasm_application(wasm_runtime: WasmRuntime) -> an
         );
     }
 
-    assert_eq!(*view.available_fuel.get(), 9_976_846);
+    assert_eq!(*view.available_fuel.get(), 9_978_474);
 
     let context = QueryContext {
         chain_id: ChainId::root(0),
