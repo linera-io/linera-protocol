@@ -28,74 +28,65 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
-use test_log::test;
+use test_case::test_case;
 
 #[cfg(feature = "aws")]
 use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
 
-#[test(tokio::test)]
-async fn test_memory_handle_certificates_to_create_application_both() -> Result<(), anyhow::Error> {
-    test_memory_handle_certificates_to_create_application(true).await?;
-    test_memory_handle_certificates_to_create_application(false).await
+#[derive(Copy, Clone, Debug)]
+enum StorageKind {
+    Simple,
+    View,
 }
 
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::Simple ; "wasmer_simple"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::View ; "wasmer_view"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::Simple ; "wasmtime_simple"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::View ; "wasmtime_view"))]
+#[test_log::test(tokio::test)]
 async fn test_memory_handle_certificates_to_create_application(
-    use_view: bool,
+    wasm_runtime: WasmRuntime,
+    storage_kind: StorageKind,
 ) -> Result<(), anyhow::Error> {
-    for &wasm_runtime in WasmRuntime::ALL {
-        let client = MemoryStoreClient::new(Some(wasm_runtime));
-        run_test_handle_certificates_to_create_application(client, use_view).await?;
-    }
-    Ok(())
+    let client = MemoryStoreClient::new(Some(wasm_runtime));
+    run_test_handle_certificates_to_create_application(client, storage_kind).await
 }
 
-#[test(tokio::test)]
-async fn test_rocksdb_handle_certificates_to_create_application_both() -> Result<(), anyhow::Error>
-{
-    test_rocksdb_handle_certificates_to_create_application(true).await?;
-    test_rocksdb_handle_certificates_to_create_application(false).await
-}
-
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::Simple ; "wasmer_simple"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::View ; "wasmer_view"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::Simple ; "wasmtime_simple"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::View ; "wasmtime_view"))]
+#[test_log::test(tokio::test)]
 async fn test_rocksdb_handle_certificates_to_create_application(
-    use_view: bool,
+    wasm_runtime: WasmRuntime,
+    storage_kind: StorageKind,
 ) -> Result<(), anyhow::Error> {
-    for &wasm_runtime in WasmRuntime::ALL {
-        let dir = tempfile::TempDir::new().unwrap();
-        let client = RocksdbStoreClient::new(dir.path().to_path_buf(), Some(wasm_runtime));
-        run_test_handle_certificates_to_create_application(client, use_view).await?;
-    }
-    Ok(())
+    let dir = tempfile::TempDir::new().unwrap();
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), Some(wasm_runtime));
+    run_test_handle_certificates_to_create_application(client, storage_kind).await
 }
 
 #[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_handle_certificates_to_create_application_bool() -> Result<(), anyhow::Error>
-{
-    test_dynamo_db_handle_certificates_to_create_application(true).await?;
-    test_dynamo_db_handle_certificates_to_create_application(false).await
-}
-
-#[cfg(feature = "aws")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::Simple ; "wasmer_simple"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::View ; "wasmer_view"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::Simple ; "wasmtime_simple"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::View ; "wasmtime_view"))]
+#[test_log::test(tokio::test)]
 async fn test_dynamo_db_handle_certificates_to_create_application(
-    use_view: bool,
+    wasm_runtime: WasmRuntime,
+    storage_kind: StorageKind,
 ) -> Result<(), anyhow::Error> {
-    for &wasm_runtime in WasmRuntime::ALL {
-        let table = "linera".parse().expect("Invalid table name");
-        let localstack = LocalStackTestContext::new().await?;
-        let (client, _) = DynamoDbStoreClient::from_config(
-            localstack.dynamo_db_config(),
-            table,
-            Some(wasm_runtime),
-        )
-        .await?;
-        run_test_handle_certificates_to_create_application(client, use_view).await?;
-    }
-    Ok(())
+    let table = "linera".parse().expect("Invalid table name");
+    let localstack = LocalStackTestContext::new().await?;
+    let (client, _) =
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, Some(wasm_runtime))
+            .await?;
+    run_test_handle_certificates_to_create_application(client, storage_kind).await
 }
 
 async fn run_test_handle_certificates_to_create_application<S>(
     client: S,
-    use_view: bool,
+    storage_kind: StorageKind,
 ) -> Result<(), anyhow::Error>
 where
     S: Store + Clone + Send + Sync + 'static,
@@ -120,7 +111,10 @@ where
     .await;
 
     // Load some bytecode.
-    let name_counter = if use_view { "counter2" } else { "counter" };
+    let name_counter = match storage_kind {
+        StorageKind::Simple => "counter",
+        StorageKind::View => "counter2",
+    };
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths(name_counter)?;
     let contract_bytecode = Bytecode::load_from_file(contract_path).await?;

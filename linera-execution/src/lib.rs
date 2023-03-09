@@ -639,16 +639,7 @@ pub enum WasmRuntime {
     Wasmtime,
 }
 
-impl WasmRuntime {
-    /// Returns all available WebAssembly runtimes.
-    pub const ALL: &[WasmRuntime] = &[
-        #[cfg(feature = "wasmer")]
-        WasmRuntime::Wasmer,
-        #[cfg(feature = "wasmtime")]
-        WasmRuntime::Wasmtime,
-    ];
-}
-
+/// Trait used to select a default WasmRuntime, if one is available.
 pub trait WithWasmDefault {
     fn with_wasm_default(self) -> Self;
 }
