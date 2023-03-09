@@ -281,11 +281,12 @@ pub mod test {
         wasm_runtime: impl Into<Option<WasmRuntime>>,
     ) -> Result<WasmApplication, anyhow::Error> {
         let (contract, service) = get_example_bytecode_paths(name)?;
-        Ok(WasmApplication::from_files(
+        let application = WasmApplication::from_files(
             &contract,
             &service,
             wasm_runtime.into().unwrap_or_default(),
         )
-        .await?)
+        .await?;
+        Ok(application)
     }
 }
