@@ -37,7 +37,7 @@ use super::{
 use crate::{CallResult, ExecutionError, QueryableStorage, SessionId, WritableStorage};
 use linera_views::{common::Batch, views::ViewError};
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::Mutex;
 use wasmer::{
     imports, wasmparser::Operator, CompilerConfig, EngineBuilder, Instance, Module, RuntimeError,
     Singlepass, Store,
@@ -111,13 +111,8 @@ impl WasmApplication {
         let mut imports = imports! {};
         let context_forwarder = ContextForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
-        let (internal_error_sender, internal_error_receiver) = oneshot::channel();
-        let (system_api, storage_guard) = ContractSystemApi::new(
-            context_forwarder.clone(),
-            storage,
-            queued_future_factory,
-            internal_error_sender,
-        );
+        let (system_api, storage_guard) =
+            ContractSystemApi::new(context_forwarder.clone(), storage, queued_future_factory);
         let system_api_setup =
             writable_system::add_to_imports(&mut store, &mut imports, system_api);
         let (contract, instance) =
@@ -133,7 +128,6 @@ impl WasmApplication {
             context_forwarder,
             application,
             future_queue,
-            internal_error_receiver,
             store,
             extra: WasmerContractExtra {
                 instance,
@@ -153,7 +147,6 @@ impl WasmApplication {
         let mut imports = imports! {};
         let context_forwarder = ContextForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
-        let (_internal_error_sender, internal_error_receiver) = oneshot::channel();
         let (system_api, storage_guard) = ServiceSystemApi::new(context_forwarder.clone(), storage);
         let system_api_setup =
             queryable_system::add_to_imports(&mut store, &mut imports, system_api);
@@ -169,7 +162,6 @@ impl WasmApplication {
             context_forwarder,
             application,
             future_queue,
-            internal_error_receiver,
             store,
             extra: storage_guard,
         })
@@ -345,7 +337,6 @@ struct SystemApi<S> {
 pub struct ContractSystemApi {
     shared: SystemApi<&'static dyn WritableStorage>,
     queued_future_factory: QueuedHostFutureFactory<'static>,
-    internal_error_sender: Option<oneshot::Sender<ExecutionError>>,
 }
 
 impl ContractSystemApi {
@@ -365,7 +356,6 @@ impl ContractSystemApi {
         context: ContextForwarder,
         storage: &'storage dyn WritableStorage,
         queued_future_factory: QueuedHostFutureFactory<'static>,
-        internal_error_sender: oneshot::Sender<ExecutionError>,
     ) -> (Self, StorageGuard<'storage, &'static dyn WritableStorage>) {
         let storage_without_lifetime = unsafe { mem::transmute(storage) };
         let storage = Arc::new(Mutex::new(Some(storage_without_lifetime)));
@@ -379,7 +369,6 @@ impl ContractSystemApi {
             ContractSystemApi {
                 shared: SystemApi { context, storage },
                 queued_future_factory,
-                internal_error_sender: Some(internal_error_sender),
             },
             guard,
         )
@@ -406,17 +395,6 @@ impl ContractSystemApi {
     /// Returns the [`ContextForwarder`] to be used for asynchronous system calls.
     fn context(&mut self) -> &mut ContextForwarder {
         &mut self.shared.context
-    }
-
-    /// Reports an error to the [`GuestFuture`] responsible for executing the application.
-    ///
-    /// This causes the [`GuestFuture`] to return that error the next time it is polled.
-    fn report_internal_error(&mut self, error: ExecutionError) {
-        if let Some(sender) = self.internal_error_sender.take() {
-            sender
-                .send(error)
-                .expect("Internal error receiver has unexpectedly been dropped");
-        }
     }
 }
 

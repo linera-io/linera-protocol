@@ -40,7 +40,6 @@ use super::{
 use crate::{CallResult, ExecutionError, QueryableStorage, SessionId, WritableStorage};
 use linera_views::{common::Batch, views::ViewError};
 use std::{error::Error, task::Poll};
-use tokio::sync::oneshot;
 use wasmtime::{Config, Engine, Linker, Module, Store, Trap};
 use wit_bindgen_host_wasmtime_rust::Le;
 
@@ -94,13 +93,7 @@ impl WasmApplication {
         let module = Module::new(&engine, &self.contract_bytecode)?;
         let context_forwarder = ContextForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
-        let (internal_error_sender, internal_error_receiver) = oneshot::channel();
-        let state = ContractState::new(
-            storage,
-            context_forwarder.clone(),
-            queued_future_factory,
-            internal_error_sender,
-        );
+        let state = ContractState::new(storage, context_forwarder.clone(), queued_future_factory);
         let mut store = Store::new(&engine, state);
         let (contract, _instance) =
             contract::Contract::instantiate(&mut store, &module, &mut linker, ContractState::data)?;
@@ -114,7 +107,6 @@ impl WasmApplication {
             context_forwarder,
             application,
             future_queue,
-            internal_error_receiver,
             store,
             extra: (),
         })
@@ -133,7 +125,6 @@ impl WasmApplication {
         let module = Module::new(&engine, &self.service_bytecode)?;
         let context_forwarder = ContextForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
-        let (_internal_error_sender, internal_error_receiver) = oneshot::channel();
         let state = ServiceState::new(storage, context_forwarder.clone());
         let mut store = Store::new(&engine, state);
         let (service, _instance) =
@@ -144,7 +135,6 @@ impl WasmApplication {
             context_forwarder,
             application,
             future_queue,
-            internal_error_receiver,
             store,
             extra: (),
         })
@@ -174,16 +164,10 @@ impl<'storage> ContractState<'storage> {
         storage: &'storage dyn WritableStorage,
         context: ContextForwarder,
         queued_future_factory: QueuedHostFutureFactory<'storage>,
-        internal_error_sender: oneshot::Sender<ExecutionError>,
     ) -> Self {
         Self {
             data: ContractData::default(),
-            system_api: ContractSystemApi::new(
-                context,
-                storage,
-                queued_future_factory,
-                internal_error_sender,
-            ),
+            system_api: ContractSystemApi::new(context, storage, queued_future_factory),
             system_tables: WritableSystemTables::default(),
         }
     }
@@ -385,7 +369,6 @@ struct SystemApi<S> {
 pub struct ContractSystemApi<'storage> {
     shared: SystemApi<&'storage dyn WritableStorage>,
     queued_future_factory: QueuedHostFutureFactory<'storage>,
-    internal_error_sender: Option<oneshot::Sender<ExecutionError>>,
 }
 
 impl<'storage> ContractSystemApi<'storage> {
@@ -395,12 +378,10 @@ impl<'storage> ContractSystemApi<'storage> {
         context: ContextForwarder,
         storage: &'storage dyn WritableStorage,
         queued_future_factory: QueuedHostFutureFactory<'storage>,
-        internal_error_sender: oneshot::Sender<ExecutionError>,
     ) -> Self {
         ContractSystemApi {
             shared: SystemApi { context, storage },
             queued_future_factory,
-            internal_error_sender: Some(internal_error_sender),
         }
     }
 
@@ -412,17 +393,6 @@ impl<'storage> ContractSystemApi<'storage> {
     /// Returns the [`ContextForwarder`] to be used for asynchronous system calls.
     fn context(&mut self) -> &mut ContextForwarder {
         &mut self.shared.context
-    }
-
-    /// Reports an error to the [`GuestFuture`] responsible for executing the application.
-    ///
-    /// This causes the [`GuestFuture`] to return that error the next time it is polled.
-    fn report_internal_error(&mut self, error: ExecutionError) {
-        if let Some(sender) = self.internal_error_sender.take() {
-            sender
-                .send(error)
-                .expect("Internal error receiver has unexpectedly been dropped");
-        }
     }
 }
 
