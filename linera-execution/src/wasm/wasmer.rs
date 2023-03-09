@@ -505,3 +505,9 @@ impl<S> Drop for StorageGuard<'_, S> {
             .take();
     }
 }
+
+impl From<ExecutionError> for wasmer::RuntimeError {
+    fn from(error: ExecutionError) -> Self {
+        wasmer::RuntimeError::user(Box::new(error))
+    }
+}
