@@ -2232,6 +2232,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "tempfile",
+ "test-case",
  "test-log",
  "test-strategy",
  "thiserror",
@@ -2251,6 +2252,7 @@ dependencies = [
  "custom_debug_derive",
  "dashmap",
  "derive_more",
+ "env_logger",
  "futures",
  "linera-base",
  "linera-execution",
@@ -2259,6 +2261,8 @@ dependencies = [
  "log",
  "serde",
  "serde_bytes",
+ "test-case",
+ "test-log",
  "thiserror",
  "tokio",
  "wasm-encoder 0.24.1",
@@ -3911,6 +3915,41 @@ checksum = "633c1a546cee861a1a6d0dc69ebeca693bf4296661ba7852b9d21d159e0506df"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "test-case"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "679b019fb241da62cc449b33b224d19ebe1c6767b495569765115dd7f7f9fba4"
+dependencies = [
+ "test-case-macros",
+]
+
+[[package]]
+name = "test-case-core"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72dc21b5887f4032c4656502d085dc28f2afbb686f25f216472bb0526f4b1b88"
+dependencies = [
+ "cfg-if",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "test-case-macros"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3786898e0be151a96f730fd529b0e8a10f5990fa2a7ea14e37ca27613c05190"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "test-case-core",
 ]
 
 [[package]]

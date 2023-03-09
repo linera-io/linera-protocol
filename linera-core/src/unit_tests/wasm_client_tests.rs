@@ -22,37 +22,32 @@ use linera_storage::Store;
 use linera_views::views::ViewError;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::BTreeMap, iter};
-use test_log::test;
+use test_case::test_case;
 
 #[cfg(feature = "aws")]
 use crate::client::client_tests::MakeDynamoDbStoreClient;
 
-#[test(tokio::test)]
-async fn test_memory_create_application() -> Result<(), anyhow::Error> {
-    for &wasm_runtime in WasmRuntime::ALL {
-        run_test_create_application(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await?
-    }
-    Ok(())
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
+    run_test_create_application(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
-#[test(tokio::test)]
-async fn test_rocksdb_create_application() -> Result<(), anyhow::Error> {
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_rocksdb_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    for &wasm_runtime in WasmRuntime::ALL {
-        run_test_create_application(MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime))
-            .await?;
-    }
-    Ok(())
+    run_test_create_application(MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_create_application() -> Result<(), anyhow::Error> {
-    for &wasm_runtime in WasmRuntime::ALL {
-        run_test_create_application(MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime))
-            .await?;
-    }
-    Ok(())
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
+    run_test_create_application(MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
 async fn run_test_create_application<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -118,39 +113,40 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_run_application_with_dependency() -> Result<(), anyhow::Error> {
-    for &wasm_runtime in WasmRuntime::ALL {
-        run_test_run_application_with_dependency(MakeMemoryStoreClient::with_wasm_runtime(
-            wasm_runtime,
-        ))
-        .await?
-    }
-    Ok(())
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_memory_run_application_with_dependency(
+    wasm_runtime: WasmRuntime,
+) -> Result<(), anyhow::Error> {
+    run_test_run_application_with_dependency(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime))
+        .await
 }
 
-#[test(tokio::test)]
-async fn test_rocksdb_run_application_with_dependency() -> Result<(), anyhow::Error> {
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_rocksdb_run_application_with_dependency(
+    wasm_runtime: WasmRuntime,
+) -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    for &wasm_runtime in WasmRuntime::ALL {
-        run_test_run_application_with_dependency(MakeRocksdbStoreClient::with_wasm_runtime(
-            wasm_runtime,
-        ))
-        .await?;
-    }
-    Ok(())
+    run_test_run_application_with_dependency(MakeRocksdbStoreClient::with_wasm_runtime(
+        wasm_runtime,
+    ))
+    .await
 }
 
 #[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_run_application_with_dependency() -> Result<(), anyhow::Error> {
-    for &wasm_runtime in WasmRuntime::ALL {
-        run_test_run_application_with_dependency(MakeDynamoDbStoreClient::with_wasm_runtime(
-            wasm_runtime,
-        ))
-        .await?;
-    }
-    Ok(())
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_run_application_with_dependency(
+    wasm_runtime: WasmRuntime,
+) -> Result<(), anyhow::Error> {
+    run_test_run_application_with_dependency(MakeDynamoDbStoreClient::with_wasm_runtime(
+        wasm_runtime,
+    ))
+    .await
 }
 
 async fn run_test_run_application_with_dependency<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -248,32 +244,29 @@ where
     Ok(())
 }
 
-#[test(tokio::test)]
-async fn test_memory_cross_chain_message() -> Result<(), anyhow::Error> {
-    for &wasm_runtime in WasmRuntime::ALL {
-        run_test_cross_chain_message(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await?
-    }
-    Ok(())
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
+    run_test_cross_chain_message(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
-#[test(tokio::test)]
-async fn test_rocksdb_cross_chain_message() -> Result<(), anyhow::Error> {
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_rocksdb_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
     let _lock = GUARD.lock().await;
-    for &wasm_runtime in WasmRuntime::ALL {
-        run_test_cross_chain_message(MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime))
-            .await?;
-    }
-    Ok(())
+    run_test_cross_chain_message(MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "aws")]
-#[test(tokio::test)]
-async fn test_dynamo_db_cross_chain_message() -> Result<(), anyhow::Error> {
-    for &wasm_runtime in WasmRuntime::ALL {
-        run_test_cross_chain_message(MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime))
-            .await?;
-    }
-    Ok(())
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_cross_chain_message(
+    wasm_runtime: WasmRuntime,
+) -> Result<(), anyhow::Error> {
+    run_test_cross_chain_message(MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
 async fn run_test_cross_chain_message<B>(store_builder: B) -> Result<(), anyhow::Error>

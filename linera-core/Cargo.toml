@@ -44,6 +44,7 @@ linera-storage = { path = "../linera-storage", default-features = false, feature
 linera-views = { path = "../linera-views", features = ["test"] }
 proptest = "1.0.0"
 tempfile = "3.2.0"
+test-case = "3.0.0"
 test-log = "0.2.10"
 test-strategy = "0.2.0"
 

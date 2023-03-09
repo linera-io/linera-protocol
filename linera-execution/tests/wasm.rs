@@ -14,75 +14,66 @@ use linera_execution::{
 };
 use linera_views::{memory::MemoryContext, views::View};
 use std::sync::Arc;
+use test_case::test_case;
 
 /// Test if the "counter" example application in `linera-sdk` compiled to a WASM module can be
-/// called correctly.
-#[tokio::test]
-async fn test_counter_wasm_application() -> anyhow::Result<()> {
-    let mut operation_fuel = None;
-
-    for wasm_runtime in WasmRuntime::ALL {
-        let state = SystemExecutionState {
-            description: Some(ChainDescription::Root(0)),
-            ..Default::default()
-        };
-        let mut view =
-            ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-                state,
-            )
+/// called correctly and consume the expected amount of fuel.
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_fuel_for_counter_wasm_application(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    let state = SystemExecutionState {
+        description: Some(ChainDescription::Root(0)),
+        ..Default::default()
+    };
+    let mut view =
+        ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await
             .with_fuel(10_000_000);
-        let app_desc = create_dummy_user_application_description();
-        let app_id = view
-            .system
-            .registry
-            .register_application(app_desc.clone())
+    let app_desc = create_dummy_user_application_description();
+    let app_id = view
+        .system
+        .registry
+        .register_application(app_desc.clone())
+        .await?;
+
+    view.context().extra.user_applications().insert(
+        app_id,
+        Arc::new(
+            linera_execution::wasm_test::build_example_application("counter", wasm_runtime).await?,
+        ),
+    );
+
+    let context = OperationContext {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(0),
+        index: 0,
+        authenticated_signer: None,
+    };
+    let increments = [2_u128, 9, 7, 1000];
+    for increment in &increments {
+        let operation = bcs::to_bytes(increment).expect("Serialization of u128 failed");
+        let result = view
+            .execute_operation(ApplicationId::User(app_id), &context, &operation.into())
             .await?;
-
-        view.context().extra.user_applications().insert(
-            app_id,
-            Arc::new(
-                linera_execution::wasm_test::build_example_application("counter", *wasm_runtime)
-                    .await?,
-            ),
-        );
-
-        let context = OperationContext {
-            chain_id: ChainId::root(0),
-            height: BlockHeight(0),
-            index: 0,
-            authenticated_signer: None,
-        };
-        let increments = [2_u128, 9, 7, 1000];
-        for increment in &increments {
-            let operation = bcs::to_bytes(increment).expect("Serialization of u128 failed");
-            let result = view
-                .execute_operation(ApplicationId::User(app_id), &context, &operation.into())
-                .await?;
-            assert_eq!(
-                result,
-                vec![ExecutionResult::User(app_id, RawExecutionResult::default())]
-            );
-        }
-
-        if operation_fuel.is_none() {
-            operation_fuel = Some(*view.available_fuel.get());
-        } else {
-            assert_eq!(operation_fuel, Some(*view.available_fuel.get()));
-        }
-
-        let context = QueryContext {
-            chain_id: ChainId::root(0),
-        };
-        let expected_value: u128 = increments.into_iter().sum();
-        let expected_serialized_value =
-            bcs::to_bytes(&expected_value).expect("Serialization of u128 failed");
         assert_eq!(
-            view.query_application(ApplicationId::User(app_id), &context, &Query::User(vec![]),)
-                .await?,
-            Response::User(expected_serialized_value)
+            result,
+            vec![ExecutionResult::User(app_id, RawExecutionResult::default())]
         );
     }
 
+    assert_eq!(*view.available_fuel.get(), 9_976_846);
+
+    let context = QueryContext {
+        chain_id: ChainId::root(0),
+    };
+    let expected_value: u128 = increments.into_iter().sum();
+    let expected_serialized_value =
+        bcs::to_bytes(&expected_value).expect("Serialization of u128 failed");
+    assert_eq!(
+        view.query_application(ApplicationId::User(app_id), &context, &Query::User(vec![]),)
+            .await?,
+        Response::User(expected_serialized_value)
+    );
     Ok(())
 }
