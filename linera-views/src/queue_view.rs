@@ -37,7 +37,7 @@ impl<C, T> View<C> for QueueView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Serialize,
+    T: Send + Sync + Serialize,
 {
     fn context(&self) -> &C {
         &self.context

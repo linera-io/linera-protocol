@@ -35,7 +35,7 @@ impl<C, I> View<C> for SetView<C, I>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Clone + Serialize,
+    I: Send + Sync + Serialize,
 {
     fn context(&self) -> &C {
         &self.context
