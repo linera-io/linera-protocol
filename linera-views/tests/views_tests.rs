@@ -70,7 +70,7 @@ impl StateStore for MemoryTestStore {
             .states
             .entry(id)
             .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
-        log::trace!("Acquiring lock on {:?}", id);
+        tracing::trace!("Acquiring lock on {:?}", id);
         let context = MemoryContext::new(state.clone().lock_arc().await, id);
         StateView::load(context).await
     }
@@ -90,7 +90,7 @@ impl StateStore for KeyValueStoreTestStore {
             .states
             .entry(id)
             .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
-        log::trace!("Acquiring lock on {:?}", id);
+        tracing::trace!("Acquiring lock on {:?}", id);
         let guard = state.clone().lock_arc().await;
         let base_key = bcs::to_bytes(&id)?;
         let context = KeyValueStoreMemoryContext::new(guard, base_key, id).await?;
@@ -118,7 +118,7 @@ impl StateStore for RocksdbTestStore {
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
-        log::trace!("Acquiring lock on {:?}", id);
+        tracing::trace!("Acquiring lock on {:?}", id);
         let context = RocksdbContext::new(self.db.clone(), bcs::to_bytes(&id)?, id);
         StateView::load(context).await
     }
@@ -147,7 +147,7 @@ impl StateStore for DynamoDbTestStore {
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
-        log::trace!("Acquiring lock on {:?}", id);
+        tracing::trace!("Acquiring lock on {:?}", id);
         let (context, _) = DynamoDbContext::from_config(
             self.localstack.dynamo_db_config(),
             "test_table".parse().expect("Invalid table name"),
@@ -552,7 +552,7 @@ where
 
 #[cfg(test)]
 async fn test_views_in_memory_param(config: &TestConfig) {
-    log::warn!("Testing config {:?} with memory", config);
+    tracing::warn!("Testing config {:?} with memory", config);
     let mut store = MemoryTestStore::default();
     test_store(&mut store, config).await;
     assert_eq!(store.states.len(), 1);
@@ -569,7 +569,7 @@ async fn test_views_in_memory() {
 
 #[cfg(test)]
 async fn test_views_in_key_value_store_view_memory_param(config: &TestConfig) {
-    log::warn!(
+    tracing::warn!(
         "Testing config {:?} with key_value_store_view on memory",
         config
     );
@@ -586,7 +586,7 @@ async fn test_views_in_key_value_store_view_memory() {
 
 #[cfg(test)]
 async fn test_views_in_rocksdb_param(config: &TestConfig) {
-    log::warn!("Testing config {:?} with rocksdb", config);
+    tracing::warn!("Testing config {:?} with rocksdb", config);
     let dir = tempfile::TempDir::new().unwrap();
     let mut options = rocksdb::Options::default();
     options.create_if_missing(true);

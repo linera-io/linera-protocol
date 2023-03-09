@@ -122,7 +122,7 @@ where
         let (sender, receiver) = oneshot::channel();
         tokio::spawn(async move {
             if f(validator, sender).await.is_err() {
-                log::debug!("result could not be sent");
+                tracing::debug!("result could not be sent");
             }
         });
         receiver.await.unwrap()
@@ -314,7 +314,7 @@ where
             validator_clients.push((name, validator));
             validator_stores.insert(name, store);
         }
-        log::info!(
+        tracing::info!(
             "Test will use the following faulty validators: {:?}",
             faulty_validators
         );

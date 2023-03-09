@@ -84,7 +84,7 @@ impl StorageConfig {
                 job.run(client).await
             }
             Rocksdb { path } if path.is_dir() => {
-                log::warn!("Using existing database {:?}", path);
+                tracing::warn!("Using existing database {:?}", path);
                 let client = RocksdbStoreClient::new(path.clone(), wasm_runtime);
                 job.run(client).await
             }

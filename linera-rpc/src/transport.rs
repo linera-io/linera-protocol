@@ -4,12 +4,12 @@
 
 use crate::{codec, RpcMessage};
 use futures::{future, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
-use log::{error, warn};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, net::ToSocketAddrs};
 use structopt::clap::arg_enum;
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio_util::{codec::Framed, udp::UdpFramed};
+use tracing::{error, warn};
 
 use crate::codec::Codec;
 

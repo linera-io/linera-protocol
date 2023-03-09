@@ -1,7 +1,7 @@
 use dashmap::DashMap;
 use linera_base::data_types::ChainId;
-use log::trace;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tracing::trace;
 
 /// The `Notifier` holds references to clients waiting to receive notifications
 /// from the validator.

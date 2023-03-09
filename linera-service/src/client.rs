@@ -38,7 +38,6 @@ use linera_service::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
-use log::{debug, error, info, warn};
 use std::{
     collections::{HashMap, HashSet},
     num::NonZeroU16,
@@ -46,6 +45,7 @@ use std::{
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
+use tracing::{debug, error, info, warn};
 
 struct ClientContext {
     genesis_config: GenesisConfig,
@@ -714,7 +714,7 @@ where
                     .into_iter()
                     .map(|c| c.value.effects().len())
                     .sum::<usize>();
-                log::info!("Subscribed {} chains to new committees", n);
+                tracing::info!("Subscribed {} chains to new committees", n);
 
                 // Create the new committee.
                 let committee = admin_state.local_committee().await.unwrap();

@@ -223,7 +223,7 @@ where
                     .await?,
             ChainError::InternalError("Trying to receive blocks in the wrong order".to_string())
         );
-        log::trace!(
+        tracing::trace!(
             "Processing new messages to {:?} from {:?}::{:?} at height {}",
             chain_id,
             application_id,
@@ -349,7 +349,7 @@ where
     pub async fn remove_events_from_inboxes(&mut self, block: &Block) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         for message in &block.incoming_messages {
-            log::trace!(
+            tracing::trace!(
                 "Updating inbox {:?}::{:?} in chain {:?}",
                 message.application_id,
                 message.origin,

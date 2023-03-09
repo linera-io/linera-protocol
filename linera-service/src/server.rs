@@ -25,12 +25,12 @@ use linera_service::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
-use log::{error, info};
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
 use structopt::StructOpt;
+use tracing::{error, info};
 
 struct ServerContext {
     server_config: ValidatorServerConfig,

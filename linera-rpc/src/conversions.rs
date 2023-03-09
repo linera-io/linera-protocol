@@ -90,7 +90,7 @@ macro_rules! map_invert {
 #[macro_export]
 macro_rules! client_delegate {
     ($self:ident, $handler:ident, $req:ident) => {{
-        log::debug!(
+        tracing::debug!(
             "client handler [{}] received delegating request [{:?}] ",
             stringify!($handler),
             $req
