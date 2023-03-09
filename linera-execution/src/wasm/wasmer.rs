@@ -6,7 +6,10 @@
 //! Code specific to the usage of the [Wasmer](https://wasmer.io/) runtime.
 
 // Export the writable system interface used by a user contract.
-wit_bindgen_host_wasmer_rust::export!("../linera-sdk/writable_system.wit");
+wit_bindgen_host_wasmer_rust::export!({
+    custom_error: true,
+    paths: ["../linera-sdk/writable_system.wit"],
+});
 
 // Export the queryable system interface used by a user service.
 wit_bindgen_host_wasmer_rust::export!("../linera-sdk/queryable_system.wit");
