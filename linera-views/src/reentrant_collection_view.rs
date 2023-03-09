@@ -134,8 +134,7 @@ where
     }
 }
 
-impl<C: Context, I, W> ReentrantCollectionView<C, I, W>
-{
+impl<C: Context, I, W> ReentrantCollectionView<C, I, W> {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
         self.context.base_tag_index(KeyTag::Index as u8, index)
     }

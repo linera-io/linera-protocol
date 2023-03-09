@@ -206,7 +206,7 @@ impl<C, I, V> MapView<C, I, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Sync + Serialize + DeserializeOwned,
+    I: Sync + Send + Serialize + DeserializeOwned,
     V: Sync + Serialize + DeserializeOwned + 'static,
 {
     /// Return the list of indices in the map.
