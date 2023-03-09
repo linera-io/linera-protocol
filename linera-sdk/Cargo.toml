@@ -26,7 +26,7 @@ serde_with = "2.1.0"
 linera-views = { path = "../linera-views" }
 sha2 = { version = "0.9.8", optional = true }
 thiserror = { version = "1.0.31", optional = true }
-wit-bindgen-guest-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "081e2839303345c96a4ebd1eee259683593de1a0" }
+wit-bindgen-guest-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "4f25d5363360c049e3415c32f5654faea5f874ce" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow = "1.0.57"

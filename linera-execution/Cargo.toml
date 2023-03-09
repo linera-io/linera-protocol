@@ -34,8 +34,8 @@ wasmer = { version = "3.0.0-rc.2", optional = true, features = ["singlepass"] }
 wasmer-middlewares = { version = "3.1.1", optional = true }
 wasmparser = { version = "0.101.1", optional = true }
 wasmtime = { version = "1.0", optional = true }
-wit-bindgen-host-wasmer-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "081e2839303345c96a4ebd1eee259683593de1a0", optional = true }
-wit-bindgen-host-wasmtime-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "081e2839303345c96a4ebd1eee259683593de1a0", optional = true }
+wit-bindgen-host-wasmer-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "4f25d5363360c049e3415c32f5654faea5f874ce", optional = true }
+wit-bindgen-host-wasmtime-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "4f25d5363360c049e3415c32f5654faea5f874ce", optional = true }
 
 [dev-dependencies]
 anyhow = "1.0.57"
