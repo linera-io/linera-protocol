@@ -253,19 +253,21 @@ impl UserApplication for WasmApplication {
 #[cfg(any(test, feature = "test"))]
 pub mod test {
     use crate::{WasmApplication, WasmRuntime};
+    use once_cell::sync::OnceCell;
 
     fn build_applications() -> Result<(), std::io::Error> {
         log::info!("Building example applications with cargo");
-        let status = std::process::Command::new("cargo")
+        let output = std::process::Command::new("cargo")
             .current_dir("../linera-examples")
             .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
-            .status()?;
-        assert!(status.success());
+            .output()?;
+        assert!(output.status.success());
         Ok(())
     }
 
     pub fn get_example_bytecode_paths(name: &str) -> Result<(String, String), std::io::Error> {
-        build_applications()?;
+        static INSTANCE: OnceCell<()> = OnceCell::new();
+        INSTANCE.get_or_try_init(build_applications)?;
         Ok((
             format!(
                 "../linera-examples/target/wasm32-unknown-unknown/release/{name}_contract.wasm"
