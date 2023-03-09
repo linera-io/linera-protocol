@@ -782,7 +782,7 @@ where
                         ));
                     }
                 } else {
-                    log::info!("Withdrawal request was skipped due to lack of funds.");
+                    tracing::info!("Withdrawal request was skipped due to lack of funds.");
                 }
             }
             SetCommittees {
@@ -847,7 +847,7 @@ where
                 }
             }
             _ => {
-                log::error!(
+                tracing::error!(
                     "Skipping unexpected received effect: {effect:?} with context: {context:?}"
                 );
             }

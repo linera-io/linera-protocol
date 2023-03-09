@@ -2284,7 +2284,6 @@ dependencies = [
  "linera-execution",
  "linera-views",
  "linera-views-derive",
- "log",
  "once_cell",
  "serde",
  "serde_bytes",

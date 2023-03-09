@@ -256,7 +256,7 @@ pub mod test {
     use once_cell::sync::OnceCell;
 
     fn build_applications() -> Result<(), std::io::Error> {
-        log::info!("Building example applications with cargo");
+        tracing::info!("Building example applications with cargo");
         let output = std::process::Command::new("cargo")
             .current_dir("../linera-examples")
             .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
