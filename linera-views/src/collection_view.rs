@@ -170,39 +170,17 @@ where
         Q: Serialize + ?Sized,
     {
         *self.hash.get_mut() = None;
-        let short_key = C::derive_short_key(index)?;
-        match self.updates.get_mut().entry(short_key.clone()) {
-            btree_map::Entry::Occupied(entry) => {
-                let entry = entry.into_mut();
-                match entry {
-                    Update::Set(view) => Ok(view),
-                    Update::Removed => {
-                        let key = self
-                            .context
-                            .base_tag_index(KeyTag::Subview as u8, &short_key);
-                        let context = self.context.clone_with_base_key(key);
-                        // Obtain a view and set its pending state to the default (e.g. empty) state
-                        let mut view = W::load(context).await?;
-                        view.clear();
-                        *entry = Update::Set(view);
-                        let Update::Set(view) = entry else { unreachable!(); };
-                        Ok(view)
-                    }
-                }
-            }
-            btree_map::Entry::Vacant(entry) => {
-                let key = self
-                    .context
-                    .base_tag_index(KeyTag::Subview as u8, &short_key);
-                let context = self.context.clone_with_base_key(key);
-                let mut view = W::load(context).await?;
-                if self.was_cleared {
-                    view.clear();
-                }
-                let Update::Set(view) = entry.insert(Update::Set(view)) else { unreachable!(); };
-                Ok(view)
-            }
-        }
+        self.do_load_entry_mut(index).await
+    }
+
+    /// Obtain a subview for the data at the given index in the collection. If an entry
+    /// was removed before then a default entry is put on this index.
+    pub async fn load_entry<Q>(&mut self, index: &Q) -> Result<&W, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        Ok(self.do_load_entry_mut(index).await?)
     }
 
     /// Same as `load_entry_mut` but for read-only access. May fail if one subview is
@@ -286,6 +264,46 @@ where
     /// Obtain the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
+    }
+
+    async fn do_load_entry_mut<Q>(&mut self, index: &Q) -> Result<&mut W, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        match self.updates.get_mut().entry(short_key.clone()) {
+            btree_map::Entry::Occupied(entry) => {
+                let entry = entry.into_mut();
+                match entry {
+                    Update::Set(view) => Ok(view),
+                    Update::Removed => {
+                        let key = self
+                            .context
+                            .base_tag_index(KeyTag::Subview as u8, &short_key);
+                        let context = self.context.clone_with_base_key(key);
+                        // Obtain a view and set its pending state to the default (e.g. empty) state
+                        let mut view = W::load(context).await?;
+                        view.clear();
+                        *entry = Update::Set(view);
+                        let Update::Set(view) = entry else { unreachable!(); };
+                        Ok(view)
+                    }
+                }
+            }
+            btree_map::Entry::Vacant(entry) => {
+                let key = self
+                    .context
+                    .base_tag_index(KeyTag::Subview as u8, &short_key);
+                let context = self.context.clone_with_base_key(key);
+                let mut view = W::load(context).await?;
+                if self.was_cleared {
+                    view.clear();
+                }
+                let Update::Set(view) = entry.insert(Update::Set(view)) else { unreachable!(); };
+                Ok(view)
+            }
+        }
     }
 }
 
