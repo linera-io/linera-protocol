@@ -389,7 +389,7 @@ where
             let hash = certificate.value.hash();
             if !certificate.value.is_confirmed() || certificate.value.block().chain_id != chain_id {
                 // The certificate is not as expected. Give up.
-                log::warn!("Failed to process network certificate {}", hash);
+                tracing::warn!("Failed to process network certificate {}", hash);
                 return info;
             }
             let mut result = self.handle_certificate(certificate.clone(), vec![]).await;
@@ -408,7 +408,7 @@ where
                         blobs.push(blob);
                     } else {
                         // The certificate is not as expected. Give up.
-                        log::warn!("Failed to process network blob");
+                        tracing::warn!("Failed to process network blob");
                         return info;
                     }
                 }
@@ -418,7 +418,7 @@ where
                 Ok(response) => info = Some(response.info),
                 Err(error) => {
                     // The certificate is not as expected. Give up.
-                    log::warn!("Failed to process network certificate {}: {}", hash, error);
+                    tracing::warn!("Failed to process network certificate {}: {}", hash, error);
                     return info;
                 }
             };
@@ -643,12 +643,12 @@ where
         let info = match client.handle_chain_info_query(query).await {
             Ok(response) if response.check(name).is_ok() => response.info,
             Ok(_) => {
-                log::warn!("Ignoring invalid response from validator");
+                tracing::warn!("Ignoring invalid response from validator");
                 // Give up on this validator.
                 return Ok(());
             }
             Err(err) => {
-                log::warn!("Ignoring error from validator: {}", err);
+                tracing::warn!("Ignoring error from validator: {}", err);
                 return Ok(());
             }
         };
@@ -669,7 +669,7 @@ where
                 if proposal.content.block.chain_id == chain_id {
                     let owner = proposal.owner;
                     if let Err(error) = self.handle_block_proposal(proposal).await {
-                        log::warn!("Skipping proposal from {}: {}", owner, error);
+                        tracing::warn!("Skipping proposal from {}: {}", owner, error);
                     }
                 }
             }
@@ -677,7 +677,7 @@ where
                 if cert.value.is_validated() && cert.value.block().chain_id == chain_id {
                     let hash = cert.value.hash();
                     if let Err(error) = self.handle_certificate(cert, vec![]).await {
-                        log::warn!("Skipping certificate {}: {}", hash, error);
+                        tracing::warn!("Skipping certificate {}: {}", hash, error);
                     }
                 }
             }

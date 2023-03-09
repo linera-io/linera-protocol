@@ -64,7 +64,7 @@ impl Store for RocksdbStoreClient {
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
         let db = self.0.db.clone();
         let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
-        log::trace!("Acquiring lock on {:?}", id);
+        tracing::trace!("Acquiring lock on {:?}", id);
         let guard = self.0.guards.guard(id).await;
         let runtime_context = ChainRuntimeContext {
             store: self.clone(),

@@ -21,7 +21,7 @@ linera-base = { path = "../linera-base" }
 linera-chain = { path = "../linera-chain" }
 linera-execution = { path = "../linera-execution", default-features = false }
 linera-views = { path = "../linera-views" }
-log = "0.4.14"
+tracing = "0.1.37"
 rocksdb = "0.19.0"
 serde = { version = "1.0.130", features = ["derive"] }
 tokio = "1.22.0"

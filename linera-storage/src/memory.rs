@@ -56,7 +56,7 @@ impl Store for MemoryStoreClient {
             .entry(id)
             .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())))
             .clone();
-        log::trace!("Acquiring lock on {:?}", id);
+        tracing::trace!("Acquiring lock on {:?}", id);
         let runtime_context = ChainRuntimeContext {
             store: self.clone(),
             chain_id: id,

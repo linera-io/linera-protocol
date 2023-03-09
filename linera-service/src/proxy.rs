@@ -98,7 +98,7 @@ impl MessageHandler for SimpleProxy {
                 match Self::try_proxy_message(message, shard, protocol).await {
                     Ok(maybe_response) => maybe_response,
                     Err(error) => {
-                        log::warn!("Failed to proxy message: {error}");
+                        tracing::warn!("Failed to proxy message: {error}");
                         None
                     }
                 }
@@ -113,7 +113,7 @@ impl MessageHandler for SimpleProxy {
 impl SimpleProxy {
     async fn run(self) -> Result<()> {
         let address = format!("0.0.0.0:{}", self.public_config.port);
-        log::info!("Starting simple proxy on {}...", &address);
+        tracing::info!("Starting simple proxy on {}...", &address);
         self.public_config
             .protocol
             .spawn_server(&address, self)
@@ -130,7 +130,7 @@ impl SimpleProxy {
             RpcMessage::Certificate(certificate, _) => certificate.value.chain_id(),
             RpcMessage::ChainInfoQuery(query) => query.chain_id,
             RpcMessage::Vote(_) | RpcMessage::ChainInfoResponse(_) | RpcMessage::Error(_) => {
-                log::debug!("Can't proxy an incoming response message");
+                tracing::debug!("Can't proxy an incoming response message");
                 return None;
             }
             RpcMessage::CrossChainRequest(cross_chain_request) => {
@@ -159,7 +159,7 @@ async fn main() -> Result<()> {
         .format_timestamp_millis()
         .init();
 
-    log::info!("Initialising proxy...");
+    tracing::info!("Initialising proxy...");
 
     let proxy = Proxy::from_options(ProxyOptions::from_args())?;
     proxy.run().await

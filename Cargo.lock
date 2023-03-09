@@ -2228,10 +2228,10 @@ dependencies = [
  "linera-base",
  "linera-execution",
  "linera-views",
- "log",
  "serde",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2252,7 +2252,6 @@ dependencies = [
  "linera-sdk",
  "linera-storage",
  "linera-views",
- "log",
  "lru",
  "proptest",
  "rand 0.7.3",
@@ -2264,6 +2263,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tracing",
 ]
 
 [[package]]
@@ -2321,7 +2321,6 @@ dependencies = [
  "linera-rpc",
  "linera-storage",
  "linera-views",
- "log",
  "proptest",
  "prost",
  "serde",
@@ -2335,6 +2334,7 @@ dependencies = [
  "tokio-util 0.6.10",
  "tonic",
  "tonic-build",
+ "tracing",
 ]
 
 [[package]]
@@ -2384,7 +2384,6 @@ dependencies = [
  "linera-rpc",
  "linera-storage",
  "linera-views",
- "log",
  "parse_duration",
  "proptest",
  "serde",
@@ -2396,6 +2395,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic",
+ "tracing",
 ]
 
 [[package]]
@@ -2412,11 +2412,11 @@ dependencies = [
  "linera-chain",
  "linera-execution",
  "linera-views",
- "log",
  "rocksdb",
  "serde",
  "tempfile",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2438,7 +2438,6 @@ dependencies = [
  "linera-base",
  "linera-views",
  "linera-views-derive",
- "log",
  "rand 0.8.5",
  "rocksdb",
  "serde",
@@ -2446,6 +2445,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

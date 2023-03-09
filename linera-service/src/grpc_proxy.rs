@@ -93,7 +93,7 @@ impl GrpcProxy {
     /// Runs the proxy. If either the public server or private server dies for whatever
     /// reason we'll kill the proxy.
     pub async fn run(self) -> Result<()> {
-        log::info!(
+        tracing::info!(
             "Starting gRPC proxy on public address {} and internal address {}...",
             self.public_address(),
             self.internal_address()
@@ -118,7 +118,7 @@ impl GrpcProxy {
     where
         R: Debug + Proxyable,
     {
-        log::debug!(
+        tracing::debug!(
             "handler [ValidatorWorker] proxying request [{:?}] from {:?}",
             request,
             request.remote_addr()

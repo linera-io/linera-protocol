@@ -30,10 +30,10 @@ use linera_execution::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
-use log::{error, info};
 use serde_json::Value;
 use std::{collections::BTreeMap, net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
+use tracing::{error, info};
 
 /// Our root GraphQL query type.
 struct QueryRoot<P, S>(Arc<Mutex<ChainClient<P, S>>>);

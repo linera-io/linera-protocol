@@ -14,9 +14,9 @@ use linera_base::{
     ensure,
 };
 use linera_execution::ChainOwnership;
-use log::error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tracing::error;
 
 /// How to produce new blocks.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -181,7 +181,7 @@ impl ChainManager {
                     if vote.value.block() == new_block {
                         return Ok(Outcome::Skip);
                     } else {
-                        log::error!(
+                        tracing::error!(
                             "Attempting to sign a different block at the same height:\n{:?}\n{:?}",
                             vote.value.block(),
                             new_block

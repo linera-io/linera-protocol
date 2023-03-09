@@ -14,7 +14,7 @@ async-graphql = "5.0.5"
 linera-base = { path = "../linera-base" }
 linera-execution = { path = "../linera-execution", default-features = false }
 linera-views = { path = "../linera-views" }
-log = "0.4.14"
+tracing = "0.1.37"
 serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.31"
 tokio = "1.25.0"

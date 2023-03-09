@@ -142,13 +142,13 @@ where
                 for location in locations {
                     if !required.contains_key(location) {
                         let hash = location.certificate_hash;
-                        log::warn!("validator requested {:?} but it is not required", hash);
+                        tracing::warn!("validator requested {:?} but it is not required", hash);
                         return Err(NodeError::InvalidChainInfoResponse);
                     }
                 }
                 let unique_locations: HashSet<_> = locations.iter().cloned().collect();
                 if locations.len() > unique_locations.len() {
-                    log::warn!("locations requested by validator contain duplicates");
+                    tracing::warn!("locations requested by validator contain duplicates");
                     return Err(NodeError::InvalidChainInfoResponse);
                 }
                 let blobs = future::join_all(
@@ -230,7 +230,7 @@ where
                         tokio::time::sleep(self.delay).await;
                         count += 1;
                     } else {
-                        log::info!("Missing cross-chain updates: {:?}", e);
+                        tracing::info!("Missing cross-chain updates: {:?}", e);
                         return Err(NodeError::ProposedBlockWithLaggingMessages {
                             chain_id,
                             retries: self.retries,

@@ -34,12 +34,12 @@ use linera_execution::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
-use log::info;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
     time::Duration,
 };
+use tracing::info;
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -198,7 +198,7 @@ where
         let mut pending_messages = vec![];
         for message in response.info.requested_pending_messages {
             if pending_messages.len() >= self.max_pending_messages {
-                log::warn!(
+                tracing::warn!(
                     "Limiting block from {} to {} incoming messages",
                     pending_messages.len(),
                     self.max_pending_messages
@@ -552,7 +552,7 @@ where
                 }
             }
             // The certificate is not as expected. Give up.
-            log::warn!("Failed to process network blob",);
+            tracing::warn!("Failed to process network blob",);
             return Err(err.into());
         }
         // Make sure a quorum of validators (according to our new local committee) are up-to-date
@@ -625,7 +625,7 @@ where
                         if block.epoch > max_epoch {
                             // We don't accept a certificate from a committee in the
                             // future.
-                            log::warn!(
+                            tracing::warn!(
                                 "Postponing received certificate from future epoch {:?}",
                                 block.epoch
                             );
@@ -648,7 +648,7 @@ where
                                 // comes up later from the same chain, the call to
                                 // `receive_certificate` below will download the skipped
                                 // certificate again.
-                                log::warn!(
+                                tracing::warn!(
                                     "Skipping received certificate from past epoch {:?}",
                                     block.epoch
                                 );
@@ -689,7 +689,7 @@ where
                     )
                     .await
                 {
-                    log::warn!("Received invalid certificate {hash} from {name}: {e}");
+                    tracing::warn!("Received invalid certificate {hash} from {name}: {e}");
                     // Do not update the validator's tracker in case of error.
                     // Move on to the next validator.
                     continue 'outer;

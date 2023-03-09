@@ -6,8 +6,8 @@ use std::{io, time::Duration};
 
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
-use log::{debug, error, info, warn};
 use tokio::time;
+use tracing::{debug, error, info, warn};
 
 use linera_base::data_types::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};

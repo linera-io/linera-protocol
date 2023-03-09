@@ -665,7 +665,7 @@ where
                 // Refuse to create a chain state if the chain is still inactive by
                 // now. Accordingly, do not send a confirmation, so that the
                 // cross-chain update is retried later.
-                log::warn!(
+                tracing::warn!(
                     "[{}] Refusing to deliver messages to {recipient:?} from {application_id:?}::{origin:?} \
                      at height {height} because the recipient is still inactive",
                     self.nickname
@@ -725,7 +725,7 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        log::trace!("{} <-- {:?}", self.nickname, proposal);
+        tracing::trace!("{} <-- {:?}", self.nickname, proposal);
         let BlockProposal {
             content: BlockAndRound { block, round },
             owner,
@@ -836,7 +836,7 @@ where
         certificate: Certificate,
         blobs: Vec<HashedValue>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        log::trace!("{} <-- {:?}", self.nickname, certificate);
+        tracing::trace!("{} <-- {:?}", self.nickname, certificate);
         ensure!(
             certificate.value.is_confirmed() || blobs.is_empty(),
             WorkerError::UnneededValue {
@@ -864,7 +864,7 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        log::trace!("{} <-- {:?}", self.nickname, query);
+        tracing::trace!("{} <-- {:?}", self.nickname, query);
         let mut chain = self.storage.load_chain(query.chain_id).await?;
         let mut info = ChainInfo::from(&chain);
         if query.request_committees {
@@ -920,7 +920,7 @@ where
             info.manager.add_values(chain.manager.get());
         }
         let response = ChainInfoResponse::new(info, self.key_pair());
-        log::trace!("{} --> {:?}", self.nickname, response);
+        tracing::trace!("{} --> {:?}", self.nickname, response);
         // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
         let actions = self.create_network_actions(&mut chain).await?;
         Ok((response, actions))
@@ -930,7 +930,7 @@ where
         &mut self,
         request: CrossChainRequest,
     ) -> Result<NetworkActions, WorkerError> {
-        log::trace!("{} <-- {:?}", self.nickname, request);
+        tracing::trace!("{} <-- {:?}", self.nickname, request);
         match request {
             CrossChainRequest::UpdateRecipient {
                 height_map,
@@ -1039,7 +1039,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
         }
         if skipped_len > 0 {
             let sample_block = certificates[skipped_len - 1].value.block();
-            log::warn!(
+            tracing::warn!(
                 "[{}] Ignoring repeated messages to {recipient:?} from {application_id:?}::{origin:?} at height {}",
                 self.nickname,
                 sample_block.height,
@@ -1047,7 +1047,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
         }
         if skipped_len < certificates.len() && trusted_len < certificates.len() {
             let sample_block = certificates[trusted_len].value.block();
-            log::warn!(
+            tracing::warn!(
                 "[{}] Refusing messages to {recipient:?} from {application_id:?}::{origin:?} at height {} \
                  because the epoch {:?} is not trusted any more",
                 self.nickname,

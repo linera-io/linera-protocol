@@ -157,7 +157,7 @@ where
                 break;
             }
             self.added_events.delete_front();
-            log::trace!("Skipping previously received event {:?}", previous_event);
+            tracing::trace!("Skipping previously received event {:?}", previous_event);
         }
         // Reconcile the event with the next added event, or mark it as removed.
         match self.added_events.front().await? {
@@ -175,10 +175,10 @@ where
                     }
                 );
                 self.added_events.delete_front();
-                log::trace!("Consuming event {:?}", event);
+                tracing::trace!("Consuming event {:?}", event);
             }
             None => {
-                log::trace!("Marking event as expected: {:?}", event);
+                tracing::trace!("Marking event as expected: {:?}", event);
                 self.removed_events.push_back(event.clone());
             }
         }

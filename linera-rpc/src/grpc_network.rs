@@ -13,13 +13,13 @@ use futures::{
     channel::{mpsc, mpsc::Receiver, oneshot::Sender},
     FutureExt, SinkExt, StreamExt,
 };
-use log::{debug, error, info, warn};
 use thiserror::Error;
 use tokio::task::{JoinError, JoinHandle};
 use tonic::{
     transport::{Channel, Server},
     Request, Response, Status,
 };
+use tracing::{debug, error, info, warn};
 
 use linera_base::data_types::ChainId;
 use linera_chain::data_types;

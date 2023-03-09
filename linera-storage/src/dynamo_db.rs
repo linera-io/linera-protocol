@@ -160,7 +160,7 @@ impl Store for DynamoDbStoreClient {
     type ContextError = DynamoDbContextError;
 
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
-        log::trace!("Acquiring lock on {:?}", id);
+        tracing::trace!("Acquiring lock on {:?}", id);
         let guard = self.0.guards.guard(id).await;
         let runtime_context = ChainRuntimeContext {
             store: self.clone(),
