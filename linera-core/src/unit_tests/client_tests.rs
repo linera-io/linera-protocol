@@ -27,7 +27,7 @@ use std::{
     sync::Arc,
 };
 use test_log::test;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Semaphore};
 
 #[cfg(feature = "aws")]
 use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
@@ -456,8 +456,8 @@ where
     }
 }
 
-/// Need a guard to avoid "too many open files" error
-static ROCKSDB_GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+/// Limit concurrency for rocksdb tests to avoid "too many open files" errors.
+static ROCKSDB_SEMAPHORE: Semaphore = Semaphore::const_new(20);
 
 #[derive(Default)]
 pub struct MakeMemoryStoreClient {
@@ -559,7 +559,7 @@ async fn test_memory_initiating_valid_transfer() -> Result<(), anyhow::Error> {
 
 #[test(tokio::test)]
 async fn test_rocksdb_initiating_valid_transfer() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_initiating_valid_transfer(MakeRocksdbStoreClient::default()).await
 }
 
@@ -608,7 +608,7 @@ async fn test_memory_claim_amount() -> Result<(), anyhow::Error> {
 
 #[test(tokio::test)]
 async fn test_rocksdb_claim_amount() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_claim_amount(MakeRocksdbStoreClient::default()).await
 }
 
@@ -686,7 +686,7 @@ async fn test_memory_rotate_key_pair() -> Result<(), anyhow::Error> {
 
 #[test(tokio::test)]
 async fn test_rocksdb_rotate_key_pair() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_rotate_key_pair(MakeRocksdbStoreClient::default()).await
 }
 
@@ -744,7 +744,7 @@ async fn test_memory_transfer_ownership() -> Result<(), anyhow::Error> {
 
 #[test(tokio::test)]
 async fn test_rocksdb_transfer_ownership() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_transfer_ownership(MakeRocksdbStoreClient::default()).await
 }
 
@@ -803,7 +803,7 @@ async fn test_memory_share_ownership() -> Result<(), anyhow::Error> {
 
 #[test(tokio::test)]
 async fn test_rocksdb_share_ownership() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_share_ownership(MakeRocksdbStoreClient::default()).await
 }
 
@@ -888,7 +888,7 @@ async fn test_memory_open_chain_then_close_it() -> Result<(), anyhow::Error> {
 
 #[test(tokio::test)]
 async fn test_rocksdb_open_chain_then_close_it() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_open_chain_then_close_it(MakeRocksdbStoreClient::default()).await
 }
 
@@ -939,7 +939,7 @@ async fn test_memory_transfer_then_open_chain() -> Result<(), anyhow::Error> {
 
 #[test(tokio::test)]
 async fn test_rocksdb_transfer_then_open_chain() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_transfer_then_open_chain(MakeRocksdbStoreClient::default()).await
 }
 
@@ -1023,7 +1023,7 @@ async fn test_memory_open_chain_then_transfer() -> Result<(), anyhow::Error> {
 
 #[test(tokio::test)]
 async fn test_rocksdb_open_chain_then_transfer() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_open_chain_then_transfer(MakeRocksdbStoreClient::default()).await
 }
 
@@ -1098,7 +1098,7 @@ async fn test_memory_close_chain() -> Result<(), anyhow::Error> {
 
 #[test(tokio::test)]
 async fn test_rocksdb_close_chain() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_close_chain(MakeRocksdbStoreClient::default()).await
 }
 
@@ -1154,7 +1154,7 @@ async fn test_memory_initiating_valid_transfer_too_many_faults() -> Result<(), a
 
 #[test(tokio::test)]
 async fn test_rocksdb_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_initiating_valid_transfer_too_many_faults(MakeRocksdbStoreClient::default()).await
 }
 
@@ -1197,7 +1197,7 @@ async fn test_memory_bidirectional_transfer() -> Result<(), anyhow::Error> {
 
 #[test(tokio::test)]
 async fn test_rocksdb_bidirectional_transfer() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_bidirectional_transfer(MakeRocksdbStoreClient::default()).await
 }
 
@@ -1323,7 +1323,7 @@ async fn test_memory_receiving_unconfirmed_transfer() -> Result<(), anyhow::Erro
 
 #[test(tokio::test)]
 async fn test_rocksdb_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_receiving_unconfirmed_transfer(MakeRocksdbStoreClient::default()).await
 }
 
@@ -1376,7 +1376,7 @@ async fn test_memory_receiving_unconfirmed_transfer_with_lagging_sender_balances
 #[test(tokio::test)]
 async fn test_rocksdb_receiving_unconfirmed_transfer_with_lagging_sender_balances(
 ) -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
         MakeRocksdbStoreClient::default(),
     )
@@ -1490,7 +1490,7 @@ async fn test_memory_change_voting_rights() -> Result<(), anyhow::Error> {
 
 #[test(tokio::test)]
 async fn test_rocksdb_change_voting_rights() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_change_voting_rights(MakeRocksdbStoreClient::default()).await
 }
 
