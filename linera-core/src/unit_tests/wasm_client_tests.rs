@@ -9,7 +9,7 @@
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
 use crate::client::client_tests::{
-    MakeMemoryStoreClient, MakeRocksdbStoreClient, StoreBuilder, TestBuilder, ROCKSDB_GUARD,
+    MakeMemoryStoreClient, MakeRocksdbStoreClient, StoreBuilder, TestBuilder, ROCKSDB_SEMAPHORE,
 };
 use fungible::{AccountOwner, SignedTransfer, SignedTransferPayload, Transfer};
 use linera_base::data_types::*;
@@ -38,7 +38,7 @@ async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> Result<(),
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_rocksdb_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_create_application(MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
@@ -129,7 +129,7 @@ async fn test_memory_run_application_with_dependency(
 async fn test_rocksdb_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_run_application_with_dependency(MakeRocksdbStoreClient::with_wasm_runtime(
         wasm_runtime,
     ))
@@ -255,7 +255,7 @@ async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<()
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_rocksdb_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_GUARD.lock().await;
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
     run_test_cross_chain_message(MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
