@@ -293,7 +293,13 @@ macro_rules! impl_writable_system {
                 message: &str,
                 level: writable_system::LogLevel,
             ) -> Result<(), Self::Error> {
-                log::log!(level.into(), "{message}");
+                match level {
+                    writable_system::LogLevel::Trace => tracing::trace!("{message}"),
+                    writable_system::LogLevel::Debug => tracing::debug!("{message}"),
+                    writable_system::LogLevel::Info => tracing::info!("{message}"),
+                    writable_system::LogLevel::Warn => tracing::warn!("{message}"),
+                    writable_system::LogLevel::Error => tracing::error!("{message}"),
+                }
                 Ok(())
             }
         }
@@ -458,7 +464,13 @@ macro_rules! impl_queryable_system {
             }
 
             fn log(&mut self, message: &str, level: queryable_system::LogLevel) {
-                log::log!(level.into(), "{message}");
+                match level {
+                    queryable_system::LogLevel::Trace => tracing::trace!("{message}"),
+                    queryable_system::LogLevel::Debug => tracing::debug!("{message}"),
+                    queryable_system::LogLevel::Info => tracing::info!("{message}"),
+                    queryable_system::LogLevel::Warn => tracing::warn!("{message}"),
+                    queryable_system::LogLevel::Error => tracing::error!("{message}"),
+                }
             }
         }
     };

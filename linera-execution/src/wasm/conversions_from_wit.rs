@@ -186,18 +186,6 @@ impl From<writable_system::CryptoHash> for CryptoHash {
     }
 }
 
-impl From<writable_system::LogLevel> for log::Level {
-    fn from(level: writable_system::LogLevel) -> Self {
-        match level {
-            writable_system::LogLevel::Trace => log::Level::Trace,
-            writable_system::LogLevel::Debug => log::Level::Debug,
-            writable_system::LogLevel::Info => log::Level::Info,
-            writable_system::LogLevel::Warn => log::Level::Warn,
-            writable_system::LogLevel::Error => log::Level::Error,
-        }
-    }
-}
-
 impl From<queryable_system::ApplicationId> for UserApplicationId {
     fn from(guest: queryable_system::ApplicationId) -> Self {
         UserApplicationId {
@@ -246,17 +234,5 @@ impl From<queryable_system::CryptoHash> for CryptoHash {
         bytes[56..64].copy_from_slice(&guest.part8.to_le_bytes());
 
         CryptoHash::try_from(&bytes[..]).expect("Incorrect byte count for `CryptoHash`")
-    }
-}
-
-impl From<queryable_system::LogLevel> for log::Level {
-    fn from(level: queryable_system::LogLevel) -> Self {
-        match level {
-            queryable_system::LogLevel::Trace => log::Level::Trace,
-            queryable_system::LogLevel::Debug => log::Level::Debug,
-            queryable_system::LogLevel::Info => log::Level::Info,
-            queryable_system::LogLevel::Warn => log::Level::Warn,
-            queryable_system::LogLevel::Error => log::Level::Error,
-        }
     }
 }
