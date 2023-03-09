@@ -10,7 +10,7 @@ use linera_base::data_types::{BlockHeight, ChainDescription, ChainId};
 use linera_execution::{
     ApplicationId, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, OperationContext,
     Query, QueryContext, RawExecutionResult, Response, SystemExecutionState,
-    TestExecutionRuntimeContext, WasmRuntime,
+    TestExecutionRuntimeContext, WasmApplication, WasmRuntime,
 };
 use linera_views::{memory::MemoryContext, views::View};
 use std::sync::Arc;
@@ -37,12 +37,16 @@ async fn test_fuel_for_counter_wasm_application(wasm_runtime: WasmRuntime) -> an
         .register_application(app_desc.clone())
         .await?;
 
-    view.context().extra.user_applications().insert(
-        app_id,
-        Arc::new(
-            linera_execution::wasm_test::build_example_application("counter", wasm_runtime).await?,
-        ),
-    );
+    let application = WasmApplication::from_files(
+        "tests/fixtures/counter_contract.wasm",
+        "tests/fixtures/counter_service.wasm",
+        wasm_runtime,
+    )
+    .await?;
+    view.context()
+        .extra
+        .user_applications()
+        .insert(app_id, Arc::new(application));
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
