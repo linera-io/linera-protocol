@@ -36,8 +36,8 @@ use linera_views::{common::Batch, views::ViewError};
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
 use tokio::sync::{oneshot, Mutex};
 use wasmer::{
-    imports, wasmparser::Operator, CompilerConfig, Cranelift, EngineBuilder, Instance, Module,
-    RuntimeError, Store,
+    imports, wasmparser::Operator, CompilerConfig, EngineBuilder, Instance, Module, RuntimeError,
+    Singlepass, Store,
 };
 use wasmer_middlewares::metering::{self, Metering, MeteringPoints};
 use wit_bindgen_host_wasmer_rust::Le;
@@ -99,7 +99,7 @@ impl WasmApplication {
             storage.remaining_fuel(),
             Self::operation_cost,
         ));
-        let mut compiler_config = Cranelift::default();
+        let mut compiler_config = Singlepass::default();
         compiler_config.push_middleware(metering);
 
         let mut store = Store::new(EngineBuilder::new(compiler_config));
