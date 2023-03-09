@@ -539,12 +539,8 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use std::{
-        env,
-        path::PathBuf,
-        process::Stdio,
-        time::Duration,
-    };
+    use serde_json::{json, Value};
+    use std::{env, path::PathBuf, process::Stdio, time::Duration};
     use tempfile::{tempdir, TempDir};
     use tokio::process::{Child, Command};
 
@@ -663,8 +659,8 @@ pub mod tests {
 
         let contract = examples_dir
             .join("target/wasm32-unknown-unknown/release/counter_graphql_contract.wasm");
-        let service = examples_dir
-            .join("target/wasm32-unknown-unknown/release/counter_graphql_service.wasm");
+        let service =
+            examples_dir.join("target/wasm32-unknown-unknown/release/counter_graphql_service.wasm");
 
         (contract, service)
     }
@@ -673,7 +669,7 @@ pub mod tests {
         contract: PathBuf,
         service: PathBuf,
         tmp_dir: &TempDir,
-        counter_value: usize,
+        counter_value: u64,
     ) {
         let mut cargo_run = cargo_run(tmp_dir);
         cargo_run
@@ -718,19 +714,89 @@ pub mod tests {
             .unwrap()
     }
 
+    async fn get_application_uri() -> String {
+        let query = json!({ "query": "query {  applications {    link    }}" });
+        let client = reqwest::Client::new();
+        let res = client
+            .post("http://localhost:8080/")
+            .json(&query)
+            .send()
+            .await
+            .unwrap();
+        let response_body: Value = res.json().await.unwrap();
+        let application_uri = response_body
+            .get("data")
+            .unwrap()
+            .get("applications")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .get("link")
+            .unwrap();
+        application_uri.as_str().unwrap().to_string()
+    }
+
+    async fn get_counter_value(application_uri: &str) -> u64 {
+        let query = json!({ "query": "query { value }" });
+        let client = reqwest::Client::new();
+        let res = client
+            .post(application_uri)
+            .json(&query)
+            .send()
+            .await
+            .unwrap();
+        let response_body: Value = res.json().await.unwrap();
+        response_body
+            .get("data")
+            .unwrap()
+            .get("value")
+            .unwrap()
+            .as_u64()
+            .unwrap()
+    }
+
+    async fn increment_counter_value(application_uri: &str, increment: u64) {
+        let query_string = format!("mutation {{  executeOperation(operation: {{ increment: {} }})}}", increment);
+        let query = json!({ "query": query_string });
+        let client = reqwest::Client::new();
+        client
+            .post(application_uri)
+            .json(&query)
+            .send()
+            .await
+            .unwrap();
+    }
+
     #[tokio::test]
     async fn end_to_end() {
         let tmp_dir = tempdir().unwrap();
-        let counter_value = 35;
+        let original_counter_value = 35;
+        let increment = 5;
+
         generate_server_config(&tmp_dir).await;
         generate_client_config(&tmp_dir).await;
         let _local_net = run_local_net(&tmp_dir);
         let (contract, service) = build_application(&tmp_dir).await;
+
         // wait for net to start
         tokio::time::sleep(Duration::from_millis(10_000)).await;
-        publish_application(contract, service, &tmp_dir, counter_value).await;
+
+        publish_application(contract, service, &tmp_dir, original_counter_value).await;
         let _node_service = run_node_service(&tmp_dir).await;
 
-        tokio::time::sleep(Duration::from_millis(60_000)).await;
+        // wait for node service to start
+        tokio::time::sleep(Duration::from_millis(1_000)).await;
+
+        let application_uri = get_application_uri().await;
+
+        let counter_value = get_counter_value(&application_uri).await;
+        assert_eq!(counter_value, original_counter_value);
+
+        increment_counter_value(&application_uri, increment).await;
+
+        let counter_value = get_counter_value(&application_uri).await;
+        assert_eq!(counter_value, original_counter_value + increment);
     }
 }
