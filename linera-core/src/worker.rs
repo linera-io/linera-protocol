@@ -340,7 +340,7 @@ where
     }
 
     async fn create_cross_chain_request(
-        &self,
+        &mut self,
         confirmed_log: &mut LogView<Client::Context, CryptoHash>,
         height_map: Vec<(ApplicationId, Medium, Vec<BlockHeight>)>,
         sender: ChainId,
@@ -369,14 +369,14 @@ where
 
     /// Load pending cross-chain requests.
     async fn create_network_actions(
-        &self,
+        &mut self,
         chain: &mut ChainStateView<Client::Context>,
     ) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
         for application_id in chain.communication_states.indices().await? {
             let state = chain
                 .communication_states
-                .try_load_entry(&application_id)
+                .load_entry(&application_id)
                 .await?;
             for target in state.outboxes.indices().await? {
                 let outbox = state.outboxes.try_load_entry(&target).await?;
@@ -884,7 +884,7 @@ where
             for application_id in chain.communication_states.indices().await? {
                 let state = chain
                     .communication_states
-                    .try_load_entry(&application_id)
+                    .load_entry(&application_id)
                     .await?;
                 for origin in state.inboxes.indices().await? {
                     let inbox = state.inboxes.try_load_entry(&origin).await?;

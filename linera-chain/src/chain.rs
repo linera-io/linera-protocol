@@ -153,16 +153,17 @@ where
 
     /// Verify that this chain is up-to-date and all the messages executed ahead of time
     /// have been properly received by now.
-    pub async fn validate_incoming_messages(&self) -> Result<(), ChainError> {
+    pub async fn validate_incoming_messages(&mut self) -> Result<(), ChainError> {
+        let chain_id = self.chain_id();
         for id in self.communication_states.indices().await? {
-            let state = self.communication_states.try_load_entry(&id).await?;
+            let state = self.communication_states.load_entry(&id).await?;
             for origin in state.inboxes.indices().await? {
                 let inbox = state.inboxes.try_load_entry(&origin).await?;
                 let event = inbox.removed_events.front().await?;
                 ensure!(
                     event.is_none(),
                     ChainError::MissingCrossChainUpdate {
-                        chain_id: self.chain_id(),
+                        chain_id,
                         application_id: id,
                         origin,
                         height: event.unwrap().height,
@@ -174,26 +175,26 @@ where
     }
 
     pub async fn next_block_height_to_receive(
-        &self,
+        &mut self,
         application_id: ApplicationId,
         origin: Origin,
     ) -> Result<BlockHeight, ChainError> {
         let communication_state = self
             .communication_states
-            .try_load_entry(&application_id)
+            .load_entry(&application_id)
             .await?;
         let inbox = communication_state.inboxes.try_load_entry(&origin).await?;
         inbox.next_block_height_to_receive()
     }
 
     pub async fn last_anticipated_block_height(
-        &self,
+        &mut self,
         application_id: ApplicationId,
         origin: Origin,
     ) -> Result<Option<BlockHeight>, ChainError> {
         let communication_state = self
             .communication_states
-            .try_load_entry(&application_id)
+            .load_entry(&application_id)
             .await?;
         let inbox = communication_state.inboxes.try_load_entry(&origin).await?;
         match inbox.removed_events.back().await? {
