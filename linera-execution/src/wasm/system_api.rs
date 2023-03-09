@@ -66,11 +66,7 @@ macro_rules! impl_writable_system {
                 use writable_system::PollLoad;
                 match future.poll(self.context()) {
                     Poll::Pending => Ok(PollLoad::Pending),
-                    Poll::Ready(Ok(bytes)) => Ok(PollLoad::Ready(bytes)),
-                    Poll::Ready(Err(error)) => {
-                        self.report_internal_error(error);
-                        Ok(PollLoad::Pending)
-                    }
+                    Poll::Ready(bytes) => Ok(PollLoad::Ready(bytes?)),
                 }
             }
 
@@ -91,10 +87,7 @@ macro_rules! impl_writable_system {
                     Poll::Ready(Err(ExecutionError::ViewError(ViewError::NotFound(_)))) => {
                         Ok(PollLoadAndLock::Ready(None))
                     }
-                    Poll::Ready(Err(error)) => {
-                        self.report_internal_error(error);
-                        Ok(PollLoadAndLock::Pending)
-                    }
+                    Poll::Ready(Err(error)) => Err(error),
                 }
             }
 
@@ -122,10 +115,7 @@ macro_rules! impl_writable_system {
                     Poll::Ready(Err(ExecutionError::ViewError(ViewError::TryLockError(_)))) => {
                         Ok(PollLock::ReadyNotLocked)
                     }
-                    Poll::Ready(Err(error)) => {
-                        self.report_internal_error(error);
-                        Ok(PollLock::Pending)
-                    }
+                    Poll::Ready(Err(error)) => Err(error),
                 }
             }
 
@@ -145,11 +135,7 @@ macro_rules! impl_writable_system {
                 use writable_system::PollReadKeyBytes;
                 match future.poll(self.context()) {
                     Poll::Pending => Ok(PollReadKeyBytes::Pending),
-                    Poll::Ready(Ok(opt_list)) => Ok(PollReadKeyBytes::Ready(opt_list)),
-                    Poll::Ready(Err(error)) => {
-                        self.report_internal_error(error);
-                        Ok(PollReadKeyBytes::Pending)
-                    }
+                    Poll::Ready(opt_list) => Ok(PollReadKeyBytes::Ready(opt_list?)),
                 }
             }
 
@@ -166,11 +152,7 @@ macro_rules! impl_writable_system {
                 use writable_system::PollFindKeys;
                 match future.poll(self.context()) {
                     Poll::Pending => Ok(PollFindKeys::Pending),
-                    Poll::Ready(Ok(keys)) => Ok(PollFindKeys::Ready(keys)),
-                    Poll::Ready(Err(error)) => {
-                        self.report_internal_error(error);
-                        Ok(PollFindKeys::Pending)
-                    }
+                    Poll::Ready(keys) => Ok(PollFindKeys::Ready(keys?)),
                 }
             }
 
@@ -191,11 +173,7 @@ macro_rules! impl_writable_system {
                 use writable_system::PollFindKeyValues;
                 match future.poll(self.context()) {
                     Poll::Pending => Ok(PollFindKeyValues::Pending),
-                    Poll::Ready(Ok(key_values)) => Ok(PollFindKeyValues::Ready(key_values)),
-                    Poll::Ready(Err(error)) => {
-                        self.report_internal_error(error);
-                        Ok(PollFindKeyValues::Pending)
-                    }
+                    Poll::Ready(key_values) => Ok(PollFindKeyValues::Ready(key_values?)),
                 }
             }
 
@@ -230,10 +208,7 @@ macro_rules! impl_writable_system {
                 match future.poll(self.context()) {
                     Poll::Pending => Ok(PollUnit::Pending),
                     Poll::Ready(Ok(())) => Ok(PollUnit::Ready),
-                    Poll::Ready(Err(error)) => {
-                        self.report_internal_error(error);
-                        Ok(PollUnit::Pending)
-                    }
+                    Poll::Ready(Err(error)) => Err(error),
                 }
             }
 
@@ -271,11 +246,7 @@ macro_rules! impl_writable_system {
                 use writable_system::PollCallResult;
                 match future.poll(self.context()) {
                     Poll::Pending => Ok(PollCallResult::Pending),
-                    Poll::Ready(Ok(result)) => Ok(PollCallResult::Ready(result.into())),
-                    Poll::Ready(Err(error)) => {
-                        self.report_internal_error(error);
-                        Ok(PollCallResult::Pending)
-                    }
+                    Poll::Ready(result) => Ok(PollCallResult::Ready(result?.into())),
                 }
             }
 
@@ -313,11 +284,7 @@ macro_rules! impl_writable_system {
                 use writable_system::PollCallResult;
                 match future.poll(self.context()) {
                     Poll::Pending => Ok(PollCallResult::Pending),
-                    Poll::Ready(Ok(result)) => Ok(PollCallResult::Ready(result.into())),
-                    Poll::Ready(Err(error)) => {
-                        self.report_internal_error(error);
-                        Ok(PollCallResult::Pending)
-                    }
+                    Poll::Ready(result) => Ok(PollCallResult::Ready(result?.into())),
                 }
             }
 
