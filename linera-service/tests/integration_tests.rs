@@ -157,8 +157,7 @@ impl TestRunner {
     }
 
     async fn generate_server_config(&self) {
-        let mut cargo_run = self.cargo_run();
-        cargo_run
+        self.cargo_run()
             .args(["--bin", "server"])
             .arg("generate")
             .arg("--validators")
@@ -175,8 +174,7 @@ impl TestRunner {
     }
 
     async fn generate_client_config(&self) {
-        let mut cargo_run = self.cargo_run();
-        cargo_run
+        self.cargo_run()
             .args(["--bin", "client"])
             .arg("--")
             .args(["--wallet", "wallet.json"])
@@ -192,8 +190,7 @@ impl TestRunner {
     }
 
     fn run_proxy(&self, i: usize) -> Child {
-        let mut cargo_run = self.cargo_run();
-        cargo_run
+        self.cargo_run()
             .args(["--bin", "proxy"])
             .arg("--")
             .arg(format!("server_{}.json", i))
@@ -202,8 +199,7 @@ impl TestRunner {
     }
 
     fn run_server(&self, i: usize, j: usize) -> Child {
-        let mut cargo_run = self.cargo_run();
-        cargo_run
+        self.cargo_run()
             .args(["--bin", "server"])
             .arg("run")
             .args(["--storage", &format!("rocksdb:server_{}_{}.db", i, j)])
@@ -252,8 +248,7 @@ impl TestRunner {
     }
 
     async fn publish_application(&self, contract: PathBuf, service: PathBuf, arg: u64) {
-        let mut cargo_run = self.cargo_run();
-        cargo_run
+        self.cargo_run()
             .args(["--bin", "client"])
             .arg("--")
             .args(["--storage", "rocksdb:client.db"])
@@ -271,8 +266,7 @@ impl TestRunner {
     }
 
     async fn run_node_service(&self) -> Child {
-        let mut cargo_run = self.cargo_run();
-        cargo_run
+        self.cargo_run()
             .args(["--bin", "client"])
             .arg("--")
             .args(["--storage", "rocksdb:client.db"])
