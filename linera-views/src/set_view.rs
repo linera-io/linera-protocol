@@ -3,7 +3,7 @@
 
 use crate::{
     batch::Batch,
-    common::{Context, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
+    common::{Context, CustomSerialize, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
@@ -22,21 +22,19 @@ enum KeyTag {
 
 /// A view that supports inserting and removing values indexed by a key.
 #[derive(Debug)]
-pub struct SetView<C, I> {
+pub struct ByteSetView<C> {
     context: C,
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Update<()>>,
-    _phantom: PhantomData<I>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
 }
 
 #[async_trait]
-impl<C, I> View<C> for SetView<C, I>
+impl<C> View<C> for ByteSetView<C>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Serialize,
 {
     fn context(&self) -> &C {
         &self.context
@@ -49,7 +47,6 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
-            _phantom: PhantomData,
             stored_hash: hash,
             hash: Mutex::new(hash),
         })
@@ -103,38 +100,25 @@ where
     }
 }
 
-impl<C, I> SetView<C, I>
+impl<C> ByteSetView<C>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Serialize,
 {
     /// Set or insert a value.
-    pub fn insert<Q>(&mut self, index: &Q) -> Result<(), ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + ?Sized,
-    {
+    pub fn insert(&mut self, short_key: Vec<u8>) {
         *self.hash.get_mut() = None;
-        let short_key = C::derive_short_key(index)?;
         self.updates.insert(short_key, Update::Set(()));
-        Ok(())
     }
 
     /// Remove a value.
-    pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + ?Sized,
-    {
+    pub fn remove(&mut self, short_key: Vec<u8>) {
         *self.hash.get_mut() = None;
-        let short_key = C::derive_short_key(index)?;
         if self.was_cleared {
             self.updates.remove(&short_key);
         } else {
             self.updates.insert(short_key, Update::Removed);
         }
-        Ok(())
     }
 
     /// Obtain the extra data.
@@ -143,19 +127,13 @@ where
     }
 }
 
-impl<C, I> SetView<C, I>
+impl<C> ByteSetView<C>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Serialize,
 {
     /// Return true if the given index exists in the set.
-    pub async fn contains<Q>(&self, index: &Q) -> Result<bool, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + ?Sized,
-    {
-        let short_key = C::derive_short_key(index)?;
+    pub async fn contains(&self, short_key: Vec<u8>) -> Result<bool, ViewError> {
         if let Some(update) = self.updates.get(&short_key) {
             let value = match update {
                 Update::Removed => false,
@@ -174,21 +152,20 @@ where
     }
 }
 
-impl<C, I> SetView<C, I>
+impl<C> ByteSetView<C>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Serialize + DeserializeOwned,
 {
-    /// Return the list of indices in the set.
-    pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
-        let mut indices = Vec::<I>::new();
-        self.for_each_index(|index: I| {
-            indices.push(index);
+    /// Return the list of keys in the set.
+    pub async fn keys(&self) -> Result<Vec<Vec<u8>>, ViewError> {
+        let mut keys = Vec::new();
+        self.for_each_key(|key| {
+            keys.push(key.to_vec());
             Ok(())
         })
         .await?;
-        Ok(indices)
+        Ok(keys)
     }
 
     /// Execute a function on each serialized index (aka key). Keys are visited in a
@@ -231,21 +208,6 @@ where
         Ok(())
     }
 
-    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
-    /// order.
-    pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
-    where
-        F: FnMut(I) -> Result<(), ViewError> + Send,
-    {
-        self.for_each_key(|key| {
-            let index = C::deserialize_value(key)?;
-            f(index)?;
-            Ok(())
-        })
-        .await?;
-        Ok(())
-    }
-
     async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         let mut hasher = sha3::Sha3_256::default();
         let mut count = 0;
@@ -261,11 +223,10 @@ where
 }
 
 #[async_trait]
-impl<C, I> HashableView<C> for SetView<C, I>
+impl<C> HashableView<C> for ByteSetView<C>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Clone + Send + Sync + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;
 
@@ -292,5 +253,297 @@ where
                 Ok(new_hash)
             }
         }
+    }
+}
+
+/// A ['View'] implementing the set functionality with the index I being a non-trivial type
+#[derive(Debug)]
+pub struct SetView<C, I> {
+    set: ByteSetView<C>,
+    _phantom: PhantomData<I>,
+}
+
+#[async_trait]
+impl<C, I> View<C> for SetView<C, I>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Send + Sync + Serialize,
+{
+    fn context(&self) -> &C {
+        self.set.context()
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let set = ByteSetView::load(context).await?;
+        Ok(Self {
+            set,
+            _phantom: PhantomData,
+        })
+    }
+
+    fn rollback(&mut self) {
+        self.set.rollback()
+    }
+
+    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+        self.set.flush(batch)
+    }
+
+    fn delete(self, batch: &mut Batch) {
+        self.set.delete(batch)
+    }
+
+    fn clear(&mut self) {
+        self.set.clear()
+    }
+}
+
+impl<C, I> SetView<C, I>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: Serialize,
+{
+    /// Set or insert a value.
+    pub fn insert<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.set.insert(short_key);
+        Ok(())
+    }
+
+    /// Remove a value.
+    pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.set.remove(short_key);
+        Ok(())
+    }
+
+    /// Obtain the extra data.
+    pub fn extra(&self) -> &C::Extra {
+        self.set.extra()
+    }
+}
+
+impl<C, I> SetView<C, I>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: Serialize,
+{
+    /// Return true if the given index exists in the set.
+    pub async fn contains<Q>(&self, index: &Q) -> Result<bool, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.set.contains(short_key).await
+    }
+}
+
+impl<C, I> SetView<C, I>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: Sync + Clone + Send + Serialize + DeserializeOwned,
+{
+    /// Return the list of indices in the set.
+    pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
+        let mut indices = Vec::<I>::new();
+        self.for_each_index(|index: I| {
+            indices.push(index);
+            Ok(())
+        })
+        .await?;
+        Ok(indices)
+    }
+
+    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
+    /// order.
+    pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<(), ViewError> + Send,
+    {
+        self.set
+            .for_each_key(|key| {
+                let index = C::deserialize_value(key)?;
+                f(index)?;
+                Ok(())
+            })
+            .await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<C, I> HashableView<C> for SetView<C, I>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Clone + Send + Sync + Serialize + DeserializeOwned,
+{
+    type Hasher = sha2::Sha512;
+
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.set.hash_mut().await
+    }
+
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.set.hash().await
+    }
+}
+
+/// A ['View'] implementing the set functionality with the index I being a non-trivial type
+#[derive(Debug)]
+pub struct CustomSetView<C, I> {
+    set: ByteSetView<C>,
+    _phantom: PhantomData<I>,
+}
+
+#[async_trait]
+impl<C, I> View<C> for CustomSetView<C, I>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Send + Sync + CustomSerialize,
+{
+    fn context(&self) -> &C {
+        self.set.context()
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let set = ByteSetView::load(context).await?;
+        Ok(Self {
+            set,
+            _phantom: PhantomData,
+        })
+    }
+
+    fn rollback(&mut self) {
+        self.set.rollback()
+    }
+
+    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+        self.set.flush(batch)
+    }
+
+    fn delete(self, batch: &mut Batch) {
+        self.set.delete(batch)
+    }
+
+    fn clear(&mut self) {
+        self.set.clear()
+    }
+}
+
+impl<C, I> CustomSetView<C, I>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: CustomSerialize,
+{
+    /// Set or insert a value.
+    pub fn insert<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + ?Sized,
+    {
+        let short_key = index.to_custom_bytes::<C>()?;
+        self.set.insert(short_key);
+        Ok(())
+    }
+
+    /// Remove a value.
+    pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + ?Sized,
+    {
+        let short_key = index.to_custom_bytes::<C>()?;
+        self.set.remove(short_key);
+        Ok(())
+    }
+
+    /// Obtain the extra data.
+    pub fn extra(&self) -> &C::Extra {
+        self.set.extra()
+    }
+}
+
+impl<C, I> CustomSetView<C, I>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: CustomSerialize,
+{
+    /// Return true if the given index exists in the set.
+    pub async fn contains<Q>(&self, index: &Q) -> Result<bool, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + ?Sized,
+    {
+        let short_key = index.to_custom_bytes::<C>()?;
+        self.set.contains(short_key).await
+    }
+}
+
+impl<C, I> CustomSetView<C, I>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: Sync + Clone + Send + CustomSerialize,
+{
+    /// Return the list of indices in the set.
+    pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
+        let mut indices = Vec::<I>::new();
+        self.for_each_index(|index: I| {
+            indices.push(index);
+            Ok(())
+        })
+        .await?;
+        Ok(indices)
+    }
+
+    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
+    /// order.
+    pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<(), ViewError> + Send,
+    {
+        self.set
+            .for_each_key(|key| {
+                let index = I::from_custom_bytes::<C>(key)?;
+                f(index)?;
+                Ok(())
+            })
+            .await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<C, I> HashableView<C> for CustomSetView<C, I>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Clone + Send + Sync + CustomSerialize,
+{
+    type Hasher = sha2::Sha512;
+
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.set.hash_mut().await
+    }
+
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.set.hash().await
     }
 }

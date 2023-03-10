@@ -3,7 +3,9 @@
 
 use crate::{
     batch::Batch,
-    common::{Context, HasherOutput, KeyIterable, KeyValueIterable, Update, MIN_VIEW_TAG},
+    common::{
+        Context, CustomSerialize, HasherOutput, KeyIterable, KeyValueIterable, Update, MIN_VIEW_TAG,
+    },
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
@@ -20,23 +22,21 @@ enum KeyTag {
     Hash,
 }
 
-/// A view that supports inserting and removing values indexed by a key.
+/// A view that supports inserting and removing values indexed by Vec<u8>
 #[derive(Debug)]
-pub struct MapView<C, I, V> {
+pub struct ByteMapView<C, V> {
     context: C,
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Update<V>>,
-    _phantom: PhantomData<I>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
 }
 
 #[async_trait]
-impl<C, I, V> View<C> for MapView<C, I, V>
+impl<C, V> View<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Serialize,
     V: Send + Sync + Serialize,
 {
     fn context(&self) -> &C {
@@ -50,7 +50,6 @@ where
             context,
             was_cleared: false,
             updates: BTreeMap::new(),
-            _phantom: PhantomData,
             stored_hash: hash,
             hash: Mutex::new(hash),
         })
@@ -104,38 +103,25 @@ where
     }
 }
 
-impl<C, I, V> MapView<C, I, V>
+impl<C, V> ByteMapView<C, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Serialize,
 {
     /// Set or insert a value.
-    pub fn insert<Q>(&mut self, index: &Q, value: V) -> Result<(), ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + ?Sized,
-    {
+    pub fn insert(&mut self, short_key: Vec<u8>, value: V) {
         *self.hash.get_mut() = None;
-        let short_key = C::derive_short_key(index)?;
         self.updates.insert(short_key, Update::Set(value));
-        Ok(())
     }
 
     /// Remove a value.
-    pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + ?Sized,
-    {
+    pub fn remove(&mut self, short_key: Vec<u8>) {
         *self.hash.get_mut() = None;
-        let short_key = C::derive_short_key(index)?;
         if self.was_cleared {
             self.updates.remove(&short_key);
         } else {
             self.updates.insert(short_key, Update::Removed);
         }
-        Ok(())
     }
 
     /// Obtain the extra data.
@@ -144,20 +130,14 @@ where
     }
 }
 
-impl<C, I, V> MapView<C, I, V>
+impl<C, V> ByteMapView<C, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Serialize,
     V: Clone + DeserializeOwned + 'static,
 {
     /// Read the value at the given position, if any.
-    pub async fn get<Q>(&self, index: &Q) -> Result<Option<V>, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + ?Sized,
-    {
-        let short_key = C::derive_short_key(index)?;
+    pub async fn get(&self, short_key: Vec<u8>) -> Result<Option<V>, ViewError> {
         if let Some(update) = self.updates.get(&short_key) {
             let value = match update {
                 Update::Removed => None,
@@ -185,12 +165,7 @@ where
     }
 
     /// Obtain a mutable reference to a value at a given position if available
-    pub async fn get_mut<Q>(&mut self, index: &Q) -> Result<Option<&mut V>, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + ?Sized,
-    {
-        let short_key = C::derive_short_key(index)?;
+    pub async fn get_mut(&mut self, short_key: Vec<u8>) -> Result<Option<&mut V>, ViewError> {
         self.load_value(&short_key).await?;
         if let Some(update) = self.updates.get_mut(&short_key.clone()) {
             let value = match update {
@@ -203,27 +178,15 @@ where
     }
 }
 
-impl<C, I, V> MapView<C, I, V>
+impl<C, V> ByteMapView<C, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Sync + Send + Serialize + DeserializeOwned,
     V: Sync + Serialize + DeserializeOwned + 'static,
 {
-    /// Return the list of indices in the map.
-    pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
-        let mut indices = Vec::<I>::new();
-        self.for_each_index(|index: I| {
-            indices.push(index);
-            Ok(())
-        })
-        .await?;
-        Ok(indices)
-    }
-
     /// Execute a function on each serialized index (aka key). Keys are visited
     /// in a stable, yet unspecified order.
-    async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
     {
@@ -261,40 +224,9 @@ where
         Ok(())
     }
 
-    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
-    /// order.
-    pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
-    where
-        F: FnMut(I) -> Result<(), ViewError> + Send,
-    {
-        self.for_each_key(|key| {
-            let index = C::deserialize_value(key)?;
-            f(index)?;
-            Ok(())
-        })
-        .await?;
-        Ok(())
-    }
-
-    /// Execute a function on each index and value in the map. Indices and values are
-    /// visited in a stable, yet unspecified order.
-    pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
-    where
-        F: FnMut(I, V) -> Result<(), ViewError> + Send,
-    {
-        self.for_each_key_value(|key, bytes| {
-            let index = C::deserialize_value(key)?;
-            let value = C::deserialize_value(bytes)?;
-            f(index, value)?;
-            Ok(())
-        })
-        .await?;
-        Ok(())
-    }
-
     /// Execute a function on each serialized index (aka key). Keys and values are visited
     /// in a stable, yet unspecified order.
-    async fn for_each_key_value<F>(&self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_key_value<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
     {
@@ -354,21 +286,15 @@ where
     }
 }
 
-impl<C, I, V> MapView<C, I, V>
+impl<C, V> ByteMapView<C, V>
 where
     C: Context,
     ViewError: From<C::Error>,
-    I: Serialize,
     V: Default + DeserializeOwned + 'static,
 {
     /// Obtain a mutable reference to a value at a given position.
     /// Default value if the index is missing.
-    pub async fn get_mut_or_default<Q>(&mut self, index: &Q) -> Result<&mut V, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Sync + Send + Serialize + ?Sized,
-    {
-        let short_key = C::derive_short_key(index)?;
+    pub async fn get_mut_or_default(&mut self, short_key: Vec<u8>) -> Result<&mut V, ViewError> {
         use std::collections::btree_map::Entry;
 
         let update = match self.updates.entry(short_key.clone()) {
@@ -395,11 +321,10 @@ where
 }
 
 #[async_trait]
-impl<C, I, V> HashableView<C> for MapView<C, I, V>
+impl<C, V> HashableView<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Serialize + DeserializeOwned,
     V: Send + Sync + Serialize + DeserializeOwned + 'static,
 {
     type Hasher = sha3::Sha3_256;
@@ -427,6 +352,399 @@ where
                 Ok(new_hash)
             }
         }
+    }
+}
+
+/// A View that actually has a type for keys. The ordering of the entries
+/// is determined by the serialization of the context.
+#[derive(Debug)]
+pub struct MapView<C, I, V> {
+    map: ByteMapView<C, V>,
+    _phantom: PhantomData<I>,
+}
+
+#[async_trait]
+impl<C, I, V> View<C> for MapView<C, I, V>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Send + Sync + Serialize,
+    V: Send + Sync + Serialize,
+{
+    fn context(&self) -> &C {
+        self.map.context()
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let map = ByteMapView::load(context).await?;
+        Ok(MapView {
+            map,
+            _phantom: PhantomData,
+        })
+    }
+
+    fn rollback(&mut self) {
+        self.map.rollback()
+    }
+
+    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+        self.map.flush(batch)
+    }
+
+    fn delete(self, batch: &mut Batch) {
+        self.map.delete(batch)
+    }
+
+    fn clear(&mut self) {
+        self.map.clear()
+    }
+}
+
+impl<C, I, V> MapView<C, I, V>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: Serialize,
+{
+    /// Set or insert a value.
+    pub fn insert<Q>(&mut self, index: &Q, value: V) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.map.insert(short_key, value);
+        Ok(())
+    }
+
+    /// Remove a value.
+    pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.map.remove(short_key);
+        Ok(())
+    }
+
+    /// Obtain the extra data.
+    pub fn extra(&self) -> &C::Extra {
+        self.map.extra()
+    }
+}
+
+impl<C, I, V> MapView<C, I, V>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: Serialize,
+    V: Clone + DeserializeOwned + 'static,
+{
+    /// Read the value at the given position, if any.
+    pub async fn get<Q>(&self, index: &Q) -> Result<Option<V>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.map.get(short_key).await
+    }
+
+    /// Obtain a mutable reference to a value at a given position if available
+    pub async fn get_mut<Q>(&mut self, index: &Q) -> Result<Option<&mut V>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.map.get_mut(short_key).await
+    }
+}
+
+impl<C, I, V> MapView<C, I, V>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: Sync + Send + Serialize + DeserializeOwned,
+    V: Sync + Serialize + DeserializeOwned + 'static,
+{
+    /// Return the list of indices in the map.
+    pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
+        let mut indices = Vec::<I>::new();
+        self.for_each_index(|index: I| {
+            indices.push(index);
+            Ok(())
+        })
+        .await?;
+        Ok(indices)
+    }
+
+    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
+    /// order.
+    pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<(), ViewError> + Send,
+    {
+        self.map
+            .for_each_key(|key| {
+                let index = C::deserialize_value(key)?;
+                f(index)?;
+                Ok(())
+            })
+            .await?;
+        Ok(())
+    }
+
+    /// Execute a function on each index and value in the map. Indices and values are
+    /// visited in a stable, yet unspecified order.
+    pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I, V) -> Result<(), ViewError> + Send,
+    {
+        self.map
+            .for_each_key_value(|key, bytes| {
+                let index = C::deserialize_value(key)?;
+                let value = C::deserialize_value(bytes)?;
+                f(index, value)?;
+                Ok(())
+            })
+            .await?;
+        Ok(())
+    }
+}
+
+impl<C, I, V> MapView<C, I, V>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: Serialize,
+    V: Default + DeserializeOwned + 'static,
+{
+    /// Obtain a mutable reference to a value at a given position.
+    /// Default value if the index is missing.
+    pub async fn get_mut_or_default<Q>(&mut self, index: &Q) -> Result<&mut V, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Sync + Send + Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.map.get_mut_or_default(short_key).await
+    }
+}
+
+#[async_trait]
+impl<C, I, V> HashableView<C> for MapView<C, I, V>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Send + Sync + Serialize + DeserializeOwned,
+    V: Send + Sync + Serialize + DeserializeOwned + 'static,
+{
+    type Hasher = sha2::Sha512;
+
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.map.hash_mut().await
+    }
+
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.map.hash().await
+    }
+}
+
+/// A Custom MapView that uses the custom serialization
+#[derive(Debug)]
+pub struct CustomMapView<C, I, V> {
+    map: ByteMapView<C, V>,
+    _phantom: PhantomData<I>,
+}
+
+#[async_trait]
+impl<C, I, V> View<C> for CustomMapView<C, I, V>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Send + Sync + CustomSerialize,
+    V: Send + Sync + Serialize,
+{
+    fn context(&self) -> &C {
+        self.map.context()
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let map = ByteMapView::load(context).await?;
+        Ok(CustomMapView {
+            map,
+            _phantom: PhantomData,
+        })
+    }
+
+    fn rollback(&mut self) {
+        self.map.rollback()
+    }
+
+    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+        self.map.flush(batch)
+    }
+
+    fn delete(self, batch: &mut Batch) {
+        self.map.delete(batch)
+    }
+
+    fn clear(&mut self) {
+        self.map.clear()
+    }
+}
+
+impl<C, I, V> CustomMapView<C, I, V>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: CustomSerialize,
+{
+    /// Set or insert a value.
+    pub fn insert<Q>(&mut self, index: &Q, value: V) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized + CustomSerialize,
+    {
+        let short_key = index.to_custom_bytes::<C>()?;
+        self.map.insert(short_key, value);
+        Ok(())
+    }
+
+    /// Remove a value.
+    pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized + CustomSerialize,
+    {
+        let short_key = index.to_custom_bytes::<C>()?;
+        self.map.remove(short_key);
+        Ok(())
+    }
+
+    /// Obtain the extra data.
+    pub fn extra(&self) -> &C::Extra {
+        self.map.extra()
+    }
+}
+
+impl<C, I, V> CustomMapView<C, I, V>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: CustomSerialize,
+    V: Clone + DeserializeOwned + 'static,
+{
+    /// Read the value at the given position, if any.
+    pub async fn get<Q>(&self, index: &Q) -> Result<Option<V>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized + CustomSerialize,
+    {
+        let short_key = index.to_custom_bytes::<C>()?;
+        self.map.get(short_key).await
+    }
+
+    /// Obtain a mutable reference to a value at a given position if available
+    pub async fn get_mut<Q>(&mut self, index: &Q) -> Result<Option<&mut V>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized + CustomSerialize,
+    {
+        let short_key = index.to_custom_bytes::<C>()?;
+        self.map.get_mut(short_key).await
+    }
+}
+
+impl<C, I, V> CustomMapView<C, I, V>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: Sync + Send + CustomSerialize,
+    V: Sync + Serialize + DeserializeOwned + 'static,
+{
+    /// Return the list of indices in the map.
+    pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
+        let mut indices = Vec::<I>::new();
+        self.for_each_index(|index: I| {
+            indices.push(index);
+            Ok(())
+        })
+        .await?;
+        Ok(indices)
+    }
+
+    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
+    /// order.
+    pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<(), ViewError> + Send,
+    {
+        self.map
+            .for_each_key(|key| {
+                let index = I::from_custom_bytes::<C>(key)?;
+                f(index)?;
+                Ok(())
+            })
+            .await?;
+        Ok(())
+    }
+
+    /// Execute a function on each index and value in the map. Indices and values are
+    /// visited in a stable, yet unspecified order.
+    pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I, V) -> Result<(), ViewError> + Send,
+    {
+        self.map
+            .for_each_key_value(|key, bytes| {
+                let index = I::from_custom_bytes::<C>(key)?;
+                let value = C::deserialize_value(bytes)?;
+                f(index, value)?;
+                Ok(())
+            })
+            .await?;
+        Ok(())
+    }
+}
+
+impl<C, I, V> CustomMapView<C, I, V>
+where
+    C: Context,
+    ViewError: From<C::Error>,
+    I: CustomSerialize,
+    V: Default + DeserializeOwned + 'static,
+{
+    /// Obtain a mutable reference to a value at a given position.
+    /// Default value if the index is missing.
+    pub async fn get_mut_or_default<Q>(&mut self, index: &Q) -> Result<&mut V, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Sync + Send + Serialize + ?Sized + CustomSerialize,
+    {
+        let short_key = index.to_custom_bytes::<C>()?;
+        self.map.get_mut_or_default(short_key).await
+    }
+}
+
+#[async_trait]
+impl<C, I, V> HashableView<C> for CustomMapView<C, I, V>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Send + Sync + CustomSerialize,
+    V: Send + Sync + Serialize + DeserializeOwned + 'static,
+{
+    type Hasher = sha2::Sha512;
+
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.map.hash_mut().await
+    }
+
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.map.hash().await
     }
 }
 

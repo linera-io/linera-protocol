@@ -3,7 +3,7 @@
 
 use crate::{
     batch::Batch,
-    common::{Context, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
+    common::{Context, CustomSerialize, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
@@ -19,15 +19,14 @@ use std::{
 };
 use tokio::sync::{Mutex, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
 
-/// A view that supports accessing a collection of views of the same kind, indexed by a
-/// key, possibly several subviews at a time.
+/// A view that supports accessing a collection of views of the same kind, indexed by Vec<u8>,
+/// possibly several subviews at a time.
 #[derive(Debug)]
 #[allow(clippy::type_complexity)]
-pub struct ReentrantCollectionView<C, I, W> {
+pub struct ReentrantByteCollectionView<C, W> {
     context: C,
     was_cleared: bool,
     updates: Mutex<BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>>,
-    _phantom: PhantomData<I>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
 }
@@ -50,11 +49,10 @@ enum KeyTag {
 }
 
 #[async_trait]
-impl<C, I, W> View<C> for ReentrantCollectionView<C, I, W>
+impl<C, W> View<C> for ReentrantByteCollectionView<C, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Send + Sync + Debug + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
     fn context(&self) -> &C {
@@ -68,7 +66,6 @@ where
             context,
             was_cleared: false,
             updates: Mutex::new(BTreeMap::new()),
-            _phantom: PhantomData,
             stored_hash: hash,
             hash: Mutex::new(hash),
         })
@@ -135,7 +132,7 @@ where
     }
 }
 
-impl<C: Context, I, W> ReentrantCollectionView<C, I, W> {
+impl<C: Context, W> ReentrantByteCollectionView<C, W> {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
         self.context.base_tag_index(KeyTag::Index as u8, index)
     }
@@ -151,25 +148,19 @@ impl<C: Context, I, W> ReentrantCollectionView<C, I, W> {
     }
 }
 
-impl<C, I, W> ReentrantCollectionView<C, I, W>
+impl<C, W> ReentrantByteCollectionView<C, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
     /// Obtain a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
-    pub async fn try_load_entry_mut<Q>(
+    pub async fn try_load_entry_mut(
         &mut self,
-        index: &Q,
-    ) -> Result<OwnedRwLockWriteGuard<W>, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + ?Sized,
-    {
+        short_key: Vec<u8>,
+    ) -> Result<OwnedRwLockWriteGuard<W>, ViewError> {
         *self.hash.get_mut() = None;
-        let short_key = C::derive_short_key(index)?;
         let updates = self.updates.get_mut();
         match updates.entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
@@ -208,12 +199,10 @@ where
 
     /// Obtain a read-only access to a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
-    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<OwnedRwLockReadGuard<W>, ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + ?Sized,
-    {
-        let short_key = C::derive_short_key(index)?;
+    pub async fn try_load_entry(
+        &self,
+        short_key: Vec<u8>,
+    ) -> Result<OwnedRwLockReadGuard<W>, ViewError> {
         let mut updates = self.updates.lock().await;
         match updates.entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
@@ -251,13 +240,8 @@ where
     }
 
     /// Mark the entry so that it is removed in the next flush
-    pub fn remove_entry<Q>(&mut self, index: &Q) -> Result<(), ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + ?Sized,
-    {
+    pub fn remove_entry(&mut self, short_key: Vec<u8>) -> Result<(), ViewError> {
         *self.hash.get_mut() = None;
-        let short_key = C::derive_short_key(index)?;
         if self.was_cleared {
             self.updates.get_mut().remove(&short_key);
         } else {
@@ -267,13 +251,12 @@ where
     }
 
     /// Mark the entry so that it is removed in the next flush
-    pub async fn try_reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
-    where
-        I: Borrow<Q>,
-        Q: Serialize + ?Sized,
-    {
+    pub async fn try_reset_entry_to_default(
+        &mut self,
+        short_key: Vec<u8>,
+    ) -> Result<(), ViewError> {
         *self.hash.get_mut() = None;
-        let mut view = self.try_load_entry_mut(index).await?;
+        let mut view = self.try_load_entry_mut(short_key).await?;
         view.clear();
         Ok(())
     }
@@ -284,22 +267,21 @@ where
     }
 }
 
-impl<C, I, W> ReentrantCollectionView<C, I, W>
+impl<C, W> ReentrantByteCollectionView<C, W>
 where
     C: Context + Send,
     ViewError: From<C::Error>,
-    I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
     /// Return the list of indices in the collection.
-    pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
-        let mut indices = Vec::new();
-        self.for_each_index(|index: I| {
-            indices.push(index);
+    pub async fn keys(&self) -> Result<Vec<Vec<u8>>, ViewError> {
+        let mut keys = Vec::new();
+        self.for_each_key(|key| {
+            keys.push(key.to_vec());
             Ok(())
         })
         .await?;
-        Ok(indices)
+        Ok(keys)
     }
 
     /// Execute a function on each serialized index (aka key). Keys are visited in a
@@ -342,29 +324,13 @@ where
         }
         Ok(())
     }
-
-    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
-    /// order.
-    pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
-    where
-        F: FnMut(I) -> Result<(), ViewError> + Send,
-    {
-        self.for_each_key(|key| {
-            let index = C::deserialize_value(key)?;
-            f(index)?;
-            Ok(())
-        })
-        .await?;
-        Ok(())
-    }
 }
 
 #[async_trait]
-impl<C, I, W> HashableView<C> for ReentrantCollectionView<C, I, W>
+impl<C, W> HashableView<C> for ReentrantByteCollectionView<C, W>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    I: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
     W: HashableView<C> + Send + Sync + 'static,
 {
     type Hasher = sha3::Sha3_256;
@@ -375,11 +341,11 @@ where
             Some(hash) => Ok(hash),
             None => {
                 let mut hasher = Self::Hasher::default();
-                let indices = self.indices().await?;
-                hasher.update_with_bcs_bytes(&indices.len())?;
-                for index in indices {
-                    hasher.update_with_bcs_bytes(&index)?;
-                    let view = self.try_load_entry_mut(&index).await?;
+                let keys = self.keys().await?;
+                hasher.update_with_bcs_bytes(&keys.len())?;
+                for key in keys {
+                    hasher.update_with_bytes(&key)?;
+                    let view = self.try_load_entry_mut(key).await?;
                     let hash = view.hash().await?;
                     hasher.write_all(hash.as_ref())?;
                 }
@@ -397,11 +363,11 @@ where
             Some(hash) => Ok(hash),
             None => {
                 let mut hasher = Self::Hasher::default();
-                let indices = self.indices().await?;
-                hasher.update_with_bcs_bytes(&indices.len())?;
-                for index in indices {
-                    hasher.update_with_bcs_bytes(&index)?;
-                    let view = self.try_load_entry(&index).await?;
+                let keys = self.keys().await?;
+                hasher.update_with_bcs_bytes(&keys.len())?;
+                for key in keys {
+                    hasher.update_with_bytes(&key)?;
+                    let view = self.try_load_entry(key).await?;
                     let hash = view.hash().await?;
                     hasher.write_all(hash.as_ref())?;
                 }
@@ -410,5 +376,319 @@ where
                 Ok(new_hash)
             }
         }
+    }
+}
+
+/// A view that supports accessing a collection of views of the same kind, indexed by key,
+/// possibly several subviews at a time.
+#[derive(Debug)]
+pub struct ReentrantCollectionView<C, I, W> {
+    collection: ReentrantByteCollectionView<C, W>,
+    _phantom: PhantomData<I>,
+}
+
+#[async_trait]
+impl<C, I, W> View<C> for ReentrantCollectionView<C, I, W>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Send + Sync + Debug + Serialize + DeserializeOwned,
+    W: View<C> + Send + Sync,
+{
+    fn context(&self) -> &C {
+        self.collection.context()
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let collection = ReentrantByteCollectionView::load(context).await?;
+        Ok(ReentrantCollectionView {
+            collection,
+            _phantom: PhantomData,
+        })
+    }
+
+    fn rollback(&mut self) {
+        self.collection.rollback()
+    }
+
+    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+        self.collection.flush(batch)
+    }
+
+    fn delete(self, batch: &mut Batch) {
+        self.collection.delete(batch)
+    }
+
+    fn clear(&mut self) {
+        self.collection.clear()
+    }
+}
+
+impl<C, I, W> ReentrantCollectionView<C, I, W>
+where
+    C: Context + Send,
+    ViewError: From<C::Error>,
+    I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
+    W: View<C> + Send + Sync,
+{
+    /// Obtain a subview for the data at the given index in the collection. If an entry
+    /// was removed before then a default entry is put on this index.
+    pub async fn try_load_entry_mut<Q>(
+        &mut self,
+        index: &Q,
+    ) -> Result<OwnedRwLockWriteGuard<W>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.collection.try_load_entry_mut(short_key).await
+    }
+
+    /// Obtain a read-only access to a subview for the data at the given index in the collection. If an entry
+    /// was removed before then a default entry is put on this index.
+    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<OwnedRwLockReadGuard<W>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.collection.try_load_entry(short_key).await
+    }
+
+    /// Mark the entry so that it is removed in the next flush
+    pub fn remove_entry<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.collection.remove_entry(short_key)
+    }
+
+    /// Mark the entry so that it is removed in the next flush
+    pub async fn try_reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: Serialize + ?Sized,
+    {
+        let short_key = C::derive_short_key(index)?;
+        self.collection.try_reset_entry_to_default(short_key).await
+    }
+
+    /// Obtain the extra data.
+    pub fn extra(&self) -> &C::Extra {
+        self.collection.extra()
+    }
+}
+
+impl<C, I, W> ReentrantCollectionView<C, I, W>
+where
+    C: Context + Send,
+    ViewError: From<C::Error>,
+    I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
+    W: View<C> + Send + Sync,
+{
+    /// Return the list of indices in the collection.
+    pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
+        let mut indices = Vec::new();
+        self.for_each_index(|index: I| {
+            indices.push(index);
+            Ok(())
+        })
+        .await?;
+        Ok(indices)
+    }
+
+    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
+    /// order.
+    pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<(), ViewError> + Send,
+    {
+        self.collection
+            .for_each_key(|key| {
+                let index = C::deserialize_value(key)?;
+                f(index)?;
+                Ok(())
+            })
+            .await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<C, I, W> HashableView<C> for ReentrantCollectionView<C, I, W>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Debug + Send + Sync + Serialize + DeserializeOwned,
+    W: HashableView<C> + Send + Sync + 'static,
+{
+    type Hasher = sha2::Sha512;
+
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.collection.hash_mut().await
+    }
+
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.collection.hash().await
+    }
+}
+
+/// A view that supports accessing a collection of views of the same kind, indexed by an ordered key,
+/// possibly several subviews at a time.
+#[derive(Debug)]
+pub struct ReentrantCustomCollectionView<C, I, W> {
+    collection: ReentrantByteCollectionView<C, W>,
+    _phantom: PhantomData<I>,
+}
+
+#[async_trait]
+impl<C, I, W> View<C> for ReentrantCustomCollectionView<C, I, W>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Send + Sync + Debug + CustomSerialize,
+    W: View<C> + Send + Sync,
+{
+    fn context(&self) -> &C {
+        self.collection.context()
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let collection = ReentrantByteCollectionView::load(context).await?;
+        Ok(ReentrantCustomCollectionView {
+            collection,
+            _phantom: PhantomData,
+        })
+    }
+
+    fn rollback(&mut self) {
+        self.collection.rollback()
+    }
+
+    fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
+        self.collection.flush(batch)
+    }
+
+    fn delete(self, batch: &mut Batch) {
+        self.collection.delete(batch)
+    }
+
+    fn clear(&mut self) {
+        self.collection.clear()
+    }
+}
+
+impl<C, I, W> ReentrantCustomCollectionView<C, I, W>
+where
+    C: Context + Send,
+    ViewError: From<C::Error>,
+    I: Sync + Clone + Send + Debug + CustomSerialize,
+    W: View<C> + Send + Sync,
+{
+    /// Obtain a subview for the data at the given index in the collection. If an entry
+    /// was removed before then a default entry is put on this index.
+    pub async fn try_load_entry_mut<Q>(
+        &mut self,
+        index: &Q,
+    ) -> Result<OwnedRwLockWriteGuard<W>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + ?Sized,
+    {
+        let short_key = index.to_custom_bytes::<C>()?;
+        self.collection.try_load_entry_mut(short_key).await
+    }
+
+    /// Obtain a read-only access to a subview for the data at the given index in the collection. If an entry
+    /// was removed before then a default entry is put on this index.
+    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<OwnedRwLockReadGuard<W>, ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + ?Sized,
+    {
+        let short_key = index.to_custom_bytes::<C>()?;
+        self.collection.try_load_entry(short_key).await
+    }
+
+    /// Mark the entry so that it is removed in the next flush
+    pub fn remove_entry<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + ?Sized,
+    {
+        let short_key = index.to_custom_bytes::<C>()?;
+        self.collection.remove_entry(short_key)
+    }
+
+    /// Mark the entry so that it is removed in the next flush
+    pub async fn try_reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + ?Sized,
+    {
+        let short_key = index.to_custom_bytes::<C>()?;
+        self.collection.try_reset_entry_to_default(short_key).await
+    }
+
+    /// Obtain the extra data.
+    pub fn extra(&self) -> &C::Extra {
+        self.collection.extra()
+    }
+}
+
+impl<C, I, W> ReentrantCustomCollectionView<C, I, W>
+where
+    C: Context + Send,
+    ViewError: From<C::Error>,
+    I: Sync + Clone + Send + Debug + CustomSerialize,
+    W: View<C> + Send + Sync,
+{
+    /// Return the list of indices in the collection.
+    pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
+        let mut indices = Vec::new();
+        self.for_each_index(|index: I| {
+            indices.push(index);
+            Ok(())
+        })
+        .await?;
+        Ok(indices)
+    }
+
+    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
+    /// order.
+    pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<(), ViewError> + Send,
+    {
+        self.collection
+            .for_each_key(|key| {
+                let index = I::from_custom_bytes::<C>(key)?;
+                f(index)?;
+                Ok(())
+            })
+            .await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<C, I, W> HashableView<C> for ReentrantCustomCollectionView<C, I, W>
+where
+    C: Context + Send + Sync,
+    ViewError: From<C::Error>,
+    I: Debug + Send + Sync + CustomSerialize,
+    W: HashableView<C> + Send + Sync + 'static,
+{
+    type Hasher = sha2::Sha512;
+
+    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.collection.hash_mut().await
+    }
+
+    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+        self.collection.hash().await
     }
 }
