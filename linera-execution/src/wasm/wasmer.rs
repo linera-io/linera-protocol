@@ -104,6 +104,7 @@ impl WasmApplication {
         ));
         let mut compiler_config = Singlepass::default();
         compiler_config.push_middleware(metering);
+        compiler_config.canonicalize_nans(true);
 
         let mut store = Store::new(EngineBuilder::new(compiler_config));
         let module = Module::new(&store, &self.contract_bytecode)
