@@ -35,7 +35,7 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
-use tracing::Instrument;
+use tracing::instrument;
 
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
@@ -714,8 +714,20 @@ where
         // Cache the certificate so that clients don't have to send the value again.
         self.recent_values.push(hash, value);
     }
+}
 
-    async fn do_handle_block_proposal(
+#[async_trait]
+impl<Client> ValidatorWorker for WorkerState<Client>
+where
+    Client: Store + Clone + Send + Sync + 'static,
+    ViewError: From<Client::ContextError>,
+{
+    #[instrument(skip_all, fields(
+        nick = self.nickname,
+        chain_id = format!("{:.8}", proposal.content.block.chain_id),
+        height = %proposal.content.block.height,
+    ))]
+    async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -808,8 +820,10 @@ where
         Ok((info, actions))
     }
 
+    // Other fields will be included in handle_certificate's span.
+    #[instrument(skip_all, fields(hash = %certificate.value.value_hash))]
     /// Process a certificate, e.g. to extend a chain with a confirmed block.
-    async fn do_handle_lite_certificate(
+    async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -821,11 +835,16 @@ where
         let full_cert = certificate
             .with_value(value)
             .ok_or(WorkerError::InvalidLiteCertificate)?;
-        self.do_handle_certificate(full_cert, vec![]).await
+        self.handle_certificate(full_cert, vec![]).await
     }
 
     /// Process a certificate.
-    async fn do_handle_certificate(
+    #[instrument(skip_all, fields(
+        nick = self.nickname,
+        chain_id = format!("{:.8}", certificate.value.block().chain_id),
+        height = %certificate.value.block().height,
+    ))]
+    async fn handle_certificate(
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
@@ -854,7 +873,11 @@ where
         Ok((info, actions))
     }
 
-    async fn do_handle_chain_info_query(
+    #[instrument(skip_all, fields(
+        nick = self.nickname,
+        chain_id = format!("{:.8}", query.chain_id)
+    ))]
+    async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -920,7 +943,11 @@ where
         Ok((response, actions))
     }
 
-    async fn do_handle_cross_chain_request(
+    #[instrument(skip_all, fields(
+        nick = self.nickname,
+        chain_id = format!("{:.8}", request.target_chain_id())
+    ))]
+    async fn handle_cross_chain_request(
         &mut self,
         request: CrossChainRequest,
     ) -> Result<NetworkActions, WorkerError> {
@@ -969,89 +996,6 @@ where
                 Ok(NetworkActions::default())
             }
         }
-    }
-}
-
-#[async_trait]
-impl<Client> ValidatorWorker for WorkerState<Client>
-where
-    Client: Store + Clone + Send + Sync + 'static,
-    ViewError: From<Client::ContextError>,
-{
-    async fn handle_block_proposal(
-        &mut self,
-        proposal: BlockProposal,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let span = tracing::info_span!(
-            "block proposal",
-            nick = self.nickname,
-            chain_id = format!("{:.8}", proposal.content.block.chain_id),
-            height = %proposal.content.block.height,
-        );
-        self.do_handle_block_proposal(proposal)
-            .instrument(span)
-            .await
-    }
-
-    /// Process a certificate, e.g. to extend a chain with a confirmed block.
-    async fn handle_lite_certificate(
-        &mut self,
-        certificate: LiteCertificate,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let span = tracing::info_span!(
-            "lite certificate",
-            nick = self.nickname,
-            chain_id = format!("{:.8}", certificate.value.chain_id),
-            hash = %certificate.value.value_hash,
-        );
-        self.do_handle_lite_certificate(certificate)
-            .instrument(span)
-            .await
-    }
-
-    /// Process a certificate.
-    async fn handle_certificate(
-        &mut self,
-        certificate: Certificate,
-        blobs: Vec<HashedValue>,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let span = tracing::info_span!(
-            "certificate",
-            nick = self.nickname,
-            chain_id = format!("{:.8}", certificate.value.block().chain_id),
-            hash = %certificate.value.hash(),
-        );
-        self.do_handle_certificate(certificate, blobs)
-            .instrument(span)
-            .await
-    }
-
-    async fn handle_chain_info_query(
-        &mut self,
-        query: ChainInfoQuery,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let span = tracing::info_span!(
-            "chain info query",
-            nick = self.nickname,
-            chain_id = format!("{:.8}", query.chain_id),
-        );
-        self.do_handle_chain_info_query(query)
-            .instrument(span)
-            .await
-    }
-
-    async fn handle_cross_chain_request(
-        &mut self,
-        request: CrossChainRequest,
-    ) -> Result<NetworkActions, WorkerError> {
-        let span = tracing::info_span!(
-            "cross-chain request",
-            nick = self.nickname,
-            chain_id = format!("{:.8}", request.target_chain_id()),
-        );
-        self.do_handle_cross_chain_request(request)
-            .instrument(span)
-            .await
     }
 }
 

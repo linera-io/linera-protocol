@@ -289,7 +289,7 @@ impl std::fmt::Display for PublicKey {
 impl std::fmt::Display for CryptoHash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let prec = f.precision().unwrap_or(self.0.len() * 2);
-        write!(f, "{:.*}", prec, hex::encode(&self.0[..((prec + 1) / 2)]))
+        hex::encode(&self.0[..((prec + 1) / 2)]).fmt(f)
     }
 }
 
