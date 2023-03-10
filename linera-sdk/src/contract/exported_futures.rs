@@ -15,12 +15,20 @@ use crate::{
     ApplicationCallResult, Contract, ContractLogger, ExecutionResult, ExportedFuture,
     SessionCallResult, SessionId, SimpleStateStorage, ViewStateStorage,
 };
+use async_trait::async_trait;
 use linera_views::views::RootView;
 use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
 
 /// The storage APIs used by a contract.
+#[async_trait]
 pub trait ContractStateStorage<Application> {
+    /// Loads the `Application` state and locks it for writing.
+    async fn load_and_lock() -> Application;
+
+    /// Stores the `Application` state and unlocks it for reads and writes.
+    async fn store_and_unlock(state: Application);
+
     /// Loads the `Application` state and calls its [`initialize`][Application::initialize] method.
     fn initialize(
         context: contract::OperationContext,
@@ -56,10 +64,19 @@ pub trait ContractStateStorage<Application> {
     ) -> ExportedFuture<Result<SessionCallResult, String>>;
 }
 
+#[async_trait]
 impl<Application> ContractStateStorage<Application> for SimpleStateStorage<Application>
 where
-    Application: Contract + Default + DeserializeOwned + Serialize,
+    Application: Contract + Default + DeserializeOwned + Serialize + Send + 'static,
 {
+    async fn load_and_lock() -> Application {
+        system_api::load_and_lock().expect("Failed to lock contract state")
+    }
+
+    async fn store_and_unlock(state: Application) {
+        system_api::store_and_unlock(state).await;
+    }
+
     fn initialize(
         context: contract::OperationContext,
         argument: Vec<u8>,
@@ -162,10 +179,21 @@ where
     }
 }
 
+#[async_trait]
 impl<Application> ContractStateStorage<Application> for ViewStateStorage<Application>
 where
-    Application: Contract + RootView<WasmContext>,
+    Application: Contract + RootView<WasmContext> + Send + 'static,
 {
+    async fn load_and_lock() -> Application {
+        system_api::load_and_lock_view()
+            .await
+            .expect("Failed to lock contract view")
+    }
+
+    async fn store_and_unlock(state: Application) {
+        system_api::store_and_unlock_view(state).await;
+    }
+
     fn initialize(
         context: contract::OperationContext,
         argument: Vec<u8>,
