@@ -83,7 +83,9 @@ impl WasmApplication {
         storage: &'storage dyn WritableStorage,
     ) -> Result<WasmRuntimeContext<'storage, Contract<'storage>>, WasmExecutionError> {
         let mut config = Config::default();
-        config.consume_fuel(true);
+        config
+            .consume_fuel(true)
+            .cranelift_nan_canonicalization(true);
 
         let engine = Engine::new(&config).map_err(WasmExecutionError::CreateWasmtimeEngine)?;
         let mut linker = Linker::new(&engine);
