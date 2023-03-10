@@ -20,7 +20,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
 
 /// The storage APIs used by a contract.
-pub trait ContractStateStorage {
+pub trait ContractStateStorage<Application> {
     /// Loads the `Application` state and calls its [`initialize`][Application::initialize] method.
     fn initialize(
         context: contract::OperationContext,
@@ -56,7 +56,7 @@ pub trait ContractStateStorage {
     ) -> ExportedFuture<Result<SessionCallResult, String>>;
 }
 
-impl<Application> ContractStateStorage for SimpleStateStorage<Application>
+impl<Application> ContractStateStorage<Application> for SimpleStateStorage<Application>
 where
     Application: Contract + Default + DeserializeOwned + Serialize,
 {
@@ -162,7 +162,7 @@ where
     }
 }
 
-impl<Application> ContractStateStorage for ViewStateStorage<Application>
+impl<Application> ContractStateStorage<Application> for ViewStateStorage<Application>
 where
     Application: Contract + RootView<WasmContext>,
 {
@@ -285,7 +285,7 @@ pub struct Initialize<Application> {
 impl<Application> Initialize<Application>
 where
     Application: Contract,
-    Application::Storage: ContractStateStorage,
+    Application::Storage: ContractStateStorage<Application>,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -319,7 +319,7 @@ pub struct ExecuteOperation<Application> {
 impl<Application> ExecuteOperation<Application>
 where
     Application: Contract,
-    Application::Storage: ContractStateStorage,
+    Application::Storage: ContractStateStorage<Application>,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -353,7 +353,7 @@ pub struct ExecuteEffect<Application> {
 impl<Application> ExecuteEffect<Application>
 where
     Application: Contract,
-    Application::Storage: ContractStateStorage,
+    Application::Storage: ContractStateStorage<Application>,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -387,7 +387,7 @@ pub struct CallApplication<Application> {
 impl<Application> CallApplication<Application>
 where
     Application: Contract,
-    Application::Storage: ContractStateStorage,
+    Application::Storage: ContractStateStorage<Application>,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -424,7 +424,7 @@ pub struct CallSession<Application> {
 impl<Application> CallSession<Application>
 where
     Application: Contract,
-    Application::Storage: ContractStateStorage,
+    Application::Storage: ContractStateStorage<Application>,
 {
     /// Creates the exported future that the host can poll.
     ///
