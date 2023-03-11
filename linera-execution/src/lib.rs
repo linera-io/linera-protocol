@@ -98,7 +98,7 @@ impl From<ViewError> for ExecutionError {
 /// The public entry points provided by an application.
 #[async_trait]
 pub trait UserApplication {
-    /// Initialize the application state on the chain that owns the application.
+    /// Initializes the application state on the chain that owns the application.
     async fn initialize(
         &self,
         context: &OperationContext,
@@ -106,7 +106,7 @@ pub trait UserApplication {
         argument: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
-    /// Apply an operation from the current block.
+    /// Applies an operation from the current block.
     async fn execute_operation(
         &self,
         context: &OperationContext,
@@ -114,7 +114,7 @@ pub trait UserApplication {
         operation: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
-    /// Apply an effect originating from a cross-chain message.
+    /// Applies an effect originating from a cross-chain message.
     async fn execute_effect(
         &self,
         context: &EffectContext,
@@ -122,8 +122,10 @@ pub trait UserApplication {
         effect: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
-    /// Allow an operation or an effect of other applications to call into this
-    /// user application.
+    /// Executes a call from another application.
+    ///
+    /// When an application is executing an operation or an effect it may call other applications,
+    /// which can in turn call other applications.
     async fn call_application(
         &self,
         context: &CalleeContext,
@@ -132,8 +134,7 @@ pub trait UserApplication {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError>;
 
-    /// Allow an operation or an effect of other applications to call into a session that
-    /// we previously created.
+    /// Executes a call from another application into a session created by this application.
     async fn call_session(
         &self,
         context: &CalleeContext,
@@ -144,8 +145,11 @@ pub trait UserApplication {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, ExecutionError>;
 
-    /// Allow an end user to execute read-only queries on the state of this application.
-    /// NOTE: This is not meant to be metered and may not be exposed by all validators.
+    /// Executes unmetered read-only queries on the state of this application.
+    ///
+    /// # Note
+    ///
+    /// This is not meant to be metered and may not be exposed by all validators.
     async fn query_application(
         &self,
         context: &QueryContext,
