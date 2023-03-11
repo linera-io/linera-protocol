@@ -58,12 +58,6 @@ pub trait ContractStateStorage<Application> {
         result
     }
 
-    /// Loads the `Application` state and calls its [`initialize`][Application::initialize] method.
-    fn initialize(
-        context: contract::OperationContext,
-        argument: Vec<u8>,
-    ) -> ExportedFuture<Result<ExecutionResult, String>>;
-
     /// Loads the `Application` state and calls its [`execute_operation`][Application::execute_operation] method.
     fn execute_operation(
         context: contract::OperationContext,
@@ -104,15 +98,6 @@ where
 
     async fn store_and_unlock(state: Application) {
         system_api::store_and_unlock(state).await;
-    }
-
-    fn initialize(
-        context: contract::OperationContext,
-        argument: Vec<u8>,
-    ) -> ExportedFuture<Result<ExecutionResult, String>> {
-        ExportedFuture::new(Self::with_state(move |application| {
-            async move { application.initialize(&context.into(), &argument).await }.boxed()
-        }))
     }
 
     fn execute_operation(
@@ -200,15 +185,6 @@ where
         system_api::store_and_unlock_view(state).await;
     }
 
-    fn initialize(
-        context: contract::OperationContext,
-        argument: Vec<u8>,
-    ) -> ExportedFuture<Result<ExecutionResult, String>> {
-        ExportedFuture::new(Self::with_state(move |application| {
-            async move { application.initialize(&context.into(), &argument).await }.boxed()
-        }))
-    }
-
     fn execute_operation(
         context: contract::OperationContext,
         operation: Vec<u8>,
@@ -290,8 +266,9 @@ pub struct Initialize<Application> {
 
 impl<Application> Initialize<Application>
 where
-    Application: Contract,
-    Application::Storage: ContractStateStorage<Application>,
+    Application: Contract + Send,
+    Application::Error: 'static,
+    Application::Storage: ContractStateStorage<Application> + Send + 'static,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -299,7 +276,9 @@ where
     pub fn new(context: contract::OperationContext, argument: Vec<u8>) -> Self {
         ContractLogger::install();
         Initialize {
-            future: Application::Storage::initialize(context, argument),
+            future: ExportedFuture::new(Application::Storage::with_state(move |application| {
+                async move { application.initialize(&context.into(), &argument).await }.boxed()
+            })),
             _application: PhantomData,
         }
     }
