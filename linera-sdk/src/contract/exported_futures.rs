@@ -16,6 +16,7 @@ use crate::{
     SessionCallResult, SessionId, SimpleStateStorage, ViewStateStorage,
 };
 use async_trait::async_trait;
+use futures::FutureExt;
 use linera_views::views::RootView;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{future::Future, marker::PhantomData, pin::Pin};
@@ -109,44 +110,32 @@ where
         context: contract::OperationContext,
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<ExecutionResult, String>> {
-        ExportedFuture::new(async move {
-            let mut application = Self::load_and_lock().await;
-            let result = application.initialize(&context.into(), &argument).await;
-            if result.is_ok() {
-                Self::store_and_unlock(application).await;
-            }
-            result.map_err(|error| error.to_string())
-        })
+        ExportedFuture::new(Self::with_state(move |application| {
+            async move { application.initialize(&context.into(), &argument).await }.boxed()
+        }))
     }
 
     fn execute_operation(
         context: contract::OperationContext,
         operation: Vec<u8>,
     ) -> ExportedFuture<Result<ExecutionResult, String>> {
-        ExportedFuture::new(async move {
-            let mut application = Self::load_and_lock().await;
-            let result = application
-                .execute_operation(&context.into(), &operation)
-                .await;
-            if result.is_ok() {
-                Self::store_and_unlock(application).await;
+        ExportedFuture::new(Self::with_state(move |application| {
+            async move {
+                application
+                    .execute_operation(&context.into(), &operation)
+                    .await
             }
-            result.map_err(|error| error.to_string())
-        })
+            .boxed()
+        }))
     }
 
     fn execute_effect(
         context: contract::EffectContext,
         effect: Vec<u8>,
     ) -> ExportedFuture<Result<ExecutionResult, String>> {
-        ExportedFuture::new(async move {
-            let mut application = Self::load_and_lock().await;
-            let result = application.execute_effect(&context.into(), &effect).await;
-            if result.is_ok() {
-                Self::store_and_unlock(application).await;
-            }
-            result.map_err(|error| error.to_string())
-        })
+        ExportedFuture::new(Self::with_state(move |application| {
+            async move { application.execute_effect(&context.into(), &effect).await }.boxed()
+        }))
     }
 
     fn call_application(
@@ -154,22 +143,19 @@ where
         argument: Vec<u8>,
         forwarded_sessions: Vec<contract::SessionId>,
     ) -> ExportedFuture<Result<ApplicationCallResult, String>> {
-        ExportedFuture::new(async move {
-            let mut application = Self::load_and_lock().await;
+        ExportedFuture::new(Self::with_state(move |application| {
+            async move {
+                let forwarded_sessions = forwarded_sessions
+                    .into_iter()
+                    .map(SessionId::from)
+                    .collect();
 
-            let forwarded_sessions = forwarded_sessions
-                .into_iter()
-                .map(SessionId::from)
-                .collect();
-
-            let result = application
-                .call_application(&context.into(), &argument, forwarded_sessions)
-                .await;
-            if result.is_ok() {
-                Self::store_and_unlock(application).await;
+                application
+                    .call_application(&context.into(), &argument, forwarded_sessions)
+                    .await
             }
-            result.map_err(|error| error.to_string())
-        })
+            .boxed()
+        }))
     }
 
     fn call_session(
@@ -178,27 +164,24 @@ where
         argument: Vec<u8>,
         forwarded_sessions: Vec<contract::SessionId>,
     ) -> ExportedFuture<Result<SessionCallResult, String>> {
-        ExportedFuture::new(async move {
-            let mut application = Self::load_and_lock().await;
+        ExportedFuture::new(Self::with_state(move |application| {
+            async move {
+                let forwarded_sessions = forwarded_sessions
+                    .into_iter()
+                    .map(SessionId::from)
+                    .collect();
 
-            let forwarded_sessions = forwarded_sessions
-                .into_iter()
-                .map(SessionId::from)
-                .collect();
-
-            let result = application
-                .call_session(
-                    &context.into(),
-                    session.into(),
-                    &argument,
-                    forwarded_sessions,
-                )
-                .await;
-            if result.is_ok() {
-                Self::store_and_unlock(application).await;
+                application
+                    .call_session(
+                        &context.into(),
+                        session.into(),
+                        &argument,
+                        forwarded_sessions,
+                    )
+                    .await
             }
-            result.map_err(|error| error.to_string())
-        })
+            .boxed()
+        }))
     }
 }
 
@@ -221,44 +204,32 @@ where
         context: contract::OperationContext,
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<ExecutionResult, String>> {
-        ExportedFuture::new(async move {
-            let mut application = Self::load_and_lock().await;
-            let result = application.initialize(&context.into(), &argument).await;
-            if result.is_ok() {
-                Self::store_and_unlock(application).await;
-            }
-            result.map_err(|error| error.to_string())
-        })
+        ExportedFuture::new(Self::with_state(move |application| {
+            async move { application.initialize(&context.into(), &argument).await }.boxed()
+        }))
     }
 
     fn execute_operation(
         context: contract::OperationContext,
         operation: Vec<u8>,
     ) -> ExportedFuture<Result<ExecutionResult, String>> {
-        ExportedFuture::new(async move {
-            let mut application = Self::load_and_lock().await;
-            let result = application
-                .execute_operation(&context.into(), &operation)
-                .await;
-            if result.is_ok() {
-                Self::store_and_unlock(application).await;
+        ExportedFuture::new(Self::with_state(move |application| {
+            async move {
+                application
+                    .execute_operation(&context.into(), &operation)
+                    .await
             }
-            result.map_err(|error| error.to_string())
-        })
+            .boxed()
+        }))
     }
 
     fn execute_effect(
         context: contract::EffectContext,
         effect: Vec<u8>,
     ) -> ExportedFuture<Result<ExecutionResult, String>> {
-        ExportedFuture::new(async move {
-            let mut application = Self::load_and_lock().await;
-            let result = application.execute_effect(&context.into(), &effect).await;
-            if result.is_ok() {
-                Self::store_and_unlock(application).await;
-            }
-            result.map_err(|error| error.to_string())
-        })
+        ExportedFuture::new(Self::with_state(move |application| {
+            async move { application.execute_effect(&context.into(), &effect).await }.boxed()
+        }))
     }
 
     fn call_application(
@@ -266,22 +237,19 @@ where
         argument: Vec<u8>,
         forwarded_sessions: Vec<contract::SessionId>,
     ) -> ExportedFuture<Result<ApplicationCallResult, String>> {
-        ExportedFuture::new(async move {
-            let mut application = Self::load_and_lock().await;
+        ExportedFuture::new(Self::with_state(move |application| {
+            async move {
+                let forwarded_sessions = forwarded_sessions
+                    .into_iter()
+                    .map(SessionId::from)
+                    .collect();
 
-            let forwarded_sessions = forwarded_sessions
-                .into_iter()
-                .map(SessionId::from)
-                .collect();
-
-            let result = application
-                .call_application(&context.into(), &argument, forwarded_sessions)
-                .await;
-            if result.is_ok() {
-                Self::store_and_unlock(application).await;
+                application
+                    .call_application(&context.into(), &argument, forwarded_sessions)
+                    .await
             }
-            result.map_err(|error| error.to_string())
-        })
+            .boxed()
+        }))
     }
 
     fn call_session(
@@ -290,27 +258,24 @@ where
         argument: Vec<u8>,
         forwarded_sessions: Vec<contract::SessionId>,
     ) -> ExportedFuture<Result<SessionCallResult, String>> {
-        ExportedFuture::new(async move {
-            let mut application = Self::load_and_lock().await;
+        ExportedFuture::new(Self::with_state(move |application| {
+            async move {
+                let forwarded_sessions = forwarded_sessions
+                    .into_iter()
+                    .map(SessionId::from)
+                    .collect();
 
-            let forwarded_sessions = forwarded_sessions
-                .into_iter()
-                .map(SessionId::from)
-                .collect();
-
-            let result = application
-                .call_session(
-                    &context.into(),
-                    session.into(),
-                    &argument,
-                    forwarded_sessions,
-                )
-                .await;
-            if result.is_ok() {
-                Self::store_and_unlock(application).await;
+                application
+                    .call_session(
+                        &context.into(),
+                        session.into(),
+                        &argument,
+                        forwarded_sessions,
+                    )
+                    .await
             }
-            result.map_err(|error| error.to_string())
-        })
+            .boxed()
+        }))
     }
 }
 
