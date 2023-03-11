@@ -18,7 +18,7 @@ use crate::{
 use async_trait::async_trait;
 use linera_views::views::RootView;
 use serde::{de::DeserializeOwned, Serialize};
-use std::marker::PhantomData;
+use std::{future::Future, marker::PhantomData, pin::Pin};
 
 /// The storage APIs used by a contract.
 #[async_trait]
@@ -28,6 +28,34 @@ pub trait ContractStateStorage<Application> {
 
     /// Stores the `Application` state and unlocks it for reads and writes.
     async fn store_and_unlock(state: Application);
+
+    /// Executes an `operation` with the `Application` state.
+    ///
+    /// The state is only stored back in storage if the `operation` succeeds. Otherwise, the error
+    /// is returned as a [`String`].
+    async fn with_state<Operation, Success, Error>(operation: Operation) -> Result<Success, String>
+    where
+        Operation: for<'app> FnOnce(
+            &'app mut Application,
+        ) -> Pin<
+            Box<dyn Future<Output = Result<Success, Error>> + Send + 'app>,
+        >,
+        Application: Send,
+        Operation: Send,
+        Success: Send + 'static,
+        Error: ToString + 'static,
+    {
+        let mut application = Self::load_and_lock().await;
+
+        let result = operation(&mut application)
+            .await
+            .map_err(|error| error.to_string());
+
+        if result.is_ok() {
+            Self::store_and_unlock(application).await;
+        }
+        result
+    }
 
     /// Loads the `Application` state and calls its [`initialize`][Application::initialize] method.
     fn initialize(
