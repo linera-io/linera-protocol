@@ -8,15 +8,12 @@ use linera_chain::data_types::{BlockAndRound, HashedValue};
 use linera_core::notifier::Notifier;
 use linera_rpc::{
     config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
-    grpc_network::{
-        grpc::{
-            notifier_service_server::{NotifierService, NotifierServiceServer},
-            validator_node_server::{ValidatorNode, ValidatorNodeServer},
-            validator_worker_client::ValidatorWorkerClient,
-            ChainInfoResult, Notification, SubscriptionRequest,
-        },
-        BlockProposal, CertificateWithDependencies, ChainInfoQuery, CrossChainRequest,
-        LiteCertificate,
+    grpc_network::grpc::{
+        notifier_service_server::{NotifierService, NotifierServiceServer},
+        validator_node_server::{ValidatorNode, ValidatorNodeServer},
+        validator_worker_client::ValidatorWorkerClient,
+        BlockProposal, CertificateWithDependencies, ChainInfoQuery, ChainInfoResult,
+        CrossChainRequest, LiteCertificate, Notification, SubscriptionRequest,
     },
     pool::ConnectionPool,
 };

@@ -1,26 +1,36 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    fmt::Debug,
-    net::{AddrParseError, SocketAddr},
-    str::FromStr,
-    time::Duration,
-};
+#[allow(clippy::derive_partial_eq_without_eq)]
+// https://github.com/hyperium/tonic/issues/1056
+pub mod grpc {
+    tonic::include_proto!("rpc.v1");
+}
 
+use crate::{
+    config::{
+        CrossChainConfig, NotificationConfig, ShardId, ValidatorInternalNetworkConfig,
+        ValidatorPublicNetworkConfig,
+    },
+    conversions::ProtoConversionError,
+    mass::{MassClient, MassClientError},
+    pool::Connect,
+    RpcMessage,
+};
 use async_trait::async_trait;
 use futures::{
     channel::{mpsc, mpsc::Receiver, oneshot::Sender},
     FutureExt, SinkExt, StreamExt,
 };
-use thiserror::Error;
-use tokio::task::{JoinError, JoinHandle};
-use tonic::{
-    transport::{Channel, Server},
-    Request, Response, Status,
+use grpc::{
+    chain_info_result::Inner,
+    notifier_service_client::NotifierServiceClient,
+    validator_node_client::ValidatorNodeClient,
+    validator_worker_client::ValidatorWorkerClient,
+    validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
+    BlockProposal, CertificateWithDependencies, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
+    LiteCertificate, SubscriptionRequest,
 };
-use tracing::{debug, error, info, warn};
-
 use linera_base::data_types::ChainId;
 use linera_chain::data_types;
 use linera_core::{
@@ -29,36 +39,19 @@ use linera_core::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
-
-pub use crate::{
-    client_delegate,
-    config::{
-        CrossChainConfig, ShardId, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
-    },
-    conversions::ProtoConversionError,
-    grpc_network::grpc::{
-        chain_info_result::Inner,
-        validator_node_client::ValidatorNodeClient,
-        validator_worker_client::ValidatorWorkerClient,
-        validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
-        BlockProposal, Certificate, CertificateWithDependencies, ChainInfoQuery, ChainInfoResult,
-        CrossChainRequest, LiteCertificate,
-    },
-    mass::{MassClient, MassClientError},
-    mass_client_delegate,
-    pool::Connect,
-    RpcMessage,
+use std::{
+    fmt::Debug,
+    net::{AddrParseError, SocketAddr},
+    str::FromStr,
+    time::Duration,
 };
-use crate::{
-    config::NotificationConfig,
-    grpc_network::grpc::{notifier_service_client::NotifierServiceClient, SubscriptionRequest},
+use thiserror::Error;
+use tokio::task::{JoinError, JoinHandle};
+use tonic::{
+    transport::{Channel, Server},
+    Request, Response, Status,
 };
-
-#[allow(clippy::derive_partial_eq_without_eq)]
-// https://github.com/hyperium/tonic/issues/1056
-pub mod grpc {
-    tonic::include_proto!("rpc.v1");
-}
+use tracing::{debug, error, info, warn};
 
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
 type NotificationSender = mpsc::Sender<Notification>;
@@ -468,6 +461,71 @@ impl GrpcClient {
             ValidatorNodeClient::connect(network.http_address()).await?,
         ))
     }
+}
+
+macro_rules! client_delegate {
+    ($self:ident, $handler:ident, $req:ident) => {{
+        tracing::debug!(
+            "client handler [{}] received delegating request [{:?}] ",
+            stringify!($handler),
+            $req
+        );
+        let request_inner = $req.try_into().map_err(|_| NodeError::GrpcError {
+            error: "could not convert request to proto".to_string(),
+        })?;
+        let request = Request::new(request_inner);
+        match $self
+            .0
+            .$handler(request)
+            .await
+            .map_err(|s| NodeError::GrpcError {
+                error: format!(
+                    "remote request [{}] failed with status: {:?}",
+                    stringify!($handler),
+                    s
+                ),
+            })?
+            .into_inner()
+            .inner
+            .ok_or(NodeError::GrpcError {
+                error: "missing body from response".to_string(),
+            })? {
+            Inner::ChainInfoResponse(response) => {
+                Ok(response.try_into().map_err(|_| NodeError::GrpcError {
+                    error: "failed to marshal response".to_string(),
+                })?)
+            }
+            Inner::Error(error) => {
+                Err(bcs::from_bytes(&error).map_err(|_| NodeError::GrpcError {
+                    error: "failed to marshal error message".to_string(),
+                })?)
+            }
+        }
+    }};
+}
+
+macro_rules! mass_client_delegate {
+    ($client:ident, $handler:ident, $msg:ident, $responses: ident) => {{
+        let response = $client.$handler(Request::new((*$msg).try_into()?)).await?;
+        match response
+            .into_inner()
+            .inner
+            .ok_or(ProtoConversionError::MissingField)?
+        {
+            Inner::ChainInfoResponse(chain_info_response) => {
+                $responses.push(RpcMessage::ChainInfoResponse(Box::new(
+                    chain_info_response.try_into()?,
+                )));
+            }
+            Inner::Error(error) => {
+                error!(
+                    "Received error response: {:?}",
+                    bcs::from_bytes::<NodeError>(&error)
+                        .map_err(|e| ProtoConversionError::BcsError(e))?
+                )
+            }
+        }
+    }};
 }
 
 #[async_trait]
