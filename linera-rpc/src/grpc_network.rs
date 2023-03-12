@@ -184,21 +184,12 @@ where
         proxy_address: String,
         mut receiver: Receiver<Notification>,
     ) {
-        // The `ConnectionPool` here acts as a 'lazy' client even though we only have
-        // one connection. This is so that the connection is instantiated on-demand
-        // and not when the server is started to avoid race conditions.
-        let pool = NotifierServiceClient::<Channel>::pool();
+        let channel = Channel::from_shared(proxy_address.clone())
+            .expect("Proxy URI should be valid")
+            .connect_lazy();
+        let mut client = NotifierServiceClient::new(channel);
+
         while let Some(notification) = receiver.next().await {
-            let mut client = match pool.client_for_address_mut(proxy_address.clone()).await {
-                Ok(client) => client,
-                Err(error) => {
-                    error!(
-                        "[{}] could not create client for the proxy at {} with error: {}",
-                        nickname, proxy_address, error
-                    );
-                    continue;
-                }
-            };
             let request = Request::new(notification.clone().into());
             if let Err(e) = client.notify(request).await {
                 warn!(
