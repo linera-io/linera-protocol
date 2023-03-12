@@ -9,7 +9,14 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use thiserror::Error;
 
-pub use super::BcsSignable;
+#[cfg(not(target_arch = "wasm32"))]
+pub use linera_base::crypto::BcsSignable;
+
+/// Activate the blanket implementation of `Signable` based on serde and BCS.
+/// * We use `serde_name` to extract a seed from the name of structs and enums.
+/// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
+#[cfg(target_arch = "wasm32")]
+pub trait BcsSignable: Serialize + serde::de::DeserializeOwned {}
 
 /// A signature key-pair.
 pub struct KeyPair(dalek::Keypair);
