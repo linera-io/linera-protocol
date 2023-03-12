@@ -93,26 +93,29 @@ where
             .await
             .expect("Initialization should not fail");
 
-        let mut queries_sent = 0u64;
         while let Some((message, shard_id)) = receiver.next().await {
-            // Send cross-chain query.
             let shard = network.shard(shard_id);
             let remote_address = format!("{}:{}", shard.host, shard.port);
-            for i in 0..cross_chain_max_retries {
+            let mut attempt = 0;
+            // Send the cross-chain query and retry if needed.
+            loop {
                 let status = pool.send_message_to(message.clone(), &remote_address).await;
                 match status {
                     Err(error) => {
-                        if i < cross_chain_max_retries {
+                        if attempt < cross_chain_max_retries {
                             error!(
                                 "[{}] Failed to send cross-chain query ({}-th retry): {}",
-                                nickname, i, error
+                                nickname, attempt, error
                             );
                             tokio::time::sleep(cross_chain_retry_delay).await;
+                            attempt += 1;
+                            // retry
                         } else {
                             error!(
                                 "[{}] Failed to send cross-chain query (giving up after {} retries): {}",
-                                nickname, i, error
+                                nickname, attempt, error
                             );
+                            break;
                         }
                     }
                     _ => {
@@ -120,16 +123,9 @@ where
                             "[{}] Sent cross-chain query: {} -> {}",
                             nickname, this_shard, shard_id
                         );
-                        queries_sent += 1;
                         break;
                     }
                 }
-            }
-            if queries_sent % 2000 == 0 {
-                debug!(
-                    "[{}] {} has sent {} cross-chain queries to {}:{} (shard {})",
-                    nickname, this_shard, queries_sent, shard.host, shard.port, shard_id,
-                );
             }
         }
     }

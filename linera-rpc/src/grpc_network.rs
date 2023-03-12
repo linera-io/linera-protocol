@@ -133,6 +133,8 @@ where
                 state.nickname().to_string(),
                 internal_network.clone(),
                 cross_chain_config.max_retries,
+                Duration::from_millis(cross_chain_config.retry_delay_ms),
+                shard_id,
                 cross_chain_receiver,
             )
         });
@@ -237,69 +239,52 @@ where
     async fn forward_cross_chain_queries(
         nickname: String,
         network: ValidatorInternalNetworkConfig,
+        cross_chain_max_retries: usize,
+        cross_chain_retry_delay: Duration,
         this_shard: ShardId,
         mut receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
-        let mut queries_sent = 0u64;
-        let mut failed = 0u64;
-
         let pool = ValidatorWorkerClient::<Channel>::pool();
 
         while let Some((cross_chain_request, shard_id)) = receiver.next().await {
             let shard = network.shard(shard_id);
-            let http_address = format!("http://{}", shard.address());
-            let mut client = match pool.client_for_address_mut(http_address.clone()).await {
-                Ok(client) => client,
-                Err(error) => {
-                    error!(
-                        "[{}] could not create client to {} with error: {}",
-                        nickname, http_address, error
-                    );
-                    continue;
-                }
-            };
-
-            let mut back_off = Duration::from_millis(100);
-
-            for attempt in 0..10 {
-                let request = Request::new(cross_chain_request.clone().try_into().expect("todo"));
-                match client.handle_cross_chain_request(request).await {
-                    Ok(_) => {
-                        queries_sent += 1;
-                        break;
-                    }
+            let remote_address = format!("http://{}", shard.address());
+            let mut attempt = 0;
+            // Send the cross-chain query and retry if needed.
+            loop {
+                let result = || async {
+                    let cross_chain_request = cross_chain_request.clone().try_into()?;
+                    let request = Request::new(cross_chain_request);
+                    let mut client = pool.client_for_address_mut(remote_address.clone()).await?;
+                    let response = client.handle_cross_chain_request(request).await?;
+                    Ok::<_, anyhow::Error>(response)
+                };
+                match result().await {
                     Err(error) => {
-                        if attempt < 10 {
-                            failed += 1;
-                            back_off *= 2;
+                        if attempt < cross_chain_max_retries {
                             error!(
-                                "[{}] cross chain query to {} failed: {:?}, backing off for {} ms...",
-                                nickname,
-                                shard.address(),
-                                error,
-                                back_off.as_millis()
+                                "[{}] Failed to send cross-chain query ({}-th retry): {}",
+                                nickname, attempt, error
                             );
-                            error!(
-                                "[{}] queries succeeded: {}. queries failed: {}",
-                                nickname, queries_sent, failed
-                            );
-                            tokio::time::sleep(back_off).await;
+                            tokio::time::sleep(cross_chain_retry_delay).await;
+                            attempt += 1;
+                            // retry
                         } else {
                             error!(
                                 "[{}] Failed to send cross-chain query (giving up after {} retries): {}",
                                 nickname, attempt, error
                             );
+                            break;
                         }
                     }
+                    _ => {
+                        debug!(
+                            "[{}] Sent cross-chain query: {} -> {}",
+                            nickname, this_shard, shard_id
+                        );
+                        break;
+                    }
                 }
-            }
-
-            if queries_sent % 2000 == 0 {
-                // is this correct? does the `shard_id` not change?
-                debug!(
-                    "[{}] {} has sent {} cross-chain queries to {}:{} (shard {})",
-                    nickname, this_shard, queries_sent, shard.host, shard.port, shard_id,
-                );
             }
         }
     }
