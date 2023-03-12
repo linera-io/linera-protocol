@@ -7,7 +7,7 @@ use crate::grpc_network::{
 };
 use ed25519::signature::Signature as edSignature;
 use linera_base::{
-    crypto::{CryptoError, PublicKey, Signature},
+    crypto::{CryptoError, CryptoHash, PublicKey, Signature},
     data_types::{BlockHeight, ChainId, EffectId, Owner, ValidatorName},
 };
 use linera_chain::data_types::{
@@ -320,7 +320,7 @@ impl TryFrom<grpc::LiteCertificate> for LiteCertificate {
         let chain_id = try_proto_convert!(certificate.chain_id);
         Ok(LiteCertificate::new(
             LiteValue {
-                value_hash: bcs::from_bytes(certificate.hash.as_slice())?,
+                value_hash: CryptoHash::try_from(certificate.hash.as_slice())?,
                 chain_id,
             },
             signatures,
@@ -342,7 +342,7 @@ impl TryFrom<LiteCertificate> for grpc::LiteCertificate {
             .collect();
 
         Ok(Self {
-            hash: bcs::to_bytes(&certificate.value.value_hash)?,
+            hash: certificate.value.value_hash.as_bytes().to_vec(),
             chain_id: Some(certificate.value.chain_id.into()),
             signatures,
         })
