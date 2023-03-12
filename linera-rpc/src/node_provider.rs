@@ -20,7 +20,7 @@ pub struct NodeProvider {
 
 impl NodeProvider {
     pub fn new(send_timeout: Duration, recv_timeout: Duration) -> Self {
-        let grpc = GrpcNodeProvider;
+        let grpc = GrpcNodeProvider::new(send_timeout, recv_timeout);
         let simple = SimpleNodeProvider::new(send_timeout, recv_timeout);
         Self { grpc, simple }
     }
@@ -49,7 +49,19 @@ impl ValidatorNodeProvider for NodeProvider {
     }
 }
 
-pub struct GrpcNodeProvider;
+pub struct GrpcNodeProvider {
+    send_timeout: Duration,
+    recv_timeout: Duration,
+}
+
+impl GrpcNodeProvider {
+    pub fn new(send_timeout: Duration, recv_timeout: Duration) -> Self {
+        Self {
+            send_timeout,
+            recv_timeout,
+        }
+    }
+}
 
 #[async_trait]
 impl ValidatorNodeProvider for GrpcNodeProvider {
@@ -62,7 +74,7 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
             }
         })?;
 
-        let client = GrpcClient::new(network)
+        let client = GrpcClient::new(network, self.send_timeout, self.recv_timeout)
             .await
             .map_err(|e| NodeError::GrpcError {
                 error: format!(

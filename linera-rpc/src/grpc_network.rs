@@ -441,10 +441,18 @@ where
 pub struct GrpcClient(ValidatorNodeClient<Channel>);
 
 impl GrpcClient {
-    pub(crate) async fn new(network: ValidatorPublicNetworkConfig) -> Result<Self, GrpcError> {
-        Ok(Self(
-            ValidatorNodeClient::connect(network.http_address()).await?,
-        ))
+    pub(crate) async fn new(
+        network: ValidatorPublicNetworkConfig,
+        send_timeout: Duration,
+        recv_timeout: Duration,
+    ) -> Result<Self, GrpcError> {
+        let channel = Channel::from_shared(network.http_address())
+            .expect("need a correct URI")
+            .connect_timeout(send_timeout)
+            .timeout(recv_timeout)
+            .connect()
+            .await?;
+        Ok(Self(ValidatorNodeClient::new(channel)))
     }
 }
 
