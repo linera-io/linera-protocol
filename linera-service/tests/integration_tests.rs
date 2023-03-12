@@ -20,7 +20,7 @@ use tokio::process::Child;
 static README_GUARD: Mutex<()> = Mutex::new(());
 
 #[test]
-fn test_examples_in_readme() -> std::io::Result<()> {
+fn test_examples_in_readme_simple() -> std::io::Result<()> {
     let _guard = README_GUARD.lock().unwrap();
 
     let dir = tempdir().unwrap();
