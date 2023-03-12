@@ -1,7 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{common::get_interval, views::ViewError};
+use crate::{
+    common::{get_interval, Context, KeyIterable},
+    memory::{MemoryContext, MemoryContextError},
+    views::ViewError,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -9,10 +13,6 @@ use std::{
     fmt::Debug,
     ops::Bound,
 };
-use crate::common::Context;
-use crate::common::KeyIterable;
-use crate::memory::MemoryContext;
-use crate::memory::MemoryContextError;
 
 /// A write operation as requested by a view when it needs to persist staged changes.
 #[derive(Debug)]
@@ -61,7 +61,6 @@ pub struct UnorderedBatch {
     pub simple_unordered_batch: SimpleUnorderedBatch,
 }
 
-
 impl UnorderedBatch {
     /// From an UnorderedBatch, create a SimpleUnorderedBatch that does not contain the key_prefixes
     pub async fn eliminate_delete_prefixes<DB: DeletePrefixExpander>(
@@ -89,8 +88,6 @@ impl UnorderedBatch {
         })
     }
 }
-
-
 
 fn is_prefix_matched(key_prefix_set: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
     let range = (Bound::Unbounded, Bound::Included(key.to_vec()));
@@ -217,33 +214,26 @@ pub trait DeletePrefixExpander {
     /// The error type that can happen when expanding the key_prefix
     type Error: Debug;
     /// Return the list of keys to be appended to the list.
-    async fn expand_delete_prefix(&self, key_prefix: &[u8])
-        -> Result<Vec<Vec<u8>>, Self::Error>;
+    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 }
 
 #[async_trait]
 impl DeletePrefixExpander for MemoryContext<()> {
     type Error = MemoryContextError;
-    async fn expand_delete_prefix(
-        &self,
-	key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, Self::Error> {
-	let mut vector_list = Vec::new();
-        for key in <Vec<Vec<u8>> as KeyIterable<Self::Error>>::iterator(&self.find_keys_by_prefix(key_prefix).await?) {
+    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
+        let mut vector_list = Vec::new();
+        for key in <Vec<Vec<u8>> as KeyIterable<Self::Error>>::iterator(
+            &self.find_keys_by_prefix(key_prefix).await?,
+        ) {
             vector_list.push(key?.to_vec());
-	}
+        }
         Ok(vector_list)
     }
 }
 
-
-
-
 #[cfg(test)]
 mod tests {
-    use linera_views::batch::Batch;
-    use linera_views::memory::create_test_context;
-    use linera_views::common::Context;
+    use linera_views::{batch::Batch, common::Context, memory::create_test_context};
 
     #[test]
     fn test_simplify_batch1() {
@@ -277,17 +267,22 @@ mod tests {
     async fn test_simplify_batch3() {
         let context = create_test_context().await;
         let mut batch = Batch::new();
-        batch.put_key_value_bytes(vec![1,2,3], vec![]);
-        batch.put_key_value_bytes(vec![1,2,4], vec![]);
-        batch.put_key_value_bytes(vec![1,2,5], vec![]);
-        batch.put_key_value_bytes(vec![1,3,3], vec![]);
+        batch.put_key_value_bytes(vec![1, 2, 3], vec![]);
+        batch.put_key_value_bytes(vec![1, 2, 4], vec![]);
+        batch.put_key_value_bytes(vec![1, 2, 5], vec![]);
+        batch.put_key_value_bytes(vec![1, 3, 3], vec![]);
         context.write_batch(batch).await.unwrap();
         let mut batch = Batch::new();
-        batch.delete_key_prefix(vec![1,2]);
+        batch.delete_key_prefix(vec![1, 2]);
         let unordered_batch = batch.simplify();
-        let simple_unordered_batch = unordered_batch.eliminate_delete_prefixes(&context).await.unwrap();
-        assert_eq!(simple_unordered_batch.deletions, vec![vec![1,2,3], vec![1,2,4], vec![1,2,5]]);
+        let simple_unordered_batch = unordered_batch
+            .eliminate_delete_prefixes(&context)
+            .await
+            .unwrap();
+        assert_eq!(
+            simple_unordered_batch.deletions,
+            vec![vec![1, 2, 3], vec![1, 2, 4], vec![1, 2, 5]]
+        );
         assert!(simple_unordered_batch.insertions.is_empty());
     }
-
 }

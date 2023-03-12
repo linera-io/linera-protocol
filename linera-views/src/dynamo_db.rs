@@ -257,7 +257,6 @@ struct JournalHeader {
 }
 
 impl JournalHeader {
-
     /// Resolve the database by using the symbolic data that has been retrieved
     async fn coherently_resolve_journal(
         mut self,
@@ -287,19 +286,13 @@ impl JournalHeader {
         }
         Ok(())
     }
-
-
-
 }
-
-
 
 /// The bunch of deletes and writes to be done.
 #[derive(Serialize, Deserialize)]
 struct DynamoDbBatch(SimpleUnorderedBatch);
 
 impl DynamoDbBatch {
-
     /// The total number of entries to be submitted
     fn len(&self) -> usize {
         self.0.deletions.len() + self.0.insertions.len()
@@ -520,10 +513,7 @@ struct DynamoDbClientInternal {
 #[async_trait]
 impl DeletePrefixExpander for DynamoDbClientInternal {
     type Error = DynamoDbContextError;
-    async fn expand_delete_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, Self::Error> {
+    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let mut vector_list = Vec::new();
         for key in self.find_keys_by_prefix(key_prefix).await?.iterator() {
             vector_list.push(key?.to_vec());
@@ -585,11 +575,7 @@ impl DynamoDbClientInternal {
     /// We put submit the transaction in blocks (called BatchWriteItem in dynamoDb) of at most MAX_BATCH_WRITE_ITEM_SIZE
     /// so as to decrease the number of needed transactions. That constant MAX_BATCH_WRITE_ITEM_SIZE comes from
     /// <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html>
-    async fn write_batch(
-        &self,
-        batch: Batch,
-        base_key: &[u8],
-    ) -> Result<(), DynamoDbContextError> {
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
         let block_operations = DynamoDbBatch::from_batch(self, batch).await?;
         if block_operations.is_fastpath_feasible() {
             block_operations.write_fastpath_failsafe(self).await
@@ -604,7 +590,7 @@ impl DynamoDbClientInternal {
         // It is theoretically possible to have an insert that cancels a delete. However,
         // simplifying the puts and deletes is expensive to do.
         let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
-        let value : Option<JournalHeader> = self.read_key(&key).await?;
+        let value: Option<JournalHeader> = self.read_key(&key).await?;
         if let Some(header) = value {
             header.coherently_resolve_journal(self, base_key).await?;
         }

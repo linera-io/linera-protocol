@@ -32,10 +32,7 @@ use std::{
 };
 
 #[cfg(feature = "aws")]
-use linera_views::{
-    dynamo_db::DynamoDbContext,
-    test_utils::LocalStackTestContext,
-};
+use linera_views::{dynamo_db::DynamoDbContext, test_utils::LocalStackTestContext};
 
 #[allow(clippy::type_complexity)]
 #[derive(CryptoHashRootView)]
