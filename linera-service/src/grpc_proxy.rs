@@ -4,7 +4,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use linera_base::data_types::ChainId;
-use linera_chain::data_types::{BlockAndRound, HashedValue};
+use linera_chain::data_types::{BlockAndRound, Value};
 use linera_core::notifier::Notifier;
 use linera_rpc::{
     config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
@@ -220,8 +220,8 @@ impl Proxyable for LiteCertificate {
 
 impl Proxyable for CertificateWithDependencies {
     fn chain_id(&self) -> Option<ChainId> {
-        match bcs::from_bytes::<HashedValue>(&self.certificate.as_ref()?.value) {
-            Ok(value) => Some(value.chain_id()),
+        match bcs::from_bytes::<Value>(&self.certificate.as_ref()?.value) {
+            Ok(value) => Some(value.block.chain_id),
             Err(_) => None,
         }
     }
