@@ -174,13 +174,13 @@ impl UserApplication for WasmApplication {
             #[cfg(feature = "wasmtime")]
             WasmRuntime::Wasmtime => {
                 self.prepare_contract_runtime_with_wasmtime(storage)?
-                    .call_application(context, argument, forwarded_sessions)
+                    .handle_application_call(context, argument, forwarded_sessions)
                     .await?
             }
             #[cfg(feature = "wasmer")]
             WasmRuntime::Wasmer => {
                 self.prepare_contract_runtime_with_wasmer(storage)?
-                    .call_application(context, argument, forwarded_sessions)
+                    .handle_application_call(context, argument, forwarded_sessions)
                     .await?
             }
         };

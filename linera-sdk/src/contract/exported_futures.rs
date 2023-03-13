@@ -209,12 +209,12 @@ where
 ///
 /// Loads the `Application` state and calls its [`call_application`][Application::call_application]
 /// method.
-pub struct CallApplication<Application> {
+pub struct HandleApplicationCall<Application> {
     future: ExportedFuture<Result<ApplicationCallResult, String>>,
     _application: PhantomData<Application>,
 }
 
-impl<Application> CallApplication<Application>
+impl<Application> HandleApplicationCall<Application>
 where
     Application: Contract + Send,
     Application::Error: 'static,
@@ -229,7 +229,7 @@ where
         forwarded_sessions: Vec<contract::SessionId>,
     ) -> Self {
         ContractLogger::install();
-        CallApplication {
+        HandleApplicationCall {
             future: ExportedFuture::new(Application::Storage::with_state(move |application| {
                 async move {
                     let forwarded_sessions = forwarded_sessions

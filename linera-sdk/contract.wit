@@ -25,12 +25,12 @@ resource execute-effect {
     poll: func() -> poll-execution-result
 }
 
-resource call-application {
+resource handle-application-call {
     static new: func(
         context: callee-context,
         argument: list<u8>,
         forwarded-sessions: list<session-id>,
-    ) -> call-application
+    ) -> handle-application-call
 
     poll: func() -> poll-call-application
 }

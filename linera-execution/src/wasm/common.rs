@@ -49,8 +49,10 @@ pub trait Contract: ApplicationRuntimeContext {
         + Unpin;
 
     /// The WIT type for the resource representing the guest future
-    /// [`call_application`][crate::Contract::call_application] method.
-    type CallApplication: GuestFutureInterface<Self, Output = ApplicationCallResult> + Send + Unpin;
+    /// [`handle_application_call`][crate::Contract::handle_application_call] method.
+    type HandleApplicationCall: GuestFutureInterface<Self, Output = ApplicationCallResult>
+        + Send
+        + Unpin;
 
     /// The WIT type for the resource representing the guest future
     /// [`call_session`][crate::Contract::call_session] method.
@@ -131,19 +133,19 @@ pub trait Contract: ApplicationRuntimeContext {
     ) -> Result<Self::PollExecutionResult, Self::Error>;
 
     /// Create a new future for the user contract to handle a call from another contract.
-    fn call_application_new(
+    fn handle_application_call_new(
         &self,
         store: &mut Self::Store,
         context: Self::CalleeContext,
         argument: &[u8],
         forwarded_sessions: &[Self::SessionId],
-    ) -> Result<Self::CallApplication, Self::Error>;
+    ) -> Result<Self::HandleApplicationCall, Self::Error>;
 
     /// Poll a user contract future that's handling a call from another contract.
-    fn call_application_poll(
+    fn handle_application_call_poll(
         &self,
         store: &mut Self::Store,
-        future: &Self::CallApplication,
+        future: &Self::HandleApplicationCall,
     ) -> Result<Self::PollCallApplication, Self::Error>;
 
     /// Create a new future for the user contract to handle a session call from another
@@ -298,25 +300,25 @@ where
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
     ///
     /// ```ignore
-    /// pub async fn call_application(
+    /// pub async fn handle_application_call(
     ///     mut self,
     ///     context: &CalleeContext,
     ///     argument: &[u8],
     ///     forwarded_sessions: Vec<SessionId>,
     /// ) -> Result<ApplicationCallResult, ExecutionError>
     /// ```
-    pub fn call_application(
+    pub fn handle_application_call(
         mut self,
         context: &CalleeContext,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> GuestFuture<'context, A::CallApplication, A> {
+    ) -> GuestFuture<'context, A::HandleApplicationCall, A> {
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
             .map(A::SessionId::from)
             .collect();
 
-        let future = self.application.call_application_new(
+        let future = self.application.handle_application_call_new(
             &mut self.store,
             (*context).into(),
             argument,

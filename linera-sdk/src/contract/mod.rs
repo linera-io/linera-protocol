@@ -30,7 +30,7 @@ macro_rules! contract {
             type Initialize = Initialize;
             type ExecuteOperation = ExecuteOperation;
             type ExecuteEffect = ExecuteEffect;
-            type CallApplication = CallApplication;
+            type HandleApplicationCall = HandleApplicationCall;
             type CallSession = CallSession;
         }
 
@@ -56,7 +56,7 @@ macro_rules! contract {
         }
 
         $crate::instance_exported_future! {
-            contract::CallApplication<$application>(
+            contract::HandleApplicationCall<$application>(
                 context: $crate::contract::CalleeContext,
                 argument: Vec<u8>,
                 forwarded_sessions: Vec<$crate::contract::SessionId>,

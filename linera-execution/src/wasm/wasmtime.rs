@@ -223,7 +223,7 @@ impl<'storage> common::Contract for Contract<'storage> {
     type Initialize = contract::Initialize;
     type ExecuteOperation = contract::ExecuteOperation;
     type ExecuteEffect = contract::ExecuteEffect;
-    type CallApplication = contract::CallApplication;
+    type HandleApplicationCall = contract::HandleApplicationCall;
     type CallSession = contract::CallSession;
     type OperationContext = contract::OperationContext;
     type EffectContext = contract::EffectContext;
@@ -285,14 +285,14 @@ impl<'storage> common::Contract for Contract<'storage> {
         contract::Contract::execute_effect_poll(&self.contract, store, future)
     }
 
-    fn call_application_new(
+    fn handle_application_call_new(
         &self,
         store: &mut Store<ContractState<'storage>>,
         context: contract::CalleeContext,
         argument: &[u8],
         forwarded_sessions: &[contract::SessionId],
-    ) -> Result<contract::CallApplication, Trap> {
-        contract::Contract::call_application_new(
+    ) -> Result<contract::HandleApplicationCall, Trap> {
+        contract::Contract::handle_application_call_new(
             &self.contract,
             store,
             context,
@@ -301,12 +301,12 @@ impl<'storage> common::Contract for Contract<'storage> {
         )
     }
 
-    fn call_application_poll(
+    fn handle_application_call_poll(
         &self,
         store: &mut Store<ContractState<'storage>>,
-        future: &contract::CallApplication,
+        future: &contract::HandleApplicationCall,
     ) -> Result<contract::PollCallApplication, Trap> {
-        contract::Contract::call_application_poll(&self.contract, store, future)
+        contract::Contract::handle_application_call_poll(&self.contract, store, future)
     }
 
     fn call_session_new(
