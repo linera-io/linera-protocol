@@ -40,7 +40,6 @@ wit-bindgen-host-wasmtime-rust = { git = "https://github.com/jvff/wit-bindgen", 
 [dev-dependencies]
 anyhow = "1.0.57"
 bcs = "0.1.3"
-env_logger = "0.9.0"
 linera-base = { path = "../linera-base", features = ["test"] }
 linera-execution = { path = ".", default-features = false, features = ["test"] }
 test-case = "3.0.0"

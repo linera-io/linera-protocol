@@ -302,7 +302,15 @@ where
                         }
                     }
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to query validator {:?} for information about chain {:?}: {}",
+                        self.name,
+                        chain_id,
+                        e
+                    );
+                    return Err(e);
+                }
             }
         }
         for (chain_id, initial_block_height, target_block_height, retryable) in

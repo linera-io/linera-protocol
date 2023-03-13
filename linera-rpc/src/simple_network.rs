@@ -7,14 +7,14 @@ use std::{io, time::Duration};
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
 use tokio::time;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 use linera_base::data_types::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{NodeError, NotificationStream, ValidatorNode},
-    worker::{NetworkActions, ValidatorWorker, WorkerState},
+    worker::{NetworkActions, ValidatorWorker, WorkerError, WorkerState},
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -104,24 +104,29 @@ where
                     Err(error) => {
                         if attempt < cross_chain_max_retries {
                             error!(
-                                "[{}] Failed to send cross-chain query ({}-th retry): {}",
-                                nickname, attempt, error
+                                nickname = nickname,
+                                error = %error,
+                                attempt = attempt,
+                                "Failed to send cross-chain query",
                             );
                             tokio::time::sleep(cross_chain_retry_delay).await;
                             attempt += 1;
                             // retry
                         } else {
                             error!(
-                                "[{}] Failed to send cross-chain query (giving up after {} retries): {}",
-                                nickname, attempt, error
+                                nickname = nickname,
+                                error = %error,
+                                attempt = attempt,
+                                "Failed to send cross-chain query",
                             );
                             break;
                         }
                     }
                     _ => {
                         debug!(
-                            "[{}] Sent cross-chain query: {} -> {}",
-                            nickname, this_shard, shard_id
+                            from_shard = this_shard,
+                            to_shard = shard_id,
+                            "Sent cross-chain query",
                         );
                         break;
                     }
@@ -165,107 +170,116 @@ struct RunningServerState<S> {
     cross_chain_sender: mpsc::Sender<(RpcMessage, ShardId)>,
 }
 
+#[async_trait]
 impl<S> MessageHandler for RunningServerState<S>
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    fn handle_message(
-        &mut self,
-        message: RpcMessage,
-    ) -> futures::future::BoxFuture<Option<RpcMessage>> {
-        Box::pin(async move {
-            let reply = match message {
-                RpcMessage::BlockProposal(message) => {
-                    match self.server.state.handle_block_proposal(*message).await {
-                        Ok((info, actions)) => {
-                            // Cross-shard requests
-                            self.handle_network_actions(actions).await;
-                            // Response
-                            Ok(Some(info.into()))
-                        }
-                        Err(error) => Err(error.into()),
+    #[instrument(target = "simple_server", skip_all, fields(nickname = self.server.state.nickname()))]
+    async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage> {
+        let reply = match message {
+            RpcMessage::BlockProposal(message) => {
+                match self.server.state.handle_block_proposal(*message).await {
+                    Ok((info, actions)) => {
+                        // Cross-shard requests
+                        self.handle_network_actions(actions).await;
+                        // Response
+                        Ok(Some(info.into()))
+                    }
+                    Err(error) => {
+                        warn!(nickname = self.server.state.nickname(), error = %error, "Failed to handle block proposal");
+                        Err(error.into())
                     }
                 }
-                RpcMessage::LiteCertificate(message) => {
-                    match self.server.state.handle_lite_certificate(*message).await {
-                        Ok((info, actions)) => {
-                            // Cross-shard requests
-                            self.handle_network_actions(actions).await;
-                            // Response
-                            Ok(Some(info.into()))
+            }
+            RpcMessage::LiteCertificate(message) => {
+                match self.server.state.handle_lite_certificate(*message).await {
+                    Ok((info, actions)) => {
+                        // Cross-shard requests
+                        self.handle_network_actions(actions).await;
+                        // Response
+                        Ok(Some(info.into()))
+                    }
+                    Err(error) => {
+                        if let WorkerError::MissingCertificateValue = &error {
+                            debug!(nickname = self.server.state.nickname(), error = %error, "Failed to handle lite certificate");
+                        } else {
+                            error!(nickname = self.server.state.nickname(), error = %error, "Failed to handle lite certificate");
                         }
-                        Err(error) => Err(error.into()),
+                        Err(error.into())
                     }
                 }
-                RpcMessage::Certificate(message, blobs) => {
-                    match self.server.state.handle_certificate(*message, blobs).await {
-                        Ok((info, actions)) => {
-                            // Cross-shard requests
-                            self.handle_network_actions(actions).await;
-                            // Response
-                            Ok(Some(info.into()))
-                        }
-                        Err(error) => Err(error.into()),
+            }
+            RpcMessage::Certificate(message, blobs) => {
+                match self.server.state.handle_certificate(*message, blobs).await {
+                    Ok((info, actions)) => {
+                        // Cross-shard requests
+                        self.handle_network_actions(actions).await;
+                        // Response
+                        Ok(Some(info.into()))
+                    }
+                    Err(error) => {
+                        error!(nickname = self.server.state.nickname(), error = %error, "Failed to handle certificate");
+                        Err(error.into())
                     }
                 }
-                RpcMessage::ChainInfoQuery(message) => {
-                    match self.server.state.handle_chain_info_query(*message).await {
-                        Ok((info, actions)) => {
-                            // Cross-shard requests
-                            self.handle_network_actions(actions).await;
-                            // Response
-                            Ok(Some(info.into()))
-                        }
-                        Err(error) => Err(error.into()),
+            }
+            RpcMessage::ChainInfoQuery(message) => {
+                match self.server.state.handle_chain_info_query(*message).await {
+                    Ok((info, actions)) => {
+                        // Cross-shard requests
+                        self.handle_network_actions(actions).await;
+                        // Response
+                        Ok(Some(info.into()))
+                    }
+                    Err(error) => {
+                        error!(nickname = self.server.state.nickname(), error = %error, "Failed to handle chain info query");
+                        Err(error.into())
                     }
                 }
-                RpcMessage::CrossChainRequest(request) => {
-                    match self.server.state.handle_cross_chain_request(*request).await {
-                        Ok(actions) => {
-                            self.handle_network_actions(actions).await;
-                        }
-                        Err(error) => {
-                            error!(
-                                "[{}] Failed to handle cross-chain request: {}",
-                                self.server.state.nickname(),
-                                error
-                            );
-                        }
+            }
+            RpcMessage::CrossChainRequest(request) => {
+                match self.server.state.handle_cross_chain_request(*request).await {
+                    Ok(actions) => {
+                        self.handle_network_actions(actions).await;
                     }
-                    // No user to respond to.
-                    Ok(None)
+                    Err(error) => {
+                        error!(nickname = self.server.state.nickname(), error = %error, "Failed to handle cross-chain request");
+                    }
                 }
-                RpcMessage::Vote(_) | RpcMessage::Error(_) | RpcMessage::ChainInfoResponse(_) => {
-                    Err(NodeError::UnexpectedMessage)
-                }
-            };
+                // No user to respond to.
+                Ok(None)
+            }
+            RpcMessage::Vote(_) | RpcMessage::Error(_) | RpcMessage::ChainInfoResponse(_) => {
+                Err(NodeError::UnexpectedMessage)
+            }
+        };
 
-            self.server.packets_processed += 1;
-            if self.server.packets_processed % 5000 == 0 {
-                debug!(
-                    "[{}] {}:{} (shard {}) has processed {} packets",
+        self.server.packets_processed += 1;
+        if self.server.packets_processed % 5000 == 0 {
+            debug!(
+                "[{}] {}:{} (shard {}) has processed {} packets",
+                self.server.state.nickname(),
+                self.server.host,
+                self.server.port,
+                self.server.shard_id,
+                self.server.packets_processed
+            );
+        }
+
+        match reply {
+            Ok(x) => x,
+            Err(error) => {
+                warn!(
+                    "[{}] User query failed: {}",
                     self.server.state.nickname(),
-                    self.server.host,
-                    self.server.port,
-                    self.server.shard_id,
-                    self.server.packets_processed
+                    error
                 );
+                self.server.user_errors += 1;
+                Some(error.into())
             }
-
-            match reply {
-                Ok(x) => x,
-                Err(error) => {
-                    warn!(
-                        "[{}] User query failed: {}",
-                        self.server.state.nickname(),
-                        error
-                    );
-                    self.server.user_errors += 1;
-                    Some(error.into())
-                }
-            }
-        })
+        }
     }
 }
 

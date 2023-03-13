@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{bail, Result};
-use futures::{future::BoxFuture, FutureExt, SinkExt, StreamExt};
+use async_trait::async_trait;
+use futures::{SinkExt, StreamExt};
 use linera_rpc::{
     config::{
         NetworkProtocol, ShardConfig, ValidatorInternalNetworkPreConfig,
@@ -17,6 +18,7 @@ use linera_service::{
 };
 use std::path::PathBuf;
 use structopt::StructOpt;
+use tracing::{error, info, instrument};
 
 /// Options for running the proxy.
 #[derive(Debug, StructOpt)]
@@ -82,38 +84,38 @@ impl Proxy {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct SimpleProxy {
     public_config: ValidatorPublicNetworkPreConfig<TransportProtocol>,
     internal_config: ValidatorInternalNetworkPreConfig<TransportProtocol>,
 }
 
+#[async_trait]
 impl MessageHandler for SimpleProxy {
-    fn handle_message(&mut self, message: RpcMessage) -> BoxFuture<Option<RpcMessage>> {
-        let shard = self.select_shard_for(&message);
+    #[instrument(skip_all, fields(chain_id = ?message.target_chain_id()))]
+    async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage> {
+        let Some(chain_id) = message.target_chain_id() else {
+            error!("Can't proxy unexpected message");
+            return None;
+        };
+        let shard = self.internal_config.get_shard_for(chain_id).clone();
         let protocol = self.internal_config.protocol;
 
-        async move {
-            if let Some(shard) = shard {
-                match Self::try_proxy_message(message, shard, protocol).await {
-                    Ok(maybe_response) => maybe_response,
-                    Err(error) => {
-                        tracing::warn!("Failed to proxy message: {error}");
-                        None
-                    }
-                }
-            } else {
+        match Self::try_proxy_message(message, shard, protocol).await {
+            Ok(maybe_response) => maybe_response,
+            Err(error) => {
+                error!(error = %error, "Failed to proxy message");
                 None
             }
         }
-        .boxed()
     }
 }
 
 impl SimpleProxy {
+    #[instrument(skip_all, fields(port = self.public_config.port), err)]
     async fn run(self) -> Result<()> {
+        info!("Starting simple server");
         let address = format!("0.0.0.0:{}", self.public_config.port);
-        tracing::info!("Starting simple proxy on {}...", &address);
         self.public_config
             .protocol
             .spawn_server(&address, self)
@@ -121,24 +123,6 @@ impl SimpleProxy {
             .join()
             .await?;
         Ok(())
-    }
-
-    fn select_shard_for(&self, request: &RpcMessage) -> Option<ShardConfig> {
-        let chain_id = match request {
-            RpcMessage::BlockProposal(proposal) => proposal.content.block.chain_id,
-            RpcMessage::LiteCertificate(certificate) => certificate.value.chain_id,
-            RpcMessage::Certificate(certificate, _) => certificate.value.chain_id(),
-            RpcMessage::ChainInfoQuery(query) => query.chain_id,
-            RpcMessage::Vote(_) | RpcMessage::ChainInfoResponse(_) | RpcMessage::Error(_) => {
-                tracing::debug!("Can't proxy an incoming response message");
-                return None;
-            }
-            RpcMessage::CrossChainRequest(cross_chain_request) => {
-                cross_chain_request.target_chain_id()
-            }
-        };
-
-        Some(self.internal_config.get_shard_for(chain_id).clone())
     }
 
     async fn try_proxy_message(
@@ -155,11 +139,7 @@ impl SimpleProxy {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .format_timestamp_millis()
-        .init();
-
-    tracing::info!("Initialising proxy...");
+    tracing_subscriber::fmt::init();
 
     let proxy = Proxy::from_options(ProxyOptions::from_args())?;
     proxy.run().await

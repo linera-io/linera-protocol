@@ -2,7 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{codec, RpcMessage};
+use crate::{codec, codec::Codec, RpcMessage};
+use async_trait::async_trait;
 use futures::{future, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, net::ToSocketAddrs};
@@ -10,8 +11,6 @@ use structopt::clap::arg_enum;
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio_util::{codec::Framed, udp::UdpFramed};
 use tracing::{error, warn};
-
-use crate::codec::Codec;
 
 /// Suggested buffer size
 pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";
@@ -48,8 +47,9 @@ pub trait ConnectionPool: Send {
 /// The implementation needs to implement [`Clone`] because a seed instance is used to generate
 /// cloned instances, where each cloned instance handles a single request. Multiple cloned instances
 /// may exist at the same time and handle separate requests concurrently.
+#[async_trait]
 pub trait MessageHandler: Clone {
-    fn handle_message(&mut self, message: RpcMessage) -> future::BoxFuture<Option<RpcMessage>>;
+    async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage>;
 }
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
