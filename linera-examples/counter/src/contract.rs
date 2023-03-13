@@ -63,7 +63,7 @@ impl Contract for Counter {
         })
     }
 
-    async fn call_session(
+    async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
         _session: Session,
@@ -163,7 +163,7 @@ mod tests {
         let mut counter = create_and_initialize_counter(initial_value);
 
         let result = counter
-            .call_session(&dummy_callee_context(), Session::default(), &[], vec![])
+            .handle_session_call(&dummy_callee_context(), Session::default(), &[], vec![])
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 

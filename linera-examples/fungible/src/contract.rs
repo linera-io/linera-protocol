@@ -83,7 +83,7 @@ impl Contract for FungibleToken {
         Ok(result)
     }
 
-    async fn call_session(
+    async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
         session: Session,

@@ -68,7 +68,7 @@ impl Contract for MetaCounter {
         Err(Error::CallsNotSupported)
     }
 
-    async fn call_session(
+    async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
         _session: Session,

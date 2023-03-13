@@ -85,7 +85,7 @@ impl Contract for CrowdFunding {
         Ok(ApplicationCallResult::default())
     }
 
-    async fn call_session(
+    async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
         _session: Session,

@@ -79,7 +79,7 @@ pub trait Contract: Sized {
 
     /// Allow an operation or an effect of other applications to call into a session that
     /// we previously created.
-    async fn call_session(
+    async fn handle_session_call(
         &mut self,
         context: &CalleeContext,
         session: Session,

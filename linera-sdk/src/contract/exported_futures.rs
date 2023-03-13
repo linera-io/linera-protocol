@@ -256,9 +256,10 @@ where
 }
 
 /// Future implementation exported from the guest to allow the host to call
-/// [`Application::call_session`].
+/// [`Application::handle_session_call`].
 ///
-/// Loads the `Application` state and calls its [`call_session`][Application::call_session] method.
+/// Loads the `Application` state and calls its
+/// [`handle_session_call`][Application::handle_session_call] method.
 pub struct HandleSessionCall<Application> {
     future: ExportedFuture<Result<SessionCallResult, String>>,
     _application: PhantomData<Application>,
@@ -289,7 +290,7 @@ where
                         .collect();
 
                     application
-                        .call_session(
+                        .handle_session_call(
                             &context.into(),
                             session.into(),
                             &argument,
