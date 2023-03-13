@@ -59,7 +59,7 @@ impl Contract for MetaCounter {
         Ok(ExecutionResult::default())
     }
 
-    async fn call_application(
+    async fn handle_application_call(
         &mut self,
         _context: &CalleeContext,
         _argument: &[u8],

@@ -59,7 +59,7 @@ where
         Err(Error::EffectsNotSupported)
     }
 
-    async fn call_application(
+    async fn handle_application_call(
         &mut self,
         _context: &CalleeContext,
         argument: &[u8],
@@ -162,7 +162,7 @@ mod tests {
         let argument = bcs::to_bytes(&increment).expect("Increment value is not serializable");
 
         let result = counter
-            .call_application(&dummy_callee_context(), &argument, vec![])
+            .handle_application_call(&dummy_callee_context(), &argument, vec![])
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 

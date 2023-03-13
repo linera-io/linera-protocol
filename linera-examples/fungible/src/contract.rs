@@ -58,7 +58,7 @@ impl Contract for FungibleToken {
         Ok(ExecutionResult::default())
     }
 
-    async fn call_application(
+    async fn handle_application_call(
         &mut self,
         context: &CalleeContext,
         argument: &[u8],

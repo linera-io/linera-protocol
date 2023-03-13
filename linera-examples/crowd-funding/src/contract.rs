@@ -66,7 +66,7 @@ impl Contract for CrowdFunding {
         Err(Error::EffectsNotSupported)
     }
 
-    async fn call_application(
+    async fn handle_application_call(
         &mut self,
         context: &CalleeContext,
         argument: &[u8],

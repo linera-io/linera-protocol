@@ -70,7 +70,7 @@ pub trait Contract: Sized {
 
     /// Allow an operation or an effect of other applications to call into this
     /// application.
-    async fn call_application(
+    async fn handle_application_call(
         &mut self,
         context: &CalleeContext,
         argument: &[u8],
