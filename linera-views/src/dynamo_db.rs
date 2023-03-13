@@ -229,7 +229,7 @@ impl TransactionBuilder {
 
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for the storing of the state of the journal
+    /// Prefix for the storing of the header of the journal
     Journal = 1,
     /// Prefix for the block entry
     Entry,
@@ -257,7 +257,7 @@ struct JournalHeader {
 }
 
 impl JournalHeader {
-    /// Resolve the database by using the symbolic data that has been retrieved
+    /// Resolve the database by using the header that has been retrieved
     async fn coherently_resolve_journal(
         mut self,
         db: &DynamoDbClientInternal,
@@ -587,8 +587,6 @@ impl DynamoDbClientInternal {
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
         // Design is done in the following way that we do the deletes and then the inserts.
-        // It is theoretically possible to have an insert that cancels a delete. However,
-        // simplifying the puts and deletes is expensive to do.
         let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
         let value: Option<JournalHeader> = self.read_key(&key).await?;
         if let Some(header) = value {
