@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Store};
+use crate::{
+    chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Store,
+    READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
+};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{crypto::CryptoHash, data_types::ChainId};
@@ -13,6 +16,7 @@ use linera_views::{
     rocksdb::{RocksdbClient, RocksdbContext, RocksdbContextError, DB},
     views::{View, ViewError},
 };
+use metrics::increment_counter;
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::Arc};
 
@@ -80,11 +84,18 @@ impl Store for RocksdbStoreClient {
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let maybe_value: Option<Value> = self.0.db.read_key(&value_key).await?;
+        let id = match &maybe_value {
+            Some(value) => format!("{}", value.block.chain_id),
+            None => "not found".to_string(),
+        };
+        increment_counter!(READ_VALUE_COUNTER, &[("chain_id", id)]);
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(value.with_hash_unchecked(hash))
     }
 
     async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
+        let id = format!("{}", value.block().chain_id);
+        increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         let mut batch = Batch::new();
         batch.put_key_value(value_key.to_vec(), &value)?;
@@ -96,9 +107,16 @@ impl Store for RocksdbStoreClient {
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let (cert_result, value_result) = tokio::join!(
-            self.0.db.read_key(&cert_key),
-            self.0.db.read_key(&value_key)
+            self.0.db.read_key::<LiteCertificate>(&cert_key),
+            self.0.db.read_key::<Value>(&value_key)
         );
+        if let Ok(maybe_value) = &value_result {
+            let id = match maybe_value {
+                Some(value) => format!("{}", value.block.chain_id),
+                None => "not found".to_string(),
+            };
+            increment_counter!(READ_CERTIFICATE_COUNTER, &[("chain_id", id)]);
+        };
         let value: Value =
             value_result?.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         let cert: LiteCertificate =
@@ -109,6 +127,8 @@ impl Store for RocksdbStoreClient {
     }
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
+        let id = format!("{}", certificate.value.block().chain_id);
+        increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id,)]);
         let hash = certificate.value.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;

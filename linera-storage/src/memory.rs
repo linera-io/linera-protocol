@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ChainRuntimeContext, ChainStateView, Store};
+use crate::{
+    ChainRuntimeContext, ChainStateView, Store, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER,
+    WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
+};
 use async_lock::Mutex;
 use async_trait::async_trait;
 use dashmap::DashMap;
@@ -12,6 +15,7 @@ use linera_views::{
     memory::{MemoryContext, MemoryContextError, MemoryStoreMap},
     views::{View, ViewError},
 };
+use metrics::increment_counter;
 use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Clone)]
@@ -68,10 +72,13 @@ impl Store for MemoryStoreClient {
     }
 
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
-        Ok(self
-            .0
-            .values
-            .get(&hash)
+        let maybe_value = self.0.values.get(&hash);
+        let id = match &maybe_value {
+            Some(value) => format!("{}", value.block.chain_id),
+            None => "not found".to_string(),
+        };
+        increment_counter!(READ_VALUE_COUNTER, &[("chain_id", id)]);
+        Ok(maybe_value
             .ok_or_else(|| ViewError::not_found("value for hash", hash))?
             .value()
             .clone()
@@ -79,15 +86,22 @@ impl Store for MemoryStoreClient {
     }
 
     async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
+        let id = format!("{}", value.block().chain_id);
+        increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
         self.0.values.insert(value.hash(), value.into());
         Ok(())
     }
 
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
+        let maybe_value = self.0.values.get(&hash);
+        let id = match &maybe_value {
+            Some(value) => format!("{}", value.block.chain_id),
+            None => "not found".to_string(),
+        };
+        increment_counter!(READ_CERTIFICATE_COUNTER, &[("chain_id", id)]);
+        let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         let maybe_cert = self.0.certificates.get(&hash);
         let cert = maybe_cert.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
-        let maybe_value = self.0.values.get(&hash);
-        let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         let cert = cert.value().clone();
         let value = value.value().clone().with_hash_unchecked(hash);
         Ok(cert
@@ -96,6 +110,8 @@ impl Store for MemoryStoreClient {
     }
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
+        let id = format!("{}", certificate.value.block().chain_id);
+        increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id)]);
         let (cert, value) = certificate.split();
         self.0.values.insert(cert.value.value_hash, value.into());
         self.0.certificates.insert(cert.value.value_hash, cert);

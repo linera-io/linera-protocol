@@ -273,7 +273,7 @@ where
     ViewError: From<Client::ContextError>,
 {
     // NOTE: This only works for non-sharded workers!
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test"))]
     pub(crate) async fn fully_handle_certificate(
         &mut self,
         certificate: Certificate,
