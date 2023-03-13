@@ -228,16 +228,16 @@ where
             );
 
             cross_chain_sender
-                .feed((request, shard_id))
+                .send((request, shard_id))
                 .await
-                .expect("sinks are never closed so `feed` should not fail.")
+                .expect("sinks are never closed so `send` should not fail.")
         }
 
         for notification in actions.notifications {
             notification_sender
-                .feed(notification)
+                .send(notification)
                 .await
-                .expect("sinks are never closed so call to `feed` should not fail");
+                .expect("sinks are never closed so call to `send` should not fail");
         }
     }
 
