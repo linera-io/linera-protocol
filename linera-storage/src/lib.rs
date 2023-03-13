@@ -34,6 +34,15 @@ use linera_views::{
 };
 use std::{fmt::Debug, sync::Arc};
 
+/// The name for the metric counting how often a value is read from storage.
+pub const READ_VALUE_COUNTER: &str = "read_value";
+/// The name for the metric counting how often a value is written to storage.
+pub const WRITE_VALUE_COUNTER: &str = "write_value";
+/// The name for the metric counting how often a certificate is read from storage.
+pub const READ_CERTIFICATE_COUNTER: &str = "read_value";
+/// The name for the metric counting how often a certificate is written to storage.
+pub const WRITE_CERTIFICATE_COUNTER: &str = "write_value";
+
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 use linera_execution::{ApplicationId, Operation, SystemOperation, WasmApplication};
 

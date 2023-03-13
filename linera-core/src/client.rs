@@ -41,6 +41,10 @@ use std::{
 };
 use tracing::info;
 
+#[cfg(any(test, feature = "test"))]
+#[path = "unit_tests/client_test_utils.rs"]
+pub mod client_test_utils;
+
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
 mod client_tests;
@@ -293,6 +297,11 @@ where
             .await?
             .epoch
             .ok_or(NodeError::InactiveLocalChain(self.chain_id))?)
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    pub async fn get_identity(&mut self) -> Result<Owner, anyhow::Error> {
+        self.identity().await
     }
 
     /// Obtain the identity of the current owner of the chain. HACK: In the case of a

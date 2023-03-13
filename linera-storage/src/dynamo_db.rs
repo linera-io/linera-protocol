@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Store};
+use crate::{
+    chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Store,
+    READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
+};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use futures::Future;
@@ -15,6 +18,7 @@ use linera_views::{
     map_view::MapView,
     views::{View, ViewError},
 };
+use metrics::increment_counter;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -183,11 +187,18 @@ impl Store for DynamoDbStoreClient {
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
         let values = self.0.values().await?;
         let maybe_value = values.get(&hash).await?;
+        let id = match &maybe_value {
+            Some(value) => format!("{}", value.block.chain_id),
+            None => "not found".to_string(),
+        };
+        increment_counter!(READ_VALUE_COUNTER, &[("chain_id", id)]);
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(value.with_hash_unchecked(hash))
     }
 
     async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
+        let id = format!("{}", value.block().chain_id);
+        increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
         let mut values = self.0.values().await?;
         values.insert(&value.hash(), value.into())?;
         let mut batch = Batch::new();
@@ -215,12 +226,21 @@ impl Store for DynamoDbStoreClient {
                     .ok_or_else(|| ViewError::not_found("certificate for hash", hash))
             }
         );
+        if let Some(id) = match &value_result {
+            Ok(value) => Some(format!("{}", value.block.chain_id)),
+            Err(ViewError::NotFound(_)) => Some("not found".to_string()),
+            Err(_) => None,
+        } {
+            increment_counter!(READ_CERTIFICATE_COUNTER, &[("chain_id", id)]);
+        }
         cert_result?
             .with_value(value_result?.with_hash_unchecked(hash))
             .ok_or(ViewError::InconsistentEntries)
     }
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
+        let id = format!("{}", certificate.value.block().chain_id);
+        increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id,)]);
         let (cert, value) = certificate.split();
         let hash = value.hash();
         let (certs_result, values_result) = tokio::join!(self.0.certificates(), self.0.values());
