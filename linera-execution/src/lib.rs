@@ -135,7 +135,7 @@ pub trait UserApplication {
     ) -> Result<ApplicationCallResult, ExecutionError>;
 
     /// Executes a call from another application into a session created by this application.
-    async fn call_session(
+    async fn handle_session_call(
         &self,
         context: &CalleeContext,
         storage: &dyn WritableStorage,

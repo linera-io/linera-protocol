@@ -154,7 +154,7 @@ impl UserApplication for TestApplication {
     }
 
     /// Close the session.
-    async fn call_session(
+    async fn handle_session_call(
         &self,
         context: &CalleeContext,
         _storage: &dyn WritableStorage,

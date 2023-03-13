@@ -582,7 +582,7 @@ where
             signer: authenticated_signer,
         });
         let raw_result = code
-            .call_session(
+            .handle_session_call(
                 &callee_context,
                 self,
                 session_id.kind,

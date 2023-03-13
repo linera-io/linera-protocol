@@ -187,7 +187,7 @@ impl UserApplication for WasmApplication {
         Ok(result)
     }
 
-    async fn call_session(
+    async fn handle_session_call(
         &self,
         context: &CalleeContext,
         storage: &dyn WritableStorage,
