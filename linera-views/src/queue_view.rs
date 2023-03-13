@@ -3,7 +3,7 @@
 
 use crate::{
     batch::Batch,
-    common::{Context, HashOutput, MIN_VIEW_TAG},
+    common::{Context, HasherOutput, MIN_VIEW_TAG},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
@@ -29,8 +29,8 @@ pub struct QueueView<C, T> {
     stored_indices: Range<usize>,
     front_delete_count: usize,
     new_back_values: VecDeque<T>,
-    stored_hash: Option<HashOutput>,
-    hash: Mutex<Option<HashOutput>>,
+    stored_hash: Option<HasherOutput>,
+    hash: Mutex<Option<HasherOutput>>,
 }
 
 #[async_trait]
@@ -234,10 +234,10 @@ where
         Ok(values)
     }
 
-    async fn compute_hash(&self) -> Result<<sha2::Sha512 as Hasher>::Output, ViewError> {
+    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         let count = self.count();
         let elements = self.read_front(count).await?;
-        let mut hasher = sha2::Sha512::default();
+        let mut hasher = sha3::Sha3_256::default();
         hasher.update_with_bcs_bytes(&elements)?;
         Ok(hasher.finalize())
     }
@@ -250,7 +250,7 @@ where
     ViewError: From<C::Error>,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
-    type Hasher = sha2::Sha512;
+    type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let hash = *self.hash.get_mut();

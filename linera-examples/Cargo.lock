@@ -1405,7 +1405,7 @@ dependencies = [
  "rand 0.8.5",
  "rocksdb",
  "serde",
- "sha2 0.9.9",
+ "sha3",
  "static_assertions",
  "thiserror",
  "tokio",

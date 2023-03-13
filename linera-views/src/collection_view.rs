@@ -3,7 +3,7 @@
 
 use crate::{
     batch::Batch,
-    common::{Context, HashOutput, KeyIterable, Update, MIN_VIEW_TAG},
+    common::{Context, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -26,8 +26,8 @@ pub struct CollectionView<C, I, W> {
     was_cleared: bool,
     updates: RwLock<BTreeMap<Vec<u8>, Update<W>>>,
     _phantom: PhantomData<I>,
-    stored_hash: Option<HashOutput>,
-    hash: Mutex<Option<HashOutput>>,
+    stored_hash: Option<HasherOutput>,
+    hash: Mutex<Option<HasherOutput>>,
 }
 
 /// A read-only accessor for a particular subview in a [`CollectionView`].
@@ -399,7 +399,7 @@ where
     I: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
     W: HashableView<C> + Send + Sync + 'static,
 {
-    type Hasher = sha2::Sha512;
+    type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let hash = *self.hash.get_mut();

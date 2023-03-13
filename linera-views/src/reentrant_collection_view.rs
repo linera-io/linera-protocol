@@ -3,7 +3,7 @@
 
 use crate::{
     batch::Batch,
-    common::{Context, HashOutput, KeyIterable, Update, MIN_VIEW_TAG},
+    common::{Context, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_trait::async_trait;
@@ -28,8 +28,8 @@ pub struct ReentrantCollectionView<C, I, W> {
     was_cleared: bool,
     updates: Mutex<BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>>,
     _phantom: PhantomData<I>,
-    stored_hash: Option<HashOutput>,
-    hash: Mutex<Option<HashOutput>>,
+    stored_hash: Option<HasherOutput>,
+    hash: Mutex<Option<HasherOutput>>,
 }
 
 /// We need to find new base keys in order to implement the collection_view.
@@ -367,7 +367,7 @@ where
     I: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static,
     W: HashableView<C> + Send + Sync + 'static,
 {
-    type Hasher = sha2::Sha512;
+    type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let hash = *self.hash.get_mut();

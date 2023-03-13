@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    common::{Context, HashOutput},
+    common::{Context, HasherOutput},
     hashable_wrapper::WrappedHashableContainerView,
     memory::create_test_context,
     register_view::RegisterView,
@@ -13,7 +13,7 @@ pub use linera_views_derive::{CryptoHashRootView, CryptoHashView, GraphQLView, R
 #[derive(CryptoHashRootView)]
 struct TestType<C> {
     pub inner: RegisterView<C, String>,
-    pub wrap: WrappedHashableContainerView<C, RegisterView<C, String>, HashOutput>,
+    pub wrap: WrappedHashableContainerView<C, RegisterView<C, String>, HasherOutput>,
 }
 
 // TODO(Implement the same for CryptoHash)
