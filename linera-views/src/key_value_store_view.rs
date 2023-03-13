@@ -4,8 +4,8 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_interval, get_upper_bound, Context, HashOutput, KeyIterable, KeyValueIterable, Update,
-        MIN_VIEW_TAG,
+        get_interval, get_upper_bound, Context, HasherOutput, KeyIterable, KeyValueIterable,
+        Update, MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
 };
@@ -67,8 +67,8 @@ pub struct KeyValueStoreView<C> {
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
     deleted_prefixes: BTreeSet<Vec<u8>>,
-    stored_hash: Option<HashOutput>,
-    hash: Mutex<Option<HashOutput>>,
+    stored_hash: Option<HasherOutput>,
+    hash: Mutex<Option<HasherOutput>>,
 }
 
 #[async_trait]
@@ -447,8 +447,8 @@ where
         Ok(())
     }
 
-    async fn compute_hash(&self) -> Result<<sha2::Sha512 as Hasher>::Output, ViewError> {
-        let mut hasher = sha2::Sha512::default();
+    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+        let mut hasher = sha3::Sha3_256::default();
         let mut count = 0;
         self.for_each_index_value(|index, value| -> Result<(), ViewError> {
             count += 1;
@@ -468,7 +468,7 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
 {
-    type Hasher = sha2::Sha512;
+    type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let hash = *self.hash.get_mut();

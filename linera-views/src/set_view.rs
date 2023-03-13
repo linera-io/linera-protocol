@@ -3,7 +3,7 @@
 
 use crate::{
     batch::Batch,
-    common::{Context, HashOutput, KeyIterable, Update, MIN_VIEW_TAG},
+    common::{Context, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
@@ -27,8 +27,8 @@ pub struct SetView<C, I> {
     was_cleared: bool,
     updates: BTreeMap<Vec<u8>, Update<()>>,
     _phantom: PhantomData<I>,
-    stored_hash: Option<HashOutput>,
-    hash: Mutex<Option<HashOutput>>,
+    stored_hash: Option<HasherOutput>,
+    hash: Mutex<Option<HasherOutput>>,
 }
 
 #[async_trait]
@@ -246,8 +246,8 @@ where
         Ok(())
     }
 
-    async fn compute_hash(&self) -> Result<<sha2::Sha512 as Hasher>::Output, ViewError> {
-        let mut hasher = sha2::Sha512::default();
+    async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
+        let mut hasher = sha3::Sha3_256::default();
         let mut count = 0;
         self.for_each_key(|key| {
             count += 1;
@@ -267,7 +267,7 @@ where
     ViewError: From<C::Error>,
     I: Clone + Send + Sync + Serialize + DeserializeOwned,
 {
-    type Hasher = sha2::Sha512;
+    type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         let hash = *self.hash.get_mut();

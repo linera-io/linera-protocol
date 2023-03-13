@@ -167,7 +167,7 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
             #first_generic: Context + Send + Sync + Clone + 'static,
             linera_views::views::ViewError: From<#first_generic::Error>,
         {
-            type Hasher = linera_views::sha2::Sha512;
+            type Hasher = linera_views::sha3::Sha3_256;
 
             async fn hash_mut(&mut self) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output, linera_views::views::ViewError> {
                 use linera_views::views::{Hasher, HashableView};
@@ -211,9 +211,9 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
                 use linera_base::crypto::{BcsHashable, CryptoHash};
                 use linera_views::views::HashableView;
                 use serde::{Serialize, Deserialize};
-                use linera_views::sha2::{Sha512, Digest};
+                use linera_views::sha3::{Sha3_256, digest::OutputSizeUser};
                 #[derive(Serialize, Deserialize)]
-                struct #hash_type(GenericArray<u8, <Sha512 as Digest>::OutputSize>);
+                struct #hash_type(GenericArray<u8, <Sha3_256 as OutputSizeUser>::OutputSize>);
                 impl BcsHashable for #hash_type {}
                 let hash = self.hash().await?;
                 Ok(CryptoHash::new(&#hash_type(hash)))
@@ -607,7 +607,7 @@ pub mod tests {
                 C: Context + Send + Sync + Clone + 'static,
                 linera_views::views::ViewError: From<C::Error>,
             {
-                type Hasher = linera_views::sha2::Sha512;
+                type Hasher = linera_views::sha3::Sha3_256;
                 async fn hash_mut(
                     &mut self
                 ) -> Result<<Self::Hasher as linera_views::views::Hasher>::Output,
@@ -712,9 +712,9 @@ pub mod tests {
                     use linera_base::crypto::{BcsHashable, CryptoHash};
                     use linera_views::views::HashableView;
                     use serde::{Serialize, Deserialize};
-                    use linera_views::sha2::{Sha512, Digest};
+                    use linera_views::sha3::{Sha3_256, digest::OutputSizeUser};
                     #[derive(Serialize, Deserialize)]
-                    struct TestViewHash(GenericArray<u8, <Sha512 as Digest>::OutputSize>);
+                    struct TestViewHash(GenericArray<u8, <Sha3_256 as OutputSizeUser>::OutputSize>);
                     impl BcsHashable for TestViewHash {}
                     let hash = self.hash().await?;
                     Ok(CryptoHash::new(&TestViewHash(hash)))

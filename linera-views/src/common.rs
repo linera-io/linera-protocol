@@ -16,8 +16,10 @@ use std::{
 #[path = "unit_tests/common_tests.rs"]
 mod common_tests;
 
-/// This is the standard hash used by sha2
-pub type HashOutput = generic_array::GenericArray<u8, <sha2::Sha512 as sha2::Digest>::OutputSize>;
+#[doc(hidden)]
+pub type HasherOutputSize = <sha3::Sha3_256 as sha3::digest::OutputSizeUser>::OutputSize;
+#[doc(hidden)]
+pub type HasherOutput = generic_array::GenericArray<u8, HasherOutputSize>;
 
 #[derive(Debug)]
 pub(crate) enum Update<T> {
