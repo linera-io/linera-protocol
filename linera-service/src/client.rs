@@ -974,7 +974,7 @@ where
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    tracing_subscriber::fmt::init();
     let options = ClientOptions::from_args();
     let mut context = ClientContext::from_options(&options);
     match options.command {

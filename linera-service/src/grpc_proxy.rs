@@ -24,6 +24,7 @@ use tonic::{
     transport::{Channel, Server},
     Request, Response, Status,
 };
+use tracing::{debug, info, instrument};
 
 #[derive(Clone)]
 pub struct GrpcProxy(Arc<GrpcProxyInner>);
@@ -89,12 +90,9 @@ impl GrpcProxy {
 
     /// Runs the proxy. If either the public server or private server dies for whatever
     /// reason we'll kill the proxy.
+    #[instrument(skip_all, fields(public_address = %self.public_address(), internal_address = %self.internal_address()), err)]
     pub async fn run(self) -> Result<()> {
-        tracing::info!(
-            "Starting gRPC proxy on public address {} and internal address {}...",
-            self.public_address(),
-            self.internal_address()
-        );
+        info!("Starting gRPC server");
         let internal_server = Server::builder()
             .add_service(self.as_notifier_service())
             .serve(self.internal_address());
@@ -115,7 +113,7 @@ impl GrpcProxy {
     where
         R: Debug + Proxyable,
     {
-        tracing::debug!(
+        debug!(
             "handler [ValidatorWorker] proxying request [{:?}] from {:?}",
             request,
             request.remote_addr()
@@ -136,6 +134,7 @@ impl GrpcProxy {
 impl ValidatorNode for GrpcProxy {
     type SubscribeStream = UnboundedReceiverStream<Result<Notification, Status>>;
 
+    #[instrument(skip_all, err(Display))]
     async fn handle_block_proposal(
         &self,
         request: Request<BlockProposal>,
@@ -144,6 +143,7 @@ impl ValidatorNode for GrpcProxy {
         client.handle_block_proposal(inner).await
     }
 
+    #[instrument(skip_all, err(Display))]
     async fn handle_lite_certificate(
         &self,
         request: Request<LiteCertificate>,
@@ -152,6 +152,7 @@ impl ValidatorNode for GrpcProxy {
         client.handle_lite_certificate(inner).await
     }
 
+    #[instrument(skip_all, err(Display))]
     async fn handle_certificate(
         &self,
         request: Request<CertificateWithDependencies>,
@@ -160,6 +161,7 @@ impl ValidatorNode for GrpcProxy {
         client.handle_certificate(inner).await
     }
 
+    #[instrument(skip_all, err(Display))]
     async fn handle_chain_info_query(
         &self,
         request: Request<ChainInfoQuery>,
@@ -168,6 +170,7 @@ impl ValidatorNode for GrpcProxy {
         client.handle_chain_info_query(inner).await
     }
 
+    #[instrument(skip_all, err(Display))]
     async fn subscribe(
         &self,
         request: Request<SubscriptionRequest>,
@@ -185,6 +188,7 @@ impl ValidatorNode for GrpcProxy {
 
 #[async_trait]
 impl NotifierService for GrpcProxy {
+    #[instrument(skip_all, err(Display))]
     async fn notify(&self, request: Request<Notification>) -> Result<Response<()>, Status> {
         let notification = request.into_inner();
         let chain_id = notification

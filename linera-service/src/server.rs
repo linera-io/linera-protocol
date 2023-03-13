@@ -351,9 +351,7 @@ fn parse_duration(s: &str) -> Result<u64, parse_duration::parse::Error> {
 
 #[tokio::main]
 async fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .format_timestamp_millis()
-        .init();
+    tracing_subscriber::fmt::init();
     let options = ServerOptions::from_args();
 
     match options.command {
