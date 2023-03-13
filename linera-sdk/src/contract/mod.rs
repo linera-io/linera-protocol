@@ -27,11 +27,11 @@ macro_rules! contract {
 
         /// Mark the contract type to be exported.
         impl $crate::contract::Contract for $application {
+            type Initialize = Initialize;
+            type ExecuteOperation = ExecuteOperation;
+            type ExecuteEffect = ExecuteEffect;
             type CallApplication = CallApplication;
             type CallSession = CallSession;
-            type ExecuteEffect = ExecuteEffect;
-            type ExecuteOperation = ExecuteOperation;
-            type Initialize = Initialize;
         }
 
         $crate::instance_exported_future! {
