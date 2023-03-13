@@ -13,7 +13,7 @@ use super::{
         ExecutionError, WasmExecutionError,
     },
     contract::{
-        CallSession, ExecuteEffect, ExecuteOperation, HandleApplicationCall, Initialize,
+        ExecuteEffect, ExecuteOperation, HandleApplicationCall, HandleSessionCall, Initialize,
         PollCallApplication, PollCallSession, PollExecutionResult,
     },
     service::{PollQuery, QueryApplication},
@@ -61,6 +61,6 @@ impl_guest_future_interface! {
     ExecuteOperation: execute_operation_poll -> PollExecutionResult -> Contract => RawExecutionResult<Vec<u8>>,
     ExecuteEffect: execute_effect_poll -> PollExecutionResult -> Contract => RawExecutionResult<Vec<u8>>,
     HandleApplicationCall: handle_application_call_poll -> PollCallApplication -> Contract => ApplicationCallResult,
-    CallSession: call_session_poll -> PollCallSession -> Contract => (SessionCallResult, Vec<u8>),
+    HandleSessionCall: handle_session_call_poll -> PollCallSession -> Contract => (SessionCallResult, Vec<u8>),
     QueryApplication: query_application_poll -> PollQuery -> Service => Vec<u8>,
 }

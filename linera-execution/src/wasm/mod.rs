@@ -200,7 +200,7 @@ impl UserApplication for WasmApplication {
             #[cfg(feature = "wasmtime")]
             WasmRuntime::Wasmtime => {
                 self.prepare_contract_runtime_with_wasmtime(storage)?
-                    .call_session(
+                    .handle_session_call(
                         context,
                         session_kind,
                         session_data,
@@ -212,7 +212,7 @@ impl UserApplication for WasmApplication {
             #[cfg(feature = "wasmer")]
             WasmRuntime::Wasmer => {
                 self.prepare_contract_runtime_with_wasmer(storage)?
-                    .call_session(
+                    .handle_session_call(
                         context,
                         session_kind,
                         session_data,

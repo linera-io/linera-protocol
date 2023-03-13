@@ -55,8 +55,8 @@ pub trait Contract: ApplicationRuntimeContext {
         + Unpin;
 
     /// The WIT type for the resource representing the guest future
-    /// [`call_session`][crate::Contract::call_session] method.
-    type CallSession: GuestFutureInterface<Self, Output = (SessionCallResult, Vec<u8>)>
+    /// [`handle_session_call`][crate::Contract::handle_session_call] method.
+    type HandleSessionCall: GuestFutureInterface<Self, Output = (SessionCallResult, Vec<u8>)>
         + Send
         + Unpin;
 
@@ -150,20 +150,20 @@ pub trait Contract: ApplicationRuntimeContext {
 
     /// Create a new future for the user contract to handle a session call from another
     /// contract.
-    fn call_session_new(
+    fn handle_session_call_new(
         &self,
         store: &mut Self::Store,
         context: Self::CalleeContext,
         session: Self::SessionParam<'_>,
         argument: &[u8],
         forwarded_sessions: &[Self::SessionId],
-    ) -> Result<Self::CallSession, Self::Error>;
+    ) -> Result<Self::HandleSessionCall, Self::Error>;
 
     /// Poll a user contract future that's handling a session call from another contract.
-    fn call_session_poll(
+    fn handle_session_call_poll(
         &self,
         store: &mut Self::Store,
-        future: &Self::CallSession,
+        future: &Self::HandleSessionCall,
     ) -> Result<Self::PollCallSession, Self::Error>;
 }
 
@@ -334,7 +334,7 @@ where
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
     ///
     /// ```ignore
-    /// pub async fn call_session(
+    /// pub async fn handle_session_call(
     ///     mut self,
     ///     context: &CalleeContext,
     ///     session_kind: u64,
@@ -343,7 +343,7 @@ where
     ///     forwarded_sessions: Vec<SessionId>,
     /// ) -> Result<SessionCallResult, ExecutionError>
     /// ```
-    pub fn call_session<'session_data>(
+    pub fn handle_session_call<'session_data>(
         mut self,
         context: &CalleeContext,
         session_kind: u64,
@@ -351,7 +351,7 @@ where
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> future::MapOk<
-        GuestFuture<'context, A::CallSession, A>,
+        GuestFuture<'context, A::HandleSessionCall, A>,
         impl FnOnce((SessionCallResult, Vec<u8>)) -> SessionCallResult + 'session_data,
     >
     where
@@ -367,7 +367,7 @@ where
 
         let session = A::SessionParam::from((session_kind, &*session_data));
 
-        let future = self.application.call_session_new(
+        let future = self.application.handle_session_call_new(
             &mut self.store,
             (*context).into(),
             session,

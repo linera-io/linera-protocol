@@ -192,7 +192,7 @@ impl<'storage> common::Contract for Contract<'storage> {
     type ExecuteOperation = contract::ExecuteOperation;
     type ExecuteEffect = contract::ExecuteEffect;
     type HandleApplicationCall = contract::HandleApplicationCall;
-    type CallSession = contract::CallSession;
+    type HandleSessionCall = contract::HandleSessionCall;
     type OperationContext = contract::OperationContext;
     type EffectContext = contract::EffectContext;
     type CalleeContext = contract::CalleeContext;
@@ -277,15 +277,15 @@ impl<'storage> common::Contract for Contract<'storage> {
         contract::Contract::handle_application_call_poll(&self.contract, store, future)
     }
 
-    fn call_session_new(
+    fn handle_session_call_new(
         &self,
         store: &mut Store,
         context: contract::CalleeContext,
         session: contract::SessionParam,
         argument: &[u8],
         forwarded_sessions: &[contract::SessionId],
-    ) -> Result<contract::CallSession, RuntimeError> {
-        contract::Contract::call_session_new(
+    ) -> Result<contract::HandleSessionCall, RuntimeError> {
+        contract::Contract::handle_session_call_new(
             &self.contract,
             store,
             context,
@@ -295,12 +295,12 @@ impl<'storage> common::Contract for Contract<'storage> {
         )
     }
 
-    fn call_session_poll(
+    fn handle_session_call_poll(
         &self,
         store: &mut Store,
-        future: &contract::CallSession,
+        future: &contract::HandleSessionCall,
     ) -> Result<contract::PollCallSession, RuntimeError> {
-        contract::Contract::call_session_poll(&self.contract, store, future)
+        contract::Contract::handle_session_call_poll(&self.contract, store, future)
     }
 }
 

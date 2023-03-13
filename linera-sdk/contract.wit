@@ -35,13 +35,13 @@ resource handle-application-call {
     poll: func() -> poll-call-application
 }
 
-resource call-session {
+resource handle-session-call {
     static new: func(
         context: callee-context,
         session: session,
         argument: list<u8>,
         forwarded-sessions: list<session-id>,
-    ) -> call-session
+    ) -> handle-session-call
 
     poll: func() -> poll-call-session
 }
