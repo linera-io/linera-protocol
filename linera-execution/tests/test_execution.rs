@@ -136,7 +136,7 @@ impl UserApplication for TestApplication {
     }
 
     /// Create a session.
-    async fn call_application(
+    async fn handle_application_call(
         &self,
         context: &CalleeContext,
         _storage: &dyn WritableStorage,

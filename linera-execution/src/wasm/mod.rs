@@ -163,7 +163,7 @@ impl UserApplication for WasmApplication {
         Ok(result)
     }
 
-    async fn call_application(
+    async fn handle_application_call(
         &self,
         context: &CalleeContext,
         storage: &dyn WritableStorage,

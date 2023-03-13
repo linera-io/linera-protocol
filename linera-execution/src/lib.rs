@@ -126,7 +126,7 @@ pub trait UserApplication {
     ///
     /// When an application is executing an operation or an effect it may call other applications,
     /// which can in turn call other applications.
-    async fn call_application(
+    async fn handle_application_call(
         &self,
         context: &CalleeContext,
         storage: &dyn WritableStorage,

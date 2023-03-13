@@ -295,7 +295,7 @@ where
     }
 
     /// Call the guest WASM module's implementation of
-    /// [`UserApplication::call_application`][`linera_execution::UserApplication::call_application`].
+    /// [`UserApplication::handle_application_call`][`linera_execution::UserApplication::handle_application_call`].
     ///
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
     ///

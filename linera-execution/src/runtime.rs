@@ -526,7 +526,7 @@ where
             signer: authenticated_signer,
         });
         let raw_result = code
-            .call_application(&callee_context, self, argument, forwarded_sessions)
+            .handle_application_call(&callee_context, self, argument, forwarded_sessions)
             .await?;
         self.applications_mut().pop();
         // Interpret the results of the call.
