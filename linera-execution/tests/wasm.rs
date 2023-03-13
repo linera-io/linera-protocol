@@ -19,11 +19,7 @@ use test_case::test_case;
 /// Test if the "counter" example application in `linera-sdk` compiled to a WASM module can be
 /// called correctly and consume the expected amount of fuel.
 ///
-/// Update the bytecode files as follows:
-/// ```ignore
-/// (cd linera-examples && cargo build --release)
-/// cp linera-examples/target/wasm32-unknown-unknown/release/counter_{contract,service}.wasm linera-execution/tests/fixtures/
-/// ```
+/// To update the bytecode files, run `linera-execution/update_wasm_fixtures.sh`.
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
