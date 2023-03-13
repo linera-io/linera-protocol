@@ -8,8 +8,8 @@ use structopt::StructOpt;
 
 #[derive(Clone, Debug, StructOpt)]
 pub struct CrossChainConfig {
-    /// Number of cross-chains messages allowed before blocking the main server loop
-    #[structopt(long = "cross_chain_queue_size", default_value = "1")]
+    /// Number of cross-chains messages allowed before dropping them.
+    #[structopt(long = "cross_chain_queue_size", default_value = "1000")]
     pub(crate) queue_size: usize,
     /// Maximum number of retries for a cross-chain message.
     #[structopt(long = "cross_chain_max_retries", default_value = "10")]
