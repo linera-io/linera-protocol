@@ -81,12 +81,12 @@ fn generate_view_code(input: ItemStruct) -> TokenStream2 {
                 #(#rollbackes)*
             }
 
-            fn flush(&mut self, batch: &mut linera_views::common::Batch) -> Result<(), linera_views::views::ViewError> {
+            fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<(), linera_views::views::ViewError> {
                 #(#flushes)*
                 Ok(())
             }
 
-            fn delete(self, batch: &mut linera_views::common::Batch) {
+            fn delete(self, batch: &mut linera_views::batch::Batch) {
                 #(#deletes)*
             }
 
@@ -121,7 +121,7 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
             linera_views::views::ViewError: From<#first_generic::Error>,
         {
             async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
-                use linera_views::common::Batch;
+                use linera_views::batch::Batch;
                 let mut batch = Batch::new();
                 #(#flushes)*
                 self.context().write_batch(batch).await?;
@@ -129,7 +129,7 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
             }
 
             async fn write_delete(self) -> Result<(), linera_views::views::ViewError> {
-                use linera_views::common::Batch;
+                use linera_views::batch::Batch;
                 let context = self.context().clone();
                 let batch = Batch::build(move |batch| {
                     Box::pin(async move {
@@ -207,7 +207,7 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
         {
             async fn crypto_hash(&self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
                 use linera_views::generic_array::GenericArray;
-                use linera_views::common::Batch;
+                use linera_views::batch::Batch;
                 use linera_base::crypto::{BcsHashable, CryptoHash};
                 use linera_views::views::HashableView;
                 use serde::{Serialize, Deserialize};
@@ -569,13 +569,13 @@ pub mod tests {
                 }
                 fn flush(
                     &mut self,
-                    batch: &mut linera_views::common::Batch
+                    batch: &mut linera_views::batch::Batch
                 ) -> Result<(), linera_views::views::ViewError> {
                     self.register.flush(batch)?;
                     self.collection.flush(batch)?;
                     Ok(())
                 }
-                fn delete(self, batch: &mut linera_views::common::Batch) {
+                fn delete(self, batch: &mut linera_views::batch::Batch) {
                     self.register.delete(batch);
                     self.collection.delete(batch);
                 }
@@ -657,7 +657,7 @@ pub mod tests {
                 linera_views::views::ViewError: From<C::Error>,
             {
                 async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
-                    use linera_views::common::Batch;
+                    use linera_views::batch::Batch;
                     let mut batch = Batch::new();
                     self.register.flush(&mut batch)?;
                     self.collection.flush(&mut batch)?;
@@ -665,7 +665,7 @@ pub mod tests {
                     Ok(())
                 }
                 async fn write_delete(self) -> Result<(), linera_views::views::ViewError> {
-                    use linera_views::common::Batch;
+                    use linera_views::batch::Batch;
                     let context = self.context().clone();
                     let batch = Batch::build(move |batch| {
                         Box::pin(async move {
@@ -708,7 +708,7 @@ pub mod tests {
                 ) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError>
                 {
                     use linera_views::generic_array::GenericArray;
-                    use linera_views::common::Batch;
+                    use linera_views::batch::Batch;
                     use linera_base::crypto::{BcsHashable, CryptoHash};
                     use linera_views::views::HashableView;
                     use serde::{Serialize, Deserialize};

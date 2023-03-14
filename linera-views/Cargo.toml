@@ -9,6 +9,7 @@ test = ["anyhow", "tokio/macros", "tokio/sync", "tokio/parking_lot", "tokio/rt"]
 aws = ["aws-config", "aws-sdk-dynamodb", "aws-sdk-s3", "aws-smithy-http", "aws-types"]
 
 [dependencies]
+static_assertions = "1.1.0"
 async-lock = "2.6.0"
 async-trait = "0.1.52"
 bcs = "0.1.3"

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 extern crate linera_views_derive;
-use crate::common::Batch;
+use crate::batch::Batch;
 use async_trait::async_trait;
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::crypto::CryptoHash;

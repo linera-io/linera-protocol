@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    batch::{Batch, WriteOperation},
     common::{
-        get_interval, get_upper_bound, Batch, Context, HashOutput, KeyIterable, KeyValueIterable,
-        Update, WriteOperation,
+        get_interval, get_upper_bound, Context, HashOutput, KeyIterable, KeyValueIterable, Update,
+        MIN_VIEW_TAG,
     },
     views::{HashableView, Hasher, View, ViewError},
 };
@@ -39,9 +40,9 @@ use {
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the indices of the view
-    Index = 0,
+    Index = MIN_VIEW_TAG,
     /// Prefix for the hash
-    Hash = 1,
+    Hash,
 }
 
 /// A view that represents the function of KeyValueStoreClient (though not KeyValueStoreClient)
@@ -531,12 +532,16 @@ where
         kvsv.find_key_values_by_prefix(key_prefix).await
     }
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
+    async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
         let mut kvsv = self.kvsv.write().await;
         kvsv.write_batch(batch).await?;
         let mut batch = Batch::new();
         kvsv.flush(&mut batch)?;
         kvsv.context().write_batch(batch).await?;
+        Ok(())
+    }
+
+    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), Self::Error> {
         Ok(())
     }
 }

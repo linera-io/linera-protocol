@@ -3,7 +3,8 @@
 
 use async_lock::{Mutex, RwLock};
 use linera_views::{
-    common::{Batch, KeyIterable, KeyValueStoreClient},
+    batch::Batch,
+    common::{KeyIterable, KeyValueStoreClient},
     key_value_store_view::ViewContainer,
     memory::MemoryContext,
     rocksdb::DB,
@@ -29,7 +30,7 @@ async fn test_ordering_keys_key_value_vec<OP: KeyValueStoreClient + Sync>(
     for key_value in key_value_vec {
         batch.put_key_value_bytes(key_value.0, key_value.1);
     }
-    key_value_operation.write_batch(batch).await.unwrap();
+    key_value_operation.write_batch(batch, &[]).await.unwrap();
     let keys: Vec<Vec<u8>> = key_value_operation
         .find_keys_by_prefix(&key_prefix)
         .await

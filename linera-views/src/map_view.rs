@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    common::{Batch, Context, HashOutput, KeyIterable, KeyValueIterable, Update},
+    batch::Batch,
+    common::{Context, HashOutput, KeyIterable, KeyValueIterable, Update, MIN_VIEW_TAG},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
@@ -14,9 +15,9 @@ use std::{borrow::Borrow, collections::BTreeMap, fmt::Debug, marker::PhantomData
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the indices of the view
-    Index = 0,
+    Index = MIN_VIEW_TAG,
     /// Prefix for the hash
-    Hash = 1,
+    Hash,
 }
 
 /// A view that supports inserting and removing values indexed by a key.

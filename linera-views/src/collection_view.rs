@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    common::{Batch, Context, HashOutput, KeyIterable, Update},
+    batch::Batch,
+    common::{Context, HashOutput, KeyIterable, Update, MIN_VIEW_TAG},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -54,11 +55,11 @@ impl<'a, W> std::ops::Deref for ReadGuardedView<'a, W> {
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for specifying an index and serves to indicate the existence of an entry in the collection
-    Index = 0,
+    Index = MIN_VIEW_TAG,
     /// Prefix for specifying as the prefix for the sub-view.
-    Subview = 1,
+    Subview,
     /// Prefix for the hash value
-    Hash = 2,
+    Hash,
 }
 
 #[async_trait]

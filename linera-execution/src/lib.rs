@@ -39,7 +39,7 @@ use linera_base::{
     data_types::{BlockHeight, ChainId, EffectId, Owner, Timestamp},
     hex_debug,
 };
-use linera_views::{common::Batch, views::ViewError};
+use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
 use std::{io, path::Path, str::FromStr, sync::Arc};
 use thiserror::Error;

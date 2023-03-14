@@ -38,7 +38,7 @@ use super::{
     WasmApplication, WasmExecutionError,
 };
 use crate::{ExecutionError, QueryableStorage, SessionId, WritableStorage};
-use linera_views::{common::Batch, views::ViewError};
+use linera_views::{batch::Batch, views::ViewError};
 use std::{error::Error, task::Poll};
 use wasmtime::{Config, Engine, Linker, Module, Store, Trap};
 use wit_bindgen_host_wasmtime_rust::Le;
