@@ -61,6 +61,33 @@ macro_rules! contract {
                 )
                 .await
             }
+
+            /// Calls a `session` from another application.
+            ///
+            /// The application state is persisted before the call and restored after the call, in
+            /// order to allow reentrant calls to use the most up-to-date state.
+            pub async fn call_session(
+                &mut self,
+                authenticated: bool,
+                session: $crate::SessionId,
+                argument: &[u8],
+                forwarded_sessions: Vec<$crate::SessionId>,
+            ) -> (Vec<u8>, Vec<SessionId>) {
+                use $crate::contract::exported_futures::ContractStateStorage as Storage;
+
+                <Self as $crate::Contract>::Storage::execute_with_released_state(
+                    self,
+                    move || async move {
+                        $crate::contract::system_api::call_session(
+                            authenticated,
+                            session,
+                            argument,
+                            forwarded_sessions,
+                        )
+                    },
+                )
+                .await
+            }
         }
 
         $crate::instance_exported_future! {
