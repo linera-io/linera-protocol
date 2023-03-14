@@ -1889,6 +1889,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "reentrant-counter2"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "futures",
+ "linera-sdk",
+ "linera-views",
+ "thiserror",
+ "webassembly-test",
+]
+
+[[package]]
 name = "regalloc2"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
