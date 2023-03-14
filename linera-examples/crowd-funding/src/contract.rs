@@ -9,7 +9,6 @@ use self::state::{CrowdFunding, Status};
 use async_trait::async_trait;
 use crowd_funding::ApplicationCall;
 use fungible::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
-use futures::{stream, StreamExt, TryStreamExt};
 use linera_sdk::{
     contract::system_api, ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext,
     ExecutionResult, FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
@@ -131,12 +130,13 @@ impl CrowdFunding {
     ) -> Result<(), Error> {
         self.check_session_tokens(&sessions)?;
 
-        let session_balances = Self::query_session_balances(&sessions).await?;
+        let session_balances = self.query_session_balances(&sessions).await?;
         let amount = session_balances.iter().sum();
 
         ensure!(amount > 0, Error::EmptyPledge);
 
-        Self::collect_session_tokens(sessions, session_balances).await?;
+        self.collect_session_tokens(sessions, session_balances)
+            .await?;
 
         let source_application = context
             .authenticated_caller_id
@@ -159,44 +159,45 @@ impl CrowdFunding {
     }
 
     /// Gathers the balances in all the pledged sessions.
-    async fn query_session_balances(sessions: &[SessionId]) -> Result<Vec<u128>, Error> {
+    async fn query_session_balances(&mut self, sessions: &[SessionId]) -> Result<Vec<u128>, Error> {
+        let mut balances = Vec::with_capacity(sessions.len());
         let balance_query = bcs::to_bytes(&fungible::SessionCall::Balance)
             .map_err(Error::InvalidSessionBalanceQuery)?;
 
-        stream::iter(sessions)
-            .map(|session| {
-                let (balance_bytes, _) =
-                    system_api::call_session(false, *session, &balance_query, vec![]);
+        for session in sessions {
+            let (balance_bytes, _) = self
+                .call_session(false, *session, &balance_query, vec![])
+                .await;
 
-                u128::from_bcs_bytes(&balance_bytes).map_err(Error::InvalidSessionBalance)
-            })
-            .try_collect()
-            .await
+            balances
+                .push(u128::from_bcs_bytes(&balance_bytes).map_err(Error::InvalidSessionBalance)?);
+        }
+
+        Ok(balances)
     }
 
     /// Collects all tokens in the sessions and places them in custody of the campaign.
     async fn collect_session_tokens(
+        &mut self,
         sessions: Vec<SessionId>,
         balances: Vec<u128>,
     ) -> Result<(), Error> {
         let destination_account = AccountOwner::Application(system_api::current_application_id());
         let destination_chain = system_api::current_chain_id();
 
-        stream::iter(sessions.into_iter().zip(balances))
-            .map(Ok)
-            .try_for_each_concurrent(None, move |(session, balance)| async move {
-                let transfer = Transfer {
-                    destination_account,
-                    destination_chain,
-                    amount: balance,
-                };
-                let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
+        for (session, balance) in sessions.into_iter().zip(balances) {
+            let transfer = Transfer {
+                destination_account,
+                destination_chain,
+                amount: balance,
+            };
+            let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
 
-                system_api::call_session(false, session, &transfer_bytes, vec![]);
+            self.call_session(false, session, &transfer_bytes, vec![])
+                .await;
+        }
 
-                Ok(())
-            })
-            .await
+        Ok(())
     }
 
     /// Marks a pledge in the application state, so that it can be returned if the campaign is
