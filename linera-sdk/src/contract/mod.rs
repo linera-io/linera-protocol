@@ -51,7 +51,7 @@ macro_rules! contract {
                 <Self as $crate::Contract>::Storage::execute_with_released_state(
                     self,
                     move || async move {
-                        $crate::contract::system_api::call_application(
+                        $crate::contract::system_api::call_application_without_persisting_state(
                             authenticated,
                             application,
                             argument,
