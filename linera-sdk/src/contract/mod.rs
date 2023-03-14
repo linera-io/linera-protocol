@@ -34,6 +34,35 @@ macro_rules! contract {
             type HandleSessionCall = HandleSessionCall;
         }
 
+        impl $application {
+            /// Calls another `application`.
+            ///
+            /// The application state is persisted before the call and restored after the call, in
+            /// order to allow reentrant calls to use the most up-to-date state.
+            pub async fn call_application(
+                &mut self,
+                authenticated: bool,
+                application: $crate::ApplicationId,
+                argument: &[u8],
+                forwarded_sessions: Vec<$crate::SessionId>,
+            ) -> (Vec<u8>, Vec<$crate::SessionId>) {
+                use $crate::contract::exported_futures::ContractStateStorage as Storage;
+
+                <Self as $crate::Contract>::Storage::execute_with_released_state(
+                    self,
+                    move || async move {
+                        $crate::contract::system_api::call_application(
+                            authenticated,
+                            application,
+                            argument,
+                            forwarded_sessions,
+                        )
+                    },
+                )
+                .await
+            }
+        }
+
         $crate::instance_exported_future! {
             contract::Initialize<$application>(
                 context: $crate::contract::OperationContext,
