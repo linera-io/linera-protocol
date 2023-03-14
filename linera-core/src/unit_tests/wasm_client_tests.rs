@@ -247,6 +247,105 @@ where
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
+async fn test_memory_run_reentrant_application(
+    wasm_runtime: WasmRuntime,
+) -> Result<(), anyhow::Error> {
+    run_test_run_reentrant_application(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_rocksdb_run_reentrant_application(
+    wasm_runtime: WasmRuntime,
+) -> Result<(), anyhow::Error> {
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
+    run_test_run_reentrant_application(MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime))
+        .await
+}
+
+#[cfg(feature = "aws")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_run_reentrant_application(
+    wasm_runtime: WasmRuntime,
+) -> Result<(), anyhow::Error> {
+    run_test_run_reentrant_application(MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime))
+        .await
+}
+
+async fn run_test_run_reentrant_application<B>(store_builder: B) -> Result<(), anyhow::Error>
+where
+    B: StoreBuilder,
+    ViewError: From<<B::Store as Store>::ContextError>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    // Will publish the bytecodes.
+    let mut publisher = builder
+        .add_initial_chain(ChainDescription::Root(0), Balance::from(3))
+        .await?;
+    // Will create the apps and use them to send a message.
+    let mut creator = builder
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(0))
+        .await?;
+
+    let cert = creator
+        .subscribe_to_published_bytecodes(publisher.chain_id)
+        .await
+        .unwrap();
+    publisher.receive_certificate(cert).await.unwrap();
+    publisher.process_inbox().await.unwrap();
+
+    let (bytecode_id, certificate) = {
+        let (contract_path, service_path) =
+            linera_execution::wasm_test::get_example_bytecode_paths("reentrant-counter")?;
+        publisher
+            .publish_bytecode(
+                Bytecode::load_from_file(contract_path).await?,
+                Bytecode::load_from_file(service_path).await?,
+            )
+            .await
+            .unwrap()
+    };
+    // Receive our own certificate to broadcast the bytecode locations.
+    publisher.receive_certificate(certificate).await.unwrap();
+    publisher.process_inbox().await.unwrap();
+
+    // Creator receives the bytecodes then creates the app.
+    creator.synchronize_and_recompute_balance().await.unwrap();
+    creator.process_inbox().await.unwrap();
+    let initial_value = 100_u128;
+    let (application_id, _) = creator
+        .create_application(bytecode_id, vec![], bcs::to_bytes(&initial_value)?, vec![])
+        .await
+        .unwrap();
+
+    let increment = 51_u128;
+    let user_operation = bcs::to_bytes(&increment)?;
+    let certificate = creator
+        .execute_operation(
+            ApplicationId::User(application_id),
+            Operation::User(user_operation),
+        )
+        .await
+        .unwrap();
+    creator.receive_certificate(certificate).await.unwrap();
+
+    let response = creator
+        .query_application(ApplicationId::User(application_id), &Query::User(vec![]))
+        .await
+        .unwrap();
+
+    let expected = 151_u128;
+    let expected_bytes = bcs::to_bytes(&expected)?;
+    assert!(matches!(response, Response::User(bytes) if bytes == expected_bytes));
+    Ok(())
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test)]
 async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
     run_test_cross_chain_message(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
