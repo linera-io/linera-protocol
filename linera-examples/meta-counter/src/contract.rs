@@ -55,7 +55,8 @@ impl Contract for MetaCounter {
         effect: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
         log::trace!("executing {:?} via {:?}", effect, Self::counter_id()?);
-        system_api::call_application(true, Self::counter_id()?, effect, vec![]);
+        self.call_application(true, Self::counter_id()?, effect, vec![])
+            .await;
         Ok(ExecutionResult::default())
     }
 

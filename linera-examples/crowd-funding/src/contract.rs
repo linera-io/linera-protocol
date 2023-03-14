@@ -245,26 +245,27 @@ impl CrowdFunding {
             self.send(amount, pledger).await?;
         }
 
-        self.send(self.balance().await?, self.parameters().owner)
-            .await?;
+        let balance = self.balance().await?;
+        self.send(balance, self.parameters().owner).await?;
         self.status = Status::Cancelled;
 
         Ok(())
     }
 
     /// Queries the token application to determine the total amount of tokens in custody.
-    async fn balance(&self) -> Result<u128, Error> {
+    async fn balance(&mut self) -> Result<u128, Error> {
         let query_bytes = bcs::to_bytes(&fungible::ApplicationCall::Balance)
             .map_err(Error::InvalidBalanceQuery)?;
 
-        let (response, _sessions) =
-            system_api::call_application(true, self.parameters().token, &query_bytes, vec![]);
+        let (response, _sessions) = self
+            .call_application(true, self.parameters().token, &query_bytes, vec![])
+            .await;
 
         bcs::from_bytes(&response).map_err(Error::InvalidBalance)
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
-    async fn send(&self, amount: u128, destination: AccountOwner) -> Result<(), Error> {
+    async fn send(&mut self, amount: u128, destination: AccountOwner) -> Result<(), Error> {
         let transfer = ApplicationTransfer::Static(Transfer {
             destination_account: destination,
             destination_chain: system_api::current_chain_id(),
@@ -276,10 +277,11 @@ impl CrowdFunding {
     }
 
     /// Calls into the Fungible Token application to execute the `transfer`.
-    async fn transfer(&self, transfer: fungible::ApplicationCall) -> Result<(), Error> {
+    async fn transfer(&mut self, transfer: fungible::ApplicationCall) -> Result<(), Error> {
         let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
 
-        system_api::call_application(true, self.parameters().token, &transfer_bytes, vec![]);
+        self.call_application(true, self.parameters().token, &transfer_bytes, vec![])
+            .await;
 
         Ok(())
     }

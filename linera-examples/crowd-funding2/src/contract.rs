@@ -16,10 +16,7 @@ use linera_sdk::{
     ExecutionResult, FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
     ViewStateStorage,
 };
-use linera_views::{
-    common::Context,
-    views::{View, ViewError},
-};
+use linera_views::views::{View, ViewError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -29,10 +26,7 @@ pub type WritableCrowdFunding = CrowdFunding<WasmContext>;
 linera_sdk::contract!(WritableCrowdFunding);
 
 #[async_trait]
-impl<C: Context + Send + Sync + Clone + 'static> Contract for CrowdFunding<C>
-where
-    ViewError: From<<C as linera_views::common::Context>::Error>,
-{
+impl Contract for CrowdFunding<WasmContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 
@@ -108,10 +102,7 @@ where
     }
 }
 
-impl<C: Context + Send + Sync + Clone + 'static> CrowdFunding<C>
-where
-    ViewError: From<<C as linera_views::common::Context>::Error>,
-{
+impl CrowdFunding<WasmContext> {
     /// Adds a pledge from a [`SignedTransfer`].
     async fn signed_pledge(&mut self, transfer: SignedTransfer) -> Result<(), Error> {
         let amount = transfer.payload.transfer.amount;
@@ -270,26 +261,27 @@ where
             self.send(amount, pledger).await?;
         }
 
-        self.send(self.balance().await?, self.parameters().owner)
-            .await?;
+        let balance = self.balance().await?;
+        self.send(balance, self.parameters().owner).await?;
         self.status.set(Status::Cancelled);
 
         Ok(())
     }
 
     /// Queries the token application to determine the total amount of tokens in custody.
-    async fn balance(&self) -> Result<u128, Error> {
+    async fn balance(&mut self) -> Result<u128, Error> {
         let query_bytes = bcs::to_bytes(&fungible2::ApplicationCall::Balance)
             .map_err(Error::InvalidBalanceQuery)?;
 
-        let (response, _sessions) =
-            system_api::call_application(true, self.parameters().token, &query_bytes, vec![]);
+        let (response, _sessions) = self
+            .call_application(true, self.parameters().token, &query_bytes, vec![])
+            .await;
 
         bcs::from_bytes(&response).map_err(Error::InvalidBalance)
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
-    async fn send(&self, amount: u128, destination: AccountOwner) -> Result<(), Error> {
+    async fn send(&mut self, amount: u128, destination: AccountOwner) -> Result<(), Error> {
         let transfer = ApplicationTransfer::Static(Transfer {
             destination_account: destination,
             destination_chain: system_api::current_chain_id(),
@@ -301,10 +293,11 @@ where
     }
 
     /// Calls into the Fungible2 Token application to execute the `transfer`.
-    async fn transfer(&self, transfer: fungible2::ApplicationCall) -> Result<(), Error> {
+    async fn transfer(&mut self, transfer: fungible2::ApplicationCall) -> Result<(), Error> {
         let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
 
-        system_api::call_application(true, self.parameters().token, &transfer_bytes, vec![]);
+        self.call_application(true, self.parameters().token, &transfer_bytes, vec![])
+            .await;
 
         Ok(())
     }
