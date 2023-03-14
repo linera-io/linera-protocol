@@ -9,6 +9,7 @@ members = [
         "counter2",
         "crowd-funding2",
         "fungible2",
+        "reentrant-counter",
 ]
 
 [profile.release]
