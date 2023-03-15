@@ -1,6 +1,6 @@
 use crate::{contract, service};
 use log::{LevelFilter, Log, Metadata, Record};
-use std::panic::PanicInfo;
+use std::panic::{self, PanicInfo};
 
 static CONTRACT_LOGGER: ContractLogger = ContractLogger;
 static SERVICE_LOGGER: ServiceLogger = ServiceLogger;
@@ -14,6 +14,7 @@ impl ContractLogger {
     pub fn install() {
         log::set_logger(&CONTRACT_LOGGER).expect("Failed to initialize contract logger");
         log::set_max_level(LevelFilter::Trace);
+        panic::set_hook(Box::new(log_panic));
     }
 }
 
