@@ -209,21 +209,23 @@ where
             available_fuel,
         );
         // Make the call to user code.
-        let mut result = match action {
+        let call_result = match action {
             UserAction::Initialize(context, argument) => {
-                application.initialize(context, &runtime, &argument).await?
+                application.initialize(context, &runtime, &argument).await
             }
             UserAction::Operation(context, operation) => {
                 application
                     .execute_operation(context, &runtime, operation)
-                    .await?
+                    .await
             }
             UserAction::Effect(context, effect) => {
-                application
-                    .execute_effect(context, &runtime, effect)
-                    .await?
+                application.execute_effect(context, &runtime, effect).await
             }
         };
+        if let Err(ExecutionError::UserError(message)) = &call_result {
+            tracing::error!("User application reported an error: {message}");
+        }
+        let mut result = call_result?;
         // Set the authenticated signer to be used in outgoing effects.
         result.authenticated_signer = signer;
         // Update the amount of available fuel after execution has consumed some or all of it
