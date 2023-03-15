@@ -34,7 +34,9 @@ pub trait ContractStateStorage<Application> {
     ///
     /// The state is only stored back in storage if the `operation` succeeds. Otherwise, the error
     /// is returned as a [`String`].
-    async fn with_state<Operation, Success, Error>(operation: Operation) -> Result<Success, String>
+    async fn execute_with_state<Operation, Success, Error>(
+        operation: Operation,
+    ) -> Result<Success, String>
     where
         Operation: for<'app> FnOnce(
             &'app mut Application,
@@ -110,9 +112,11 @@ where
     pub fn new(context: contract::OperationContext, argument: Vec<u8>) -> Self {
         ContractLogger::install();
         Initialize {
-            future: ExportedFuture::new(Application::Storage::with_state(move |application| {
-                async move { application.initialize(&context.into(), &argument).await }.boxed()
-            })),
+            future: ExportedFuture::new(Application::Storage::execute_with_state(
+                move |application| {
+                    async move { application.initialize(&context.into(), &argument).await }.boxed()
+                },
+            )),
             _application: PhantomData,
         }
     }
@@ -147,14 +151,16 @@ where
     pub fn new(context: contract::OperationContext, operation: Vec<u8>) -> Self {
         ContractLogger::install();
         ExecuteOperation {
-            future: ExportedFuture::new(Application::Storage::with_state(move |application| {
-                async move {
-                    application
-                        .execute_operation(&context.into(), &operation)
-                        .await
-                }
-                .boxed()
-            })),
+            future: ExportedFuture::new(Application::Storage::execute_with_state(
+                move |application| {
+                    async move {
+                        application
+                            .execute_operation(&context.into(), &operation)
+                            .await
+                    }
+                    .boxed()
+                },
+            )),
             _application: PhantomData,
         }
     }
@@ -189,9 +195,12 @@ where
     pub fn new(context: contract::EffectContext, effect: Vec<u8>) -> Self {
         ContractLogger::install();
         ExecuteEffect {
-            future: ExportedFuture::new(Application::Storage::with_state(move |application| {
-                async move { application.execute_effect(&context.into(), &effect).await }.boxed()
-            })),
+            future: ExportedFuture::new(Application::Storage::execute_with_state(
+                move |application| {
+                    async move { application.execute_effect(&context.into(), &effect).await }
+                        .boxed()
+                },
+            )),
             _application: PhantomData,
         }
     }
@@ -230,19 +239,21 @@ where
     ) -> Self {
         ContractLogger::install();
         HandleApplicationCall {
-            future: ExportedFuture::new(Application::Storage::with_state(move |application| {
-                async move {
-                    let forwarded_sessions = forwarded_sessions
-                        .into_iter()
-                        .map(SessionId::from)
-                        .collect();
+            future: ExportedFuture::new(Application::Storage::execute_with_state(
+                move |application| {
+                    async move {
+                        let forwarded_sessions = forwarded_sessions
+                            .into_iter()
+                            .map(SessionId::from)
+                            .collect();
 
-                    application
-                        .handle_application_call(&context.into(), &argument, forwarded_sessions)
-                        .await
-                }
-                .boxed()
-            })),
+                        application
+                            .handle_application_call(&context.into(), &argument, forwarded_sessions)
+                            .await
+                    }
+                    .boxed()
+                },
+            )),
             _application: PhantomData,
         }
     }
@@ -282,24 +293,26 @@ where
     ) -> Self {
         ContractLogger::install();
         HandleSessionCall {
-            future: ExportedFuture::new(Application::Storage::with_state(move |application| {
-                async move {
-                    let forwarded_sessions = forwarded_sessions
-                        .into_iter()
-                        .map(SessionId::from)
-                        .collect();
+            future: ExportedFuture::new(Application::Storage::execute_with_state(
+                move |application| {
+                    async move {
+                        let forwarded_sessions = forwarded_sessions
+                            .into_iter()
+                            .map(SessionId::from)
+                            .collect();
 
-                    application
-                        .handle_session_call(
-                            &context.into(),
-                            session.into(),
-                            &argument,
-                            forwarded_sessions,
-                        )
-                        .await
-                }
-                .boxed()
-            })),
+                        application
+                            .handle_session_call(
+                                &context.into(),
+                                session.into(),
+                                &argument,
+                                forwarded_sessions,
+                            )
+                            .await
+                    }
+                    .boxed()
+                },
+            )),
             _application: PhantomData,
         }
     }
