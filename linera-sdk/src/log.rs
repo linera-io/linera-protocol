@@ -1,5 +1,6 @@
 use crate::{contract, service};
 use log::{LevelFilter, Log, Metadata, Record};
+use std::panic::PanicInfo;
 
 static CONTRACT_LOGGER: ContractLogger = ContractLogger;
 static SERVICE_LOGGER: ServiceLogger = ServiceLogger;
@@ -50,4 +51,9 @@ impl Log for ServiceLogger {
     }
 
     fn flush(&self) {}
+}
+
+/// Logs a panic using the [`log`] API.
+fn log_panic(info: &PanicInfo<'_>) {
+    log::error!("{info}");
 }
