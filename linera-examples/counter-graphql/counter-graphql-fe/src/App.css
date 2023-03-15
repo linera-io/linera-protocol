@@ -1,0 +1,23 @@
+.App {
+  text-align: center;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+.increment {
+  @apply font-medium focus:outline-none focus:ring active:bg-blue-700 bg-blue-500 my-10 hover:bg-blue-600 text-white  px-2 py-2 rounded-full py-2 px-4;
+}
