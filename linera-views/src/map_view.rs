@@ -541,7 +541,7 @@ where
     I: Send + Sync + Serialize + DeserializeOwned,
     V: Send + Sync + Serialize + DeserializeOwned + 'static,
 {
-    type Hasher = sha2::Sha512;
+    type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         self.map.hash_mut().await
@@ -737,7 +737,7 @@ where
     I: Send + Sync + CustomSerialize,
     V: Send + Sync + Serialize + DeserializeOwned + 'static,
 {
-    type Hasher = sha2::Sha512;
+    type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         self.map.hash_mut().await

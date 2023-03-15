@@ -391,7 +391,7 @@ where
     ViewError: From<C::Error>,
     I: Clone + Send + Sync + Serialize + DeserializeOwned,
 {
-    type Hasher = sha2::Sha512;
+    type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         self.set.hash_mut().await
@@ -537,7 +537,7 @@ where
     ViewError: From<C::Error>,
     I: Clone + Send + Sync + CustomSerialize,
 {
-    type Hasher = sha2::Sha512;
+    type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         self.set.hash_mut().await

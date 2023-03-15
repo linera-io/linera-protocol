@@ -554,7 +554,7 @@ where
     I: Clone + Debug + Send + Sync + Serialize + DeserializeOwned,
     W: HashableView<C> + Send + Sync + 'static,
 {
-    type Hasher = sha2::Sha512;
+    type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         self.collection.hash_mut().await
@@ -726,7 +726,7 @@ where
     I: Clone + Debug + Send + Sync + CustomSerialize,
     W: HashableView<C> + Send + Sync + 'static,
 {
-    type Hasher = sha2::Sha512;
+    type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         self.collection.hash_mut().await
