@@ -430,7 +430,12 @@ impl_queryable_system!(ServiceSystemApi<'storage>);
 
 impl From<ExecutionError> for wasmtime::Trap {
     fn from(error: ExecutionError) -> Self {
-        let boxed_error: Box<dyn Error + Send + Sync + 'static> = Box::new(error);
-        wasmtime::Trap::from(boxed_error)
+        match error {
+            ExecutionError::UserError(message) => wasmtime::Trap::new(message),
+            _ => {
+                let boxed_error: Box<dyn Error + Send + Sync + 'static> = Box::new(error);
+                wasmtime::Trap::from(boxed_error)
+            }
+        }
     }
 }
