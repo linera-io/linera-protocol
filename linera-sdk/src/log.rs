@@ -39,6 +39,7 @@ impl ServiceLogger {
     pub fn install() {
         log::set_logger(&SERVICE_LOGGER).expect("Failed to initialize service logger");
         log::set_max_level(LevelFilter::Trace);
+        panic::set_hook(Box::new(log_panic));
     }
 }
 
