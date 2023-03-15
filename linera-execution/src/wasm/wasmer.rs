@@ -494,3 +494,13 @@ impl From<ExecutionError> for wasmer::RuntimeError {
         wasmer::RuntimeError::user(Box::new(error))
     }
 }
+
+impl From<wasmer::RuntimeError> for ExecutionError {
+    fn from(error: wasmer::RuntimeError) -> Self {
+        error
+            .downcast::<ExecutionError>()
+            .unwrap_or_else(|unknown_error| {
+                ExecutionError::WasmError(WasmExecutionError::ExecuteModuleInWasmer(unknown_error))
+            })
+    }
+}
