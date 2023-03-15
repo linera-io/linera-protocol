@@ -34,6 +34,7 @@ use linera_views::views::ViewError;
 use serde_json::Value;
 use std::{collections::BTreeMap, net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
+use tower_http::cors::CorsLayer;
 use tracing::{error, info};
 
 /// Our root GraphQL query type.
@@ -527,7 +528,9 @@ where
             .route("/applications/:id", applications_handler)
             .route_service("/ws", GraphQLSubscription::new(schema.clone()))
             .layer(Extension(client))
-            .layer(Extension(self.port));
+            .layer(Extension(self.port))
+            // this will be removed when we have a browser extension wallet.
+            .layer(CorsLayer::permissive());
 
         let port = self.port.get();
 
