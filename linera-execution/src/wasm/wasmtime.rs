@@ -439,3 +439,13 @@ impl From<ExecutionError> for wasmtime::Trap {
         }
     }
 }
+
+impl From<wasmtime::Trap> for ExecutionError {
+    fn from(trap: wasmtime::Trap) -> Self {
+        if trap.trap_code().is_none() {
+            ExecutionError::UserError(trap.display_reason().to_string())
+        } else {
+            ExecutionError::WasmError(WasmExecutionError::ExecuteModuleInWasmtime(trap))
+        }
+    }
+}
