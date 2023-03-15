@@ -48,7 +48,7 @@ macro_rules! impl_guest_future_interface {
                             Poll::Ready(Err(ExecutionError::UserError(message).into()))
                         }
                         Ok($poll_type::Pending) => Poll::Pending,
-                        Err(error) => Poll::Ready(Err(ExecutionError::WasmError(error.into()))),
+                        Err(error) => Poll::Ready(Err(error.into())),
                     }
                 }
             }

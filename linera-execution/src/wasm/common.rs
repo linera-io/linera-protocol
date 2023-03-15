@@ -6,7 +6,7 @@
 use super::{
     async_boundary::{ContextForwarder, GuestFuture, GuestFutureInterface},
     async_determinism::HostFutureQueue,
-    WasmExecutionError,
+    ExecutionError,
 };
 use crate::{
     system::Balance, ApplicationCallResult, CalleeContext, EffectContext, OperationContext,
@@ -18,7 +18,7 @@ use futures::future::{self, TryFutureExt};
 /// runtime.
 pub trait ApplicationRuntimeContext: Sized {
     /// The error emitted by the runtime when the application traps (panics).
-    type Error: Into<WasmExecutionError> + Send + Unpin;
+    type Error: Into<ExecutionError> + Send + Unpin;
 
     /// How to store the application's in-memory state.
     type Store: Send + Unpin;

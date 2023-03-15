@@ -134,7 +134,7 @@ where
         match self.get_mut() {
             GuestFuture::FailedToCreate(runtime_error) => {
                 let error = runtime_error.take().expect("Unexpected poll after error");
-                Poll::Ready(Err(ExecutionError::WasmError(error.into())))
+                Poll::Ready(Err(error.into()))
             }
             GuestFuture::Active { future, context } => {
                 ready!(context.future_queue.poll_next_unpin(task_context));
