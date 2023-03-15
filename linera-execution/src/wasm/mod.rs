@@ -88,8 +88,6 @@ pub enum WasmExecutionError {
     #[cfg(feature = "wasmtime")]
     #[error("Failed to execute WASM module (Wasmtime)")]
     ExecuteModuleInWasmtime(#[from] ::wasmtime::Trap),
-    #[error("Error reported from user application: {0}")]
-    UserApplication(String),
 }
 
 #[async_trait]

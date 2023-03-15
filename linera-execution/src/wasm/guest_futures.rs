@@ -10,7 +10,7 @@ use super::{
     super::{
         async_boundary::GuestFutureInterface,
         common::{Contract, Service},
-        ExecutionError, WasmExecutionError,
+        ExecutionError,
     },
     contract::{
         ExecuteEffect, ExecuteOperation, HandleApplicationCall, HandleSessionCall, Initialize,
@@ -45,7 +45,7 @@ macro_rules! impl_guest_future_interface {
                             Poll::Ready(Ok(result.into()))
                         }
                         Ok($poll_type::Ready(Err(message))) => {
-                            Poll::Ready(Err(WasmExecutionError::UserApplication(message).into()))
+                            Poll::Ready(Err(ExecutionError::UserError(message).into()))
                         }
                         Ok($poll_type::Pending) => Poll::Pending,
                         Err(error) => Poll::Ready(Err(ExecutionError::WasmError(error.into()))),

@@ -53,6 +53,8 @@ pub enum ExecutionError {
     ViewError(ViewError),
     #[error(transparent)]
     SystemError(#[from] SystemExecutionError),
+    #[error("User application reported an error: {0}")]
+    UserError(String),
     #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
     #[error(transparent)]
     WasmError(#[from] WasmExecutionError),
