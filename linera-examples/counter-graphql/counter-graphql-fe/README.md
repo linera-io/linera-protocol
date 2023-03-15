@@ -5,6 +5,11 @@ This project was bootstrapped with [Create React App](https://github.com/faceboo
 The application (contract/service) must be deployed on the network, and a Node Service must be running
 on port 8000.
 
+To access the counter app for a given Application Id, append the Application Id to the URI as so:
+```
+http://localhost:3000/7817752ff06b8266d77df8febf5c4b524cec096bd83dc54f989074fb94f833737ae984f32be2cee1dfab766fe2d0c726503c4d97117eb59023e9cc65a8ecd1f7000000000000000000000000000000007817752ff06b8266d77df8febf5c4b524cec096bd83dc54f989074fb94f833737ae984f32be2cee1dfab766fe2d0c726503c4d97117eb59023e9cc65a8ecd1f702000000000000000000000000000000
+```
+
 ## Available Scripts
 
 In the project directory, you can run:
