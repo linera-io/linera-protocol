@@ -15,9 +15,9 @@ use linera_rpc::{
         BlockProposal, CertificateWithDependencies, ChainInfoQuery, ChainInfoResult,
         CrossChainRequest, LiteCertificate, Notification, SubscriptionRequest,
     },
-    pool::ConnectionPool,
+    grpc_pool::ConnectionPool,
 };
-use std::{fmt::Debug, net::SocketAddr, sync::Arc};
+use std::{fmt::Debug, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::select;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
@@ -32,7 +32,7 @@ pub struct GrpcProxy(Arc<GrpcProxyInner>);
 struct GrpcProxyInner {
     public_config: ValidatorPublicNetworkConfig,
     internal_config: ValidatorInternalNetworkConfig,
-    worker_connection_pool: ConnectionPool<ValidatorWorkerClient<Channel>>,
+    worker_connection_pool: ConnectionPool,
     notifier: Notifier<Result<Notification, Status>>,
 }
 
@@ -40,11 +40,15 @@ impl GrpcProxy {
     pub fn new(
         public_config: ValidatorPublicNetworkConfig,
         internal_config: ValidatorInternalNetworkConfig,
+        connect_timeout: Duration,
+        timeout: Duration,
     ) -> Self {
         Self(Arc::new(GrpcProxyInner {
             public_config,
             internal_config,
-            worker_connection_pool: ConnectionPool::new(),
+            worker_connection_pool: ConnectionPool::default()
+                .with_connect_timeout(connect_timeout)
+                .with_timeout(timeout),
             notifier: Notifier::default(),
         }))
     }
@@ -74,17 +78,13 @@ impl GrpcProxy {
         )
     }
 
-    async fn worker_client_for_shard(
+    fn worker_client_for_shard(
         &self,
         shard: &ShardConfig,
     ) -> Result<ValidatorWorkerClient<Channel>> {
         let address = shard.http_address();
-        let client = self
-            .0
-            .worker_connection_pool
-            .cloned_client_for_address(address)
-            .await?;
-
+        let channel = self.0.worker_connection_pool.channel(address)?;
+        let client = ValidatorWorkerClient::new(channel);
         Ok(client)
     }
 
@@ -124,7 +124,6 @@ impl GrpcProxy {
             .ok_or_else(|| Status::not_found("could not find shard for message"))?;
         let client = self
             .worker_client_for_shard(&shard)
-            .await
             .map_err(|_| Status::internal("could not connect to shard"))?;
         Ok((client, inner))
     }

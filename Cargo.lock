@@ -2354,6 +2354,7 @@ dependencies = [
  "ed25519",
  "ed25519-dalek",
  "futures",
+ "http",
  "linera-base",
  "linera-chain",
  "linera-core",

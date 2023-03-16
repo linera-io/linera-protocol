@@ -16,7 +16,7 @@ use linera_service::{
     config::{Import, ValidatorServerConfig},
     grpc_proxy::GrpcProxy,
 };
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
 use tracing::{error, info, instrument};
 
@@ -29,6 +29,14 @@ use tracing::{error, info, instrument};
 pub struct ProxyOptions {
     /// Path to server configuration.
     config_path: PathBuf,
+
+    /// Timeout for sending queries (us)
+    #[structopt(long, default_value = "4000000")]
+    send_timeout_us: u64,
+
+    /// Timeout for receiving responses (us)
+    #[structopt(long, default_value = "4000000")]
+    recv_timeout_us: u64,
 }
 
 /// A Linera Proxy, either gRPC or over 'Simple Transport', meaning TCP or UDP.
@@ -58,6 +66,8 @@ impl Proxy {
             (NetworkProtocol::Grpc, NetworkProtocol::Grpc) => Self::Grpc(GrpcProxy::new(
                 config.validator.network,
                 config.internal_network,
+                Duration::from_micros(options.send_timeout_us),
+                Duration::from_micros(options.recv_timeout_us),
             )),
             (
                 NetworkProtocol::Simple(internal_transport),
@@ -70,6 +80,8 @@ impl Proxy {
                     .validator
                     .network
                     .clone_with_protocol(public_transport),
+                send_timeout: Duration::from_micros(options.send_timeout_us),
+                recv_timeout: Duration::from_micros(options.recv_timeout_us),
             }),
             _ => {
                 bail!(
@@ -88,6 +100,8 @@ impl Proxy {
 pub struct SimpleProxy {
     public_config: ValidatorPublicNetworkPreConfig<TransportProtocol>,
     internal_config: ValidatorInternalNetworkPreConfig<TransportProtocol>,
+    send_timeout: Duration,
+    recv_timeout: Duration,
 }
 
 #[async_trait]
@@ -101,7 +115,15 @@ impl MessageHandler for SimpleProxy {
         let shard = self.internal_config.get_shard_for(chain_id).clone();
         let protocol = self.internal_config.protocol;
 
-        match Self::try_proxy_message(message, shard, protocol).await {
+        match Self::try_proxy_message(
+            message,
+            shard,
+            protocol,
+            self.send_timeout,
+            self.recv_timeout,
+        )
+        .await
+        {
             Ok(maybe_response) => maybe_response,
             Err(error) => {
                 error!(error = %error, "Failed to proxy message");
@@ -129,11 +151,16 @@ impl SimpleProxy {
         message: RpcMessage,
         shard: ShardConfig,
         protocol: TransportProtocol,
+        send_timeout: Duration,
+        recv_timeout: Duration,
     ) -> Result<Option<RpcMessage>> {
         let shard_address = format!("{}:{}", shard.host, shard.port);
         let mut connection = protocol.connect(shard_address).await?;
-        connection.send(message).await?;
-        Ok(connection.next().await.transpose()?)
+        tokio::time::timeout(send_timeout, connection.send(message)).await??;
+        let message = tokio::time::timeout(recv_timeout, connection.next())
+            .await?
+            .transpose()?;
+        Ok(message)
     }
 }
 

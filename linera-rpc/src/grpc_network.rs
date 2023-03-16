@@ -13,8 +13,8 @@ use crate::{
         ValidatorPublicNetworkConfig,
     },
     conversions::ProtoConversionError,
+    grpc_pool::ConnectionPool,
     mass::{MassClient, MassClientError},
-    pool::Connect,
     RpcMessage,
 };
 use async_trait::async_trait;
@@ -92,6 +92,9 @@ pub enum GrpcError {
 
     #[error("failed to parse socket address: {0}")]
     SocketAddr(#[from] AddrParseError),
+
+    #[error(transparent)]
+    InvalidUri(#[from] http::uri::InvalidUri),
 }
 
 impl<S> GrpcServer<S>
@@ -235,7 +238,7 @@ where
         this_shard: ShardId,
         mut receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
-        let pool = ValidatorWorkerClient::<Channel>::pool();
+        let pool = ConnectionPool::default();
 
         while let Some((cross_chain_request, shard_id)) = receiver.next().await {
             let shard = network.shard(shard_id);
@@ -246,7 +249,8 @@ where
                 let result = || async {
                     let cross_chain_request = cross_chain_request.clone().try_into()?;
                     let request = Request::new(cross_chain_request);
-                    let mut client = pool.client_for_address_mut(remote_address.clone()).await?;
+                    let mut client =
+                        ValidatorWorkerClient::new(pool.channel(remote_address.clone())?);
                     let response = client.handle_cross_chain_request(request).await?;
                     Ok::<_, anyhow::Error>(response)
                 };
@@ -418,14 +422,13 @@ pub struct GrpcClient {
 impl GrpcClient {
     pub(crate) async fn new(
         network: ValidatorPublicNetworkConfig,
-        send_timeout: Duration,
-        recv_timeout: Duration,
+        connect_timeout: Duration,
+        timeout: Duration,
     ) -> Result<Self, GrpcError> {
         let address = network.http_address();
-        let channel = Channel::from_shared(address.clone())
-            .expect("need a correct URI")
-            .connect_timeout(send_timeout)
-            .timeout(recv_timeout)
+        let channel = Channel::from_shared(address.clone())?
+            .connect_timeout(connect_timeout)
+            .timeout(timeout)
             .connect()
             .await?;
         let client = ValidatorNodeClient::new(channel);
