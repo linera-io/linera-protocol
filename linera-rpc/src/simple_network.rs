@@ -183,7 +183,7 @@ where
                 match self.server.state.handle_block_proposal(*message).await {
                     Ok((info, actions)) => {
                         // Cross-shard requests
-                        self.handle_network_actions(actions).await;
+                        self.handle_network_actions(actions);
                         // Response
                         Ok(Some(info.into()))
                     }
@@ -197,7 +197,7 @@ where
                 match self.server.state.handle_lite_certificate(*message).await {
                     Ok((info, actions)) => {
                         // Cross-shard requests
-                        self.handle_network_actions(actions).await;
+                        self.handle_network_actions(actions);
                         // Response
                         Ok(Some(info.into()))
                     }
@@ -215,7 +215,7 @@ where
                 match self.server.state.handle_certificate(*message, blobs).await {
                     Ok((info, actions)) => {
                         // Cross-shard requests
-                        self.handle_network_actions(actions).await;
+                        self.handle_network_actions(actions);
                         // Response
                         Ok(Some(info.into()))
                     }
@@ -229,7 +229,7 @@ where
                 match self.server.state.handle_chain_info_query(*message).await {
                     Ok((info, actions)) => {
                         // Cross-shard requests
-                        self.handle_network_actions(actions).await;
+                        self.handle_network_actions(actions);
                         // Response
                         Ok(Some(info.into()))
                     }
@@ -242,7 +242,7 @@ where
             RpcMessage::CrossChainRequest(request) => {
                 match self.server.state.handle_cross_chain_request(*request).await {
                     Ok(actions) => {
-                        self.handle_network_actions(actions).await;
+                        self.handle_network_actions(actions);
                     }
                     Err(error) => {
                         error!(nickname = self.server.state.nickname(), error = %error, "Failed to handle cross-chain request");
@@ -287,25 +287,20 @@ impl<S> RunningServerState<S>
 where
     S: Send,
 {
-    fn handle_network_actions(
-        &mut self,
-        actions: NetworkActions,
-    ) -> futures::future::BoxFuture<()> {
-        Box::pin(async move {
-            for request in actions.cross_chain_requests {
-                let shard_id = self.server.network.get_shard_id(request.target_chain_id());
-                debug!(
-                    "[{}] Scheduling cross-chain query: {} -> {}",
-                    self.server.state.nickname(),
-                    self.server.shard_id,
-                    shard_id
-                );
-                self.cross_chain_sender
-                    .send((request.into(), shard_id))
-                    .await
-                    .expect("internal channel should not fail");
+    fn handle_network_actions(&mut self, actions: NetworkActions) {
+        for request in actions.cross_chain_requests {
+            let shard_id = self.server.network.get_shard_id(request.target_chain_id());
+            debug!(
+                "[{}] Scheduling cross-chain query: {} -> {}",
+                self.server.state.nickname(),
+                self.server.shard_id,
+                shard_id
+            );
+            if let Err(e) = self.cross_chain_sender.try_send((request.into(), shard_id)) {
+                error!(error = %e, "dropping cross-chain request");
+                break;
             }
-        })
+        }
     }
 }
 

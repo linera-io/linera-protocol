@@ -20,7 +20,7 @@ use crate::{
 use async_trait::async_trait;
 use futures::{
     channel::{mpsc, mpsc::Receiver, oneshot::Sender},
-    FutureExt, SinkExt, StreamExt,
+    FutureExt, StreamExt,
 };
 use grpc::{
     chain_info_result::Inner,
@@ -202,7 +202,7 @@ where
         }
     }
 
-    async fn handle_network_actions(&self, actions: NetworkActions) {
+    fn handle_network_actions(&self, actions: NetworkActions) {
         let mut cross_chain_sender = self.cross_chain_sender.clone();
         let mut notification_sender = self.notification_sender.clone();
 
@@ -214,18 +214,18 @@ where
                 "Scheduling cross-chain query",
             );
 
-            cross_chain_sender
-                .send((request, shard_id))
-                .await
-                .expect("sinks are never closed so `send` should not fail.")
+            if let Err(e) = cross_chain_sender.try_send((request, shard_id)) {
+                error!(error = %e, "dropping cross-chain request");
+                break;
+            }
         }
 
         for notification in actions.notifications {
             debug!("Scheduling notification query");
-            notification_sender
-                .send(notification)
-                .await
-                .expect("sinks are never closed so call to `send` should not fail");
+            if let Err(e) = notification_sender.try_send(notification) {
+                error!(error = %e, "dropping notification");
+                break;
+            }
         }
     }
 
@@ -310,7 +310,7 @@ where
                 .await
             {
                 Ok((info, actions)) => {
-                    self.handle_network_actions(actions).await;
+                    self.handle_network_actions(actions);
                     info.try_into()?
                 }
                 Err(error) => {
@@ -334,7 +334,7 @@ where
             .await
         {
             Ok((info, actions)) => {
-                self.handle_network_actions(actions).await;
+                self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
@@ -363,7 +363,7 @@ where
             .await
         {
             Ok((info, actions)) => {
-                self.handle_network_actions(actions).await;
+                self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
@@ -382,7 +382,7 @@ where
         debug!(request = ?request, "Handling chain info query");
         match self.state.clone().handle_chain_info_query(request).await {
             Ok((info, actions)) => {
-                self.handle_network_actions(actions).await;
+                self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
@@ -404,7 +404,7 @@ where
             .handle_cross_chain_request(request.into_inner().try_into()?)
             .await
         {
-            Ok(actions) => self.handle_network_actions(actions).await,
+            Ok(actions) => self.handle_network_actions(actions),
             Err(error) => {
                 error!(nickname = self.state.nickname(), error = %error, "Failed to handle cross-chain request");
             }
