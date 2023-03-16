@@ -60,8 +60,8 @@ struct ClientContext {
 impl ClientContext {
     fn from_options(options: &ClientOptions) -> Self {
         let wallet_state_path = options.wallet_state_path.clone();
-        let wallet_state =
-            WalletState::read_or_create(&wallet_state_path).expect("Unable to read user chains");
+        let wallet_state = WalletState::read_or_create(&wallet_state_path)
+            .unwrap_or_else(|_| panic!("Unable to read user chains at {:?}", &wallet_state_path));
         let genesis_config = match options.command {
             ClientCommand::CreateGenesisConfig { admin_root, .. } => {
                 GenesisConfig::new(CommitteeConfig::default(), ChainId::root(admin_root))
@@ -266,7 +266,7 @@ impl ClientContext {
         responses
     }
 
-    fn save_chains(&self) {
+    fn save_wallet(&self) {
         self.wallet_state
             .write(&self.wallet_state_path)
             .expect("Unable to write user chains");
@@ -612,7 +612,7 @@ where
                 info!("Operation confirmed after {} us", time_total);
                 info!("{:?}", certificate);
                 context.update_wallet_from_client(&mut chain_client).await;
-                context.save_chains();
+                context.save_wallet();
             }
 
             OpenChain { sender, public_key } => {
@@ -635,7 +635,7 @@ where
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
                 // Print the new chain id(s) on stdout for the scripting purposes.
                 println!("{}", id);
-                context.save_chains();
+                context.save_wallet();
             }
 
             CloseChain { sender } => {
@@ -647,7 +647,7 @@ where
                 info!("Operation confirmed after {} us", time_total);
                 info!("{:?}", certificate);
                 context.update_wallet_from_client(&mut chain_client).await;
-                context.save_chains();
+                context.save_wallet();
             }
 
             QueryBalance { chain_id } => {
@@ -662,7 +662,7 @@ where
                 info!("Local balance obtained after {} us", time_total);
                 println!("{}", balance);
                 context.update_wallet_from_client(&mut chain_client).await;
-                context.save_chains();
+                context.save_wallet();
             }
 
             SynchronizeBalance { chain_id } => {
@@ -677,7 +677,7 @@ where
                 info!("Chain balance synchronized after {} us", time_total);
                 println!("{}", balance);
                 context.update_wallet_from_client(&mut chain_client).await;
-                context.save_chains();
+                context.save_wallet();
             }
 
             QueryValidators { chain_id } => {
@@ -692,7 +692,7 @@ where
                 info!("Validators obtained after {} us", time_total);
                 info!("{:?}", committee.validators);
                 context.update_wallet_from_client(&mut chain_client).await;
-                context.save_chains();
+                context.save_wallet();
             }
 
             command @ (SetValidator { .. } | RemoveValidator { .. }) => {
@@ -753,7 +753,7 @@ where
 
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operations confirmed after {} us", time_total);
-                context.save_chains();
+                context.save_wallet();
             }
 
             Benchmark {
@@ -839,7 +839,7 @@ where
                 context
                     .update_wallet_from_certificates(storage, certificates)
                     .await;
-                context.save_chains();
+                context.save_wallet();
             }
 
             Watch { chain_ids, raw } => {
@@ -1008,7 +1008,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 // Private keys.
                 context.wallet_state.insert(chain);
             }
-            context.save_chains();
+            context.save_wallet();
             genesis_config.write(&options.genesis_config_path)?;
             Ok(())
         }
