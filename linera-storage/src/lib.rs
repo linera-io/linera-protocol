@@ -39,9 +39,9 @@ pub const READ_VALUE_COUNTER: &str = "read_value";
 /// The metric counting how often a value is written to storage.
 pub const WRITE_VALUE_COUNTER: &str = "write_value";
 /// The metric counting how often a certificate is read from storage.
-pub const READ_CERTIFICATE_COUNTER: &str = "read_value";
+pub const READ_CERTIFICATE_COUNTER: &str = "read_certificate";
 /// The metric counting how often a certificate is written to storage.
-pub const WRITE_CERTIFICATE_COUNTER: &str = "write_value";
+pub const WRITE_CERTIFICATE_COUNTER: &str = "write_certificate";
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 use linera_execution::{ApplicationId, Operation, SystemOperation, WasmApplication};
