@@ -128,7 +128,7 @@ impl Store for RocksdbStoreClient {
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
         let id = format!("{}", certificate.value.block().chain_id);
-        increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id,)]);
+        increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id)]);
         let hash = certificate.value.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;

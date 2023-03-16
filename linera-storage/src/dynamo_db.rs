@@ -240,7 +240,7 @@ impl Store for DynamoDbStoreClient {
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
         let id = format!("{}", certificate.value.block().chain_id);
-        increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id,)]);
+        increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id)]);
         let (cert, value) = certificate.split();
         let hash = value.hash();
         let (certs_result, values_result) = tokio::join!(self.0.certificates(), self.0.values());

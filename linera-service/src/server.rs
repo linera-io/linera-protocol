@@ -26,6 +26,7 @@ use linera_service::{
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{
+    net::SocketAddr,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -216,6 +217,12 @@ struct ValidatorOptions {
     /// The port of the proxy on the internal network.
     internal_port: u16,
 
+    /// The host on which metrics are served.
+    metrics_host: String,
+
+    /// The port on which metrics are served.
+    metrics_port: Option<u16>,
+
     /// The network protocol for the frontend.
     external_protocol: NetworkProtocol,
 
@@ -232,8 +239,9 @@ impl FromStr for ValidatorOptions {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.split(':').collect();
         ensure!(
-            parts.len() >= 7 && parts.len() % 2 == 1,
-            "Expecting format `file.json:(udp|tcp):host:port:(udp|tcp):internal_host:internal_port:host1:port1:...:hostN:portN`"
+            parts.len() >= 9 && parts.len() % 2 == 1,
+            "Expecting format `file.json:(udp|tcp):host:port:(udp|tcp):internal_host:\
+            internal_port:metrics_host:metrics_port:host1:port1:...:hostN:portN`"
         );
 
         let server_config_path = Path::new(parts[0]).to_path_buf();
@@ -243,8 +251,14 @@ impl FromStr for ValidatorOptions {
         let internal_protocol = parts[4].parse().map_err(|s| anyhow!("{}", s))?;
         let internal_host = parts[5].to_owned();
         let internal_port = parts[6].parse()?;
+        let metrics_host = parts[7].to_owned();
+        let metrics_port = if parts[8].is_empty() {
+            None
+        } else {
+            Some(parts[8].parse()?)
+        };
 
-        let shards = parts[7..]
+        let shards = parts[9..]
             .chunks_exact(2)
             .map(|shard_address| {
                 let host = shard_address[0].to_owned();
@@ -263,6 +277,8 @@ impl FromStr for ValidatorOptions {
             internal_host,
             internal_port,
             shards,
+            metrics_host,
+            metrics_port,
         })
     }
 }
@@ -278,6 +294,8 @@ fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
         shards: options.shards,
         host: options.internal_host,
         port: options.internal_port,
+        metrics_host: options.metrics_host,
+        metrics_port: options.metrics_port,
     };
     let key = KeyPair::generate();
     let name = ValidatorName(key.public());
@@ -369,6 +387,18 @@ async fn main() {
                 .expect("Fail to read initial chain config");
             let server_config = ValidatorServerConfig::read(&server_config_path)
                 .expect("Fail to read server config");
+            if let Some(port) = server_config.internal_network.metrics_port {
+                let host = &server_config.internal_network.metrics_host;
+                let address: SocketAddr = format!("{}:{}", host, port)
+                    .parse()
+                    .expect("Invalid metrics address");
+                if let Err(error) = metrics_exporter_tcp::TcpBuilder::new()
+                    .listen_address(address)
+                    .install()
+                {
+                    tracing::warn!(?error, %address, "Could not install TCP metrics exporter.");
+                }
+            }
             let job = ServerContext {
                 server_config,
                 cross_chain_config,
@@ -419,7 +449,7 @@ mod test {
     #[test]
     fn test_validator_options() {
         let options = ValidatorOptions::from_str(
-            "server.json:tcp:host:9000:udp:internal_host:10000:host1:9001:host2:9002",
+            "server.json:tcp:host:9000:udp:internal_host:10000:metrics_host:5000:host1:9001:host2:9002",
         )
         .unwrap();
         assert_eq!(
@@ -442,6 +472,8 @@ mod test {
                         port: 9002,
                     },
                 ],
+                metrics_host: "metrics_host".into(),
+                metrics_port: Some(5000),
             }
         );
     }
