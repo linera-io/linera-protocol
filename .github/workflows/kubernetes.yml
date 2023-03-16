@@ -16,7 +16,11 @@ env:
   RUSTFLAGS: "-D warnings"
   RUSTUP_MAX_RETRIES: 10
 
+permissions:
+  contents: read
+
 jobs:
+
   integration-test-with-kind:
     runs-on: ubuntu-latest-4-cores
     steps:
