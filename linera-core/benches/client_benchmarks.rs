@@ -11,7 +11,7 @@ use linera_storage::{
     Store, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
     WRITE_VALUE_COUNTER,
 };
-use linera_views::views::ViewError;
+use linera_views::{views::ViewError, LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};
 use recorder::{BenchRecorder, BenchRecorderMeasurement};
 use tokio::runtime;
 
@@ -102,7 +102,8 @@ criterion_group!(
         .measurement_time(Duration::from_secs(40))
         .with_measurement(BenchRecorderMeasurement::new(create_recorder(), vec![
             READ_VALUE_COUNTER, WRITE_VALUE_COUNTER,
-            READ_CERTIFICATE_COUNTER, WRITE_CERTIFICATE_COUNTER
+            READ_CERTIFICATE_COUNTER, WRITE_CERTIFICATE_COUNTER,
+            LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER
         ]));
     targets = criterion_benchmark
 );
