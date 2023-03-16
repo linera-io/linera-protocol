@@ -4,11 +4,11 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use linera_base::data_types::ChainId;
-use linera_chain::data_types::{BlockAndRound, Value};
 use linera_core::notifier::Notifier;
 use linera_rpc::{
     config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
     grpc_network::grpc::{
+        self,
         notifier_service_server::{NotifierService, NotifierServiceServer},
         validator_node_server::{ValidatorNode, ValidatorNodeServer},
         validator_worker_client::ValidatorWorkerClient,
@@ -208,10 +208,7 @@ trait Proxyable {
 
 impl Proxyable for BlockProposal {
     fn chain_id(&self) -> Option<ChainId> {
-        match bcs::from_bytes::<BlockAndRound>(&self.content) {
-            Ok(block_and_round) => Some(block_and_round.block.chain_id),
-            Err(_) => None,
-        }
+        self.chain_id.clone()?.try_into().ok()
     }
 }
 
@@ -223,10 +220,7 @@ impl Proxyable for LiteCertificate {
 
 impl Proxyable for CertificateWithDependencies {
     fn chain_id(&self) -> Option<ChainId> {
-        match bcs::from_bytes::<Value>(&self.certificate.as_ref()?.value) {
-            Ok(value) => Some(value.block.chain_id),
-            Err(_) => None,
-        }
+        self.chain_id.clone()?.try_into().ok()
     }
 }
 
@@ -238,9 +232,13 @@ impl Proxyable for ChainInfoQuery {
 
 impl Proxyable for CrossChainRequest {
     fn chain_id(&self) -> Option<ChainId> {
-        match linera_core::data_types::CrossChainRequest::try_from(self.clone()) {
-            Ok(cross_chain_request) => Some(cross_chain_request.target_chain_id()),
-            Err(_) => None,
+        use grpc::cross_chain_request::Inner;
+
+        match self.inner.as_ref()? {
+            Inner::UpdateRecipient(grpc::UpdateRecipient { recipient, .. })
+            | Inner::ConfirmUpdatedRecipient(grpc::ConfirmUpdatedRecipient { recipient, .. }) => {
+                recipient.clone()?.try_into().ok()
+            }
         }
     }
 }

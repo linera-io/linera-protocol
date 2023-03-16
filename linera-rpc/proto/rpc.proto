@@ -164,6 +164,9 @@ message Medium {
 
 // An authenticated proposal for a new block.
 message BlockProposal {
+  // The ID of the chain (used for routing).
+  ChainId chain_id = 10;
+
   // BCS signable
   bytes content = 1;
 
@@ -191,6 +194,9 @@ message LiteCertificate {
 
 // A certified statement from the committee.
 message Certificate {
+  // The ID of the chain (used for routing).
+  ChainId chain_id = 10;
+
   // The certified value (bcs signable)
   bytes value = 1;
 
@@ -201,6 +207,9 @@ message Certificate {
 // A certified statement from the committee, together with other certificates
 // required for execution.
 message CertificateWithDependencies {
+  // The ID of the chain (used for routing).
+  ChainId chain_id = 10;
+
   // The certificate
   Certificate certificate = 1;
 

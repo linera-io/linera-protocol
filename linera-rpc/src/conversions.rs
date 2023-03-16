@@ -3,16 +3,17 @@
 
 use crate::grpc_network::{
     grpc,
-    grpc::{cross_chain_request::Inner, ChainInfoResult, NameSignaturePair, NewBlock, NewMessage},
+    grpc::{ChainInfoResult, NameSignaturePair, NewBlock, NewMessage},
 };
 use ed25519::signature::Signature as edSignature;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
     data_types::{BlockHeight, ChainId, EffectId, Owner, ValidatorName},
+    ensure,
 };
 use linera_chain::data_types::{
-    BlockProposal, Certificate, CertificateWithDependencies, LiteCertificate, LiteValue, Medium,
-    Origin,
+    BlockAndRound, BlockProposal, Certificate, CertificateWithDependencies, HashedValue,
+    LiteCertificate, LiteValue, Medium, Origin,
 };
 use linera_core::{
     data_types::{
@@ -36,6 +37,8 @@ pub enum ProtoConversionError {
     SignatureError(#[from] ed25519_dalek::SignatureError),
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
+    #[error("Inconsistent outer/inner chain ids")]
+    InconsistentChainId,
 }
 
 /// Extract an optional field from a Proto type and map it.
@@ -187,6 +190,7 @@ impl TryFrom<BlockProposal> for grpc::BlockProposal {
             .map(bcs::to_bytes)
             .collect::<Result<_, bcs::Error>>()?;
         Ok(Self {
+            chain_id: Some(block_proposal.content.block.chain_id.into()),
             content: bcs::to_bytes(&block_proposal.content)?,
             owner: Some(block_proposal.owner.into()),
             signature: Some(block_proposal.signature.into()),
@@ -199,13 +203,19 @@ impl TryFrom<grpc::BlockProposal> for BlockProposal {
     type Error = ProtoConversionError;
 
     fn try_from(block_proposal: grpc::BlockProposal) -> Result<Self, Self::Error> {
+        let content: BlockAndRound = bcs::from_bytes(&block_proposal.content)?;
+        let inner_chain_id = content.block.chain_id;
+        ensure!(
+            Some(inner_chain_id.into()) == block_proposal.chain_id,
+            ProtoConversionError::InconsistentChainId
+        );
         let blobs = block_proposal
             .blobs
             .iter()
             .map(|bytes| bcs::from_bytes(bytes))
             .collect::<Result<_, bcs::Error>>()?;
         Ok(Self {
-            content: bcs::from_bytes(&block_proposal.content)?,
+            content,
             owner: try_proto_convert!(block_proposal.owner),
             signature: try_proto_convert!(block_proposal.signature),
             blobs,
@@ -217,6 +227,8 @@ impl TryFrom<grpc::CrossChainRequest> for CrossChainRequest {
     type Error = ProtoConversionError;
 
     fn try_from(cross_chain_request: grpc::CrossChainRequest) -> Result<Self, Self::Error> {
+        use grpc::cross_chain_request::Inner;
+
         let ccr = match cross_chain_request
             .inner
             .ok_or(ProtoConversionError::MissingField)?
@@ -267,6 +279,8 @@ impl TryFrom<CrossChainRequest> for grpc::CrossChainRequest {
     type Error = ProtoConversionError;
 
     fn try_from(cross_chain_request: CrossChainRequest) -> Result<Self, Self::Error> {
+        use grpc::cross_chain_request::Inner;
+
         let inner = match cross_chain_request {
             UpdateRecipient {
                 height_map,
@@ -353,7 +367,13 @@ impl TryFrom<grpc::Certificate> for Certificate {
     type Error = ProtoConversionError;
 
     fn try_from(certificate: grpc::Certificate) -> Result<Self, Self::Error> {
+        let value: HashedValue = bcs::from_bytes(certificate.value.as_slice())?;
         let mut signatures = Vec::with_capacity(certificate.signatures.len());
+        let inner_chain_id = value.chain_id();
+        ensure!(
+            Some(inner_chain_id.into()) == certificate.chain_id,
+            ProtoConversionError::InconsistentChainId
+        );
 
         for name_signature_pair in certificate.signatures {
             let validator_name: ValidatorName =
@@ -362,10 +382,7 @@ impl TryFrom<grpc::Certificate> for Certificate {
             signatures.push((validator_name, signature));
         }
 
-        Ok(Certificate::new(
-            bcs::from_bytes(certificate.value.as_slice())?,
-            signatures,
-        ))
+        Ok(Certificate::new(value, signatures))
     }
 }
 
@@ -383,6 +400,7 @@ impl TryFrom<Certificate> for grpc::Certificate {
             .collect();
 
         Ok(Self {
+            chain_id: Some(certificate.value.chain_id().into()),
             value: bcs::to_bytes(&certificate.value)?,
             signatures,
         })
@@ -398,7 +416,12 @@ impl TryFrom<grpc::CertificateWithDependencies> for CertificateWithDependencies 
             .into_iter()
             .map(|value| bcs::from_bytes(value.as_slice()))
             .collect::<Result<_, bcs::Error>>()?;
-        let certificate = try_proto_convert!(cert_with_deps.certificate);
+        let certificate: Certificate = try_proto_convert!(cert_with_deps.certificate);
+        let inner_chain_id = certificate.value.chain_id();
+        ensure!(
+            Some(inner_chain_id.into()) == cert_with_deps.chain_id,
+            ProtoConversionError::InconsistentChainId
+        );
         Ok(CertificateWithDependencies { certificate, blobs })
     }
 }
@@ -412,8 +435,13 @@ impl TryFrom<CertificateWithDependencies> for grpc::CertificateWithDependencies 
             .into_iter()
             .map(|value| bcs::to_bytes(&value))
             .collect::<Result<_, _>>()?;
+        let chain_id = Some(cert_with_deps.certificate.value.chain_id().into());
         let certificate = Some(cert_with_deps.certificate.try_into()?);
-        Ok(Self { certificate, blobs })
+        Ok(Self {
+            chain_id,
+            certificate,
+            blobs,
+        })
     }
 }
 
