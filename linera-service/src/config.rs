@@ -16,7 +16,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     fs::{self, OpenOptions},
-    io::{BufReader, BufWriter, Write},
+    io::{BufRead, BufReader, BufWriter, Write},
     path::Path,
 };
 
@@ -108,8 +108,10 @@ impl UserChain {
     }
 }
 
+#[derive(Default, Serialize, Deserialize)]
 pub struct WalletState {
     chains: BTreeMap<ChainId, UserChain>,
+    unassigned: Vec<KeyPair>,
 }
 
 impl WalletState {
@@ -161,23 +163,18 @@ impl WalletState {
             .write(true)
             .read(true)
             .open(path)?;
-        let reader = BufReader::new(file);
-        let stream = serde_json::Deserializer::from_reader(reader).into_iter();
-        Ok(Self {
-            chains: stream
-                .filter_map(Result::ok)
-                .map(|chain: UserChain| (chain.chain_id, chain))
-                .collect(),
-        })
+        let mut reader = BufReader::new(file);
+        if reader.fill_buf()?.is_empty() {
+            return Ok(Self::default());
+        }
+        Ok(serde_json::from_reader(reader)?)
     }
 
     pub fn write(&self, path: &Path) -> Result<(), std::io::Error> {
         let file = OpenOptions::new().write(true).open(path)?;
         let mut writer = BufWriter::new(file);
-        for chain in self.chains.values() {
-            serde_json::to_writer(&mut writer, chain)?;
-            writer.write_all(b"\n")?;
-        }
+        serde_json::to_writer_pretty(&mut writer, &self)?;
+        writer.flush()?;
         Ok(())
     }
 }
