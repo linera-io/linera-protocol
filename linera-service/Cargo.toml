@@ -28,6 +28,7 @@ linera-execution = { path = "../linera-execution", default-features = false }
 linera-rpc = { path = "../linera-rpc" }
 linera-storage = { path = "../linera-storage", default-features = false }
 linera-views = { path = "../linera-views" }
+metrics-exporter-tcp = "0.7.0"
 tracing = "0.1.37"
 parse_duration = "2.1.1"
 serde = { version = "1.0.130", features = ["derive"] }
