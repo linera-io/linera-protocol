@@ -3,9 +3,9 @@
 
 pub mod config;
 pub mod grpc_network;
+pub mod grpc_pool;
 pub mod mass;
 pub mod node_provider;
-pub mod pool;
 pub mod simple_network;
 pub mod transport;
 

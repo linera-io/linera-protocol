@@ -17,6 +17,7 @@ dashmap = "5.4.0"
 ed25519 = "1.2.0"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 futures = "0.3.17"
+http = "0.2"
 linera-base = { path = "../linera-base" }
 linera-chain = { path = "../linera-chain" }
 linera-core = { path = "../linera-core", default-features = false }
