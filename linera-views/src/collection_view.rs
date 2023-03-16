@@ -19,7 +19,7 @@ use std::{
 };
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a
-/// Vec<u8>, one subview at a time.
+/// `Vec<u8>`, one subview at a time.
 #[derive(Debug)]
 pub struct ByteCollectionView<C, W> {
     context: C,

@@ -144,7 +144,7 @@ pub trait Store: Sized {
     /// Selects the WebAssembly runtime to use for applications (if any).
     fn wasm_runtime(&self) -> Option<WasmRuntime>;
 
-    /// Creates a [`UserApplication`] instance using the bytecode in storage referenced by the
+    /// Creates a [`linera-sdk::UserApplication`] instance using the bytecode in storage referenced by the
     /// `application_description`.
     #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
     async fn load_application(

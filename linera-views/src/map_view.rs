@@ -22,7 +22,7 @@ enum KeyTag {
     Hash,
 }
 
-/// A view that supports inserting and removing values indexed by Vec<u8>
+/// A view that supports inserting and removing values indexed by `Vec<u8>`
 #[derive(Debug)]
 pub struct ByteMapView<C, V> {
     context: C,

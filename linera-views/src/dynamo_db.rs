@@ -59,15 +59,15 @@ const MAX_VALUE_BYTES: usize = 409600;
 const _MAX_TRANSACT_WRITE_ITEM_BYTES: usize = 4194304;
 
 /// Fundamental constants in DynamoDb: The maximum size of a TransactWriteItem is 100
-/// See https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html
+/// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html>
 pub const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
 
 /// Fundamental constants in DynamoDb: The maximum size of a BatchWriteItem is 16M
-/// See https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html
+/// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html>
 const MAX_BATCH_WRITE_ITEM_BYTES: usize = 16777216;
 
 /// Fundamental constants in DynamoDb: The maximum size of a BatchWriteItem is 100
-/// See https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html
+/// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html>
 pub const MAX_BATCH_WRITE_ITEM_SIZE: usize = 25;
 
 /// Build the key attributes for a table item.

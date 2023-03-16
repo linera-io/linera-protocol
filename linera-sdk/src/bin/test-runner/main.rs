@@ -28,7 +28,7 @@ use anyhow::{bail, Result};
 use std::process::ExitCode;
 use wasmtime::*;
 
-/// Load a test WASM module and run all test functions annotated by [webassembly_test].
+/// Load a test WASM module and run all test functions annotated by [`webassembly-test`].
 ///
 /// Prints out a summary of executed tests and their results.
 #[tokio::main]
