@@ -20,7 +20,7 @@ futures = "0.3.17"
 linera-base = { path = "../linera-base" }
 linera-chain = { path = "../linera-chain" }
 linera-execution = { path = "../linera-execution", default-features = false }
-linera-views = { path = "../linera-views" }
+linera-views = { path = "../linera-views", features = ["metrics"] }
 metrics = "0.20.1"
 tracing = "0.1.37"
 rocksdb = "0.19.0"

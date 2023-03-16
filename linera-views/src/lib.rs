@@ -74,5 +74,22 @@ pub use {async_trait::async_trait, generic_array, serde, sha3};
 #[cfg(not(target_arch = "wasm32"))]
 pub use linera_base::crypto;
 
+/// Does nothing. Use the metrics feature to enable.
+#[cfg(not(feature = "metrics"))]
+pub fn increment_counter(_name: &str, _struct_name: &str, _base_key: &[u8]) {}
+
+/// Increments the metrics counter with the given name, with the struct and base key as labels.
+#[cfg(feature = "metrics")]
+pub fn increment_counter(name: &'static str, struct_name: &str, base_key: &[u8]) {
+    let base_key = hex::encode(base_key);
+    let labels = [("type", struct_name.into()), ("base_key", base_key)];
+    metrics::increment_counter!(name, &labels,);
+}
+
+/// The metric counting how often a view is read from storage.
+pub const LOAD_VIEW_COUNTER: &str = "load_view";
+/// The metric counting how often a view is written from storage.
+pub const SAVE_VIEW_COUNTER: &str = "save_view";
+
 #[cfg(all(feature = "aws", target_arch = "wasm32"))]
 compile_error!("Cannot build AWS features for the WASM target");

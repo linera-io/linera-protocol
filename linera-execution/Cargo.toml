@@ -21,7 +21,7 @@ dashmap = "5.3.4"
 derive_more = "0.99.17"
 futures = "0.3.24"
 linera-base = { path = "../linera-base" }
-linera-views = { path = "../linera-views" }
+linera-views = { path = "../linera-views", features = ["metrics"] }
 linera-views-derive = { path = "../linera-views-derive" }
 once_cell = { version = "1.17.1", optional = true }
 serde = { version = "1.0.130", features = ["derive"] }

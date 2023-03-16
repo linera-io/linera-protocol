@@ -13,7 +13,7 @@ async-lock = { version = "2.6.0", optional = true }
 async-graphql = "5.0.5"
 linera-base = { path = "../linera-base" }
 linera-execution = { path = "../linera-execution", default-features = false }
-linera-views = { path = "../linera-views" }
+linera-views = { path = "../linera-views", features = ["metrics"] }
 tracing = "0.1.37"
 serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.31"

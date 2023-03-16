@@ -7,6 +7,7 @@ edition = "2021"
 [features]
 test = ["anyhow", "tokio/macros", "tokio/sync", "tokio/parking_lot", "tokio/rt"]
 aws = ["aws-config", "aws-sdk-dynamodb", "aws-sdk-s3", "aws-smithy-http", "aws-types"]
+metrics = ["dep:hex", "dep:metrics"]
 
 [dependencies]
 static_assertions = "1.1.0"
@@ -15,7 +16,9 @@ async-trait = "0.1.52"
 bcs = "0.1.3"
 futures = "0.3.17"
 generic-array = { version = "0.14.4", features = ["serde"] }
+hex = { version = "0.4.3", optional = true }
 linera-views-derive = { path = "../linera-views-derive" }
+metrics = { version = "0.20.1", optional = true }
 serde = { version = "1.0.130", features = ["derive"] }
 sha3 = "0.10.6"
 thiserror = "1.0.31"

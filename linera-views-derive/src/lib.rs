@@ -30,7 +30,7 @@ fn get_type_field(field: syn::Field) -> Option<syn::Ident> {
     }
 }
 
-fn generate_view_code(input: ItemStruct) -> TokenStream2 {
+fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let struct_name = input.ident;
     let generics = input.generics;
     let template_vect = get_seq_parameter(generics.clone());
@@ -61,6 +61,18 @@ fn generate_view_code(input: ItemStruct) -> TokenStream2 {
     }
     let first_name = names.get(0).expect("list of names should be non-empty");
 
+    let increment_counter = if root {
+        quote! {
+            linera_views::increment_counter(
+                linera_views::LOAD_VIEW_COUNTER,
+                stringify!(#struct_name),
+                &context.base_key(),
+            );
+        }
+    } else {
+        quote! {}
+    };
+
     quote! {
         #[async_trait::async_trait]
         impl #generics linera_views::views::View<#first_generic> for #struct_name #generics
@@ -73,6 +85,7 @@ fn generate_view_code(input: ItemStruct) -> TokenStream2 {
             }
 
             async fn load(context: #first_generic) -> Result<Self, linera_views::views::ViewError> {
+                #increment_counter
                 #(#loades)*
                 Ok(Self {#(#names),*})
             }
@@ -121,6 +134,11 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
             linera_views::views::ViewError: From<#first_generic::Error>,
         {
             async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
+                linera_views::increment_counter(
+                    linera_views::SAVE_VIEW_COUNTER,
+                    stringify!(#struct_name),
+                    &self.context().base_key(),
+                );
                 use linera_views::batch::Batch;
                 let mut batch = Batch::new();
                 #(#flushes)*
@@ -454,13 +472,13 @@ fn generate_graphql_code(input: ItemStruct) -> TokenStream2 {
 #[proc_macro_derive(View)]
 pub fn derive_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    generate_view_code(input).into()
+    generate_view_code(input, false).into()
 }
 
 #[proc_macro_derive(HashableView)]
 pub fn derive_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    let mut stream = generate_view_code(input.clone());
+    let mut stream = generate_view_code(input.clone(), false);
     stream.extend(generate_hash_view_code(input));
     stream.into()
 }
@@ -468,7 +486,7 @@ pub fn derive_hash_view(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(RootView)]
 pub fn derive_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    let mut stream = generate_view_code(input.clone());
+    let mut stream = generate_view_code(input.clone(), true);
     stream.extend(generate_save_delete_view_code(input));
     stream.into()
 }
@@ -477,7 +495,7 @@ pub fn derive_root_view(input: TokenStream) -> TokenStream {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    let mut stream = generate_view_code(input.clone());
+    let mut stream = generate_view_code(input.clone(), false);
     stream.extend(generate_hash_view_code(input.clone()));
     stream.extend(generate_crypto_hash_code(input));
     stream.into()
@@ -487,7 +505,7 @@ pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    let mut stream = generate_view_code(input.clone());
+    let mut stream = generate_view_code(input.clone(), true);
     stream.extend(generate_save_delete_view_code(input.clone()));
     stream.extend(generate_hash_view_code(input.clone()));
     stream.extend(generate_crypto_hash_code(input));
@@ -499,7 +517,7 @@ pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
 #[cfg(test)]
 pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    let mut stream = generate_view_code(input.clone());
+    let mut stream = generate_view_code(input.clone(), true);
     stream.extend(generate_save_delete_view_code(input.clone()));
     stream.extend(generate_hash_view_code(input));
     stream.into()
@@ -537,7 +555,7 @@ pub mod tests {
                 collection: CollectionView<C, usize, RegisterView<C, usize>>,
             }
         );
-        let output = generate_view_code(input);
+        let output = generate_view_code(input, true);
 
         let expected = quote!(
             #[async_trait::async_trait]
@@ -550,6 +568,11 @@ pub mod tests {
                     self.register.context()
                 }
                 async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
+                    linera_views::increment_counter(
+                        linera_views::LOAD_VIEW_COUNTER,
+                        stringify!(TestView),
+                        &context.base_key(),
+                    );
                     let index = 0;
                     let base_key = context.derive_key(&index)?;
                     let register =
@@ -657,6 +680,11 @@ pub mod tests {
                 linera_views::views::ViewError: From<C::Error>,
             {
                 async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
+                    linera_views::increment_counter(
+                        linera_views::SAVE_VIEW_COUNTER,
+                        stringify!(TestView),
+                        &self.context().base_key(),
+                    );
                     use linera_views::batch::Batch;
                     let mut batch = Batch::new();
                     self.register.flush(&mut batch)?;
