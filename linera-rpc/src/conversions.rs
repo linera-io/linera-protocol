@@ -368,13 +368,13 @@ impl TryFrom<grpc::Certificate> for Certificate {
 
     fn try_from(certificate: grpc::Certificate) -> Result<Self, Self::Error> {
         let value: HashedValue = bcs::from_bytes(certificate.value.as_slice())?;
-        let mut signatures = Vec::with_capacity(certificate.signatures.len());
         let inner_chain_id = value.chain_id();
         ensure!(
             Some(inner_chain_id.into()) == certificate.chain_id,
             ProtoConversionError::InconsistentChainId
         );
 
+        let mut signatures = Vec::with_capacity(certificate.signatures.len());
         for name_signature_pair in certificate.signatures {
             let validator_name: ValidatorName =
                 try_proto_convert!(name_signature_pair.validator_name);
