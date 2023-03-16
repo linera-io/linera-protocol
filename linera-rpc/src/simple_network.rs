@@ -102,23 +102,17 @@ where
                 let status = pool.send_message_to(message.clone(), &remote_address).await;
                 match status {
                     Err(error) => {
+                        error!(
+                            nickname,
+                            %error,
+                            attempt,
+                            "Failed to send cross-chain query",
+                        );
                         if attempt < cross_chain_max_retries {
-                            error!(
-                                nickname = nickname,
-                                error = %error,
-                                attempt = attempt,
-                                "Failed to send cross-chain query",
-                            );
                             tokio::time::sleep(cross_chain_retry_delay).await;
                             attempt += 1;
                             // retry
                         } else {
-                            error!(
-                                nickname = nickname,
-                                error = %error,
-                                attempt = attempt,
-                                "Failed to send cross-chain query",
-                            );
                             break;
                         }
                     }
@@ -188,7 +182,7 @@ where
                         Ok(Some(info.into()))
                     }
                     Err(error) => {
-                        warn!(nickname = self.server.state.nickname(), error = %error, "Failed to handle block proposal");
+                        warn!(nickname = self.server.state.nickname(), %error, "Failed to handle block proposal");
                         Err(error.into())
                     }
                 }
@@ -203,9 +197,9 @@ where
                     }
                     Err(error) => {
                         if let WorkerError::MissingCertificateValue = &error {
-                            debug!(nickname = self.server.state.nickname(), error = %error, "Failed to handle lite certificate");
+                            debug!(nickname = self.server.state.nickname(), %error, "Failed to handle lite certificate");
                         } else {
-                            error!(nickname = self.server.state.nickname(), error = %error, "Failed to handle lite certificate");
+                            error!(nickname = self.server.state.nickname(), %error, "Failed to handle lite certificate");
                         }
                         Err(error.into())
                     }
@@ -220,7 +214,7 @@ where
                         Ok(Some(info.into()))
                     }
                     Err(error) => {
-                        error!(nickname = self.server.state.nickname(), error = %error, "Failed to handle certificate");
+                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle certificate");
                         Err(error.into())
                     }
                 }
@@ -234,7 +228,7 @@ where
                         Ok(Some(info.into()))
                     }
                     Err(error) => {
-                        error!(nickname = self.server.state.nickname(), error = %error, "Failed to handle chain info query");
+                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle chain info query");
                         Err(error.into())
                     }
                 }
@@ -245,7 +239,7 @@ where
                         self.handle_network_actions(actions);
                     }
                     Err(error) => {
-                        error!(nickname = self.server.state.nickname(), error = %error, "Failed to handle cross-chain request");
+                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle cross-chain request");
                     }
                 }
                 // No user to respond to.
@@ -296,8 +290,8 @@ where
                 self.server.shard_id,
                 shard_id
             );
-            if let Err(e) = self.cross_chain_sender.try_send((request.into(), shard_id)) {
-                error!(error = %e, "dropping cross-chain request");
+            if let Err(error) = self.cross_chain_sender.try_send((request.into(), shard_id)) {
+                error!(%error, "dropping cross-chain request");
                 break;
             }
         }

@@ -193,9 +193,9 @@ where
             let request = Request::new(notification.clone().into());
             if let Err(error) = client.notify(request).await {
                 error!(
-                    error = %error,
-                    nickname = nickname,
-                    notification = ?notification,
+                    %error,
+                    nickname,
+                    ?notification,
                     "could not send notification",
                 )
             }
@@ -214,22 +214,22 @@ where
                 "Scheduling cross-chain query",
             );
 
-            if let Err(e) = cross_chain_sender.try_send((request, shard_id)) {
-                error!(error = %e, "dropping cross-chain request");
+            if let Err(error) = cross_chain_sender.try_send((request, shard_id)) {
+                error!(%error, "dropping cross-chain request");
                 break;
             }
         }
 
         for notification in actions.notifications {
             debug!("Scheduling notification query");
-            if let Err(e) = notification_sender.try_send(notification) {
-                error!(error = %e, "dropping notification");
+            if let Err(error) = notification_sender.try_send(notification) {
+                error!(%error, "dropping notification");
                 break;
             }
         }
     }
 
-    #[instrument(skip(receiver))]
+    #[instrument(skip_all, fields(nickname, %this_shard))]
     async fn forward_cross_chain_queries(
         nickname: String,
         network: ValidatorInternalNetworkConfig,
@@ -256,23 +256,17 @@ where
                 };
                 match result().await {
                     Err(error) => {
+                        error!(
+                            nickname,
+                            %error,
+                            attempt,
+                            "Failed to send cross-chain query",
+                        );
                         if attempt < cross_chain_max_retries {
-                            error!(
-                                nickname = nickname,
-                                error = %error,
-                                attempt = attempt,
-                                "Failed to send cross-chain query",
-                            );
                             tokio::time::sleep(cross_chain_retry_delay).await;
                             attempt += 1;
                             // retry
                         } else {
-                            error!(
-                                nickname = nickname,
-                                error = %error,
-                                attempt = attempt,
-                                "Failed to send cross-chain query",
-                            );
                             break;
                         }
                     }
@@ -296,7 +290,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()), err)]
+    #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
     async fn handle_block_proposal(
         &self,
         request: Request<BlockProposal>,
@@ -314,14 +308,14 @@ where
                     info.try_into()?
                 }
                 Err(error) => {
-                    warn!(nickname = self.state.nickname(), error = %error, "Failed to handle block proposal");
+                    warn!(nickname = self.state.nickname(), %error, "Failed to handle block proposal");
                     NodeError::from(error).try_into()?
                 }
             },
         ))
     }
 
-    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()), err)]
+    #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
     async fn handle_lite_certificate(
         &self,
         request: Request<LiteCertificate>,
@@ -339,16 +333,16 @@ where
             }
             Err(error) => {
                 if let WorkerError::MissingCertificateValue = &error {
-                    debug!(nickname = self.state.nickname(), error = %error, "Failed to handle lite certificate");
+                    debug!(nickname = self.state.nickname(), %error, "Failed to handle lite certificate");
                 } else {
-                    error!(nickname = self.state.nickname(), error = %error, "Failed to handle lite certificate");
+                    error!(nickname = self.state.nickname(), %error, "Failed to handle lite certificate");
                 }
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
     }
 
-    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()), err)]
+    #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
     async fn handle_certificate(
         &self,
         request: Request<CertificateWithDependencies>,
@@ -367,13 +361,13 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                error!(nickname = self.state.nickname(), error = %error, "Failed to handle certificate");
+                error!(nickname = self.state.nickname(), %error, "Failed to handle certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
     }
 
-    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()), err)]
+    #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
     async fn handle_chain_info_query(
         &self,
         request: Request<ChainInfoQuery>,
@@ -386,13 +380,13 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                error!(nickname = self.state.nickname(), error = %error, "Failed to handle chain info query");
+                error!(nickname = self.state.nickname(), %error, "Failed to handle chain info query");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
     }
 
-    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname(), chain_id= ?request.get_ref().chain_id()), err)]
+    #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id= ?request.get_ref().chain_id()))]
     async fn handle_cross_chain_request(
         &self,
         request: Request<CrossChainRequest>,
@@ -406,7 +400,7 @@ where
         {
             Ok(actions) => self.handle_network_actions(actions),
             Err(error) => {
-                error!(nickname = self.state.nickname(), error = %error, "Failed to handle cross-chain request");
+                error!(nickname = self.state.nickname(), %error, "Failed to handle cross-chain request");
             }
         }
         Ok(Response::new(()))
@@ -440,7 +434,7 @@ macro_rules! client_delegate {
     ($self:ident, $handler:ident, $req:ident) => {{
         tracing::debug!(
             request = ?$req,
-            "sending grpc request",
+            "sending gRPC request",
         );
         let request_inner = $req.try_into().map_err(|_| NodeError::GrpcError {
             error: "could not convert request to proto".to_string(),
@@ -502,7 +496,7 @@ macro_rules! mass_client_delegate {
 
 #[async_trait]
 impl ValidatorNode for GrpcClient {
-    #[instrument(target = "grpc_client", skip_all, fields(address = self.address), err)]
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn handle_block_proposal(
         &mut self,
         proposal: data_types::BlockProposal,
@@ -518,7 +512,7 @@ impl ValidatorNode for GrpcClient {
         client_delegate!(self, handle_lite_certificate, certificate)
     }
 
-    #[instrument(target = "grpc_client", skip_all, fields(address = self.address), err)]
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn handle_certificate(
         &mut self,
         certificate: data_types::Certificate,
@@ -528,7 +522,7 @@ impl ValidatorNode for GrpcClient {
         client_delegate!(self, handle_certificate, cert_with_deps)
     }
 
-    #[instrument(target = "grpc_client", skip_all, fields(address = self.address), err)]
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn handle_chain_info_query(
         &mut self,
         query: linera_core::data_types::ChainInfoQuery,
@@ -537,7 +531,7 @@ impl ValidatorNode for GrpcClient {
         client_delegate!(self, handle_chain_info_query, query)
     }
 
-    #[instrument(target = "grpc_client", skip_all, fields(address = self.address), err)]
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
         let subscription_request = SubscriptionRequest {
             chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
