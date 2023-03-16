@@ -399,6 +399,7 @@ where
 
 /// Sometimes we need a serialization that is different from the usual one and
 /// and for example preserves order.
+/// The {to/from}_custom_bytes has to be coherent with the Borrow trait.
 pub trait CustomSerialize {
     /// Serializes the value
     fn to_custom_bytes<C: Context>(&self) -> Result<Vec<u8>, ViewError>
