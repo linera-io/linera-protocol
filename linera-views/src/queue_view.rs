@@ -9,7 +9,11 @@ use crate::{
 use async_lock::Mutex;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::VecDeque, fmt::Debug, ops::Range};
+use std::{
+    collections::{vec_deque::IterMut, VecDeque},
+    fmt::Debug,
+    ops::Range,
+};
 
 /// Key tags to create the sub-keys of a QueueView on top of the base key.
 #[repr(u8)]
@@ -28,6 +32,7 @@ pub struct QueueView<C, T> {
     context: C,
     stored_indices: Range<usize>,
     front_delete_count: usize,
+    delete_indices: bool,
     new_back_values: VecDeque<T>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -53,6 +58,7 @@ where
             context,
             stored_indices,
             front_delete_count: 0,
+            delete_indices: false,
             new_back_values: VecDeque::new(),
             stored_hash: hash,
             hash: Mutex::new(hash),
@@ -66,11 +72,17 @@ where
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
-        if self.front_delete_count > 0 {
+        let mut save_stored_indices = false;
+        if self.delete_indices {
+            let key_prefix = self.context.base_tag(KeyTag::Index as u8);
+            batch.delete_key_prefix(key_prefix);
+            self.stored_indices.start += self.front_delete_count;
+            self.stored_indices.end = self.stored_indices.start;
+            save_stored_indices = true;
+        } else if self.front_delete_count > 0 {
             let deletion_range = self.stored_indices.clone().take(self.front_delete_count);
             self.stored_indices.start += self.front_delete_count;
-            let key = self.context.base_tag(KeyTag::Store as u8);
-            batch.put_key_value(key, &self.stored_indices)?;
+            save_stored_indices = true;
             for index in deletion_range {
                 let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
                 batch.delete_key(key);
@@ -84,11 +96,15 @@ where
                 batch.put_key_value(key, value)?;
                 self.stored_indices.end += 1;
             }
-            let key = self.context.base_tag(KeyTag::Store as u8);
-            batch.put_key_value(key, &self.stored_indices)?;
+            save_stored_indices = true;
             self.new_back_values.clear();
         }
+        if save_stored_indices {
+            let key = self.context.base_tag(KeyTag::Store as u8);
+            batch.put_key_value(key, &self.stored_indices)?;
+        }
         self.front_delete_count = 0;
+        self.delete_indices = false;
         let hash = *self.hash.get_mut();
         if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
@@ -112,11 +128,11 @@ where
     }
 }
 
-impl<C, T> QueueView<C, T>
+impl<'a, C, T> QueueView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Serialize + DeserializeOwned,
+    T: Send + Sync + Clone + Debug + Serialize + DeserializeOwned,
 {
     async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
         let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
@@ -126,7 +142,7 @@ where
     /// Read the front value, if any.
     pub async fn front(&self) -> Result<Option<T>, ViewError> {
         let stored_remainder = self.stored_indices.len() - self.front_delete_count;
-        let value = if stored_remainder > 0 {
+        let value = if !self.delete_indices && stored_remainder > 0 {
             self.get(self.stored_indices.end - stored_remainder).await?
         } else {
             self.new_back_values.front().cloned()
@@ -138,7 +154,7 @@ where
     pub async fn back(&self) -> Result<Option<T>, ViewError> {
         let value = match self.new_back_values.back() {
             Some(value) => Some(value.clone()),
-            None if self.stored_indices.len() > self.front_delete_count => {
+            None if !self.delete_indices && self.stored_indices.len() > self.front_delete_count => {
                 self.get(self.stored_indices.end - 1).await?
             }
             _ => None,
@@ -149,7 +165,7 @@ where
     /// Delete the front value, if any.
     pub fn delete_front(&mut self) {
         *self.hash.get_mut() = None;
-        if self.front_delete_count < self.stored_indices.len() {
+        if self.front_delete_count < self.stored_indices.len() && !self.delete_indices {
             self.front_delete_count += 1;
         } else {
             self.new_back_values.pop_front();
@@ -164,7 +180,11 @@ where
 
     /// Read the size of the queue.
     pub fn count(&self) -> usize {
-        self.stored_indices.len() - self.front_delete_count + self.new_back_values.len()
+        if !self.delete_indices {
+            self.stored_indices.len() - self.front_delete_count + self.new_back_values.len()
+        } else {
+            self.new_back_values.len()
+        }
     }
 
     /// Obtain the extra data.
@@ -194,17 +214,21 @@ where
         }
         let mut values = Vec::new();
         values.reserve(count);
-        let stored_remainder = self.stored_indices.len() - self.front_delete_count;
-        let start = self.stored_indices.end - stored_remainder;
-        if count <= stored_remainder {
-            values.extend(self.read_context(start..(start + count)).await?);
+        if !self.delete_indices {
+            let stored_remainder = self.stored_indices.len() - self.front_delete_count;
+            let start = self.stored_indices.end - stored_remainder;
+            if count <= stored_remainder {
+                values.extend(self.read_context(start..(start + count)).await?);
+            } else {
+                values.extend(self.read_context(start..self.stored_indices.end).await?);
+                values.extend(
+                    self.new_back_values
+                        .range(0..(count - stored_remainder))
+                        .cloned(),
+                );
+            }
         } else {
-            values.extend(self.read_context(start..self.stored_indices.end).await?);
-            values.extend(
-                self.new_back_values
-                    .range(0..(count - stored_remainder))
-                    .cloned(),
-            );
+            values.extend(self.new_back_values.range(0..count).cloned());
         }
         Ok(values)
     }
@@ -220,7 +244,7 @@ where
         let mut values = Vec::new();
         values.reserve(count);
         let new_back_len = self.new_back_values.len();
-        if count <= new_back_len {
+        if count <= new_back_len || self.delete_indices {
             values.extend(
                 self.new_back_values
                     .range((new_back_len - count)..new_back_len)
@@ -234,12 +258,41 @@ where
         Ok(values)
     }
 
+    /// Get all the elements in the queue
+    pub async fn elements(&self) -> Result<Vec<T>, ViewError> {
+        let count = self.count();
+        self.read_front(count).await
+    }
+
     async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         let count = self.count();
         let elements = self.read_front(count).await?;
         let mut hasher = sha3::Sha3_256::default();
         hasher.update_with_bcs_bytes(&elements)?;
         Ok(hasher.finalize())
+    }
+
+    async fn load_all(&mut self) -> Result<(), ViewError> {
+        if !self.delete_indices {
+            let stored_remainder = self.stored_indices.len() - self.front_delete_count;
+            let start = self.stored_indices.end - stored_remainder;
+            let elements = self.read_context(start..self.stored_indices.end).await?;
+            let shift = self.stored_indices.end - start;
+            for elt in elements {
+                self.new_back_values.push_back(elt);
+            }
+            self.new_back_values.rotate_right(shift);
+            // Indices are whether deleted by a self.front_delete_count or deleted because modified by the IterMut.
+            // So, better to put a DeletePrefix. The stored_indices has to be put
+            self.delete_indices = true;
+        }
+        Ok(())
+    }
+
+    /// Get a mutable iterator on the entries of the queue
+    pub async fn iter_mut(&'a mut self) -> Result<IterMut<'a, T>, ViewError> {
+        self.load_all().await?;
+        Ok(self.new_back_values.iter_mut())
     }
 }
 
@@ -248,7 +301,7 @@ impl<C, T> HashableView<C> for QueueView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Serialize + DeserializeOwned,
+    T: Send + Sync + Clone + Debug + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;
 

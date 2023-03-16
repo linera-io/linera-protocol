@@ -105,7 +105,7 @@ impl KeyValueStoreClient for RocksdbClient {
                 if get_upper_bound(key_prefix) == Bound::Unbounded {
                     for short_key in self.find_keys_by_prefix(key_prefix).await? {
                         let mut key = key_prefix.clone();
-                        key.extend_from_slice(&short_key);
+                        key.extend(short_key);
                         keys.push(key);
                     }
                 }
