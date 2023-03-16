@@ -176,7 +176,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    #[instrument(target = "simple_server", skip_all, fields(nickname = self.server.state.nickname()))]
+    #[instrument(target = "simple_server", skip_all, fields(nickname = self.server.state.nickname(), chain_id = ?message.target_chain_id()))]
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage> {
         let reply = match message {
             RpcMessage::BlockProposal(message) => {

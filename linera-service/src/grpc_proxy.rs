@@ -7,13 +7,15 @@ use linera_base::data_types::ChainId;
 use linera_core::notifier::Notifier;
 use linera_rpc::{
     config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},
-    grpc_network::grpc::{
-        self,
-        notifier_service_server::{NotifierService, NotifierServiceServer},
-        validator_node_server::{ValidatorNode, ValidatorNodeServer},
-        validator_worker_client::ValidatorWorkerClient,
-        BlockProposal, CertificateWithDependencies, ChainInfoQuery, ChainInfoResult,
-        CrossChainRequest, LiteCertificate, Notification, SubscriptionRequest,
+    grpc_network::{
+        grpc::{
+            notifier_service_server::{NotifierService, NotifierServiceServer},
+            validator_node_server::{ValidatorNode, ValidatorNodeServer},
+            validator_worker_client::ValidatorWorkerClient,
+            BlockProposal, CertificateWithDependencies, ChainInfoQuery, ChainInfoResult,
+            LiteCertificate, Notification, SubscriptionRequest,
+        },
+        Proxyable,
     },
     grpc_pool::ConnectionPool,
 };
@@ -197,48 +199,5 @@ impl NotifierService for GrpcProxy {
             .try_into()?;
         self.0.notifier.notify(&chain_id, Ok(notification));
         Ok(Response::new(()))
-    }
-}
-
-/// Types which are proxyable and expose the appropriate methods to be handled
-/// by the `GrpcProxy`
-trait Proxyable {
-    fn chain_id(&self) -> Option<ChainId>;
-}
-
-impl Proxyable for BlockProposal {
-    fn chain_id(&self) -> Option<ChainId> {
-        self.chain_id.clone()?.try_into().ok()
-    }
-}
-
-impl Proxyable for LiteCertificate {
-    fn chain_id(&self) -> Option<ChainId> {
-        self.chain_id.clone()?.try_into().ok()
-    }
-}
-
-impl Proxyable for CertificateWithDependencies {
-    fn chain_id(&self) -> Option<ChainId> {
-        self.chain_id.clone()?.try_into().ok()
-    }
-}
-
-impl Proxyable for ChainInfoQuery {
-    fn chain_id(&self) -> Option<ChainId> {
-        self.chain_id.clone()?.try_into().ok()
-    }
-}
-
-impl Proxyable for CrossChainRequest {
-    fn chain_id(&self) -> Option<ChainId> {
-        use grpc::cross_chain_request::Inner;
-
-        match self.inner.as_ref()? {
-            Inner::UpdateRecipient(grpc::UpdateRecipient { recipient, .. })
-            | Inner::ConfirmUpdatedRecipient(grpc::ConfirmUpdatedRecipient { recipient, .. }) => {
-                recipient.clone()?.try_into().ok()
-            }
-        }
     }
 }

@@ -296,7 +296,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname()), err)]
+    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()), err)]
     async fn handle_block_proposal(
         &self,
         request: Request<BlockProposal>,
@@ -321,7 +321,7 @@ where
         ))
     }
 
-    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname()), err)]
+    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()), err)]
     async fn handle_lite_certificate(
         &self,
         request: Request<LiteCertificate>,
@@ -348,7 +348,7 @@ where
         }
     }
 
-    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname()), err)]
+    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()), err)]
     async fn handle_certificate(
         &self,
         request: Request<CertificateWithDependencies>,
@@ -373,7 +373,7 @@ where
         }
     }
 
-    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname()), err)]
+    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()), err)]
     async fn handle_chain_info_query(
         &self,
         request: Request<ChainInfoQuery>,
@@ -392,7 +392,7 @@ where
         }
     }
 
-    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname()), err)]
+    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname(), chain_id= ?request.get_ref().chain_id()), err)]
     async fn handle_cross_chain_request(
         &self,
         request: Request<CrossChainRequest>,
@@ -590,5 +590,48 @@ impl MassClient for GrpcMassClient {
             }
         }
         Ok(responses)
+    }
+}
+
+/// Types which are proxyable and expose the appropriate methods to be handled
+/// by the `GrpcProxy`
+pub trait Proxyable {
+    fn chain_id(&self) -> Option<ChainId>;
+}
+
+impl Proxyable for BlockProposal {
+    fn chain_id(&self) -> Option<ChainId> {
+        self.chain_id.clone()?.try_into().ok()
+    }
+}
+
+impl Proxyable for LiteCertificate {
+    fn chain_id(&self) -> Option<ChainId> {
+        self.chain_id.clone()?.try_into().ok()
+    }
+}
+
+impl Proxyable for CertificateWithDependencies {
+    fn chain_id(&self) -> Option<ChainId> {
+        self.chain_id.clone()?.try_into().ok()
+    }
+}
+
+impl Proxyable for ChainInfoQuery {
+    fn chain_id(&self) -> Option<ChainId> {
+        self.chain_id.clone()?.try_into().ok()
+    }
+}
+
+impl Proxyable for CrossChainRequest {
+    fn chain_id(&self) -> Option<ChainId> {
+        use grpc::cross_chain_request::Inner;
+
+        match self.inner.as_ref()? {
+            Inner::UpdateRecipient(grpc::UpdateRecipient { recipient, .. })
+            | Inner::ConfirmUpdatedRecipient(grpc::ConfirmUpdatedRecipient { recipient, .. }) => {
+                recipient.clone()?.try_into().ok()
+            }
+        }
     }
 }
