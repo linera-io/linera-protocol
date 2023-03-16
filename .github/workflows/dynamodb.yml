@@ -20,7 +20,11 @@ env:
   RUSTFLAGS: "-D warnings"
   RUSTUP_MAX_RETRIES: 10
 
+permissions:
+  contents: read
+
 jobs:
+
   build:
     runs-on: ubuntu-latest-8-cores
     steps:
