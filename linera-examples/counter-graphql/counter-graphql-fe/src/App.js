@@ -4,7 +4,6 @@ import {
   gql,
   useLazyQuery,
 } from "@apollo/client";
-import logo from "./logo.png";
 import "./App.css";
 import React from "react";
 
@@ -43,7 +42,6 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
         <p>Counter Value: {data ? data.value : "Loading..."}</p>
         <Increment />
       </header>
