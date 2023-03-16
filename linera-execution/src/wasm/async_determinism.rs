@@ -26,7 +26,7 @@
 //! guest.
 //!
 //! The [`HostFutureQueue`] implements [`Stream`], and produces a marker `()` item every time the
-//! next future in the queue is ready for completion. Therefore, the [`GuestFuture`] is responsible
+//! next future in the queue is ready for completion. Therefore, the [`super::async_boundary::GuestFuture`] is responsible
 //! for always polling the [`HostFutureQueue`] before polling the guest WASM module.
 
 use super::async_boundary::HostFuture;

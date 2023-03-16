@@ -19,7 +19,7 @@ use std::{
 };
 use tokio::sync::{Mutex, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
 
-/// A view that supports accessing a collection of views of the same kind, indexed by Vec<u8>,
+/// A view that supports accessing a collection of views of the same kind, indexed by `Vec<u8>`,
 /// possibly several subviews at a time.
 #[derive(Debug)]
 #[allow(clippy::type_complexity)]
