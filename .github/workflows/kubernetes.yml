@@ -3,6 +3,11 @@ name: Kubernetes
 on:
   workflow_dispatch:
 
+# This allows a subsequently queued workflow run to interrupt previous runs on pull-requests
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
