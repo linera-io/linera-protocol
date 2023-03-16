@@ -106,3 +106,6 @@ jobs:
     - name: Run clippy
       run: |
         cargo clippy --all-targets --all-features --tests
+    - name: Run cargo doc
+      run: |
+        RUSTDOCFLAGS='-D warnings' cargo doc --all-features
