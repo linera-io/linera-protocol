@@ -5,7 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [features]
-test = ["anyhow", "tokio/macros", "tokio/sync", "tokio/parking_lot", "tokio/rt"]
+test = ["anyhow", "tokio/macros", "tokio/parking_lot"]
 aws = ["aws-config", "aws-sdk-dynamodb", "aws-sdk-s3", "aws-smithy-http", "aws-types"]
 metrics = ["dep:hex", "dep:metrics"]
 
@@ -26,7 +26,7 @@ thiserror = "1.0.31"
 linked-hash-map = "0.5.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { version = "1.25.0", features = ["sync"] }
+tokio = { version = "1.25.0", features = ["rt", "sync"] }
 anyhow = { version = "1.0.57", optional = true }
 tracing = "0.1.37"
 http = "0.2.7"
