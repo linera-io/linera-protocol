@@ -580,6 +580,10 @@ enum ClientCommand {
         arguments: String,
         publisher: Option<ChainId>,
     },
+
+    /// Create an unassigned key-pair.
+    #[structopt(name = "keygen")]
+    KeyGen
 }
 
 struct Job(ClientContext, ClientCommand);
@@ -965,7 +969,7 @@ where
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs())
             }
 
-            CreateGenesisConfig { .. } => unreachable!(),
+            CreateGenesisConfig { .. } | KeyGen => unreachable!(),
         }
         Ok(())
     }
@@ -1012,6 +1016,15 @@ async fn main() -> Result<(), anyhow::Error> {
             genesis_config.write(&options.genesis_config_path)?;
             Ok(())
         }
+
+        ClientCommand::KeyGen => {
+            let keypair = KeyPair::generate();
+            println!("{}", keypair.public());
+            context.wallet_state.add_unassigned_keypair(keypair);
+            context.save_wallet();
+            Ok(())
+        }
+
         command => {
             let genesis_config = context.genesis_config.clone();
             let wasm_runtime = options.wasm_runtime.with_wasm_default();

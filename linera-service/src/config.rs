@@ -139,6 +139,10 @@ impl WalletState {
         self.chains.values_mut()
     }
 
+    pub fn add_unassigned_keypair(&mut self, keypair: KeyPair) {
+        self.unassigned.push(keypair)
+    }
+
     pub async fn update_from_state<P, S>(&mut self, state: &mut ChainClient<P, S>)
     where
         P: ValidatorNodeProvider + Send + 'static,
