@@ -1,7 +1,5 @@
-use std::time::Duration;
-
 use criterion::{criterion_group, criterion_main, measurement::Measurement, BatchSize, Criterion};
-use linera_base::data_types::{ChainDescription, ChainId};
+use linera_base::data_types::ChainDescription;
 use linera_core::client::{
     self,
     client_test_utils::{MakeMemoryStoreClient, NodeProvider, StoreBuilder, TestBuilder},
@@ -13,6 +11,7 @@ use linera_storage::{
 };
 use linera_views::{views::ViewError, LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};
 use recorder::{BenchRecorder, BenchRecorderMeasurement};
+use std::time::Duration;
 use tokio::runtime;
 
 type ChainClient<B> =
@@ -55,7 +54,7 @@ where
     let owner1 = chain1.get_identity().await.unwrap();
     let amt = Amount::from(1);
 
-    let account = Account::owner(ChainId::root(2), owner1);
+    let account = Account::owner(chain2.chain_id(), owner1);
     let cert = chain1
         .transfer_to_account(None, amt, account, UserData(None))
         .await
@@ -65,9 +64,9 @@ where
     chain2.process_inbox().await.unwrap();
     assert_eq!(chain1.local_balance().await.unwrap(), Balance::from(9));
 
-    let account = Recipient::Account(Account::chain(ChainId::root(1)));
+    let account = Recipient::Account(Account::chain(chain1.chain_id()));
     let cert = chain1
-        .claim(owner1, ChainId::root(2), account, amt, UserData(None))
+        .claim(owner1, chain2.chain_id(), account, amt, UserData(None))
         .await
         .unwrap();
 

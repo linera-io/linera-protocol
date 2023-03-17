@@ -85,7 +85,7 @@ impl Store for RocksdbStoreClient {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let maybe_value: Option<Value> = self.0.db.read_key(&value_key).await?;
         let id = match &maybe_value {
-            Some(value) => format!("{}", value.block.chain_id),
+            Some(value) => value.block.chain_id.to_string(),
             None => "not found".to_string(),
         };
         increment_counter!(READ_VALUE_COUNTER, &[("chain_id", id)]);
@@ -94,7 +94,7 @@ impl Store for RocksdbStoreClient {
     }
 
     async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
-        let id = format!("{}", value.block().chain_id);
+        let id = value.block().chain_id.to_string();
         increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         let mut batch = Batch::new();
@@ -112,7 +112,7 @@ impl Store for RocksdbStoreClient {
         );
         if let Ok(maybe_value) = &value_result {
             let id = match maybe_value {
-                Some(value) => format!("{}", value.block.chain_id),
+                Some(value) => value.block.chain_id.to_string(),
                 None => "not found".to_string(),
             };
             increment_counter!(READ_CERTIFICATE_COUNTER, &[("chain_id", id)]);
@@ -127,7 +127,7 @@ impl Store for RocksdbStoreClient {
     }
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
-        let id = format!("{}", certificate.value.block().chain_id);
+        let id = certificate.value.block().chain_id.to_string();
         increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id)]);
         let hash = certificate.value.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
