@@ -12,17 +12,27 @@ the Linera protocol functions refer to the [whitepaper](https://github.com/liner
 
 ## Repository Structure
 
-The Linera protocol repository is broken down into the following crates: (from low-level to high-level in the dependency graph)
+The Linera protocol repository is broken down into the following crates and subdirectories: (from low-level to high-level in the dependency graph)
 
-1. [`linera-base`](./linera-base) Basic type definitions, including cryptography. This will slowly be transitioned out into the rest of the crate ecosystem.
-2. [`linera-views`](./linera-views) A module enabling the mapping of complex data structures onto a KV store.
-3. [`linera-execution`](./linera-execution) Persistent data and the corresponding logics for runtime and execution of smart contracts / applications.
-4. [`linera-chain`](./linera-chain) Persistent data and the corresponding logics for chains of blocks, certificates, and cross-chain messaging.
-5. [`linera-storage`](./linera-storage) Defines the storage abstraction and corresponding concrete implementations (DynamoDB, RocksDB, etc.) on top of `linera-chain`.
-6. [`linera-core`](./linera-core) The Linera core protocol. Contains client / server logic, node synchronization etc.
-7. [`linera-rpc`](./linera-rpc)  Defines the data-type for RPC messages (currently all client<->proxy<->chain<->chain interactions), and track the corresponding data schemas.
-8. [`linera-service`](./linera-service) Executable for clients (aka CLI wallets), proxy (aka validator frontend) and servers.
-9. [`linera-sdk`](./linera-sdk) The library to develop WASM applications in Linera.
+1. [`linera-base`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_base/index.html) Basic type definitions, including cryptography.
+
+2. [`linera-views`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_views/index.html) A module enabling the mapping of complex data structures onto a KV store.
+
+3. [`linera-execution`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_execution/index.html) Persistent data and the corresponding logics for runtime and execution of smart contracts / applications.
+
+4. [`linera-chain`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_chain/index.html) Persistent data and the corresponding logics for chains of blocks, certificates, and cross-chain messaging.
+
+5. [`linera-storage`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_storage/index.html) Defines the storage abstraction and corresponding concrete implementations (DynamoDB, RocksDB, etc.) on top of `linera-chain`.
+
+6. [`linera-core`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_core/index.html) The Linera core protocol. Contains client / server logic, node synchronization etc.
+
+7. [`linera-rpc`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_rpc/index.html)  Defines the data-type for RPC messages (currently all client<->proxy<->chain<->chain interactions), and track the corresponding data schemas.
+
+8. [`linera-service`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_service/index.html) Executable for clients (aka CLI wallets), proxy (aka validator frontend) and servers.
+
+9. [`linera-sdk`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_sdk/index.html) The library to develop Linera applications written in Rust for the WASM virtual machine.
+
+10. [`linera-examples`](./linera-examples) Examples of Linera applications written in Rust.
 
 ## Quickstart with the Linera service CLI
 
