@@ -236,6 +236,7 @@ struct ValidatorOptions {
 impl FromStr for ValidatorOptions {
     type Err = anyhow::Error;
 
+    // TODO(#543): Use a config file instead of this string.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.split(':').collect();
         ensure!(
