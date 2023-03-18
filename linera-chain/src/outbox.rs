@@ -6,7 +6,7 @@ use linera_views::{
     common::Context,
     queue_view::QueueView,
     register_view::RegisterView,
-    views::{View, ViewError},
+    views::{GraphQLView, View, ViewError},
 };
 
 #[cfg(test)]
@@ -72,7 +72,6 @@ where
     }
 }
 
-use linera_views::views::GraphQLView;
 #[cfg(any(test, feature = "test"))]
 use {
     async_lock::Mutex, linera_views::memory::MemoryContext, std::collections::BTreeMap,
