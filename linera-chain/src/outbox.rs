@@ -3,7 +3,10 @@
 
 use linera_base::data_types::{ArithmeticError, BlockHeight};
 use linera_views::{
-    common::Context, queue_view::QueueView, register_view::RegisterView, views::ViewError,
+    common::Context,
+    queue_view::QueueView,
+    register_view::RegisterView,
+    views::{View, ViewError},
 };
 
 #[cfg(test)]
@@ -72,8 +75,8 @@ where
 use linera_views::views::GraphQLView;
 #[cfg(any(test, feature = "test"))]
 use {
-    async_lock::Mutex, linera_views::memory::MemoryContext, linera_views::views::View,
-    std::collections::BTreeMap, std::sync::Arc,
+    async_lock::Mutex, linera_views::memory::MemoryContext, std::collections::BTreeMap,
+    std::sync::Arc,
 };
 
 #[cfg(any(test, feature = "test"))]
