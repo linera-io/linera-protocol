@@ -18,6 +18,12 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+#[cfg(any(test, feature = "test"))]
+use {
+    async_lock::Mutex, linera_views::memory::MemoryContext, std::collections::BTreeMap,
+    std::sync::Arc,
+};
+
 #[cfg(test)]
 #[path = "unit_tests/inbox_tests.rs"]
 mod inbox_tests;
@@ -232,12 +238,6 @@ where
         Ok(())
     }
 }
-
-#[cfg(any(test, feature = "test"))]
-use {
-    async_lock::Mutex, linera_views::memory::MemoryContext, std::collections::BTreeMap,
-    std::sync::Arc,
-};
 
 #[cfg(any(test, feature = "test"))]
 impl InboxStateView<MemoryContext<()>>
