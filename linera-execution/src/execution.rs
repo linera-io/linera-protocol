@@ -13,6 +13,7 @@ use linera_base::{
     identifiers::{ChainId, Owner},
 };
 use linera_views::{
+    common::Context,
     key_value_store_view::KeyValueStoreView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
@@ -27,7 +28,7 @@ use {
         UserApplicationDescription,
     },
     async_lock::Mutex,
-    linera_views::{common::Context, memory::MemoryContext},
+    linera_views::memory::MemoryContext,
     std::collections::BTreeMap,
     std::sync::Arc,
 };
