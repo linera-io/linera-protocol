@@ -6,7 +6,7 @@ use crate::{
     system::SystemExecutionStateView,
     ApplicationId, Effect, EffectContext, ExecutionError, ExecutionResult, ExecutionRuntimeContext,
     Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemEffect,
-    UserApplicationId, WritableStorage,
+    UserApplicationDescription, UserApplicationId, WritableStorage,
 };
 use linera_base::{
     ensure,
@@ -23,10 +23,7 @@ use linera_views_derive::CryptoHashView;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::{
-        system::SystemExecutionState, TestExecutionRuntimeContext, UserApplicationCode,
-        UserApplicationDescription,
-    },
+    crate::{system::SystemExecutionState, TestExecutionRuntimeContext, UserApplicationCode},
     async_lock::Mutex,
     linera_views::memory::MemoryContext,
     std::collections::BTreeMap,
