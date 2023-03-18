@@ -9,6 +9,12 @@ use linera_views::{
     views::{GraphQLView, View, ViewError},
 };
 
+#[cfg(any(test, feature = "test"))]
+use {
+    async_lock::Mutex, linera_views::memory::MemoryContext, std::collections::BTreeMap,
+    std::sync::Arc,
+};
+
 #[cfg(test)]
 #[path = "unit_tests/outbox_tests.rs"]
 mod outbox_tests;
@@ -71,12 +77,6 @@ where
         Ok(updated)
     }
 }
-
-#[cfg(any(test, feature = "test"))]
-use {
-    async_lock::Mutex, linera_views::memory::MemoryContext, std::collections::BTreeMap,
-    std::sync::Arc,
-};
 
 #[cfg(any(test, feature = "test"))]
 impl OutboxStateView<MemoryContext<()>>
