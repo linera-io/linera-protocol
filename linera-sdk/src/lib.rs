@@ -109,6 +109,8 @@ pub trait Service {
 pub struct OperationContext {
     /// The current chain id.
     pub chain_id: ChainId,
+    /// The authenticated signer of the operation, if any.
+    pub authenticated_signer: Option<Owner>,
     /// The current block height.
     pub height: BlockHeight,
     /// The current index of the operation.
@@ -119,6 +121,8 @@ pub struct OperationContext {
 pub struct EffectContext {
     /// The current chain id.
     pub chain_id: ChainId,
+    /// The authenticated signer of the operation, if any.
+    pub authenticated_signer: Option<Owner>,
     /// The current block height.
     pub height: BlockHeight,
     /// The id of the effect (based on the operation height and index in the remote
@@ -130,6 +134,8 @@ pub struct EffectContext {
 pub struct CalleeContext {
     /// The current chain id.
     pub chain_id: ChainId,
+    /// The authenticated signer of the operation, if any.
+    pub authenticated_signer: Option<Owner>,
     /// `None` if the caller doesn't want this particular call to be authenticated (e.g.
     /// for safety reasons).
     pub authenticated_caller_id: Option<ApplicationId>,
@@ -190,6 +196,10 @@ pub struct EffectId {
 /// The unique identifier (UID) of a chain. This is the hash value of a ChainDescription.
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Deserialize, Serialize)]
 pub struct ChainId(pub CryptoHash);
+
+/// The owner of an account (aka address).
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Deserialize, Serialize)]
+pub struct Owner(pub CryptoHash);
 
 /// The name of a subscription channel.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Deserialize, Serialize)]

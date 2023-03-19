@@ -19,6 +19,7 @@ impl From<OperationContext> for contract::OperationContext {
     fn from(host: OperationContext) -> Self {
         contract::OperationContext {
             chain_id: host.chain_id.into(),
+            authenticated_signer: host.authenticated_signer.map(|owner| owner.0.into()),
             height: host.height.0,
             index: host
                 .index
@@ -32,6 +33,7 @@ impl From<EffectContext> for contract::EffectContext {
     fn from(host: EffectContext) -> Self {
         contract::EffectContext {
             chain_id: host.chain_id.into(),
+            authenticated_signer: host.authenticated_signer.map(|owner| owner.0.into()),
             height: host.height.0,
             effect_id: host.effect_id.into(),
         }
@@ -81,6 +83,7 @@ impl From<CalleeContext> for contract::CalleeContext {
     fn from(host: CalleeContext) -> Self {
         contract::CalleeContext {
             chain_id: host.chain_id.into(),
+            authenticated_signer: host.authenticated_signer.map(|owner| owner.0.into()),
             authenticated_caller_id: host
                 .authenticated_caller_id
                 .map(contract::ApplicationId::from),
