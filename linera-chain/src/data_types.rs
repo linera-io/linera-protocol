@@ -452,7 +452,7 @@ impl BlockProposal {
         let signature = Signature::new(&content, secret);
         Self {
             content,
-            owner: Owner(secret.public()),
+            owner: secret.public().into(),
             signature,
             blobs,
         }

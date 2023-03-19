@@ -273,7 +273,7 @@ message PublicKey {
 }
 
 message Owner {
-  PublicKey inner = 1;
+  bytes bytes = 1;
 }
 
 message Signature {

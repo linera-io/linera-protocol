@@ -231,15 +231,15 @@ struct GenesisStoreBuilder {
 
 struct GenesisAccount {
     description: ChainDescription,
-    owner: Owner,
+    public_key: PublicKey,
     balance: Balance,
 }
 
 impl GenesisStoreBuilder {
-    fn add(&mut self, description: ChainDescription, owner: Owner, balance: Balance) {
+    fn add(&mut self, description: ChainDescription, public_key: PublicKey, balance: Balance) {
         self.accounts.push(GenesisAccount {
             description,
-            owner,
+            public_key,
             balance,
         })
     }
@@ -255,7 +255,7 @@ impl GenesisStoreBuilder {
                     initial_committee.clone(),
                     admin_id,
                     account.description,
-                    account.owner,
+                    account.public_key,
                     account.balance,
                     Timestamp::from(0),
                 )
@@ -325,9 +325,10 @@ where
         balance: Balance,
     ) -> Result<ChainClient<NodeProvider<B::Store>, B::Store>, anyhow::Error> {
         let key_pair = KeyPair::generate();
-        let owner = Owner(key_pair.public());
+        let public_key = key_pair.public();
         // Remember what's in the genesis store for future clients to join.
-        self.genesis_store_builder.add(description, owner, balance);
+        self.genesis_store_builder
+            .add(description, public_key, balance);
         for (name, store) in self.validator_stores.iter_mut() {
             if self.faulty_validators.contains(name) {
                 store
@@ -335,7 +336,7 @@ where
                         self.initial_committee.clone(),
                         self.admin_id,
                         description,
-                        owner,
+                        public_key,
                         Balance::from(0),
                         Timestamp::from(0),
                     )
@@ -347,7 +348,7 @@ where
                         self.initial_committee.clone(),
                         self.admin_id,
                         description,
-                        owner,
+                        public_key,
                         balance,
                         Timestamp::from(0),
                     )
@@ -361,7 +362,7 @@ where
                     self.initial_committee.clone(),
                     self.admin_id,
                     description,
-                    owner,
+                    public_key,
                     balance,
                     Timestamp::from(0),
                 )

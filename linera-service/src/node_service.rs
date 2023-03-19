@@ -16,6 +16,7 @@ use axum::{
 use futures::lock::Mutex;
 use linera_base::{
     committee::Committee,
+    crypto::PublicKey,
     data_types::{ChainId, Epoch, Owner},
 };
 use linera_chain::{data_types::Certificate, ChainStateView};
@@ -178,14 +179,14 @@ where
     async fn open_chain(
         &self,
         id: ChainId,
-        owner: Owner,
+        public_key: PublicKey,
         admin_id: ChainId,
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
     ) -> Result<Certificate, Error> {
         let operation = SystemOperation::OpenChain {
             id,
-            owner,
+            public_key,
             admin_id,
             epoch,
             committees,
@@ -200,14 +201,17 @@ where
     }
 
     /// Changes the authentication key of the chain.
-    async fn change_owner(&self, new_owner: Owner) -> Result<Certificate, Error> {
-        let operation = SystemOperation::ChangeOwner { new_owner };
+    async fn change_owner(&self, new_public_key: PublicKey) -> Result<Certificate, Error> {
+        let operation = SystemOperation::ChangeOwner { new_public_key };
         self.execute_system_operation(operation).await
     }
 
     /// Changes the authentication key of the chain.
-    async fn change_multiple_owners(&self, new_owners: Vec<Owner>) -> Result<Certificate, Error> {
-        let operation = SystemOperation::ChangeMultipleOwners { new_owners };
+    async fn change_multiple_owners(
+        &self,
+        new_public_keys: Vec<PublicKey>,
+    ) -> Result<Certificate, Error> {
+        let operation = SystemOperation::ChangeMultipleOwners { new_public_keys };
         self.execute_system_operation(operation).await
     }
 

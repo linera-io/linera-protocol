@@ -83,9 +83,10 @@ impl fmt::Display for Timestamp {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct ValidatorName(pub PublicKey);
 
-/// The owner of a chain.
+/// The owner of a chain. This is currently the hash of the owner's public key used to
+/// verify signatures.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct Owner(pub PublicKey);
+pub struct Owner(pub CryptoHash);
 
 /// A number identifying the configuration of the chain (aka the committee).
 #[derive(
@@ -302,7 +303,13 @@ impl From<PublicKey> for ValidatorName {
 
 impl From<PublicKey> for Owner {
     fn from(value: PublicKey) -> Self {
-        Self(value)
+        Self(CryptoHash::new(&value))
+    }
+}
+
+impl From<&PublicKey> for Owner {
+    fn from(value: &PublicKey) -> Self {
+        Self(CryptoHash::new(value))
     }
 }
 
@@ -310,7 +317,7 @@ impl std::str::FromStr for Owner {
     type Err = CryptoError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Owner(PublicKey::from_str(s)?))
+        Ok(Owner(CryptoHash::from_str(s)?))
     }
 }
 

@@ -743,7 +743,7 @@ impl From<grpc::BlockHeight> for BlockHeight {
 impl From<Owner> for grpc::Owner {
     fn from(owner: Owner) -> Self {
         Self {
-            inner: Some(owner.0.into()),
+            bytes: owner.0.as_bytes().to_vec(),
         }
     }
 }
@@ -752,7 +752,7 @@ impl TryFrom<grpc::Owner> for Owner {
     type Error = ProtoConversionError;
 
     fn try_from(owner: grpc::Owner) -> Result<Self, Self::Error> {
-        Ok(Self(try_proto_convert!(owner.inner)))
+        Ok(Self(CryptoHash::try_from(owner.bytes.as_slice())?))
     }
 }
 

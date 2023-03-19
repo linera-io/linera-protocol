@@ -1,6 +1,6 @@
 use crate::{
     committee::{Committee, ValidatorState},
-    crypto::{CryptoHash, Signature},
+    crypto::{CryptoHash, PublicKey, Signature},
     data_types::{BlockHeight, ChainDescription, ChainId, Epoch, Owner, Timestamp, ValidatorName},
 };
 use async_graphql::{scalar, Object};
@@ -12,6 +12,7 @@ scalar!(ChainId);
 scalar!(CryptoHash);
 scalar!(Epoch);
 scalar!(Owner);
+scalar!(PublicKey);
 scalar!(Signature);
 scalar!(Timestamp);
 scalar!(ValidatorName);

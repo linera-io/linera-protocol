@@ -335,7 +335,8 @@ MultiOwnerManagerInfo:
         MAP:
           KEY:
             TYPENAME: Owner
-          VALUE: UNIT
+          VALUE:
+            TYPENAME: PublicKey
     - requested_proposed:
         OPTION:
           TYPENAME: BlockProposal
@@ -477,7 +478,7 @@ OutgoingEffect:
         TYPENAME: Effect
 Owner:
   NEWTYPESTRUCT:
-    TYPENAME: PublicKey
+    TYPENAME: CryptoHash
 PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -575,8 +576,8 @@ SystemEffect:
         STRUCT:
           - id:
               TYPENAME: ChainId
-          - owner:
-              TYPENAME: Owner
+          - public_key:
+              TYPENAME: PublicKey
           - admin_id:
               TYPENAME: ChainId
           - epoch:
@@ -669,8 +670,8 @@ SystemOperation:
         STRUCT:
           - id:
               TYPENAME: ChainId
-          - owner:
-              TYPENAME: Owner
+          - public_key:
+              TYPENAME: PublicKey
           - admin_id:
               TYPENAME: ChainId
           - epoch:
@@ -686,14 +687,14 @@ SystemOperation:
     4:
       ChangeOwner:
         STRUCT:
-          - new_owner:
-              TYPENAME: Owner
+          - new_public_key:
+              TYPENAME: PublicKey
     5:
       ChangeMultipleOwners:
         STRUCT:
-          - new_owners:
+          - new_public_keys:
               SEQ:
-                TYPENAME: Owner
+                TYPENAME: PublicKey
     6:
       CreateCommittee:
         STRUCT:

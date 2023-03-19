@@ -317,7 +317,7 @@ where
         match &effect {
             Effect::System(SystemEffect::OpenChain {
                 id,
-                owner,
+                public_key,
                 epoch,
                 committees,
                 admin_id,
@@ -326,7 +326,7 @@ where
                 self.execution_state.system.open_chain(
                     effect_id,
                     *id,
-                    *owner,
+                    *public_key,
                     *epoch,
                     committees.clone(),
                     *admin_id,

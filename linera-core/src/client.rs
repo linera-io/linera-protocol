@@ -16,7 +16,7 @@ use futures::{
 };
 use linera_base::{
     committee::{Committee, ValidatorState},
-    crypto::{CryptoHash, KeyPair},
+    crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{
         BlockHeight, ChainId, EffectId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName,
     },
@@ -113,7 +113,7 @@ impl<P, S> ChainClient<P, S> {
     ) -> Self {
         let known_key_pairs = known_key_pairs
             .into_iter()
-            .map(|kp| (Owner(kp.public()), kp))
+            .map(|kp| (Owner::from(kp.public()), kp))
             .collect();
         let state = WorkerState::new(format!("Client node {:?}", chain_id), None, storage_client)
             .with_allow_inactive_chains(true)
@@ -299,14 +299,9 @@ where
             .ok_or(NodeError::InactiveLocalChain(self.chain_id))?)
     }
 
-    #[cfg(any(test, feature = "test"))]
-    pub async fn get_identity(&mut self) -> Result<Owner, anyhow::Error> {
-        self.identity().await
-    }
-
     /// Obtain the identity of the current owner of the chain. HACK: In the case of a
     /// multi-owner chain, we pick one identity for which we know the private key.
-    async fn identity(&mut self) -> Result<Owner, anyhow::Error> {
+    pub async fn identity(&mut self) -> Result<Owner, anyhow::Error> {
         match self.chain_info().await?.manager {
             ChainManagerInfo::Single(m) => {
                 if !self.known_key_pairs.contains_key(&m.owner) {
@@ -319,7 +314,7 @@ where
             }
             ChainManagerInfo::Multi(m) => {
                 let mut identities = Vec::new();
-                for (owner, ()) in &m.owners {
+                for owner in m.owners.keys() {
                     if self.known_key_pairs.contains_key(owner) {
                         identities.push(*owner);
                     }
@@ -349,6 +344,11 @@ where
             .known_key_pairs
             .get(&id)
             .expect("key should be known at this point"))
+    }
+
+    /// Obtain the public key associated to the current identity.
+    pub async fn public_key(&mut self) -> Result<PublicKey> {
+        Ok(self.key_pair().await?.public())
     }
 
     async fn make_validator_nodes(
@@ -1041,31 +1041,31 @@ where
 
     /// Rotate the key of the chain.
     pub async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate> {
-        let new_owner = Owner(key_pair.public());
-        self.known_key_pairs.insert(new_owner, key_pair);
-        self.transfer_ownership(new_owner).await
+        let new_public_key = key_pair.public();
+        self.known_key_pairs.insert(new_public_key.into(), key_pair);
+        self.transfer_ownership(new_public_key).await
     }
 
     /// Transfer ownership of the chain.
-    pub async fn transfer_ownership(&mut self, new_owner: Owner) -> Result<Certificate> {
+    pub async fn transfer_ownership(&mut self, new_public_key: PublicKey) -> Result<Certificate> {
         self.execute_operation(
             ApplicationId::System,
-            Operation::System(SystemOperation::ChangeOwner { new_owner }),
+            Operation::System(SystemOperation::ChangeOwner { new_public_key }),
         )
         .await
     }
 
     /// Add another owner to the chain.
-    pub async fn share_ownership(&mut self, new_owner: Owner) -> Result<Certificate> {
+    pub async fn share_ownership(&mut self, new_public_key: PublicKey) -> Result<Certificate> {
         self.prepare_chain().await?;
-        let owner = self.identity().await?;
+        let public_key = self.public_key().await?;
         let messages = self.pending_messages().await?;
         self.execute_block(
             messages,
             vec![(
                 ApplicationId::System,
                 Operation::System(SystemOperation::ChangeMultipleOwners {
-                    new_owners: vec![owner, new_owner],
+                    new_public_keys: vec![public_key, new_public_key],
                 }),
             )],
         )
@@ -1073,7 +1073,7 @@ where
     }
 
     /// Open a new chain with a derived UID.
-    pub async fn open_chain(&mut self, owner: Owner) -> Result<(ChainId, Certificate)> {
+    pub async fn open_chain(&mut self, public_key: PublicKey) -> Result<(ChainId, Certificate)> {
         self.prepare_chain().await?;
         let id = ChainId::child(EffectId {
             chain_id: self.chain_id,
@@ -1090,7 +1090,7 @@ where
                     ApplicationId::System,
                     Operation::System(SystemOperation::OpenChain {
                         id,
-                        owner,
+                        public_key,
                         committees,
                         admin_id: self.admin_id,
                         epoch,

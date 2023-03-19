@@ -752,11 +752,12 @@ where
             WorkerError::InvalidEpoch { chain_id, epoch }
         );
         // Check the authentication of the block.
-        ensure!(
-            chain.manager.get().has_owner(owner),
-            WorkerError::InvalidOwner
-        );
-        signature.check(&proposal.content, owner.0)?;
+        let public_key = chain
+            .manager
+            .get()
+            .verify_owner(owner)
+            .ok_or(WorkerError::InvalidOwner)?;
+        signature.check(&proposal.content, public_key)?;
         // Check the authentication of the operations in the block.
         if let Some(signer) = block.authenticated_signer {
             ensure!(signer == *owner, WorkerError::InvalidSigner(signer));
