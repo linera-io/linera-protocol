@@ -9,9 +9,9 @@ use colored::Colorize;
 use futures::StreamExt;
 use linera_base::{
     committee::ValidatorState,
-    crypto::KeyPair,
+    crypto::{KeyPair, PublicKey},
     data_types::{
-        BlockHeight, ChainDescription, ChainId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName,
+        BlockHeight, ChainDescription, ChainId, Epoch, RoundNumber, Timestamp, ValidatorName,
     },
 };
 use linera_chain::data_types::{
@@ -450,8 +450,8 @@ enum ClientCommand {
         sender: ChainId,
 
         /// Public key of the new owner (otherwise create a key pair and remember it)
-        #[structopt(long = "to-owner")]
-        owner: Option<Owner>,
+        #[structopt(long = "to-public-key")]
+        public_key: Option<PublicKey>,
     },
 
     /// Close (i.e. deactivate) an existing chain. (Consider `spend_and_transfer`
@@ -616,18 +616,18 @@ where
                 context.save_chains();
             }
 
-            OpenChain { sender, owner } => {
+            OpenChain { sender, public_key } => {
                 let mut chain_client = context.make_chain_client(storage, sender);
-                let (new_owner, key_pair) = match owner {
+                let (new_public_key, key_pair) = match public_key {
                     Some(key) => (key, None),
                     None => {
                         let key_pair = KeyPair::generate();
-                        (Owner(key_pair.public()), Some(key_pair))
+                        (key_pair.public(), Some(key_pair))
                     }
                 };
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
-                let (id, certificate) = chain_client.open_chain(new_owner).await.unwrap();
+                let (id, certificate) = chain_client.open_chain(new_public_key).await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
                 info!("{:?}", certificate);
@@ -999,7 +999,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 // Public "genesis" state.
                 genesis_config.chains.push((
                     description,
-                    Owner(chain.key_pair.as_ref().unwrap().public()),
+                    chain.key_pair.as_ref().unwrap().public(),
                     initial_funding,
                     timestamp,
                 ));

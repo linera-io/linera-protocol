@@ -11,7 +11,7 @@ use crate::{
 use custom_debug_derive::Debug;
 use linera_base::{
     committee::Committee,
-    crypto::CryptoHash,
+    crypto::{CryptoHash, PublicKey},
     data_types::{ArithmeticError, ChainDescription, ChainId, EffectId, Epoch, Owner, Timestamp},
     ensure, hex_debug,
 };
@@ -104,7 +104,7 @@ pub enum SystemOperation {
     /// This will automatically subscribe to the future committees created by `admin_id`.
     OpenChain {
         id: ChainId,
-        owner: Owner,
+        public_key: PublicKey,
         admin_id: ChainId,
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
@@ -112,9 +112,9 @@ pub enum SystemOperation {
     /// Closes the chain.
     CloseChain,
     /// Changes the authentication key of the chain.
-    ChangeOwner { new_owner: Owner },
+    ChangeOwner { new_public_key: PublicKey },
     /// Changes the authentication key of the chain.
-    ChangeMultipleOwners { new_owners: Vec<Owner> },
+    ChangeMultipleOwners { new_public_keys: Vec<PublicKey> },
     /// (admin chain only) Registers a new committee. This will notify the subscribers of
     /// the admin chain so that they can migrate to the new epoch (by accepting the
     /// notification as an "incoming message" in a next block).
@@ -172,7 +172,7 @@ pub enum SystemEffect {
     /// Creates (or activate) a new chain by installing the given authentication key.
     OpenChain {
         id: ChainId,
-        owner: Owner,
+        public_key: PublicKey,
         admin_id: ChainId,
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
@@ -447,7 +447,7 @@ where
         match operation {
             OpenChain {
                 id,
-                owner,
+                public_key,
                 committees,
                 admin_id,
                 epoch,
@@ -477,7 +477,7 @@ where
                     false,
                     SystemEffect::OpenChain {
                         id: *id,
-                        owner: *owner,
+                        public_key: *public_key,
                         committees: committees.clone(),
                         admin_id: *admin_id,
                         epoch: *epoch,
@@ -497,12 +497,12 @@ where
                 );
                 result.effects.extend([e1, e2]);
             }
-            ChangeOwner { new_owner } => {
-                self.ownership.set(ChainOwnership::single(*new_owner));
+            ChangeOwner { new_public_key } => {
+                self.ownership.set(ChainOwnership::single(*new_public_key));
             }
-            ChangeMultipleOwners { new_owners } => {
+            ChangeMultipleOwners { new_public_keys } => {
                 self.ownership
-                    .set(ChainOwnership::multiple(new_owners.clone()));
+                    .set(ChainOwnership::multiple(new_public_keys.iter().cloned()));
             }
             CloseChain => {
                 self.ownership.set(ChainOwnership::default());
@@ -861,7 +861,7 @@ where
         &mut self,
         effect_id: EffectId,
         chain_id: ChainId,
-        owner: Owner,
+        public_key: PublicKey,
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
         admin_id: ChainId,
@@ -883,7 +883,7 @@ where
                 name: SystemChannel::Admin.name(),
             })
             .expect("serialization failed");
-        self.ownership.set(ChainOwnership::single(owner));
+        self.ownership.set(ChainOwnership::single(public_key));
         self.timestamp.set(timestamp);
     }
 

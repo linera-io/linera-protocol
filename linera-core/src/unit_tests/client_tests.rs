@@ -177,7 +177,7 @@ where
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await?;
     let new_key_pair = KeyPair::generate();
-    let new_owner = Owner(new_key_pair.public());
+    let new_owner = Owner::from(new_key_pair.public());
     let certificate = sender.rotate_key_pair(new_key_pair).await.unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
@@ -236,8 +236,10 @@ where
         .await?;
 
     let new_key_pair = KeyPair::generate();
-    let new_owner = Owner(new_key_pair.public());
-    let certificate = sender.transfer_ownership(new_owner).await.unwrap();
+    let certificate = sender
+        .transfer_ownership(new_key_pair.public())
+        .await
+        .unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_err());
@@ -294,8 +296,7 @@ where
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await?;
     let new_key_pair = KeyPair::generate();
-    let new_owner = Owner(new_key_pair.public());
-    let certificate = sender.share_ownership(new_owner).await.unwrap();
+    let certificate = sender.share_ownership(new_key_pair.public()).await.unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
@@ -383,9 +384,8 @@ where
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await?;
     let new_key_pair = KeyPair::generate();
-    let new_owner = Owner(new_key_pair.public());
     // Open the new chain.
-    let (new_id, certificate) = sender.open_chain(new_owner).await.unwrap();
+    let (new_id, certificate) = sender.open_chain(new_key_pair.public()).await.unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
@@ -434,7 +434,6 @@ where
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await?;
     let new_key_pair = KeyPair::generate();
-    let new_owner = Owner(new_key_pair.public());
     let new_id = ChainId::child(EffectId {
         chain_id: ChainId::root(1),
         height: BlockHeight::from(1),
@@ -451,7 +450,7 @@ where
         .await
         .unwrap();
     // Open the new chain.
-    let (new_id2, certificate) = sender.open_chain(new_owner).await.unwrap();
+    let (new_id2, certificate) = sender.open_chain(new_key_pair.public()).await.unwrap();
     assert_eq!(new_id, new_id2);
     assert_eq!(sender.next_block_height, BlockHeight::from(2));
     assert!(sender.pending_block.is_none());
@@ -518,9 +517,8 @@ where
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await?;
     let new_key_pair = KeyPair::generate();
-    let new_owner = Owner(new_key_pair.public());
     // Open the new chain.
-    let (new_id, creation_certificate) = sender.open_chain(new_owner).await.unwrap();
+    let (new_id, creation_certificate) = sender.open_chain(new_key_pair.public()).await.unwrap();
     // Transfer after creating the chain.
     let transfer_certificate = sender
         .transfer_to_account(

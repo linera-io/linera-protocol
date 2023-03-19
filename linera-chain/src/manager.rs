@@ -9,7 +9,7 @@ use crate::{
     ChainError,
 };
 use linera_base::{
-    crypto::{CryptoHash, KeyPair},
+    crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{BlockHeight, Owner, RoundNumber},
     ensure,
 };
@@ -34,6 +34,8 @@ pub enum ChainManager {
 pub struct SingleOwnerManager {
     /// The owner of the chain.
     pub owner: Owner,
+    /// The corresponding public key.
+    pub public_key: PublicKey,
     /// Latest proposal that we have voted on last (both to validate and confirm it).
     pub pending: Option<Vote>,
 }
@@ -42,8 +44,7 @@ pub struct SingleOwnerManager {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MultiOwnerManager {
     /// The co-owners of the chain.
-    /// Using a map instead a hashset because Serde treats HashSet's as vectors.
-    pub owners: HashMap<Owner, ()>,
+    pub owners: HashMap<Owner, PublicKey>,
     /// Latest authenticated block that we have received.
     pub proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have seen (and voted to confirm).
@@ -66,8 +67,9 @@ impl Default for ChainManager {
 }
 
 impl SingleOwnerManager {
-    pub fn new(owner: Owner) -> Self {
+    pub fn new(owner: Owner, public_key: PublicKey) -> Self {
         SingleOwnerManager {
+            public_key,
             owner,
             pending: None,
         }
@@ -75,7 +77,7 @@ impl SingleOwnerManager {
 }
 
 impl MultiOwnerManager {
-    pub fn new(owners: HashMap<Owner, ()>) -> Self {
+    pub fn new(owners: HashMap<Owner, PublicKey>) -> Self {
         MultiOwnerManager {
             owners,
             proposed: None,
@@ -108,8 +110,9 @@ impl ChainManager {
             ChainOwnership::None => {
                 *self = ChainManager::None;
             }
-            ChainOwnership::Single { owner } => {
-                *self = ChainManager::Single(Box::new(SingleOwnerManager::new(*owner)));
+            ChainOwnership::Single { owner, public_key } => {
+                *self =
+                    ChainManager::Single(Box::new(SingleOwnerManager::new(*owner, *public_key)));
             }
             ChainOwnership::Multi { owners } => {
                 *self = ChainManager::Multi(Box::new(MultiOwnerManager::new(owners.clone())));
@@ -121,11 +124,17 @@ impl ChainManager {
         !matches!(self, ChainManager::None)
     }
 
-    pub fn has_owner(&self, owner: &Owner) -> bool {
+    pub fn verify_owner(&self, owner: &Owner) -> Option<PublicKey> {
         match self {
-            ChainManager::Single(manager) => manager.owner == *owner,
-            ChainManager::Multi(manager) => manager.owners.contains_key(owner),
-            ChainManager::None => false,
+            ChainManager::Single(manager) => {
+                if manager.owner == *owner {
+                    Some(manager.public_key)
+                } else {
+                    None
+                }
+            }
+            ChainManager::Multi(manager) => manager.owners.get(owner).copied(),
+            ChainManager::None => None,
         }
     }
 
@@ -344,7 +353,7 @@ pub struct SingleOwnerManagerInfo {
 pub struct MultiOwnerManagerInfo {
     /// The co-owners of the chain.
     /// Using a map instead a hashset because Serde treats HashSet's as vectors.
-    pub owners: HashMap<Owner, ()>,
+    pub owners: HashMap<Owner, PublicKey>,
     /// Latest authenticated block that we have received, if requested.
     pub requested_proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have seen (and voted to confirm), if requested.

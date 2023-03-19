@@ -17,8 +17,8 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future;
 use linera_base::{
     committee::Committee,
-    crypto::CryptoHash,
-    data_types::{ChainDescription, ChainId, Epoch, Owner, Timestamp},
+    crypto::{CryptoHash, PublicKey},
+    data_types::{ChainDescription, ChainId, Epoch, Timestamp},
 };
 use linera_chain::{
     data_types::{Certificate, HashedValue},
@@ -118,7 +118,7 @@ pub trait Store: Sized {
         committee: Committee,
         admin_id: ChainId,
         description: ChainDescription,
-        owner: Owner,
+        public_key: PublicKey,
         balance: Balance,
         timestamp: Timestamp,
     ) -> Result<(), ChainError>
@@ -137,7 +137,9 @@ pub trait Store: Sized {
             .committees
             .get_mut()
             .insert(Epoch::from(0), committee);
-        system_state.ownership.set(ChainOwnership::single(owner));
+        system_state
+            .ownership
+            .set(ChainOwnership::single(public_key));
         system_state.balance.set(balance);
         system_state.timestamp.set(timestamp);
         let state_hash = chain.execution_state.crypto_hash().await?;
@@ -145,7 +147,7 @@ pub trait Store: Sized {
         chain
             .manager
             .get_mut()
-            .reset(&ChainOwnership::single(owner));
+            .reset(&ChainOwnership::single(public_key));
         chain.save().await?;
         Ok(())
     }

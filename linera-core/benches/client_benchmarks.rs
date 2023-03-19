@@ -51,7 +51,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
-    let owner1 = chain1.get_identity().await.unwrap();
+    let owner1 = chain1.identity().await.unwrap();
     let amt = Amount::from(1);
 
     let account = Account::owner(chain2.chain_id(), owner1);

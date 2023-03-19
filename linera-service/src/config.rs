@@ -4,8 +4,8 @@
 
 use linera_base::{
     committee::{Committee, ValidatorState},
-    crypto::{CryptoHash, KeyPair},
-    data_types::{BlockHeight, ChainDescription, ChainId, Owner, Timestamp, ValidatorName},
+    crypto::{CryptoHash, KeyPair, PublicKey},
+    data_types::{BlockHeight, ChainDescription, ChainId, Timestamp, ValidatorName},
 };
 use linera_core::client::{ChainClient, ValidatorNodeProvider};
 use linera_execution::system::Balance;
@@ -186,7 +186,7 @@ impl WalletState {
 pub struct GenesisConfig {
     pub committee: CommitteeConfig,
     pub admin_id: ChainId,
-    pub chains: Vec<(ChainDescription, Owner, Balance, Timestamp)>,
+    pub chains: Vec<(ChainDescription, PublicKey, Balance, Timestamp)>,
 }
 
 impl Import for GenesisConfig {}
@@ -206,13 +206,13 @@ impl GenesisConfig {
         S: Store + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
-        for (description, owner, balance, timestamp) in &self.chains {
+        for (description, public_key, balance, timestamp) in &self.chains {
             store
                 .create_chain(
                     self.committee.clone().into_committee(),
                     self.admin_id,
                     *description,
-                    *owner,
+                    *public_key,
                     *balance,
                     *timestamp,
                 )

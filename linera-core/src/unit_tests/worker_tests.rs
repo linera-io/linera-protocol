@@ -89,7 +89,7 @@ where
                 committee.clone(),
                 ChainId::root(0),
                 description,
-                pubk.into(),
+                pubk,
                 balance,
                 Timestamp::from(0),
             )
@@ -236,7 +236,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         admin_id: Some(ChainId::root(0)),
         subscriptions: BTreeSet::new(),
         committees: [(epoch, committee.clone())].into_iter().collect(),
-        ownership: ChainOwnership::single(key_pair.public().into()),
+        ownership: ChainOwnership::single(key_pair.public()),
         balance,
         balances: BTreeMap::new(),
         timestamp: Timestamp::from(0),
@@ -525,7 +525,7 @@ where
             admin_id: Some(ChainId::root(0)),
             subscriptions: BTreeSet::new(),
             committees: [(epoch, committee.clone())].into_iter().collect(),
-            ownership: ChainOwnership::single(key_pair.public().into()),
+            ownership: ChainOwnership::single(key_pair.public()),
             balance,
             balances: BTreeMap::new(),
             timestamp: Timestamp::from(block_0_time),
@@ -842,7 +842,7 @@ where
                     admin_id: Some(ChainId::root(0)),
                     subscriptions: BTreeSet::new(),
                     committees: [(epoch, committee.clone())].into_iter().collect(),
-                    ownership: ChainOwnership::single(sender_key_pair.public().into()),
+                    ownership: ChainOwnership::single(sender_key_pair.public()),
                     balance: Balance::from(3),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
@@ -890,7 +890,7 @@ where
                     admin_id: Some(ChainId::root(0)),
                     subscriptions: BTreeSet::new(),
                     committees: [(epoch, committee.clone())].into_iter().collect(),
-                    ownership: ChainOwnership::single(sender_key_pair.public().into()),
+                    ownership: ChainOwnership::single(sender_key_pair.public()),
                     balance: Balance::from(0),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
@@ -1191,7 +1191,7 @@ where
                         admin_id: Some(ChainId::root(0)),
                         subscriptions: BTreeSet::new(),
                         committees: [(epoch, committee.clone())].into_iter().collect(),
-                        ownership: ChainOwnership::single(recipient_key_pair.public().into()),
+                        ownership: ChainOwnership::single(recipient_key_pair.public()),
                         balance: Balance::from(0),
                         balances: BTreeMap::new(),
                         timestamp: Timestamp::from(0),
@@ -2382,10 +2382,13 @@ where
             *recipient_chain.execution_state.system.balance.get(),
             Balance::from(4)
         );
-        assert!(recipient_chain
-            .manager
-            .get()
-            .has_owner(&recipient_key_pair.public().into()));
+        assert_eq!(
+            recipient_chain
+                .manager
+                .get()
+                .verify_owner(&recipient_key_pair.public().into()),
+            Some(recipient_key_pair.public())
+        );
         assert_eq!(recipient_chain.confirmed_log.count(), 1);
         assert_eq!(
             recipient_chain.tip_state.get().block_hash,
@@ -2539,7 +2542,7 @@ where
                     ApplicationId::System,
                     Operation::System(SystemOperation::OpenChain {
                         id: user_id,
-                        owner: key_pair.public().into(),
+                        public_key: key_pair.public(),
                         epoch: Epoch::from(0),
                         committees: committees.clone(),
                         admin_id,
@@ -2555,7 +2558,7 @@ where
                     user_id,
                     SystemEffect::OpenChain {
                         id: user_id,
-                        owner: key_pair.public().into(),
+                        public_key: key_pair.public(),
                         epoch: Epoch::from(0),
                         committees: committees.clone(),
                         admin_id,
@@ -2576,7 +2579,7 @@ where
                     admin_id: Some(admin_id),
                     subscriptions: BTreeSet::new(),
                     committees: committees.clone(),
-                    ownership: ChainOwnership::single(key_pair.public().into()),
+                    ownership: ChainOwnership::single(key_pair.public()),
                     balance: Balance::from(2),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
@@ -2687,7 +2690,7 @@ where
                     subscriptions: BTreeSet::new(),
                     // The root chain knows both committees at the end.
                     committees: committees2.clone(),
-                    ownership: ChainOwnership::single(key_pair.public().into()),
+                    ownership: ChainOwnership::single(key_pair.public()),
                     balance: Balance::from(0),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
@@ -2744,7 +2747,7 @@ where
                     subscriptions: BTreeSet::new(),
                     // The root chain knows both committees at the end.
                     committees: committees2.clone(),
-                    ownership: ChainOwnership::single(key_pair.public().into()),
+                    ownership: ChainOwnership::single(key_pair.public()),
                     balance: Balance::from(0),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
@@ -2941,7 +2944,7 @@ where
                     .collect(),
                     // Finally the child knows about both committees and has the money.
                     committees: committees2.clone(),
-                    ownership: ChainOwnership::single(key_pair.public().into()),
+                    ownership: ChainOwnership::single(key_pair.public()),
                     balance: Balance::from(2),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
@@ -3105,7 +3108,7 @@ where
                     admin_id: Some(admin_id),
                     subscriptions: BTreeSet::new(),
                     committees: committees.clone(),
-                    ownership: ChainOwnership::single(key_pair1.public().into()),
+                    ownership: ChainOwnership::single(key_pair1.public()),
                     balance: Balance::from(2),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
@@ -3157,7 +3160,7 @@ where
                     admin_id: Some(admin_id),
                     subscriptions: BTreeSet::new(),
                     committees: committees2.clone(),
-                    ownership: ChainOwnership::single(key_pair0.public().into()),
+                    ownership: ChainOwnership::single(key_pair0.public()),
                     balance: Balance::from(0),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
@@ -3319,7 +3322,7 @@ where
                     admin_id: Some(admin_id),
                     subscriptions: BTreeSet::new(),
                     committees: committees.clone(),
-                    ownership: ChainOwnership::single(key_pair1.public().into()),
+                    ownership: ChainOwnership::single(key_pair1.public()),
                     balance: Balance::from(2),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
@@ -3391,7 +3394,7 @@ where
                     admin_id: Some(admin_id),
                     subscriptions: BTreeSet::new(),
                     committees: committees3.clone(),
-                    ownership: ChainOwnership::single(key_pair0.public().into()),
+                    ownership: ChainOwnership::single(key_pair0.public()),
                     balance: Balance::from(0),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
@@ -3480,7 +3483,7 @@ where
                     admin_id: Some(admin_id),
                     subscriptions: BTreeSet::new(),
                     committees: committees3.clone(),
-                    ownership: ChainOwnership::single(key_pair0.public().into()),
+                    ownership: ChainOwnership::single(key_pair0.public()),
                     balance: Balance::from(1),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
