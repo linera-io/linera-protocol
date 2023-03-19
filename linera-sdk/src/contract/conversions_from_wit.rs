@@ -8,7 +8,7 @@ use super::writable_system::{
 };
 use crate::{
     ApplicationId, BlockHeight, BytecodeId, CalleeContext, ChainId, CryptoHash, EffectContext,
-    EffectId, OperationContext, Session, SessionId, SystemBalance,
+    EffectId, OperationContext, Owner, Session, SessionId, SystemBalance,
 };
 use std::task::Poll;
 
@@ -16,6 +16,7 @@ impl From<super::OperationContext> for OperationContext {
     fn from(application_context: super::OperationContext) -> Self {
         OperationContext {
             chain_id: ChainId(application_context.chain_id.into()),
+            authenticated_signer: application_context.authenticated_signer.map(Owner::from),
             height: BlockHeight(application_context.height),
             index: application_context.index,
         }
@@ -26,6 +27,7 @@ impl From<super::EffectContext> for EffectContext {
     fn from(application_context: super::EffectContext) -> Self {
         EffectContext {
             chain_id: ChainId(application_context.chain_id.into()),
+            authenticated_signer: application_context.authenticated_signer.map(Owner::from),
             height: BlockHeight(application_context.height),
             effect_id: application_context.effect_id.into(),
         }
@@ -46,6 +48,7 @@ impl From<super::CalleeContext> for CalleeContext {
     fn from(application_context: super::CalleeContext) -> Self {
         CalleeContext {
             chain_id: ChainId(application_context.chain_id.into()),
+            authenticated_signer: application_context.authenticated_signer.map(Owner::from),
             authenticated_caller_id: application_context
                 .authenticated_caller_id
                 .map(ApplicationId::from),
@@ -78,6 +81,12 @@ impl From<super::Session> for Session {
             kind: session.kind,
             data: session.data,
         }
+    }
+}
+
+impl From<super::CryptoHash> for Owner {
+    fn from(crypto_hash: super::CryptoHash) -> Self {
+        Owner(crypto_hash.into())
     }
 }
 

@@ -191,6 +191,7 @@ mod tests {
     fn dummy_operation_context() -> OperationContext {
         OperationContext {
             chain_id: ChainId([0; 4].into()),
+            authenticated_signer: None,
             height: BlockHeight(0),
             index: 0,
         }
@@ -199,6 +200,7 @@ mod tests {
     fn dummy_effect_context() -> EffectContext {
         EffectContext {
             chain_id: ChainId([0; 4].into()),
+            authenticated_signer: None,
             height: BlockHeight(0),
             effect_id: EffectId {
                 chain_id: ChainId([1; 4].into()),
@@ -211,6 +213,7 @@ mod tests {
     fn dummy_callee_context() -> CalleeContext {
         CalleeContext {
             chain_id: ChainId([0; 4].into()),
+            authenticated_signer: None,
             authenticated_caller_id: None,
         }
     }
