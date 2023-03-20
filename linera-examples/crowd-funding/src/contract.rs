@@ -154,16 +154,16 @@ impl CrowdFunding {
         let balance_query = bcs::to_bytes(&fungible::SessionCall::Balance)
             .map_err(Error::InvalidSessionBalanceQuery)?;
 
-        let mut amounts = Vec::new();
+        let mut balances = Vec::with_capacity(sessions.len());
         for session in sessions {
             let (balance_bytes, _) = self
                 .call_session(false, *session, &balance_query, vec![])
                 .await;
-            amounts.push(
+            balances.push(
                 Amount::from_bcs_bytes(&balance_bytes).map_err(Error::InvalidSessionBalance)?,
             );
         }
-        Ok(amounts)
+        Ok(balances)
     }
 
     /// Collects all tokens in the sessions and places them in custody of the campaign.

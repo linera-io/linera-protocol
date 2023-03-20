@@ -606,7 +606,8 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bcs",
- "fungible2",
+ "crowd-funding",
+ "fungible",
  "linera-sdk",
  "linera-views",
  "serde",
@@ -913,6 +914,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bcs",
+ "fungible",
  "linera-sdk",
  "linera-views",
  "serde",

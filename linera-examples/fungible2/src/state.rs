@@ -1,8 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fungible2::types::{AccountOwner, Nonce};
-use linera_sdk::ensure;
+use fungible::AccountOwner;
+use linera_sdk::base::Amount;
 use linera_views::{
     common::Context,
     map_view::MapView,
@@ -14,8 +14,7 @@ use thiserror::Error;
 /// The application state.
 #[derive(RootView)]
 pub struct FungibleToken<C> {
-    accounts: MapView<C, AccountOwner, u128>,
-    nonces: MapView<C, AccountOwner, Nonce>,
+    accounts: MapView<C, AccountOwner, Amount>,
 }
 
 #[allow(dead_code)]
@@ -25,7 +24,7 @@ where
     linera_views::views::ViewError: From<C::Error>,
 {
     /// Initialize the application state with some accounts with initial balances.
-    pub(crate) fn initialize_accounts(&mut self, accounts: BTreeMap<AccountOwner, u128>) {
+    pub(crate) async fn initialize_accounts(&mut self, accounts: BTreeMap<AccountOwner, Amount>) {
         for (k, v) in accounts {
             self.accounts
                 .insert(&k, v)
@@ -34,19 +33,18 @@ where
     }
 
     /// Obtain the balance for an `account`.
-    pub(crate) async fn balance(&self, account: &AccountOwner) -> u128 {
-        let result = self
-            .accounts
+    pub(crate) async fn balance(&self, account: &AccountOwner) -> Amount {
+        self.accounts
             .get(account)
             .await
-            .expect("Failure in the retrieval");
-        result.unwrap_or(0)
+            .expect("Failure in the retrieval")
+            .unwrap_or_default()
     }
 
     /// Credit an `account` with the provided `amount`.
-    pub(crate) async fn credit(&mut self, account: AccountOwner, amount: u128) {
+    pub(crate) async fn credit(&mut self, account: AccountOwner, amount: Amount) {
         let mut value = self.balance(&account).await;
-        value += amount;
+        value.saturating_add_assign(amount);
         self.accounts
             .insert(&account, value)
             .expect("Failed insert statement");
@@ -56,45 +54,16 @@ where
     pub(crate) async fn debit(
         &mut self,
         account: AccountOwner,
-        amount: u128,
+        amount: Amount,
     ) -> Result<(), InsufficientBalanceError> {
         let mut balance = self.balance(&account).await;
-        ensure!(balance >= amount, InsufficientBalanceError);
-        balance -= amount;
+        balance
+            .try_sub_assign(amount)
+            .map_err(|_| InsufficientBalanceError)?;
         self.accounts
             .insert(&account, balance)
             .expect("Failed insertion operation");
         Ok(())
-    }
-
-    /// Obtain the minimum allowed [`Nonce`] for an `account`.
-    ///
-    /// The minimum allowed nonce is the value of the previously used nonce plus one, or zero if
-    /// this is the first transaction for the `account` on the current chain.
-    ///
-    /// If the increment to obtain the next nonce overflows, `None` is returned.
-    pub(crate) async fn minimum_nonce(&self, account: &AccountOwner) -> Option<Nonce> {
-        let nonce: Option<Nonce> = self
-            .nonces
-            .get(account)
-            .await
-            .expect("Failed to retrieve the nonce");
-        match nonce {
-            None => Some(Nonce::default()),
-            Some(x) => x.next(),
-        }
-    }
-
-    /// Mark the provided [`Nonce`] as used for the `account`.
-    pub(crate) async fn mark_nonce_as_used(&mut self, account: AccountOwner, nonce: Nonce) {
-        let minimum_nonce = self.minimum_nonce(&account).await;
-
-        assert!(minimum_nonce.is_some());
-        assert!(nonce >= minimum_nonce.unwrap());
-
-        self.nonces
-            .insert(&account, nonce)
-            .expect("failed insertion operation");
     }
 }
 
