@@ -124,7 +124,7 @@ where
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.0.lock().await;
         let result = if validator.is_faulty {
-            Err(ArithmeticError::SequenceOverflow.into())
+            Err(ArithmeticError::Overflow.into())
         } else {
             validator.state.handle_block_proposal(proposal).await
         };

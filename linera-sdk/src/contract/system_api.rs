@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::writable_system as system;
-use crate::{ApplicationId, ChainId, SessionId, SystemBalance, Timestamp};
+use crate::base::{ApplicationId, ChainId, SessionId, SystemBalance, Timestamp};
 use async_trait::async_trait;
 use futures::future;
 use linera_views::{

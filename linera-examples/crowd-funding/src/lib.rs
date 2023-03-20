@@ -1,4 +1,5 @@
-use fungible::{AccountOwner, Amount};
+use fungible::AccountOwner;
+use linera_sdk::base::Amount;
 use serde::{Deserialize, Serialize};
 
 /// A cross-application call.

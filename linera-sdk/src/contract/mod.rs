@@ -42,10 +42,10 @@ macro_rules! contract {
             pub async fn call_application(
                 &mut self,
                 authenticated: bool,
-                application: $crate::ApplicationId,
+                application: $crate::base::ApplicationId,
                 argument: &[u8],
-                forwarded_sessions: Vec<$crate::SessionId>,
-            ) -> (Vec<u8>, Vec<$crate::SessionId>) {
+                forwarded_sessions: Vec<$crate::base::SessionId>,
+            ) -> (Vec<u8>, Vec<$crate::base::SessionId>) {
                 use $crate::contract::exported_futures::ContractStateStorage as Storage;
 
                 <Self as $crate::Contract>::Storage::execute_with_released_state(
@@ -69,10 +69,10 @@ macro_rules! contract {
             pub async fn call_session(
                 &mut self,
                 authenticated: bool,
-                session: $crate::SessionId,
+                session: $crate::base::SessionId,
                 argument: &[u8],
-                forwarded_sessions: Vec<$crate::SessionId>,
-            ) -> (Vec<u8>, Vec<SessionId>) {
+                forwarded_sessions: Vec<$crate::base::SessionId>,
+            ) -> (Vec<u8>, Vec<$crate::base::SessionId>) {
                 use $crate::contract::exported_futures::ContractStateStorage as Storage;
 
                 <Self as $crate::Contract>::Storage::execute_with_released_state(

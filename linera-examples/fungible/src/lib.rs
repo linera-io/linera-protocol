@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_sdk::{ApplicationId, ChainId, Owner};
+use linera_sdk::base::{Amount, ApplicationId, ChainId, Owner};
 use serde::{Deserialize, Serialize};
 
 /// An operation.
@@ -13,12 +13,14 @@ pub enum Operation {
         amount: Amount,
         target_account: Account,
     },
+    // Meant to be extended here
 }
 
 /// An effect.
 #[derive(Deserialize, Serialize)]
 pub enum Effect {
     Credit { owner: AccountOwner, amount: Amount },
+    // Meant to be extended here
 }
 
 /// A cross-application call.
@@ -47,8 +49,6 @@ pub enum SessionCall {
         destination: Destination,
     },
 }
-
-pub type Amount = u128;
 
 /// An account owner.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]

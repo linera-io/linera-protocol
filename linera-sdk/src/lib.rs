@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod base;
 pub mod contract;
 #[cfg(feature = "crypto")]
 pub mod crypto;
@@ -11,10 +12,12 @@ mod log;
 pub mod service;
 
 use async_trait::async_trait;
+use base::{
+    ApplicationId, BlockHeight, ChainId, ChannelName, Destination, EffectId, Owner, SessionId,
+};
 use custom_debug_derive::Debug;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use std::{error::Error, fmt, sync::Arc};
+use std::{error::Error, sync::Arc};
 
 pub use self::{
     exported_future::ExportedFuture,
@@ -23,15 +26,6 @@ pub use self::{
 };
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
-
-#[cfg(not(target_arch = "wasm32"))]
-pub use linera_base::crypto::BcsSignable;
-
-/// Activate the blanket implementation of `Signable` based on serde and BCS.
-/// * We use `serde_name` to extract a seed from the name of structs and enums.
-/// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
-#[cfg(target_arch = "wasm32")]
-pub trait BcsSignable: Serialize + serde::de::DeserializeOwned {}
 
 /// A simple state management runtime using a single byte array.
 pub struct SimpleStateStorage<A>(std::marker::PhantomData<A>);
@@ -185,101 +179,17 @@ impl ExecutionResult {
     }
 }
 
-/// The index of an effect in a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Deserialize, Serialize)]
-pub struct EffectId {
-    pub chain_id: ChainId,
-    pub height: BlockHeight,
-    pub index: u64,
-}
-
-/// The unique identifier (UID) of a chain. This is the hash value of a ChainDescription.
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Deserialize, Serialize)]
-pub struct ChainId(pub CryptoHash);
-
-/// The owner of an account (aka address).
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Deserialize, Serialize)]
-pub struct Owner(pub CryptoHash);
-
-/// The name of a subscription channel.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Deserialize, Serialize)]
-pub struct ChannelName(pub Vec<u8>);
-
-/// A block height to identify blocks in a chain.
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Deserialize, Serialize,
-)]
-pub struct BlockHeight(pub u64);
-
-/// A Sha3-256 value.
-#[serde_as]
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Deserialize, Serialize)]
-pub struct CryptoHash(#[serde_as(as = "[_; 32]")] [u8; 32]);
-
-impl From<[u64; 4]> for CryptoHash {
-    fn from(integers: [u64; 4]) -> Self {
-        let mut bytes = [0u8; 32];
-
-        bytes[0..8].copy_from_slice(&integers[0].to_le_bytes());
-        bytes[8..16].copy_from_slice(&integers[1].to_le_bytes());
-        bytes[16..24].copy_from_slice(&integers[2].to_le_bytes());
-        bytes[24..32].copy_from_slice(&integers[3].to_le_bytes());
-
-        CryptoHash(bytes)
-    }
-}
-
-impl From<CryptoHash> for [u64; 4] {
-    fn from(crypto_hash: CryptoHash) -> Self {
-        let bytes = crypto_hash.0;
-        let mut integers = [0u64; 4];
-
-        integers[0] = u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices"));
-        integers[1] = u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices"));
-        integers[2] = u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices"));
-        integers[3] = u64::from_le_bytes(bytes[24..32].try_into().expect("incorrect indices"));
-
-        integers
-    }
-}
-
-/// The destination of a message, relative to a particular application.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
-pub enum Destination {
-    /// Direct message to a chain.
-    Recipient(ChainId),
-    /// Broadcast to the current subscribers of our channel.
-    Subscribers(ChannelName),
-}
-
-impl From<ChainId> for Destination {
-    fn from(chain_id: ChainId) -> Self {
-        Destination::Recipient(chain_id)
-    }
-}
-
-/// A unique identifier for an application.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Deserialize, Serialize)]
-pub struct ApplicationId {
-    /// The bytecode to use for the application.
-    pub bytecode: BytecodeId,
-    /// The unique ID of the application's creation.
-    pub creation: EffectId,
-}
-
-/// A unique identifier for an application bytecode.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Deserialize, Serialize)]
-pub struct BytecodeId(pub EffectId);
-
-/// The identifier of a session.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize)]
-pub struct SessionId {
-    /// The application that runs the session.
-    pub application_id: ApplicationId,
-    /// User-defined tag.
-    pub kind: u64,
-    /// Unique index set by the runtime.
-    pub index: u64,
+/// The result of calling into a user application.
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct ApplicationCallResult {
+    /// The return value.
+    #[debug(with = "crate::base::hex_debug")]
+    pub value: Vec<u8>,
+    /// The externally-visible result.
+    pub execution_result: ExecutionResult,
+    /// The new sessions that were just created by the callee for us.
+    pub create_sessions: Vec<Session>,
 }
 
 /// Syscall to request creating a new session.
@@ -289,21 +199,8 @@ pub struct Session {
     /// A kind provided by the creator (meant to be visible to other applications).
     pub kind: u64,
     /// The data associated to the session.
-    #[debug(with = "hex_debug")]
+    #[debug(with = "crate::base::hex_debug")]
     pub data: Vec<u8>,
-}
-
-/// The result of calling into a user application.
-#[derive(Debug, Default, Deserialize, Serialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct ApplicationCallResult {
-    /// The return value.
-    #[debug(with = "hex_debug")]
-    pub value: Vec<u8>,
-    /// The externally-visible result.
-    pub execution_result: ExecutionResult,
-    /// The new sessions that were just created by the callee for us.
-    pub create_sessions: Vec<Session>,
 }
 
 /// The result of calling into a session.
@@ -313,35 +210,4 @@ pub struct SessionCallResult {
     pub inner: ApplicationCallResult,
     /// If `call_session` was called, this tells the system to clean up the session.
     pub data: Option<Vec<u8>>,
-}
-
-/// The balance of a chain.
-#[derive(Default, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize)]
-pub struct SystemBalance(pub u128);
-
-/// A timestamp, in microseconds since the Unix epoch.
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Deserialize, Serialize,
-)]
-pub struct Timestamp(u64);
-
-impl Timestamp {
-    /// Returns the number of microseconds since the Unix epoch.
-    pub fn micros(&self) -> u64 {
-        self.0
-    }
-}
-
-impl From<u64> for Timestamp {
-    fn from(t: u64) -> Timestamp {
-        Timestamp(t)
-    }
-}
-
-/// Prints a vector of bytes in hexadecimal.
-pub fn hex_debug<T: AsRef<[u8]>>(bytes: &T, f: &mut fmt::Formatter) -> fmt::Result {
-    for byte in bytes.as_ref() {
-        write!(f, "{:02x}", byte)?;
-    }
-    Ok(())
 }

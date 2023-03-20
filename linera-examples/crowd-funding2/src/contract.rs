@@ -11,8 +11,8 @@ use async_trait::async_trait;
 use crowd_funding2::ApplicationCall;
 use fungible2::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
 use linera_sdk::{
-    contract::system_api, ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext,
-    ExecutionResult, FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
+    base::SessionId, contract::system_api, ensure, ApplicationCallResult, CalleeContext, Contract,
+    EffectContext, ExecutionResult, FromBcsBytes, OperationContext, Session, SessionCallResult,
     ViewStateStorage,
 };
 use linera_views::views::{View, ViewError};

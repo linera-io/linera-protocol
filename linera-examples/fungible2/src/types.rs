@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_sdk::{crypto::PublicKey, ApplicationId};
+use linera_sdk::{base::ApplicationId, crypto::PublicKey};
 use serde::{Deserialize, Serialize};
 
 /// An account owner.

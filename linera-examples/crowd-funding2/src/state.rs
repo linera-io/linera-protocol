@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fungible2::AccountOwner;
-use linera_sdk::{ApplicationId, Timestamp};
+use linera_sdk::base::{ApplicationId, Timestamp};
 use linera_views::{
     common::Context,
     map_view::MapView,

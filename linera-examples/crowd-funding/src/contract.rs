@@ -7,11 +7,12 @@ mod state;
 
 use async_trait::async_trait;
 use crowd_funding::{ApplicationCall, Operation};
-use fungible::{Account, AccountOwner, Amount, Destination};
+use fungible::{Account, AccountOwner, Destination};
 use linera_sdk::{
-    contract::system_api, ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext,
-    ExecutionResult, FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId,
-    SimpleStateStorage,
+    base::{Amount, SessionId},
+    contract::system_api,
+    ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    FromBcsBytes, OperationContext, Session, SessionCallResult, SimpleStateStorage,
 };
 use state::{CrowdFunding, Status};
 use std::mem;
@@ -109,7 +110,7 @@ impl CrowdFunding {
         owner: AccountOwner,
         amount: Amount,
     ) -> Result<(), Error> {
-        ensure!(amount > 0, Error::EmptyPledge);
+        ensure!(amount > Amount::zero(), Error::EmptyPledge);
         self.receive_from_account(owner, amount).await?;
         self.finish_pledge(owner, amount).await
     }
@@ -125,7 +126,7 @@ impl CrowdFunding {
         let session_balances = self.query_session_balances(&sessions).await?;
         let amount = session_balances.iter().sum();
 
-        ensure!(amount > 0, Error::EmptyPledge);
+        ensure!(amount > Amount::zero(), Error::EmptyPledge);
 
         self.collect_session_tokens(sessions, session_balances)
             .await?;
@@ -182,8 +183,10 @@ impl CrowdFunding {
     async fn finish_pledge(&mut self, source: AccountOwner, amount: Amount) -> Result<(), Error> {
         match self.status {
             Status::Active => {
-                *self.pledges.entry(source).or_insert(0) += amount;
-
+                self.pledges
+                    .entry(source)
+                    .or_default()
+                    .saturating_add_assign(amount);
                 Ok(())
             }
             Status::Complete => self.send_to(amount, self.parameters().owner).await,

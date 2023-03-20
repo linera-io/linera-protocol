@@ -8,8 +8,8 @@ mod state;
 use self::state::Counter;
 use async_trait::async_trait;
 use linera_sdk::{
-    contract::system_api::WasmContext, ApplicationCallResult, CalleeContext, Contract,
-    EffectContext, ExecutionResult, OperationContext, Session, SessionCallResult, SessionId,
+    base::SessionId, contract::system_api::WasmContext, ApplicationCallResult, CalleeContext,
+    Contract, EffectContext, ExecutionResult, OperationContext, Session, SessionCallResult,
     ViewStateStorage,
 };
 use linera_views::{common::Context, views::ViewError};
@@ -105,8 +105,9 @@ mod tests {
     use crate::Counter;
     use futures_util::FutureExt;
     use linera_sdk::{
-        ApplicationCallResult, BlockHeight, CalleeContext, ChainId, Contract, EffectContext,
-        EffectId, ExecutionResult, OperationContext, Session,
+        base::{BlockHeight, ChainId, EffectId},
+        ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+        OperationContext, Session,
     };
     use linera_views::{
         memory::{create_test_context, MemoryContext},

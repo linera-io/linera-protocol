@@ -7,7 +7,9 @@ mod state;
 
 use self::state::MetaCounter;
 use async_trait::async_trait;
-use linera_sdk::{service::system_api, ApplicationId, QueryContext, Service, SimpleStateStorage};
+use linera_sdk::{
+    base::ApplicationId, service::system_api, QueryContext, Service, SimpleStateStorage,
+};
 use std::sync::Arc;
 use thiserror::Error;
 
