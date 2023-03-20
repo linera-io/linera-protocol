@@ -917,7 +917,6 @@ dependencies = [
  "fungible",
  "linera-sdk",
  "linera-views",
- "serde",
  "thiserror",
 ]
 
