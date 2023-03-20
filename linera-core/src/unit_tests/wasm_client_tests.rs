@@ -374,32 +374,60 @@ where
     Ok(())
 }
 
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::Simple ; "wasmer_simple"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::View ; "wasmer_view"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::Simple ; "wasmtime_simple"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::View ; "wasmtime_view"))]
 #[test_log::test(tokio::test)]
-async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    run_test_cross_chain_message(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
+async fn test_memory_cross_chain_message(
+    wasm_runtime: WasmRuntime,
+    storage_kind: StorageKind,
+) -> Result<(), anyhow::Error> {
+    run_test_cross_chain_message(
+        MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime),
+        storage_kind,
+    )
+    .await
 }
 
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::Simple ; "wasmer_simple"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::View ; "wasmer_view"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::Simple ; "wasmtime_simple"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::View ; "wasmtime_view"))]
 #[test_log::test(tokio::test)]
-async fn test_rocksdb_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
+async fn test_rocksdb_cross_chain_message(
+    wasm_runtime: WasmRuntime,
+    storage_kind: StorageKind,
+) -> Result<(), anyhow::Error> {
     let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_cross_chain_message(MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime)).await
+    run_test_cross_chain_message(
+        MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime),
+        storage_kind,
+    )
+    .await
 }
 
 #[cfg(feature = "aws")]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::Simple ; "wasmer_simple"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::View ; "wasmer_view"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::Simple ; "wasmtime_simple"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::View ; "wasmtime_view"))]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_cross_chain_message(
     wasm_runtime: WasmRuntime,
+    storage_kind: StorageKind,
 ) -> Result<(), anyhow::Error> {
-    run_test_cross_chain_message(MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime)).await
+    run_test_cross_chain_message(
+        MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime),
+        storage_kind,
+    )
+    .await
 }
 
-async fn run_test_cross_chain_message<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_cross_chain_message<B>(
+    store_builder: B,
+    storage_kind: StorageKind,
+) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
@@ -416,14 +444,20 @@ where
         .add_initial_chain(ChainDescription::Root(1), Balance::from(0))
         .await?;
 
-    let (contract_path, service_path) =
-        linera_execution::wasm_test::get_example_bytecode_paths("fungible")?;
-    let (bytecode_id, pub_cert) = sender
-        .publish_bytecode(
-            Bytecode::load_from_file(contract_path).await?,
-            Bytecode::load_from_file(service_path).await?,
-        )
-        .await?;
+    let (bytecode_id, pub_cert) = {
+        let bytecode_name = match storage_kind {
+            StorageKind::Simple => "fungible",
+            StorageKind::View => "fungible2",
+        };
+        let (contract_path, service_path) =
+            linera_execution::wasm_test::get_example_bytecode_paths(bytecode_name)?;
+        sender
+            .publish_bytecode(
+                Bytecode::load_from_file(contract_path).await?,
+                Bytecode::load_from_file(service_path).await?,
+            )
+            .await?
+    };
 
     // Receive our own cert to broadcast the bytecode location.
     sender.receive_certificate(pub_cert.clone()).await.unwrap();
