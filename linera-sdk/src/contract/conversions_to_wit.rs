@@ -5,8 +5,8 @@
 
 use super::writable_system as system;
 use crate::{
-    ApplicationCallResult, ApplicationId, ChannelName, CryptoHash, Destination, EffectId,
-    ExecutionResult, Session, SessionCallResult, SessionId,
+    base::{ApplicationId, ChannelName, CryptoHash, Destination, EffectId, SessionId},
+    ApplicationCallResult, ExecutionResult, Session, SessionCallResult,
 };
 use std::task::Poll;
 

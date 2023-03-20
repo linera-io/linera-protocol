@@ -67,7 +67,7 @@ mod tests {
     use super::{Counter, Error};
     use async_graphql::{Request, Response};
     use futures::FutureExt;
-    use linera_sdk::{ChainId, QueryContext, Service};
+    use linera_sdk::{base::ChainId, QueryContext, Service};
     use linera_views::{memory::create_test_context, views::View};
     use std::sync::Arc;
     use webassembly_test::webassembly_test;

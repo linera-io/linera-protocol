@@ -7,7 +7,7 @@ mod state;
 
 use async_trait::async_trait;
 use crowd_funding::Query;
-use linera_sdk::{Amount, QueryContext, Service, SimpleStateStorage};
+use linera_sdk::{base::Amount, QueryContext, Service, SimpleStateStorage};
 use state::CrowdFunding;
 use std::sync::Arc;
 use thiserror::Error;

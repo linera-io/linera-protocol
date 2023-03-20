@@ -8,8 +8,8 @@ mod state;
 use self::state::Counter;
 use async_trait::async_trait;
 use linera_sdk::{
-    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-    OperationContext, Session, SessionCallResult, SessionId, SimpleStateStorage,
+    base::SessionId, ApplicationCallResult, CalleeContext, Contract, EffectContext,
+    ExecutionResult, OperationContext, Session, SessionCallResult, SimpleStateStorage,
 };
 use thiserror::Error;
 
@@ -95,8 +95,9 @@ mod tests {
     use super::{Counter, Error};
     use futures::FutureExt;
     use linera_sdk::{
-        ApplicationCallResult, BlockHeight, CalleeContext, ChainId, Contract, EffectContext,
-        EffectId, ExecutionResult, OperationContext, Session,
+        base::{BlockHeight, ChainId, EffectId},
+        ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+        OperationContext, Session,
     };
     use webassembly_test::webassembly_test;
 

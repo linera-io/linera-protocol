@@ -6,8 +6,8 @@ use super::queryable_system::{
     self, PollFindKeyValues, PollFindKeys, PollLoad, PollLock, PollReadKeyBytes,
 };
 use crate::{
-    ApplicationId, BlockHeight, BytecodeId, ChainId, CryptoHash, EffectId, QueryContext,
-    SystemBalance,
+    base::{ApplicationId, BlockHeight, BytecodeId, ChainId, CryptoHash, EffectId, SystemBalance},
+    QueryContext,
 };
 use linera_views::views::ViewError;
 use std::task::Poll;

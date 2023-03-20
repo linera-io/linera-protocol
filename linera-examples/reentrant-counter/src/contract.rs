@@ -8,8 +8,9 @@ mod state;
 use self::state::ReentrantCounter;
 use async_trait::async_trait;
 use linera_sdk::{
-    contract::system_api, ApplicationCallResult, CalleeContext, Contract, EffectContext,
-    ExecutionResult, OperationContext, Session, SessionCallResult, SessionId, SimpleStateStorage,
+    base::SessionId, contract::system_api, ApplicationCallResult, CalleeContext, Contract,
+    EffectContext, ExecutionResult, OperationContext, Session, SessionCallResult,
+    SimpleStateStorage,
 };
 use thiserror::Error;
 

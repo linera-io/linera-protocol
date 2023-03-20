@@ -86,10 +86,7 @@ impl Cursor {
     fn try_add_one(self) -> Result<Self, ArithmeticError> {
         let value = Self {
             height: self.height,
-            index: self
-                .index
-                .checked_add(1)
-                .ok_or(ArithmeticError::SequenceOverflow)?,
+            index: self.index.checked_add(1).ok_or(ArithmeticError::Overflow)?,
         };
         Ok(value)
     }

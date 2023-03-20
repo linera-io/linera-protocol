@@ -8,12 +8,13 @@ mod state;
 use self::state::FungibleToken;
 use async_trait::async_trait;
 use fungible::{
-    Account, AccountOwner, Amount, ApplicationCall, Destination, Effect, Operation, SessionCall,
+    Account, AccountOwner, ApplicationCall, Destination, Effect, Operation, SessionCall,
 };
 use linera_sdk::{
-    contract::system_api, ensure, ApplicationCallResult, ApplicationId, CalleeContext, Contract,
-    EffectContext, ExecutionResult, FromBcsBytes, OperationContext, Owner, Session,
-    SessionCallResult, SessionId, SimpleStateStorage,
+    base::{Amount, ApplicationId, Owner, SessionId},
+    contract::system_api,
+    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
+    OperationContext, Session, SessionCallResult, SimpleStateStorage,
 };
 use thiserror::Error;
 
@@ -148,12 +149,11 @@ impl FungibleToken {
     ) -> Result<SessionCallResult, Error> {
         let mut balance =
             Amount::from_bcs_bytes(&session_data).expect("Session contains corrupt data");
+        balance
+            .try_sub_assign(amount)
+            .map_err(|_| Error::InsufficientSessionBalance)?;
 
-        ensure!(balance >= amount, Error::InsufficientSessionBalance);
-
-        balance -= amount;
-
-        let updated_session = (balance > 0)
+        let updated_session = (balance > Amount::zero())
             .then(|| bcs::to_bytes(&balance).expect("Serializing amounts should not fail"));
 
         Ok(SessionCallResult {

@@ -119,10 +119,10 @@ pub struct EffectId {
 #[derive(Debug, Error)]
 /// An error type for arithmetic errors.
 pub enum ArithmeticError {
-    #[error("Sequence number overflow")]
-    SequenceOverflow,
-    #[error("Sequence number underflow")]
-    SequenceUnderflow,
+    #[error("Number overflow")]
+    Overflow,
+    #[error("Number underflow")]
+    Underflow,
 }
 
 impl std::fmt::Display for BlockHeight {
@@ -173,37 +173,25 @@ impl BlockHeight {
 
     #[inline]
     pub fn try_add_one(self) -> Result<BlockHeight, ArithmeticError> {
-        let val = self
-            .0
-            .checked_add(1)
-            .ok_or(ArithmeticError::SequenceOverflow)?;
+        let val = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
         Ok(Self(val))
     }
 
     #[inline]
     pub fn try_sub_one(self) -> Result<BlockHeight, ArithmeticError> {
-        let val = self
-            .0
-            .checked_sub(1)
-            .ok_or(ArithmeticError::SequenceUnderflow)?;
+        let val = self.0.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
         Ok(Self(val))
     }
 
     #[inline]
     pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self
-            .0
-            .checked_add(1)
-            .ok_or(ArithmeticError::SequenceOverflow)?;
+        self.0 = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
         Ok(())
     }
 
     #[inline]
     pub fn try_sub_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self
-            .0
-            .checked_sub(1)
-            .ok_or(ArithmeticError::SequenceUnderflow)?;
+        self.0 = self.0.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
         Ok(())
     }
 }
@@ -216,37 +204,25 @@ impl RoundNumber {
 
     #[inline]
     pub fn try_add_one(self) -> Result<RoundNumber, ArithmeticError> {
-        let val = self
-            .0
-            .checked_add(1)
-            .ok_or(ArithmeticError::SequenceOverflow)?;
+        let val = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
         Ok(Self(val))
     }
 
     #[inline]
     pub fn try_sub_one(self) -> Result<RoundNumber, ArithmeticError> {
-        let val = self
-            .0
-            .checked_sub(1)
-            .ok_or(ArithmeticError::SequenceUnderflow)?;
+        let val = self.0.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
         Ok(Self(val))
     }
 
     #[inline]
     pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self
-            .0
-            .checked_add(1)
-            .ok_or(ArithmeticError::SequenceOverflow)?;
+        self.0 = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
         Ok(())
     }
 
     #[inline]
     pub fn try_sub_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self
-            .0
-            .checked_sub(1)
-            .ok_or(ArithmeticError::SequenceUnderflow)?;
+        self.0 = self.0.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
         Ok(())
     }
 }
@@ -254,19 +230,13 @@ impl RoundNumber {
 impl Epoch {
     #[inline]
     pub fn try_add_one(self) -> Result<Self, ArithmeticError> {
-        let val = self
-            .0
-            .checked_add(1)
-            .ok_or(ArithmeticError::SequenceOverflow)?;
+        let val = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
         Ok(Self(val))
     }
 
     #[inline]
     pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self
-            .0
-            .checked_add(1)
-            .ok_or(ArithmeticError::SequenceOverflow)?;
+        self.0 = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
         Ok(())
     }
 }

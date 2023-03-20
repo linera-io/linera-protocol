@@ -8,9 +8,10 @@ mod state;
 use self::state::MetaCounter;
 use async_trait::async_trait;
 use linera_sdk::{
-    contract::system_api, ensure, ApplicationCallResult, ApplicationId, CalleeContext, ChainId,
-    Contract, EffectContext, ExecutionResult, OperationContext, Session, SessionCallResult,
-    SessionId, SimpleStateStorage,
+    base::{ApplicationId, ChainId, SessionId},
+    contract::system_api,
+    ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    OperationContext, Session, SessionCallResult, SimpleStateStorage,
 };
 use thiserror::Error;
 

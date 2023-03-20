@@ -7,8 +7,8 @@ pub use self::types::AccountOwner;
 
 use self::types::Nonce;
 use linera_sdk::{
+    base::{ApplicationId, ChainId},
     crypto::{BcsSignable, CryptoError, PublicKey, Signature},
-    ApplicationId, ChainId,
 };
 use serde::{Deserialize, Serialize};
 

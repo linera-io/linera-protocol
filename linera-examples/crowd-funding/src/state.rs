@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fungible::AccountOwner;
-use linera_sdk::{Amount, ApplicationId, Timestamp};
+use linera_sdk::base::{Amount, ApplicationId, Timestamp};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

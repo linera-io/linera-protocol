@@ -42,7 +42,7 @@ pub enum Error {
 mod tests {
     use super::{Error, ReentrantCounter};
     use futures::FutureExt;
-    use linera_sdk::{ChainId, QueryContext, Service};
+    use linera_sdk::{base::ChainId, QueryContext, Service};
     use std::sync::Arc;
     use webassembly_test::webassembly_test;
 

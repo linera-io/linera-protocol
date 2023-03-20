@@ -1,8 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fungible::{AccountOwner, Amount};
-use linera_sdk::ensure;
+use fungible::AccountOwner;
+use linera_sdk::base::Amount;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use thiserror::Error;
@@ -22,12 +22,15 @@ impl FungibleToken {
 
     /// Obtain the balance for an `account`.
     pub(crate) fn balance(&self, account: &AccountOwner) -> Amount {
-        self.accounts.get(account).copied().unwrap_or(0)
+        self.accounts.get(account).copied().unwrap_or_default()
     }
 
     /// Credit an `account` with the provided `amount`.
     pub(crate) fn credit(&mut self, account: AccountOwner, amount: Amount) {
-        *self.accounts.entry(account).or_default() += amount;
+        self.accounts
+            .entry(account)
+            .or_default()
+            .saturating_add_assign(amount)
     }
 
     /// Try to debit the requested `amount` from an `account`.
@@ -41,11 +44,9 @@ impl FungibleToken {
             .get_mut(&account)
             .ok_or(InsufficientBalanceError)?;
 
-        ensure!(*balance >= amount, InsufficientBalanceError);
-
-        *balance -= amount;
-
-        Ok(())
+        balance
+            .try_sub_assign(amount)
+            .map_err(|_| InsufficientBalanceError)
     }
 }
 

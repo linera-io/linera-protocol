@@ -12,10 +12,11 @@ use fungible2::{
     ApplicationCall, ApplicationTransfer, SessionCall, SignedTransfer, Transfer,
 };
 use linera_sdk::{
+    base::SessionId,
     contract::{system_api, system_api::WasmContext},
     crypto::CryptoError,
     ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-    FromBcsBytes, OperationContext, Session, SessionCallResult, SessionId, ViewStateStorage,
+    FromBcsBytes, OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
 use linera_views::{common::Context, views::ViewError};
 use serde::{Deserialize, Serialize};

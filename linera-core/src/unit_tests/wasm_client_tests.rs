@@ -434,7 +434,7 @@ where
     let receiver_owner =
         fungible::AccountOwner::User(convert(&Owner::from(receiver.key_pair().await?.public()))?);
 
-    let accounts = BTreeMap::from_iter([(sender_owner, 1_000_000 as fungible::Amount)]);
+    let accounts = BTreeMap::from_iter([(sender_owner, linera_sdk::base::Amount::from(1_000_000))]);
     let initial_value_bytes = bcs::to_bytes(&accounts)?;
     let (application_id, _cert) = sender
         .create_application(bytecode_id, vec![], initial_value_bytes, vec![])
@@ -443,7 +443,7 @@ where
     // Make a transfer using the fungible app.
     let transfer = fungible::Operation::Transfer {
         owner: sender_owner,
-        amount: 100,
+        amount: 100.into(),
         target_account: fungible::Account {
             chain_id: convert(&receiver.chain_id())?,
             owner: receiver_owner,
@@ -486,7 +486,7 @@ where
     // Make another transfer.
     let transfer = fungible::Operation::Transfer {
         owner: sender_owner,
-        amount: 200,
+        amount: 200.into(),
         target_account: fungible::Account {
             chain_id: convert(&receiver.chain_id())?,
             owner: receiver_owner,
@@ -518,7 +518,7 @@ where
     // Try another transfer in the other direction except that the amount is too large.
     let transfer = fungible::Operation::Transfer {
         owner: receiver_owner,
-        amount: 301,
+        amount: 301.into(),
         target_account: fungible::Account {
             chain_id: convert(&sender.chain_id())?,
             owner: sender_owner,
@@ -536,7 +536,7 @@ where
     // Try another transfer in the other direction with the correct amount.
     let transfer = fungible::Operation::Transfer {
         owner: receiver_owner,
-        amount: 300,
+        amount: 300.into(),
         target_account: fungible::Account {
             chain_id: convert(&sender.chain_id())?,
             owner: sender_owner,
