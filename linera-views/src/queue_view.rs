@@ -132,7 +132,7 @@ impl<'a, C, T> QueueView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Debug + Serialize + DeserializeOwned,
+    T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
         let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
@@ -258,7 +258,7 @@ where
         Ok(values)
     }
 
-    /// Get all the elements in the queue
+    /// Read all the elements
     pub async fn elements(&self) -> Result<Vec<T>, ViewError> {
         let count = self.count();
         self.read_front(count).await
@@ -282,8 +282,10 @@ where
                 self.new_back_values.push_back(elt);
             }
             self.new_back_values.rotate_right(shift);
-            // Indices are whether deleted by a self.front_delete_count or deleted because modified by the IterMut.
-            // So, better to put a DeletePrefix. The stored_indices has to be put
+            // All indices are being deleted at the next flush. This is because they are deleted either:
+            // * Because a self.front_delete_count forces them to be removed
+            // * Or because loading them means that their value can be changed which invalidates
+            //   the entries on storage
             self.delete_indices = true;
         }
         Ok(())
@@ -301,7 +303,7 @@ impl<C, T> HashableView<C> for QueueView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Send + Sync + Clone + Debug + Serialize + DeserializeOwned,
+    T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
     type Hasher = sha3::Sha3_256;
 
