@@ -7,7 +7,8 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1.52"
 bcs = "0.1.3"
-fungible2 = { path = "../fungible2" }
+crowd-funding = { path = "../crowd-funding" }
+fungible = { path = "../fungible" }
 linera-sdk = { path = "../../linera-sdk", features = ["crypto"] }
 linera-views = { path = "../../linera-views" }
 serde = { version = "1.0.130", features = ["derive"] }

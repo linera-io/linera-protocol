@@ -7,30 +7,22 @@ mod state;
 
 use self::state::FungibleToken;
 use async_trait::async_trait;
-use fungible2::{
-    types::{AccountOwner, Nonce},
-    ApplicationCall, ApplicationTransfer, SessionCall, SignedTransfer, Transfer,
+use fungible::{
+    Account, AccountOwner, ApplicationCall, Destination, Effect, Operation, SessionCall,
 };
 use linera_sdk::{
-    base::SessionId,
+    base::{Amount, ApplicationId, Owner, SessionId},
     contract::{system_api, system_api::WasmContext},
-    crypto::CryptoError,
-    ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-    FromBcsBytes, OperationContext, Session, SessionCallResult, ViewStateStorage,
+    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
+    OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
-use linera_views::{common::Context, views::ViewError};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// Alias to the application type, so that the boilerplate module can reference it.
 pub type WritableFungibleToken = FungibleToken<WasmContext>;
 linera_sdk::contract!(WritableFungibleToken);
 
 #[async_trait]
-impl<C: Context + Send + Sync + Clone + 'static> Contract for FungibleToken<C>
-where
-    ViewError: From<<C as linera_views::common::Context>::Error>,
-{
+impl Contract for FungibleToken<WasmContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 
@@ -39,19 +31,27 @@ where
         _context: &OperationContext,
         argument: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        self.initialize_accounts(bcs::from_bytes(argument).map_err(Error::InvalidInitialState)?);
+        let accounts = bcs::from_bytes(argument).map_err(Error::InvalidInitialState)?;
+        self.initialize_accounts(accounts).await;
         Ok(ExecutionResult::default())
     }
 
     async fn execute_operation(
         &mut self,
-        _context: &OperationContext,
+        context: &OperationContext,
         operation: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        let signed_transfer =
-            SignedTransfer::from_bcs_bytes(operation).map_err(Error::InvalidOperation)?;
-
-        self.handle_signed_transfer(signed_transfer).await
+        let operation = Operation::from_bcs_bytes(operation).map_err(Error::InvalidOperation)?;
+        let Operation::Transfer {
+            owner,
+            amount,
+            target_account,
+        } = operation;
+        Self::check_account_authentication(None, context.authenticated_signer, owner)?;
+        self.debit(owner, amount).await?;
+        Ok(self
+            .finish_transfer_to_account(amount, target_account)
+            .await)
     }
 
     async fn execute_effect(
@@ -59,10 +59,9 @@ where
         _context: &EffectContext,
         effect: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        let credit = Credit::from_bcs_bytes(effect).map_err(Error::InvalidEffect)?;
-
-        self.credit(credit.destination, credit.amount).await;
-
+        let effect = Effect::from_bcs_bytes(effect).map_err(Error::InvalidEffect)?;
+        let Effect::Credit { owner, amount } = effect;
+        self.credit(owner, amount).await;
         Ok(ExecutionResult::default())
     }
 
@@ -74,21 +73,30 @@ where
     ) -> Result<ApplicationCallResult, Self::Error> {
         let request =
             ApplicationCall::from_bcs_bytes(argument).map_err(Error::InvalidApplicationCall)?;
-        let mut result = ApplicationCallResult::default();
-
         match request {
-            ApplicationCall::Balance => {
-                result.value = self.handle_application_balance(context).await?;
+            ApplicationCall::Balance { owner } => {
+                let mut result = ApplicationCallResult::default();
+                let balance = self.balance(&owner).await;
+                result.value =
+                    bcs::to_bytes(&balance).expect("Serializing amounts should not fail");
+                Ok(result)
             }
-            ApplicationCall::Transfer(transfer) => {
-                result = self.handle_application_transfer(context, transfer).await?;
-            }
-            ApplicationCall::Delegated(transfer) => {
-                result.execution_result = self.handle_signed_transfer(transfer).await?;
+            ApplicationCall::Transfer {
+                owner,
+                amount,
+                destination,
+            } => {
+                Self::check_account_authentication(
+                    context.authenticated_caller_id,
+                    context.authenticated_signer,
+                    owner,
+                )?;
+                self.debit(owner, amount).await?;
+                Ok(self
+                    .finish_transfer_to_destination(amount, destination)
+                    .await)
             }
         }
-
-        Ok(result)
     }
 
     async fn handle_session_call(
@@ -99,65 +107,31 @@ where
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error> {
         let request = SessionCall::from_bcs_bytes(argument).map_err(Error::InvalidSessionCall)?;
-
         match request {
             SessionCall::Balance => self.handle_session_balance(session.data),
-            SessionCall::Transfer(transfer) => {
-                self.handle_session_transfer(transfer, session.data).await
+            SessionCall::Transfer {
+                amount,
+                destination,
+            } => {
+                self.handle_session_transfer(session.data, amount, destination)
+                    .await
             }
         }
     }
 }
 
-impl<C: Context + Send + Sync + Clone + 'static> FungibleToken<C>
-where
-    ViewError: From<<C as linera_views::common::Context>::Error>,
-{
-    /// Handles a signed transfer.
-    ///
-    /// A signed transfer is either requested through an operation or a delegated application call.
-    async fn handle_signed_transfer(
-        &mut self,
-        signed_transfer: SignedTransfer,
-    ) -> Result<ExecutionResult, Error> {
-        let (source, transfer, nonce) = self.check_signed_transfer(signed_transfer).await?;
-
-        self.debit(source, transfer.amount).await?;
-        self.mark_nonce_as_used(source, nonce).await;
-
-        Ok(self.finish_transfer(transfer).await)
-    }
-
-    /// Handles an account balance request sent by an application.
-    async fn handle_application_balance(
-        &mut self,
-        context: &CalleeContext,
-    ) -> Result<Vec<u8>, Error> {
-        let caller = context
-            .authenticated_caller_id
-            .ok_or(Error::MissingSourceApplication)?;
-        let account = AccountOwner::Application(caller);
-
-        let balance = self.balance(&account).await;
-        let balance_bytes = bcs::to_bytes(&balance).expect("Couldn't serialize account balance");
-
-        Ok(balance_bytes)
-    }
-
-    /// Handles a transfer requested by an application.
-    async fn handle_application_transfer(
-        &mut self,
-        context: &CalleeContext,
-        transfer: ApplicationTransfer,
-    ) -> Result<ApplicationCallResult, Error> {
-        let caller = context
-            .authenticated_caller_id
-            .ok_or(Error::MissingSourceApplication)?;
-        let source = AccountOwner::Application(caller);
-
-        self.debit(source, transfer.amount()).await?;
-
-        Ok(self.finish_application_transfer(transfer).await)
+impl FungibleToken<WasmContext> {
+    /// Verifies that a transfer is authenticated for this local account.
+    fn check_account_authentication(
+        authenticated_application_id: Option<ApplicationId>,
+        authenticated_signer: Option<Owner>,
+        owner: AccountOwner,
+    ) -> Result<(), Error> {
+        match owner {
+            AccountOwner::User(address) if authenticated_signer == Some(address) => Ok(()),
+            AccountOwner::Application(id) if authenticated_application_id == Some(id) => Ok(()),
+            _ => Err(Error::IncorrectAuthentication),
+        }
     }
 
     /// Handles a session balance request sent by an application.
@@ -174,113 +148,71 @@ where
         Ok(session_call_result)
     }
 
-    /// Handles a session transfer request sent by an application.
+    /// Handles a transfer from a session.
     async fn handle_session_transfer(
         &mut self,
-        transfer: ApplicationTransfer,
         session_data: Vec<u8>,
+        amount: Amount,
+        destination: Destination,
     ) -> Result<SessionCallResult, Error> {
         let mut balance =
-            u128::from_bcs_bytes(&session_data).expect("Session contains corrupt data");
+            Amount::from_bcs_bytes(&session_data).expect("Session contains corrupt data");
+        balance
+            .try_sub_assign(amount)
+            .map_err(|_| Error::InsufficientSessionBalance)?;
 
-        ensure!(
-            balance >= transfer.amount(),
-            Error::InsufficientSessionBalance
-        );
-
-        balance -= transfer.amount();
-
-        let updated_session = (balance > 0)
-            .then(|| bcs::to_bytes(&balance).expect("Serializing a `u128` should not fail"));
+        let updated_session = (balance > Amount::zero())
+            .then(|| bcs::to_bytes(&balance).expect("Serializing amounts should not fail"));
 
         Ok(SessionCallResult {
-            inner: self.finish_application_transfer(transfer).await,
+            inner: self
+                .finish_transfer_to_destination(amount, destination)
+                .await,
             data: updated_session,
         })
     }
 
-    /// Checks if a signed transfer can be executed.
-    ///
-    /// If the transfer can be executed, return the source [`AccountOwner`], the [`Transfer`] to be
-    /// executed and the [`Nonce`] used to prevent the transfer from being replayed.
-    async fn check_signed_transfer(
-        &self,
-        signed_transfer: SignedTransfer,
-    ) -> Result<(AccountOwner, Transfer, Nonce), Error> {
-        let (source, payload) = signed_transfer.check_signature()?;
-
-        ensure!(
-            payload.token_id == system_api::current_application_id(),
-            Error::IncorrectTokenId
-        );
-        ensure!(
-            payload.source_chain == system_api::current_chain_id(),
-            Error::IncorrectSourceChain
-        );
-        ensure!(
-            payload.nonce
-                >= self
-                    .minimum_nonce(&source)
-                    .await
-                    .ok_or(Error::ReusedNonce)?,
-            Error::ReusedNonce
-        );
-
-        Ok((source, payload.transfer, payload.nonce))
-    }
-
-    /// Credits an account or forward it into a session or another micro-chain.
-    async fn finish_application_transfer(
+    /// Execute the final step of a transfer where the tokens are sent to the destination.
+    async fn finish_transfer_to_destination(
         &mut self,
-        application_transfer: ApplicationTransfer,
+        amount: Amount,
+        destination: Destination,
     ) -> ApplicationCallResult {
         let mut result = ApplicationCallResult::default();
-
-        match application_transfer {
-            ApplicationTransfer::Static(transfer) => {
-                result.execution_result = self.finish_transfer(transfer).await;
+        match destination {
+            Destination::Account(account) => {
+                result.execution_result = self.finish_transfer_to_account(amount, account).await;
             }
-            ApplicationTransfer::Dynamic(amount) => {
+            Destination::NewSession => {
                 result.create_sessions.push(Self::new_session(amount));
             }
         }
-
         result
     }
 
-    /// Credits an account or forward it to another micro-chain.
-    async fn finish_transfer(&mut self, transfer: Transfer) -> ExecutionResult {
-        if transfer.destination_chain == system_api::current_chain_id() {
-            self.credit(transfer.destination_account, transfer.amount)
-                .await;
+    /// Execute the final step of a transfer where the tokens are sent to the destination.
+    async fn finish_transfer_to_account(
+        &mut self,
+        amount: Amount,
+        account: Account,
+    ) -> ExecutionResult {
+        if account.chain_id == system_api::current_chain_id() {
+            self.credit(account.owner, amount).await;
             ExecutionResult::default()
         } else {
-            ExecutionResult::default()
-                .with_effect(transfer.destination_chain, &Credit::from(transfer))
+            let effect = Effect::Credit {
+                owner: account.owner,
+                amount,
+            };
+            ExecutionResult::default().with_effect(account.chain_id, &effect)
         }
     }
 
     /// Creates a new session with the specified `amount` of tokens.
-    fn new_session(amount: u128) -> Session {
+    fn new_session(amount: Amount) -> Session {
         Session {
             kind: 0,
-            data: bcs::to_bytes(&amount).expect("Serializing a `u128` should not fail"),
-        }
-    }
-}
-
-/// The credit effect.
-#[derive(Deserialize, Serialize)]
-pub struct Credit {
-    destination: AccountOwner,
-    amount: u128,
-}
-
-impl From<Transfer> for Credit {
-    fn from(transfer: Transfer) -> Self {
-        Credit {
-            destination: transfer.destination_account,
-            amount: transfer.amount,
+            data: bcs::to_bytes(&amount).expect("Serializing amounts should not fail"),
         }
     }
 }
@@ -296,17 +228,9 @@ pub enum Error {
     #[error("Operation is not a valid serialized signed transfer")]
     InvalidOperation(#[source] bcs::Error),
 
-    /// Incorrect signature for transfer.
-    #[error("Operation does not have a valid signature")]
-    IncorrectSignature(#[from] CryptoError),
-
     /// Invalid serialized [`Credit`].
     #[error("Effect is not a valid serialized credit operation")]
     InvalidEffect(#[source] bcs::Error),
-
-    /// Cross-application call without a source application ID.
-    #[error("Applications must identify themselves to perform transfers")]
-    MissingSourceApplication,
 
     /// Invalid serialized [`ApplicationCall`].
     #[error("Cross-application call argument is not a valid request")]
@@ -316,18 +240,6 @@ pub enum Error {
     #[error("Cross-application session call argument is not a valid request")]
     InvalidSessionCall(#[source] bcs::Error),
 
-    /// Incorrect token ID in operation.
-    #[error("Operation attempts to transfer the incorrect token")]
-    IncorrectTokenId,
-
-    /// Incorrect source chain ID in operation.
-    #[error("Operation is not valid on the current chain")]
-    IncorrectSourceChain,
-
-    /// Attempt to reuse a nonce.
-    #[error("Operation uses a unique transaction number (nonce) that was previously used")]
-    ReusedNonce,
-
     /// Insufficient balance in source account.
     #[error("Source account does not have sufficient balance for transfer")]
     InsufficientBalance(#[from] state::InsufficientBalanceError),
@@ -336,7 +248,7 @@ pub enum Error {
     #[error("Session does not have sufficient balance for transfer")]
     InsufficientSessionBalance,
 
-    /// Application doesn't support any cross-application sessions.
-    #[error("Application doesn't support any cross-application sessions")]
-    SessionsNotSupported,
+    /// Requested transfer does not have permission on this account.
+    #[error("The requested transfer is not correctly authenticated.")]
+    IncorrectAuthentication,
 }

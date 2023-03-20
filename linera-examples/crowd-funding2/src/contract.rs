@@ -5,23 +5,20 @@
 
 mod state;
 
-use self::state::{CrowdFunding, Status};
-use crate::system_api::WasmContext;
 use async_trait::async_trait;
-use crowd_funding2::ApplicationCall;
-use fungible2::{AccountOwner, ApplicationTransfer, SignedTransfer, Transfer};
+use crowd_funding::{ApplicationCall, Operation};
+use fungible::{Account, AccountOwner, Destination};
 use linera_sdk::{
-    base::SessionId, contract::system_api, ensure, ApplicationCallResult, CalleeContext, Contract,
-    EffectContext, ExecutionResult, FromBcsBytes, OperationContext, Session, SessionCallResult,
-    ViewStateStorage,
+    base::{Amount, SessionId},
+    contract::{system_api, system_api::WasmContext},
+    ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    FromBcsBytes, OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
-use linera_views::views::{View, ViewError};
-use serde::{Deserialize, Serialize};
+use linera_views::views::View;
+use state::{CrowdFunding, Status};
 use thiserror::Error;
 
-/// Alias to the application type, so that the boilerplate module can reference it.
 pub type WritableCrowdFunding = CrowdFunding<WasmContext>;
-
 linera_sdk::contract!(WritableCrowdFunding);
 
 #[async_trait]
@@ -55,7 +52,9 @@ impl Contract for CrowdFunding<WasmContext> {
             bcs::from_bytes(operation_bytes).map_err(Error::InvalidOperation)?;
 
         match operation {
-            Operation::Pledge { transfer } => self.signed_pledge(transfer).await?,
+            Operation::PledgeWithTransfer { owner, amount } => {
+                self.execute_pledge_with_transfer(owner, amount).await?
+            }
             Operation::Collect => self.collect_pledges().await?,
             Operation::Cancel => self.cancel_campaign().await?,
         }
@@ -73,7 +72,7 @@ impl Contract for CrowdFunding<WasmContext> {
 
     async fn handle_application_call(
         &mut self,
-        context: &CalleeContext,
+        _context: &CalleeContext,
         argument: &[u8],
         sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
@@ -81,8 +80,14 @@ impl Contract for CrowdFunding<WasmContext> {
             bcs::from_bytes(argument).map_err(Error::InvalidCrossApplicationCall)?;
 
         match call {
-            ApplicationCall::Pledge => self.application_pledge(context, sessions).await?,
-            ApplicationCall::DelegatedPledge { transfer } => self.signed_pledge(transfer).await?,
+            ApplicationCall::PledgeWithSessions { source } => {
+                // In real-life applications, the source could be constrained so that a
+                // refund cannot be used as a transfer.
+                self.execute_pledge_with_sessions(source, sessions).await?
+            }
+            ApplicationCall::PledgeWithTransfer { owner, amount } => {
+                self.execute_pledge_with_transfer(owner, amount).await?
+            }
             ApplicationCall::Collect => self.collect_pledges().await?,
             ApplicationCall::Cancel => self.cancel_campaign().await?,
         }
@@ -102,36 +107,21 @@ impl Contract for CrowdFunding<WasmContext> {
 }
 
 impl CrowdFunding<WasmContext> {
-    /// Adds a pledge from a [`SignedTransfer`].
-    async fn signed_pledge(&mut self, transfer: SignedTransfer) -> Result<(), Error> {
-        let amount = transfer.payload.transfer.amount;
-        let source = AccountOwner::Key(transfer.source);
-
-        ensure!(transfer.payload.transfer.amount > 0, Error::EmptyPledge);
-        ensure!(
-            transfer.payload.token_id == self.parameters().token,
-            Error::IncorrectToken
-        );
-        ensure!(
-            transfer.payload.transfer.destination_chain == system_api::current_chain_id(),
-            Error::IncorrectDestination
-        );
-        ensure!(
-            transfer.payload.transfer.destination_account
-                == AccountOwner::Application(system_api::current_application_id()),
-            Error::IncorrectDestination
-        );
-
-        self.transfer(fungible2::ApplicationCall::Delegated(transfer))
-            .await?;
-
-        self.finish_pledge(source, amount).await
+    /// Adds a pledge from a transfer.
+    async fn execute_pledge_with_transfer(
+        &mut self,
+        owner: AccountOwner,
+        amount: Amount,
+    ) -> Result<(), Error> {
+        ensure!(amount > Amount::zero(), Error::EmptyPledge);
+        self.receive_from_account(owner, amount).await?;
+        self.finish_pledge(owner, amount).await
     }
 
     /// Adds a pledge sent from an application using token sessions.
-    async fn application_pledge(
+    async fn execute_pledge_with_sessions(
         &mut self,
-        context: &CalleeContext,
+        source: AccountOwner,
         sessions: Vec<SessionId>,
     ) -> Result<(), Error> {
         self.check_session_tokens(&sessions)?;
@@ -139,15 +129,10 @@ impl CrowdFunding<WasmContext> {
         let session_balances = self.query_session_balances(&sessions).await?;
         let amount = session_balances.iter().sum();
 
-        ensure!(amount > 0, Error::EmptyPledge);
+        ensure!(amount > Amount::zero(), Error::EmptyPledge);
 
         self.collect_session_tokens(sessions, session_balances)
             .await?;
-
-        let source_application = context
-            .authenticated_caller_id
-            .ok_or(Error::MissingSourceApplication)?;
-        let source = AccountOwner::Application(source_application);
 
         self.finish_pledge(source, amount).await
     }
@@ -165,20 +150,22 @@ impl CrowdFunding<WasmContext> {
     }
 
     /// Gathers the balances in all the pledged sessions.
-    async fn query_session_balances(&mut self, sessions: &[SessionId]) -> Result<Vec<u128>, Error> {
-        let mut balances = Vec::with_capacity(sessions.len());
-        let balance_query = bcs::to_bytes(&fungible2::SessionCall::Balance)
+    async fn query_session_balances(
+        &mut self,
+        sessions: &[SessionId],
+    ) -> Result<Vec<Amount>, Error> {
+        let balance_query = bcs::to_bytes(&fungible::SessionCall::Balance)
             .map_err(Error::InvalidSessionBalanceQuery)?;
 
+        let mut balances = Vec::with_capacity(sessions.len());
         for session in sessions {
             let (balance_bytes, _) = self
                 .call_session(false, *session, &balance_query, vec![])
                 .await;
-
-            balances
-                .push(u128::from_bcs_bytes(&balance_bytes).map_err(Error::InvalidSessionBalance)?);
+            balances.push(
+                Amount::from_bcs_bytes(&balance_bytes).map_err(Error::InvalidSessionBalance)?,
+            );
         }
-
         Ok(balances)
     }
 
@@ -186,36 +173,27 @@ impl CrowdFunding<WasmContext> {
     async fn collect_session_tokens(
         &mut self,
         sessions: Vec<SessionId>,
-        balances: Vec<u128>,
+        balances: Vec<Amount>,
     ) -> Result<(), Error> {
-        let destination_account = AccountOwner::Application(system_api::current_application_id());
-        let destination_chain = system_api::current_chain_id();
-
         for (session, balance) in sessions.into_iter().zip(balances) {
-            let transfer = Transfer {
-                destination_account,
-                destination_chain,
-                amount: balance,
-            };
-            let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
-
-            self.call_session(false, session, &transfer_bytes, vec![])
-                .await;
+            self.receive_from_session(session, balance).await?;
         }
-
         Ok(())
     }
 
     /// Marks a pledge in the application state, so that it can be returned if the campaign is
     /// cancelled.
-    async fn finish_pledge(&mut self, source: AccountOwner, amount: u128) -> Result<(), Error> {
+    async fn finish_pledge(&mut self, source: AccountOwner, amount: Amount) -> Result<(), Error> {
         match self.status.get() {
             Status::Active => {
-                let value = self.pledges.get_mut_or_default(&source).await?;
-                *value += amount;
+                self.pledges
+                    .get_mut_or_default(&source)
+                    .await
+                    .expect("view access should not fail")
+                    .saturating_add_assign(amount);
                 Ok(())
             }
-            Status::Complete => self.send(amount, self.parameters().owner).await,
+            Status::Complete => self.send_to(amount, self.parameters().owner).await,
             Status::Cancelled => Err(Error::Cancelled),
         }
     }
@@ -232,7 +210,7 @@ impl CrowdFunding<WasmContext> {
             Status::Cancelled => return Err(Error::Cancelled),
         }
 
-        self.send(total, self.parameters().owner).await?;
+        self.send_to(total, self.parameters().owner).await?;
         self.pledges.clear();
         self.status.set(Status::Complete);
 
@@ -248,32 +226,29 @@ impl CrowdFunding<WasmContext> {
             Error::DeadlineNotReached
         );
 
-        // While waiting for having iterators for MapView
-        let mut vec_pledger_amount = Vec::new();
+        let mut pledges = Vec::new();
         self.pledges
-            .for_each_index_value(
-                |pledger: AccountOwner, amount: u128| -> Result<(), ViewError> {
-                    vec_pledger_amount.push((pledger, amount));
-                    Ok(())
-                },
-            )
-            .await?;
-        for (pledger, amount) in vec_pledger_amount {
-            self.send(amount, pledger).await?;
+            .for_each_index_value(|pledger, amount| {
+                pledges.push((pledger, amount));
+                Ok(())
+            })
+            .await
+            .expect("view iteration should not fail");
+        for (pledger, amount) in pledges {
+            self.send_to(amount, pledger).await?;
         }
 
         let balance = self.balance().await?;
-        self.send(balance, self.parameters().owner).await?;
+        self.send_to(balance, self.parameters().owner).await?;
         self.status.set(Status::Cancelled);
 
         Ok(())
     }
 
     /// Queries the token application to determine the total amount of tokens in custody.
-    async fn balance(&mut self) -> Result<u128, Error> {
-        let query_bytes = bcs::to_bytes(&fungible2::ApplicationCall::Balance)
-            .map_err(Error::InvalidBalanceQuery)?;
-
+    async fn balance(&mut self) -> Result<Amount, Error> {
+        let query_bytes =
+            bcs::to_bytes(&fungible::SessionCall::Balance).map_err(Error::InvalidBalanceQuery)?;
         let (response, _sessions) = self
             .call_application(true, self.parameters().token, &query_bytes, vec![])
             .await;
@@ -282,60 +257,84 @@ impl CrowdFunding<WasmContext> {
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
-    async fn send(&mut self, amount: u128, destination: AccountOwner) -> Result<(), Error> {
-        let transfer = ApplicationTransfer::Static(Transfer {
-            destination_account: destination,
-            destination_chain: system_api::current_chain_id(),
+    async fn send_to(&mut self, amount: Amount, owner: AccountOwner) -> Result<(), Error> {
+        let account = Account {
+            chain_id: system_api::current_chain_id(),
+            owner,
+        };
+        let destination = Destination::Account(account);
+        let transfer = fungible::ApplicationCall::Transfer {
+            owner: AccountOwner::Application(system_api::current_application_id()),
             amount,
-        });
-
-        self.transfer(fungible2::ApplicationCall::Transfer(transfer))
-            .await
-    }
-
-    /// Calls into the Fungible2 Token application to execute the `transfer`.
-    async fn transfer(&mut self, transfer: fungible2::ApplicationCall) -> Result<(), Error> {
+            destination,
+        };
         let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
-
         self.call_application(true, self.parameters().token, &transfer_bytes, vec![])
             .await;
-
         Ok(())
     }
-}
 
-/// Operations that can be sent to the application.
-#[derive(Deserialize, Serialize)]
-#[allow(clippy::large_enum_variant)]
-pub enum Operation {
-    /// Pledge some tokens to the campaign.
-    Pledge { transfer: SignedTransfer },
-    /// Collect the pledges after the campaign has reached its target.
-    Collect,
-    /// Cancel the campaign and refund all pledges after the campaign has reached its deadline.
-    Cancel,
+    /// Calls into the Fungible Token application to receive tokens from the given account.
+    async fn receive_from_account(
+        &mut self,
+        owner: AccountOwner,
+        amount: Amount,
+    ) -> Result<(), Error> {
+        let account = Account {
+            chain_id: system_api::current_chain_id(),
+            owner: AccountOwner::Application(system_api::current_application_id()),
+        };
+        let destination = Destination::Account(account);
+        let transfer = fungible::ApplicationCall::Transfer {
+            owner,
+            amount,
+            destination,
+        };
+        let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
+        self.call_application(true, self.parameters().token, &transfer_bytes, vec![])
+            .await;
+        Ok(())
+    }
+
+    /// Calls into the Fungible Token application to receive tokens from the given account.
+    async fn receive_from_session(
+        &mut self,
+        session: SessionId,
+        amount: Amount,
+    ) -> Result<(), Error> {
+        let account = Account {
+            chain_id: system_api::current_chain_id(),
+            owner: AccountOwner::Application(system_api::current_application_id()),
+        };
+        let destination = Destination::Account(account);
+        let transfer = fungible::SessionCall::Transfer {
+            amount,
+            destination,
+        };
+        let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
+        self.call_session(false, session, &transfer_bytes, vec![])
+            .await;
+        Ok(())
+    }
 }
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error(transparent)]
-    ViewError(#[from] linera_views::views::ViewError),
-
-    /// Crowd-funding2 application doesn't support any cross-chain effects.
-    #[error("Crowd-funding2 application doesn't support any cross-chain effects")]
+    /// Crowd-funding application doesn't support any cross-chain effects.
+    #[error("Crowd-funding application doesn't support any cross-chain effects")]
     EffectsNotSupported,
 
-    /// Crowd-funding2 application doesn't support any cross-application sessions.
-    #[error("Crowd-funding2 application doesn't support any cross-application sessions")]
+    /// Crowd-funding application doesn't support any cross-application sessions.
+    #[error("Crowd-funding application doesn't support any cross-application sessions")]
     SessionsNotSupported,
 
     /// Failure to deserialize the initialization parameters.
-    #[error("Crowd-funding2 campaign parameters are invalid")]
+    #[error("Crowd-funding campaign parameters are invalid")]
     InvalidParameters(bcs::Error),
 
-    /// Crowd-funding2 campaigns can't start after its deadline.
-    #[error("Crowd-funding2 campaign can not start after its deadline")]
+    /// Crowd-funding campaign can't start after its deadline.
+    #[error("Crowd-funding campaign can not start after its deadline")]
     DeadlineInThePast,
 
     /// Operation bytes does not deserialize into an [`Operation`].
@@ -366,35 +365,35 @@ pub enum Error {
     #[error("Transfer is invalid because it can't be serialized")]
     InvalidTransfer(bcs::Error),
 
-    /// [`fungible2::ApplicationCall::Balance`] could not be serialized.
+    /// [`fungible::ApplicationCall::Balance`] could not be serialized.
     #[error("Can't check balance because the query can't be serialized")]
     InvalidBalanceQuery(bcs::Error),
 
-    /// Fungible2 Token application returned an invalid balance.
+    /// Fungible Token application returned an invalid balance.
     #[error("Received an invalid balance from token application")]
     InvalidBalance(bcs::Error),
 
-    /// [`fungible2::SessionCall::Balance`] could not be serialized.
+    /// [`fungible::SessionCall::Balance`] could not be serialized.
     #[error("Can't check session balance because the query can't be serialized")]
     InvalidSessionBalanceQuery(bcs::Error),
 
-    /// Fungible2 Token application returned an invalid session balance.
+    /// Fungible Token application returned an invalid session balance.
     #[error("Received an invalid session balance from token application")]
     InvalidSessionBalance(bcs::Error),
 
     /// Can't collect pledges before the campaign target has been reached.
-    #[error("Crowd-funding2 campaign has not reached its target yet")]
+    #[error("Crowd-funding campaign has not reached its target yet")]
     TargetNotReached,
 
     /// Can't cancel a campaign before its deadline.
-    #[error("Crowd-funding2 campaign has not reached its deadline yet")]
+    #[error("Crowd-funding campaign has not reached its deadline yet")]
     DeadlineNotReached,
 
     /// Can't cancel a campaign after it has been completed.
-    #[error("Crowd-funding2 campaign has already been completed")]
+    #[error("Crowd-funding campaign has already been completed")]
     Completed,
 
     /// Can't pledge to or collect pledges from a cancelled campaign.
-    #[error("Crowd-funding2 campaign has been cancelled")]
+    #[error("Crowd-funding campaign has been cancelled")]
     Cancelled,
 }
