@@ -13,6 +13,7 @@ use std::{
     sync::Mutex,
     time::Duration,
 };
+use std::rc::Rc;
 use tempfile::{tempdir, TempDir};
 use tokio::process::Child;
 
@@ -134,15 +135,90 @@ mod aws_test {
     }
 }
 
+struct Client {
+    tmp_dir: Rc<TempDir>,
+    storage: String,
+    wallet: String,
+    genesis: String,
+    max_pending_messages: usize
+}
+
+impl Client {
+    fn new(tmp_dir: Rc<TempDir>) -> Self {
+        Self {
+            tmp_dir,
+            storage: "rocksdb:client.db".to_string(),
+            wallet: "wallet.json".to_string(),
+            genesis: "genesis.json".to_string(),
+            max_pending_messages: 10_000
+        }
+    }
+
+    fn client_run(&self) -> tokio::process::Command {
+        let mut command = tokio::process::Command::new("cargo");
+        command
+            .current_dir(&self.tmp_dir.path().canonicalize().unwrap())
+            .kill_on_drop(true)
+            .arg("run")
+            .arg("--manifest-path")
+            .arg(env::current_dir().unwrap().join("Cargo.toml"))
+            .args(["--bin", "client"])
+            .arg("--")
+            .args(["--wallet", &self.wallet])
+            .args(["--genesis", &self.genesis]);
+        command
+    }
+
+    async fn generate_client_config(&self) {
+        self.client_run()
+            .args(["create_genesis_config", "10"])
+            .args(["--initial-funding", "10"])
+            .args(["--committee", "committee.json"])
+            .spawn()
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+    }
+
+    async fn publish_application(&self, contract: PathBuf, service: PathBuf, arg: u64) {
+        self.client_run()
+            .args(["--storage", "rocksdb:client.db"])
+            .args(["--max-pending-messages", &self.max_pending_messages.to_string()])
+            .arg("publish")
+            .args([contract, service])
+            .arg(arg.to_string())
+            .spawn()
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+    }
+
+    async fn run_node_service(&self) -> Child {
+        self.client_run()
+            .args(["--storage", &self.storage])
+            .args(["--max-pending-messages", "10000"])
+            .arg("service")
+            .spawn()
+            .unwrap()
+    }
+}
+
+
 struct TestRunner {
-    tmp_dir: TempDir,
+    tmp_dir: Rc<TempDir>,
 }
 
 impl TestRunner {
     fn new() -> Self {
         Self {
-            tmp_dir: tempdir().unwrap(),
+            tmp_dir: Rc::new(tempdir().unwrap()),
         }
+    }
+
+    fn tmp_dir(&self) -> Rc<TempDir> {
+        self.tmp_dir.clone()
     }
 
     fn cargo_run(&self) -> tokio::process::Command {
@@ -165,22 +241,6 @@ impl TestRunner {
             .arg("server_2.json:grpc:127.0.0.1:9200:grpc:127.0.0.1:10200:127.0.0.1:9201:127.0.0.1:9202:127.0.0.1:9203:127.0.0.1:9204")
             .arg("server_3.json:grpc:127.0.0.1:9300:grpc:127.0.0.1:10300:127.0.0.1:9301:127.0.0.1:9302:127.0.0.1:9303:127.0.0.1:9304")
             .arg("server_4.json:grpc:127.0.0.1:9400:grpc:127.0.0.1:10400:127.0.0.1:9401:127.0.0.1:9402:127.0.0.1:9403:127.0.0.1:9404")
-            .args(["--committee", "committee.json"])
-            .spawn()
-            .unwrap()
-            .wait()
-            .await
-            .unwrap();
-    }
-
-    async fn generate_client_config(&self) {
-        self.cargo_run()
-            .args(["--bin", "client"])
-            .arg("--")
-            .args(["--wallet", "wallet.json"])
-            .args(["--genesis", "genesis.json"])
-            .args(["create_genesis_config", "10"])
-            .args(["--initial-funding", "10"])
             .args(["--committee", "committee.json"])
             .spawn()
             .unwrap()
@@ -245,37 +305,6 @@ impl TestRunner {
             examples_dir.join("target/wasm32-unknown-unknown/release/counter_graphql_service.wasm");
 
         (contract, service)
-    }
-
-    async fn publish_application(&self, contract: PathBuf, service: PathBuf, arg: u64) {
-        self.cargo_run()
-            .args(["--bin", "client"])
-            .arg("--")
-            .args(["--storage", "rocksdb:client.db"])
-            .args(["--wallet", "wallet.json"])
-            .args(["--genesis", "genesis.json"])
-            .args(["--max-pending-messages", "10000"])
-            .arg("publish")
-            .args([contract, service])
-            .arg(arg.to_string())
-            .spawn()
-            .unwrap()
-            .wait()
-            .await
-            .unwrap();
-    }
-
-    async fn run_node_service(&self) -> Child {
-        self.cargo_run()
-            .args(["--bin", "client"])
-            .arg("--")
-            .args(["--storage", "rocksdb:client.db"])
-            .args(["--wallet", "wallet.json"])
-            .args(["--genesis", "genesis.json"])
-            .args(["--max-pending-messages", "10000"])
-            .arg("service")
-            .spawn()
-            .unwrap()
     }
 }
 
@@ -343,21 +372,23 @@ async fn end_to_end() {
     let _guard = README_GUARD.lock().unwrap();
 
     let runner = TestRunner::new();
+    let client = Client::new(runner.tmp_dir());
+
     let original_counter_value = 35;
     let increment = 5;
 
     runner.generate_server_config().await;
-    runner.generate_client_config().await;
+    client.generate_client_config().await;
     let _local_net = runner.run_local_net();
     let (contract, service) = runner.build_application().await;
 
     // wait for net to start
     tokio::time::sleep(Duration::from_millis(10_000)).await;
 
-    runner
+    client
         .publish_application(contract, service, original_counter_value)
         .await;
-    let _node_service = runner.run_node_service().await;
+    let _node_service = client.run_node_service().await;
 
     // wait for node service to start
     tokio::time::sleep(Duration::from_millis(1_000)).await;
