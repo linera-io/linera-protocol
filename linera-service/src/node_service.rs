@@ -529,7 +529,7 @@ where
             .route_service("/ws", GraphQLSubscription::new(schema.clone()))
             .layer(Extension(client))
             .layer(Extension(self.port))
-            // this will be removed when we have a browser extension wallet.
+            // TODO(#551): Provide application authentication.
             .layer(CorsLayer::permissive());
 
         let port = self.port.get();
