@@ -12,7 +12,7 @@ use linera_views::{
     common::Context,
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
     log_view::LogView,
-    lru_key_value_client::LruCachingMemoryContext,
+    lru_caching::LruCachingMemoryContext,
     map_view::MapView,
     memory::{MemoryContext, MemoryStoreMap},
     queue_view::QueueView,
