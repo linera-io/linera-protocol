@@ -38,13 +38,13 @@ use tower_http::cors::CorsLayer;
 use tracing::{error, info};
 
 /// Our root GraphQL query type.
-struct QueryRoot<P, S>(Arc<Mutex<ChainClient<P, S>>>);
+struct QueryRoot<P, S>(Arc<Mutex<NodeService<P, S>>>);
 
 /// Our root GraphQL subscription type.
-struct SubscriptionRoot<P, S>(Arc<Mutex<ChainClient<P, S>>>);
+struct SubscriptionRoot<P, S>(Arc<Mutex<NodeService<P, S>>>);
 
 /// Our root GraphQL mutation type.
-struct MutationRoot<P, S>(Arc<Mutex<ChainClient<P, S>>>);
+struct MutationRoot<P, S>(Arc<Mutex<NodeService<P, S>>>);
 
 #[derive(Debug, ThisError)]
 enum NodeServiceError {
@@ -107,7 +107,7 @@ where
         &self,
         chain_ids: Vec<ChainId>,
     ) -> Result<impl Stream<Item = Notification>, Error> {
-        Ok(self.0.lock().await.subscribe_all(chain_ids).await?)
+        Ok(self.0.lock().await.client.subscribe_all(chain_ids).await?)
     }
 }
 
@@ -123,9 +123,12 @@ where
     ) -> Result<Certificate, Error> {
         let application_id = ApplicationId::System;
         let operation = Operation::System(system_operation);
-        let mut client = self.0.lock().await;
-        client.process_inbox().await?;
-        Ok(client.execute_operation(application_id, operation).await?)
+        let mut service = self.0.lock().await;
+        service.client.process_inbox().await?;
+        Ok(service
+            .client
+            .execute_operation(application_id, operation)
+            .await?)
     }
 }
 
@@ -303,7 +306,13 @@ where
         &self,
         chain_id: Option<ChainId>,
     ) -> Result<Arc<ChainStateView<S::Context>>, Error> {
-        Ok(self.0.lock().await.chain_state_view(chain_id).await?)
+        Ok(self
+            .0
+            .lock()
+            .await
+            .client
+            .chain_state_view(chain_id)
+            .await?)
     }
 
     async fn applications(
@@ -314,6 +323,7 @@ where
             .0
             .lock()
             .await
+            .client
             .chain_state_view(chain_id)
             .await?
             .execution_state
@@ -350,7 +360,7 @@ impl From<(UserApplicationId, UserApplicationDescription)> for ApplicationOvervi
 
 /// Execute a GraphQL query and generate a response for our `Schema`.
 async fn index_handler<P, S>(
-    client: Extension<Arc<Mutex<ChainClient<P, S>>>>,
+    client: Extension<Arc<Mutex<NodeService<P, S>>>>,
     req: GraphQLRequest,
 ) -> GraphQLResponse
 where
@@ -511,15 +521,16 @@ where
 
     /// Run the node service.
     pub async fn run(self) -> Result<(), anyhow::Error> {
-        let client = Arc::new(Mutex::new(self.client));
+        let port = self.port.get();
+        let service = Arc::new(Mutex::new(self));
 
         let index_handler = get(graphiql).post(index_handler::<P, S>);
         let applications_handler = get(graphiql).post(application_handler::<P, S>);
 
         let schema = Schema::build(
-            QueryRoot(client.clone()),
-            MutationRoot(client.clone()),
-            SubscriptionRoot(client.clone()),
+            QueryRoot(service.clone()),
+            MutationRoot(service.clone()),
+            SubscriptionRoot(service.clone()),
         )
         .finish();
 
@@ -527,12 +538,9 @@ where
             .route("/", index_handler)
             .route("/applications/:id", applications_handler)
             .route_service("/ws", GraphQLSubscription::new(schema.clone()))
-            .layer(Extension(client))
-            .layer(Extension(self.port))
+            .layer(Extension(service))
             // TODO(#551): Provide application authentication.
             .layer(CorsLayer::permissive());
-
-        let port = self.port.get();
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
