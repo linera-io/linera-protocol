@@ -329,6 +329,7 @@ where
 
         let overviews = applications
             .into_iter()
+            .map(|(id, description)| (id, description, self.0.port))
             .map(ApplicationOverview::from)
             .collect();
 
@@ -343,14 +344,20 @@ pub struct ApplicationOverview {
     link: String,
 }
 
-impl From<(UserApplicationId, UserApplicationDescription)> for ApplicationOverview {
-    fn from((id, description): (UserApplicationId, UserApplicationDescription)) -> Self {
+impl From<(UserApplicationId, UserApplicationDescription, NonZeroU16)> for ApplicationOverview {
+    fn from(
+        (id, description, port): (UserApplicationId, UserApplicationDescription, NonZeroU16),
+    ) -> Self {
         let id_bytes = bcs::to_bytes(&id).expect("user application ids should be bcs serializable");
         let encoded_id = hex::encode(id_bytes);
         Self {
             id,
             description,
-            link: format!("http://localhost:{}/applications/{}", 8080, encoded_id),
+            link: format!(
+                "http://localhost:{}/applications/{}",
+                port.get(),
+                encoded_id
+            ),
         }
     }
 }
@@ -380,7 +387,7 @@ where
 /// accordingly.
 async fn application_handler<P, S>(
     Path(user_application_id): Path<String>,
-    client: Extension<Arc<Mutex<ChainClient<P, S>>>>,
+    service: Extension<Arc<NodeService<P, S>>>,
     req: GraphQLRequest,
 ) -> Result<GraphQLResponse, NodeServiceError>
 where
@@ -398,8 +405,8 @@ where
     let application_id = ApplicationId::User(user_application_id);
 
     let response = match operation_type {
-        OperationType::Query => user_application_query(application_id, client, &req).await?,
-        OperationType::Mutation => user_application_mutation(application_id, client, &req).await?,
+        OperationType::Query => user_application_query(application_id, service, &req).await?,
+        OperationType::Mutation => user_application_mutation(application_id, service, &req).await?,
         OperationType::Subscription => return Err(NodeServiceError::UnsupportedQueryType),
     };
 
@@ -429,7 +436,7 @@ fn operation_type(document: &ExecutableDocument) -> Result<OperationType, NodeSe
 /// Handles queries for user applications.
 async fn user_application_query<P, S>(
     application_id: ApplicationId,
-    client: Extension<Arc<Mutex<ChainClient<P, S>>>>,
+    service: Extension<Arc<NodeService<P, S>>>,
     req: &Request,
 ) -> Result<async_graphql::Response, NodeServiceError>
 where
@@ -439,8 +446,9 @@ where
 {
     let serialized_request = serde_json::to_vec(&req)?;
     let query = Query::User(serialized_request);
-    let response = client
+    let response = service
         .0
+        .client
         .lock()
         .await
         .query_application(application_id, &query)
@@ -455,7 +463,7 @@ where
 /// Handles mutations for user applications.
 async fn user_application_mutation<P, S>(
     application_id: ApplicationId,
-    client: Extension<Arc<Mutex<ChainClient<P, S>>>>,
+    service: Extension<Arc<NodeService<P, S>>>,
     req: &Request,
 ) -> Result<async_graphql::Response, NodeServiceError>
 where
@@ -463,13 +471,13 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    let graphql_res = user_application_query(application_id, client.clone(), req).await?;
+    let graphql_res = user_application_query(application_id, service.clone(), req).await?;
     let res_json = graphql_res.data.into_json()?;
     let bcs_bytes =
         bytes_from_res(res_json).ok_or(NodeServiceError::MalformedApplicationResponse)?;
     let operation = Operation::User(bcs_bytes);
 
-    let mut client = client.0.lock().await;
+    let mut client = service.0.client.lock().await;
     client.process_inbox().await?;
     let certificate = client.execute_operation(application_id, operation).await?;
     let value = async_graphql::Value::from_json(serde_json::to_value(certificate)?)?;
