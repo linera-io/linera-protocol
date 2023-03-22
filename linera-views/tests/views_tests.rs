@@ -12,6 +12,7 @@ use linera_views::{
     common::Context,
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
     log_view::LogView,
+    lru_caching::LruCachingMemoryContext,
     map_view::MapView,
     memory::{MemoryContext, MemoryStoreMap},
     queue_view::QueueView,
@@ -95,6 +96,29 @@ impl StateStore for KeyValueStoreTestStore {
         let guard = state.clone().lock_arc().await;
         let base_key = bcs::to_bytes(&id)?;
         let context = KeyValueStoreMemoryContext::new(guard, base_key, id).await?;
+        StateView::load(context).await
+    }
+}
+
+#[derive(Default)]
+pub struct LruMemoryStore {
+    states: HashMap<usize, Arc<Mutex<MemoryStoreMap>>>,
+}
+
+#[async_trait]
+impl StateStore for LruMemoryStore {
+    type Context = LruCachingMemoryContext<usize>;
+
+    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
+        let state = self
+            .states
+            .entry(id)
+            .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
+        tracing::trace!("Acquiring lock on {:?}", id);
+        let guard = state.clone().lock_arc().await;
+        let base_key = bcs::to_bytes(&id)?;
+        let n = 1000;
+        let context = LruCachingMemoryContext::new(guard, base_key, id, n).await?;
         StateView::load(context).await
     }
 }
@@ -549,6 +573,23 @@ where
         view.write_delete().await.unwrap();
     }
     staged_hash
+}
+
+#[cfg(test)]
+async fn test_views_in_lru_memory_param(config: &TestConfig) {
+    tracing::warn!("Testing config {:?} with lru memory", config);
+    let mut store = LruMemoryStore::default();
+    test_store(&mut store, config).await;
+    assert_eq!(store.states.len(), 1);
+    let entry = store.states.get(&1).unwrap().clone();
+    assert!(entry.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn test_views_in_lru_memory() {
+    for config in TestConfig::samples() {
+        test_views_in_lru_memory_param(&config).await
+    }
 }
 
 #[cfg(test)]

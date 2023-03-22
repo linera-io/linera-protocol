@@ -13,8 +13,11 @@ pub mod batch;
 /// The definitions used for the memory/rocksdb/dynamo_db
 pub mod common;
 
-/// The main definitions.
+/// The main definitions
 pub mod views;
+
+/// The lru caching
+pub mod lru_caching;
 
 /// The register_view
 pub mod register_view;
