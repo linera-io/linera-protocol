@@ -32,7 +32,7 @@ pub struct QueueView<C, T> {
     context: C,
     stored_indices: Range<usize>,
     front_delete_count: usize,
-    delete_indices: bool,
+    was_cleared: bool,
     new_back_values: VecDeque<T>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -58,7 +58,7 @@ where
             context,
             stored_indices,
             front_delete_count: 0,
-            delete_indices: false,
+            was_cleared: false,
             new_back_values: VecDeque::new(),
             stored_hash: hash,
             hash: Mutex::new(hash),
@@ -66,6 +66,7 @@ where
     }
 
     fn rollback(&mut self) {
+        self.was_cleared = false;
         self.front_delete_count = 0;
         self.new_back_values.clear();
         *self.hash.get_mut() = self.stored_hash;
@@ -73,11 +74,10 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         let mut save_stored_indices = false;
-        if self.delete_indices {
+        if self.was_cleared {
             let key_prefix = self.context.base_tag(KeyTag::Index as u8);
             batch.delete_key_prefix(key_prefix);
-            self.stored_indices.start += self.front_delete_count;
-            self.stored_indices.end = self.stored_indices.start;
+            self.stored_indices = Range::default();
             save_stored_indices = true;
         } else if self.front_delete_count > 0 {
             let deletion_range = self.stored_indices.clone().take(self.front_delete_count);
@@ -104,7 +104,7 @@ where
             batch.put_key_value(key, &self.stored_indices)?;
         }
         self.front_delete_count = 0;
-        self.delete_indices = false;
+        self.was_cleared = false;
         let hash = *self.hash.get_mut();
         if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
@@ -122,7 +122,7 @@ where
     }
 
     fn clear(&mut self) {
-        self.front_delete_count = self.stored_indices.len();
+        self.was_cleared = true;
         self.new_back_values.clear();
         *self.hash.get_mut() = None;
     }
@@ -142,7 +142,7 @@ where
     /// Read the front value, if any.
     pub async fn front(&self) -> Result<Option<T>, ViewError> {
         let stored_remainder = self.stored_indices.len() - self.front_delete_count;
-        let value = if !self.delete_indices && stored_remainder > 0 {
+        let value = if !self.was_cleared && stored_remainder > 0 {
             self.get(self.stored_indices.end - stored_remainder).await?
         } else {
             self.new_back_values.front().cloned()
@@ -154,7 +154,7 @@ where
     pub async fn back(&self) -> Result<Option<T>, ViewError> {
         let value = match self.new_back_values.back() {
             Some(value) => Some(value.clone()),
-            None if !self.delete_indices && self.stored_indices.len() > self.front_delete_count => {
+            None if !self.was_cleared && self.stored_indices.len() > self.front_delete_count => {
                 self.get(self.stored_indices.end - 1).await?
             }
             _ => None,
@@ -165,7 +165,7 @@ where
     /// Delete the front value, if any.
     pub fn delete_front(&mut self) {
         *self.hash.get_mut() = None;
-        if self.front_delete_count < self.stored_indices.len() && !self.delete_indices {
+        if self.front_delete_count < self.stored_indices.len() && !self.was_cleared {
             self.front_delete_count += 1;
         } else {
             self.new_back_values.pop_front();
@@ -180,7 +180,7 @@ where
 
     /// Read the size of the queue.
     pub fn count(&self) -> usize {
-        if !self.delete_indices {
+        if !self.was_cleared {
             self.stored_indices.len() - self.front_delete_count + self.new_back_values.len()
         } else {
             self.new_back_values.len()
@@ -214,7 +214,7 @@ where
         }
         let mut values = Vec::new();
         values.reserve(count);
-        if !self.delete_indices {
+        if !self.was_cleared {
             let stored_remainder = self.stored_indices.len() - self.front_delete_count;
             let start = self.stored_indices.end - stored_remainder;
             if count <= stored_remainder {
@@ -244,7 +244,7 @@ where
         let mut values = Vec::new();
         values.reserve(count);
         let new_back_len = self.new_back_values.len();
-        if count <= new_back_len || self.delete_indices {
+        if count <= new_back_len || self.was_cleared {
             values.extend(
                 self.new_back_values
                     .range((new_back_len - count)..new_back_len)
@@ -273,7 +273,7 @@ where
     }
 
     async fn load_all(&mut self) -> Result<(), ViewError> {
-        if !self.delete_indices {
+        if !self.was_cleared {
             let stored_remainder = self.stored_indices.len() - self.front_delete_count;
             let start = self.stored_indices.end - stored_remainder;
             let elements = self.read_context(start..self.stored_indices.end).await?;
@@ -286,7 +286,7 @@ where
             // * Because a self.front_delete_count forces them to be removed
             // * Or because loading them means that their value can be changed which invalidates
             //   the entries on storage
-            self.delete_indices = true;
+            self.was_cleared = true;
         }
         Ok(())
     }

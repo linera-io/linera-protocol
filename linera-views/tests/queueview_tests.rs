@@ -16,17 +16,17 @@ async fn queue_view_mutability_check() {
     let context = create_test_context().await;
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     let mut vector = Vec::new();
-    let n = 100;
+    let n = 20;
     for _ in 0..n {
         let mut view = StateView::load(context.clone()).await.unwrap();
         let save = rng.gen::<bool>();
         let elements = view.queue.elements().await.unwrap();
         assert_eq!(elements, vector);
         //
-        let count_oper = rng.gen_range(0..5);
+        let count_oper = rng.gen_range(0..25);
         let mut new_vector = vector.clone();
         for _ in 0..count_oper {
-            let thr = rng.gen_range(0..3);
+            let thr = rng.gen_range(0..5);
             let count = view.queue.count();
             if thr == 0 {
                 // inserting random stuff
@@ -35,18 +35,17 @@ async fn queue_view_mutability_check() {
                     let val = rng.gen::<u8>();
                     view.queue.push_back(val);
                     new_vector.push(val);
-                    let new_elements = view.queue.elements().await.unwrap();
-                    assert_eq!(new_elements, new_vector);
                 }
             }
             if thr == 1 {
                 // deleting some entries
                 if count > 0 {
-                    view.queue.delete_front();
-                    // slow but we do not care for tests.
-                    new_vector.remove(0);
-                    let new_elements = view.queue.elements().await.unwrap();
-                    assert_eq!(new_elements, new_vector);
+                    let n_remove = rng.gen_range(0..count);
+                    for _ in 0..n_remove {
+                        view.queue.delete_front();
+                        // slow but we do not care for tests.
+                        new_vector.remove(0);
+                    }
                 }
             }
             if thr == 2 && count > 0 {
@@ -63,9 +62,19 @@ async fn queue_view_mutability_check() {
                 if let Some(value) = new_vector.get_mut(pos) {
                     *value = val;
                 }
-                let new_elements = view.queue.elements().await.unwrap();
-                assert_eq!(new_elements, new_vector);
             }
+            if thr == 3 {
+                // Doing the clearing
+                view.clear();
+                new_vector.clear();
+            }
+            if thr == 4 {
+                // Doing the rollback
+                view.rollback();
+                new_vector = vector.clone();
+            }
+            let new_elements = view.queue.elements().await.unwrap();
+            assert_eq!(new_elements, new_vector);
         }
         if save {
             vector = new_vector.clone();
