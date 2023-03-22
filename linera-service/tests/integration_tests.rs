@@ -50,8 +50,8 @@ fn test_examples_in_readme_simple() -> std::io::Result<()> {
 
 #[allow(clippy::while_let_on_iterator)]
 fn get_bash_quotes<R>(reader: R) -> std::io::Result<Vec<String>>
-    where
-        R: std::io::BufRead,
+where
+    R: std::io::BufRead,
 {
     let mut result = Vec::new();
     let mut lines = reader.lines();
@@ -74,7 +74,6 @@ fn get_bash_quotes<R>(reader: R) -> std::io::Result<Vec<String>>
 
     Ok(result)
 }
-
 
 #[cfg(feature = "aws")]
 mod aws_test {
@@ -116,21 +115,21 @@ mod aws_test {
 #[derive(Copy, Clone)]
 enum Network {
     Grpc,
-    Simple
+    Simple,
 }
 
 impl Network {
     fn internal(&self) -> &'static str {
         match self {
             Network::Grpc => "grpc",
-            Network::Simple => "udp"
+            Network::Simple => "udp",
         }
     }
 
     fn external(&self) -> &'static str {
         match self {
             Network::Grpc => "grpc",
-            Network::Simple => "tcp"
+            Network::Simple => "tcp",
         }
     }
 }
@@ -141,7 +140,7 @@ struct Client {
     wallet: String,
     genesis: String,
     max_pending_messages: usize,
-    network: Network
+    network: Network,
 }
 
 impl Client {
@@ -152,7 +151,7 @@ impl Client {
             wallet: "wallet.json".to_string(),
             genesis: "genesis.json".to_string(),
             max_pending_messages: 10_000,
-            network
+            network,
         }
     }
 
@@ -224,7 +223,8 @@ impl Client {
     }
 
     async fn query_balance(&self, chain_id: ChainId) -> anyhow::Result<usize> {
-        let output = self.client_run_with_storage()
+        let output = self
+            .client_run_with_storage()
             .arg("query_balance")
             .arg(&chain_id.to_string())
             .stdout(Stdio::piped())
@@ -307,14 +307,14 @@ impl Client {
 
 struct Validator {
     _proxy: Child,
-    servers: Vec<Child>
+    servers: Vec<Child>,
 }
 
 impl Validator {
     fn new(proxy: Child) -> Self {
         Self {
             _proxy: proxy,
-            servers: vec![]
+            servers: vec![],
         }
     }
 
@@ -329,14 +329,14 @@ impl Validator {
 
 struct TestRunner {
     tmp_dir: Rc<TempDir>,
-    network: Network
+    network: Network,
 }
 
 impl TestRunner {
     fn new(network: Network) -> Self {
         Self {
             tmp_dir: Rc::new(tempdir().unwrap()),
-            network
+            network,
         }
     }
 
@@ -384,12 +384,15 @@ impl TestRunner {
             .args(["--bin", "server"])
             .arg("generate")
             .arg("--validators")
-            .arg(&config.replace("X", &server_number.to_string()))
+            .arg(&config.replace('X', &server_number.to_string()))
             .stdout(Stdio::piped())
             .spawn()?
             .wait_with_output()
             .await?;
-        Ok(String::from_utf8_lossy(output.stdout.as_slice()).to_string().trim().to_string())
+        Ok(String::from_utf8_lossy(output.stdout.as_slice())
+            .to_string()
+            .trim()
+            .to_string())
     }
 
     fn run_proxy(&self, i: usize) -> Child {
@@ -620,18 +623,14 @@ async fn test_reconfiguration(network: Network) {
     tokio::time::sleep(Duration::from_millis(1_000)).await;
 
     // Add validator 5
-    client
-        .set_validator(&server_5, 9500, 100)
-        .await;
+    client.set_validator(&server_5, 9500, 100).await;
 
     assert_eq!(client.query_balance(chain_1).await.unwrap(), 5);
     client.query_validators(None).await;
     client.query_validators(Some(chain_1)).await;
 
     // Add validator 6
-    client
-        .set_validator(&server_6, 9600, 100)
-        .await;
+    client.set_validator(&server_6, 9600, 100).await;
 
     tokio::time::sleep(Duration::from_millis(1_000)).await;
 
