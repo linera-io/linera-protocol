@@ -166,7 +166,9 @@ impl SimpleProxy {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
 
     let proxy = Proxy::from_options(ProxyOptions::from_args())?;
     proxy.run().await
