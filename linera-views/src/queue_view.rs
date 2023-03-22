@@ -32,7 +32,6 @@ pub struct QueueView<C, T> {
     context: C,
     stored_indices: Range<usize>,
     front_delete_count: usize,
-    delete_indices: bool,
     new_back_values: VecDeque<T>,
     stored_hash: Option<HasherOutput>,
     hash: Mutex<Option<HasherOutput>>,
@@ -58,7 +57,6 @@ where
             context,
             stored_indices,
             front_delete_count: 0,
-            delete_indices: false,
             new_back_values: VecDeque::new(),
             stored_hash: hash,
             hash: Mutex::new(hash),
@@ -73,13 +71,7 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         let mut save_stored_indices = false;
-        if self.delete_indices {
-            let key_prefix = self.context.base_tag(KeyTag::Index as u8);
-            batch.delete_key_prefix(key_prefix);
-            self.stored_indices.start += self.front_delete_count;
-            self.stored_indices.end = self.stored_indices.start;
-            save_stored_indices = true;
-        } else if self.front_delete_count > 0 {
+        if self.front_delete_count > 0 {
             let deletion_range = self.stored_indices.clone().take(self.front_delete_count);
             self.stored_indices.start += self.front_delete_count;
             save_stored_indices = true;
@@ -104,7 +96,6 @@ where
             batch.put_key_value(key, &self.stored_indices)?;
         }
         self.front_delete_count = 0;
-        self.delete_indices = false;
         let hash = *self.hash.get_mut();
         if self.stored_hash != hash {
             let key = self.context.base_tag(KeyTag::Hash as u8);
@@ -142,7 +133,7 @@ where
     /// Read the front value, if any.
     pub async fn front(&self) -> Result<Option<T>, ViewError> {
         let stored_remainder = self.stored_indices.len() - self.front_delete_count;
-        let value = if !self.delete_indices && stored_remainder > 0 {
+        let value = if stored_remainder > 0 {
             self.get(self.stored_indices.end - stored_remainder).await?
         } else {
             self.new_back_values.front().cloned()
@@ -154,7 +145,7 @@ where
     pub async fn back(&self) -> Result<Option<T>, ViewError> {
         let value = match self.new_back_values.back() {
             Some(value) => Some(value.clone()),
-            None if !self.delete_indices && self.stored_indices.len() > self.front_delete_count => {
+            None if self.stored_indices.len() > self.front_delete_count => {
                 self.get(self.stored_indices.end - 1).await?
             }
             _ => None,
@@ -165,7 +156,7 @@ where
     /// Delete the front value, if any.
     pub fn delete_front(&mut self) {
         *self.hash.get_mut() = None;
-        if self.front_delete_count < self.stored_indices.len() && !self.delete_indices {
+        if self.front_delete_count < self.stored_indices.len() {
             self.front_delete_count += 1;
         } else {
             self.new_back_values.pop_front();
@@ -180,11 +171,7 @@ where
 
     /// Read the size of the queue.
     pub fn count(&self) -> usize {
-        if !self.delete_indices {
-            self.stored_indices.len() - self.front_delete_count + self.new_back_values.len()
-        } else {
-            self.new_back_values.len()
-        }
+        self.stored_indices.len() - self.front_delete_count + self.new_back_values.len()
     }
 
     /// Obtain the extra data.
@@ -214,21 +201,17 @@ where
         }
         let mut values = Vec::new();
         values.reserve(count);
-        if !self.delete_indices {
-            let stored_remainder = self.stored_indices.len() - self.front_delete_count;
-            let start = self.stored_indices.end - stored_remainder;
-            if count <= stored_remainder {
-                values.extend(self.read_context(start..(start + count)).await?);
-            } else {
-                values.extend(self.read_context(start..self.stored_indices.end).await?);
-                values.extend(
-                    self.new_back_values
-                        .range(0..(count - stored_remainder))
-                        .cloned(),
-                );
-            }
+        let stored_remainder = self.stored_indices.len() - self.front_delete_count;
+        let start = self.stored_indices.end - stored_remainder;
+        if count <= stored_remainder {
+            values.extend(self.read_context(start..(start + count)).await?);
         } else {
-            values.extend(self.new_back_values.range(0..count).cloned());
+            values.extend(self.read_context(start..self.stored_indices.end).await?);
+            values.extend(
+                self.new_back_values
+                    .range(0..(count - stored_remainder))
+                    .cloned(),
+            );
         }
         Ok(values)
     }
@@ -244,7 +227,7 @@ where
         let mut values = Vec::new();
         values.reserve(count);
         let new_back_len = self.new_back_values.len();
-        if count <= new_back_len || self.delete_indices {
+        if count <= new_back_len {
             values.extend(
                 self.new_back_values
                     .range((new_back_len - count)..new_back_len)
@@ -273,21 +256,15 @@ where
     }
 
     async fn load_all(&mut self) -> Result<(), ViewError> {
-        if !self.delete_indices {
-            let stored_remainder = self.stored_indices.len() - self.front_delete_count;
-            let start = self.stored_indices.end - stored_remainder;
-            let elements = self.read_context(start..self.stored_indices.end).await?;
-            let shift = self.stored_indices.end - start;
-            for elt in elements {
-                self.new_back_values.push_back(elt);
-            }
-            self.new_back_values.rotate_right(shift);
-            // All indices are being deleted at the next flush. This is because they are deleted either:
-            // * Because a self.front_delete_count forces them to be removed
-            // * Or because loading them means that their value can be changed which invalidates
-            //   the entries on storage
-            self.delete_indices = true;
+        let stored_remainder = self.stored_indices.len() - self.front_delete_count;
+        let start = self.stored_indices.end - stored_remainder;
+        let elements = self.read_context(start..self.stored_indices.end).await?;
+        let shift = self.stored_indices.end - start;
+        for elt in elements {
+            self.new_back_values.push_back(elt);
         }
+        self.new_back_values.rotate_right(shift);
+        self.front_delete_count = self.stored_indices.len();
         Ok(())
     }
 
