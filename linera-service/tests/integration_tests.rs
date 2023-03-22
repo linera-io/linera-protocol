@@ -50,8 +50,8 @@ fn test_examples_in_readme_simple() -> std::io::Result<()> {
 
 #[allow(clippy::while_let_on_iterator)]
 fn get_bash_quotes<R>(reader: R) -> std::io::Result<Vec<String>>
-where
-    R: std::io::BufRead,
+    where
+        R: std::io::BufRead,
 {
     let mut result = Vec::new();
     let mut lines = reader.lines();
@@ -74,6 +74,7 @@ where
 
     Ok(result)
 }
+
 
 #[cfg(feature = "aws")]
 mod aws_test {
@@ -112,22 +113,46 @@ mod aws_test {
     }
 }
 
+#[derive(Copy, Clone)]
+enum Network {
+    Grpc,
+    Simple
+}
+
+impl Network {
+    fn internal(&self) -> &'static str {
+        match self {
+            Network::Grpc => "grpc",
+            Network::Simple => "udp"
+        }
+    }
+
+    fn external(&self) -> &'static str {
+        match self {
+            Network::Grpc => "grpc",
+            Network::Simple => "tcp"
+        }
+    }
+}
+
 struct Client {
     tmp_dir: Rc<TempDir>,
     storage: String,
     wallet: String,
     genesis: String,
     max_pending_messages: usize,
+    network: Network
 }
 
 impl Client {
-    fn new(tmp_dir: Rc<TempDir>) -> Self {
+    fn new(tmp_dir: Rc<TempDir>, network: Network) -> Self {
         Self {
             tmp_dir,
             storage: "rocksdb:client.db".to_string(),
             wallet: "wallet.json".to_string(),
             genesis: "genesis.json".to_string(),
             max_pending_messages: 10_000,
+            network
         }
     }
 
@@ -254,11 +279,12 @@ impl Client {
         wallet.get(chain).is_some()
     }
 
-    async fn set_validator(&self, name: &str, address: &str, votes: usize) {
+    async fn set_validator(&self, name: &str, port: usize, votes: usize) {
+        let address = format!("{}:127.0.0.1:{}", self.network.external(), port);
         self.client_run_with_storage()
             .arg("set_validator")
             .args(["--name", name])
-            .args(["--address", address])
+            .args(["--address", &address])
             .args(["--votes", &votes.to_string()])
             .spawn()
             .unwrap()
@@ -303,12 +329,14 @@ impl Validator {
 
 struct TestRunner {
     tmp_dir: Rc<TempDir>,
+    network: Network
 }
 
 impl TestRunner {
-    fn new() -> Self {
+    fn new(network: Network) -> Self {
         Self {
             tmp_dir: Rc::new(tempdir().unwrap()),
+            network
         }
     }
 
@@ -328,14 +356,18 @@ impl TestRunner {
     }
 
     async fn generate_initial_server_config(&self) {
+        let server_1 = format!("server_1.json:{}:127.0.0.1:9100:{}:127.0.0.1:10100:127.0.0.1:9101:127.0.0.1:9102:127.0.0.1:9103:127.0.0.1:9104", self.network.external(), self.network.internal());
+        let server_2 = format!("server_2.json:{}:127.0.0.1:9200:{}:127.0.0.1:10200:127.0.0.1:9201:127.0.0.1:9202:127.0.0.1:9203:127.0.0.1:9204", self.network.external(), self.network.internal());
+        let server_3 = format!("server_3.json:{}:127.0.0.1:9300:{}:127.0.0.1:10300:127.0.0.1:9301:127.0.0.1:9302:127.0.0.1:9303:127.0.0.1:9304", self.network.external(), self.network.internal());
+        let server_4 = format!("server_4.json:{}:127.0.0.1:9400:{}:127.0.0.1:10400:127.0.0.1:9401:127.0.0.1:9402:127.0.0.1:9403:127.0.0.1:9404", self.network.external(), self.network.internal());
         self.cargo_run()
             .args(["--bin", "server"])
             .arg("generate")
             .arg("--validators")
-            .arg("server_1.json:grpc:127.0.0.1:9100:grpc:127.0.0.1:10100:127.0.0.1:9101:127.0.0.1:9102:127.0.0.1:9103:127.0.0.1:9104")
-            .arg("server_2.json:grpc:127.0.0.1:9200:grpc:127.0.0.1:10200:127.0.0.1:9201:127.0.0.1:9202:127.0.0.1:9203:127.0.0.1:9204")
-            .arg("server_3.json:grpc:127.0.0.1:9300:grpc:127.0.0.1:10300:127.0.0.1:9301:127.0.0.1:9302:127.0.0.1:9303:127.0.0.1:9304")
-            .arg("server_4.json:grpc:127.0.0.1:9400:grpc:127.0.0.1:10400:127.0.0.1:9401:127.0.0.1:9402:127.0.0.1:9403:127.0.0.1:9404")
+            .arg(&server_1)
+            .arg(&server_2)
+            .arg(&server_3)
+            .arg(&server_4)
             .args(["--committee", "committee.json"])
             .spawn()
             .unwrap()
@@ -345,14 +377,14 @@ impl TestRunner {
     }
 
     async fn generate_server_config(&self, server_number: usize) -> anyhow::Result<String> {
-        let config = "server_{}.json:grpc:127.0.0.1:9{}00:grpc:127.0.0.1:10{}00:127.0.0.1:9{}01:127.0.0.1:9{}02:127.0.0.1:9{}03:127.0.0.1:9{}04";
+        let config = format!("server_X.json:{}:127.0.0.1:9X00:{}:127.0.0.1:10X00:127.0.0.1:9X01:127.0.0.1:9X02:127.0.0.1:9X03:127.0.0.1:9X04", self.network.external(), self.network.internal());
         let output = self
             .cargo_run()
             .env("RUST_LOG", "ERROR")
             .args(["--bin", "server"])
             .arg("generate")
             .arg("--validators")
-            .arg(&config.replace("{}", &server_number.to_string()))
+            .arg(&config.replace("X", &server_number.to_string()))
             .stdout(Stdio::piped())
             .spawn()?
             .wait_with_output()
@@ -485,8 +517,9 @@ async fn increment_counter_value(application_uri: &str, increment: u64) {
 async fn end_to_end() {
     let _guard = README_GUARD.lock().unwrap();
 
-    let runner = TestRunner::new();
-    let client = Client::new(runner.tmp_dir());
+    let network = Network::Grpc;
+    let runner = TestRunner::new(network);
+    let client = Client::new(runner.tmp_dir(), network);
 
     let original_counter_value = 35;
     let increment = 5;
@@ -520,11 +553,21 @@ async fn end_to_end() {
 
 #[tokio::test]
 #[allow(clippy::await_holding_lock)]
-async fn test_examples_in_readme_grpc() {
+async fn reconfiguration_test_grpc() {
     let _guard = README_GUARD.lock().unwrap();
+    test_reconfiguration(Network::Grpc).await;
+}
 
-    let runner = TestRunner::new();
-    let client = Client::new(runner.tmp_dir());
+#[tokio::test]
+#[allow(clippy::await_holding_lock)]
+async fn reconfiguration_test_simple() {
+    let _guard = README_GUARD.lock().unwrap();
+    test_reconfiguration(Network::Simple).await;
+}
+
+async fn test_reconfiguration(network: Network) {
+    let runner = TestRunner::new(network);
+    let client = Client::new(runner.tmp_dir(), network);
 
     runner.generate_initial_server_config().await;
     client.generate_client_config().await;
@@ -578,7 +621,7 @@ async fn test_examples_in_readme_grpc() {
 
     // Add validator 5
     client
-        .set_validator(&server_5, "grpc:127.0.0.1:9500", 100)
+        .set_validator(&server_5, 9500, 100)
         .await;
 
     assert_eq!(client.query_balance(chain_1).await.unwrap(), 5);
@@ -587,7 +630,7 @@ async fn test_examples_in_readme_grpc() {
 
     // Add validator 6
     client
-        .set_validator(&server_6, "grpc:127.0.0.1:9600", 100)
+        .set_validator(&server_6, 9600, 100)
         .await;
 
     tokio::time::sleep(Duration::from_millis(1_000)).await;
