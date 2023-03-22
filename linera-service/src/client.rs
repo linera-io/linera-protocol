@@ -974,7 +974,9 @@ where
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
     let options = ClientOptions::from_args();
     let mut context = ClientContext::from_options(&options);
     match options.command {

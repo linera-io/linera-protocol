@@ -370,7 +370,9 @@ fn parse_duration(s: &str) -> Result<u64, parse_duration::parse::Error> {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
     let options = ServerOptions::from_args();
 
     match options.command {
