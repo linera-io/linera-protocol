@@ -50,6 +50,7 @@ metrics = "0.20.1"
 metrics-util = "0.14.0"
 portable-atomic = "0.3.19"
 proptest = "1.0.0"
+social = { path = "../linera-examples/social" }
 tempfile = "3.2.0"
 test-case = "3.0.0"
 test-log = { version = "0.2.11", default-features = false, features = ["trace"] }

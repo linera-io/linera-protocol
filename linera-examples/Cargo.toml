@@ -12,6 +12,7 @@ members = [
         "fungible2",
         "reentrant-counter",
         "reentrant-counter2",
+        "social",
 ]
 
 [profile.release]

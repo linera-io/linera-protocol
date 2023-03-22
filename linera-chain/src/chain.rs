@@ -574,8 +574,8 @@ where
                     let outbox = outboxes.load_entry_mut(&Target::channel(id, name)).await?;
                     outbox.schedule_message(*latest_height)?;
                 }
+                channel.subscribers.insert(&id)?;
             }
-            channel.subscribers.insert(&id)?;
         }
         Ok(())
     }
