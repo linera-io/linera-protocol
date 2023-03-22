@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use std::{
     env,
     io::Write,
+    ops::Range,
     path::PathBuf,
     process::{Command, Stdio},
     rc::Rc,
@@ -33,33 +34,6 @@ fn test_examples_in_readme_simple() -> std::io::Result<()> {
     // Check that we have the expected number of examples starting with "```bash".
     assert_eq!(quotes.len(), 1);
     let quote = quotes.pop().unwrap();
-
-    let mut test_script = std::fs::File::create(dir.path().join("test.sh"))?;
-    write!(&mut test_script, "{}", quote)?;
-
-    let status = Command::new("bash")
-        .current_dir("..") // root of the repo
-        .arg("-e")
-        .arg("-x")
-        .arg(dir.path().join("test.sh"))
-        .status()?;
-    assert!(status.success());
-    Ok(())
-}
-
-#[test]
-fn test_examples_in_readme_grpc() -> std::io::Result<()> {
-    let _guard = README_GUARD.lock().unwrap();
-
-    let dir = tempdir().unwrap();
-    let file = std::io::BufReader::new(std::fs::File::open("../README.md")?);
-    let mut quotes = get_bash_quotes(file)?;
-    // Check that we have the expected number of examples starting with "```bash".
-    assert_eq!(quotes.len(), 1);
-    let mut quote = quotes.pop().unwrap();
-
-    quote = quote.replace("tcp", "grpc");
-    quote = quote.replace("udp", "grpc");
 
     let mut test_script = std::fs::File::create(dir.path().join("test.sh"))?;
     write!(&mut test_script, "{}", quote)?;
@@ -215,25 +189,25 @@ impl Client {
             .unwrap()
     }
 
-    async fn query_validators(&self) {
-        self.client_run_with_storage()
-            .arg("query_validators")
-            .spawn()
-            .unwrap()
-            .wait()
-            .await
-            .unwrap();
+    async fn query_validators(&self, chain_id: Option<ChainId>) {
+        let mut command = self.client_run_with_storage();
+        command.arg("query_validators");
+        if let Some(chain_id) = chain_id {
+            command.arg(&chain_id.to_string());
+        }
+        command.spawn().unwrap().wait().await.unwrap();
     }
 
-    async fn query_balance(&self, chain_id: ChainId) {
-        self.client_run_with_storage()
+    async fn query_balance(&self, chain_id: ChainId) -> anyhow::Result<usize> {
+        let output = self.client_run_with_storage()
             .arg("query_balance")
             .arg(&chain_id.to_string())
-            .spawn()
-            .unwrap()
-            .wait()
-            .await
-            .unwrap();
+            .stdout(Stdio::piped())
+            .spawn()?
+            .wait_with_output()
+            .await?;
+        let amount = String::from_utf8_lossy(output.stdout.as_slice()).to_string();
+        Ok(amount.trim().parse()?)
     }
 
     async fn transfer(&self, amount: usize, from: ChainId, to: ChainId) {
@@ -266,7 +240,6 @@ impl Client {
             .arg("open_chain")
             .args(["--from", &from.to_string()])
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
             .spawn()?
             .wait_with_output()
             .await?;
@@ -279,6 +252,52 @@ impl Client {
         let wallet =
             WalletState::read_or_create(self.tmp_dir.path().join(&self.wallet).as_path()).unwrap();
         wallet.get(chain).is_some()
+    }
+
+    async fn set_validator(&self, name: &str, address: &str, votes: usize) {
+        self.client_run_with_storage()
+            .arg("set_validator")
+            .args(["--name", name])
+            .args(["--address", address])
+            .args(["--votes", &votes.to_string()])
+            .spawn()
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+    }
+
+    async fn remove_validator(&self, name: &str) {
+        self.client_run_with_storage()
+            .arg("remove_validator")
+            .args(["--name", name])
+            .spawn()
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+    }
+}
+
+struct Validator {
+    _proxy: Child,
+    servers: Vec<Child>
+}
+
+impl Validator {
+    fn new(proxy: Child) -> Self {
+        Self {
+            _proxy: proxy,
+            servers: vec![]
+        }
+    }
+
+    fn add_server(&mut self, server: Child) {
+        self.servers.push(server)
+    }
+
+    fn kill_server(&mut self, index: usize) {
+        self.servers.remove(index);
     }
 }
 
@@ -308,7 +327,7 @@ impl TestRunner {
         command
     }
 
-    async fn generate_server_config(&self) {
+    async fn generate_initial_server_config(&self) {
         self.cargo_run()
             .args(["--bin", "server"])
             .arg("generate")
@@ -323,6 +342,22 @@ impl TestRunner {
             .wait()
             .await
             .unwrap();
+    }
+
+    async fn generate_server_config(&self, server_number: usize) -> anyhow::Result<String> {
+        let config = "server_{}.json:grpc:127.0.0.1:9{}00:grpc:127.0.0.1:10{}00:127.0.0.1:9{}01:127.0.0.1:9{}02:127.0.0.1:9{}03:127.0.0.1:9{}04";
+        let output = self
+            .cargo_run()
+            .env("RUST_LOG", "ERROR")
+            .args(["--bin", "server"])
+            .arg("generate")
+            .arg("--validators")
+            .arg(&config.replace("{}", &server_number.to_string()))
+            .stdout(Stdio::piped())
+            .spawn()?
+            .wait_with_output()
+            .await?;
+        Ok(String::from_utf8_lossy(output.stdout.as_slice()).to_string().trim().to_string())
     }
 
     fn run_proxy(&self, i: usize) -> Child {
@@ -346,17 +381,20 @@ impl TestRunner {
             .unwrap()
     }
 
-    fn run_local_net(&self) -> Vec<Child> {
-        let mut processes = vec![];
-        for i in 1..5 {
-            let process = self.run_proxy(i);
-            processes.push(process);
+    fn run_local_net(&self) -> Vec<Validator> {
+        self.start_validators(1..5)
+    }
+
+    fn start_validators(&self, validator_range: Range<usize>) -> Vec<Validator> {
+        let mut validators = vec![];
+        for i in validator_range {
+            let mut validator = Validator::new(self.run_proxy(i));
             for j in 0..4 {
-                let process = self.run_server(i, j);
-                processes.push(process);
+                validator.add_server(self.run_server(i, j));
             }
+            validators.push(validator);
         }
-        processes
+        validators
     }
 
     async fn build_application(&self) -> (PathBuf, PathBuf) {
@@ -453,7 +491,7 @@ async fn end_to_end() {
     let original_counter_value = 35;
     let increment = 5;
 
-    runner.generate_server_config().await;
+    runner.generate_initial_server_config().await;
     client.generate_client_config().await;
     let _local_net = runner.run_local_net();
     let (contract, service) = runner.build_application().await;
@@ -482,19 +520,19 @@ async fn end_to_end() {
 
 #[tokio::test]
 #[allow(clippy::await_holding_lock)]
-async fn test_grpc() {
+async fn test_examples_in_readme_grpc() {
     let _guard = README_GUARD.lock().unwrap();
 
     let runner = TestRunner::new();
     let client = Client::new(runner.tmp_dir());
 
-    runner.generate_server_config().await;
+    runner.generate_initial_server_config().await;
     client.generate_client_config().await;
     let mut local_net = runner.run_local_net();
 
     tokio::time::sleep(Duration::from_millis(5_000)).await;
 
-    client.query_validators().await;
+    client.query_validators(None).await;
 
     // Query balance for first and last user chain
     let chain_1 =
@@ -503,22 +541,22 @@ async fn test_grpc() {
     let chain_2 =
         ChainId::from_str("170883d704512b1682064639bdda0aab27756727af8e0dc5732bae70b2e15997")
             .unwrap();
-    client.query_balance(chain_1).await;
-    client.query_balance(chain_2).await;
+    assert_eq!(client.query_balance(chain_1).await.unwrap(), 10);
+    assert_eq!(client.query_balance(chain_2).await.unwrap(), 10);
 
     // Transfer 10 units then 5 back
     client.transfer(10, chain_1, chain_2).await;
     client.transfer(5, chain_2, chain_1).await;
 
     // Restart last server (dropping it kills the process)
-    let last = local_net.pop();
-    drop(last);
-    local_net.push(runner.run_server(4, 3));
+    let validator_4 = local_net.get_mut(3).unwrap();
+    validator_4.kill_server(3);
+    validator_4.add_server(runner.run_server(4, 3));
     tokio::time::sleep(Duration::from_millis(1_000)).await;
 
     // Query balances again
-    client.query_balance(chain_1).await;
-    client.query_balance(chain_2).await;
+    assert_eq!(client.query_balance(chain_1).await.unwrap(), 5);
+    assert_eq!(client.query_balance(chain_2).await.unwrap(), 15);
 
     // Launch local benchmark using all user chains
     client.benchmark(500).await;
@@ -528,4 +566,37 @@ async fn test_grpc() {
 
     // Inspect state of derived chain
     assert!(client.check_for_chain_in_wallet(chain_3).await);
+
+    // Create configurations for two more validators
+    let server_5 = runner.generate_server_config(5).await.unwrap();
+    let server_6 = runner.generate_server_config(6).await.unwrap();
+
+    // Start the validators
+    local_net.extend(runner.start_validators(5..7));
+
+    tokio::time::sleep(Duration::from_millis(1_000)).await;
+
+    // Add validator 5
+    client
+        .set_validator(&server_5, "grpc:127.0.0.1:9500", 100)
+        .await;
+
+    assert_eq!(client.query_balance(chain_1).await.unwrap(), 5);
+    client.query_validators(None).await;
+    client.query_validators(Some(chain_1)).await;
+
+    // Add validator 6
+    client
+        .set_validator(&server_6, "grpc:127.0.0.1:9600", 100)
+        .await;
+
+    tokio::time::sleep(Duration::from_millis(1_000)).await;
+
+    // Remove validator 5
+    client.remove_validator(&server_5).await;
+    local_net.remove(4);
+
+    assert_eq!(client.query_balance(chain_1).await.unwrap(), 5);
+    client.query_validators(None).await;
+    client.query_validators(Some(chain_1)).await;
 }
