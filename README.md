@@ -79,8 +79,6 @@ do
     done
 done
 
-LAST_PID="$!"
-
 # Command line prefix for client calls
 CLIENT=(./client --storage rocksdb:client.db --wallet wallet.json --genesis genesis.json --max-pending-messages 10000)
 
@@ -99,67 +97,9 @@ ${CLIENT[@]} query_balance "$CHAIN2"
 ${CLIENT[@]} transfer 10 --from "$CHAIN1" --to "$CHAIN2"
 ${CLIENT[@]} transfer 5 --from "$CHAIN2" --to "$CHAIN1"
 
-# Restart last server
-kill "$LAST_PID"
-./server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
-
-sleep 1
-
 # Query balances again
 ${CLIENT[@]} query_balance "$CHAIN1"
 ${CLIENT[@]} query_balance "$CHAIN2"
-
-# Launch local benchmark using all user chains
-${CLIENT[@]} benchmark --max-in-flight 500
-
-# Create derived chain
-CHAIN3="`${CLIENT[@]} open_chain --from "$CHAIN1"`"
-
-# Inspect state of derived chain
-fgrep '"chain_id":"'$CHAIN3'"' wallet.json
-
-# Query the balance of the first chain
-${CLIENT[@]} query_balance "$CHAIN1"
-
-# Create two more validators
-NAME5=$(./server generate --validators \
-   server_5.json:tcp:127.0.0.1:9500:udp:127.0.0.1:10500:127.0.0.1:11500:127.0.0.1:9501:127.0.0.1:9502:127.0.0.1:9503:127.0.0.1:9504)
-
-NAME6=$(./server generate --validators \
-   server_6.json:tcp:127.0.0.1:9600:udp:127.0.0.1:10600:127.0.0.1:11500:127.0.0.1:9601:127.0.0.1:9602:127.0.0.1:9603:127.0.0.1:9604)
-
-# Start the corresponding services
-for I in 6 5
-do
-    ./proxy server_"$I".json &
-
-    # hack!
-    PID5="$!"
-
-    for J in $(seq 0 3)
-    do
-        ./server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
-    done
-done
-
-sleep 1
-
-${CLIENT[@]} set_validator --name "$NAME5" --address tcp:127.0.0.1:9500 --votes 100
-
-${CLIENT[@]} query_balance "$CHAIN1"
-${CLIENT[@]} query_validators
-${CLIENT[@]} query_validators "$CHAIN1"
-
-${CLIENT[@]} set_validator --name "$NAME6" --address tcp:127.0.0.1:9600 --votes 1
-
-sleep 1
-
-${CLIENT[@]} remove_validator --name "$NAME5"
-kill "$PID5"
-
-${CLIENT[@]} query_balance "$CHAIN1"
-${CLIENT[@]} query_validators
-${CLIENT[@]} query_validators "$CHAIN1"
 
 cd ../..
 ```
