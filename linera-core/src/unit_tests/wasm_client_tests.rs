@@ -583,3 +583,170 @@ where
 
     Ok(())
 }
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
+    run_test_user_pub_sub_channels(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_rocksdb_user_pub_sub_channels(
+    wasm_runtime: WasmRuntime,
+) -> Result<(), anyhow::Error> {
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
+    run_test_user_pub_sub_channels(MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime)).await
+}
+
+#[cfg(feature = "aws")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_user_pub_sub_channels(
+    wasm_runtime: WasmRuntime,
+) -> Result<(), anyhow::Error> {
+    run_test_user_pub_sub_channels(MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime)).await
+}
+
+async fn run_test_user_pub_sub_channels<B>(store_builder: B) -> Result<(), anyhow::Error>
+where
+    B: StoreBuilder,
+    ViewError: From<<B::Store as Store>::ContextError>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut sender = builder
+        .add_initial_chain(ChainDescription::Root(0), Balance::from(0))
+        .await?;
+    let mut receiver = builder
+        .add_initial_chain(ChainDescription::Root(1), Balance::from(0))
+        .await?;
+
+    let (bytecode_id, pub_cert) = {
+        let (contract_path, service_path) =
+            linera_execution::wasm_test::get_example_bytecode_paths("social")?;
+        receiver
+            .publish_bytecode(
+                Bytecode::load_from_file(contract_path).await?,
+                Bytecode::load_from_file(service_path).await?,
+            )
+            .await?
+    };
+
+    // Receive our own cert to broadcast the bytecode location.
+    receiver
+        .receive_certificate(pub_cert.clone())
+        .await
+        .unwrap();
+    receiver.process_inbox().await.unwrap();
+
+    let (application_id, _cert) = receiver
+        .create_application(bytecode_id, vec![], vec![], vec![])
+        .await?;
+
+    // Request to subscribe to the sender.
+    let request_subscribe = social::Operation::RequestSubscribe(sender.chain_id());
+    let cert = receiver
+        .execute_operation(
+            ApplicationId::User(application_id),
+            Operation::User(bcs::to_bytes(&request_subscribe)?),
+        )
+        .await?;
+
+    // Subscribe the receiver. This also registers the application.
+    sender.synchronize_and_recompute_balance().await.unwrap();
+    sender.receive_certificate(cert).await.unwrap();
+    let _certs = sender.process_inbox().await.unwrap();
+
+    // Make a post.
+    let text = "Please like and subscribe! No, wait, like isn't supported yet.".to_string();
+    let post = social::Operation::Post(text.clone());
+    let cert = sender
+        .execute_operation(
+            ApplicationId::User(application_id),
+            Operation::User(bcs::to_bytes(&post)?),
+        )
+        .await?;
+
+    receiver.receive_certificate(cert.clone()).await?;
+    let certs = receiver.process_inbox().await?;
+    assert_eq!(certs.len(), 1);
+
+    // There should be a message receiving the new post.
+    assert!(certs[0]
+        .value
+        .block()
+        .incoming_messages
+        .iter()
+        .any(|msg| matches!(&msg.event.effect, Effect::User(_))
+            && msg.application_id == ApplicationId::User(application_id)));
+
+    let query = social::Query::ReceivedPosts(10);
+    let response = receiver
+        .query_application(
+            ApplicationId::User(application_id),
+            &Query::User(bcs::to_bytes(&query)?),
+        )
+        .await?;
+    let posts: Vec<social::Post> = match response {
+        Response::System(_) => panic!("Expected user response."),
+        Response::User(bytes) => bcs::from_bytes(&bytes)?,
+    };
+    assert_eq!(
+        &posts,
+        &[social::Post {
+            key: social::Key {
+                timestamp: cert.value.block().timestamp,
+                index: 0,
+                author: sender.chain_id(),
+            },
+            text,
+        }]
+    );
+
+    // Request to unsubscribe from the sender.
+    let request_unsubscribe = social::Operation::RequestUnsubscribe(sender.chain_id());
+    let cert = receiver
+        .execute_operation(
+            ApplicationId::User(application_id),
+            Operation::User(bcs::to_bytes(&request_unsubscribe)?),
+        )
+        .await?;
+
+    // Unsubscribe the receiver.
+    sender.synchronize_and_recompute_balance().await.unwrap();
+    sender.receive_certificate(cert).await.unwrap();
+    let _certs = sender.process_inbox().await.unwrap();
+
+    // Make a post.
+    let post = social::Operation::Post("Nobody will read this!".to_string());
+    let cert = sender
+        .execute_operation(
+            ApplicationId::User(application_id),
+            Operation::User(bcs::to_bytes(&post)?),
+        )
+        .await?;
+
+    // The post will not be received by the unsubscribed chain.
+    receiver.receive_certificate(cert).await?;
+    let certs = receiver.process_inbox().await?;
+    assert!(certs.is_empty());
+
+    // There is still only one post it can see.
+    let query = social::Query::ReceivedPosts(10);
+    let response = receiver
+        .query_application(
+            ApplicationId::User(application_id),
+            &Query::User(bcs::to_bytes(&query)?),
+        )
+        .await?;
+    let posts: Vec<social::Post> = match response {
+        Response::System(_) => panic!("Expected user response."),
+        Response::User(bytes) => bcs::from_bytes(&bytes)?,
+    };
+    assert_eq!(posts.len(), 1);
+
+    Ok(())
+}
