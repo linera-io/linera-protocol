@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use linera_base::data_types::ChainId;
+use linera_service::config::WalletState;
 #[cfg(feature = "aws")]
 use linera_views::test_utils::LocalStackTestContext;
 use serde_json::{json, Value};
@@ -10,10 +12,11 @@ use std::{
     io::Write,
     path::PathBuf,
     process::{Command, Stdio},
+    rc::Rc,
+    str::FromStr,
     sync::Mutex,
     time::Duration,
 };
-use std::rc::Rc;
 use tempfile::{tempdir, TempDir};
 use tokio::process::Child;
 
@@ -140,7 +143,7 @@ struct Client {
     storage: String,
     wallet: String,
     genesis: String,
-    max_pending_messages: usize
+    max_pending_messages: usize,
 }
 
 impl Client {
@@ -150,7 +153,7 @@ impl Client {
             storage: "rocksdb:client.db".to_string(),
             wallet: "wallet.json".to_string(),
             genesis: "genesis.json".to_string(),
-            max_pending_messages: 10_000
+            max_pending_messages: 10_000,
         }
     }
 
@@ -159,6 +162,7 @@ impl Client {
         command
             .current_dir(&self.tmp_dir.path().canonicalize().unwrap())
             .kill_on_drop(true)
+            .env("RUST_LOG", "ERROR")
             .arg("run")
             .arg("--manifest-path")
             .arg(env::current_dir().unwrap().join("Cargo.toml"))
@@ -166,6 +170,17 @@ impl Client {
             .arg("--")
             .args(["--wallet", &self.wallet])
             .args(["--genesis", &self.genesis]);
+        command
+    }
+
+    fn client_run_with_storage(&self) -> tokio::process::Command {
+        let mut command = self.client_run();
+        command
+            .args(["--storage", &self.storage.to_string()])
+            .args([
+                "--max-pending-messages",
+                &self.max_pending_messages.to_string(),
+            ]);
         command
     }
 
@@ -182,9 +197,7 @@ impl Client {
     }
 
     async fn publish_application(&self, contract: PathBuf, service: PathBuf, arg: u64) {
-        self.client_run()
-            .args(["--storage", "rocksdb:client.db"])
-            .args(["--max-pending-messages", &self.max_pending_messages.to_string()])
+        self.client_run_with_storage()
             .arg("publish")
             .args([contract, service])
             .arg(arg.to_string())
@@ -196,15 +209,78 @@ impl Client {
     }
 
     async fn run_node_service(&self) -> Child {
-        self.client_run()
-            .args(["--storage", &self.storage])
-            .args(["--max-pending-messages", "10000"])
+        self.client_run_with_storage()
             .arg("service")
             .spawn()
             .unwrap()
     }
-}
 
+    async fn query_validators(&self) {
+        self.client_run_with_storage()
+            .arg("query_validators")
+            .spawn()
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+    }
+
+    async fn query_balance(&self, chain_id: ChainId) {
+        self.client_run_with_storage()
+            .arg("query_balance")
+            .arg(&chain_id.to_string())
+            .spawn()
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+    }
+
+    async fn transfer(&self, amount: usize, from: ChainId, to: ChainId) {
+        self.client_run_with_storage()
+            .arg("transfer")
+            .arg(&amount.to_string())
+            .args(["--from", &from.to_string()])
+            .args(["--to", &to.to_string()])
+            .spawn()
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+    }
+
+    async fn benchmark(&self, max_in_flight: usize) {
+        self.client_run_with_storage()
+            .arg("benchmark")
+            .args(["--max-in-flight", &max_in_flight.to_string()])
+            .spawn()
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+    }
+
+    async fn open_chain(&self, from: ChainId) -> anyhow::Result<ChainId> {
+        let output = self
+            .client_run_with_storage()
+            .arg("open_chain")
+            .args(["--from", &from.to_string()])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()?
+            .wait_with_output()
+            .await?;
+        Ok(ChainId::from_str(
+            String::from_utf8_lossy(output.stdout.as_slice()).trim(),
+        )?)
+    }
+
+    async fn check_for_chain_in_wallet(&self, chain: ChainId) -> bool {
+        let wallet =
+            WalletState::read_or_create(self.tmp_dir.path().join(&self.wallet).as_path()).unwrap();
+        wallet.get(chain).is_some()
+    }
+}
 
 struct TestRunner {
     tmp_dir: Rc<TempDir>,
@@ -402,4 +478,54 @@ async fn end_to_end() {
 
     let counter_value = get_counter_value(&application_uri).await;
     assert_eq!(counter_value, original_counter_value + increment);
+}
+
+#[tokio::test]
+#[allow(clippy::await_holding_lock)]
+async fn test_grpc() {
+    let _guard = README_GUARD.lock().unwrap();
+
+    let runner = TestRunner::new();
+    let client = Client::new(runner.tmp_dir());
+
+    runner.generate_server_config().await;
+    client.generate_client_config().await;
+    let mut local_net = runner.run_local_net();
+
+    tokio::time::sleep(Duration::from_millis(5_000)).await;
+
+    client.query_validators().await;
+
+    // Query balance for first and last user chain
+    let chain_1 =
+        ChainId::from_str("91c7b394ef500cd000e365807b770d5b76a6e8c9c2f2af8e58c205e521b5f646")
+            .unwrap();
+    let chain_2 =
+        ChainId::from_str("170883d704512b1682064639bdda0aab27756727af8e0dc5732bae70b2e15997")
+            .unwrap();
+    client.query_balance(chain_1).await;
+    client.query_balance(chain_2).await;
+
+    // Transfer 10 units then 5 back
+    client.transfer(10, chain_1, chain_2).await;
+    client.transfer(5, chain_2, chain_1).await;
+
+    // Restart last server (dropping it kills the process)
+    let last = local_net.pop();
+    drop(last);
+    local_net.push(runner.run_server(4, 3));
+    tokio::time::sleep(Duration::from_millis(1_000)).await;
+
+    // Query balances again
+    client.query_balance(chain_1).await;
+    client.query_balance(chain_2).await;
+
+    // Launch local benchmark using all user chains
+    client.benchmark(500).await;
+
+    // Create derived chain
+    let chain_3 = client.open_chain(chain_1).await.unwrap();
+
+    // Inspect state of derived chain
+    assert!(client.check_for_chain_in_wallet(chain_3).await);
 }
