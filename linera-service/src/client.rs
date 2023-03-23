@@ -976,6 +976,7 @@ where
 async fn main() -> Result<(), anyhow::Error> {
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
     let options = ClientOptions::from_args();
     let mut context = ClientContext::from_options(&options);

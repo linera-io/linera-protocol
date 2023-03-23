@@ -39,7 +39,7 @@ tokio = "1.25.0"
 tokio-stream = "0.1.11"
 tonic = "0.8"
 tower-http = { version = "0.4.0", features = ["cors"] }
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 linera-base = { path = "../linera-base", features = ["test"] }
