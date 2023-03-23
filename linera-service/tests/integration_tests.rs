@@ -2,7 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::identifiers::ChainId;
+use linera_base::identifiers::{ChainId, Owner};
+use linera_chain::data_types::Certificate;
 use linera_service::config::WalletState;
 #[cfg(feature = "aws")]
 use linera_views::test_utils::LocalStackTestContext;
@@ -259,24 +260,40 @@ impl Client {
             .unwrap();
     }
 
-    async fn open_chain(&self, from: ChainId) -> anyhow::Result<ChainId> {
-        let output = self
-            .client_run_with_storage()
+    async fn open_chain(
+        &self,
+        from: ChainId,
+        to_owner: Option<Owner>,
+    ) -> anyhow::Result<(ChainId, Certificate)> {
+        let mut command = self.client_run_with_storage();
+        command
             .arg("open_chain")
-            .args(["--from", &from.to_string()])
+            .args(["--from", &from.to_string()]);
+
+        if let Some(owner) = to_owner {
+            command.args(["--to-public-key", &owner.to_string()]);
+        }
+
+        let output = command
             .stdout(Stdio::piped())
             .spawn()?
             .wait_with_output()
             .await?;
-        Ok(ChainId::from_str(
-            String::from_utf8_lossy(output.stdout.as_slice()).trim(),
-        )?)
+
+        let as_string = String::from_utf8_lossy(output.stdout.as_slice());
+        let mut split = as_string.split('\n');
+        let chain_id = ChainId::from_str(split.next().unwrap())?;
+        let cert: Certificate = bcs::from_bytes(&hex::decode(split.next().unwrap())?)?;
+
+        Ok((chain_id, cert))
+    }
+
+    fn get_wallet(&self) -> WalletState {
+        WalletState::read_or_create(self.tmp_dir.path().join(&self.wallet).as_path()).unwrap()
     }
 
     async fn check_for_chain_in_wallet(&self, chain: ChainId) -> bool {
-        let wallet =
-            WalletState::read_or_create(self.tmp_dir.path().join(&self.wallet).as_path()).unwrap();
-        wallet.get(chain).is_some()
+        self.get_wallet().get(chain).is_some()
     }
 
     async fn set_validator(&self, name: &str, port: usize, votes: usize) {
@@ -297,6 +314,49 @@ impl Client {
         self.client_run_with_storage()
             .arg("remove_validator")
             .args(["--name", name])
+            .spawn()
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+    }
+
+    async fn keygen(&self) -> anyhow::Result<Owner> {
+        let output = self
+            .client_run()
+            .arg("keygen")
+            .stdout(Stdio::piped())
+            .spawn()?
+            .wait_with_output()
+            .await?;
+        Ok(Owner::from_str(
+            String::from_utf8_lossy(output.stdout.as_slice()).trim(),
+        )?)
+    }
+
+    async fn assign(
+        &self,
+        owner: Owner,
+        chain_id: ChainId,
+        certificate: Certificate,
+    ) -> anyhow::Result<()> {
+        self.client_run_with_storage()
+            .arg("assign")
+            .args(["--key", &owner.to_string()])
+            .args(["--chain", &chain_id.to_string()])
+            .args(["--certificate", &hex::encode(bcs::to_bytes(&certificate)?)])
+            .spawn()
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+        Ok(())
+    }
+
+    async fn synchronize_balance(&self, chain_id: ChainId) {
+        self.client_run_with_storage()
+            .arg("sync_balance")
+            .arg(&chain_id.to_string())
             .spawn()
             .unwrap()
             .wait()
@@ -569,13 +629,49 @@ async fn end_to_end() {
 async fn test_multiple_wallets() {
     let _guard = README_GUARD.lock().unwrap();
 
+    // Create runner and two clients.
     let runner = TestRunner::new(Network::Grpc);
-    let client1 = Client::new(runner.tmp_dir(), Network::Grpc, 1);
-    let client2 = Client::new(runner.tmp_dir(), Network::Grpc, 2);
+    let client_1 = Client::new(runner.tmp_dir(), Network::Grpc, 1);
+    let client_2 = Client::new(runner.tmp_dir(), Network::Grpc, 2);
 
+    // Create initial server and client config.
     runner.generate_initial_server_config().await;
-    client1.generate_client_config().await;
-    let mut local_net = runner.run_local_net();
+    client_1.generate_client_config().await;
+
+    // Start local network.
+    let _local_net = runner.run_local_net();
+
+    // Get some chain owned by Client 1.
+    let chain_1 = *client_1.get_wallet().chain_ids().first().unwrap();
+
+    // Generate a key for Client 2.
+    let client_2_key = client_2.keygen().await.unwrap();
+
+    // Open chain on behalf of Client 2.
+    let (chain_2, cert) = client_1
+        .open_chain(chain_1, Some(client_2_key))
+        .await
+        .unwrap();
+
+    // Assign chain_2 to client_2_key.
+    client_2.assign(client_2_key, chain_2, cert).await.unwrap();
+
+    // Check initial balance of Chain 1.
+    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), 10);
+
+    // Transfer 5 units from Chain 1 to Chain 2.
+    client_1.transfer(5, chain_1, chain_2).await;
+    client_2.synchronize_balance(chain_2).await;
+
+    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), 5);
+    assert_eq!(client_2.query_balance(chain_2).await.unwrap(), 5);
+
+    // Transfer 2 units from Chain 2 to Chain 1.
+    client_2.transfer(2, chain_2, chain_1).await;
+    client_1.synchronize_balance(chain_1).await;
+
+    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), 7);
+    assert_eq!(client_2.query_balance(chain_2).await.unwrap(), 3);
 }
 
 #[tokio::test]
@@ -632,7 +728,7 @@ async fn test_reconfiguration(network: Network) {
     client.benchmark(500).await;
 
     // Create derived chain
-    let chain_3 = client.open_chain(chain_1).await.unwrap();
+    let (chain_3, _) = client.open_chain(chain_1, None).await.unwrap();
 
     // Inspect state of derived chain
     assert!(client.check_for_chain_in_wallet(chain_3).await);
