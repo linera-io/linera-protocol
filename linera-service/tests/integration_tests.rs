@@ -144,11 +144,11 @@ struct Client {
 }
 
 impl Client {
-    fn new(tmp_dir: Rc<TempDir>, network: Network) -> Self {
+    fn new(tmp_dir: Rc<TempDir>, network: Network, id: usize) -> Self {
         Self {
             tmp_dir,
-            storage: "rocksdb:client.db".to_string(),
-            wallet: "wallet.json".to_string(),
+            storage: format!("rocksdb:client_{}.db", id),
+            wallet: format!("wallet_{}.json", id),
             genesis: "genesis.json".to_string(),
             max_pending_messages: 10_000,
             network,
@@ -532,7 +532,7 @@ async fn end_to_end() {
 
     let network = Network::Grpc;
     let runner = TestRunner::new(network);
-    let client = Client::new(runner.tmp_dir(), network);
+    let client = Client::new(runner.tmp_dir(), network, 1);
 
     let original_counter_value = 35;
     let increment = 5;
@@ -566,6 +566,20 @@ async fn end_to_end() {
 
 #[tokio::test]
 #[allow(clippy::await_holding_lock)]
+async fn test_multiple_wallets() {
+    let _guard = README_GUARD.lock().unwrap();
+
+    let runner = TestRunner::new(Network::Grpc);
+    let client1 = Client::new(runner.tmp_dir(), Network::Grpc, 1);
+    let client2 = Client::new(runner.tmp_dir(), Network::Grpc, 2);
+
+    runner.generate_initial_server_config().await;
+    client1.generate_client_config().await;
+    let mut local_net = runner.run_local_net();
+}
+
+#[tokio::test]
+#[allow(clippy::await_holding_lock)]
 async fn reconfiguration_test_grpc() {
     let _guard = README_GUARD.lock().unwrap();
     test_reconfiguration(Network::Grpc).await;
@@ -580,7 +594,7 @@ async fn reconfiguration_test_simple() {
 
 async fn test_reconfiguration(network: Network) {
     let runner = TestRunner::new(network);
-    let client = Client::new(runner.tmp_dir(), network);
+    let client = Client::new(runner.tmp_dir(), network, 1);
 
     runner.generate_initial_server_config().await;
     client.generate_client_config().await;
