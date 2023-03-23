@@ -244,8 +244,8 @@ fn get_journaling_key(
     // We used the value 0 because it does not collide with other key values.
     // since other tags are starting from 1.
     let mut key = base_key.to_vec();
-    key.extend_from_slice(&[JOURNAL_TAG]);
-    key.extend_from_slice(&[tag]);
+    key.extend([JOURNAL_TAG]);
+    key.extend([tag]);
     bcs::serialize_into(&mut key, &pos)?;
     Ok(key)
 }

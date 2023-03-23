@@ -76,7 +76,7 @@ impl UnorderedBatch {
         for key_prefix in self.key_prefix_deletions {
             for short_key in db.expand_delete_prefix(&key_prefix).await?.iter() {
                 let mut key = key_prefix.clone();
-                key.extend_from_slice(short_key);
+                key.extend(short_key);
                 if !insert_set.contains(&key) {
                     deletions.push(key);
                 }

@@ -244,9 +244,6 @@ pub trait Context {
     /// Obtain the short `Vec<u8>` key from the key by serialization
     fn derive_short_key<I: Serialize + ?Sized>(index: &I) -> Result<Vec<u8>, Self::Error>;
 
-    /// Obtain the `Vec<u8>` key from the key by appending to the base_key
-    fn derive_key_bytes(&self, index: &[u8]) -> Vec<u8>;
-
     /// Deserialize `value_byte`.
     fn deserialize_value<Item: DeserializeOwned>(bytes: &[u8]) -> Result<Item, Self::Error>;
 
@@ -314,14 +311,14 @@ where
     fn base_tag(&self, tag: u8) -> Vec<u8> {
         assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
         let mut key = self.base_key.clone();
-        key.extend_from_slice(&[tag]);
+        key.extend([tag]);
         key
     }
 
     fn base_tag_index(&self, tag: u8, index: &[u8]) -> Vec<u8> {
         assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
         let mut key = self.base_key.clone();
-        key.extend_from_slice(&[tag]);
+        key.extend([tag]);
         key.extend_from_slice(index);
         key
     }
@@ -339,7 +336,7 @@ where
     fn derive_tag_key<I: Serialize>(&self, tag: u8, index: &I) -> Result<Vec<u8>, Self::Error> {
         assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
         let mut key = self.base_key.clone();
-        key.extend_from_slice(&[tag]);
+        key.extend([tag]);
         bcs::serialize_into(&mut key, index)?;
         Ok(key)
     }
@@ -348,12 +345,6 @@ where
         let mut key = Vec::new();
         bcs::serialize_into(&mut key, index)?;
         Ok(key)
-    }
-
-    fn derive_key_bytes(&self, index: &[u8]) -> Vec<u8> {
-        let mut key = self.base_key.clone();
-        key.extend_from_slice(index);
-        key
     }
 
     fn deserialize_value<Item: DeserializeOwned>(bytes: &[u8]) -> Result<Item, Self::Error> {
