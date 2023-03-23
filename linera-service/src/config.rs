@@ -2,6 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Balance, BlockHeight, Timestamp},
@@ -14,7 +15,7 @@ use linera_storage::Store;
 use linera_views::views::ViewError;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     fs::{self, OpenOptions},
     io::{BufRead, BufReader, BufWriter, Write},
     path::Path,
@@ -111,7 +112,7 @@ impl UserChain {
 #[derive(Default, Serialize, Deserialize)]
 pub struct WalletState {
     chains: BTreeMap<ChainId, UserChain>,
-    unassigned: Vec<KeyPair>,
+    unassigned: HashMap<PublicKey, KeyPair>,
 }
 
 impl WalletState {
@@ -140,7 +141,23 @@ impl WalletState {
     }
 
     pub fn add_unassigned_keypair(&mut self, keypair: KeyPair) {
-        self.unassigned.push(keypair)
+        self.unassigned.insert(keypair.public(), keypair);
+    }
+
+    pub fn key_pair_for_pk(&self, key: &PublicKey) -> Option<KeyPair> {
+        self.unassigned.get(key).map(|key_pair| key_pair.copy())
+    }
+
+    pub fn assign_chain_to_key(
+        &mut self,
+        key: &PublicKey,
+        chain: UserChain,
+    ) -> Result<(), anyhow::Error> {
+        self.unassigned.remove(key).ok_or_else(|| {
+            anyhow!("could not assign chain to key as unassigned key was not found")
+        })?;
+        self.insert(chain);
+        Ok(())
     }
 
     pub async fn update_from_state<P, S>(&mut self, state: &mut ChainClient<P, S>)
