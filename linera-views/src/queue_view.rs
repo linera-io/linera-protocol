@@ -128,8 +128,7 @@ where
     }
 }
 
-impl<C, T> QueueView<C, T>
-{
+impl<C, T> QueueView<C, T> {
     fn stored_count(&self) -> usize {
         if self.was_cleared {
             0
@@ -165,9 +164,7 @@ where
     pub async fn back(&self) -> Result<Option<T>, ViewError> {
         let value = match self.new_back_values.back() {
             Some(value) => Some(value.clone()),
-            None if self.stored_count() > 0 => {
-                self.get(self.stored_indices.end - 1).await?
-            }
+            None if self.stored_count() > 0 => self.get(self.stored_indices.end - 1).await?,
             _ => None,
         };
         Ok(value)
