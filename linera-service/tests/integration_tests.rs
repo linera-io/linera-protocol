@@ -94,7 +94,7 @@ mod aws_test {
         // Check that we have the expected number of examples starting with "```bash".
         assert_eq!(quotes.len(), 1);
         let quote = quotes.pop().unwrap();
-        assert_eq!(quote.matches(ROCKSDB_STORAGE).count(), 3);
+        assert_eq!(quote.matches(ROCKSDB_STORAGE).count(), 1);
         let quote = quote.replace(ROCKSDB_STORAGE, DYNAMO_DB_STORAGE);
         let quote = quote.replace(BUILD, AWS_BUILD);
 
