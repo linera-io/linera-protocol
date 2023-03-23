@@ -111,7 +111,10 @@ impl ClientContext {
         storage: S,
         chain_id: ChainId,
     ) -> ChainClient<impl ValidatorNodeProvider, S> {
-        let chain = self.wallet_state.get(chain_id).expect("Unknown chain");
+        let chain = self
+            .wallet_state
+            .get(chain_id)
+            .unwrap_or_else(|| panic!("Unknown chain: {}", chain_id));
         let node_provider = NodeProvider::new(self.send_timeout, self.recv_timeout);
         ChainClient::new(
             chain_id,
@@ -583,7 +586,20 @@ enum ClientCommand {
 
     /// Create an unassigned key-pair.
     #[structopt(name = "keygen")]
-    KeyGen
+    KeyGen,
+
+    /// Assign a key to a chain given a certificate.
+    #[structopt(name = "assign")]
+    Assign {
+        #[structopt(long)]
+        key: PublicKey,
+
+        #[structopt(long)]
+        certificate: String,
+
+        #[structopt(long)]
+        chain: ChainId,
+    },
 }
 
 struct Job(ClientContext, ClientCommand);
@@ -633,12 +649,13 @@ where
                 let (id, certificate) = chain_client.open_chain(new_public_key).await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
-                info!("{:?}", certificate);
+                info!("{:#?}", certificate);
                 context.update_wallet_from_client(&mut chain_client).await;
                 let timestamp = certificate.value.block().timestamp;
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
                 // Print the new chain id(s) on stdout for the scripting purposes.
                 println!("{}", id);
+                println!("{}", hex::encode(bcs::to_bytes(&certificate).unwrap()));
                 context.save_wallet();
             }
 
@@ -967,6 +984,32 @@ where
                     format!("{:?}", application_id).bold()
                 );
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs())
+            }
+
+            Assign {
+                key,
+                certificate,
+                chain: chain_id,
+            } => {
+                let certificate: Certificate = bcs::from_bytes(&hex::decode(certificate)?)?;
+                let key_pair = context.wallet_state.key_pair_for_pk(&key);
+                let block_hash = None;
+                let timestamp = Timestamp::from(0);
+                let next_block_height = BlockHeight(0);
+                let user_chain = UserChain {
+                    chain_id,
+                    key_pair,
+                    block_hash,
+                    timestamp,
+                    next_block_height,
+                };
+                context
+                    .wallet_state
+                    .assign_chain_to_key(&key, user_chain)
+                    .unwrap();
+                let mut chain_client = context.make_chain_client(storage, chain_id);
+                chain_client.receive_certificate(certificate).await.unwrap();
+                context.save_wallet();
             }
 
             CreateGenesisConfig { .. } | KeyGen => unreachable!(),
