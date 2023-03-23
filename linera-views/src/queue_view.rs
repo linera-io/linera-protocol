@@ -18,7 +18,7 @@ use std::{
 /// Key tags to create the sub-keys of a QueueView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for the storing of the variable stored_count
+    /// Prefix for the storing of the variable stored_indices
     Store = MIN_VIEW_TAG,
     /// Prefix for the indices of the log
     Index,
@@ -74,7 +74,7 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError> {
         let mut save_stored_indices = false;
-        if self.was_cleared {
+        if self.stored_count() == 0 {
             let key_prefix = self.context.base_tag(KeyTag::Index as u8);
             batch.delete_key_prefix(key_prefix);
             self.stored_indices = Range::default();
@@ -128,6 +128,17 @@ where
     }
 }
 
+impl<C, T> QueueView<C, T>
+{
+    fn stored_count(&self) -> usize {
+        if self.was_cleared {
+            0
+        } else {
+            self.stored_indices.len() - self.front_delete_count
+        }
+    }
+}
+
 impl<'a, C, T> QueueView<C, T>
 where
     C: Context + Send + Sync,
@@ -141,8 +152,8 @@ where
 
     /// Read the front value, if any.
     pub async fn front(&self) -> Result<Option<T>, ViewError> {
-        let stored_remainder = self.stored_indices.len() - self.front_delete_count;
-        let value = if !self.was_cleared && stored_remainder > 0 {
+        let stored_remainder = self.stored_count();
+        let value = if stored_remainder > 0 {
             self.get(self.stored_indices.end - stored_remainder).await?
         } else {
             self.new_back_values.front().cloned()
@@ -154,7 +165,7 @@ where
     pub async fn back(&self) -> Result<Option<T>, ViewError> {
         let value = match self.new_back_values.back() {
             Some(value) => Some(value.clone()),
-            None if !self.was_cleared && self.stored_indices.len() > self.front_delete_count => {
+            None if self.stored_count() > 0 => {
                 self.get(self.stored_indices.end - 1).await?
             }
             _ => None,
@@ -165,7 +176,7 @@ where
     /// Delete the front value, if any.
     pub fn delete_front(&mut self) {
         *self.hash.get_mut() = None;
-        if self.front_delete_count < self.stored_indices.len() && !self.was_cleared {
+        if self.stored_count() > 0 {
             self.front_delete_count += 1;
         } else {
             self.new_back_values.pop_front();
@@ -180,11 +191,7 @@ where
 
     /// Read the size of the queue.
     pub fn count(&self) -> usize {
-        if !self.was_cleared {
-            self.stored_indices.len() - self.front_delete_count + self.new_back_values.len()
-        } else {
-            self.new_back_values.len()
-        }
+        self.stored_count() + self.new_back_values.len()
     }
 
     /// Obtain the extra data.
@@ -215,7 +222,7 @@ where
         let mut values = Vec::new();
         values.reserve(count);
         if !self.was_cleared {
-            let stored_remainder = self.stored_indices.len() - self.front_delete_count;
+            let stored_remainder = self.stored_count();
             let start = self.stored_indices.end - stored_remainder;
             if count <= stored_remainder {
                 values.extend(self.read_context(start..(start + count)).await?);
@@ -274,7 +281,7 @@ where
 
     async fn load_all(&mut self) -> Result<(), ViewError> {
         if !self.was_cleared {
-            let stored_remainder = self.stored_indices.len() - self.front_delete_count;
+            let stored_remainder = self.stored_count();
             let start = self.stored_indices.end - stored_remainder;
             let elements = self.read_context(start..self.stored_indices.end).await?;
             let shift = self.stored_indices.end - start;
