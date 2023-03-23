@@ -1401,6 +1401,7 @@ dependencies = [
  "http",
  "linera-base",
  "linera-views-derive",
+ "linked-hash-map",
  "rand 0.8.5",
  "rocksdb",
  "serde",
@@ -1431,6 +1432,12 @@ checksum = "9272ab7b96c9046fbc5bc56c06c117cb639fe2d509df0c421cad82d2915cf369"
 dependencies = [
  "cc",
 ]
+
+[[package]]
+name = "linked-hash-map"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "linux-raw-sys"
