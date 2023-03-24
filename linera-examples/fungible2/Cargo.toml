@@ -8,7 +8,7 @@ edition = "2021"
 async-trait = "0.1.52"
 bcs = "0.1.3"
 fungible = { path = "../fungible" }
-linera-sdk = { path = "../../linera-sdk", features = ["crypto"] }
+linera-sdk = { path = "../../linera-sdk" }
 linera-views = { path = "../../linera-views" }
 thiserror = "1.0.31"
 
