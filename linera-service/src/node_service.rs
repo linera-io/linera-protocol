@@ -20,7 +20,7 @@ use futures::lock::Mutex;
 use linera_base::{
     crypto::PublicKey,
     data_types::Amount,
-    identifiers::{ChainId, Owner},
+    identifiers::{BytecodeId, ChainId, Owner},
 };
 use linera_chain::{data_types::Certificate, ChainStateView};
 use linera_core::{
@@ -30,7 +30,7 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{Recipient, SystemChannel, UserData},
-    ApplicationId, Bytecode, BytecodeId, Operation, Query, Response, SystemOperation,
+    ApplicationId, Bytecode, Operation, Query, Response, SystemOperation,
     UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Store;

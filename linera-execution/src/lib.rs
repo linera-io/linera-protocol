@@ -11,7 +11,7 @@ pub mod system;
 mod wasm;
 
 pub use applications::{
-    ApplicationDescription, ApplicationId, ApplicationRegistryView, BytecodeId, BytecodeLocation,
+    ApplicationDescription, ApplicationId, ApplicationRegistryView, BytecodeLocation,
     UserApplicationDescription, UserApplicationId,
 };
 pub use execution::ExecutionStateView;
@@ -39,7 +39,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Balance, BlockHeight, Timestamp},
     hex_debug,
-    identifiers::{ChainId, EffectId, Owner},
+    identifiers::{BytecodeId, ChainId, ChannelName, Destination, EffectId, Owner, SessionId},
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -301,8 +301,6 @@ pub trait QueryableStorage: ReadableStorage {
     ) -> Result<Vec<u8>, ExecutionError>;
 }
 
-pub type SessionId = linera_base::identifiers::SessionId;
-
 /// The result of calling into an application or a session.
 pub struct CallResult {
     /// The return value.
@@ -419,9 +417,6 @@ pub struct RawExecutionResult<Effect> {
     /// Unsubscribe chains to channels.
     pub unsubscribe: Vec<(ChannelName, ChainId)>,
 }
-
-pub type ChannelName = linera_base::identifiers::ChannelName;
-pub type Destination = linera_base::identifiers::Destination;
 
 /// The identifier of a channel, relative to a particular application.
 #[derive(

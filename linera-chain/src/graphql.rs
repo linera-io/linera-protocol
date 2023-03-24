@@ -9,8 +9,8 @@ use crate::{
     ChainManager,
 };
 use async_graphql::{scalar, Error, Object};
-use linera_base::identifiers::ChainId;
-use linera_execution::{ApplicationId, ChannelName};
+use linera_base::identifiers::{ChainId, ChannelName};
+use linera_execution::ApplicationId;
 use linera_views::{collection_view::ReadGuardedView, common::Context, views::ViewError};
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;

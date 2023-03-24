@@ -13,11 +13,11 @@ use crate::client::client_tests::{
 };
 use linera_base::{
     data_types::Balance,
-    identifiers::{ChainDescription, ChainId, Owner},
+    identifiers::{ChainDescription, ChainId, Destination, Owner},
 };
 use linera_chain::data_types::OutgoingEffect;
 use linera_execution::{
-    ApplicationId, Bytecode, Destination, Effect, Operation, Query, Response, SystemEffect,
+    ApplicationId, Bytecode, Effect, Operation, Query, Response, SystemEffect,
     UserApplicationDescription, WasmRuntime,
 };
 use linera_storage::Store;

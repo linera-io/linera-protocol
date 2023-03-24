@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use linera_base::{
     crypto::PublicKey,
     data_types::BlockHeight,
-    identifiers::{ChainDescription, ChainId, Owner},
+    identifiers::{ChainDescription, ChainId, Owner, SessionId},
 };
 use linera_execution::*;
 use linera_views::{batch::Batch, common::Context, memory::MemoryContext, views::View};

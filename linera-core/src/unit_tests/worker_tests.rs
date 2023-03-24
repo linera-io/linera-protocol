@@ -15,7 +15,7 @@ use crate::{
 use linera_base::{
     crypto::{BcsSignable, CryptoHash, *},
     data_types::*,
-    identifiers::{ChainDescription, ChainId, EffectId, Owner},
+    identifiers::{ChainDescription, ChainId, ChannelName, Destination, EffectId, Owner},
 };
 use linera_chain::{
     data_types::{
@@ -27,9 +27,9 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{Account, Recipient, SystemChannel, SystemEffect, SystemOperation, UserData},
-    ApplicationId, ApplicationRegistry, ChainOwnership, ChannelId, ChannelName, Destination,
-    Effect, ExecutionStateView, Operation, Query, Response, SystemExecutionState, SystemQuery,
-    SystemResponse, UserApplicationId,
+    ApplicationId, ApplicationRegistry, ChainOwnership, ChannelId, Effect, ExecutionStateView,
+    Operation, Query, Response, SystemExecutionState, SystemQuery, SystemResponse,
+    UserApplicationId,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::views::{CryptoHashView, ViewError};
