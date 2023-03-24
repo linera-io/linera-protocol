@@ -3,8 +3,6 @@
 
 pub mod base;
 pub mod contract;
-#[cfg(feature = "crypto")]
-pub mod crypto;
 mod ensure;
 mod exported_future;
 mod extensions;
@@ -184,7 +182,7 @@ impl ExecutionResult {
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ApplicationCallResult {
     /// The return value.
-    #[debug(with = "crate::base::hex_debug")]
+    #[debug(with = "linera_base::hex_debug")]
     pub value: Vec<u8>,
     /// The externally-visible result.
     pub execution_result: ExecutionResult,
@@ -199,7 +197,7 @@ pub struct Session {
     /// A kind provided by the creator (meant to be visible to other applications).
     pub kind: u64,
     /// The data associated to the session.
-    #[debug(with = "crate::base::hex_debug")]
+    #[debug(with = "linera_base::hex_debug")]
     pub data: Vec<u8>,
 }
 

@@ -133,14 +133,6 @@ impl From<u64> for Timestamp {
     }
 }
 
-/// Prints a vector of bytes in hexadecimal.
-pub fn hex_debug<T: AsRef<[u8]>>(bytes: &T, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    for byte in bytes.as_ref() {
-        write!(f, "{:02x}", byte)?;
-    }
-    Ok(())
-}
-
 #[derive(Default, Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Amount(u64);
 
