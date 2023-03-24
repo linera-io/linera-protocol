@@ -109,7 +109,7 @@ impl From<EffectId> for BytecodeId {
 
 impl std::fmt::Display for Owner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", self.0)
+        self.0.fmt(f)
     }
 }
 
