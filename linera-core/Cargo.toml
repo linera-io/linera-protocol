@@ -10,6 +10,7 @@ wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 test = [
     "linera-base/test", "linera-chain/test", "test-strategy", "proptest", "test-log", "tempfile",
+    "tokio/parking_lot",
 ]
 aws = ["linera-views/aws", "linera-storage/aws"]
 
