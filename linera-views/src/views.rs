@@ -4,7 +4,6 @@
 extern crate linera_views_derive;
 use crate::{batch::Batch, common::HasherOutput};
 use async_trait::async_trait;
-#[cfg(not(target_arch = "wasm32"))]
 use linera_base::crypto::CryptoHash;
 pub use linera_views_derive::{
     CryptoHashRootView, CryptoHashView, GraphQLView, HashableView, RootView, View,
@@ -165,7 +164,6 @@ pub trait RootView<C>: View<C> {
 
 /// A [`View`] that also supports crypto hash
 #[async_trait]
-#[cfg(not(target_arch = "wasm32"))]
 pub trait CryptoHashView<C>: HashableView<C> {
     /// Computing the hash and attributing the type to it.
     async fn crypto_hash(&self) -> Result<CryptoHash, ViewError>;
@@ -173,5 +171,4 @@ pub trait CryptoHashView<C>: HashableView<C> {
 
 /// A [`RootView`] that also supports crypto hash
 #[async_trait]
-#[cfg(not(target_arch = "wasm32"))]
 pub trait CryptoHashRootView<C>: RootView<C> + CryptoHashView<C> {}

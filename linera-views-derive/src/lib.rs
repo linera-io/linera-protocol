@@ -209,7 +209,6 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
     let struct_name = input.ident;
     let generics = input.generics;
@@ -495,7 +494,6 @@ pub fn derive_root_view(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_derive(CryptoHashView)]
-#[cfg(not(target_arch = "wasm32"))]
 pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), false);
@@ -505,7 +503,6 @@ pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_derive(CryptoHashRootView)]
-#[cfg(not(target_arch = "wasm32"))]
 pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), true);
@@ -516,7 +513,6 @@ pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_derive(HashableRootView)]
-#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
@@ -717,7 +713,6 @@ pub mod tests {
 
     #[test]
     #[rustfmt::skip]
-    #[cfg(not(target_arch = "wasm32"))]
     fn test_generate_crypto_hash_code() {
         let input: ItemStruct = parse_quote!(
             struct TestView<C> {
