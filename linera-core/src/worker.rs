@@ -285,7 +285,7 @@ where
 {
     // NOTE: This only works for non-sharded workers!
     #[cfg(any(test, feature = "test"))]
-    pub(crate) async fn fully_handle_certificate(
+    pub async fn fully_handle_certificate(
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
