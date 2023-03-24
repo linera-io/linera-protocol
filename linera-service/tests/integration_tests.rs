@@ -355,19 +355,30 @@ impl TestRunner {
         command
     }
 
+    fn configuration_string(&self, server_number: usize) -> String {
+        let n = server_number;
+        let mut configuration = String::new();
+        configuration.push_str(&format!(
+            "server_{n}.json:{}:127.0.0.1:9{n}00:{}",
+            self.network.external(),
+            self.network.internal()
+        ));
+        configuration.push_str(&format!(":127.0.0.1:10{n}00:127.0.0.1:11{n}00"));
+        configuration.push_str(&format!(
+            ":127.0.0.1:9{n}01:127.0.0.1:9{n}02:127.0.0.1:9{n}03:127.0.0.1:9{n}04"
+        ));
+        configuration
+    }
+
     async fn generate_initial_server_config(&self) {
-        let server_1 = format!("server_1.json:{}:127.0.0.1:9100:{}:127.0.0.1:10100:127.0.0.1:9101:127.0.0.1:9102:127.0.0.1:9103:127.0.0.1:9104", self.network.external(), self.network.internal());
-        let server_2 = format!("server_2.json:{}:127.0.0.1:9200:{}:127.0.0.1:10200:127.0.0.1:9201:127.0.0.1:9202:127.0.0.1:9203:127.0.0.1:9204", self.network.external(), self.network.internal());
-        let server_3 = format!("server_3.json:{}:127.0.0.1:9300:{}:127.0.0.1:10300:127.0.0.1:9301:127.0.0.1:9302:127.0.0.1:9303:127.0.0.1:9304", self.network.external(), self.network.internal());
-        let server_4 = format!("server_4.json:{}:127.0.0.1:9400:{}:127.0.0.1:10400:127.0.0.1:9401:127.0.0.1:9402:127.0.0.1:9403:127.0.0.1:9404", self.network.external(), self.network.internal());
         self.cargo_run()
             .args(["--bin", "server"])
             .arg("generate")
             .arg("--validators")
-            .arg(&server_1)
-            .arg(&server_2)
-            .arg(&server_3)
-            .arg(&server_4)
+            .arg(&self.configuration_string(1))
+            .arg(&self.configuration_string(2))
+            .arg(&self.configuration_string(3))
+            .arg(&self.configuration_string(4))
             .args(["--committee", "committee.json"])
             .spawn()
             .unwrap()
@@ -377,14 +388,13 @@ impl TestRunner {
     }
 
     async fn generate_server_config(&self, server_number: usize) -> anyhow::Result<String> {
-        let config = format!("server_X.json:{}:127.0.0.1:9X00:{}:127.0.0.1:10X00:127.0.0.1:9X01:127.0.0.1:9X02:127.0.0.1:9X03:127.0.0.1:9X04", self.network.external(), self.network.internal());
         let output = self
             .cargo_run()
             .env("RUST_LOG", "ERROR")
             .args(["--bin", "server"])
             .arg("generate")
             .arg("--validators")
-            .arg(&config.replace('X', &server_number.to_string()))
+            .arg(&self.configuration_string(server_number))
             .stdout(Stdio::piped())
             .spawn()?
             .wait_with_output()
