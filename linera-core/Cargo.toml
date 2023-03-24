@@ -8,7 +8,9 @@ edition = "2021"
 default = ["wasmer", "wasmtime"]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
-test = ["test-strategy", "proptest", "test-log", "tempfile"]
+test = [
+    "linera-base/test", "linera-chain/test", "test-strategy", "proptest", "test-log", "tempfile",
+]
 aws = ["linera-views/aws", "linera-storage/aws"]
 
 [dependencies]
