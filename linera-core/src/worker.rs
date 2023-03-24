@@ -325,7 +325,8 @@ where
         Ok((effects, info))
     }
 
-    pub(crate) async fn query_application(
+    /// Executes a [`Query`] for an application's state on a specific chain.
+    pub async fn query_application(
         &mut self,
         chain_id: ChainId,
         application_id: ApplicationId,
