@@ -26,7 +26,7 @@ thiserror = "1.0.31"
 linked-hash-map = "0.5.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = "1.22.0"
+tokio = { version = "1.25", features = ["sync"] }
 anyhow = { version = "1.0.57", optional = true }
 tracing = "0.1.37"
 http = "0.2.7"
