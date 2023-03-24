@@ -726,6 +726,22 @@ where
         // Cache the certificate so that clients don't have to send the value again.
         self.recent_values.push(hash, value);
     }
+
+    /// Returns a stored [`Certificate`] for a chain's block.
+    #[cfg(any(test, feature = "test"))]
+    pub async fn read_certificate(
+        &self,
+        chain_id: ChainId,
+        height: BlockHeight,
+    ) -> Result<Option<Certificate>, WorkerError> {
+        let chain = self.storage.load_active_chain(chain_id).await?;
+        let certificate_hash = match chain.confirmed_log.get(height.0 as usize).await? {
+            Some(hash) => hash,
+            None => return Ok(None),
+        };
+        let certificate = self.storage.read_certificate(certificate_hash).await?;
+        Ok(Some(certificate))
+    }
 }
 
 #[async_trait]
