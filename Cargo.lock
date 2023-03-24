@@ -893,7 +893,6 @@ dependencies = [
  "js-sys",
  "num-integer",
  "num-traits",
- "serde",
  "time 0.1.45",
  "wasm-bindgen",
  "winapi",
@@ -2364,6 +2363,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde-name",
+ "serde_bytes",
  "sha3",
  "test-strategy",
  "thiserror",
@@ -2506,8 +2506,6 @@ dependencies = [
  "linera-views",
  "log",
  "serde",
- "serde_with",
- "thiserror",
  "tokio",
  "wasmtime",
  "wit-bindgen-guest-rust",
@@ -4142,34 +4140,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_with"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25bf4a5a814902cd1014dbccfa4d4560fb8432c779471e96e035602519f82eef"
-dependencies = [
- "base64 0.13.1",
- "chrono",
- "hex",
- "indexmap",
- "serde",
- "serde_json",
- "serde_with_macros",
- "time 0.3.17",
-]
-
-[[package]]
-name = "serde_with_macros"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3452b4c0f6c1e357f73fdb87cd1efabaa12acf328c7a528e252893baeb3f4aa"
-dependencies = [
- "darling",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "serde_yaml"
 version = "0.8.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4590,7 +4560,6 @@ version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a561bf4617eebd33bca6434b988f39ed798e527f51a1e797d0ee4f61c0a38376"
 dependencies = [
- "itoa",
  "serde",
  "time-core",
  "time-macros",

@@ -9,11 +9,14 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::{lock::Mutex, Future};
-use linera_base::{crypto::*, data_types::*};
+use linera_base::{
+    crypto::*,
+    data_types::*,
+    identifiers::{ChainDescription, ChainId},
+};
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_execution::{
     committee::{Committee, ValidatorName},
-    system::Balance,
     WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};

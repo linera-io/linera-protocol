@@ -3,7 +3,7 @@
 
 use super::RocksdbStoreClient;
 use crate::Store;
-use linera_base::data_types::ChainId;
+use linera_base::identifiers::ChainId;
 use std::mem;
 use tempfile::TempDir;
 

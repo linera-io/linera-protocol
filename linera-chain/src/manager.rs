@@ -10,8 +10,9 @@ use crate::{
 };
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
-    data_types::{BlockHeight, Owner, RoundNumber},
+    data_types::{BlockHeight, RoundNumber},
     ensure,
+    identifiers::Owner,
 };
 use linera_execution::ChainOwnership;
 use serde::{Deserialize, Serialize};
@@ -171,13 +172,14 @@ impl ChainManager {
                 found_block_height: new_block.height
             }
         );
+        // When a block is certified, incrementing its height must succeed.
+        ensure!(
+            new_block.height < BlockHeight::max(),
+            ChainError::InvalidBlockHeight
+        );
         ensure!(
             new_block.previous_block_hash == block_hash,
             ChainError::UnexpectedPreviousBlockHash
-        );
-        ensure!(
-            new_block.height <= BlockHeight::max(),
-            ChainError::InvalidBlockHeight
         );
         match self {
             ChainManager::Single(manager) => {

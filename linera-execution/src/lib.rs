@@ -37,8 +37,9 @@ use dashmap::DashMap;
 use derive_more::Display;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, ChainId, EffectId, Owner, Timestamp},
+    data_types::{Balance, BlockHeight, Timestamp},
     hex_debug,
+    identifiers::{ChainId, EffectId, Owner},
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -260,7 +261,7 @@ pub trait ReadableStorage: Send + Sync {
     fn application_parameters(&self) -> Vec<u8>;
 
     /// Read the system balance.
-    fn read_system_balance(&self) -> crate::system::Balance;
+    fn read_system_balance(&self) -> Balance;
 
     /// Read the system timestamp.
     fn read_system_timestamp(&self) -> Timestamp;
@@ -300,16 +301,7 @@ pub trait QueryableStorage: ReadableStorage {
     ) -> Result<Vec<u8>, ExecutionError>;
 }
 
-/// The identifier of a session.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
-pub struct SessionId {
-    /// The application that runs the session.
-    pub application_id: UserApplicationId,
-    /// User-defined tag.
-    pub kind: u64,
-    /// Unique index set by the runtime.
-    index: u64,
-}
+pub type SessionId = linera_base::identifiers::SessionId;
 
 /// The result of calling into an application or a session.
 pub struct CallResult {
@@ -428,21 +420,8 @@ pub struct RawExecutionResult<Effect> {
     pub unsubscribe: Vec<(ChannelName, ChainId)>,
 }
 
-/// The name of a subscription channel.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
-pub struct ChannelName(#[serde(with = "serde_bytes")] Vec<u8>);
-
-impl From<Vec<u8>> for ChannelName {
-    fn from(name: Vec<u8>) -> Self {
-        ChannelName(name)
-    }
-}
-
-impl AsRef<[u8]> for ChannelName {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
+pub type ChannelName = linera_base::identifiers::ChannelName;
+pub type Destination = linera_base::identifiers::Destination;
 
 /// The identifier of a channel, relative to a particular application.
 #[derive(
@@ -451,15 +430,6 @@ impl AsRef<[u8]> for ChannelName {
 pub struct ChannelId {
     pub chain_id: ChainId,
     pub name: ChannelName,
-}
-
-/// The destination of a message, relative to a particular application.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum Destination {
-    /// Direct message to a chain.
-    Recipient(ChainId),
-    /// Broadcast to the current subscribers of our channel.
-    Subscribers(ChannelName),
 }
 
 /// Externally visible results of an execution, tagged by their application.
@@ -503,7 +473,7 @@ impl From<OperationContext> for EffectId {
         Self {
             chain_id: context.chain_id,
             height: context.height,
-            index: context.index,
+            index: context.index as u64,
         }
     }
 }

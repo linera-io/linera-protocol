@@ -3,7 +3,7 @@
 
 use crate::SystemExecutionError;
 use custom_debug_derive::Debug;
-use linera_base::{crypto::CryptoHash, data_types::EffectId, hex_debug};
+use linera_base::{crypto::CryptoHash, hex_debug, identifiers::EffectId};
 use linera_views::{
     common::Context,
     map_view::MapView,
@@ -41,14 +41,7 @@ impl ApplicationId {
     }
 }
 
-/// A unique identifier for a user application.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct UserApplicationId {
-    /// The bytecode to use for the application.
-    pub bytecode_id: BytecodeId,
-    /// The unique ID of the application's creation.
-    pub creation: EffectId,
-}
+pub type UserApplicationId = linera_base::identifiers::ApplicationId;
 
 /// Description of the necessary information to run a user application.
 #[allow(clippy::large_enum_variant)]
@@ -78,12 +71,6 @@ pub struct UserApplicationDescription {
     pub required_application_ids: Vec<UserApplicationId>,
 }
 
-impl From<EffectId> for BytecodeId {
-    fn from(effect_id: EffectId) -> Self {
-        BytecodeId(effect_id)
-    }
-}
-
 impl From<&ApplicationDescription> for ApplicationId {
     fn from(description: &ApplicationDescription) -> Self {
         match description {
@@ -102,9 +89,7 @@ impl From<&UserApplicationDescription> for UserApplicationId {
     }
 }
 
-/// A unique identifier for an application bytecode.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct BytecodeId(pub EffectId);
+pub type BytecodeId = linera_base::identifiers::BytecodeId;
 
 /// A reference to where the application bytecode is stored.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]

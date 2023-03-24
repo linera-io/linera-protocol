@@ -3,26 +3,25 @@
 
 use crate::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
-    system::{Amount, Balance, Recipient, UserData},
-    ApplicationId, Bytecode, BytecodeId, ChainOwnership, ChannelId, ChannelName,
-    ExecutionStateView, SystemExecutionStateView, UserApplicationDescription, UserApplicationId,
+    system::{Recipient, UserData},
+    ApplicationId, Bytecode, ChainOwnership, ChannelId, ExecutionStateView,
+    SystemExecutionStateView, UserApplicationDescription,
 };
 use async_graphql::{scalar, Error, Object};
-use linera_base::data_types::{ChainDescription, ChainId, Timestamp};
+use linera_base::{
+    data_types::{Balance, Timestamp},
+    identifiers::{ChainDescription, ChainId},
+};
 use linera_views::{common::Context, views::ViewError};
 use std::collections::BTreeMap;
 
-scalar!(Amount);
 scalar!(ApplicationId);
 scalar!(Bytecode);
-scalar!(BytecodeId);
-scalar!(Balance);
+
 scalar!(ChainOwnership);
-scalar!(ChannelName);
 scalar!(Epoch);
 scalar!(Recipient);
 scalar!(UserApplicationDescription);
-scalar!(UserApplicationId);
 scalar!(UserData);
 scalar!(ValidatorName);
 

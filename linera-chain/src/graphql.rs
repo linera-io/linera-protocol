@@ -9,7 +9,7 @@ use crate::{
     ChainManager,
 };
 use async_graphql::{scalar, Error, Object};
-use linera_base::data_types::ChainId;
+use linera_base::identifiers::ChainId;
 use linera_execution::{ApplicationId, ChannelName};
 use linera_views::{collection_view::ReadGuardedView, common::Context, views::ViewError};
 use serde::{Deserialize, Serialize};

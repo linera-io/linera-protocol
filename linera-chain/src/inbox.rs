@@ -4,8 +4,9 @@
 use crate::{data_types::Event, ChainError, Origin};
 use async_graphql::SimpleObject;
 use linera_base::{
-    data_types::{ArithmeticError, BlockHeight, ChainId},
+    data_types::{ArithmeticError, BlockHeight},
     ensure,
+    identifiers::ChainId,
 };
 use linera_execution::ApplicationId;
 use linera_views::{

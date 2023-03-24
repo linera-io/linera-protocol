@@ -3,7 +3,7 @@
 
 use super::ChainGuards;
 use futures::FutureExt;
-use linera_base::data_types::ChainId;
+use linera_base::identifiers::ChainId;
 use std::{
     mem,
     sync::{

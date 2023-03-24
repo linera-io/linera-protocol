@@ -6,8 +6,9 @@ use crate::ChainError;
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
-    data_types::{BlockHeight, ChainId, Owner, RoundNumber, Timestamp},
+    data_types::{BlockHeight, RoundNumber, Timestamp},
     ensure,
+    identifiers::{ChainId, Owner},
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},

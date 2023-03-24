@@ -16,7 +16,8 @@ use futures::{
 };
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
-    data_types::{BlockHeight, ChainId, EffectId, Owner, RoundNumber, Timestamp},
+    data_types::{Amount, Balance, BlockHeight, RoundNumber, Timestamp},
+    identifiers::{BytecodeId, ChainId, EffectId, Owner},
 };
 use linera_chain::{
     data_types::{
@@ -26,9 +27,8 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
-    system::{Account, Amount, Balance, Recipient, SystemChannel, SystemOperation, UserData},
-    ApplicationId, Bytecode, BytecodeId, Effect, Operation, Query, Response, SystemEffect,
-    UserApplicationId,
+    system::{Account, Recipient, SystemChannel, SystemOperation, UserData},
+    ApplicationId, Bytecode, Effect, Operation, Query, Response, SystemEffect, UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;

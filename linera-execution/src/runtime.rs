@@ -9,8 +9,9 @@ use crate::{
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{ChainId, Owner, Timestamp},
+    data_types::Timestamp,
     ensure, hex_debug,
+    identifiers::{ChainId, Owner},
 };
 use linera_views::{
     batch::Batch,
@@ -320,7 +321,7 @@ where
             .clone()
     }
 
-    fn read_system_balance(&self) -> crate::system::Balance {
+    fn read_system_balance(&self) -> linera_base::data_types::Balance {
         *self.execution_state_mut().system.balance.get()
     }
 

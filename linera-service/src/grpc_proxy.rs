@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use linera_base::data_types::ChainId;
+use linera_base::identifiers::ChainId;
 use linera_core::notifier::Notifier;
 use linera_rpc::{
     config::{ShardConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig},

@@ -3,7 +3,8 @@
 
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
-    data_types::{BlockHeight, ChainId, EffectId},
+    data_types::BlockHeight,
+    identifiers::{ChainId, EffectId},
 };
 use linera_execution::{BytecodeLocation, UserApplicationDescription};
 use serde::{Deserialize, Serialize};

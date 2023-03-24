@@ -17,7 +17,8 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{ChainDescription, ChainId, Timestamp},
+    data_types::{Balance, Timestamp},
+    identifiers::{ChainDescription, ChainId},
 };
 use linera_chain::{
     data_types::{Certificate, HashedValue},
@@ -25,7 +26,6 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::Balance,
     ChainOwnership, ExecutionError, ExecutionRuntimeContext, UserApplicationCode,
     UserApplicationDescription, UserApplicationId, WasmRuntime,
 };

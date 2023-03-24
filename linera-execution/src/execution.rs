@@ -9,8 +9,8 @@ use crate::{
     UserApplicationId, WritableStorage,
 };
 use linera_base::{
-    data_types::{ChainId, Owner},
     ensure,
+    identifiers::{ChainId, Owner},
 };
 use linera_views::{
     key_value_store_view::KeyValueStoreView,
@@ -120,7 +120,7 @@ where
             chain_id,
             authenticated_signer: None,
             height: application_description.creation.height,
-            index: application_description.creation.index,
+            index: application_description.creation.index as usize,
         };
 
         let action = UserAction::Initialize(&context, initialization_argument);

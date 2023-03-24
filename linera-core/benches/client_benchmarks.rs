@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use criterion::{criterion_group, criterion_main, measurement::Measurement, BatchSize, Criterion};
-use linera_base::data_types::ChainDescription;
+use linera_base::{
+    data_types::{Amount, Balance},
+    identifiers::ChainDescription,
+};
 use linera_core::client::{
     self,
     client_test_utils::{MakeMemoryStoreClient, NodeProvider, StoreBuilder, TestBuilder},
 };
-use linera_execution::system::{Account, Amount, Balance, Recipient, UserData};
+use linera_execution::system::{Account, Recipient, UserData};
 use linera_storage::{
     Store, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
     WRITE_VALUE_COUNTER,

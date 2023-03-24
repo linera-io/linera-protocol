@@ -5,15 +5,16 @@
 use crate::{
     applications::ApplicationRegistry,
     committee::{Committee, Epoch},
-    ApplicationRegistryView, Bytecode, BytecodeId, BytecodeLocation, ChainOwnership, ChannelId,
-    ChannelName, Destination, EffectContext, OperationContext, QueryContext, RawExecutionResult,
+    ApplicationRegistryView, Bytecode, BytecodeLocation, ChainOwnership, ChannelId, ChannelName,
+    Destination, EffectContext, OperationContext, QueryContext, RawExecutionResult,
     UserApplicationDescription, UserApplicationId,
 };
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{ArithmeticError, ChainDescription, ChainId, EffectId, Owner, Timestamp},
+    data_types::{Amount, ArithmeticError, Balance, Timestamp},
     ensure, hex_debug,
+    identifiers::{BytecodeId, ChainDescription, ChainId, EffectId, Owner},
 };
 use linera_views::{
     common::Context,
@@ -335,18 +336,6 @@ impl FromStr for Account {
         }
     }
 }
-
-/// A non-negative amount of money to be transferred.
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
-pub struct Amount(u64);
-
-/// The balance of a chain.
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
-pub struct Balance(u128);
 
 /// Optional user message attached to a transfer.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
@@ -742,18 +731,12 @@ where
             Credit { amount, account } if context.chain_id == account.chain_id => {
                 match &account.owner {
                     None => {
-                        let new_balance = self
-                            .balance
-                            .get()
-                            .try_add((*amount).into())
-                            .unwrap_or_else(|_| Balance::max());
+                        let new_balance = self.balance.get().saturating_add((*amount).into());
                         self.balance.set(new_balance);
                     }
                     Some(owner) => {
                         let balance = self.balances.get_mut_or_default(owner).await?;
-                        *balance = balance
-                            .try_add((*amount).into())
-                            .unwrap_or_else(|_| Balance::max());
+                        *balance = balance.saturating_add((*amount).into());
                     }
                 }
             }
@@ -897,162 +880,5 @@ where
             balance: *self.balance.get(),
         };
         Ok(response)
-    }
-}
-
-impl Amount {
-    #[inline]
-    pub fn zero() -> Self {
-        Amount(0)
-    }
-
-    #[inline]
-    pub fn try_add(self, other: Self) -> Result<Self, SystemExecutionError> {
-        let val = self
-            .0
-            .checked_add(other.0)
-            .ok_or(SystemExecutionError::AmountOverflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_sub(self, other: Self) -> Result<Self, SystemExecutionError> {
-        let val = self
-            .0
-            .checked_sub(other.0)
-            .ok_or(SystemExecutionError::AmountUnderflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_add_assign(&mut self, other: Self) -> Result<(), SystemExecutionError> {
-        self.0 = self
-            .0
-            .checked_add(other.0)
-            .ok_or(SystemExecutionError::AmountOverflow)?;
-        Ok(())
-    }
-
-    #[inline]
-    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), SystemExecutionError> {
-        self.0 = self
-            .0
-            .checked_sub(other.0)
-            .ok_or(SystemExecutionError::AmountUnderflow)?;
-        Ok(())
-    }
-}
-
-impl Balance {
-    #[inline]
-    pub fn zero() -> Self {
-        Balance(0)
-    }
-
-    #[inline]
-    pub fn max() -> Self {
-        Balance(std::u128::MAX)
-    }
-
-    #[inline]
-    pub fn try_add(self, other: Self) -> Result<Self, SystemExecutionError> {
-        let val = self
-            .0
-            .checked_add(other.0)
-            .ok_or(SystemExecutionError::BalanceOverflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_sub(self, other: Self) -> Result<Self, SystemExecutionError> {
-        let val = self
-            .0
-            .checked_sub(other.0)
-            .ok_or(SystemExecutionError::BalanceUnderflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_add_assign(&mut self, other: Self) -> Result<(), SystemExecutionError> {
-        self.0 = self
-            .0
-            .checked_add(other.0)
-            .ok_or(SystemExecutionError::BalanceOverflow)?;
-        Ok(())
-    }
-
-    #[inline]
-    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), SystemExecutionError> {
-        self.0 = self
-            .0
-            .checked_sub(other.0)
-            .ok_or(SystemExecutionError::BalanceUnderflow)?;
-        Ok(())
-    }
-}
-
-impl std::fmt::Display for Balance {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::fmt::Display for Amount {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::str::FromStr for Balance {
-    type Err = std::num::ParseIntError;
-
-    fn from_str(src: &str) -> Result<Self, Self::Err> {
-        Ok(Self(u128::from_str(src)?))
-    }
-}
-
-impl std::str::FromStr for Amount {
-    type Err = std::num::ParseIntError;
-
-    fn from_str(src: &str) -> Result<Self, Self::Err> {
-        Ok(Self(u64::from_str(src)?))
-    }
-}
-
-impl From<Amount> for u64 {
-    fn from(val: Amount) -> Self {
-        val.0
-    }
-}
-
-impl From<Amount> for Balance {
-    fn from(val: Amount) -> Self {
-        Balance(val.0 as u128)
-    }
-}
-
-impl TryFrom<Balance> for Amount {
-    type Error = std::num::TryFromIntError;
-
-    fn try_from(val: Balance) -> Result<Self, Self::Error> {
-        Ok(Amount(val.0.try_into()?))
-    }
-}
-
-impl From<u64> for Amount {
-    fn from(value: u64) -> Self {
-        Amount(value)
-    }
-}
-
-impl From<u128> for Balance {
-    fn from(value: u128) -> Self {
-        Balance(value)
-    }
-}
-
-impl From<Balance> for u128 {
-    fn from(value: Balance) -> Self {
-        value.0
     }
 }

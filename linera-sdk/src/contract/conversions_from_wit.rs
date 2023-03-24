@@ -6,13 +6,13 @@
 use super::writable_system::{
     self as system, PollFindKeyValues, PollFindKeys, PollLock, PollReadKeyBytes, PollUnit,
 };
-use crate::{
-    base::{
-        ApplicationId, BlockHeight, BytecodeId, ChainId, CryptoHash, EffectId, Owner, SessionId,
-        SystemBalance,
-    },
-    CalleeContext, EffectContext, OperationContext, Session,
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::{Balance, BlockHeight},
+    identifiers::{ApplicationId, BytecodeId, ChainId, EffectId, Owner, SessionId},
 };
+
+use crate::{CalleeContext, EffectContext, OperationContext, Session};
 use std::task::Poll;
 
 impl From<super::OperationContext> for OperationContext {
@@ -62,7 +62,7 @@ impl From<super::CalleeContext> for CalleeContext {
 impl From<super::ApplicationId> for ApplicationId {
     fn from(application_id: super::ApplicationId) -> Self {
         ApplicationId {
-            bytecode: BytecodeId(application_id.bytecode_id.into()),
+            bytecode_id: BytecodeId(application_id.bytecode_id.into()),
             creation: application_id.creation.into(),
         }
     }
@@ -117,7 +117,7 @@ impl From<system::EffectId> for EffectId {
 impl From<system::ApplicationId> for ApplicationId {
     fn from(application_id: system::ApplicationId) -> Self {
         ApplicationId {
-            bytecode: BytecodeId(application_id.bytecode_id.into()),
+            bytecode_id: BytecodeId(application_id.bytecode_id.into()),
             creation: application_id.creation.into(),
         }
     }
@@ -134,10 +134,10 @@ impl From<system::CryptoHash> for CryptoHash {
     }
 }
 
-impl From<system::SystemBalance> for SystemBalance {
-    fn from(balance: system::SystemBalance) -> Self {
+impl From<system::Balance> for Balance {
+    fn from(balance: system::Balance) -> Self {
         let value = ((balance.upper_half as u128) << 64) | (balance.lower_half as u128);
-        SystemBalance(value)
+        Balance::from(value)
     }
 }
 

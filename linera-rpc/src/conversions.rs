@@ -8,8 +8,9 @@ use crate::grpc_network::{
 use ed25519::signature::Signature as edSignature;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
-    data_types::{BlockHeight, ChainId, EffectId, Owner},
+    data_types::BlockHeight,
     ensure,
+    identifiers::{BytecodeId, ChainId, EffectId, Owner},
 };
 use linera_chain::data_types::{
     BlockAndRound, BlockProposal, Certificate, CertificateWithDependencies, HashedValue,
@@ -23,7 +24,7 @@ use linera_core::{
     node::NodeError,
     worker::{Notification, Reason},
 };
-use linera_execution::{committee::ValidatorName, ApplicationId, BytecodeId, UserApplicationId};
+use linera_execution::{committee::ValidatorName, ApplicationId, UserApplicationId};
 use thiserror::Error;
 use tonic::{Code, Status};
 
@@ -601,7 +602,7 @@ impl From<EffectId> for grpc::EffectId {
         Self {
             chain_id: Some(effect_id.chain_id.into()),
             height: Some(effect_id.height.into()),
-            index: effect_id.index as u64,
+            index: effect_id.index,
         }
     }
 }
@@ -613,7 +614,7 @@ impl TryFrom<grpc::EffectId> for EffectId {
         Ok(Self {
             chain_id: try_proto_convert!(effect_id.chain_id),
             height: proto_convert!(effect_id.height),
-            index: effect_id.index as usize,
+            index: effect_id.index,
         })
     }
 }
@@ -827,7 +828,7 @@ pub mod tests {
 
     #[test]
     pub fn test_block_height() {
-        let block_height = BlockHeight::from(10u64);
+        let block_height = BlockHeight::from(10);
         round_trip_check::<_, grpc::BlockHeight>(block_height);
     }
 
@@ -866,13 +867,13 @@ pub mod tests {
     #[test]
     pub fn test_block_height_range() {
         let block_height_range_none = BlockHeightRange {
-            start: BlockHeight::from(10u64),
+            start: BlockHeight::from(10),
             limit: None,
         };
         round_trip_check::<_, grpc::BlockHeightRange>(block_height_range_none);
 
         let block_height_range_some = BlockHeightRange {
-            start: BlockHeight::from(10u64),
+            start: BlockHeight::from(10),
             limit: Some(20),
         };
         round_trip_check::<_, grpc::BlockHeightRange>(block_height_range_some);

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use dashmap::DashMap;
-use linera_base::data_types::ChainId;
+use linera_base::identifiers::ChainId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::trace;
 

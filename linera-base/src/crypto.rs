@@ -264,6 +264,33 @@ impl TryFrom<&[u8]> for CryptoHash {
     }
 }
 
+impl From<[u64; 4]> for CryptoHash {
+    fn from(integers: [u64; 4]) -> Self {
+        let mut bytes = [0u8; 32];
+
+        bytes[0..8].copy_from_slice(&integers[0].to_le_bytes());
+        bytes[8..16].copy_from_slice(&integers[1].to_le_bytes());
+        bytes[16..24].copy_from_slice(&integers[2].to_le_bytes());
+        bytes[24..32].copy_from_slice(&integers[3].to_le_bytes());
+
+        CryptoHash(bytes.into())
+    }
+}
+
+impl From<CryptoHash> for [u64; 4] {
+    fn from(crypto_hash: CryptoHash) -> Self {
+        let bytes = crypto_hash.0;
+        let mut integers = [0u64; 4];
+
+        integers[0] = u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices"));
+        integers[1] = u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices"));
+        integers[2] = u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices"));
+        integers[3] = u64::from_le_bytes(bytes[24..32].try_into().expect("incorrect indices"));
+
+        integers
+    }
+}
+
 impl std::fmt::Display for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         let s = hex::encode(self.0.to_bytes());

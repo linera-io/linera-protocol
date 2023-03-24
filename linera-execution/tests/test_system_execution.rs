@@ -5,10 +5,11 @@
 
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
-    data_types::{BlockHeight, ChainDescription, ChainId, EffectId},
+    data_types::{Amount, Balance, BlockHeight},
+    identifiers::{ChainDescription, ChainId, EffectId},
 };
 use linera_execution::{
-    system::{Account, Amount, Balance, Recipient, UserData},
+    system::{Account, Recipient, UserData},
     ApplicationId, Effect, EffectContext, ExecutionResult, ExecutionStateView, Operation,
     OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemEffect,
     SystemExecutionState, SystemOperation, SystemQuery, SystemResponse,

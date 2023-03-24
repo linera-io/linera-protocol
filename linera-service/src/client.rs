@@ -9,7 +9,8 @@ use colored::Colorize;
 use futures::StreamExt;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{BlockHeight, ChainDescription, ChainId, RoundNumber, Timestamp},
+    data_types::{Amount, Balance, BlockHeight, RoundNumber, Timestamp},
+    identifiers::{ChainDescription, ChainId},
 };
 use linera_chain::data_types::{
     Block, BlockAndRound, BlockProposal, Certificate, HashedValue, SignatureAggregator, Vote,
@@ -22,7 +23,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Epoch, ValidatorName, ValidatorState},
-    system::{Account, Amount, Balance, Recipient, SystemOperation, UserData},
+    system::{Account, Recipient, SystemOperation, UserData},
     ApplicationId, Bytecode, Operation, WasmRuntime, WithWasmDefault,
 };
 use linera_rpc::{

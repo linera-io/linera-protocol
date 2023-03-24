@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{crypto::PublicKey, data_types::Owner};
+use linera_base::{crypto::PublicKey, identifiers::Owner};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

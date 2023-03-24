@@ -5,9 +5,11 @@
 use super::queryable_system::{
     self, PollFindKeyValues, PollFindKeys, PollLoad, PollLock, PollReadKeyBytes,
 };
-use crate::{
-    base::{ApplicationId, BlockHeight, BytecodeId, ChainId, CryptoHash, EffectId, SystemBalance},
-    QueryContext,
+use crate::QueryContext;
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::{Balance, BlockHeight},
+    identifiers::{ApplicationId, BytecodeId, ChainId, EffectId},
 };
 use linera_views::views::ViewError;
 use std::task::Poll;
@@ -45,7 +47,7 @@ impl From<queryable_system::CryptoHash> for CryptoHash {
 impl From<queryable_system::ApplicationId> for ApplicationId {
     fn from(application_id: queryable_system::ApplicationId) -> Self {
         ApplicationId {
-            bytecode: BytecodeId(application_id.bytecode_id.into()),
+            bytecode_id: BytecodeId(application_id.bytecode_id.into()),
             creation: application_id.creation.into(),
         }
     }
@@ -61,10 +63,10 @@ impl From<queryable_system::EffectId> for EffectId {
     }
 }
 
-impl From<queryable_system::SystemBalance> for SystemBalance {
-    fn from(balance: queryable_system::SystemBalance) -> Self {
+impl From<queryable_system::Balance> for Balance {
+    fn from(balance: queryable_system::Balance) -> Self {
         let value = ((balance.upper_half as u128) << 64) | (balance.lower_half as u128);
-        SystemBalance(value)
+        Balance::from(value)
     }
 }
 

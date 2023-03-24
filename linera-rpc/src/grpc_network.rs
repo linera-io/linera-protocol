@@ -31,7 +31,7 @@ use grpc::{
     BlockProposal, CertificateWithDependencies, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
     LiteCertificate, SubscriptionRequest,
 };
-use linera_base::data_types::ChainId;
+use linera_base::identifiers::ChainId;
 use linera_chain::data_types;
 use linera_core::{
     node::{NodeError, NotificationStream, ValidatorNode},

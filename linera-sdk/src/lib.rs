@@ -10,10 +10,11 @@ mod log;
 pub mod service;
 
 use async_trait::async_trait;
-use base::{
-    ApplicationId, BlockHeight, ChainId, ChannelName, Destination, EffectId, Owner, SessionId,
-};
 use custom_debug_derive::Debug;
+use linera_base::{
+    data_types::BlockHeight,
+    identifiers::{ApplicationId, ChainId, ChannelName, Destination, EffectId, Owner, SessionId},
+};
 use serde::{Deserialize, Serialize};
 use std::{error::Error, sync::Arc};
 
