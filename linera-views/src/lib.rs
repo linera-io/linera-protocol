@@ -74,7 +74,6 @@ pub mod test_utils;
 pub use {async_trait::async_trait, generic_array, serde, sha3};
 
 #[doc(hidden)]
-#[cfg(not(target_arch = "wasm32"))]
 pub use linera_base::crypto;
 
 /// Does nothing. Use the metrics feature to enable.

@@ -93,7 +93,8 @@ pub enum ChainDescription {
     Child(EffectId),
 }
 
-/// The unique identifier (UID) of a chain. This is the hash value of a ChainDescription.
+/// The unique identifier (UID) of a chain. This is currently computed as the hash value
+/// of a [`ChainDescription`].
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Arbitrary))]
 pub struct ChainId(pub CryptoHash);
