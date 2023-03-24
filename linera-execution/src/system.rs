@@ -3,16 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    applications::ApplicationRegistry, ApplicationRegistryView, Bytecode, BytecodeId,
-    BytecodeLocation, ChainOwnership, ChannelId, ChannelName, Destination, EffectContext,
-    OperationContext, QueryContext, RawExecutionResult, UserApplicationDescription,
-    UserApplicationId,
+    applications::ApplicationRegistry,
+    committee::{Committee, Epoch},
+    ApplicationRegistryView, Bytecode, BytecodeId, BytecodeLocation, ChainOwnership, ChannelId,
+    ChannelName, Destination, EffectContext, OperationContext, QueryContext, RawExecutionResult,
+    UserApplicationDescription, UserApplicationId,
 };
 use custom_debug_derive::Debug;
 use linera_base::{
-    committee::Committee,
     crypto::{CryptoHash, PublicKey},
-    data_types::{ArithmeticError, ChainDescription, ChainId, EffectId, Epoch, Owner, Timestamp},
+    data_types::{ArithmeticError, ChainDescription, ChainId, EffectId, Owner, Timestamp},
     ensure, hex_debug,
 };
 use linera_views::{

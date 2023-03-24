@@ -13,6 +13,7 @@ use crate::client::{
 };
 use linera_base::{crypto::*, data_types::*};
 use linera_execution::{
+    committee::Epoch,
     system::{Account, Amount, Balance, Recipient, SystemOperation, UserData},
     ApplicationId, Operation, Query, Response, SystemQuery, SystemResponse,
 };

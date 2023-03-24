@@ -2,10 +2,23 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::data_types::ValidatorName;
 use async_graphql::InputObject;
+use linera_base::{
+    crypto::{CryptoError, PublicKey},
+    data_types::ArithmeticError,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+/// A number identifying the configuration of the chain (aka the committee).
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+)]
+pub struct Epoch(pub u64);
+
+/// The identity of a validator.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+pub struct ValidatorName(pub PublicKey);
 
 /// Public state of validator.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Serialize, Deserialize)]
@@ -27,6 +40,60 @@ pub struct Committee {
     pub quorum_threshold: u64,
     /// The threshold to prove the validity of a statement.
     pub validity_threshold: u64,
+}
+
+impl std::fmt::Display for ValidatorName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::str::FromStr for ValidatorName {
+    type Err = CryptoError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ValidatorName(PublicKey::from_str(s)?))
+    }
+}
+
+impl std::fmt::Display for Epoch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::str::FromStr for Epoch {
+    type Err = CryptoError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Epoch(s.parse()?))
+    }
+}
+
+impl From<u64> for Epoch {
+    fn from(value: u64) -> Self {
+        Epoch(value)
+    }
+}
+
+impl From<PublicKey> for ValidatorName {
+    fn from(value: PublicKey) -> Self {
+        Self(value)
+    }
+}
+
+impl Epoch {
+    #[inline]
+    pub fn try_add_one(self) -> Result<Self, ArithmeticError> {
+        let val = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+        Ok(Self(val))
+    }
+
+    #[inline]
+    pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
+        self.0 = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+        Ok(())
+    }
 }
 
 impl Committee {

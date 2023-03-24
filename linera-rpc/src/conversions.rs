@@ -8,7 +8,7 @@ use crate::grpc_network::{
 use ed25519::signature::Signature as edSignature;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
-    data_types::{BlockHeight, ChainId, EffectId, Owner, ValidatorName},
+    data_types::{BlockHeight, ChainId, EffectId, Owner},
     ensure,
 };
 use linera_chain::data_types::{
@@ -23,7 +23,7 @@ use linera_core::{
     node::NodeError,
     worker::{Notification, Reason},
 };
-use linera_execution::{ApplicationId, BytecodeId, UserApplicationId};
+use linera_execution::{committee::ValidatorName, ApplicationId, BytecodeId, UserApplicationId};
 use thiserror::Error;
 use tonic::{Code, Status};
 

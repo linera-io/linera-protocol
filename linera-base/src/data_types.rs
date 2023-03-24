@@ -79,20 +79,10 @@ impl fmt::Display for Timestamp {
     }
 }
 
-/// The identity of a validator.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct ValidatorName(pub PublicKey);
-
 /// The owner of a chain. This is currently the hash of the owner's public key used to
 /// verify signatures.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct Owner(pub CryptoHash);
-
-/// A number identifying the configuration of the chain (aka the committee).
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
-pub struct Epoch(pub u64);
 
 /// How to create a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
@@ -131,37 +121,9 @@ impl std::fmt::Display for BlockHeight {
     }
 }
 
-impl std::fmt::Display for Epoch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", self.0)
-    }
-}
-
 impl std::fmt::Display for Owner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{}", self.0)
-    }
-}
-
-impl std::fmt::Display for ValidatorName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::str::FromStr for ValidatorName {
-    type Err = CryptoError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(ValidatorName(PublicKey::from_str(s)?))
-    }
-}
-
-impl std::str::FromStr for Epoch {
-    type Err = CryptoError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Epoch(s.parse()?))
     }
 }
 
@@ -227,20 +189,6 @@ impl RoundNumber {
     }
 }
 
-impl Epoch {
-    #[inline]
-    pub fn try_add_one(self) -> Result<Self, ArithmeticError> {
-        let val = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-        Ok(())
-    }
-}
-
 impl From<BlockHeight> for u64 {
     fn from(val: BlockHeight) -> Self {
         val.0
@@ -256,18 +204,6 @@ impl From<u64> for BlockHeight {
 impl From<BlockHeight> for usize {
     fn from(value: BlockHeight) -> Self {
         value.0 as usize
-    }
-}
-
-impl From<u64> for Epoch {
-    fn from(value: u64) -> Self {
-        Epoch(value)
-    }
-}
-
-impl From<PublicKey> for ValidatorName {
-    fn from(value: PublicKey) -> Self {
-        Self(value)
     }
 }
 

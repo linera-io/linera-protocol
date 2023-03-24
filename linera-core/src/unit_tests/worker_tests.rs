@@ -13,7 +13,6 @@ use crate::{
     },
 };
 use linera_base::{
-    committee::Committee,
     crypto::{BcsSignable, CryptoHash, *},
     data_types::*,
 };
@@ -25,6 +24,7 @@ use linera_chain::{
     ChainError,
 };
 use linera_execution::{
+    committee::{Committee, Epoch, ValidatorName},
     system::{
         Account, Amount, Balance, Recipient, SystemChannel, SystemEffect, SystemOperation, UserData,
     },

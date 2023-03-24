@@ -16,16 +16,17 @@ use chain_guards::ChainGuard;
 use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future;
 use linera_base::{
-    committee::Committee,
     crypto::{CryptoHash, PublicKey},
-    data_types::{ChainDescription, ChainId, Epoch, Timestamp},
+    data_types::{ChainDescription, ChainId, Timestamp},
 };
 use linera_chain::{
     data_types::{Certificate, HashedValue},
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    system::Balance, ChainOwnership, ExecutionError, ExecutionRuntimeContext, UserApplicationCode,
+    committee::{Committee, Epoch},
+    system::Balance,
+    ChainOwnership, ExecutionError, ExecutionRuntimeContext, UserApplicationCode,
     UserApplicationDescription, UserApplicationId, WasmRuntime,
 };
 use linera_views::{
