@@ -6,9 +6,8 @@ use crate::data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChain
 use async_trait::async_trait;
 use futures::{future, FutureExt};
 use linera_base::{
-    committee::Committee,
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, BlockHeight, ChainId, Epoch, Owner, Timestamp},
+    data_types::{ArithmeticError, BlockHeight, ChainId, Owner, Timestamp},
     ensure,
 };
 use linera_chain::{
@@ -19,7 +18,9 @@ use linera_chain::{
     ChainManagerOutcome, ChainStateView,
 };
 use linera_execution::{
-    ApplicationId, BytecodeLocation, Query, Response, UserApplicationDescription, UserApplicationId,
+    committee::{Committee, Epoch},
+    ApplicationId, BytecodeLocation, Query, Response, UserApplicationDescription,
+    UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::{

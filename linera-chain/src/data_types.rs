@@ -5,12 +5,12 @@
 use crate::ChainError;
 use async_graphql::SimpleObject;
 use linera_base::{
-    committee::Committee,
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
-    data_types::{BlockHeight, ChainId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName},
+    data_types::{BlockHeight, ChainId, Owner, RoundNumber, Timestamp},
     ensure,
 };
 use linera_execution::{
+    committee::{Committee, Epoch, ValidatorName},
     ApplicationId, BytecodeLocation, ChannelName, Destination, Effect, Operation,
 };
 use serde::{Deserialize, Serialize};

@@ -4,15 +4,18 @@
 
 use crate::node::NodeError;
 use linera_base::{
-    committee::Committee,
     crypto::{BcsSignable, CryptoHash, KeyPair, Signature},
-    data_types::{BlockHeight, ChainDescription, ChainId, Epoch, Timestamp, ValidatorName},
+    data_types::{BlockHeight, ChainDescription, ChainId, Timestamp},
 };
 use linera_chain::{
     data_types::{Certificate, ChainAndHeight, HashedValue, Medium, Message, Origin},
     ChainManagerInfo, ChainStateView,
 };
-use linera_execution::{system::Balance, ApplicationId, ExecutionRuntimeContext};
+use linera_execution::{
+    committee::{Committee, Epoch, ValidatorName},
+    system::Balance,
+    ApplicationId, ExecutionRuntimeContext,
+};
 use linera_storage::ChainRuntimeContext;
 use linera_views::{common::Context, views::ViewError};
 use serde::{Deserialize, Serialize};

@@ -15,9 +15,8 @@ use axum::{
 };
 use futures::lock::Mutex;
 use linera_base::{
-    committee::Committee,
     crypto::PublicKey,
-    data_types::{ChainId, Epoch, Owner},
+    data_types::{ChainId, Owner},
 };
 use linera_chain::{data_types::Certificate, ChainStateView};
 use linera_core::{
@@ -25,6 +24,7 @@ use linera_core::{
     worker::Notification,
 };
 use linera_execution::{
+    committee::{Committee, Epoch},
     system::{Amount, Recipient, SystemChannel, UserData},
     ApplicationId, Bytecode, BytecodeId, Operation, Query, Response, SystemOperation,
     UserApplicationDescription, UserApplicationId,

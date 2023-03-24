@@ -15,11 +15,8 @@ use futures::{
     stream::{select_all, FuturesUnordered, StreamExt},
 };
 use linera_base::{
-    committee::{Committee, ValidatorState},
     crypto::{CryptoHash, KeyPair, PublicKey},
-    data_types::{
-        BlockHeight, ChainId, EffectId, Epoch, Owner, RoundNumber, Timestamp, ValidatorName,
-    },
+    data_types::{BlockHeight, ChainId, EffectId, Owner, RoundNumber, Timestamp},
 };
 use linera_chain::{
     data_types::{
@@ -28,6 +25,7 @@ use linera_chain::{
     ChainManagerInfo, ChainStateView,
 };
 use linera_execution::{
+    committee::{Committee, Epoch, ValidatorName, ValidatorState},
     system::{Account, Amount, Balance, Recipient, SystemChannel, SystemOperation, UserData},
     ApplicationId, Bytecode, BytecodeId, Effect, Operation, Query, Response, SystemEffect,
     UserApplicationId,

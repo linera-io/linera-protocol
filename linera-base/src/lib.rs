@@ -5,7 +5,6 @@
 //! between the Linera protocol (compiled from Rust to native code) and Linera
 //! applications (compiled from Rust to Wasm).
 
-pub mod committee;
 pub mod crypto;
 pub mod data_types;
 mod graphql;

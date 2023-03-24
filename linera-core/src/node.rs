@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use futures::{future, lock::Mutex, Stream};
 use linera_base::{
     crypto::CryptoError,
-    data_types::{ArithmeticError, BlockHeight, ChainId, ValidatorName},
+    data_types::{ArithmeticError, BlockHeight, ChainId},
 };
 use linera_chain::{
     data_types::{
@@ -20,7 +20,8 @@ use linera_chain::{
     ChainError, ChainManagerInfo,
 };
 use linera_execution::{
-    ApplicationId, BytecodeLocation, Query, Response, UserApplicationDescription, UserApplicationId,
+    committee::ValidatorName, ApplicationId, BytecodeLocation, Query, Response,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;

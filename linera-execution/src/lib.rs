@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod applications;
+pub mod committee;
 mod execution;
 mod graphql;
 mod ownership;

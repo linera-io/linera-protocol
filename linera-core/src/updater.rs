@@ -7,11 +7,9 @@ use crate::{
     node::{NodeError, ValidatorNode},
 };
 use futures::{future, StreamExt};
-use linera_base::{
-    committee::Committee,
-    data_types::{BlockHeight, ChainDescription, ChainId, EffectId, ValidatorName},
-};
+use linera_base::data_types::{BlockHeight, ChainDescription, ChainId, EffectId};
 use linera_chain::data_types::{BlockProposal, Certificate, LiteVote};
+use linera_execution::committee::{Committee, ValidatorName};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{

@@ -8,11 +8,8 @@ use chrono::{DateTime, Utc};
 use colored::Colorize;
 use futures::StreamExt;
 use linera_base::{
-    committee::ValidatorState,
     crypto::{KeyPair, PublicKey},
-    data_types::{
-        BlockHeight, ChainDescription, ChainId, Epoch, RoundNumber, Timestamp, ValidatorName,
-    },
+    data_types::{BlockHeight, ChainDescription, ChainId, RoundNumber, Timestamp},
 };
 use linera_chain::data_types::{
     Block, BlockAndRound, BlockProposal, Certificate, HashedValue, SignatureAggregator, Vote,
@@ -24,6 +21,7 @@ use linera_core::{
     worker::{Reason, WorkerState},
 };
 use linera_execution::{
+    committee::{Epoch, ValidatorName, ValidatorState},
     system::{Account, Amount, Balance, Recipient, SystemOperation, UserData},
     ApplicationId, Bytecode, Operation, WasmRuntime, WithWasmDefault,
 };
