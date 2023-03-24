@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    applications::ApplicationRegistry,
     committee::{Committee, Epoch},
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChainOwnership, ChannelId, ChannelName,
     Destination, EffectContext, OperationContext, QueryContext, RawExecutionResult,
@@ -34,7 +33,7 @@ use std::{
 use thiserror::Error;
 
 #[cfg(any(test, feature = "test"))]
-use std::collections::BTreeSet;
+use {crate::applications::ApplicationRegistry, std::collections::BTreeSet};
 
 /// A view accessing the execution state of the system of a chain.
 #[derive(Debug, HashableView)]
