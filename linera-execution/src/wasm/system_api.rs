@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Generates an implementation of `WritableSystem` for the provided `contract_system_api` type.
 ///
 /// Generates the common code for contract system API types for all WASM runtimes.
