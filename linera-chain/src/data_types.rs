@@ -8,11 +8,11 @@ use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
     data_types::{BlockHeight, RoundNumber, Timestamp},
     ensure,
-    identifiers::{ChainId, Owner},
+    identifiers::{ChainId, ChannelName, Destination, Owner},
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    ApplicationId, BytecodeLocation, ChannelName, Destination, Effect, Operation,
+    ApplicationId, BytecodeLocation, Effect, Operation,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};

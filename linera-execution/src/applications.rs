@@ -3,7 +3,11 @@
 
 use crate::SystemExecutionError;
 use custom_debug_derive::Debug;
-use linera_base::{crypto::CryptoHash, hex_debug, identifiers::EffectId};
+use linera_base::{
+    crypto::CryptoHash,
+    hex_debug,
+    identifiers::{BytecodeId, EffectId},
+};
 use linera_views::{
     common::Context,
     map_view::MapView,
@@ -41,6 +45,8 @@ impl ApplicationId {
     }
 }
 
+/// Alias for `linera_base::identifiers::ApplicationId`. Use this alias in the core
+/// protocol where the distinction with the more general enum [`ApplicationId`] matters.
 pub type UserApplicationId = linera_base::identifiers::ApplicationId;
 
 /// Description of the necessary information to run a user application.
@@ -88,8 +94,6 @@ impl From<&UserApplicationDescription> for UserApplicationId {
         }
     }
 }
-
-pub type BytecodeId = linera_base::identifiers::BytecodeId;
 
 /// A reference to where the application bytecode is stored.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
