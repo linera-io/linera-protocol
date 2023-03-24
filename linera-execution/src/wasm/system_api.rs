@@ -44,7 +44,7 @@ macro_rules! impl_writable_system {
 
             fn read_system_balance(
                 &mut self,
-            ) -> Result<writable_system::SystemBalance, Self::Error> {
+            ) -> Result<writable_system::Balance, Self::Error> {
                 Ok(self.storage().read_system_balance().into())
             }
 
@@ -302,7 +302,7 @@ macro_rules! impl_queryable_system {
                 self.storage().application_parameters()
             }
 
-            fn read_system_balance(&mut self) -> queryable_system::SystemBalance {
+            fn read_system_balance(&mut self) -> queryable_system::Balance {
                 self.storage().read_system_balance().into()
             }
 

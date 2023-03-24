@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::data_types::{BlockHeight, ChainId};
+use linera_base::{data_types::BlockHeight, identifiers::ChainId};
 use linera_chain::data_types::Origin;
 use linera_core::worker::{Notification, Reason};
 use linera_execution::ApplicationId;

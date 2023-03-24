@@ -8,7 +8,7 @@ use crate::{
 use async_trait::async_trait;
 use dashmap::DashMap;
 use futures::Future;
-use linera_base::{crypto::CryptoHash, data_types::ChainId};
+use linera_base::{crypto::CryptoHash, identifiers::ChainId};
 use linera_chain::data_types::{Certificate, HashedValue, LiteCertificate, Value};
 use linera_execution::{UserApplicationCode, UserApplicationId, WasmRuntime};
 use linera_views::{

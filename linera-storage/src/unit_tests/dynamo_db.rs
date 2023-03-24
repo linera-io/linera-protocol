@@ -3,7 +3,7 @@
 
 use super::DynamoDbStoreClient;
 use crate::Store;
-use linera_base::data_types::ChainId;
+use linera_base::identifiers::ChainId;
 use linera_views::test_utils::LocalStackTestContext;
 use std::mem;
 

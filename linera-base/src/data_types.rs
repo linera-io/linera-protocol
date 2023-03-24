@@ -2,12 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::crypto::{BcsHashable, CryptoHash, PublicKey};
 use serde::{Deserialize, Serialize};
-use std::{str::FromStr, time::SystemTime};
+use std::time::SystemTime;
 use thiserror::Error;
 
-use crate::crypto::CryptoError;
 #[cfg(not(target_arch = "wasm32"))]
 use std::fmt;
 #[cfg(any(test, feature = "test"))]
@@ -15,6 +13,18 @@ use test_strategy::Arbitrary;
 
 #[cfg(not(target_arch = "wasm32"))]
 use chrono::NaiveDateTime;
+
+/// A non-negative amount of money to be transferred.
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+)]
+pub struct Amount(u64);
+
+/// The balance of a chain.
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+)]
+pub struct Balance(u128);
 
 /// A block height to identify blocks in a chain.
 #[derive(
@@ -79,34 +89,6 @@ impl fmt::Display for Timestamp {
     }
 }
 
-/// The owner of a chain. This is currently the hash of the owner's public key used to
-/// verify signatures.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct Owner(pub CryptoHash);
-
-/// How to create a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub enum ChainDescription {
-    /// The chain was created by the genesis configuration.
-    Root(usize),
-    /// The chain was created by an effect from another chain.
-    Child(EffectId),
-}
-
-/// The unique identifier (UID) of a chain. This is currently computed as the hash value
-/// of a [`ChainDescription`].
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Arbitrary))]
-pub struct ChainId(pub CryptoHash);
-
-/// The index of an effect in a chain.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct EffectId {
-    pub chain_id: ChainId,
-    pub height: BlockHeight,
-    pub index: usize,
-}
-
 #[derive(Debug, Error)]
 /// An error type for arithmetic errors.
 pub enum ArithmeticError {
@@ -116,166 +98,150 @@ pub enum ArithmeticError {
     Underflow,
 }
 
-impl std::fmt::Display for BlockHeight {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+macro_rules! impl_strictly_wrapped_number {
+    ($name:ident, $wrapped:ident) => {
+        impl $name {
+            pub fn zero() -> Self {
+                Self(0)
+            }
+
+            pub fn max() -> Self {
+                Self($wrapped::MAX)
+            }
+
+            pub fn try_add(self, other: Self) -> Result<Self, ArithmeticError> {
+                let val = self
+                    .0
+                    .checked_add(other.0)
+                    .ok_or(ArithmeticError::Overflow)?;
+                Ok(Self(val))
+            }
+
+            pub fn try_add_one(self) -> Result<Self, ArithmeticError> {
+                let val = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+                Ok(Self(val))
+            }
+
+            pub fn saturating_add(self, other: Self) -> Self {
+                let val = self.0.saturating_add(other.0);
+                Self(val)
+            }
+
+            pub fn try_sub(self, other: Self) -> Result<Self, ArithmeticError> {
+                let val = self
+                    .0
+                    .checked_sub(other.0)
+                    .ok_or(ArithmeticError::Underflow)?;
+                Ok(Self(val))
+            }
+
+            pub fn try_sub_one(self) -> Result<Self, ArithmeticError> {
+                let val = self.0.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
+                Ok(Self(val))
+            }
+
+            pub fn try_add_assign(&mut self, other: Self) -> Result<(), ArithmeticError> {
+                self.0 = self
+                    .0
+                    .checked_add(other.0)
+                    .ok_or(ArithmeticError::Overflow)?;
+                Ok(())
+            }
+
+            pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
+                self.0 = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+                Ok(())
+            }
+
+            pub fn saturating_add_assign(&mut self, other: Self) {
+                self.0 = self.0.saturating_add(other.0);
+            }
+
+            pub fn try_sub_assign(&mut self, other: Self) -> Result<(), ArithmeticError> {
+                self.0 = self
+                    .0
+                    .checked_sub(other.0)
+                    .ok_or(ArithmeticError::Underflow)?;
+                Ok(())
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+
+        impl std::str::FromStr for $name {
+            type Err = std::num::ParseIntError;
+
+            fn from_str(src: &str) -> Result<Self, Self::Err> {
+                Ok(Self($wrapped::from_str(src)?))
+            }
+        }
+
+        impl From<$name> for $wrapped {
+            fn from(value: $name) -> Self {
+                value.0
+            }
+        }
+
+        // Cannot directly create values for a strictly wrapped type, except for testing.
+        #[cfg(any(test, feature = "test"))]
+        impl From<$wrapped> for $name {
+            fn from(value: $wrapped) -> Self {
+                Self(value)
+            }
+        }
+    };
+}
+
+macro_rules! impl_wrapped_number {
+    ($name:ident, $wrapped:ident) => {
+        impl_strictly_wrapped_number!($name, $wrapped);
+
+        #[cfg(not(any(test, feature = "test")))]
+        impl From<$wrapped> for $name {
+            fn from(value: $wrapped) -> Self {
+                Self(value)
+            }
+        }
+    };
+}
+
+impl_wrapped_number!(Balance, u128);
+impl_strictly_wrapped_number!(Amount, u64);
+impl_wrapped_number!(BlockHeight, u64);
+impl_strictly_wrapped_number!(RoundNumber, u64);
+
+impl<'a> std::iter::Sum<&'a Amount> for Amount {
+    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
+        iter.fold(Self::zero(), |a, b| Amount(a.0 + b.0))
     }
 }
 
-impl std::fmt::Display for Owner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", self.0)
+impl Balance {
+    /// Helper function to obtain the 64 most significant bits of the balance.
+    pub fn upper_half(self) -> u64 {
+        (self.0 >> 64) as u64
+    }
+
+    /// Helper function to obtain the 64 least significant bits of the balance.
+    pub fn lower_half(self) -> u64 {
+        self.0 as u64
     }
 }
 
-impl BlockHeight {
-    #[inline]
-    pub fn max() -> Self {
-        BlockHeight(0x7fff_ffff_ffff_ffff)
-    }
-
-    #[inline]
-    pub fn try_add_one(self) -> Result<BlockHeight, ArithmeticError> {
-        let val = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_sub_one(self) -> Result<BlockHeight, ArithmeticError> {
-        let val = self.0.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-        Ok(())
-    }
-
-    #[inline]
-    pub fn try_sub_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self.0.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
-        Ok(())
+impl From<Amount> for Balance {
+    fn from(val: Amount) -> Self {
+        Balance(val.0 as u128)
     }
 }
 
-impl RoundNumber {
-    #[inline]
-    pub fn max() -> Self {
-        RoundNumber(0x7fff_ffff_ffff_ffff)
+impl TryFrom<Balance> for Amount {
+    type Error = std::num::TryFromIntError;
+
+    fn try_from(val: Balance) -> Result<Self, Self::Error> {
+        Ok(Amount(val.0.try_into()?))
     }
-
-    #[inline]
-    pub fn try_add_one(self) -> Result<RoundNumber, ArithmeticError> {
-        let val = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_sub_one(self) -> Result<RoundNumber, ArithmeticError> {
-        let val = self.0.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
-        Ok(Self(val))
-    }
-
-    #[inline]
-    pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-        Ok(())
-    }
-
-    #[inline]
-    pub fn try_sub_assign_one(&mut self) -> Result<(), ArithmeticError> {
-        self.0 = self.0.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
-        Ok(())
-    }
-}
-
-impl From<BlockHeight> for u64 {
-    fn from(val: BlockHeight) -> Self {
-        val.0
-    }
-}
-
-impl From<u64> for BlockHeight {
-    fn from(value: u64) -> Self {
-        BlockHeight(value)
-    }
-}
-
-impl From<BlockHeight> for usize {
-    fn from(value: BlockHeight) -> Self {
-        value.0 as usize
-    }
-}
-
-impl From<PublicKey> for Owner {
-    fn from(value: PublicKey) -> Self {
-        Self(CryptoHash::new(&value))
-    }
-}
-
-impl From<&PublicKey> for Owner {
-    fn from(value: &PublicKey) -> Self {
-        Self(CryptoHash::new(value))
-    }
-}
-
-impl std::str::FromStr for Owner {
-    type Err = CryptoError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Owner(CryptoHash::from_str(s)?))
-    }
-}
-
-impl std::fmt::Display for ChainId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl FromStr for ChainId {
-    type Err = CryptoError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(ChainId(CryptoHash::from_str(s)?))
-    }
-}
-
-impl TryFrom<&[u8]> for ChainId {
-    type Error = CryptoError;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        Ok(ChainId(CryptoHash::try_from(value)?))
-    }
-}
-
-impl std::fmt::Debug for ChainId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{:?}", self.0)
-    }
-}
-
-impl From<ChainDescription> for ChainId {
-    fn from(description: ChainDescription) -> Self {
-        Self(CryptoHash::new(&description))
-    }
-}
-
-impl ChainId {
-    pub fn root(index: usize) -> Self {
-        Self(CryptoHash::new(&ChainDescription::Root(index)))
-    }
-
-    pub fn child(id: EffectId) -> Self {
-        Self(CryptoHash::new(&ChainDescription::Child(id)))
-    }
-}
-
-impl BcsHashable for ChainDescription {}
-
-#[test]
-fn test_max_block_height() {
-    let max = BlockHeight::max();
-    assert_eq!(max.0 * 2 + 1, std::u64::MAX);
 }

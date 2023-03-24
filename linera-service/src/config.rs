@@ -4,13 +4,11 @@
 
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
-    data_types::{BlockHeight, ChainDescription, ChainId, Timestamp},
+    data_types::{Balance, BlockHeight, Timestamp},
+    identifiers::{ChainDescription, ChainId},
 };
 use linera_core::client::{ChainClient, ValidatorNodeProvider};
-use linera_execution::{
-    committee::{Committee, ValidatorName, ValidatorState},
-    system::Balance,
-};
+use linera_execution::committee::{Committee, ValidatorName, ValidatorState};
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Store;
 use linera_views::views::ViewError;

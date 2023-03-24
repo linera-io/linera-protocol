@@ -10,8 +10,9 @@ use crate::{
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, ChainId, EffectId, Timestamp},
+    data_types::{BlockHeight, Timestamp},
     ensure,
+    identifiers::{ChainId, EffectId},
 };
 use linera_execution::{
     system::SystemEffect, ApplicationId, ChannelName, Destination, Effect, EffectContext,
@@ -262,7 +263,7 @@ where
                 let effect_id = EffectId {
                     chain_id: origin.sender,
                     height,
-                    index,
+                    index: index as u64,
                 };
                 self.execute_immediate_effect(effect_id, &effect, chain_id, timestamp)
                     .await?;
@@ -409,7 +410,7 @@ where
                 effect_id: EffectId {
                     chain_id: message.origin.sender,
                     height: message.event.height,
-                    index: message.event.index,
+                    index: message.event.index as u64,
                 },
                 authenticated_signer: message.event.authenticated_signer,
             };

@@ -5,7 +5,8 @@
 use crate::node::NodeError;
 use linera_base::{
     crypto::{BcsSignable, CryptoHash, KeyPair, Signature},
-    data_types::{BlockHeight, ChainDescription, ChainId, Timestamp},
+    data_types::{Balance, BlockHeight, Timestamp},
+    identifiers::{ChainDescription, ChainId},
 };
 use linera_chain::{
     data_types::{Certificate, ChainAndHeight, HashedValue, Medium, Message, Origin},
@@ -13,7 +14,6 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    system::Balance,
     ApplicationId, ExecutionRuntimeContext,
 };
 use linera_storage::ChainRuntimeContext;

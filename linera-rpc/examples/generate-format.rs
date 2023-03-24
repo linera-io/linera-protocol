@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::data_types::ChainDescription;
+use linera_base::identifiers::ChainDescription;
 use linera_chain::{
     data_types::{HashedValue, Medium, ValueKind},
     ChainManagerInfo,

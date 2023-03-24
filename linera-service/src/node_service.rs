@@ -19,7 +19,8 @@ use axum::{
 use futures::lock::Mutex;
 use linera_base::{
     crypto::PublicKey,
-    data_types::{ChainId, Owner},
+    data_types::Amount,
+    identifiers::{ChainId, Owner},
 };
 use linera_chain::{data_types::Certificate, ChainStateView};
 use linera_core::{
@@ -28,7 +29,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::{Amount, Recipient, SystemChannel, UserData},
+    system::{Recipient, SystemChannel, UserData},
     ApplicationId, Bytecode, BytecodeId, Operation, Query, Response, SystemOperation,
     UserApplicationDescription, UserApplicationId,
 };

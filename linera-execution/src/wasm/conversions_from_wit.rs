@@ -10,12 +10,13 @@
 
 use super::{contract, queryable_system, writable_system};
 use crate::{
-    ApplicationCallResult, BytecodeId, ChannelName, Destination, NewSession, RawExecutionResult,
+    ApplicationCallResult, ChannelName, Destination, NewSession, RawExecutionResult,
     SessionCallResult, SessionId, UserApplicationId,
 };
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, ChainId, EffectId},
+    data_types::BlockHeight,
+    identifiers::{BytecodeId, ChainId, EffectId},
 };
 
 impl From<contract::SessionCallResult> for (SessionCallResult, Vec<u8>) {
@@ -151,10 +152,7 @@ impl From<writable_system::EffectId> for EffectId {
         EffectId {
             chain_id: guest.chain_id.into(),
             height: BlockHeight(guest.height),
-            index: guest
-                .index
-                .try_into()
-                .expect("Incorrect assumption that `usize` is 64-bits"),
+            index: guest.index,
         }
     }
 }
@@ -198,10 +196,7 @@ impl From<queryable_system::EffectId> for EffectId {
         EffectId {
             chain_id: guest.chain_id.into(),
             height: BlockHeight(guest.height),
-            index: guest
-                .index
-                .try_into()
-                .expect("Incorrect assumption that `usize` is 64-bits"),
+            index: guest.index,
         }
     }
 }

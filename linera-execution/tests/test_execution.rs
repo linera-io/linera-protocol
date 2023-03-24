@@ -11,7 +11,8 @@ use self::utils::create_dummy_user_application_description;
 use async_trait::async_trait;
 use linera_base::{
     crypto::PublicKey,
-    data_types::{BlockHeight, ChainDescription, ChainId, Owner},
+    data_types::BlockHeight,
+    identifiers::{ChainDescription, ChainId, Owner},
 };
 use linera_execution::*;
 use linera_views::{batch::Batch, common::Context, memory::MemoryContext, views::View};

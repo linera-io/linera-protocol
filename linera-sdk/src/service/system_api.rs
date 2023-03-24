@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::queryable_system as system;
-use crate::base::{ApplicationId, ChainId, SystemBalance, Timestamp};
 use async_trait::async_trait;
 use futures::future;
+use linera_base::{
+    data_types::{Balance, Timestamp},
+    identifiers::{ApplicationId, ChainId},
+};
 use linera_views::{
     batch::Batch,
     common::{ContextFromDb, KeyValueStoreClient},
@@ -141,7 +144,7 @@ pub fn current_application_parameters() -> Vec<u8> {
 }
 
 /// Retrieve the current system balance.
-pub fn current_system_balance() -> SystemBalance {
+pub fn current_system_balance() -> Balance {
     system::read_system_balance().into()
 }
 

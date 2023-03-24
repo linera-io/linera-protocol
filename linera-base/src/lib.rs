@@ -8,6 +8,7 @@
 pub mod crypto;
 pub mod data_types;
 mod graphql;
+pub mod identifiers;
 
 /// A macro for asserting that a condition is true, returning an error if it is not.
 ///

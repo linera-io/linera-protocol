@@ -7,8 +7,9 @@ use async_trait::async_trait;
 use futures::{future, FutureExt};
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, BlockHeight, ChainId, Owner, Timestamp},
+    data_types::{ArithmeticError, BlockHeight, Timestamp},
     ensure,
+    identifiers::{ChainId, Owner},
 };
 use linera_chain::{
     data_types::{
@@ -356,7 +357,7 @@ where
         );
         let mut keys = Vec::new();
         for height in heights {
-            if let Some(key) = confirmed_log.get(usize::from(height)).await? {
+            if let Some(key) = confirmed_log.get(u64::from(height) as usize).await? {
                 keys.push(key);
             }
         }
@@ -920,7 +921,7 @@ where
             info.requested_pending_messages = messages;
         }
         if let Some(range) = query.request_sent_certificates_in_range {
-            let start = range.start.into();
+            let start = u64::from(range.start) as usize;
             let end = match range.limit {
                 None => chain.confirmed_log.count(),
                 Some(limit) => std::cmp::min(start + limit, chain.confirmed_log.count()),

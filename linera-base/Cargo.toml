@@ -15,6 +15,7 @@ generic-array = { version = "0.14.4", features = ["serde"] }
 hex = "0.4.3"
 proptest = { version = "1.0.0", optional = true }
 serde = { version = "1.0.130", features = ["derive"] }
+serde_bytes = "0.11.8"
 serde-name = "0.2.0"
 sha3 = "0.10.6"
 test-strategy = { version = "0.2.0", optional = true }
@@ -28,3 +29,6 @@ rand = "0.7.3"
 custom_debug_derive = "0.5.1"
 proptest = "1.0.0"
 test-strategy = "0.2.0"
+
+[package.metadata.cargo-machete]
+ignored = ["serde_bytes"]

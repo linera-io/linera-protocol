@@ -12,7 +12,8 @@ pub use chain::ChainStateView;
 use data_types::{Event, Origin};
 use linera_base::{
     crypto::CryptoError,
-    data_types::{ArithmeticError, BlockHeight, ChainId, RoundNumber, Timestamp},
+    data_types::{ArithmeticError, BlockHeight, RoundNumber, Timestamp},
+    identifiers::ChainId,
 };
 use linera_execution::{ApplicationId, ExecutionError};
 use linera_views::views::ViewError;

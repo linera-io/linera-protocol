@@ -10,10 +10,10 @@
 
 use super::{contract, queryable_system, service, writable_system};
 use crate::{
-    system::Balance, CallResult, CalleeContext, EffectContext, EffectId, OperationContext,
-    QueryContext, SessionId, UserApplicationId,
+    CallResult, CalleeContext, EffectContext, EffectId, OperationContext, QueryContext, SessionId,
+    UserApplicationId,
 };
-use linera_base::{crypto::CryptoHash, data_types::ChainId};
+use linera_base::{crypto::CryptoHash, data_types::Balance, identifiers::ChainId};
 
 impl From<OperationContext> for contract::OperationContext {
     fn from(host: OperationContext) -> Self {
@@ -45,10 +45,7 @@ impl From<EffectId> for queryable_system::EffectId {
         queryable_system::EffectId {
             chain_id: host.chain_id.into(),
             height: host.height.0,
-            index: host
-                .index
-                .try_into()
-                .expect("Effect index should fit in a `u64`"),
+            index: host.index,
         }
     }
 }
@@ -58,10 +55,7 @@ impl From<EffectId> for writable_system::EffectId {
         writable_system::EffectId {
             chain_id: host.chain_id.into(),
             height: host.height.0,
-            index: host
-                .index
-                .try_into()
-                .expect("Effect index should fit in a `u64`"),
+            index: host.index,
         }
     }
 }
@@ -71,10 +65,7 @@ impl From<EffectId> for contract::EffectId {
         contract::EffectId {
             chain_id: host.chain_id.into(),
             height: host.height.0,
-            index: host
-                .index
-                .try_into()
-                .expect("Effect index should fit in a `u64`"),
+            index: host.index,
         }
     }
 }
@@ -235,18 +226,18 @@ impl From<CallResult> for writable_system::CallResult {
     }
 }
 
-impl From<Balance> for queryable_system::SystemBalance {
+impl From<Balance> for queryable_system::Balance {
     fn from(host: Balance) -> Self {
-        queryable_system::SystemBalance {
+        queryable_system::Balance {
             lower_half: host.lower_half(),
             upper_half: host.upper_half(),
         }
     }
 }
 
-impl From<Balance> for writable_system::SystemBalance {
+impl From<Balance> for writable_system::Balance {
     fn from(host: Balance) -> Self {
-        writable_system::SystemBalance {
+        writable_system::Balance {
             lower_half: host.lower_half(),
             upper_half: host.upper_half(),
         }

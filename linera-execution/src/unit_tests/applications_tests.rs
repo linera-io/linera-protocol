@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    ApplicationRegistry, ApplicationRegistryView, BytecodeId, BytecodeLocation,
-    UserApplicationDescription, UserApplicationId,
+    ApplicationRegistry, ApplicationRegistryView, BytecodeLocation, UserApplicationDescription,
+    UserApplicationId,
 };
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
-    data_types::{BlockHeight, ChainId, EffectId},
+    data_types::BlockHeight,
+    identifiers::{BytecodeId, ChainId, EffectId},
 };
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +16,7 @@ fn effect_id(index: usize) -> EffectId {
     EffectId {
         chain_id: ChainId::root(0),
         height: BlockHeight::from(0),
-        index,
+        index: index as u64,
     }
 }
 

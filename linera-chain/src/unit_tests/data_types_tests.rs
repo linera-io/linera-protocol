@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use linera_base::data_types::Amount;
 use linera_execution::{
-    system::{Account, Amount, Recipient, SystemOperation, UserData},
+    system::{Account, Recipient, SystemOperation, UserData},
     ApplicationId,
 };
 

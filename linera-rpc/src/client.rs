@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 
-use linera_base::data_types::ChainId;
+use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},

@@ -7,7 +7,10 @@ use crate::{
     node::{NodeError, ValidatorNode},
 };
 use futures::{future, StreamExt};
-use linera_base::data_types::{BlockHeight, ChainDescription, ChainId, EffectId};
+use linera_base::{
+    data_types::BlockHeight,
+    identifiers::{ChainDescription, ChainId, EffectId},
+};
 use linera_chain::data_types::{BlockProposal, Certificate, LiteVote};
 use linera_execution::committee::{Committee, ValidatorName};
 use linera_storage::Store;
@@ -315,7 +318,8 @@ where
             jobs.into_iter().rev()
         {
             // Obtain chain state.
-            let range = usize::from(initial_block_height)..usize::from(target_block_height);
+            let range = (u64::from(initial_block_height) as usize)
+                ..(u64::from(target_block_height) as usize);
             if !range.is_empty() {
                 let keys = {
                     let chain = self.store.load_chain(chain_id).await?;
