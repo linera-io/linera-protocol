@@ -8,7 +8,7 @@ use linera_views::{
     register_view::RegisterView,
     views::{HashableView, View},
 };
-pub use linera_views_derive::{CryptoHashRootView, CryptoHashView, GraphQLView, RootView};
+use linera_views_derive::CryptoHashRootView;
 
 #[derive(CryptoHashRootView)]
 struct TestType<C> {
@@ -16,7 +16,7 @@ struct TestType<C> {
     pub wrap: WrappedHashableContainerView<C, RegisterView<C, String>, HasherOutput>,
 }
 
-// TODO(Implement the same for CryptoHash)
+// TODO(#560): Implement the same for CryptoHash
 #[tokio::test]
 async fn check_hashable_container_hash() {
     let context = create_test_context().await;
