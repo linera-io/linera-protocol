@@ -24,6 +24,9 @@
 //!
 //! [webassembly_test]: https://docs.rs/webassembly-test/latest/webassembly_test/
 
+#[cfg(target_arch = "wasm32")]
+compile_error!("The test runner is meant to be compiled for the host target");
+
 use anyhow::{bail, Result};
 use std::process::ExitCode;
 use wasmtime::*;
