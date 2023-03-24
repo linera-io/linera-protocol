@@ -25,7 +25,7 @@ metrics = "0.20.1"
 tracing = "0.1.37"
 rocksdb = "0.19.0"
 serde = { version = "1.0.130", features = ["derive"] }
-tokio = "1.22.0"
+tokio = "1.25.0"
 
 [dev-dependencies]
 anyhow = "1.0.57"
