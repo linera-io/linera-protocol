@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use dashmap::DashMap;
 use linera_base::data_types::ChainId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};

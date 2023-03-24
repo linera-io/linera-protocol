@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use fungible::AccountOwner;
 use linera_sdk::base::Amount;
 use serde::{Deserialize, Serialize};

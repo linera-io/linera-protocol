@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use convert_case::{Case, Casing};
 use proc_macro2::{Ident, Span};
 use syn::Type;

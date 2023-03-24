@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
     system::{Amount, Balance, Recipient, UserData},
