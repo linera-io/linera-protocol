@@ -39,6 +39,9 @@ use std::{
 use thiserror::Error;
 use tracing::instrument;
 
+#[cfg(any(test, feature = "test"))]
+use linera_execution::ApplicationRegistryView;
+
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
@@ -741,6 +744,21 @@ where
         };
         let certificate = self.storage.read_certificate(certificate_hash).await?;
         Ok(Some(certificate))
+    }
+
+    /// Returns the application registry for a specific chain.
+    ///
+    /// # Notes
+    ///
+    /// The returned [`ApplicationRegistryView`] holds a lock of the chain it belongs to. Incorrect
+    /// usage of this method may cause deadlocks.
+    #[cfg(any(test, feature = "test"))]
+    pub async fn load_application_registry(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ApplicationRegistryView<Client::Context>, WorkerError> {
+        let chain = self.storage.load_active_chain(chain_id).await?;
+        Ok(chain.execution_state.system.registry)
     }
 }
 
