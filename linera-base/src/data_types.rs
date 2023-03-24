@@ -168,7 +168,7 @@ macro_rules! impl_strictly_wrapped_number {
 
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", self.0)
+                self.0.fmt(f)
             }
         }
 
@@ -216,7 +216,7 @@ impl_strictly_wrapped_number!(RoundNumber, u64);
 
 impl<'a> std::iter::Sum<&'a Amount> for Amount {
     fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
-        iter.fold(Self::zero(), |a, b| Amount(a.0 + b.0))
+        iter.fold(Self::zero(), |a, b| a.saturating_add(*b))
     }
 }
 

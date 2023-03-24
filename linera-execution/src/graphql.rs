@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 
 scalar!(ApplicationId);
 scalar!(Bytecode);
-
 scalar!(ChainOwnership);
 scalar!(Epoch);
 scalar!(Recipient);

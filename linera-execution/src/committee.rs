@@ -44,7 +44,7 @@ pub struct Committee {
 
 impl std::fmt::Display for ValidatorName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", self.0)
+        self.0.fmt(f)
     }
 }
 
