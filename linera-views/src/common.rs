@@ -1,6 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! This provides several functionalities for the handling of data.
+//! The most important traits are:
+//! * [`KeyValueStoreClient`][trait1] which manages the access to a database and is clonable. It has a minimal interface
+//! * [`Context`][trait2] which provides the access to a database plus a `base_key` and some extra type `E` which is carried along
+//! and has no impact on the running of the system. There is also a bunch of other helper functions.
+//!
+//! [trait1]: common::KeyValueStoreClient
+//! [trait2]: common::Context
+
 use crate::{batch::Batch, views::ViewError};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
@@ -28,7 +37,7 @@ pub(crate) enum Update<T> {
 }
 
 /// The minimum value for the view tags. values in 0..MIN_VIEW_TAG are used for other purposes
-pub const MIN_VIEW_TAG: u8 = 1;
+pub(crate) const MIN_VIEW_TAG: u8 = 1;
 
 /// When wanting to find the entries in a BTreeMap with a specific prefix,
 /// one option is to iterate over all keys. Another is to select an interval
@@ -106,10 +115,10 @@ pub trait KeyValueStoreClient {
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error>;
 
-    /// Write the batch in the database.
+    /// Write the `batch` in the database with `base_key` the base key of the entries for the journal
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error>;
 
-    /// Read a single key and deserialize the result if present.
+    /// Read a single `key` and deserialize the result if present.
     async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
     where
         Self::Error: From<bcs::Error>,
@@ -124,7 +133,7 @@ pub trait KeyValueStoreClient {
     }
 
     /// Clearing any journal entry that may remain.
-    /// The journal located at the base_key will be cleared if existing.
+    /// The journal located at the `base_key` will be cleared if existing.
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error>;
 }
 
@@ -238,7 +247,7 @@ pub trait Context {
     /// Obtain the `Vec<u8>` key from the key by serialization and using the base_key
     fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
 
-    /// Obtain the `Vec<u8>` key from the key by serialization and using the base_key
+    /// Obtain the `Vec<u8>` key from the key by serialization and using the `base_key`
     fn derive_tag_key<I: Serialize>(&self, tag: u8, index: &I) -> Result<Vec<u8>, Self::Error>;
 
     /// Obtain the short `Vec<u8>` key from the key by serialization
@@ -259,10 +268,10 @@ pub trait Context {
     /// context.
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
-    /// Find keys matching the prefix. The prefix is not included in the returned keys.
+    /// Find keys matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error>;
 
-    /// Find the key-value pairs matching the prefix. The prefix is not included in the returned keys.
+    /// Find the key-value pairs matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -281,7 +290,7 @@ pub trait Context {
 pub struct ContextFromDb<E, DB> {
     /// The DB client, usually shared between views.
     pub db: DB,
-    /// The key prefix for the current view.
+    /// The base key for the current view.
     pub base_key: Vec<u8>,
     /// User-defined data attached to the view.
     pub extra: E,

@@ -154,7 +154,7 @@ where
     ViewError: From<C::Error>,
     W: View<C> + Send + Sync,
 {
-    /// Obtain a subview for the data at the given index in the collection. If an entry
+    /// Loads a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn try_load_entry_mut(
         &mut self,
@@ -197,7 +197,7 @@ where
         }
     }
 
-    /// Obtain a read-only access to a subview for the data at the given index in the collection. If an entry
+    /// Loads a read-only access to a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn try_load_entry(
         &self,
@@ -261,7 +261,7 @@ where
         Ok(())
     }
 
-    /// Obtain the extra data.
+    /// Get the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
@@ -451,7 +451,7 @@ where
     I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
-    /// Obtain a subview for the data at the given index in the collection. If an entry
+    /// Loads a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn try_load_entry_mut<Q>(
         &mut self,
@@ -465,7 +465,7 @@ where
         self.collection.try_load_entry_mut(short_key).await
     }
 
-    /// Obtain a read-only access to a subview for the data at the given index in the collection. If an entry
+    /// Loads a read-only access to a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<OwnedRwLockReadGuard<W>, ViewError>
     where
@@ -496,7 +496,7 @@ where
         self.collection.try_reset_entry_to_default(short_key).await
     }
 
-    /// Obtain the extra data.
+    /// Get the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.collection.extra()
     }
@@ -623,7 +623,7 @@ where
     I: Sync + Clone + Send + Debug + CustomSerialize,
     W: View<C> + Send + Sync,
 {
-    /// Obtain a subview for the data at the given index in the collection. If an entry
+    /// Loads a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn try_load_entry_mut<Q>(
         &mut self,
@@ -637,7 +637,7 @@ where
         self.collection.try_load_entry_mut(short_key).await
     }
 
-    /// Obtain a read-only access to a subview for the data at the given index in the collection. If an entry
+    /// Loads a read-only access to a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<OwnedRwLockReadGuard<W>, ViewError>
     where
@@ -668,7 +668,7 @@ where
         self.collection.try_reset_entry_to_default(short_key).await
     }
 
-    /// Obtain the extra data.
+    /// Get the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.collection.extra()
     }

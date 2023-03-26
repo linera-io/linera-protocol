@@ -106,12 +106,32 @@ where
     ViewError: From<C::Error>,
 {
     /// Set or insert a value.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::{memory::create_test_context, set_view::ByteSetView};
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set = ByteSetView::load(context).await.unwrap();
+    ///   set.insert(vec![0,1]);
+    ///   assert_eq!(set.contains(vec![0,1]).await.unwrap(), true);
+    /// # })
+    /// ```
     pub fn insert(&mut self, short_key: Vec<u8>) {
         *self.hash.get_mut() = None;
         self.updates.insert(short_key, Update::Set(()));
     }
 
-    /// Remove a value.
+    /// Remove a value from the set. If absent then no effect.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::{memory::create_test_context, set_view::ByteSetView};
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set = ByteSetView::load(context).await.unwrap();
+    ///   set.remove(vec![0,1]);
+    ///   assert_eq!(set.contains(vec![0,1]).await.unwrap(), false);
+    /// # })
+    /// ```
     pub fn remove(&mut self, short_key: Vec<u8>) {
         *self.hash.get_mut() = None;
         if self.was_cleared {
@@ -121,7 +141,7 @@ where
         }
     }
 
-    /// Obtain the extra data.
+    /// Get the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
@@ -133,6 +153,17 @@ where
     ViewError: From<C::Error>,
 {
     /// Return true if the given index exists in the set.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::{memory::create_test_context, set_view::ByteSetView};
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set = ByteSetView::load(context).await.unwrap();
+    ///   set.insert(vec![0,1]);
+    ///   assert_eq!(set.contains(vec![34]).await.unwrap(), false);
+    ///   assert_eq!(set.contains(vec![0,1]).await.unwrap(), true);
+    /// # })
+    /// ```
     pub async fn contains(&self, short_key: Vec<u8>) -> Result<bool, ViewError> {
         if let Some(update) = self.updates.get(&short_key) {
             let value = match update {
@@ -158,6 +189,17 @@ where
     ViewError: From<C::Error>,
 {
     /// Return the list of keys in the set.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::{memory::create_test_context, set_view::ByteSetView};
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set = ByteSetView::load(context).await.unwrap();
+    ///   set.insert(vec![0,1]);
+    ///   set.insert(vec![0,2]);
+    ///   assert_eq!(set.keys().await.unwrap(), vec![vec![0,1], vec![0,2]]);
+    /// # })
+    /// ```
     pub async fn keys(&self) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut keys = Vec::new();
         self.for_each_key(|key| {
@@ -325,6 +367,17 @@ where
     I: Serialize,
 {
     /// Set or insert a value.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::set_view::SetView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
+    ///   set.insert(&(34 as u32));
+    ///   assert_eq!(set.indices().await.unwrap().len(), 1);
+    /// # })
+    /// ```
     pub fn insert<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
@@ -336,6 +389,16 @@ where
     }
 
     /// Remove a value.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::{memory::create_test_context, set_view::SetView};
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
+    ///   set.remove(&(34 as u32));
+    ///   assert_eq!(set.indices().await.unwrap().len(), 0);
+    /// # })
+    /// ```
     pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
@@ -359,6 +422,17 @@ where
     I: Serialize,
 {
     /// Return true if the given index exists in the set.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::{memory::create_test_context, set_view::SetView};
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set : SetView<_,u32> = SetView::load(context).await.unwrap();
+    ///   set.insert(&(34 as u32));
+    ///   assert_eq!(set.contains(&(34 as u32)).await.unwrap(), true);
+    ///   assert_eq!(set.contains(&(45 as u32)).await.unwrap(), false);
+    /// # })
+    /// ```
     pub async fn contains<Q>(&self, index: &Q) -> Result<bool, ViewError>
     where
         I: Borrow<Q>,
@@ -376,6 +450,16 @@ where
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
 {
     /// Return the list of indices in the set.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::{memory::create_test_context, set_view::SetView};
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set : SetView<_,u32> = SetView::load(context).await.unwrap();
+    ///   set.insert(&(34 as u32));
+    ///   assert_eq!(set.indices().await.unwrap(), vec![34 as u32]);
+    /// # })
+    /// ```
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::<I>::new();
         self.for_each_index(|index: I| {
@@ -388,6 +472,24 @@ where
 
     /// Executes a function on each index. Indices are visited in an order
     /// determined by the serialization. If the function returns false, then it exits.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::set_view::SetView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
+    ///   set.insert(&(34 as u32));
+    ///   set.insert(&(37 as u32));
+    ///   set.insert(&(42 as u32));
+    ///   let mut count = 0;
+    ///   set.for_each_index_while(|_key| {
+    ///     count += 1;
+    ///     Ok(count < 2)
+    ///   }).await.unwrap();
+    ///   assert_eq!(count, 2);
+    /// # })
+    /// ```
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<bool, ViewError> + Send,
@@ -403,6 +505,24 @@ where
 
     /// Executes a function on each index. Indices are visited in an order
     /// determined by the serialization.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::set_view::SetView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
+    ///   set.insert(&(34 as u32));
+    ///   set.insert(&(37 as u32));
+    ///   set.insert(&(42 as u32));
+    ///   let mut count = 0;
+    ///   set.for_each_index(|_key| {
+    ///     count += 1;
+    ///     Ok(())
+    ///   }).await.unwrap();
+    ///   assert_eq!(count, 3);
+    /// # })
+    /// ```
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
@@ -485,6 +605,17 @@ where
     I: CustomSerialize,
 {
     /// Set or insert a value.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::set_view::CustomSetView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
+    ///   set.insert(&(34 as u128));
+    ///   assert_eq!(set.indices().await.unwrap().len(), 1);
+    /// # })
+    /// ```
     pub fn insert<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
@@ -495,7 +626,18 @@ where
         Ok(())
     }
 
-    /// Remove a value.
+    /// Remove a value. If absent then nothing is done.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::set_view::CustomSetView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
+    ///   set.remove(&(34 as u128));
+    ///   assert_eq!(set.indices().await.unwrap().len(), 0);
+    /// # })
+    /// ```
     pub fn remove<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
@@ -519,6 +661,18 @@ where
     I: CustomSerialize,
 {
     /// Return true if the given index exists in the set.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::set_view::CustomSetView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
+    ///   set.insert(&(34 as u128));
+    ///   assert_eq!(set.contains(&(34 as u128)).await.unwrap(), true);
+    ///   assert_eq!(set.contains(&(37 as u128)).await.unwrap(), false);
+    /// # })
+    /// ```
     pub async fn contains<Q>(&self, index: &Q) -> Result<bool, ViewError>
     where
         I: Borrow<Q>,
@@ -536,6 +690,18 @@ where
     I: Sync + Clone + Send + CustomSerialize,
 {
     /// Return the list of indices in the set.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::set_view::CustomSetView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
+    ///   set.insert(&(34 as u128));
+    ///   set.insert(&(37 as u128));
+    ///   assert_eq!(set.indices().await.unwrap(), vec![34 as u128,37 as u128]);
+    /// # })
+    /// ```
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::<I>::new();
         self.for_each_index(|index: I| {
@@ -549,6 +715,24 @@ where
     /// Executes a function on each index. Indices are visited in an order
     /// determined by the custom serialization. If the function does return
     /// false, then the iteration exits.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::set_view::CustomSetView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
+    ///   set.insert(&(34 as u128));
+    ///   set.insert(&(37 as u128));
+    ///   set.insert(&(42 as u128));
+    ///   let mut count = 0;
+    ///   set.for_each_index_while(|_key| {
+    ///     count += 1;
+    ///     Ok(count < 5)
+    ///   }).await.unwrap();
+    ///   assert_eq!(count, 3);
+    /// # })
+    /// ```
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<bool, ViewError> + Send,
@@ -564,6 +748,24 @@ where
 
     /// Executes a function on each index. Indices are visited in an order
     /// determined by the custom serialization.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::set_view::CustomSetView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
+    ///   set.insert(&(34 as u128));
+    ///   set.insert(&(37 as u128));
+    ///   set.insert(&(42 as u128));
+    ///   let mut count = 0;
+    ///   set.for_each_index(|_key| {
+    ///     count += 1;
+    ///     Ok(())
+    ///   }).await.unwrap();
+    ///   assert_eq!(count, 3);
+    /// # })
+    /// ```
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,

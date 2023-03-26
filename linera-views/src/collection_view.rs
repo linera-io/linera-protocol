@@ -159,15 +159,27 @@ where
         Ok(())
     }
 
-    /// Obtain a subview for the data at the given index in the collection. If an entry
-    /// was removed before then a default entry is put on this index.
+    /// Loads a subview for the data at the given index in the collection. If the entry
+    /// at that index was absent or had not been assigned then the default value is provided.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    ///   use linera_views::memory::{create_test_context, MemoryContext};
+    ///   use linera_views::collection_view::ByteCollectionView;
+    ///   use linera_views::register_view::RegisterView;
+    ///   use crate::linera_views::views::View;
+    ///   let context = create_test_context();
+    ///   let mut map : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
+    ///   let short_key : Vec<u8> = vec![0,1];
+    ///   let value = map.load_entry_mut(short_key).await.unwrap();
+    /// # })
+    /// ```
     pub async fn load_entry_mut(&mut self, short_key: Vec<u8>) -> Result<&mut W, ViewError> {
         *self.hash.get_mut() = None;
         self.do_load_entry_mut(short_key).await
     }
 
-    /// Obtain a subview for the data at the given index in the collection. If an entry
-    /// was removed before then a default entry is put on this index.
+    /// Loads a subview for the data at the given index in the collection. If an entry
+    /// was removed before or it was absent then a default entry is put on this index.
     pub async fn load_entry(&mut self, short_key: Vec<u8>) -> Result<&W, ViewError> {
         Ok(self.do_load_entry_mut(short_key).await?)
     }
@@ -239,7 +251,7 @@ where
         Ok(())
     }
 
-    /// Obtain the extra data.
+    /// Get the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
@@ -464,7 +476,7 @@ where
     I: Serialize,
     W: View<C>,
 {
-    /// Obtain a subview for the data at the given index in the collection. If an entry
+    /// Loads a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn load_entry_mut<Q>(&mut self, index: &Q) -> Result<&mut W, ViewError>
     where
@@ -475,7 +487,7 @@ where
         self.collection.load_entry_mut(short_key).await
     }
 
-    /// Obtain a subview for the data at the given index in the collection. If an entry
+    /// Loads a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn load_entry<Q>(&mut self, index: &Q) -> Result<&W, ViewError>
     where
@@ -517,7 +529,7 @@ where
         self.collection.remove_entry(short_key)
     }
 
-    /// Obtain the extra data.
+    /// Get the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.collection.extra()
     }
@@ -651,7 +663,7 @@ where
     I: CustomSerialize,
     W: View<C>,
 {
-    /// Obtain a subview for the data at the given index in the collection. If an entry
+    /// Loads a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn load_entry_mut<Q>(&mut self, index: &Q) -> Result<&mut W, ViewError>
     where
@@ -662,7 +674,7 @@ where
         self.collection.load_entry_mut(short_key).await
     }
 
-    /// Obtain a subview for the data at the given index in the collection. If an entry
+    /// Loads a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
     pub async fn load_entry<Q>(&mut self, index: &Q) -> Result<&W, ViewError>
     where
@@ -704,7 +716,7 @@ where
         self.collection.remove_entry(short_key)
     }
 
-    /// Obtain the extra data.
+    /// Get the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.collection.extra()
     }

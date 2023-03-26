@@ -48,19 +48,19 @@ const VALUE_ATTRIBUTE: &str = "item_value";
 /// The attribute for obtaining the primary key (used as a sort key) with the stored value.
 const KEY_VALUE_ATTRIBUTE: &str = "item_key, item_value";
 
-/// Fundamental constants in DynamoDb: The maximum size of a value is 400KB
+/// Fundamental constants in DynamoDB: The maximum size of a value is 400KB
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ServiceQuotas.html
 const MAX_VALUE_BYTES: usize = 409600;
 
-/// Fundamental constants in DynamoDb: The maximum size of a TransactWriteItem is 4M
+/// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 4M
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html
 const _MAX_TRANSACT_WRITE_ITEM_BYTES: usize = 4194304;
 
-/// Fundamental constants in DynamoDb: The maximum size of a TransactWriteItem is 100
+/// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 100
 /// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html>
 pub const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
 
-/// Fundamental constants in DynamoDb: The maximum size of a BatchWriteItem is 16M
+/// Fundamental constants in DynamoDB: The maximum size of a BatchWriteItem is 16M
 /// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html>
 const MAX_BATCH_WRITE_ITEM_BYTES: usize = 16777216;
 
@@ -117,7 +117,7 @@ fn extract_key(
 fn extract_value(
     attributes: &HashMap<String, AttributeValue>,
 ) -> Result<&[u8], DynamoDbContextError> {
-    // According to the official AWS DynamoDb documentation:
+    // According to the official AWS DynamoDB documentation:
     // "Binary must have a length greater than zero if the attribute is used as a key attribute for a table or index"
     let value = attributes
         .get(VALUE_ATTRIBUTE)
@@ -393,7 +393,7 @@ impl DynamoDbBatch {
         // Also we remove the deletes that are followed by inserts on the same key because
         // the TransactWriteItem and BatchWriteItem are not going to work that way.
         let unordered_batch = batch.simplify();
-        let simple_unordered_batch = unordered_batch.eliminate_delete_prefixes(db).await?;
+        let simple_unordered_batch = unordered_batch.expand_delete_prefixes(db).await?;
         Ok(DynamoDbBatch(simple_unordered_batch))
     }
 }
@@ -864,11 +864,11 @@ pub enum DynamoDbContextError {
     ZeroLengthKeyPrefix,
 
     /// The recovery failed
-    #[error("The DynamoDb database recovery failed")]
+    #[error("The DynamoDB database recovery failed")]
     DatabaseRecoveryFailed,
 
-    /// The length of the value should be at most 400K
-    #[error("The DynamoDb vakue should be less than 400K")]
+    /// The length of the value should be at most 400KB
+    #[error("The DynamoDB vakue should be less than 400KB")]
     ValueLengthTooLarge,
 
     /// The stored key is missing

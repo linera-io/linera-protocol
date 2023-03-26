@@ -93,6 +93,17 @@ where
     C: Context,
 {
     /// Access the current value in the register.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut register = RegisterView::<_,u32>::load(context).await.unwrap();
+    ///   let value = register.get();
+    ///   assert_eq!(*value, 0);
+    /// # })
+    /// ```
     pub fn get(&self) -> &T {
         match &self.update {
             None => &self.stored_value,
@@ -101,6 +112,18 @@ where
     }
 
     /// Set the value in the register.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut register = RegisterView::load(context).await.unwrap();
+    ///   register.set(5);
+    ///   let value = register.get();
+    ///   assert_eq!(*value, 5);
+    /// # })
+    /// ```
     pub fn set(&mut self, value: T) {
         self.update = Some(Box::new(value));
         *self.hash.get_mut() = None;
@@ -118,6 +141,17 @@ where
     T: Clone + Serialize,
 {
     /// Obtain a mutable reference to the value in the register.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut register : RegisterView<_,u32> = RegisterView::load(context).await.unwrap();
+    ///   let value = register.get_mut();
+    ///   assert_eq!(*value, 0);
+    /// # })
+    /// ```
     pub fn get_mut(&mut self) -> &mut T {
         *self.hash.get_mut() = None;
         match &mut self.update {

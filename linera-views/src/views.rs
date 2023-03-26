@@ -155,10 +155,10 @@ impl Hasher for sha3::Sha3_256 {
 /// A [`View`] whose staged modifications can be saved in storage.
 #[async_trait]
 pub trait RootView<C>: View<C> {
-    /// Save the container view to a file
+    /// Save the root view to the database context
     async fn save(&mut self) -> Result<(), ViewError>;
 
-    /// Delete the container view from the database
+    /// Delete the root view to the database context
     async fn write_delete(self) -> Result<(), ViewError>;
 }
 

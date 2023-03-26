@@ -150,6 +150,18 @@ where
     }
 
     /// Read the front value, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::queue_view::QueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut queue = QueueView::load(context).await.unwrap();
+    ///   queue.push_back(34);
+    ///   queue.push_back(42);
+    ///   assert_eq!(queue.front().await.unwrap(), Some(34));
+    /// # })
+    /// ```
     pub async fn front(&self) -> Result<Option<T>, ViewError> {
         let stored_remainder = self.stored_count();
         let value = if stored_remainder > 0 {
@@ -161,6 +173,18 @@ where
     }
 
     /// Read the back value, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::queue_view::QueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut queue = QueueView::load(context).await.unwrap();
+    ///   queue.push_back(34);
+    ///   queue.push_back(42);
+    ///   assert_eq!(queue.back().await.unwrap(), Some(42));
+    /// # })
+    /// ```
     pub async fn back(&self) -> Result<Option<T>, ViewError> {
         let value = match self.new_back_values.back() {
             Some(value) => Some(value.clone()),
@@ -171,6 +195,18 @@ where
     }
 
     /// Delete the front value, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::queue_view::QueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut queue = QueueView::load(context).await.unwrap();
+    ///   queue.push_back(34 as u128);
+    ///   queue.delete_front();
+    ///   assert_eq!(queue.elements().await.unwrap(), Vec::<u128>::new());
+    /// # })
+    /// ```
     pub fn delete_front(&mut self) {
         *self.hash.get_mut() = None;
         if self.stored_count() > 0 {
@@ -181,12 +217,35 @@ where
     }
 
     /// Push a value to the end of the queue.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::queue_view::QueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut queue = QueueView::load(context).await.unwrap();
+    ///   queue.push_back(34);
+    ///   queue.push_back(37);
+    ///   assert_eq!(queue.elements().await.unwrap(), vec![34,37]);
+    /// # })
+    /// ```
     pub fn push_back(&mut self, value: T) {
         *self.hash.get_mut() = None;
         self.new_back_values.push_back(value);
     }
 
     /// Read the size of the queue.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::queue_view::QueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut queue = QueueView::load(context).await.unwrap();
+    ///   queue.push_back(34);
+    ///   assert_eq!(queue.count(), 1);
+    /// # })
+    /// ```
     pub fn count(&self) -> usize {
         self.stored_count() + self.new_back_values.len()
     }
@@ -209,6 +268,18 @@ where
     }
 
     /// Read the `count` next values in the queue (including staged ones).
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::queue_view::QueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut queue = QueueView::load(context).await.unwrap();
+    ///   queue.push_back(34);
+    ///   queue.push_back(42);
+    ///   assert_eq!(queue.read_front(1).await.unwrap(), vec![34]);
+    /// # })
+    /// ```
     pub async fn read_front(&self, mut count: usize) -> Result<Vec<T>, ViewError> {
         if count > self.count() {
             count = self.count();
@@ -238,6 +309,18 @@ where
     }
 
     /// Read the `count` last values in the queue (including staged ones).
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::queue_view::QueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut queue = QueueView::load(context).await.unwrap();
+    ///   queue.push_back(34);
+    ///   queue.push_back(42);
+    ///   assert_eq!(queue.read_back(1).await.unwrap(), vec![42]);
+    /// # })
+    /// ```
     pub async fn read_back(&self, mut count: usize) -> Result<Vec<T>, ViewError> {
         if count > self.count() {
             count = self.count();
@@ -263,6 +346,18 @@ where
     }
 
     /// Read all the elements
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::queue_view::QueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut queue = QueueView::load(context).await.unwrap();
+    ///   queue.push_back(34);
+    ///   queue.push_back(37);
+    ///   assert_eq!(queue.elements().await.unwrap(), vec![34,37]);
+    /// # })
+    /// ```
     pub async fn elements(&self) -> Result<Vec<T>, ViewError> {
         let count = self.count();
         self.read_front(count).await
@@ -296,6 +391,20 @@ where
     }
 
     /// Get a mutable iterator on the entries of the queue
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::queue_view::QueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut queue = QueueView::load(context).await.unwrap();
+    ///   queue.push_back(34);
+    ///   let mut iter = queue.iter_mut().await.unwrap();
+    ///   let value = iter.next().unwrap();
+    ///   *value = 42;
+    ///   assert_eq!(queue.elements().await.unwrap(), vec![42]);
+    /// # })
+    /// ```
     pub async fn iter_mut(&'a mut self) -> Result<IterMut<'a, T>, ViewError> {
         self.load_all().await?;
         Ok(self.new_back_values.iter_mut())
