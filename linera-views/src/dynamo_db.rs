@@ -716,7 +716,7 @@ impl KeyValueStoreClient for DynamoDbClient {
     }
 }
 
-/// A implementation of [`Context`] based on [`DynamoDbClient`].
+/// A implementation of Context based on [`DynamoDbClient`].
 pub type DynamoDbContext<E> = ContextFromDb<E, DynamoDbClient>;
 
 impl<E> DynamoDbContext<E>

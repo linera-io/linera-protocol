@@ -15,6 +15,8 @@ use linera_views::{
     memory::{MemoryContext, MemoryContextError, MemoryStoreMap},
     views::{View, ViewError},
 };
+use linera_views::common::ContextFromDb;
+use linera_views::memory::MemoryClient;
 use metrics::increment_counter;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -50,7 +52,7 @@ impl MemoryStore {
 
 #[async_trait]
 impl Store for MemoryStoreClient {
-    type Context = MemoryContext<ChainRuntimeContext<Self>>;
+    type Context = ContextFromDb<ChainRuntimeContext<Self>, MemoryClient>;
     type ContextError = MemoryContextError;
 
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
