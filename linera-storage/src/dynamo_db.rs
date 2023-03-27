@@ -5,6 +5,8 @@ use crate::{
     chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Store,
     READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
 };
+use linera_views::common::ContextFromDb;
+use linera_views::dynamo_db::DynamoDbClient;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use futures::Future;
@@ -128,16 +130,6 @@ impl DynamoDbStore {
     }
 }
 
-/// The key type used to distinguish certificates and chain states.
-///
-//#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
-//enum BaseKey {
-//    ChainState(ChainId),
-//    Certificate,
-//    Value,
-//}
-
-
 #[derive(Debug, Serialize, Deserialize)]
 enum BaseKey {
     ChainState(ChainId),
@@ -147,7 +139,7 @@ enum BaseKey {
 
 #[async_trait]
 impl Store for DynamoDbStoreClient {
-    type Context = DynamoDbContext<ChainRuntimeContext<Self>>;
+    type Context = ContextFromDb<ChainRuntimeContext<Self>, DynamoDbClient>;
     type ContextError = DynamoDbContextError;
 
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {

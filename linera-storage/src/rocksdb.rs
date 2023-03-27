@@ -5,6 +5,7 @@ use crate::{
     chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Store,
     READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
 };
+use linera_views::common::ContextFromDb;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{crypto::CryptoHash, identifiers::ChainId};
@@ -63,7 +64,7 @@ enum BaseKey {
 
 #[async_trait]
 impl Store for RocksdbStoreClient {
-    type Context = RocksdbContext<ChainRuntimeContext<Self>>;
+    type Context = ContextFromDb<ChainRuntimeContext<Self>, RocksdbClient>;
     type ContextError = RocksdbContextError;
 
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
