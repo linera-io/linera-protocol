@@ -236,9 +236,8 @@ enum BaseKey {
 impl<CL> Store for DbStoreClient<CL>
 where
     CL: KeyValueStoreClient + Clone + Send + Sync + 'static,
-    ViewError: std::convert::From<<CL as KeyValueStoreClient>::Error>,
-    <CL as KeyValueStoreClient>::Error:
-        std::convert::From<bcs::Error> + Send + Sync + serde::ser::StdError,
+    ViewError: From<<CL as KeyValueStoreClient>::Error>,
+    <CL as KeyValueStoreClient>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
     type Context = ContextFromDb<ChainRuntimeContext<Self>, CL>;
     type ContextError = <CL as KeyValueStoreClient>::Error;
