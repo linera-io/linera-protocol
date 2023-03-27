@@ -95,6 +95,12 @@ impl From<&UserApplicationDescription> for UserApplicationId {
     }
 }
 
+impl From<UserApplicationId> for ApplicationId {
+    fn from(user_application_id: UserApplicationId) -> Self {
+        ApplicationId::User(user_application_id)
+    }
+}
+
 /// A reference to where the application bytecode is stored.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct BytecodeLocation {
