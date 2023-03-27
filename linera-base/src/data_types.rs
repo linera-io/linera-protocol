@@ -140,6 +140,11 @@ macro_rules! impl_strictly_wrapped_number {
                 Ok(Self(val))
             }
 
+            pub fn saturating_sub(self, other: Self) -> Self {
+                let val = self.0.saturating_sub(other.0);
+                Self(val)
+            }
+
             pub fn try_add_assign(&mut self, other: Self) -> Result<(), ArithmeticError> {
                 self.0 = self
                     .0
