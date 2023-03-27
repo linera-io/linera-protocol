@@ -162,6 +162,8 @@ impl Client {
             .kill_on_drop(true)
             .env("RUST_LOG", "ERROR")
             .arg("run")
+            .arg("--features")
+            .arg("benchmark")
             .arg("--manifest-path")
             .arg(env::current_dir().unwrap().join("Cargo.toml"))
             .args(["--bin", "client"])
@@ -351,7 +353,9 @@ impl TestRunner {
             .kill_on_drop(true)
             .arg("run")
             .arg("--manifest-path")
-            .arg(env::current_dir().unwrap().join("Cargo.toml"));
+            .arg(env::current_dir().unwrap().join("Cargo.toml"))
+            .arg("--features")
+            .arg("benchmark");
         command
     }
 

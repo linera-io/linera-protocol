@@ -9,27 +9,20 @@ use colored::Colorize;
 use futures::StreamExt;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{Amount, Balance, BlockHeight, RoundNumber, Timestamp},
+    data_types::{Amount, Balance, BlockHeight, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
-use linera_chain::data_types::{
-    Block, BlockAndRound, BlockProposal, Certificate, HashedValue, SignatureAggregator, Vote,
-};
+use linera_chain::data_types::Certificate;
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
-    data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{LocalNodeClient, ValidatorNode},
-    worker::{Reason, WorkerState},
+    worker::Reason,
 };
 use linera_execution::{
-    committee::{Epoch, ValidatorName, ValidatorState},
-    system::{Account, Recipient, SystemOperation, UserData},
-    ApplicationId, Bytecode, Operation, WasmRuntime, WithWasmDefault,
+    committee::{ValidatorName, ValidatorState},
+    system::{Account, UserData},
+    Bytecode, WasmRuntime, WithWasmDefault,
 };
-use linera_rpc::{
-    config::NetworkProtocol, grpc_network::GrpcMassClient, mass::MassClient,
-    node_provider::NodeProvider, simple_network, RpcMessage,
-};
+use linera_rpc::node_provider::NodeProvider;
 use linera_service::{
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     storage::{Runnable, StorageConfig},
@@ -38,13 +31,36 @@ use linera_service::{
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{
-    collections::{HashMap, HashSet},
     num::NonZeroU16,
     path::PathBuf,
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
+
+#[cfg(feature = "benchmark")]
+use {
+    linera_base::data_types::RoundNumber,
+    linera_chain::data_types::{
+        Block, BlockAndRound, BlockProposal, HashedValue, SignatureAggregator, Vote,
+    },
+    linera_core::{
+        data_types::{ChainInfoQuery, ChainInfoResponse},
+        node::{LocalNodeClient, ValidatorNode},
+        worker::WorkerState,
+    },
+    linera_execution::{
+        committee::Epoch,
+        system::{Recipient, SystemOperation},
+        ApplicationId, Operation,
+    },
+    linera_rpc::{
+        config::NetworkProtocol, grpc_network::GrpcMassClient, mass::MassClient, simple_network,
+        RpcMessage,
+    },
+    std::collections::{HashMap, HashSet},
+    tracing::error,
+};
 
 struct ClientContext {
     genesis_config: GenesisConfig,
@@ -85,6 +101,7 @@ impl ClientContext {
         }
     }
 
+    #[cfg(feature = "benchmark")]
     fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<Box<dyn MassClient>> {
         let mut validator_clients = Vec::new();
         for config in &self.genesis_config.committee.validators {
@@ -133,6 +150,7 @@ impl ClientContext {
         )
     }
 
+    #[cfg(feature = "benchmark")]
     async fn process_inboxes_and_force_validator_updates<S>(&mut self, storage: &S)
     where
         S: Store + Clone + Send + Sync + 'static,
@@ -147,6 +165,7 @@ impl ClientContext {
     }
 
     /// Make one block proposal per chain, up to `max_proposals` blocks.
+    #[cfg(feature = "benchmark")]
     fn make_benchmark_block_proposals(&mut self, max_proposals: usize) -> Vec<RpcMessage> {
         let mut proposals = Vec::new();
         let mut next_recipient = self.wallet_state.last_chain().unwrap().chain_id;
@@ -192,6 +211,7 @@ impl ClientContext {
     }
 
     /// Try to aggregate votes into certificates.
+    #[cfg(feature = "benchmark")]
     fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<Certificate> {
         let committee = self.genesis_config.committee.clone().into_committee();
         let mut aggregators = HashMap::new();
@@ -228,6 +248,7 @@ impl ClientContext {
     }
 
     /// Broadcast a bulk of blocks to each validator.
+    #[cfg(feature = "benchmark")]
     async fn mass_broadcast(
         &self,
         phase: &'static str,
@@ -298,6 +319,7 @@ impl ClientContext {
         });
     }
 
+    #[cfg(feature = "benchmark")]
     async fn update_wallet_from_certificates<S>(
         &mut self,
         storage: S,
@@ -365,6 +387,7 @@ impl ClientContext {
     }
 }
 
+#[cfg(feature = "benchmark")]
 fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
     match response {
         RpcMessage::ChainInfoResponse(info) => Some(*info),
@@ -509,6 +532,7 @@ enum ClientCommand {
     },
 
     /// Send one transfer per chain in bulk mode
+    #[cfg(feature = "benchmark")]
     #[structopt(name = "benchmark")]
     Benchmark {
         /// Maximum number of blocks in flight
@@ -755,7 +779,7 @@ where
                 info!("Operations confirmed after {} us", time_total);
                 context.save_chains();
             }
-
+            #[cfg(feature = "benchmark")]
             Benchmark {
                 max_in_flight,
                 max_proposals,
