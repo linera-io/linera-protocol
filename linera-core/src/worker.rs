@@ -40,7 +40,10 @@ use thiserror::Error;
 use tracing::instrument;
 
 #[cfg(any(test, feature = "test"))]
-use linera_execution::ApplicationRegistryView;
+use {
+    linera_base::identifiers::{Destination, EffectId},
+    linera_execution::ApplicationRegistryView,
+};
 
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
@@ -759,6 +762,59 @@ where
     ) -> Result<ApplicationRegistryView<Client::Context>, WorkerError> {
         let chain = self.storage.load_active_chain(chain_id).await?;
         Ok(chain.execution_state.system.registry)
+    }
+
+    /// Returns a [`Message`] that's awaiting to be received by the chain specified by `chain_id`.
+    #[cfg(any(test, feature = "test"))]
+    pub async fn find_incoming_message(
+        &self,
+        chain_id: ChainId,
+        effect_id: EffectId,
+    ) -> Result<Option<Message>, WorkerError> {
+        let Some(certificate) = self.read_certificate(effect_id.chain_id, effect_id.height).await?
+            else { return Ok(None) };
+
+        let Some(outgoing_effect) =
+            certificate.value.effects().get(effect_id.index as usize).cloned()
+            else { return Ok(None) };
+
+        let application_id = outgoing_effect.application_id;
+        let origin = Origin {
+            sender: effect_id.chain_id,
+            medium: match outgoing_effect.destination {
+                Destination::Recipient(_) => Medium::Direct,
+                Destination::Subscribers(channel) => Medium::Channel(channel),
+            },
+        };
+
+        let mut chain = self.storage.load_active_chain(chain_id).await?;
+        let communication_state = chain
+            .communication_states
+            .load_entry_mut(&application_id)
+            .await?;
+        let inbox = communication_state.inboxes.load_entry_mut(&origin).await?;
+
+        let certificate_hash = certificate.value.hash();
+        let Some(event) =
+            inbox
+                .added_events
+                .iter_mut()
+                .await?
+                .find(|event| {
+                    event.certificate_hash == certificate_hash
+                        && event.height == effect_id.height
+                        && event.index == effect_id.index as usize
+                })
+                .cloned()
+            else { return Ok(None) };
+
+        assert_eq!(event.effect, outgoing_effect.effect);
+
+        Ok(Some(Message {
+            application_id,
+            origin,
+            event,
+        }))
     }
 }
 
