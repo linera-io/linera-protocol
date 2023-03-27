@@ -136,10 +136,10 @@ impl Store for DynamoDbStoreClient {
             user_applications: self.0.user_applications.clone(),
             chain_guard: Some(Arc::new(guard)),
         };
+        let client = self.0.client.clone();
         let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
-        let db_context =
-            ContextFromDb::create(self.0.client.clone(), base_key, runtime_context).await?;
-        ChainStateView::load(db_context).await
+        let context = ContextFromDb::create(client, base_key, runtime_context).await?;
+        ChainStateView::load(context).await
     }
 
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {

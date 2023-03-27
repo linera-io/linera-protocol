@@ -13,7 +13,7 @@ use linera_execution::{UserApplicationCode, UserApplicationId, WasmRuntime};
 use linera_views::{
     batch::Batch,
     common::{ContextFromDb, KeyValueStoreClient},
-    rocksdb::{RocksdbClient, RocksdbContext, RocksdbContextError, DB},
+    rocksdb::{RocksdbClient, RocksdbContextError, DB},
     views::{View, ViewError},
 };
 use metrics::increment_counter;
@@ -25,7 +25,7 @@ use std::{path::PathBuf, sync::Arc};
 mod tests;
 
 struct RocksdbStore {
-    db: RocksdbClient,
+    client: RocksdbClient,
     guards: ChainGuards,
     user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
     wasm_runtime: Option<WasmRuntime>,
@@ -46,7 +46,7 @@ impl RocksdbStore {
         options.create_if_missing(true);
         let db = DB::open(&options, dir).unwrap();
         Self {
-            db: Arc::new(db),
+            client: Arc::new(db),
             guards: ChainGuards::default(),
             user_applications: Arc::default(),
             wasm_runtime,
@@ -67,8 +67,6 @@ impl Store for RocksdbStoreClient {
     type ContextError = RocksdbContextError;
 
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
-        let db = self.0.db.clone();
-        let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
         tracing::trace!("Acquiring lock on {:?}", id);
         let guard = self.0.guards.guard(id).await;
         let runtime_context = ChainRuntimeContext {
@@ -77,13 +75,15 @@ impl Store for RocksdbStoreClient {
             user_applications: self.0.user_applications.clone(),
             chain_guard: Some(Arc::new(guard)),
         };
-        let db_context = RocksdbContext::new(db, base_key, runtime_context);
-        ChainStateView::load(db_context).await
+        let client = self.0.client.clone();
+        let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
+        let context = ContextFromDb::create(client, base_key, runtime_context).await?;
+        ChainStateView::load(context).await
     }
 
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
-        let maybe_value: Option<Value> = self.0.db.read_key(&value_key).await?;
+        let maybe_value: Option<Value> = self.0.client.read_key(&value_key).await?;
         let id = match &maybe_value {
             Some(value) => value.block.chain_id.to_string(),
             None => "not found".to_string(),
@@ -99,7 +99,7 @@ impl Store for RocksdbStoreClient {
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         let mut batch = Batch::new();
         batch.put_key_value(value_key.to_vec(), &value)?;
-        self.0.db.write_batch(batch, &[]).await?;
+        self.0.client.write_batch(batch, &[]).await?;
         Ok(())
     }
 
@@ -107,8 +107,8 @@ impl Store for RocksdbStoreClient {
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let (cert_result, value_result) = tokio::join!(
-            self.0.db.read_key::<LiteCertificate>(&cert_key),
-            self.0.db.read_key::<Value>(&value_key)
+            self.0.client.read_key::<LiteCertificate>(&cert_key),
+            self.0.client.read_key::<Value>(&value_key)
         );
         if let Ok(maybe_value) = &value_result {
             let id = match maybe_value {
@@ -136,7 +136,7 @@ impl Store for RocksdbStoreClient {
         let mut batch = Batch::new();
         batch.put_key_value(cert_key.to_vec(), &cert)?;
         batch.put_key_value(value_key.to_vec(), &value)?;
-        self.0.db.write_batch(batch, &[]).await?;
+        self.0.client.write_batch(batch, &[]).await?;
         Ok(())
     }
 
