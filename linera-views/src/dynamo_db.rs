@@ -66,10 +66,6 @@ pub const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
 /// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html>
 const MAX_BATCH_WRITE_ITEM_BYTES: usize = 16777216;
 
-/// Fundamental constants in DynamoDb: The maximum size of a BatchWriteItem is 100
-/// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html>
-pub const MAX_BATCH_WRITE_ITEM_SIZE: usize = 25;
-
 /// Build the key attributes for a table item.
 ///
 /// The key is composed of two attributes that are both binary blobs. The first attribute is a
@@ -572,9 +568,6 @@ impl DynamoDbClientInternal {
         })
     }
 
-    /// We put submit the transaction in blocks (called BatchWriteItem in dynamoDb) of at most MAX_BATCH_WRITE_ITEM_SIZE
-    /// so as to decrease the number of needed transactions. That constant MAX_BATCH_WRITE_ITEM_SIZE comes from
-    /// <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html>
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
         let block_operations = DynamoDbBatch::from_batch(self, batch).await?;
         if block_operations.is_fastpath_feasible() {
@@ -945,10 +938,6 @@ pub enum DynamoDbContextError {
     /// The transact maximum size is MAX_TRANSACT_WRITE_ITEM_SIZE
     #[error("The transact must have length at most MAX_TRANSACT_WRITE_ITEM_SIZE")]
     TransactUpperLimitSize,
-
-    /// The batch should have size at most MAX_BATCH_WRITE_ITEM_SIZE
-    #[error("The batch must have length at most MAX_BATCH_WRITE_ITEM_SIZE")]
-    BatchUpperLimitSize,
 
     /// Key have to be of non-zero length
     #[error("The key must be of strictly positive length")]

@@ -15,7 +15,6 @@ use linera_views::{
     batch::Batch,
     common::Context,
     dynamo_db::{Config, DynamoDbContext, DynamoDbContextError, TableName, TableStatus},
-    map_view::MapView,
     views::{View, ViewError},
 };
 use metrics::increment_counter;
@@ -127,39 +126,23 @@ impl DynamoDbStore {
             table_status,
         ))
     }
-
-    /// Obtain a [`MapView`] of values.
-    async fn values(&self) -> Result<MapView<DynamoDbContext<()>, CryptoHash, Value>, ViewError> {
-        MapView::load(
-            self.context
-                .clone_with_sub_scope(&BaseKey::Value, ())
-                .await?,
-        )
-        .await
-    }
-
-    /// Obtain a [`MapView`] of certificates.
-    async fn certificates(
-        &self,
-    ) -> Result<MapView<DynamoDbContext<()>, CryptoHash, LiteCertificate>, ViewError> {
-        MapView::load(
-            self.context
-                .clone_with_sub_scope(&BaseKey::Certificate, ())
-                .await?,
-        )
-        .await
-    }
 }
 
 /// The key type used to distinguish certificates and chain states.
 ///
-/// Allows selecting a stored sub-view, either a chain state view or the [`MapView`] of
-/// certificates.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+//#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+//enum BaseKey {
+//    ChainState(ChainId),
+//    Certificate,
+//    Value,
+//}
+
+
+#[derive(Debug, Serialize, Deserialize)]
 enum BaseKey {
     ChainState(ChainId),
-    Certificate,
-    Value,
+    Certificate(CryptoHash),
+    Value(CryptoHash),
 }
 
 #[async_trait]
@@ -185,72 +168,61 @@ impl Store for DynamoDbStoreClient {
     }
 
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
-        let values = self.0.values().await?;
-        let maybe_value = values.get(&hash).await?;
+        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+        let maybe_value: Option<Value> = self.0.context.read_key(&value_key).await?;
         let id = match &maybe_value {
-            Some(value) => format!("{}", value.block.chain_id),
+            Some(value) => value.block.chain_id.to_string(),
             None => "not found".to_string(),
         };
         increment_counter!(READ_VALUE_COUNTER, &[("chain_id", id)]);
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
-        Ok(value.with_hash_unchecked(hash))
+	Ok(value.with_hash_unchecked(hash))
     }
 
     async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
-        let id = format!("{}", value.block().chain_id);
+        let id = value.block().chain_id.to_string();
         increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
-        let mut values = self.0.values().await?;
-        values.insert(&value.hash(), value.into())?;
+        let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         let mut batch = Batch::new();
-        values.flush(&mut batch)?;
+        batch.put_key_value(value_key.to_vec(), &value)?;
         self.0.context.write_batch(batch).await?;
         Ok(())
     }
 
+
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
-        let (value_result, cert_result) = tokio::join!(
-            async move {
-                self.0
-                    .values()
-                    .await?
-                    .get(&hash)
-                    .await?
-                    .ok_or_else(|| ViewError::not_found("value for hash", hash))
-            },
-            async move {
-                self.0
-                    .certificates()
-                    .await?
-                    .get(&hash)
-                    .await?
-                    .ok_or_else(|| ViewError::not_found("certificate for hash", hash))
-            }
+        let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
+        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+        let (cert_result, value_result) = tokio::join!(
+            self.0.context.read_key::<LiteCertificate>(&cert_key),
+            self.0.context.read_key::<Value>(&value_key)
         );
-        if let Some(id) = match &value_result {
-            Ok(value) => Some(format!("{}", value.block.chain_id)),
-            Err(ViewError::NotFound(_)) => Some("not found".to_string()),
-            Err(_) => None,
-        } {
+        if let Ok(maybe_value) = &value_result {
+            let id = match maybe_value {
+                Some(value) => value.block.chain_id.to_string(),
+                None => "not found".to_string(),
+            };
             increment_counter!(READ_CERTIFICATE_COUNTER, &[("chain_id", id)]);
-        }
-        cert_result?
-            .with_value(value_result?.with_hash_unchecked(hash))
-            .ok_or(ViewError::InconsistentEntries)
+        };
+        let value: Value =
+            value_result?.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
+        let cert: LiteCertificate =
+            cert_result?.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
+        Ok(cert
+            .with_value(value.with_hash_unchecked(hash))
+            .ok_or(ViewError::InconsistentEntries)?)
     }
 
     async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
-        let id = format!("{}", certificate.value.block().chain_id);
+        let id = certificate.value.block().chain_id.to_string();
         increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id)]);
+        let hash = certificate.value.hash();
+        let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
+        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let (cert, value) = certificate.split();
-        let hash = value.hash();
-        let (certs_result, values_result) = tokio::join!(self.0.certificates(), self.0.values());
-        let mut certificates = certs_result?;
-        let mut values = values_result?;
-        certificates.insert(&hash, cert)?;
-        values.insert(&hash, value.into())?;
         let mut batch = Batch::new();
-        certificates.flush(&mut batch)?;
-        values.flush(&mut batch)?;
+        batch.put_key_value(cert_key.to_vec(), &cert)?;
+        batch.put_key_value(value_key.to_vec(), &value)?;
         self.0.context.write_batch(batch).await?;
         Ok(())
     }
