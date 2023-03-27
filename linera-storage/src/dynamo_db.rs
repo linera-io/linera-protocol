@@ -22,13 +22,14 @@ use linera_views::{
 use metrics::increment_counter;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use linera_views::common::KeyValueStoreClient;
 
 #[cfg(test)]
 #[path = "unit_tests/dynamo_db.rs"]
 mod tests;
 
 struct DynamoDbStore {
-    context: DynamoDbContext<()>,
+    client: DynamoDbClient,
     guards: ChainGuards,
     user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
     wasm_runtime: Option<WasmRuntime>,
@@ -79,8 +80,8 @@ impl DynamoDbStore {
         table: TableName,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_context(
-            |key_prefix, extra| DynamoDbContext::new(table, key_prefix, extra),
+        Self::with_client(
+            || DynamoDbClient::new(table),
             wasm_runtime,
         )
         .await
@@ -91,8 +92,8 @@ impl DynamoDbStore {
         table: TableName,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_context(
-            |key_prefix, extra| DynamoDbContext::from_config(config, table, key_prefix, extra),
+        Self::with_client(
+            || DynamoDbClient::from_config(config, table),
             wasm_runtime,
         )
         .await
@@ -102,25 +103,24 @@ impl DynamoDbStore {
         table: TableName,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_context(
-            |key_prefix, extra| DynamoDbContext::with_localstack(table, key_prefix, extra),
+        Self::with_client(
+            || DynamoDbClient::with_localstack(table),
             wasm_runtime,
         )
         .await
     }
 
-    async fn with_context<F, E>(
-        create_context: impl FnOnce(Vec<u8>, ()) -> F,
+    async fn with_client<F, E>(
+        create_client: impl FnOnce() -> F,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), E>
     where
-        F: Future<Output = Result<(DynamoDbContext<()>, TableStatus), E>>,
+        F: Future<Output = Result<(DynamoDbClient, TableStatus), E>>,
     {
-        let empty_prefix = vec![];
-        let (context, table_status) = create_context(empty_prefix, ()).await?;
+        let (client, table_status) = create_client().await?;
         Ok((
             Self {
-                context,
+                client,
                 guards: ChainGuards::default(),
                 user_applications: Arc::new(DashMap::new()),
                 wasm_runtime,
@@ -151,17 +151,14 @@ impl Store for DynamoDbStoreClient {
             user_applications: self.0.user_applications.clone(),
             chain_guard: Some(Arc::new(guard)),
         };
-        let db_context = self
-            .0
-            .context
-            .clone_with_sub_scope(&BaseKey::ChainState(id), runtime_context)
-            .await?;
+        let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
+        let db_context = DynamoDbContext { db: self.0.client.clone(), base_key, extra: runtime_context };
         ChainStateView::load(db_context).await
     }
 
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
-        let maybe_value: Option<Value> = self.0.context.read_key(&value_key).await?;
+        let maybe_value: Option<Value> = self.0.client.read_key(&value_key).await?;
         let id = match &maybe_value {
             Some(value) => value.block.chain_id.to_string(),
             None => "not found".to_string(),
@@ -177,7 +174,7 @@ impl Store for DynamoDbStoreClient {
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         let mut batch = Batch::new();
         batch.put_key_value(value_key.to_vec(), &value)?;
-        self.0.context.write_batch(batch).await?;
+        self.0.client.write_batch(batch, &[]).await?;
         Ok(())
     }
 
@@ -186,8 +183,8 @@ impl Store for DynamoDbStoreClient {
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let (cert_result, value_result) = tokio::join!(
-            self.0.context.read_key::<LiteCertificate>(&cert_key),
-            self.0.context.read_key::<Value>(&value_key)
+            self.0.client.read_key::<LiteCertificate>(&cert_key),
+            self.0.client.read_key::<Value>(&value_key)
         );
         if let Ok(maybe_value) = &value_result {
             let id = match maybe_value {
@@ -215,7 +212,7 @@ impl Store for DynamoDbStoreClient {
         let mut batch = Batch::new();
         batch.put_key_value(cert_key.to_vec(), &cert)?;
         batch.put_key_value(value_key.to_vec(), &value)?;
-        self.0.context.write_batch(batch).await?;
+        self.0.client.write_batch(batch, &[]).await?;
         Ok(())
     }
 
