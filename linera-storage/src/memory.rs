@@ -2,27 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    ChainRuntimeContext, ChainStateView, Store, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER,
-    WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
+    chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Store,
+    READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
 };
-use async_lock::Mutex;
+use async_lock::{Mutex, RwLock};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{crypto::CryptoHash, identifiers::ChainId};
 use linera_chain::data_types::{Certificate, HashedValue, LiteCertificate, Value};
 use linera_execution::{UserApplicationCode, UserApplicationId, WasmRuntime};
 use linera_views::{
-    common::ContextFromDb,
+    batch::Batch,
+    common::{ContextFromDb, KeyValueStoreClient},
     memory::{MemoryClient, MemoryContextError},
     views::{View, ViewError},
 };
 use metrics::increment_counter;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
-use linera_views::common::KeyValueStoreClient;
-use linera_views::batch::Batch;
-use async_lock::RwLock;
-use crate::chain_guards::ChainGuards;
 
 struct MemoryStore {
     client: MemoryClient,
@@ -41,9 +38,9 @@ impl MemoryStoreClient {
 
 impl MemoryStore {
     pub async fn new(wasm_runtime: Option<WasmRuntime>) -> Self {
-    	let state = Arc::new(Mutex::new(BTreeMap::new()));
+        let state = Arc::new(Mutex::new(BTreeMap::new()));
         let guard = state.lock_arc().await;
-	let client = Arc::new(RwLock::new(guard));
+        let client = Arc::new(RwLock::new(guard));
         Self {
             client,
             guards: ChainGuards::default(),
@@ -66,7 +63,7 @@ impl Store for MemoryStoreClient {
     type ContextError = MemoryContextError;
 
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
-	tracing::trace!("Acquiring lock on {:?}", id);
+        tracing::trace!("Acquiring lock on {:?}", id);
         let guard = self.0.guards.guard(id).await;
         let runtime_context = ChainRuntimeContext {
             store: self.clone(),
@@ -75,7 +72,7 @@ impl Store for MemoryStoreClient {
             chain_guard: Some(Arc::new(guard)),
         };
         let client = self.0.client.clone();
-	let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
+        let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
         let context = ContextFromDb::create(client, base_key, runtime_context).await?;
         ChainStateView::load(context).await
     }
