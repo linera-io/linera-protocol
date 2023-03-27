@@ -216,12 +216,20 @@ pub trait Store: Sized {
     }
 }
 
-struct DbStore<CL> {
+/// A store implemented from a KeyValueStoreClient
+pub struct DbStore<CL> {
     client: CL,
     guards: ChainGuards,
     user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
     wasm_runtime: Option<WasmRuntime>,
 }
+
+#[derive(Clone)]
+/// A DbStoreClient wrapping with Arc
+pub struct DbStoreClient<CL> {
+    client: Arc<DbStore<CL>>,
+}
+
 
 #[derive(Debug, Serialize, Deserialize)]
 enum BaseKey {
@@ -231,7 +239,7 @@ enum BaseKey {
 }
 
 #[async_trait]
-impl<CL> Store for Arc<DbStore<CL>>
+impl<CL> Store for DbStoreClient<CL>
 where
     CL: KeyValueStoreClient + Clone + Send + Sync + 'static,
     ViewError: std::convert::From<<CL as KeyValueStoreClient>::Error>,
@@ -242,14 +250,14 @@ where
 
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
         tracing::trace!("Acquiring lock on {:?}", id);
-        let guard = self.guards.guard(id).await;
+        let guard = self.client.guards.guard(id).await;
         let runtime_context = ChainRuntimeContext {
             store: self.clone(),
             chain_id: id,
-            user_applications: self.user_applications.clone(),
+            user_applications: self.client.user_applications.clone(),
             chain_guard: Some(Arc::new(guard)),
         };
-        let client = self.client.clone();
+        let client = self.client.client.clone();
         let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
         let context = ContextFromDb::create(client, base_key, runtime_context).await?;
         ChainStateView::load(context).await
@@ -257,7 +265,7 @@ where
 
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
-        let maybe_value: Option<Value> = self.client.read_key(&value_key).await?;
+        let maybe_value: Option<Value> = self.client.client.read_key(&value_key).await?;
         let id = match &maybe_value {
             Some(value) => value.block.chain_id.to_string(),
             None => "not found".to_string(),
@@ -273,7 +281,7 @@ where
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         let mut batch = Batch::new();
         batch.put_key_value(value_key.to_vec(), &value)?;
-        self.client.write_batch(batch, &[]).await?;
+        self.client.client.write_batch(batch, &[]).await?;
         Ok(())
     }
 
@@ -281,8 +289,8 @@ where
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let (cert_result, value_result) = tokio::join!(
-            self.client.read_key::<LiteCertificate>(&cert_key),
-            self.client.read_key::<Value>(&value_key)
+            self.client.client.read_key::<LiteCertificate>(&cert_key),
+            self.client.client.read_key::<Value>(&value_key)
 	);
         if let Ok(maybe_value) = &value_result {
             let id = match maybe_value {
@@ -310,12 +318,12 @@ where
         let mut batch = Batch::new();
         batch.put_key_value(cert_key.to_vec(), &cert)?;
         batch.put_key_value(value_key.to_vec(), &value)?;
-        self.client.write_batch(batch, &[]).await?;
+        self.client.client.write_batch(batch, &[]).await?;
         Ok(())
     }
 
     fn wasm_runtime(&self) -> Option<WasmRuntime> {
-        self.wasm_runtime
+        self.client.wasm_runtime
     }
 }
 
