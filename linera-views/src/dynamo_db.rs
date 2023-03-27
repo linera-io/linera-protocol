@@ -706,7 +706,6 @@ impl KeyValueStoreClient for DynamoDbClient {
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
-        // Design is done in the following way that we do the deletes and then the inserts.
         let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
         let value: Option<JournalHeader> = self.read_key(&key).await?;
         if let Some(header) = value {
