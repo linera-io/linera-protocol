@@ -33,7 +33,16 @@ use linera_views::{
     common::Context,
     views::{CryptoHashView, RootView, ViewError},
 };
+use metrics::increment_counter;
 use std::{fmt::Debug, sync::Arc};
+use serde::{Deserialize, Serialize};
+use linera_views::batch::Batch;
+use linera_views::common::ContextFromDb;
+use linera_chain::data_types::Value;
+use linera_chain::data_types::LiteCertificate;
+use linera_views::common::KeyValueStoreClient;
+use linera_views::views::View;
+use crate::chain_guards::ChainGuards;
 
 /// The metric counting how often a value is read from storage.
 pub const READ_VALUE_COUNTER: &str = "read_value";
@@ -204,6 +213,109 @@ pub trait Store: Sized {
             Please enable the `wasmer` or the `wasmtime` feature flags \
             when compiling `linera-storage`."
         );
+    }
+}
+
+struct DbStore<CL> {
+    client: CL,
+    guards: ChainGuards,
+    user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
+    wasm_runtime: Option<WasmRuntime>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+enum BaseKey {
+    ChainState(ChainId),
+    Certificate(CryptoHash),
+    Value(CryptoHash),
+}
+
+#[async_trait]
+impl<CL> Store for Arc<DbStore<CL>>
+where
+    CL: KeyValueStoreClient + Clone + Send + Sync + 'static,
+    ViewError: std::convert::From<<CL as KeyValueStoreClient>::Error>,
+    <CL as KeyValueStoreClient>::Error: std::convert::From<bcs::Error> + Send + Sync + serde::ser::StdError,
+{
+    type Context = ContextFromDb<ChainRuntimeContext<Self>, CL>;
+    type ContextError = <CL as KeyValueStoreClient>::Error;
+
+    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
+        tracing::trace!("Acquiring lock on {:?}", id);
+        let guard = self.guards.guard(id).await;
+        let runtime_context = ChainRuntimeContext {
+            store: self.clone(),
+            chain_id: id,
+            user_applications: self.user_applications.clone(),
+            chain_guard: Some(Arc::new(guard)),
+        };
+        let client = self.client.clone();
+        let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
+        let context = ContextFromDb::create(client, base_key, runtime_context).await?;
+        ChainStateView::load(context).await
+    }
+
+    async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
+        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+        let maybe_value: Option<Value> = self.client.read_key(&value_key).await?;
+        let id = match &maybe_value {
+            Some(value) => value.block.chain_id.to_string(),
+            None => "not found".to_string(),
+        };
+        increment_counter!(READ_VALUE_COUNTER, &[("chain_id", id)]);
+        let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
+        Ok(value.with_hash_unchecked(hash))
+    }
+
+    async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
+        let id = value.block().chain_id.to_string();
+        increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
+        let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
+        let mut batch = Batch::new();
+        batch.put_key_value(value_key.to_vec(), &value)?;
+        self.client.write_batch(batch, &[]).await?;
+        Ok(())
+    }
+
+    async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
+        let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
+        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+        let (cert_result, value_result) = tokio::join!(
+            self.client.read_key::<LiteCertificate>(&cert_key),
+            self.client.read_key::<Value>(&value_key)
+	);
+        if let Ok(maybe_value) = &value_result {
+            let id = match maybe_value {
+		Some(value) => value.block.chain_id.to_string(),
+		None => "not found".to_string(),
+            };
+            increment_counter!(READ_CERTIFICATE_COUNTER, &[("chain_id", id)]);
+	};
+        let value: Value =
+            value_result?.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
+	let cert: LiteCertificate =
+            cert_result?.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
+	Ok(cert
+            .with_value(value.with_hash_unchecked(hash))
+            .ok_or(ViewError::InconsistentEntries)?)
+    }
+
+    async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
+	let id = certificate.value.block().chain_id.to_string();
+	increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id)]);
+	let hash = certificate.value.hash();
+	let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
+	let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+        let (cert, value) = certificate.split();
+        let mut batch = Batch::new();
+        batch.put_key_value(cert_key.to_vec(), &cert)?;
+        batch.put_key_value(value_key.to_vec(), &value)?;
+        self.client.write_batch(batch, &[]).await?;
+        Ok(())
+    }
+
+    fn wasm_runtime(&self) -> Option<WasmRuntime> {
+        self.wasm_runtime
     }
 }
 
