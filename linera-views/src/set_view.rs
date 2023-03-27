@@ -169,10 +169,10 @@ where
     }
 
     /// Execute a function on each serialized index (aka key). Keys are visited in a
-    /// stable, yet unspecified order.
-    async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
+    /// stable, yet unspecified order. If the function returns false, then it exits
+    async fn for_each_key_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
+        F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
         let mut updates = self.updates.iter();
         let mut update = updates.next();
@@ -184,7 +184,9 @@ where
                     match update {
                         Some((key, value)) if key.as_slice() <= index => {
                             if let Update::Set(_) = value {
-                                f(key)?;
+                                if !f(key)? {
+                                    return Ok(());
+                                }
                             }
                             update = updates.next();
                             if key == index {
@@ -192,7 +194,9 @@ where
                             }
                         }
                         _ => {
-                            f(index)?;
+                            if !f(index)? {
+                                return Ok(());
+                            }
                             break;
                         }
                     }
@@ -201,11 +205,26 @@ where
         }
         while let Some((key, value)) = update {
             if let Update::Set(_) = value {
-                f(key)?;
+                if !f(key)? {
+                    return Ok(());
+                }
             }
             update = updates.next();
         }
         Ok(())
+    }
+
+    /// Execute a function on each serialized index (aka key). Keys are visited in a
+    /// stable, yet unspecified order. If the function returns false, then it exits
+    async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
+    {
+        self.for_each_key_while(|key| {
+            f(key)?;
+            Ok(true)
+        })
+        .await
     }
 
     async fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
@@ -369,6 +388,21 @@ where
 
     /// Execute a function on each index. Indices are visited in a stable, yet unspecified
     /// order.
+    pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<bool, ViewError> + Send,
+    {
+        self.set
+            .for_each_key_while(|key| {
+                let index = C::deserialize_value(key)?;
+                Ok(f(index)?)
+            })
+            .await?;
+        Ok(())
+    }
+
+    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
+    /// order.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
@@ -376,12 +410,12 @@ where
         self.set
             .for_each_key(|key| {
                 let index = C::deserialize_value(key)?;
-                f(index)?;
-                Ok(())
+                Ok(f(index)?)
             })
             .await?;
         Ok(())
     }
+
 }
 
 #[async_trait]
@@ -514,6 +548,21 @@ where
     }
 
     /// Execute a function on each index. Indices are visited in a stable, yet unspecified
+    /// order. If the function does return false, then the iteration exits.
+    pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<bool, ViewError> + Send,
+    {
+        self.set
+            .for_each_key_while(|key| {
+                let index = I::from_custom_bytes::<C>(key)?;
+                Ok(f(index)?)
+            })
+            .await?;
+        Ok(())
+    }
+
+    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
     /// order.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
@@ -522,8 +571,7 @@ where
         self.set
             .for_each_key(|key| {
                 let index = I::from_custom_bytes::<C>(key)?;
-                f(index)?;
-                Ok(())
+                Ok(f(index)?)
             })
             .await?;
         Ok(())
