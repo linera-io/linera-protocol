@@ -211,7 +211,7 @@ pub trait Store: Sized {
     }
 }
 
-/// A store implemented from a KeyValueStoreClient
+/// A store implemented from a [`KeyValueStoreClient`]
 pub struct DbStore<CL> {
     client: CL,
     guards: ChainGuards,
