@@ -1,18 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    chain_guards::ChainGuards,
-};
+use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
 use dashmap::DashMap;
 use futures::Future;
 use linera_execution::WasmRuntime;
-use linera_views::{
-    dynamo_db::{Config, DynamoDbClient, DynamoDbContextError, TableName, TableStatus},
+use linera_views::dynamo_db::{
+    Config, DynamoDbClient, DynamoDbContextError, TableName, TableStatus,
 };
 use std::sync::Arc;
-use crate::DbStore;
-use crate::DbStoreClient;
 
 #[cfg(test)]
 #[path = "unit_tests/dynamo_db.rs"]
@@ -54,7 +50,9 @@ impl DynamoDbStoreClient {
         store_creator: impl Future<Output = Result<(DynamoDbStore, TableStatus), E>>,
     ) -> Result<(Self, TableStatus), E> {
         let (store, table_status) = store_creator.await?;
-        let client = DynamoDbStoreClient { client: Arc::new(store) };
+        let client = DynamoDbStoreClient {
+            client: Arc::new(store),
+        };
         Ok((client, table_status))
     }
 }

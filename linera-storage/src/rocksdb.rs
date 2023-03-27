@@ -1,16 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    chain_guards::ChainGuards,
-};
+use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
 use linera_execution::WasmRuntime;
-use linera_views::{
-    rocksdb::{RocksdbClient, DB},
-};
+use linera_views::rocksdb::{RocksdbClient, DB};
 use std::{path::PathBuf, sync::Arc};
-use crate::DbStore;
-use crate::DbStoreClient;
 
 #[cfg(test)]
 #[path = "unit_tests/rocksdb.rs"]
@@ -22,7 +16,9 @@ pub type RocksdbStoreClient = DbStoreClient<RocksdbClient>;
 
 impl RocksdbStoreClient {
     pub fn new(path: PathBuf, wasm_runtime: Option<WasmRuntime>) -> Self {
-        RocksdbStoreClient {client: Arc::new(RocksdbStore::new(path, wasm_runtime)) }
+        RocksdbStoreClient {
+            client: Arc::new(RocksdbStore::new(path, wasm_runtime)),
+        }
     }
 }
 

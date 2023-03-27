@@ -1,17 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    chain_guards::ChainGuards,
-};
+use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
 use async_lock::{Mutex, RwLock};
 use linera_execution::WasmRuntime;
-use linera_views::{
-    memory::MemoryClient,
-};
+use linera_views::memory::MemoryClient;
 use std::{collections::BTreeMap, sync::Arc};
-use crate::DbStoreClient;
-use crate::DbStore;
 
 type MemoryStore = DbStore<MemoryClient>;
 
@@ -19,7 +13,9 @@ pub type MemoryStoreClient = DbStoreClient<MemoryClient>;
 
 impl MemoryStoreClient {
     pub async fn new(wasm_runtime: Option<WasmRuntime>) -> Self {
-        DbStoreClient { client: Arc::new(MemoryStore::new(wasm_runtime).await) }
+        DbStoreClient {
+            client: Arc::new(MemoryStore::new(wasm_runtime).await),
+        }
     }
 }
 
