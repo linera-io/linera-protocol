@@ -6,6 +6,7 @@ edition = "2021"
 
 [features]
 default = ["wasmer", "wasmtime"]
+benchmark = ["linera-base/test"]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 aws = ["linera-views/aws", "linera-core/aws", "linera-storage/aws"]
