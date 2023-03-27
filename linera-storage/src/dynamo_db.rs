@@ -15,8 +15,7 @@ use linera_chain::data_types::{Certificate, HashedValue, LiteCertificate, Value}
 use linera_execution::{UserApplicationCode, UserApplicationId, WasmRuntime};
 use linera_views::{
     batch::Batch,
-    common::Context,
-    dynamo_db::{Config, DynamoDbContext, DynamoDbContextError, TableName, TableStatus},
+    dynamo_db::{Config, DynamoDbContextError, TableName, TableStatus},
     views::{View, ViewError},
 };
 use metrics::increment_counter;
@@ -152,7 +151,7 @@ impl Store for DynamoDbStoreClient {
             chain_guard: Some(Arc::new(guard)),
         };
         let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
-        let db_context = DynamoDbContext { db: self.0.client.clone(), base_key, extra: runtime_context };
+        let db_context = ContextFromDb::create(self.0.client.clone(), base_key, runtime_context).await?;
         ChainStateView::load(db_context).await
     }
 

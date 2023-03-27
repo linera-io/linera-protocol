@@ -4,7 +4,7 @@
 use crate::{
     batch::{Batch, DeletePrefixExpander, SimpleUnorderedBatch},
     common::{
-        Context, ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient, MIN_VIEW_TAG,
+        ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient, MIN_VIEW_TAG,
     },
     localstack,
 };
@@ -775,24 +775,6 @@ where
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let db_tablestatus = DynamoDbClient::with_localstack(table).await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
-    }
-
-    /// Clone this [`DynamoDbContext`] while entering a sub-scope.
-    ///
-    /// The return context has its key prefix extended with `scope_prefix` and uses the
-    /// `new_extra` instead of cloning the current extra data.
-    pub async fn clone_with_sub_scope<NewE: Clone + Send + Sync>(
-        &self,
-        scope_prefix: &impl Serialize,
-        new_extra: NewE,
-    ) -> Result<DynamoDbContext<NewE>, DynamoDbContextError> {
-        let base_key = self.derive_key(scope_prefix)?;
-        self.db.clear_journal(&base_key).await?;
-        Ok(DynamoDbContext {
-            db: self.db.clone(),
-            base_key,
-            extra: new_extra,
-        })
     }
 }
 
