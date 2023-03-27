@@ -5,8 +5,6 @@ use crate::{
     chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Store,
     READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
 };
-use linera_views::common::ContextFromDb;
-use linera_views::dynamo_db::DynamoDbClient;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use futures::Future;
@@ -15,13 +13,13 @@ use linera_chain::data_types::{Certificate, HashedValue, LiteCertificate, Value}
 use linera_execution::{UserApplicationCode, UserApplicationId, WasmRuntime};
 use linera_views::{
     batch::Batch,
-    dynamo_db::{Config, DynamoDbContextError, TableName, TableStatus},
+    common::{ContextFromDb, KeyValueStoreClient},
+    dynamo_db::{Config, DynamoDbClient, DynamoDbContextError, TableName, TableStatus},
     views::{View, ViewError},
 };
 use metrics::increment_counter;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use linera_views::common::KeyValueStoreClient;
 
 #[cfg(test)]
 #[path = "unit_tests/dynamo_db.rs"]
@@ -79,11 +77,7 @@ impl DynamoDbStore {
         table: TableName,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_client(
-            || DynamoDbClient::new(table),
-            wasm_runtime,
-        )
-        .await
+        Self::with_client(|| DynamoDbClient::new(table), wasm_runtime).await
     }
 
     pub async fn from_config(
@@ -91,22 +85,14 @@ impl DynamoDbStore {
         table: TableName,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_client(
-            || DynamoDbClient::from_config(config, table),
-            wasm_runtime,
-        )
-        .await
+        Self::with_client(|| DynamoDbClient::from_config(config, table), wasm_runtime).await
     }
 
     pub async fn with_localstack(
         table: TableName,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_client(
-            || DynamoDbClient::with_localstack(table),
-            wasm_runtime,
-        )
-        .await
+        Self::with_client(|| DynamoDbClient::with_localstack(table), wasm_runtime).await
     }
 
     async fn with_client<F, E>(
@@ -151,7 +137,8 @@ impl Store for DynamoDbStoreClient {
             chain_guard: Some(Arc::new(guard)),
         };
         let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
-        let db_context = ContextFromDb::create(self.0.client.clone(), base_key, runtime_context).await?;
+        let db_context =
+            ContextFromDb::create(self.0.client.clone(), base_key, runtime_context).await?;
         ChainStateView::load(db_context).await
     }
 
@@ -164,7 +151,7 @@ impl Store for DynamoDbStoreClient {
         };
         increment_counter!(READ_VALUE_COUNTER, &[("chain_id", id)]);
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
-	Ok(value.with_hash_unchecked(hash))
+        Ok(value.with_hash_unchecked(hash))
     }
 
     async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
@@ -176,7 +163,6 @@ impl Store for DynamoDbStoreClient {
         self.0.client.write_batch(batch, &[]).await?;
         Ok(())
     }
-
 
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;

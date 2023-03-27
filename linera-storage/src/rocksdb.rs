@@ -5,7 +5,6 @@ use crate::{
     chain_guards::ChainGuards, ChainRuntimeContext, ChainStateView, Store,
     READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
 };
-use linera_views::common::ContextFromDb;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{crypto::CryptoHash, identifiers::ChainId};
@@ -13,7 +12,7 @@ use linera_chain::data_types::{Certificate, HashedValue, LiteCertificate, Value}
 use linera_execution::{UserApplicationCode, UserApplicationId, WasmRuntime};
 use linera_views::{
     batch::Batch,
-    common::KeyValueStoreClient,
+    common::{ContextFromDb, KeyValueStoreClient},
     rocksdb::{RocksdbClient, RocksdbContext, RocksdbContextError, DB},
     views::{View, ViewError},
 };

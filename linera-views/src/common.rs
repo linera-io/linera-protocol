@@ -287,7 +287,7 @@ pub struct ContextFromDb<E, DB> {
     pub extra: E,
 }
 
-impl<E,DB> ContextFromDb<E,DB>
+impl<E, DB> ContextFromDb<E, DB>
 where
     E: Clone + Send + Sync,
     DB: KeyValueStoreClient + Clone + Send + Sync,
@@ -295,13 +295,19 @@ where
     ViewError: From<DB::Error>,
 {
     /// Create a context from db that also clears the journal before making it available
-    pub async fn create(db: DB, base_key: Vec<u8>, extra: E) -> Result<Self,<ContextFromDb<E, DB> as Context>::Error> {
+    pub async fn create(
+        db: DB,
+        base_key: Vec<u8>,
+        extra: E,
+    ) -> Result<Self, <ContextFromDb<E, DB> as Context>::Error> {
         db.clear_journal(&base_key).await?;
-        Ok(ContextFromDb { db, base_key, extra })
+        Ok(ContextFromDb {
+            db,
+            base_key,
+            extra,
+        })
     }
 }
-
-
 
 #[async_trait]
 impl<E, DB> Context for ContextFromDb<E, DB>

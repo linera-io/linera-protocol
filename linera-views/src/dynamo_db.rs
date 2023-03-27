@@ -3,9 +3,7 @@
 
 use crate::{
     batch::{Batch, DeletePrefixExpander, SimpleUnorderedBatch},
-    common::{
-        ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient, MIN_VIEW_TAG,
-    },
+    common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient, MIN_VIEW_TAG},
     localstack,
 };
 use async_trait::async_trait;
@@ -388,10 +386,7 @@ impl DynamoDbBatch {
         tb.submit(db).await
     }
 
-    async fn from_batch(
-        db: &DynamoDbClient,
-        batch: Batch,
-    ) -> Result<Self, DynamoDbContextError> {
+    async fn from_batch(db: &DynamoDbClient, batch: Batch) -> Result<Self, DynamoDbContextError> {
         // As a matter of fact the DynamoDB does not support the deleteprefix operation.
         // Therefore it does not make sense to have a delete prefix and they have to
         // be downloaded for making a list.
@@ -719,7 +714,6 @@ impl KeyValueStoreClient for DynamoDbClient {
         }
         Ok(())
     }
-
 }
 
 /// A implementation of [`Context`] based on [`DynamoDbClient`].
