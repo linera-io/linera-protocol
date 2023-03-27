@@ -1,124 +1,34 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    ChainRuntimeContext, ChainStateView, Store, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER,
-    WRITE_CERTIFICATE_COUNTER, WRITE_VALUE_COUNTER,
-};
-use async_lock::Mutex;
-use async_trait::async_trait;
-use dashmap::DashMap;
-use linera_base::{crypto::CryptoHash, identifiers::ChainId};
-use linera_chain::data_types::{Certificate, HashedValue, LiteCertificate, Value};
-use linera_execution::{UserApplicationCode, UserApplicationId, WasmRuntime};
-use linera_views::{
-    memory::{MemoryContext, MemoryContextError, MemoryStoreMap},
-    views::{View, ViewError},
-};
-use metrics::increment_counter;
+use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
+use async_lock::{Mutex, RwLock};
+use linera_execution::WasmRuntime;
+use linera_views::memory::MemoryClient;
 use std::{collections::BTreeMap, sync::Arc};
 
-#[derive(Clone)]
-struct MemoryStore {
-    chains: DashMap<ChainId, Arc<Mutex<MemoryStoreMap>>>,
-    certificates: DashMap<CryptoHash, LiteCertificate>,
-    values: DashMap<CryptoHash, Value>,
-    user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
-    wasm_runtime: Option<WasmRuntime>,
-}
+type MemoryStore = DbStore<MemoryClient>;
 
-#[derive(Clone)]
-pub struct MemoryStoreClient(Arc<MemoryStore>);
+pub type MemoryStoreClient = DbStoreClient<MemoryClient>;
 
 impl MemoryStoreClient {
-    pub fn new(wasm_runtime: Option<WasmRuntime>) -> Self {
-        MemoryStoreClient(Arc::new(MemoryStore::new(wasm_runtime)))
-    }
-}
-
-impl MemoryStore {
-    pub fn new(wasm_runtime: Option<WasmRuntime>) -> Self {
-        Self {
-            chains: DashMap::new(),
-            certificates: DashMap::new(),
-            values: DashMap::new(),
-            user_applications: Arc::default(),
-            wasm_runtime,
+    pub async fn new(wasm_runtime: Option<WasmRuntime>) -> Self {
+        DbStoreClient {
+            client: Arc::new(MemoryStore::new(wasm_runtime).await),
         }
     }
 }
 
-#[async_trait]
-impl Store for MemoryStoreClient {
-    type Context = MemoryContext<ChainRuntimeContext<Self>>;
-    type ContextError = MemoryContextError;
-
-    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
-        let state = self
-            .0
-            .chains
-            .entry(id)
-            .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())))
-            .clone();
-        tracing::trace!("Acquiring lock on {:?}", id);
-        let runtime_context = ChainRuntimeContext {
-            store: self.clone(),
-            chain_id: id,
-            user_applications: self.0.user_applications.clone(),
-            chain_guard: None,
-        };
-        let db_context = MemoryContext::new(state.lock_arc().await, runtime_context);
-        ChainStateView::load(db_context).await
-    }
-
-    async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
-        let maybe_value = self.0.values.get(&hash);
-        let id = match &maybe_value {
-            Some(value) => format!("{}", value.block.chain_id),
-            None => "not found".to_string(),
-        };
-        increment_counter!(READ_VALUE_COUNTER, &[("chain_id", id)]);
-        Ok(maybe_value
-            .ok_or_else(|| ViewError::not_found("value for hash", hash))?
-            .value()
-            .clone()
-            .with_hash_unchecked(hash))
-    }
-
-    async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
-        let id = format!("{}", value.block().chain_id);
-        increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
-        self.0.values.insert(value.hash(), value.into());
-        Ok(())
-    }
-
-    async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
-        let maybe_value = self.0.values.get(&hash);
-        let id = match &maybe_value {
-            Some(value) => format!("{}", value.block.chain_id),
-            None => "not found".to_string(),
-        };
-        increment_counter!(READ_CERTIFICATE_COUNTER, &[("chain_id", id)]);
-        let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
-        let maybe_cert = self.0.certificates.get(&hash);
-        let cert = maybe_cert.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
-        let cert = cert.value().clone();
-        let value = value.value().clone().with_hash_unchecked(hash);
-        Ok(cert
-            .with_value(value)
-            .ok_or(ViewError::InconsistentEntries)?)
-    }
-
-    async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
-        let id = format!("{}", certificate.value.block().chain_id);
-        increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id)]);
-        let (cert, value) = certificate.split();
-        self.0.values.insert(cert.value.value_hash, value.into());
-        self.0.certificates.insert(cert.value.value_hash, cert);
-        Ok(())
-    }
-
-    fn wasm_runtime(&self) -> Option<WasmRuntime> {
-        self.0.wasm_runtime
+impl MemoryStore {
+    pub async fn new(wasm_runtime: Option<WasmRuntime>) -> Self {
+        let state = Arc::new(Mutex::new(BTreeMap::new()));
+        let guard = state.lock_arc().await;
+        let client = Arc::new(RwLock::new(guard));
+        Self {
+            client,
+            guards: ChainGuards::default(),
+            user_applications: Arc::default(),
+            wasm_runtime,
+        }
     }
 }

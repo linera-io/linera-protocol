@@ -49,7 +49,7 @@ async fn test_memory_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
     storage_kind: StorageKind,
 ) -> Result<(), anyhow::Error> {
-    let client = MemoryStoreClient::new(Some(wasm_runtime));
+    let client = MemoryStoreClient::new(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(client, storage_kind).await
 }
 

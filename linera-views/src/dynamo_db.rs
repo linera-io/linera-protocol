@@ -3,9 +3,7 @@
 
 use crate::{
     batch::{Batch, DeletePrefixExpander, SimpleUnorderedBatch},
-    common::{
-        Context, ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient, MIN_VIEW_TAG,
-    },
+    common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient, MIN_VIEW_TAG},
     localstack,
 };
 use async_trait::async_trait;
@@ -18,7 +16,7 @@ use aws_sdk_dynamodb::{
     types::{Blob, SdkError},
     Client,
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, mem, str::FromStr};
 use thiserror::Error;
 
@@ -65,10 +63,6 @@ pub const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
 /// Fundamental constants in DynamoDb: The maximum size of a BatchWriteItem is 16M
 /// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html>
 const MAX_BATCH_WRITE_ITEM_BYTES: usize = 16777216;
-
-/// Fundamental constants in DynamoDb: The maximum size of a BatchWriteItem is 100
-/// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html>
-pub const MAX_BATCH_WRITE_ITEM_SIZE: usize = 25;
 
 /// Build the key attributes for a table item.
 ///
@@ -176,7 +170,7 @@ impl TransactionBuilder {
     fn insert_delete_request(
         &mut self,
         key: Vec<u8>,
-        db: &DynamoDbClientInternal,
+        db: &DynamoDbClient,
     ) -> Result<(), DynamoDbContextError> {
         if key.is_empty() {
             return Err(DynamoDbContextError::ZeroLengthKey);
@@ -194,7 +188,7 @@ impl TransactionBuilder {
         &mut self,
         key: Vec<u8>,
         value: Vec<u8>,
-        db: &DynamoDbClientInternal,
+        db: &DynamoDbClient,
     ) -> Result<(), DynamoDbContextError> {
         if key.is_empty() {
             return Err(DynamoDbContextError::ZeroLengthKey);
@@ -211,7 +205,7 @@ impl TransactionBuilder {
         Ok(())
     }
 
-    async fn submit(self, db: &DynamoDbClientInternal) -> Result<(), DynamoDbContextError> {
+    async fn submit(self, db: &DynamoDbClient) -> Result<(), DynamoDbContextError> {
         if self.transacts.len() > MAX_TRANSACT_WRITE_ITEM_SIZE {
             return Err(DynamoDbContextError::TransactUpperLimitSize);
         }
@@ -260,7 +254,7 @@ impl JournalHeader {
     /// Resolve the database by using the header that has been retrieved
     async fn coherently_resolve_journal(
         mut self,
-        db: &DynamoDbClientInternal,
+        db: &DynamoDbClient,
         base_key: &[u8],
     ) -> Result<(), DynamoDbContextError> {
         loop {
@@ -305,7 +299,7 @@ impl DynamoDbBatch {
     fn add_journal_header_operations(
         transact_builder: &mut TransactionBuilder,
         header: &JournalHeader,
-        db: &DynamoDbClientInternal,
+        db: &DynamoDbClient,
         base_key: &[u8],
     ) -> Result<(), DynamoDbContextError> {
         let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
@@ -321,7 +315,7 @@ impl DynamoDbBatch {
     /// writing blocks to the database so as to be resolved later
     pub async fn write_journal(
         self,
-        db: &DynamoDbClientInternal,
+        db: &DynamoDbClient,
         base_key: &[u8],
     ) -> Result<JournalHeader, DynamoDbContextError> {
         let delete_count = self.0.deletions.len();
@@ -380,7 +374,7 @@ impl DynamoDbBatch {
     /// This code is for submitting the transaction in one single transaction when that is possible
     pub async fn write_fastpath_failsafe(
         self,
-        db: &DynamoDbClientInternal,
+        db: &DynamoDbClient,
     ) -> Result<(), DynamoDbContextError> {
         let mut tb = TransactionBuilder::default();
         for key in self.0.deletions {
@@ -392,10 +386,7 @@ impl DynamoDbBatch {
         tb.submit(db).await
     }
 
-    async fn from_batch(
-        db: &DynamoDbClientInternal,
-        batch: Batch,
-    ) -> Result<Self, DynamoDbContextError> {
+    async fn from_batch(db: &DynamoDbClient, batch: Batch) -> Result<Self, DynamoDbContextError> {
         // As a matter of fact the DynamoDB does not support the deleteprefix operation.
         // Therefore it does not make sense to have a delete prefix and they have to
         // be downloaded for making a list.
@@ -505,13 +496,13 @@ impl KeyValueIterable<DynamoDbContextError> for DynamoDbKeyValues {
 
 /// A DynamoDb client.
 #[derive(Debug, Clone)]
-struct DynamoDbClientInternal {
+pub struct DynamoDbClient {
     client: Client,
     table: TableName,
 }
 
 #[async_trait]
-impl DeletePrefixExpander for DynamoDbClientInternal {
+impl DeletePrefixExpander for DynamoDbClient {
     type Error = DynamoDbContextError;
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let mut vector_list = Vec::new();
@@ -522,83 +513,11 @@ impl DeletePrefixExpander for DynamoDbClientInternal {
     }
 }
 
-impl DynamoDbClientInternal {
-    async fn read_key<V: DeserializeOwned>(
-        &self,
-        key: &[u8],
-    ) -> Result<Option<V>, DynamoDbContextError> {
-        match self.read_key_bytes(key).await? {
-            Some(bytes) => {
-                let value = bcs::from_bytes(&bytes)?;
-                Ok(Some(value))
-            }
-            None => Ok(None),
-        }
-    }
-
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
-        let key_db = build_key(key.to_vec());
-        self.read_key_bytes_general(key_db).await
-    }
-
-    async fn find_keys_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<DynamoDbKeys, DynamoDbContextError> {
-        if key_prefix.is_empty() {
-            return Err(DynamoDbContextError::ZeroLengthKeyPrefix);
-        }
-        let response = Box::new(self.get_query_output(KEY_ATTRIBUTE, key_prefix).await?);
-        Ok(DynamoDbKeys {
-            prefix_len: key_prefix.len(),
-            response,
-        })
-    }
-
-    async fn find_key_values_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<DynamoDbKeyValues, DynamoDbContextError> {
-        if key_prefix.is_empty() {
-            return Err(DynamoDbContextError::ZeroLengthKeyPrefix);
-        }
-        let response = Box::new(
-            self.get_query_output(KEY_VALUE_ATTRIBUTE, key_prefix)
-                .await?,
-        );
-        Ok(DynamoDbKeyValues {
-            prefix_len: key_prefix.len(),
-            response,
-        })
-    }
-
-    /// We put submit the transaction in blocks (called BatchWriteItem in dynamoDb) of at most MAX_BATCH_WRITE_ITEM_SIZE
-    /// so as to decrease the number of needed transactions. That constant MAX_BATCH_WRITE_ITEM_SIZE comes from
-    /// <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html>
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
-        let block_operations = DynamoDbBatch::from_batch(self, batch).await?;
-        if block_operations.is_fastpath_feasible() {
-            block_operations.write_fastpath_failsafe(self).await
-        } else {
-            let header = block_operations.write_journal(self, base_key).await?;
-            header.coherently_resolve_journal(self, base_key).await
-        }
-    }
-
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
-        // Design is done in the following way that we do the deletes and then the inserts.
-        let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
-        let value: Option<JournalHeader> = self.read_key(&key).await?;
-        if let Some(header) = value {
-            header.coherently_resolve_journal(self, base_key).await?;
-        }
-        Ok(())
-    }
-
+impl DynamoDbClient {
     /// Create a new [`DynamoDbClient`] instance.
     pub async fn new(table: TableName) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let config = aws_config::load_from_env().await;
-        DynamoDbClientInternal::from_config(&config, table).await
+        DynamoDbClient::from_config(&config, table).await
     }
 
     async fn get_query_output(
@@ -708,7 +627,7 @@ impl DynamoDbClientInternal {
         config: impl Into<Config>,
         table: TableName,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let db = DynamoDbClientInternal {
+        let db = DynamoDbClient {
             client: Client::from_conf(config.into()),
             table,
         };
@@ -730,14 +649,8 @@ impl DynamoDbClientInternal {
         let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
             .endpoint_resolver(localstack::get_endpoint()?)
             .build();
-        DynamoDbClientInternal::from_config(config, table).await
+        DynamoDbClient::from_config(config, table).await
     }
-}
-
-/// The dynamoDb client which does use journal and does atomic operations
-#[derive(Debug, Clone)]
-pub struct DynamoDbClient {
-    client: DynamoDbClientInternal,
 }
 
 #[async_trait]
@@ -747,44 +660,62 @@ impl KeyValueStoreClient for DynamoDbClient {
     type KeyValues = DynamoDbKeyValues;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
-        self.client.read_key_bytes(key).await
+        let key_db = build_key(key.to_vec());
+        self.read_key_bytes_general(key_db).await
     }
 
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::Keys, DynamoDbContextError> {
-        self.client.find_keys_by_prefix(key_prefix).await
+    ) -> Result<DynamoDbKeys, DynamoDbContextError> {
+        if key_prefix.is_empty() {
+            return Err(DynamoDbContextError::ZeroLengthKeyPrefix);
+        }
+        let response = Box::new(self.get_query_output(KEY_ATTRIBUTE, key_prefix).await?);
+        Ok(DynamoDbKeys {
+            prefix_len: key_prefix.len(),
+            response,
+        })
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, DynamoDbContextError> {
-        self.client.find_key_values_by_prefix(key_prefix).await
+    ) -> Result<DynamoDbKeyValues, DynamoDbContextError> {
+        if key_prefix.is_empty() {
+            return Err(DynamoDbContextError::ZeroLengthKeyPrefix);
+        }
+        let response = Box::new(
+            self.get_query_output(KEY_VALUE_ATTRIBUTE, key_prefix)
+                .await?,
+        );
+        Ok(DynamoDbKeyValues {
+            prefix_len: key_prefix.len(),
+            response,
+        })
     }
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
-        self.client.write_batch(batch, base_key).await
+        let block_operations = DynamoDbBatch::from_batch(self, batch).await?;
+        if block_operations.is_fastpath_feasible() {
+            block_operations.write_fastpath_failsafe(self).await
+        } else {
+            let header = block_operations.write_journal(self, base_key).await?;
+            header.coherently_resolve_journal(self, base_key).await
+        }
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
-        self.client.clear_journal(base_key).await
+        let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
+        let value: Option<JournalHeader> = self.read_key(&key).await?;
+        if let Some(header) = value {
+            header.coherently_resolve_journal(self, base_key).await?;
+        }
+        Ok(())
     }
 }
 
-impl DynamoDbClient {
-    /// Create a new client from config
-    pub async fn from_config(
-        config: impl Into<Config>,
-        table: TableName,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (client, table_status) = DynamoDbClientInternal::from_config(config, table).await?;
-        Ok((DynamoDbClient { client }, table_status))
-    }
-}
-
-/// A implementation of [`Context`] based on [`DynamoDbClient`].
+/// A implementation of Context based on [`DynamoDbClient`].
 pub type DynamoDbContext<E> = ContextFromDb<E, DynamoDbClient>;
 
 impl<E> DynamoDbContext<E>
@@ -792,14 +723,10 @@ where
     E: Clone + Sync + Send,
 {
     fn create_context(
-        db_tablestatus_general: (DynamoDbClientInternal, TableStatus),
+        db_tablestatus: (DynamoDbClient, TableStatus),
         base_key: Vec<u8>,
         extra: E,
     ) -> (Self, TableStatus) {
-        let client = DynamoDbClient {
-            client: db_tablestatus_general.0,
-        };
-        let db_tablestatus: (DynamoDbClient, TableStatus) = (client, db_tablestatus_general.1);
         let storage = DynamoDbContext {
             db: db_tablestatus.0,
             base_key,
@@ -814,7 +741,7 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let db_tablestatus = DynamoDbClientInternal::new(table).await?;
+        let db_tablestatus = DynamoDbClient::new(table).await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 
@@ -825,7 +752,7 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let db_tablestatus = DynamoDbClientInternal::from_config(config, table).await?;
+        let db_tablestatus = DynamoDbClient::from_config(config, table).await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 
@@ -839,26 +766,8 @@ where
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let db_tablestatus = DynamoDbClientInternal::with_localstack(table).await?;
+        let db_tablestatus = DynamoDbClient::with_localstack(table).await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
-    }
-
-    /// Clone this [`DynamoDbContext`] while entering a sub-scope.
-    ///
-    /// The return context has its key prefix extended with `scope_prefix` and uses the
-    /// `new_extra` instead of cloning the current extra data.
-    pub async fn clone_with_sub_scope<NewE: Clone + Send + Sync>(
-        &self,
-        scope_prefix: &impl Serialize,
-        new_extra: NewE,
-    ) -> Result<DynamoDbContext<NewE>, DynamoDbContextError> {
-        let base_key = self.derive_key(scope_prefix)?;
-        self.db.clear_journal(&base_key).await?;
-        Ok(DynamoDbContext {
-            db: self.db.clone(),
-            base_key,
-            extra: new_extra,
-        })
     }
 }
 
@@ -945,10 +854,6 @@ pub enum DynamoDbContextError {
     /// The transact maximum size is MAX_TRANSACT_WRITE_ITEM_SIZE
     #[error("The transact must have length at most MAX_TRANSACT_WRITE_ITEM_SIZE")]
     TransactUpperLimitSize,
-
-    /// The batch should have size at most MAX_BATCH_WRITE_ITEM_SIZE
-    #[error("The batch must have length at most MAX_BATCH_WRITE_ITEM_SIZE")]
-    BatchUpperLimitSize,
 
     /// Key have to be of non-zero length
     #[error("The key must be of strictly positive length")]

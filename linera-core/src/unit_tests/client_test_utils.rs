@@ -469,7 +469,7 @@ impl StoreBuilder for MakeMemoryStoreClient {
     type Store = MemoryStoreClient;
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
-        Ok(MemoryStoreClient::new(self.wasm_runtime))
+        Ok(MemoryStoreClient::new(self.wasm_runtime).await)
     }
 }
 
