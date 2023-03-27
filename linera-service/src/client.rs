@@ -60,8 +60,12 @@ struct ClientContext {
 impl ClientContext {
     fn from_options(options: &ClientOptions) -> Self {
         let wallet_state_path = options.wallet_state_path.clone();
-        let wallet_state = WalletState::read_or_create(&wallet_state_path)
-            .unwrap_or_else(|_| panic!("Unable to read user chains at {:?}", &wallet_state_path));
+        let wallet_state = WalletState::read_or_create(&wallet_state_path).unwrap_or_else(|e| {
+            panic!(
+                "Unable to read user chains at {:?}: {:?}",
+                &wallet_state_path, e
+            )
+        });
         let genesis_config = match options.command {
             ClientCommand::CreateGenesisConfig { admin_root, .. } => {
                 GenesisConfig::new(CommitteeConfig::default(), ChainId::root(admin_root))
@@ -1062,9 +1066,10 @@ async fn main() -> Result<(), anyhow::Error> {
 
         ClientCommand::KeyGen => {
             let keypair = KeyPair::generate();
-            println!("{}", keypair.public());
+            let public = keypair.public();
             context.wallet_state.add_unassigned_keypair(keypair);
             context.save_wallet();
+            println!("{}", public);
             Ok(())
         }
 
