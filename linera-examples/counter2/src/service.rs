@@ -62,9 +62,7 @@ mod tests {
     #[webassembly_test]
     fn query() {
         let value = 61_098_721_u128;
-        let context = create_test_context()
-            .now_or_never()
-            .expect("Failed to acquire the guard");
+        let context = create_test_context();
         let mut counter = Counter::load(context)
             .now_or_never()
             .unwrap()
@@ -85,9 +83,7 @@ mod tests {
     #[webassembly_test]
     fn invalid_query() {
         let value = 4_u128;
-        let context = create_test_context()
-            .now_or_never()
-            .expect("Failed to acquire the guard");
+        let context = create_test_context();
         let mut counter = Counter::load(context)
             .now_or_never()
             .unwrap()

@@ -187,9 +187,7 @@ mod tests {
     }
 
     fn create_and_initialize_counter(initial_value: u128) -> Counter<MemoryContext<()>> {
-        let context = create_test_context()
-            .now_or_never()
-            .expect("Failed to acquire the guard");
+        let context = create_test_context();
         let mut counter = Counter::load(context)
             .now_or_never()
             .unwrap()

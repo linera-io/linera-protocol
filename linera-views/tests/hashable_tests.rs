@@ -19,7 +19,7 @@ struct TestType<C> {
 // TODO(#560): Implement the same for CryptoHash
 #[tokio::test]
 async fn check_hashable_container_hash() {
-    let context = create_test_context().await;
+    let context = create_test_context();
     let test = TestType::load(context).await.unwrap();
     let hash1 = test.inner.hash().await.unwrap();
     let hash2 = test.wrap.hash().await.unwrap();

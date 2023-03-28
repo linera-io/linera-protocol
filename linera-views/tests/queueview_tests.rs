@@ -16,7 +16,7 @@ pub struct StateView<C> {
 
 #[tokio::test]
 async fn queue_view_mutability_check() {
-    let context = create_test_context().await;
+    let context = create_test_context();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     let mut vector = Vec::new();
     let n = 20;
