@@ -60,6 +60,15 @@ pub enum AccountOwner {
     Application(ApplicationId),
 }
 
+impl<T> From<T> for AccountOwner
+where
+    T: Into<Owner>,
+{
+    fn from(owner: T) -> Self {
+        AccountOwner::User(owner.into())
+    }
+}
+
 /// An account.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Account {
