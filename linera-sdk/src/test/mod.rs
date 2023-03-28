@@ -13,7 +13,8 @@
     any(feature = "wasmer", feature = "wasmtime")
 ))]
 
+mod block;
 mod chain;
 mod validator;
 
-pub use self::{chain::ActiveChain, validator::TestValidator};
+pub use self::{block::BlockBuilder, chain::ActiveChain, validator::TestValidator};
