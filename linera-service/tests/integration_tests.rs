@@ -7,6 +7,7 @@ use linera_chain::data_types::Certificate;
 use linera_service::config::WalletState;
 #[cfg(feature = "aws")]
 use linera_views::test_utils::LocalStackTestContext;
+use once_cell::sync::Lazy;
 use serde_json::{json, Value};
 use std::{
     env,
@@ -16,18 +17,17 @@ use std::{
     process::{Command, Stdio},
     rc::Rc,
     str::FromStr,
-    sync::Mutex,
     time::Duration,
 };
 use tempfile::{tempdir, TempDir};
-use tokio::process::Child;
+use tokio::{process::Child, sync::Mutex};
 
-/// A static lock to prevent README examples from running in parallel.
-static README_GUARD: Mutex<()> = Mutex::new(());
+/// A static lock to prevent integration tests from running in parallel.
+static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
-#[test]
-fn test_examples_in_readme_simple() -> std::io::Result<()> {
-    let _guard = README_GUARD.lock().unwrap();
+#[tokio::test]
+async fn test_examples_in_readme_simple() -> std::io::Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let dir = tempdir().unwrap();
     let file = std::io::BufReader::new(std::fs::File::open("../README.md")?);
@@ -586,9 +586,8 @@ async fn increment_counter_value(application_uri: &str, increment: u64) {
 }
 
 #[tokio::test]
-#[allow(clippy::await_holding_lock)]
 async fn end_to_end() {
-    let _guard = README_GUARD.lock().unwrap();
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
     let runner = TestRunner::new(network);
@@ -625,9 +624,8 @@ async fn end_to_end() {
 }
 
 #[tokio::test]
-#[allow(clippy::await_holding_lock)]
 async fn test_multiple_wallets() {
-    let _guard = README_GUARD.lock().unwrap();
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
     let runner = TestRunner::new(Network::Grpc);
@@ -675,16 +673,14 @@ async fn test_multiple_wallets() {
 }
 
 #[tokio::test]
-#[allow(clippy::await_holding_lock)]
 async fn reconfiguration_test_grpc() {
-    let _guard = README_GUARD.lock().unwrap();
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     test_reconfiguration(Network::Grpc).await;
 }
 
 #[tokio::test]
-#[allow(clippy::await_holding_lock)]
 async fn reconfiguration_test_simple() {
-    let _guard = README_GUARD.lock().unwrap();
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     test_reconfiguration(Network::Simple).await;
 }
 
