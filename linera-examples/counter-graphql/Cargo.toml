@@ -5,7 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
-async-graphql = { version = "5.0.6", default-features = false }
+async-graphql = { version = "5.0.7", default-features = false }
 async-trait = "0.1.52"
 bcs = "0.1.3"
 futures = "0.3.17"
@@ -27,4 +27,3 @@ path = "src/contract.rs"
 [[bin]]
 name = "counter_graphql_service"
 path = "src/service.rs"
-
