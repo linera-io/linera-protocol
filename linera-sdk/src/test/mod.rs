@@ -12,3 +12,7 @@
     not(target_arch = "wasm32"),
     any(feature = "wasmer", feature = "wasmtime")
 ))]
+
+mod validator;
+
+pub use self::validator::TestValidator;

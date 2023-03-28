@@ -8,9 +8,9 @@ edition = "2021"
 development = ["linera-sdk"]
 
 [features]
-wasmer = []
-wasmtime = []
-test = ["wasmer"]
+wasmer = ["linera-core?/wasmer", "linera-execution?/wasmer", "linera-storage?/wasmer"]
+wasmtime = ["linera-core?/wasmer", "linera-execution?/wasmtime", "linera-storage?/wasmtime"]
+test = ["linera-chain", "linera-core/test", "linera-execution", "linera-storage", "wasmer"]
 
 [dependencies]
 async-trait = "0.1.52"
@@ -25,5 +25,10 @@ wit-bindgen-guest-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "b
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow = "1.0.57"
+linera-base = { path = "../linera-base" }
+linera-chain = { path = "../linera-chain", optional = true }
+linera-core = { path = "../linera-core", default-features = false, optional = true }
+linera-execution = { path = "../linera-execution", default-features = false, optional = true }
+linera-storage = { path = "../linera-storage", default-features = false, optional = true }
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 wasmtime = "1.0"
