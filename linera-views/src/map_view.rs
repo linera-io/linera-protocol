@@ -303,8 +303,8 @@ where
     where
         F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
     {
-        self.for_each_key_value_while(|key,value| {
-            f(key,value)?;
+        self.for_each_key_value_while(|key, value| {
+            f(key, value)?;
             Ok(true)
         })
         .await
@@ -528,7 +528,7 @@ where
         self.map
             .for_each_key_while(|key| {
                 let index = C::deserialize_value(key)?;
-                Ok(f(index)?)
+                f(index)
             })
             .await?;
         Ok(())
@@ -543,7 +543,7 @@ where
         self.map
             .for_each_key(|key| {
                 let index = C::deserialize_value(key)?;
-                Ok(f(index)?)
+                f(index)
             })
             .await?;
         Ok(())
@@ -559,7 +559,7 @@ where
             .for_each_key_value_while(|key, bytes| {
                 let index = C::deserialize_value(key)?;
                 let value = C::deserialize_value(bytes)?;
-                Ok(f(index, value)?)
+                f(index, value)
             })
             .await?;
         Ok(())
@@ -575,7 +575,7 @@ where
             .for_each_key_value(|key, bytes| {
                 let index = C::deserialize_value(key)?;
                 let value = C::deserialize_value(bytes)?;
-                Ok(f(index, value)?)
+                f(index, value)
             })
             .await?;
         Ok(())
@@ -753,7 +753,7 @@ where
         self.map
             .for_each_key_while(|key| {
                 let index = I::from_custom_bytes::<C>(key)?;
-                Ok(f(index)?)
+                f(index)
             })
             .await?;
         Ok(())
@@ -768,7 +768,7 @@ where
         self.map
             .for_each_key(|key| {
                 let index = I::from_custom_bytes::<C>(key)?;
-                Ok(f(index)?)
+                f(index)
             })
             .await?;
         Ok(())
@@ -784,7 +784,7 @@ where
             .for_each_key_value_while(|key, bytes| {
                 let index = I::from_custom_bytes::<C>(key)?;
                 let value = C::deserialize_value(bytes)?;
-                Ok(f(index, value)?)
+                f(index, value)
             })
             .await?;
         Ok(())
@@ -800,7 +800,7 @@ where
             .for_each_key_value(|key, bytes| {
                 let index = I::from_custom_bytes::<C>(key)?;
                 let value = C::deserialize_value(bytes)?;
-                Ok(f(index, value)?)
+                f(index, value)
             })
             .await?;
         Ok(())

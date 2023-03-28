@@ -529,12 +529,11 @@ where
         self.collection
             .for_each_key_while(|key| {
                 let index = C::deserialize_value(key)?;
-                Ok(f(index)?)
+                f(index)
             })
             .await?;
         Ok(())
     }
-
 
     /// Execute a function on each index. Indices are visited in a stable, yet unspecified
     /// order.
@@ -545,12 +544,11 @@ where
         self.collection
             .for_each_key(|key| {
                 let index = C::deserialize_value(key)?;
-                Ok(f(index)?)
+                f(index)
             })
             .await?;
         Ok(())
     }
-
 }
 
 #[async_trait]

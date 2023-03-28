@@ -395,7 +395,7 @@ where
         self.set
             .for_each_key_while(|key| {
                 let index = C::deserialize_value(key)?;
-                Ok(f(index)?)
+                f(index)
             })
             .await?;
         Ok(())
@@ -410,12 +410,11 @@ where
         self.set
             .for_each_key(|key| {
                 let index = C::deserialize_value(key)?;
-                Ok(f(index)?)
+                f(index)
             })
             .await?;
         Ok(())
     }
-
 }
 
 #[async_trait]
@@ -556,7 +555,7 @@ where
         self.set
             .for_each_key_while(|key| {
                 let index = I::from_custom_bytes::<C>(key)?;
-                Ok(f(index)?)
+                f(index)
             })
             .await?;
         Ok(())
@@ -571,7 +570,7 @@ where
         self.set
             .for_each_key(|key| {
                 let index = I::from_custom_bytes::<C>(key)?;
-                Ok(f(index)?)
+                f(index)
             })
             .await?;
         Ok(())

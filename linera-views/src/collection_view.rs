@@ -558,7 +558,7 @@ where
         self.collection
             .for_each_key_while(|key| {
                 let index = C::deserialize_value(key)?;
-                Ok(f(index)?)
+                f(index)
             })
             .await?;
         Ok(())
@@ -573,7 +573,7 @@ where
         self.collection
             .for_each_key(|key| {
                 let index = C::deserialize_value(key)?;
-                Ok(f(index)?)
+                f(index)
             })
             .await?;
         Ok(())

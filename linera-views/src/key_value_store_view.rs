@@ -185,10 +185,8 @@ where
                             }
                         }
                         _ => {
-                            if lower_bound.is_index_present(index) {
-                                if !f(index)? {
-                                    return Ok(());
-                                }
+                            if lower_bound.is_index_present(index) && !f(index)? {
+                                return Ok(());
                             }
                             break;
                         }
@@ -251,10 +249,8 @@ where
                             }
                         }
                         _ => {
-                            if lower_bound.is_index_present(index) {
-                                if !f(index, index_val)? {
-                                    return Ok(());
-                                }
+                            if lower_bound.is_index_present(index) && !f(index, index_val)? {
+                                return Ok(());
                             }
                             break;
                         }
@@ -279,8 +275,8 @@ where
     where
         F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
     {
-        self.for_each_index_value_while(|key,value| {
-            f(key,value)?;
+        self.for_each_index_value_while(|key, value| {
+            f(key, value)?;
             Ok(true)
         })
         .await
