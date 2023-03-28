@@ -13,6 +13,7 @@
     any(feature = "wasmer", feature = "wasmtime")
 ))]
 
+mod chain;
 mod validator;
 
-pub use self::validator::TestValidator;
+pub use self::{chain::ActiveChain, validator::TestValidator};
