@@ -215,7 +215,7 @@ where
     }
 
     /// Execute a function on each serialized index (aka key). Keys are visited in a
-    /// stable, yet unspecified order. If the function returns false, then it exits
+    /// stable, yet unspecified order.
     async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
