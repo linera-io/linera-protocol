@@ -153,10 +153,11 @@ where
     C: Send + Context,
     ViewError: From<C::Error>,
 {
-    /// Iterate over all indices.
-    pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
+    /// Iterate over all indices. If the function f returns false, then the loop
+    /// prematurely ends
+    pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
+        F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
@@ -174,7 +175,9 @@ where
                     match update {
                         Some((key, value)) if key.as_slice() <= index => {
                             if let Update::Set(_) = value {
-                                f(key)?;
+                                if !f(key)? {
+                                    return Ok(());
+                                }
                             }
                             update = updates.next();
                             if key == index {
@@ -183,7 +186,9 @@ where
                         }
                         _ => {
                             if lower_bound.is_index_present(index) {
-                                f(index)?;
+                                if !f(index)? {
+                                    return Ok(());
+                                }
                             }
                             break;
                         }
@@ -193,17 +198,32 @@ where
         }
         while let Some((key, value)) = update {
             if let Update::Set(_) = value {
-                f(key)?;
+                if !f(key)? {
+                    return Ok(());
+                }
             }
             update = updates.next();
         }
         Ok(())
     }
 
-    /// Iterate over all the indices and values.
-    pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
+    /// Iterate over all indices.
+    pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
+        F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
+    {
+        self.for_each_index_while(|key| {
+            f(key)?;
+            Ok(true)
+        })
+        .await
+    }
+
+    /// Iterate over all the indices and values. If the function f returns false then
+    /// the loop prematurely ends.
+    pub async fn for_each_index_value_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(&[u8], &[u8]) -> Result<bool, ViewError> + Send,
     {
         let key_prefix = self.context.base_tag(KeyTag::Index as u8);
         let mut updates = self.updates.iter();
@@ -221,7 +241,9 @@ where
                     match update {
                         Some((key, value)) if key.as_slice() <= index => {
                             if let Update::Set(value) = value {
-                                f(key, value)?;
+                                if !f(key, value)? {
+                                    return Ok(());
+                                }
                             }
                             update = updates.next();
                             if key == index {
@@ -230,7 +252,9 @@ where
                         }
                         _ => {
                             if lower_bound.is_index_present(index) {
-                                f(index, index_val)?;
+                                if !f(index, index_val)? {
+                                    return Ok(());
+                                }
                             }
                             break;
                         }
@@ -240,11 +264,26 @@ where
         }
         while let Some((key, value)) = update {
             if let Update::Set(value) = value {
-                f(key, value)?;
+                if !f(key, value)? {
+                    return Ok(());
+                }
             }
             update = updates.next();
         }
         Ok(())
+    }
+
+    /// Iterate over all the indices and values. If the function f returns false then
+    /// the loop prematurely ends.
+    pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
+    {
+        self.for_each_index_value_while(|key,value| {
+            f(key,value)?;
+            Ok(true)
+        })
+        .await
     }
 
     /// Return the list of indices. The order is stable, yet not specified.
