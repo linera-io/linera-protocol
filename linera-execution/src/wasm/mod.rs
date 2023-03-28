@@ -259,7 +259,15 @@ pub mod test {
             .current_dir("../linera-examples")
             .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
             .output()?;
-        assert!(output.status.success());
+        if !output.status.success() {
+            panic!(
+                "Failed to build example applications.\n\n\
+                stdout:\n-------\n{}\n\n\
+                stderr:\n-------\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
+        }
         Ok(())
     }
 
