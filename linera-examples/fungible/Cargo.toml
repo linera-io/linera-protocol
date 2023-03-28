@@ -13,6 +13,7 @@ thiserror = "1.0.31"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 linera-sdk = { path = "../../linera-sdk", features = ["test"] }
+tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 
 [[bin]]
 name = "fungible_contract"
