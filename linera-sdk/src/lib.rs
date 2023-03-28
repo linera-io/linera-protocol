@@ -20,7 +20,7 @@ use std::{error::Error, sync::Arc};
 
 pub use self::{
     exported_future::ExportedFuture,
-    extensions::FromBcsBytes,
+    extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
 };
 #[doc(hidden)]
