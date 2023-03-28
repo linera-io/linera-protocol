@@ -993,25 +993,15 @@ where
             Assign {
                 key,
                 certificate,
-                chain: chain_id,
+                chain,
             } => {
                 let certificate: Certificate = bcs::from_bytes(&hex::decode(certificate)?)?;
-                let key_pair = context.wallet_state.key_pair_for_pk(&key);
-                let block_hash = None;
-                let timestamp = Timestamp::from(0);
-                let next_block_height = BlockHeight(0);
-                let user_chain = UserChain {
-                    chain_id,
-                    key_pair,
-                    block_hash,
-                    timestamp,
-                    next_block_height,
-                };
+                let timestamp = certificate.value.block().timestamp;
                 context
                     .wallet_state
-                    .assign_chain_to_key(&key, user_chain)
+                    .assign_new_chain_to_key(key, chain, timestamp)
                     .unwrap();
-                let mut chain_client = context.make_chain_client(storage, chain_id);
+                let mut chain_client = context.make_chain_client(storage, chain);
                 chain_client.receive_certificate(certificate).await.unwrap();
                 context.save_wallet();
             }
