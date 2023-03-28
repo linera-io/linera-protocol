@@ -2533,6 +2533,7 @@ dependencies = [
  "linera-storage",
  "linera-views",
  "metrics-exporter-tcp",
+ "once_cell",
  "parse_duration",
  "proptest",
  "reqwest",
