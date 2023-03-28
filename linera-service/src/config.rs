@@ -148,15 +148,23 @@ impl WalletState {
         self.unassigned.get(key).map(|key_pair| key_pair.copy())
     }
 
-    pub fn assign_chain_to_key(
+    pub fn assign_new_chain_to_key(
         &mut self,
-        key: &PublicKey,
-        chain: UserChain,
+        key: PublicKey,
+        chain_id: ChainId,
+        timestamp: Timestamp,
     ) -> Result<(), anyhow::Error> {
-        self.unassigned.remove(key).ok_or_else(|| {
+        let key_pair = self.unassigned.remove(&key).ok_or_else(|| {
             anyhow!("could not assign chain to key as unassigned key was not found")
         })?;
-        self.insert(chain);
+        let user_chain = UserChain {
+            chain_id,
+            key_pair: Some(key_pair),
+            block_hash: None,
+            timestamp,
+            next_block_height: BlockHeight(0),
+        };
+        self.insert(user_chain);
         Ok(())
     }
 
