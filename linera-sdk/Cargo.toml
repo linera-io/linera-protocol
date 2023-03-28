@@ -8,7 +8,9 @@ edition = "2021"
 development = ["linera-sdk"]
 
 [features]
-test = []
+wasmer = []
+wasmtime = []
+test = ["wasmer"]
 
 [dependencies]
 async-trait = "0.1.52"

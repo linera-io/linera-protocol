@@ -8,6 +8,8 @@ mod exported_future;
 mod extensions;
 mod log;
 pub mod service;
+#[cfg(feature = "test")]
+pub mod test;
 
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
