@@ -12,7 +12,7 @@ use crate::client::client_tests::{
     MakeMemoryStoreClient, MakeRocksdbStoreClient, StoreBuilder, TestBuilder, ROCKSDB_SEMAPHORE,
 };
 use linera_base::{
-    data_types::Balance,
+    data_types::{Amount, Balance},
     identifiers::{ChainDescription, ChainId, Destination, Owner},
 };
 use linera_chain::data_types::OutgoingEffect;
@@ -465,7 +465,7 @@ where
     let receiver_owner =
         fungible::AccountOwner::User(Owner::from(receiver.key_pair().await?.public()));
 
-    let accounts = BTreeMap::from_iter([(sender_owner, linera_sdk::base::Amount::from(1_000_000))]);
+    let accounts = BTreeMap::from_iter([(sender_owner, Amount::from(1_000_000))]);
     let initial_value_bytes = bcs::to_bytes(&accounts)?;
     let (application_id, _cert) = sender
         .create_application(bytecode_id, vec![], initial_value_bytes, vec![])
