@@ -79,7 +79,7 @@ impl StorageConfig {
         use StorageConfig::*;
         match self {
             Memory => {
-                let mut client = MemoryStoreClient::new(wasm_runtime).await;
+                let mut client = MemoryStoreClient::new(wasm_runtime);
                 config.initialize_store(&mut client).await?;
                 job.run(client).await
             }
