@@ -265,7 +265,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_simplify_batch3() {
-        let context = create_test_context().await;
+        let context = create_test_context();
         let mut batch = Batch::new();
         batch.put_key_value_bytes(vec![1, 2, 3], vec![]);
         batch.put_key_value_bytes(vec![1, 2, 4], vec![]);
