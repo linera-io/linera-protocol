@@ -549,7 +549,7 @@ where
     I: Debug + DeserializeOwned,
     W: View<C> + Sync,
 {
-    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
+    /// Executes a function on each index. Indices are visited in a stable, yet unspecified
     /// order. If the function returns false then the function early terminates.
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
