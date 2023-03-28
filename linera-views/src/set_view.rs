@@ -387,7 +387,7 @@ where
     }
 
     /// Execute a function on each index. Indices are visited in a stable, yet unspecified
-    /// order.
+    /// order. If the function returns false, then it exits.
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<bool, ViewError> + Send,
