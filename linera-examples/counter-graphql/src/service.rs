@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![no_main]
+#![cfg_attr(target_arch = "wasm32", no_main)]
 
 mod state;
 

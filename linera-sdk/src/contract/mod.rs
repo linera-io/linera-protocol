@@ -130,5 +130,10 @@ macro_rules! contract {
                 forwarded_sessions: Vec<$crate::contract::SessionId>,
             ) -> PollCallSession
         }
+
+        /// Stub of a `main` entrypoint so that the binary doesn't fail to compile on targets other
+        /// than WebAssembly.
+        #[cfg(not(target_arch = "wasm32"))]
+        fn main() {}
     };
 }

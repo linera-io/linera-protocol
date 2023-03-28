@@ -39,5 +39,10 @@ macro_rules! service {
                 argument: Vec<u8>,
             ) -> PollQuery
         }
+
+        /// Stub of a `main` entrypoint so that the binary doesn't fail to compile on targets other
+        /// than WebAssembly.
+        #[cfg(not(target_arch = "wasm32"))]
+        fn main() {}
     };
 }
