@@ -11,6 +11,9 @@ linera-sdk = { path = "../../linera-sdk" }
 serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.31"
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+linera-sdk = { path = "../../linera-sdk", features = ["test"] }
+
 [[bin]]
 name = "fungible_contract"
 path = "src/contract.rs"
