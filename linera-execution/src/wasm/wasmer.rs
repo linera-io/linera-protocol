@@ -29,7 +29,7 @@ mod guest_futures;
 
 use self::{queryable_system::QueryableSystem, writable_system::WritableSystem};
 use super::{
-    async_boundary::{ContextForwarder, HostFuture},
+    async_boundary::{HostFuture, WakerForwarder},
     async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     WasmApplication, WasmExecutionError,
@@ -111,7 +111,7 @@ impl WasmApplication {
         let module = Module::new(&store, &self.contract_bytecode)
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
         let mut imports = imports! {};
-        let context_forwarder = ContextForwarder::default();
+        let context_forwarder = WakerForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
         let (system_api, storage_guard) =
             ContractSystemApi::new(context_forwarder.clone(), storage, queued_future_factory);
@@ -147,7 +147,7 @@ impl WasmApplication {
         let module = Module::new(&store, &self.service_bytecode)
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
         let mut imports = imports! {};
-        let context_forwarder = ContextForwarder::default();
+        let context_forwarder = WakerForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
         let (system_api, storage_guard) = ServiceSystemApi::new(context_forwarder.clone(), storage);
         let system_api_setup =
@@ -330,7 +330,7 @@ impl<'storage> common::Service for Service<'storage> {
 /// Helper type with common functionality across the contract and service system API
 /// implementations.
 struct SystemApi<S> {
-    context: ContextForwarder,
+    context: WakerForwarder,
     storage: Arc<Mutex<Option<S>>>,
 }
 
@@ -355,7 +355,7 @@ impl ContractSystemApi {
     /// The [`StorageGuard`] instance must be kept alive while the trait object is still expected to
     /// be alive and usable by the WASM application.
     pub fn new<'storage>(
-        context: ContextForwarder,
+        context: WakerForwarder,
         storage: &'storage dyn WritableStorage,
         queued_future_factory: QueuedHostFutureFactory<'static>,
     ) -> (Self, StorageGuard<'storage, &'static dyn WritableStorage>) {
@@ -394,8 +394,8 @@ impl ContractSystemApi {
             .expect("Application called storage after it should have stopped")
     }
 
-    /// Returns the [`ContextForwarder`] to be used for asynchronous system calls.
-    fn context(&mut self) -> &mut ContextForwarder {
+    /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
+    fn context(&mut self) -> &mut WakerForwarder {
         &mut self.shared.context
     }
 }
@@ -422,7 +422,7 @@ impl ServiceSystemApi {
     /// The [`StorageGuard`] instance must be kept alive while the trait object is still expected to
     /// be alive and usable by the WASM application.
     pub fn new<'storage>(
-        context: ContextForwarder,
+        context: WakerForwarder,
         storage: &'storage dyn QueryableStorage,
     ) -> (Self, StorageGuard<'storage, &'static dyn QueryableStorage>) {
         let storage_without_lifetime = unsafe { mem::transmute(storage) };
@@ -459,8 +459,8 @@ impl ServiceSystemApi {
             .expect("Application called storage after it should have stopped")
     }
 
-    /// Returns the [`ContextForwarder`] to be used for asynchronous system calls.
-    fn context(&mut self) -> &mut ContextForwarder {
+    /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
+    fn context(&mut self) -> &mut WakerForwarder {
         &mut self.shared.context
     }
 }

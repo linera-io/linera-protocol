@@ -32,7 +32,7 @@ use self::{
     writable_system::{WritableSystem, WritableSystemTables},
 };
 use super::{
-    async_boundary::{ContextForwarder, HostFuture},
+    async_boundary::{HostFuture, WakerForwarder},
     async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     WasmApplication, WasmExecutionError,
@@ -93,7 +93,7 @@ impl WasmApplication {
         writable_system::add_to_linker(&mut linker, ContractState::system_api)?;
 
         let module = Module::new(&engine, &self.contract_bytecode)?;
-        let context_forwarder = ContextForwarder::default();
+        let context_forwarder = WakerForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
         let state = ContractState::new(storage, context_forwarder.clone(), queued_future_factory);
         let mut store = Store::new(&engine, state);
@@ -125,7 +125,7 @@ impl WasmApplication {
         queryable_system::add_to_linker(&mut linker, ServiceState::system_api)?;
 
         let module = Module::new(&engine, &self.service_bytecode)?;
-        let context_forwarder = ContextForwarder::default();
+        let context_forwarder = WakerForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
         let state = ServiceState::new(storage, context_forwarder.clone());
         let mut store = Store::new(&engine, state);
@@ -164,7 +164,7 @@ impl<'storage> ContractState<'storage> {
     /// asynchronous calls from the guest WASM module.
     pub fn new(
         storage: &'storage dyn WritableStorage,
-        context: ContextForwarder,
+        context: WakerForwarder,
         queued_future_factory: QueuedHostFutureFactory<'storage>,
     ) -> Self {
         Self {
@@ -195,7 +195,7 @@ impl<'storage> ServiceState<'storage> {
     ///
     /// Uses `storage` to export the system API, and the `context` to be able to correctly handle
     /// asynchronous calls from the guest WASM module.
-    pub fn new(storage: &'storage dyn QueryableStorage, context: ContextForwarder) -> Self {
+    pub fn new(storage: &'storage dyn QueryableStorage, context: WakerForwarder) -> Self {
         Self {
             data: ServiceData::default(),
             system_api: ServiceSystemApi::new(context, storage),
@@ -362,7 +362,7 @@ impl<'storage> common::Service for Service<'storage> {
 /// Helper type with common functionality across the contract and service system API
 /// implementations.
 struct SystemApi<S> {
-    context: ContextForwarder,
+    context: WakerForwarder,
     storage: S,
 }
 
@@ -377,7 +377,7 @@ impl<'storage> ContractSystemApi<'storage> {
     /// Creates a new [`ContractSystemApi`] instance using the provided asynchronous `context` and
     /// exporting the API from `storage`.
     pub fn new(
-        context: ContextForwarder,
+        context: WakerForwarder,
         storage: &'storage dyn WritableStorage,
         queued_future_factory: QueuedHostFutureFactory<'storage>,
     ) -> Self {
@@ -392,8 +392,8 @@ impl<'storage> ContractSystemApi<'storage> {
         self.shared.storage
     }
 
-    /// Returns the [`ContextForwarder`] to be used for asynchronous system calls.
-    fn context(&mut self) -> &mut ContextForwarder {
+    /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
+    fn context(&mut self) -> &mut WakerForwarder {
         &mut self.shared.context
     }
 }
@@ -409,7 +409,7 @@ pub struct ServiceSystemApi<'storage> {
 impl<'storage> ServiceSystemApi<'storage> {
     /// Creates a new [`ServiceSystemApi`] instance using the provided asynchronous `context` and
     /// exporting the API from `storage`.
-    pub fn new(context: ContextForwarder, storage: &'storage dyn QueryableStorage) -> Self {
+    pub fn new(context: WakerForwarder, storage: &'storage dyn QueryableStorage) -> Self {
         ServiceSystemApi {
             shared: SystemApi { context, storage },
         }
@@ -420,8 +420,8 @@ impl<'storage> ServiceSystemApi<'storage> {
         self.shared.storage
     }
 
-    /// Returns the [`ContextForwarder`] to be used for asynchronous system calls.
-    fn context(&mut self) -> &mut ContextForwarder {
+    /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
+    fn context(&mut self) -> &mut WakerForwarder {
         &mut self.shared.context
     }
 }

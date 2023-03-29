@@ -213,7 +213,7 @@ impl<'futures> QueuedHostFutureFactory<'futures> {
 #[cfg(test)]
 mod tests {
     use super::{
-        super::async_boundary::{ContextForwarder, HostFuture},
+        super::async_boundary::{HostFuture, WakerForwarder},
         HostFutureQueue,
     };
     use futures::{future, stream::FuturesUnordered, task::noop_waker, FutureExt, StreamExt};
@@ -254,7 +254,7 @@ mod tests {
             .map(|host_future| {
                 // Convert a `HostFuture` into an `impl Future`
                 future::poll_fn(move |context| {
-                    let mut forwarder = ContextForwarder::default();
+                    let mut forwarder = WakerForwarder::default();
                     let _guard = forwarder.forward(context);
                     host_future.poll(&mut forwarder)
                 })
@@ -371,7 +371,7 @@ mod tests {
 
         let fake_waker = noop_waker();
         let mut fake_context = Context::from_waker(&fake_waker);
-        let mut forwarder = ContextForwarder::default();
+        let mut forwarder = WakerForwarder::default();
         let _guard = forwarder.forward(&mut fake_context);
 
         let mut outputs = Vec::new();

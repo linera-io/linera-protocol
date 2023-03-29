@@ -54,7 +54,7 @@ impl<'future, Output> HostFuture<'future, Output> {
     ///
     /// If the `context` does not contain a valid exclusive task [`Waker`] reference, or if this
     /// future is polled concurrently in different tasks.
-    pub fn poll(&self, waker: &mut ContextForwarder) -> Poll<Output> {
+    pub fn poll(&self, waker: &mut WakerForwarder) -> Poll<Output> {
         let waker_reference = waker
             .0
             .try_lock()
@@ -129,7 +129,7 @@ where
     ///
     /// Uses the runtime context to call the WASM future's `poll` method, as implemented in the
     /// [`GuestFutureInterface`]. The `task_context` is stored in the runtime context's
-    /// [`ContextForwarder`], so that any host futures the guest calls can use the correct task
+    /// [`WakerForwarder`], so that any host futures the guest calls can use the correct task
     /// context.
     fn poll(self: Pin<&mut Self>, task_context: &mut Context) -> Poll<Self::Output> {
         match self.get_mut() {
@@ -182,9 +182,9 @@ where
 /// [`ActiveContextGuard`] instance is used to remove the context from memory before the lifetime
 /// ends.
 #[derive(Clone, Default)]
-pub struct ContextForwarder(Arc<Mutex<Option<Waker>>>);
+pub struct WakerForwarder(Arc<Mutex<Option<Waker>>>);
 
-impl ContextForwarder {
+impl WakerForwarder {
     /// Forwards the waker from the task `context` into shared memory so that it can be obtained
     /// later.
     pub fn forward<'context>(&mut self, context: &mut Context) -> ActiveContextGuard<'context> {
@@ -195,7 +195,7 @@ impl ContextForwarder {
 
         assert!(
             waker_reference.is_none(),
-            "`ContextForwarder` accessed by concurrent tasks"
+            "`WakerForwarder` accessed by concurrent tasks"
         );
 
         *waker_reference = Some(context.waker().clone());
