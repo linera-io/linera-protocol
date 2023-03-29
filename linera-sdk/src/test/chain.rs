@@ -6,6 +6,7 @@
 //! This allows manipulating a test micro-chain.
 
 use super::{BlockBuilder, TestValidator};
+use crate::{FromBcsBytes, ToBcsBytes};
 use cargo_toml::Manifest;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
@@ -16,7 +17,7 @@ use linera_chain::data_types::Certificate;
 use linera_core::{data_types::ChainInfoQuery, worker::ValidatorWorker};
 use linera_execution::{
     system::{SystemChannel, SystemEffect, SystemOperation},
-    Bytecode, Effect,
+    Bytecode, Effect, Query, Response,
 };
 use std::{
     path::{Path, PathBuf},
@@ -355,5 +356,32 @@ impl ActiveChain {
         }
 
         panic!("Bytecode not found in the chain it was supposed to be published on");
+    }
+
+    /// Executes a `query` on an `application`'s state on this micro-chain.
+    ///
+    /// Returns the deserialized `Output` response from the `application`.
+    pub async fn query<Output>(&self, application: ApplicationId, query: impl ToBcsBytes) -> Output
+    where
+        Output: FromBcsBytes,
+    {
+        let response = self
+            .validator
+            .worker()
+            .await
+            .query_application(
+                self.id(),
+                application.into(),
+                &Query::User(query.to_bcs_bytes().expect("Failed to serialize query")),
+            )
+            .await
+            .expect("Failed to query application");
+
+        match response {
+            Response::User(bytes) => {
+                Output::from_bcs_bytes(&bytes).expect("Failed to deserialize query response")
+            }
+            Response::System(_) => unreachable!("User query returned a system response"),
+        }
     }
 }
