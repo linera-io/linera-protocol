@@ -13,7 +13,10 @@ use linera_base::{
     identifiers::{BytecodeId, ChainDescription, ChainId, EffectId},
 };
 use linera_chain::data_types::Certificate;
-use linera_execution::{system::SystemOperation, Bytecode};
+use linera_execution::{
+    system::{SystemChannel, SystemOperation},
+    Bytecode,
+};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -191,5 +194,41 @@ impl ActiveChain {
             .value
             .block()
             .height
+    }
+
+    /// Subscribes this micro-chain to the bytecodes published on the `publisher_id` micro-chain.
+    pub async fn subscribe_to_published_bytecodes_from(&mut self, publisher_id: ChainId) {
+        let publisher = self.validator.get_chain(&publisher_id);
+
+        self.add_block(|block| {
+            block.with_system_operation(SystemOperation::Subscribe {
+                chain_id: publisher.id(),
+                channel: SystemChannel::PublishedBytecodes,
+            });
+        })
+        .await;
+
+        let effect_id = EffectId {
+            chain_id: self.description.into(),
+            height: self.tip_height().await,
+            index: 0,
+        };
+
+        publisher
+            .add_block(|block| {
+                block.with_incoming_message(effect_id);
+            })
+            .await;
+
+        let effect_id = EffectId {
+            chain_id: publisher.id(),
+            height: publisher.tip_height().await,
+            index: 0,
+        };
+
+        self.add_block(|block| {
+            block.with_incoming_message(effect_id);
+        })
+        .await;
     }
 }
