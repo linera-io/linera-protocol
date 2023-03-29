@@ -8,14 +8,21 @@
 
 use super::ActiveChain;
 use dashmap::DashMap;
-use linera_base::{crypto::KeyPair, identifiers::ChainId};
+use linera_base::{
+    crypto::KeyPair,
+    data_types::Timestamp,
+    identifiers::{ChainDescription, ChainId},
+};
 use linera_core::worker::WorkerState;
 use linera_execution::{
     committee::{Committee, ValidatorName},
     WasmRuntime,
 };
-use linera_storage::MemoryStoreClient;
-use std::sync::{atomic::AtomicUsize, Arc};
+use linera_storage::{MemoryStoreClient, Store};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 use tokio::sync::{Mutex, MutexGuard};
 
 /// A minimal validator implementation suited for tests.
@@ -77,5 +84,33 @@ impl TestValidator {
     /// The committee contains only this validator.
     pub fn committee(&self) -> &Committee {
         &self.committee
+    }
+
+    /// Creates a new micro-chain and returns the [`ActiveChain`] that can be used to add blocks to
+    /// it.
+    pub async fn new_chain(&self) -> ActiveChain {
+        let key_pair = KeyPair::generate();
+        let description =
+            ChainDescription::Root(self.root_chain_counter.fetch_add(1, Ordering::AcqRel));
+
+        self.worker()
+            .await
+            .storage_client()
+            .create_chain(
+                self.committee.clone(),
+                ChainId::root(0),
+                description,
+                key_pair.public(),
+                0.into(),
+                Timestamp::from(0),
+            )
+            .await
+            .expect("Failed to create chain");
+
+        let chain = ActiveChain::new(key_pair, description, self.clone());
+
+        self.chains.insert(description.into(), chain.clone());
+
+        chain
     }
 }
