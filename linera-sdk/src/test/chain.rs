@@ -5,7 +5,7 @@
 //!
 //! This allows manipulating a test micro-chain.
 
-use super::TestValidator;
+use super::{BlockBuilder, TestValidator};
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     identifiers::{ChainDescription, ChainId},
@@ -56,5 +56,32 @@ impl ActiveChain {
     /// Returns the [`PublicKey`] of the owner of this micro-chain.
     pub fn public_key(&self) -> PublicKey {
         self.key_pair.public()
+    }
+
+    /// Adds a block to this micro-chain.
+    ///
+    /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
+    /// to provide the block's contents.
+    pub async fn add_block(&self, block_builder: impl FnOnce(&mut BlockBuilder)) {
+        let mut tip = self.tip.lock().await;
+        let mut block = BlockBuilder::new(
+            self.description.into(),
+            self.key_pair.public().into(),
+            tip.as_ref(),
+            self.validator.clone(),
+        );
+
+        block_builder(&mut block);
+
+        let certificate = block.sign().await;
+
+        self.validator
+            .worker()
+            .await
+            .fully_handle_certificate(certificate.clone(), vec![])
+            .await
+            .expect("Rejected certificate");
+
+        *tip = Some(certificate);
     }
 }
