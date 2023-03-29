@@ -5,7 +5,6 @@
 
 mod state;
 
-use self::state::Social;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{ChannelName, Destination, SessionId},
@@ -14,8 +13,8 @@ use linera_sdk::{
     OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
 use linera_views::{common::Context, views::ViewError};
-use social::{Key, Operation};
-use state::{Effect, OwnPost};
+use social::{Effect, Key, Operation, OwnPost};
+use state::Social;
 use thiserror::Error;
 
 /// The channel name the application uses for cross-chain messages about new posts.
