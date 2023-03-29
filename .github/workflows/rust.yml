@@ -73,6 +73,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Check Copyright headers
+      run: >
+        find linera-* -name '*.rs' -a -not -wholename '*/target/*' -print0
+        | xargs -0 -L1 ./scripts/check_copyright_header.sh
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
