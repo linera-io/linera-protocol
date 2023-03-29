@@ -11,7 +11,7 @@ use dashmap::DashMap;
 use linera_base::{
     crypto::KeyPair,
     data_types::Timestamp,
-    identifiers::{ChainDescription, ChainId},
+    identifiers::{BytecodeId, ChainDescription, ChainId},
 };
 use linera_core::worker::WorkerState;
 use linera_execution::{
@@ -69,6 +69,19 @@ impl Clone for TestValidator {
 }
 
 impl TestValidator {
+    /// Creates a new [`TestValidator`] with a single micro-chain with the bytecode of the crate
+    /// calling this method published on it.
+    ///
+    /// Returns the new [`TestValidator`] and the [`BytecodeId`] of the published bytecode.
+    pub async fn with_current_bytecode() -> (TestValidator, BytecodeId) {
+        let validator = TestValidator::default();
+        let publisher = validator.new_chain().await;
+
+        let bytecode_id = publisher.publish_current_bytecode().await;
+
+        (validator, bytecode_id)
+    }
+
     /// Returns the locked [`WorkerState`] of this validator.
     pub(crate) async fn worker(&self) -> MutexGuard<WorkerState<MemoryStoreClient>> {
         self.worker.lock().await
