@@ -185,7 +185,7 @@ where
     V: Sync + Serialize + DeserializeOwned + 'static,
 {
     /// Execute a function on each serialized index (aka key). Keys are visited
-    /// in a stable, yet unspecified order. If the function returns false, then
+    /// in a lexicographic order. If the function returns false, then
     /// the loop exits
     pub async fn for_each_key_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
@@ -232,7 +232,7 @@ where
     }
 
     /// Execute a function on each serialized index (aka key). Keys are visited
-    /// in a stable, yet unspecified order.
+    /// in a lexicographic order.
     pub async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
@@ -245,7 +245,7 @@ where
     }
 
     /// Execute a function on each serialized index (aka key). Keys and values are visited
-    /// in a stable, yet unspecified order.
+    /// in a lexicographic order.
     pub async fn for_each_key_value_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], &[u8]) -> Result<bool, ViewError> + Send,
@@ -298,7 +298,7 @@ where
     }
 
     /// Execute a function on each serialized index (aka key). Keys and values are visited
-    /// in a stable, yet unspecified order.
+    /// in a lexicographic order.
     pub async fn for_each_key_value<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
@@ -519,8 +519,8 @@ where
         Ok(indices)
     }
 
-    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
-    /// order.
+    /// Execute a function on each index. Indices are visited in a stable,
+    /// yet unspecified order determined by the serialization.
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<bool, ViewError> + Send,
@@ -534,8 +534,8 @@ where
         Ok(())
     }
 
-    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
-    /// order.
+    /// Execute a function on each index. Indices are visited in a stable,
+    /// yet unspecified order determined by the serialization.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
@@ -550,7 +550,7 @@ where
     }
 
     /// Execute a function on each index and value in the map. Indices and values are
-    /// visited in a stable, yet unspecified order.
+    /// visited in a stable, yet unspecified order determined by the serialization.
     pub async fn for_each_index_value_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I, V) -> Result<bool, ViewError> + Send,
@@ -566,7 +566,7 @@ where
     }
 
     /// Execute a function on each index and value in the map. Indices and values are
-    /// visited in a stable, yet unspecified order.
+    /// visited in a stable, yet unspecified order determined by the serialization.
     pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I, V) -> Result<(), ViewError> + Send,
@@ -745,7 +745,7 @@ where
     }
 
     /// Execute a function on each index. Indices are visited in a stable, yet unspecified
-    /// order.
+    /// order determined by the custom serialization.
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<bool, ViewError> + Send,
@@ -760,7 +760,7 @@ where
     }
 
     /// Execute a function on each index. Indices are visited in a stable, yet unspecified
-    /// order.
+    /// order determined by the custom serialization.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
@@ -775,7 +775,7 @@ where
     }
 
     /// Execute a function on each index and value in the map. Indices and values are
-    /// visited in a stable, yet unspecified order.
+    /// visited in a stable, yet unspecified order determined by the custom serialization.
     pub async fn for_each_index_value_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I, V) -> Result<bool, ViewError> + Send,
@@ -791,7 +791,7 @@ where
     }
 
     /// Execute a function on each index and value in the map. Indices and values are
-    /// visited in a stable, yet unspecified order.
+    /// visited in a stable, yet unspecified order determined by the custom serialization.
     pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I, V) -> Result<(), ViewError> + Send,

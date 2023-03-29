@@ -153,7 +153,7 @@ where
     C: Send + Context,
     ViewError: From<C::Error>,
 {
-    /// Iterate over all indices. If the function f returns false, then the loop
+    /// Iterates over all indices. If the function f returns false, then the loop
     /// prematurely ends
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
@@ -205,7 +205,7 @@ where
         Ok(())
     }
 
-    /// Iterate over all indices.
+    /// Iterates over all indices.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
@@ -217,7 +217,7 @@ where
         .await
     }
 
-    /// Iterate over all the indices and values. If the function f returns false then
+    /// Iterates over all the indices and values. If the function f returns false then
     /// the loop prematurely ends.
     pub async fn for_each_index_value_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
@@ -269,7 +269,7 @@ where
         Ok(())
     }
 
-    /// Iterate over all the indices and values.
+    /// Iterates over all the indices and values.
     pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
@@ -349,7 +349,7 @@ where
         }
     }
 
-    /// Iterate over all the keys matching the given prefix. The prefix is not included in the returned keys.
+    /// Iterates over all the keys matching the given prefix. The prefix is not included in the returned keys.
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
         let len = key_prefix.len();
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
@@ -401,7 +401,7 @@ where
         Ok(keys)
     }
 
-    /// Iterate over all the key-value pairs, for keys matching the given prefix. The
+    /// Iterates over all the key-value pairs, for keys matching the given prefix. The
     /// prefix is not included in the returned keys.
     pub async fn find_key_values_by_prefix(
         &self,

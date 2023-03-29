@@ -169,7 +169,7 @@ where
     }
 
     /// Execute a function on each serialized index (aka key). Keys are visited in a
-    /// stable, yet unspecified order. If the function returns false, then it exits
+    /// lexicographic order. If the function returns false, then it exits
     async fn for_each_key_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
@@ -215,7 +215,7 @@ where
     }
 
     /// Execute a function on each serialized index (aka key). Keys are visited in a
-    /// stable, yet unspecified order.
+    /// lexicographic order.
     async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
@@ -387,7 +387,7 @@ where
     }
 
     /// Execute a function on each index. Indices are visited in a stable, yet unspecified
-    /// order. If the function returns false, then it exits.
+    /// order determined by the serialization. If the function returns false, then it exits.
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<bool, ViewError> + Send,
@@ -402,7 +402,7 @@ where
     }
 
     /// Execute a function on each index. Indices are visited in a stable, yet unspecified
-    /// order.
+    /// order determined by the serialization.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
@@ -547,7 +547,7 @@ where
     }
 
     /// Execute a function on each index. Indices are visited in a stable, yet unspecified
-    /// order. If the function does return false, then the iteration exits.
+    /// order determined by the custom serialization. If the function does return false, then the iteration exits.
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<bool, ViewError> + Send,
@@ -562,7 +562,7 @@ where
     }
 
     /// Execute a function on each index. Indices are visited in a stable, yet unspecified
-    /// order.
+    /// order determined by the custom serialization.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
