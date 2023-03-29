@@ -19,7 +19,7 @@ log = "0.4.14"
 serde = { version = "1.0.130", features = ["derive"] }
 linera-base = { path = "../linera-base" }
 linera-views = { path = "../linera-views" }
-wit-bindgen-guest-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "4f25d5363360c049e3415c32f5654faea5f874ce" }
+wit-bindgen-guest-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "b3f43500ec4a65379b65148e32941117c17bc2f1" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow = "1.0.57"

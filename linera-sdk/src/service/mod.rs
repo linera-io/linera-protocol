@@ -24,7 +24,7 @@ wit_bindgen_guest_rust::export!(
 /// necessary resource types and functions so that the host can call the service application.
 #[macro_export]
 macro_rules! service {
-    ($application:ident) => {
+    ($application:ty) => {
         // Export the service interface.
         $crate::export_service!($application);
 

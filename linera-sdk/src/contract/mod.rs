@@ -24,7 +24,7 @@ wit_bindgen_guest_rust::export!(
 /// necessary resource types and functions so that the host can call the contract application.
 #[macro_export]
 macro_rules! contract {
-    ($application:ident) => {
+    ($application:ty) => {
         // Export the contract interface.
         $crate::export_contract!($application);
 

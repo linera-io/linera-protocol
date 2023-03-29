@@ -14,9 +14,7 @@ use linera_views::{common::Context, views::ViewError};
 use std::sync::Arc;
 use thiserror::Error;
 
-/// TODO(#434): Remove the type alias
-type ReadableReentrantCounter = ReentrantCounter<ReadableWasmContext>;
-linera_sdk::service!(ReadableReentrantCounter);
+linera_sdk::service!(ReentrantCounter<ReadableWasmContext>);
 
 #[async_trait]
 impl<C> Service for ReentrantCounter<C>

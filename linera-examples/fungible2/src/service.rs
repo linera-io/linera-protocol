@@ -13,8 +13,7 @@ use linera_sdk::{
 use std::sync::Arc;
 use thiserror::Error;
 
-pub type ReadableFungibleToken = FungibleToken<ReadableWasmContext>;
-linera_sdk::service!(ReadableFungibleToken);
+linera_sdk::service!(FungibleToken<ReadableWasmContext>);
 
 #[async_trait]
 impl Service for FungibleToken<ReadableWasmContext> {

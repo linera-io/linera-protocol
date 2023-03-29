@@ -15,9 +15,7 @@ use linera_sdk::{
 use linera_views::{common::Context, views::ViewError};
 use thiserror::Error;
 
-/// TODO(#434): Remove the type alias
-type WritableCounter = Counter<WasmContext>;
-linera_sdk::contract!(WritableCounter);
+linera_sdk::contract!(Counter<WasmContext>);
 
 #[async_trait]
 impl<C> Contract for Counter<C>

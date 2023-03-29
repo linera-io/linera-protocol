@@ -18,8 +18,7 @@ use linera_views::views::View;
 use state::{CrowdFunding, Status};
 use thiserror::Error;
 
-pub type WritableCrowdFunding = CrowdFunding<WasmContext>;
-linera_sdk::contract!(WritableCrowdFunding);
+linera_sdk::contract!(CrowdFunding<WasmContext>);
 
 #[async_trait]
 impl Contract for CrowdFunding<WasmContext> {

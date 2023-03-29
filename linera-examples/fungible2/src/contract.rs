@@ -18,8 +18,7 @@ use linera_sdk::{
 };
 use thiserror::Error;
 
-pub type WritableFungibleToken = FungibleToken<WasmContext>;
-linera_sdk::contract!(WritableFungibleToken);
+linera_sdk::contract!(FungibleToken<WasmContext>);
 
 #[async_trait]
 impl Contract for FungibleToken<WasmContext> {
