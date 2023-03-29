@@ -11,6 +11,7 @@ use linera_base::{
     identifiers::{ChainId, EffectId, Owner},
 };
 use linera_chain::data_types::{Block, Certificate, HashedValue, LiteVote, SignatureAggregator};
+use linera_execution::system::SystemOperation;
 use std::mem;
 
 /// A helper type to build [`Block`]s using the builder pattern, and then signing them into
@@ -65,6 +66,14 @@ impl BlockBuilder {
             incoming_messages: Vec::new(),
             validator,
         }
+    }
+
+    /// Adds a [`SystemOperation`] to this block.
+    pub(crate) fn with_system_operation(&mut self, operation: SystemOperation) -> &mut Self {
+        self.block
+            .operations
+            .push((linera_execution::ApplicationId::System, operation.into()));
+        self
     }
 
     /// Adds a message sent by the effect referenced by the [`EffectId`] to this block.
