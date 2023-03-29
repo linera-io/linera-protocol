@@ -11,8 +11,8 @@ development = ["linera-sdk"]
 wasmer = ["linera-core?/wasmer", "linera-execution?/wasmer", "linera-storage?/wasmer"]
 wasmtime = ["linera-core?/wasmer", "linera-execution?/wasmtime", "linera-storage?/wasmtime"]
 test = [
-    "cargo_toml", "linera-chain", "linera-core/test", "linera-execution", "linera-storage",
-    "wasmer",
+    "cargo_toml", "dashmap", "linera-chain", "linera-core/test", "linera-execution",
+    "linera-storage", "wasmer",
 ]
 
 [dependencies]
@@ -29,6 +29,7 @@ wit-bindgen-guest-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "b
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow = "1.0.57"
 cargo_toml = { version = "0.15.2", optional = true }
+dashmap = { version = "5.4.0", optional = true }
 linera-base = { path = "../linera-base" }
 linera-chain = { path = "../linera-chain", optional = true }
 linera-core = { path = "../linera-core", default-features = false, optional = true }
