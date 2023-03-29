@@ -244,7 +244,7 @@ where
         .await
     }
 
-    /// Execute a function on each serialized index (aka key). Keys and values are visited
+    /// Executes a function on each serialized index (aka key). Keys and values are visited
     /// in a lexicographic order. If the function returns false, then
     /// the loop exits.
     pub async fn for_each_key_value_while<F>(&self, mut f: F) -> Result<(), ViewError>
