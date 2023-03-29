@@ -11,7 +11,7 @@ use dashmap::DashMap;
 use linera_base::{
     crypto::KeyPair,
     data_types::Timestamp,
-    identifiers::{BytecodeId, ChainDescription, ChainId},
+    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId},
 };
 use linera_core::worker::WorkerState;
 use linera_execution::{
@@ -80,6 +80,28 @@ impl TestValidator {
         let bytecode_id = publisher.publish_current_bytecode().await;
 
         (validator, bytecode_id)
+    }
+
+    /// Creates a new [`TestValidator`] with the application of the crate calling this method
+    /// created on a chain.
+    ///
+    /// The bytecode is first published on one micro-chain, then the application is created on
+    /// another micro-chain.
+    ///
+    /// Returns the new [`TestValidator`] and the [`ApplicationId`] of the created application.
+    pub async fn with_current_application(
+        parameters: Vec<u8>,
+        initialization_argument: Vec<u8>,
+    ) -> (TestValidator, ApplicationId) {
+        let (validator, bytecode_id) = TestValidator::with_current_bytecode().await;
+
+        let mut creator = validator.new_chain().await;
+
+        let application_id = creator
+            .create_application(bytecode_id, parameters, initialization_argument, vec![])
+            .await;
+
+        (validator, application_id)
     }
 
     /// Returns the locked [`WorkerState`] of this validator.
