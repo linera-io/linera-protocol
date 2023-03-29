@@ -22,8 +22,7 @@ const POSTS_CHANNEL_NAME: &[u8] = b"posts";
 /// The number of recent posts sent in each cross-chain message.
 const RECENT_POSTS: usize = 10;
 
-type WritableSocial = Social<WasmContext>;
-linera_sdk::contract!(WritableSocial);
+linera_sdk::contract!(Social<WasmContext>);
 
 #[async_trait]
 impl<C> Contract for Social<C>

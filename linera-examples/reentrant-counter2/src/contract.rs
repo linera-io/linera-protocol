@@ -15,9 +15,7 @@ use linera_sdk::{
 };
 use thiserror::Error;
 
-/// TODO(#434): Remove the type alias
-type WritableReentrantCounter = ReentrantCounter<WasmContext>;
-linera_sdk::contract!(WritableReentrantCounter);
+linera_sdk::contract!(ReentrantCounter<WasmContext>);
 
 #[async_trait]
 impl Contract for ReentrantCounter<WasmContext> {

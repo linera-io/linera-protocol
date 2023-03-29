@@ -16,9 +16,7 @@ use linera_sdk::{
 use linera_views::{common::Context, views::ViewError};
 use thiserror::Error;
 
-/// TODO(#434): Remove the type alias
-type ReadableCounter = Counter<ReadableWasmContext>;
-linera_sdk::service!(ReadableCounter);
+linera_sdk::service!(Counter<ReadableWasmContext>);
 
 #[async_trait]
 impl<C> Service for Counter<C>

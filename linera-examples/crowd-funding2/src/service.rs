@@ -14,8 +14,7 @@ use state::CrowdFunding;
 use std::sync::Arc;
 use thiserror::Error;
 
-pub type ReadableCrowdFunding = CrowdFunding<ReadableWasmContext>;
-linera_sdk::service!(ReadableCrowdFunding);
+linera_sdk::service!(CrowdFunding<ReadableWasmContext>);
 
 #[async_trait]
 impl Service for CrowdFunding<ReadableWasmContext> {

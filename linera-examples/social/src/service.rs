@@ -15,8 +15,7 @@ use state::Social;
 use std::sync::Arc;
 use thiserror::Error;
 
-pub type ReadableSocial = Social<ReadableWasmContext>;
-linera_sdk::service!(ReadableSocial);
+linera_sdk::service!(Social<ReadableWasmContext>);
 
 #[async_trait]
 impl Service for Social<ReadableWasmContext> {
