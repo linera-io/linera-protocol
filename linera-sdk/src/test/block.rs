@@ -11,7 +11,9 @@ use linera_base::{
     data_types::Timestamp,
     identifiers::{ApplicationId, ChainId, EffectId, Owner},
 };
-use linera_chain::data_types::{Block, Certificate, HashedValue, LiteVote, SignatureAggregator};
+use linera_chain::data_types::{
+    Block, Certificate, HashedValue, LiteVote, Message, SignatureAggregator,
+};
 use linera_execution::system::SystemOperation;
 use std::mem;
 
@@ -102,6 +104,18 @@ impl BlockBuilder {
     /// so that the message is already in the inbox of the micro-chain this block belongs to.
     pub fn with_incoming_message(&mut self, effect_id: EffectId) -> &mut Self {
         self.incoming_messages.push(effect_id);
+        self
+    }
+
+    /// Adds the `messages` directly to this block.
+    ///
+    /// This is an internal method that bypasses the check to see if the messages are already
+    /// present in the inboxes of the micro-chain that owns this block.
+    pub(crate) fn with_raw_messages(
+        &mut self,
+        messages: impl IntoIterator<Item = Message>,
+    ) -> &mut Self {
+        self.block.incoming_messages.extend(messages);
         self
     }
 

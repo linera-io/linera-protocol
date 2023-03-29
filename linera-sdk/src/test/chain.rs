@@ -13,6 +13,7 @@ use linera_base::{
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, EffectId},
 };
 use linera_chain::data_types::Certificate;
+use linera_core::{data_types::ChainInfoQuery, worker::ValidatorWorker};
 use linera_execution::{
     system::{SystemChannel, SystemEffect, SystemOperation},
     Bytecode, Effect,
@@ -92,6 +93,27 @@ impl ActiveChain {
             .expect("Rejected certificate");
 
         *tip = Some(certificate);
+    }
+
+    /// Receive all queued messages in all inboxes of this micro-chain.
+    ///
+    /// Adds a block to this micro-chain that receives all queued messages in the micro-chains
+    /// inboxes.
+    pub async fn handle_received_effects(&self) {
+        let chain_id = self.id();
+        let (information, _) = self
+            .validator
+            .worker()
+            .await
+            .handle_chain_info_query(ChainInfoQuery::new(chain_id).with_pending_messages())
+            .await
+            .expect("Failed to query chain's pending messages");
+        let messages = information.info.requested_pending_messages;
+
+        self.add_block(|block| {
+            block.with_raw_messages(messages);
+        })
+        .await;
     }
 
     /// Publishes the bytecodes in the crate calling this method to this micro-chain.
