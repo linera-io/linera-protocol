@@ -45,6 +45,7 @@ linera-core = { path = ".", default-features = false, features = ["test"] }
 metrics = "0.20.1"
 metrics-util = "0.14.0"
 portable-atomic = "0.3.19"
+serde_json = "1.0.93"
 social = { path = "../linera-examples/social" }
 test-case = "3.0.0"
 tracing-subscriber = { version = "0.3.16", default-features = false, features = ["env-filter", "fmt"] }

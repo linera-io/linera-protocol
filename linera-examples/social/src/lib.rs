@@ -1,21 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_graphql::{InputObject, SimpleObject};
 use linera_sdk::base::{ChainId, Timestamp};
 use linera_views::{
     common::{Context, CustomSerialize},
     views,
 };
 use serde::{Deserialize, Serialize};
-
-/// A query for the application service.
-#[derive(Debug, Serialize, Deserialize)]
-pub enum Query {
-    /// The most recent posts from other chains. Returns a `Vec<Post>` starting with the latest.
-    ReceivedPosts(u64),
-    /// The most recent posts we sent. Returns a `Vec<Post>` starting with the latest.
-    SentPosts(u64),
-}
 
 /// An operation that can be executed by the application.
 #[derive(Serialize, Deserialize)]
@@ -42,7 +34,7 @@ pub enum Effect {
 }
 
 /// A post's text and timestamp, to use in contexts where author and index are known.
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct OwnPost {
     /// The timestamp of the block in which the post operation was included.
     pub timestamp: Timestamp,
@@ -60,7 +52,8 @@ pub struct Post {
 }
 
 /// A key by which a post is indexed.
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, SimpleObject, InputObject)]
+#[graphql(input_name = "KeyInput")]
 pub struct Key {
     /// The timestamp of the block in which the post was included on the author's chain.
     pub timestamp: Timestamp,

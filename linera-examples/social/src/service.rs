@@ -5,13 +5,14 @@
 
 mod state;
 
+use async_graphql::{EmptySubscription, Object, Schema};
 use async_trait::async_trait;
 use linera_sdk::{
-    service::system_api::ReadOnlyViewStorageContext, FromBcsBytes, QueryContext, Service,
+    base::ChainId, service::system_api::ReadOnlyViewStorageContext, QueryContext, Service,
     ViewStateStorage,
 };
 use linera_views::views::ViewError;
-use social::{Key, OwnPost, Post, Query};
+use social::Operation;
 use state::Social;
 use std::sync::Arc;
 use thiserror::Error;
@@ -25,52 +26,34 @@ impl Service for Social<ReadOnlyViewStorageContext> {
 
     async fn query_application(
         self: Arc<Self>,
-        context: &QueryContext,
+        _context: &QueryContext,
         argument: &[u8],
     ) -> Result<Vec<u8>, Self::Error> {
-        match Query::from_bcs_bytes(argument).map_err(Error::InvalidQuery)? {
-            Query::ReceivedPosts(count) => self.handle_received_posts_query(count).await,
-            Query::SentPosts(count) => self.handle_sent_posts_query(context, count).await,
-        }
+        let graphql_request: async_graphql::Request =
+            serde_json::from_slice(argument).map_err(Error::InvalidQuery)?;
+        let schema = Schema::build(self.clone(), MutationRoot, EmptySubscription).finish();
+        let res = schema.execute(graphql_request).await;
+        Ok(serde_json::to_vec(&res).unwrap())
     }
 }
 
-impl Social<ReadOnlyViewStorageContext> {
-    async fn handle_received_posts_query(self: Arc<Self>, count: u64) -> Result<Vec<u8>, Error> {
-        let mut result = vec![];
-        let count = count.try_into().unwrap_or(usize::MAX);
-        self.received_posts
-            .for_each_index_value(|key, text| {
-                if result.len() < count {
-                    result.push(Post { key, text });
-                }
-                Ok(())
-            })
-            .await?;
-        Ok(bcs::to_bytes(&result)?)
+struct MutationRoot;
+
+#[Object]
+impl MutationRoot {
+    #[allow(unused)]
+    async fn subscribe(&self, chain_id: ChainId) -> Vec<u8> {
+        bcs::to_bytes(&Operation::RequestSubscribe(chain_id)).unwrap()
     }
 
-    async fn handle_sent_posts_query(
-        self: Arc<Self>,
-        context: &QueryContext,
-        count: u64,
-    ) -> Result<Vec<u8>, Error> {
-        let mut result = vec![];
-        let own_count = self.own_posts.count();
-        for index in (0..own_count).into_iter().rev().take(count as usize) {
-            let OwnPost { timestamp, text } = self
-                .own_posts
-                .get(index)
-                .await?
-                .expect("missing entry; this is a bug in the social application!");
-            let key = Key {
-                timestamp,
-                index: index as u64,
-                author: context.chain_id,
-            };
-            result.push(Post { key, text });
-        }
-        Ok(bcs::to_bytes(&result)?)
+    #[allow(unused)]
+    async fn unsubscribe(&self, chain_id: ChainId) -> Vec<u8> {
+        bcs::to_bytes(&Operation::RequestUnsubscribe(chain_id)).unwrap()
+    }
+
+    #[allow(unused)]
+    async fn post(&self, text: String) -> Vec<u8> {
+        bcs::to_bytes(&Operation::Post(text)).unwrap()
     }
 }
 
@@ -79,7 +62,7 @@ impl Social<ReadOnlyViewStorageContext> {
 pub enum Error {
     /// Invalid query.
     #[error("Invalid query")]
-    InvalidQuery(bcs::Error),
+    InvalidQuery(serde_json::Error),
 
     /// Serialization error.
     #[error(transparent)]

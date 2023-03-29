@@ -5,7 +5,7 @@ pub(crate) mod util;
 
 extern crate proc_macro;
 extern crate syn;
-use crate::util::{create_entry_name, snakify};
+use crate::util::{concat, create_entry_name, snakify};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
@@ -435,20 +435,35 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
             };
             (r#impl, None)
         }
-        "MapView" => {
+        "MapView" | "CustomMapView" => {
             let generic_arguments = generic_argument_from_type_path(&type_path);
             let index_ident = generic_arguments
                 .get(1)
-                .expect("no index specified for 'MapView'");
+                .expect("no index specified for 'CustomMapView'");
             let generic_ident = generic_arguments
                 .get(2)
-                .expect("no generic type specified for 'MapView'");
+                .expect("no generic type specified for 'CustomMapView'");
 
             let index_name = snakify(index_ident);
+            let field_keys = concat(&field_name, "_keys");
 
             let r#impl = quote! {
                 async fn #field_name(&self, #index_name: #index_ident) -> Result<Option<#generic_ident>, async_graphql::Error> {
                     Ok(self.#field_name.get(&#index_name).await?)
+                }
+                async fn #field_keys(&self, count: Option<u64>)
+                    -> Result<Vec<#index_ident>, async_graphql::Error>
+                {
+                    let count = count.unwrap_or(u64::MAX).try_into().unwrap_or(usize::MAX);
+                    let mut keys = vec![];
+                    if count == 0 {
+                        return Ok(keys);
+                    }
+                    self.#field_name.for_each_index_while(|key| {
+                        keys.push(key);
+                        Ok(keys.len() < count)
+                    }).await?;
+                    Ok(keys)
                 }
             };
             (r#impl, None)
@@ -887,6 +902,20 @@ pub mod tests {
                 }
                 async fn map(&self, string: String) -> Result<Option<usize>, async_graphql::Error> {
                     Ok(self.map.get(&string).await?)
+                }
+                async fn map_keys(&self, count: Option<u64>)
+                    -> Result<Vec<String>, async_graphql::Error>
+                {
+                    let count = count.unwrap_or(u64::MAX).try_into().unwrap_or(usize::MAX);
+                    let mut keys = vec![];
+                    if count == 0 {
+                        return Ok(keys);
+                    }
+                    self.map.for_each_index_while(|key| {
+                        keys.push(key);
+                        Ok(keys.len() < count)
+                    }).await?;
+                    Ok(keys)
                 }
             }
 
