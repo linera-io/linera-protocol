@@ -126,4 +126,9 @@ impl TestValidator {
 
         chain
     }
+
+    /// Returns the [`ActiveChain`] reference to the micro-chain identified by `chain_id`.
+    pub fn get_chain(&self, chain_id: &ChainId) -> ActiveChain {
+        self.chains.get(chain_id).expect("Chain not found").clone()
+    }
 }
