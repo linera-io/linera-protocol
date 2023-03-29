@@ -10,8 +10,8 @@ use linera_sdk::{
     service::system_api::ReadableWasmContext, FromBcsBytes, QueryContext, Service, ViewStateStorage,
 };
 use linera_views::views::ViewError;
-use social::{Key, Post, Query};
-use state::{OwnPost, Social};
+use social::{Key, OwnPost, Post, Query};
+use state::Social;
 use std::sync::Arc;
 use thiserror::Error;
 
