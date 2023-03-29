@@ -168,7 +168,7 @@ where
         Ok(keys)
     }
 
-    /// Execute a function on each serialized index (aka key). Keys are visited in a
+    /// Executes a function on each serialized index (aka key). Keys are visited in a
     /// lexicographic order. If the function returns false, then it exits
     async fn for_each_key_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
