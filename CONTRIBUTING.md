@@ -80,6 +80,15 @@ cargo +nightly fmt
   the flag `no-default-features = true`. (This also applies to the self-dependencies of the
   previous rule.)
 
+
+Besides the verification bove with clippy, the following steps will verify that most
+combinations of features compile for each crate:
+```
+cargo install --git https://github.com/ma2bd/cargo-all-features --branch workspace_metadata
+
+cargo check-all-features --all-targets
+```
+
 ## Dealing with test failures `test_format` after code changes
 
 Getting an error with the test in [`linera-rpc/tests/format.rs`](linera-rpc/tests/format.rs) ?

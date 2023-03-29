@@ -91,7 +91,10 @@ jobs:
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
     - name: Install cargo-machete
       run: |
-        cargo install cargo-machete --locked
+        cargo install cargo-machete
+    - name: Install cargo-all-features
+      run: |
+        cargo install --git https://github.com/ma2bd/cargo-all-features --branch workspace_metadata
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
       with:
@@ -106,10 +109,13 @@ jobs:
       run: |
         cd linera-examples
         cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
-        cargo clippy --all-targets --all-features --target wasm32-unknown-unknown
+        cargo clippy --all-targets --all-features --target wasm32-unknown-unknown --locked
     - name: Run clippy
       run: |
-        cargo clippy --all-targets --all-features --tests
+        cargo clippy --all-targets --all-features --tests --locked
     - name: Run cargo doc
       run: |
         RUSTDOCFLAGS='-D warnings' cargo doc --all-features
+    - name: Run cargo check-all-features
+      run: |
+        cargo check-all-features --all-targets
