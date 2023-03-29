@@ -298,7 +298,7 @@ where
         Ok(())
     }
 
-    /// Execute a function on each serialized index (aka key). Keys and values are visited
+    /// Executes a function on each serialized index (aka key). Keys and values are visited
     /// in a lexicographic order.
     pub async fn for_each_key_value<F>(&self, mut f: F) -> Result<(), ViewError>
     where
