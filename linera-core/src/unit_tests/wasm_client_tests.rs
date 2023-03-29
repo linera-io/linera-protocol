@@ -22,6 +22,7 @@ use linera_execution::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
+use serde_json::json;
 use std::collections::BTreeMap;
 use test_case::test_case;
 
@@ -688,27 +689,20 @@ where
         .iter()
         .any(|msg| matches!(&msg.event.effect, Effect::User { .. })));
 
-    let query = social::Query::ReceivedPosts(10);
-    let response = receiver
-        .query_application(&Query::User {
-            application_id,
-            bytes: bcs::to_bytes(&query)?,
-        })
-        .await?;
-    let posts: Vec<social::Post> = match response {
+    let json = json!({ "query": "query { receivedPostsKeys(count: 5) { author, index } }"});
+    let query = Query::User {
+        application_id,
+        bytes: json.to_string().into_bytes(),
+    };
+    let posts = match receiver.query_application(&query).await? {
         Response::System(_) => panic!("Expected user response."),
-        Response::User(bytes) => bcs::from_bytes(&bytes)?,
+        Response::User(bytes) => bytes,
     };
     assert_eq!(
-        &posts,
-        &[social::Post {
-            key: social::Key {
-                timestamp: cert.value.block().timestamp,
-                index: 0,
-                author: sender.chain_id(),
-            },
-            text,
-        }]
+        serde_json::from_slice::<serde_json::Value>(&posts).expect("invalid JSON"),
+        json!({"data": { "receivedPostsKeys": [
+            { "author": sender.chain_id, "index": 0 }
+        ]}})
     );
 
     // Request to unsubscribe from the sender.
@@ -740,18 +734,21 @@ where
     assert!(certs.is_empty());
 
     // There is still only one post it can see.
-    let query = social::Query::ReceivedPosts(10);
-    let response = receiver
-        .query_application(&Query::User {
-            application_id,
-            bytes: bcs::to_bytes(&query)?,
-        })
-        .await?;
-    let posts: Vec<social::Post> = match response {
-        Response::System(_) => panic!("Expected user response."),
-        Response::User(bytes) => bcs::from_bytes(&bytes)?,
+    let json = json!({ "query": "query { receivedPostsKeys { author, index } }"});
+    let query = Query::User {
+        application_id,
+        bytes: json.to_string().into_bytes(),
     };
-    assert_eq!(posts.len(), 1);
+    let posts = match receiver.query_application(&query).await? {
+        Response::System(_) => panic!("Expected user response."),
+        Response::User(bytes) => bytes,
+    };
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&posts).expect("invalid JSON"),
+        json!({"data": { "receivedPostsKeys": [
+            { "author": sender.chain_id, "index": 0 }
+        ]}})
+    );
 
     Ok(())
 }
