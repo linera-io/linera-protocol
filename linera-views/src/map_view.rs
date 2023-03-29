@@ -184,7 +184,7 @@ where
     ViewError: From<C::Error>,
     V: Sync + Serialize + DeserializeOwned + 'static,
 {
-    /// Execute a function on each serialized index (aka key). Keys are visited
+    /// Executes a function on each serialized index (aka key). Keys are visited
     /// in a lexicographic order. If the function returns false, then
     /// the loop exits
     pub async fn for_each_key_while<F>(&self, mut f: F) -> Result<(), ViewError>
