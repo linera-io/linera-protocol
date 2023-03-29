@@ -110,7 +110,8 @@ where
         let mut posts = vec![];
         for index in (0..count).rev().take(RECENT_POSTS) {
             let maybe_post = self.own_posts.get(index).await?;
-            let own_post = maybe_post.expect("Post with valid index missing");
+            let own_post = maybe_post
+                .expect("post with valid index missing; this is a bug in the social application!");
             posts.push(own_post);
         }
         let count = count as u64;
