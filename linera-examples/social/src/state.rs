@@ -5,12 +5,12 @@ use linera_views::{
     common::Context,
     log_view::LogView,
     map_view::CustomMapView,
-    views::{RootView, View},
+    views::{GraphQLView, RootView, View},
 };
 use social::{Key, OwnPost};
 
 /// The application state.
-#[derive(RootView, Debug)]
+#[derive(RootView, GraphQLView, Debug)]
 pub struct Social<C> {
     /// Our posts.
     pub own_posts: LogView<C, OwnPost>,
