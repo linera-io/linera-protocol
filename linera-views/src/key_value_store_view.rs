@@ -269,8 +269,7 @@ where
         Ok(())
     }
 
-    /// Iterate over all the indices and values. If the function f returns false then
-    /// the loop prematurely ends.
+    /// Iterate over all the indices and values.
     pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
