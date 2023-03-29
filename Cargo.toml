@@ -20,3 +20,13 @@ debug = true
 
 [profile.bench]
 debug = true
+
+# This section is experimental and requires to build `cargo-all-features` from the fork
+# repository: https://github.com/ma2bd/cargo-all-features
+[workspace.metadata.cargo-all-features]
+skip_optional_dependencies = true
+max_combination_size = 2
+# This combination is already tested by default.
+skip_feature_sets = [
+    ["wasmer", "wasmtime"],
+]
