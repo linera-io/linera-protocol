@@ -58,8 +58,11 @@ impl Social<ReadableWasmContext> {
         let mut result = vec![];
         let own_count = self.own_posts.count();
         for index in (0..own_count).into_iter().rev().take(count as usize) {
-            let OwnPost { timestamp, text } =
-                self.own_posts.get(index).await?.expect("missing entry");
+            let OwnPost { timestamp, text } = self
+                .own_posts
+                .get(index)
+                .await?
+                .expect("missing entry; this is a bug in the social application!");
             let key = Key {
                 timestamp,
                 index: index as u64,
