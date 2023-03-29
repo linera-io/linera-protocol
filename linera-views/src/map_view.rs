@@ -552,6 +552,7 @@ where
 
     /// Executes a function on each index and value in the map. Indices and values are
     /// visited in a stable, yet unspecified order determined by the serialization.
+    /// If the function returns false, then the loop exits.
     pub async fn for_each_index_value_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I, V) -> Result<bool, ViewError> + Send,
