@@ -10,12 +10,12 @@ use cargo_toml::Manifest;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::BlockHeight,
-    identifiers::{BytecodeId, ChainDescription, ChainId, EffectId},
+    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, EffectId},
 };
 use linera_chain::data_types::Certificate;
 use linera_execution::{
-    system::{SystemChannel, SystemOperation},
-    Bytecode,
+    system::{SystemChannel, SystemEffect, SystemOperation},
+    Bytecode, Effect,
 };
 use std::{
     path::{Path, PathBuf},
@@ -230,5 +230,108 @@ impl ActiveChain {
             block.with_incoming_message(effect_id);
         })
         .await;
+    }
+
+    /// Creates an application on this micro-chain, using the bytecode referenced by `bytecode_id`.
+    ///
+    /// Returns the [`ApplicationId`] of the created application.
+    ///
+    /// If necessary, this micro-chain will subscribe to the micro-chain that published the
+    /// bytecode to use, and fetch it.
+    ///
+    /// The application is initialized using the initialization parameters, which consist of the
+    /// global static `parameters`, the one time `initialization_argument` and the
+    /// `required_application_ids` of the applications that the new application will depend on.
+    pub async fn create_application(
+        &mut self,
+        bytecode_id: BytecodeId,
+        parameters: Vec<u8>,
+        initialization_argument: Vec<u8>,
+        required_application_ids: Vec<ApplicationId>,
+    ) -> ApplicationId {
+        let bytecode_location_effect = if self.needs_bytecode_location(bytecode_id).await {
+            self.subscribe_to_published_bytecodes_from(bytecode_id.0.chain_id)
+                .await;
+            Some(self.find_bytecode_location(bytecode_id).await)
+        } else {
+            None
+        };
+
+        self.add_block(|block| {
+            if let Some(effect_id) = bytecode_location_effect {
+                block.with_incoming_message(effect_id);
+            }
+
+            block.with_system_operation(SystemOperation::CreateApplication {
+                bytecode_id,
+                parameters,
+                initialization_argument,
+                required_application_ids,
+            });
+        })
+        .await;
+
+        let creation_effect_id = EffectId {
+            chain_id: self.description.into(),
+            height: self.tip_height().await,
+            index: 0,
+        };
+
+        ApplicationId {
+            bytecode_id,
+            creation: creation_effect_id,
+        }
+    }
+
+    /// Checks if the `bytecode_id` is missing from this micro-chain.
+    async fn needs_bytecode_location(&self, bytecode_id: BytecodeId) -> bool {
+        let applications = self
+            .validator
+            .worker()
+            .await
+            .load_application_registry(self.id())
+            .await
+            .expect("Failed to load application registry");
+
+        applications
+            .bytecode_locations_for([bytecode_id])
+            .await
+            .expect("Failed to check known bytecode locations")
+            .is_empty()
+    }
+
+    /// Finds the effect that sends the message with the bytecode location of `bytecode_id`.
+    async fn find_bytecode_location(&self, bytecode_id: BytecodeId) -> EffectId {
+        for height in bytecode_id.0.height.0.. {
+            let certificate = self
+                .validator
+                .worker()
+                .await
+                .read_certificate(bytecode_id.0.chain_id, height.into())
+                .await
+                .expect("Failed to load certificate to search for bytecode location")
+                .expect("Bytecode location not found");
+
+            let effect_index = certificate.value.effects().iter().position(|effect| {
+                matches!(
+                    &effect.effect,
+                    Effect::System(SystemEffect::BytecodeLocations { locations })
+                        if locations.iter().any(|(id, _)| id == &bytecode_id)
+                )
+            });
+
+            if let Some(index) = effect_index {
+                return EffectId {
+                    chain_id: bytecode_id.0.chain_id,
+                    height: BlockHeight(height),
+                    index: index.try_into().expect(
+                        "Incompatible `EffectId` index types in \
+                        `linera-sdk` and `linera-execution`",
+                    ),
+                };
+            }
+        }
+
+        panic!("Bytecode not found in the chain it was supposed to be published on");
     }
 }
