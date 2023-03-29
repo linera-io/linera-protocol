@@ -286,11 +286,12 @@ where
     ViewError: From<C::Error>,
     W: View<C> + Sync,
 {
-    /// Execute a function on each serialized index (aka key). Keys are visited in a
-    /// stable, yet unspecified order.
-    pub async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
+    /// Executes a function on each serialized index (aka key). Keys are visited in a
+    /// lexicographic order. If the function returns false, then the loop
+    /// is prematurely ended.
+    pub async fn for_each_key_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
-        F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
+        F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
         let updates = self.updates.write().await;
         let mut updates = updates.iter();
@@ -303,7 +304,9 @@ where
                     match update {
                         Some((key, value)) if key.as_slice() <= index => {
                             if let Update::Set(_) = value {
-                                f(key)?;
+                                if !f(key)? {
+                                    return Ok(());
+                                }
                             }
                             update = updates.next();
                             if key == index {
@@ -311,7 +314,9 @@ where
                             }
                         }
                         _ => {
-                            f(index)?;
+                            if !f(index)? {
+                                return Ok(());
+                            }
                             break;
                         }
                     }
@@ -320,11 +325,26 @@ where
         }
         while let Some((key, value)) = update {
             if let Update::Set(_) = value {
-                f(key)?;
+                if !f(key)? {
+                    return Ok(());
+                }
             }
             update = updates.next();
         }
         Ok(())
+    }
+
+    /// Executes a function on each serialized index (aka key). Keys are visited in a
+    /// lexicographic order.
+    pub async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
+    {
+        self.for_each_key_while(|key| {
+            f(key)?;
+            Ok(true)
+        })
+        .await
     }
 
     /// Return the list of indices in the collection.
@@ -529,8 +549,24 @@ where
     I: Debug + DeserializeOwned,
     W: View<C> + Sync,
 {
-    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
-    /// order.
+    /// Executes a function on each index. Indices are visited in an order
+    /// determined by the serialization. If the function returns false then
+    /// the function early terminates.
+    pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<bool, ViewError> + Send,
+    {
+        self.collection
+            .for_each_key_while(|key| {
+                let index = C::deserialize_value(key)?;
+                f(index)
+            })
+            .await?;
+        Ok(())
+    }
+
+    /// Executes a function on each index. Indices are visited in an order
+    /// determined by the serialization.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
@@ -538,8 +574,7 @@ where
         self.collection
             .for_each_key(|key| {
                 let index = C::deserialize_value(key)?;
-                f(index)?;
-                Ok(())
+                f(index)
             })
             .await?;
         Ok(())
@@ -701,8 +736,8 @@ where
     I: Debug + CustomSerialize,
     W: View<C> + Sync,
 {
-    /// Execute a function on each index. Indices are visited in a stable, yet unspecified
-    /// order.
+    /// Executes a function on each index. Indices are visited in an order
+    /// determined by the custom serialization.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
