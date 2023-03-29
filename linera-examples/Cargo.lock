@@ -1784,6 +1784,7 @@ dependencies = [
 name = "linera-views"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-lock",
  "async-trait",
  "bcs",

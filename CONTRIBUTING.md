@@ -69,6 +69,17 @@ cargo +nightly fmt
 ```
 (see also [rust-lang/rustfmt#4991](https://github.com/rust-lang/rustfmt/issues/4991))
 
+## Managing cargo features and dependencies between crates
+
+* Crates `xxx` which define the `test` feature must include `linera-xxx = { path = ".",
+  features = ["test"] }` in the section `[dev-dependencies]` instead of repeating the
+  dependencies already declared by the feature `test`.
+
+* A few crates define the features `wasm` and `wasmer`. For conveniency, these crates also
+  define a `default` feature. As a consequence, these crates must always be included with
+  the flag `no-default-features = true`. (This also applies to the self-dependencies of the
+  previous rule.)
+
 ## Dealing with test failures `test_format` after code changes
 
 Getting an error with the test in [`linera-rpc/tests/format.rs`](linera-rpc/tests/format.rs) ?

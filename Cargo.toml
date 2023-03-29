@@ -14,7 +14,6 @@ members = [
 exclude = [
         "linera-examples",
 ]
-resolver = "2"
 
 [profile.release]
 debug = true

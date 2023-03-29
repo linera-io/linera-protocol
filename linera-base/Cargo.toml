@@ -27,8 +27,7 @@ rand = "0.7.3"
 
 [dev-dependencies]
 custom_debug_derive = "0.5.1"
-proptest = "1.0.0"
-test-strategy = "0.2.0"
+linera-base = { path = ".", features = ["test"] }
 
 [package.metadata.cargo-machete]
 ignored = ["serde_bytes"]

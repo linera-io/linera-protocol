@@ -9,8 +9,8 @@ default = ["wasmer", "wasmtime"]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 test = [
-    "linera-base/test", "linera-chain/test", "linera-execution/test", "proptest", "tempfile",
-    "test-log", "test-strategy", "tokio/parking_lot",
+    "linera-base/test", "linera-chain/test", "linera-execution/test", "linera-storage/test",
+    "linera-views/test", "proptest", "tempfile", "test-log", "test-strategy", "tokio/parking_lot",
 ]
 aws = ["linera-views/aws", "linera-storage/aws"]
 
@@ -41,20 +41,12 @@ tokio-stream = "0.1.11"
 bcs = "0.1.3"
 criterion = { version = "0.4.0", features = ["async_tokio"] }
 fungible = { path = "../linera-examples/fungible" }
-linera-base = { path = "../linera-base", features = ["test"] }
-linera-chain = { path = "../linera-chain", features = ["test"] }
-linera-execution = { path = "../linera-execution", default-features = false, features = ["test"] }
-linera-storage = { path = "../linera-storage", default-features = false, features = ["test"] }
-linera-views = { path = "../linera-views", features = ["test"] }
+linera-core = { path = ".", default-features = false, features = ["test"] }
 metrics = "0.20.1"
 metrics-util = "0.14.0"
 portable-atomic = "0.3.19"
-proptest = "1.0.0"
 social = { path = "../linera-examples/social" }
-tempfile = "3.2.0"
 test-case = "3.0.0"
-test-log = { version = "0.2.11", default-features = false, features = ["trace"] }
-test-strategy = "0.2.0"
 tracing-subscriber = { version = "0.3.16", default-features = false, features = ["env-filter", "fmt"] }
 
 [package.metadata.cargo-machete]
