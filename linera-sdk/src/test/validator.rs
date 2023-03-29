@@ -14,7 +14,7 @@ use linera_execution::{
 };
 use linera_storage::MemoryStoreClient;
 use std::sync::{atomic::AtomicUsize, Arc};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 
 /// A minimal validator implementation suited for tests.
 pub struct TestValidator {
@@ -53,5 +53,24 @@ impl Clone for TestValidator {
             worker: self.worker.clone(),
             root_chain_counter: self.root_chain_counter.clone(),
         }
+    }
+}
+
+impl TestValidator {
+    /// Returns the locked [`WorkerState`] of this validator.
+    pub(crate) async fn worker(&self) -> MutexGuard<WorkerState<MemoryStoreClient>> {
+        self.worker.lock().await
+    }
+
+    /// Returns the keys this test validator uses for signing certificates.
+    pub fn key_pair(&self) -> &KeyPair {
+        &self.key_pair
+    }
+
+    /// Returns the committee that this test validator is part of.
+    ///
+    /// The committee contains only this validator.
+    pub fn committee(&self) -> &Committee {
+        &self.committee
     }
 }
