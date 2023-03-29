@@ -403,7 +403,7 @@ impl<'bytecode> Sanitizer<'bytecode> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "wasmer"))]
 mod tests {
     use super::sanitize;
     use crate::Bytecode;

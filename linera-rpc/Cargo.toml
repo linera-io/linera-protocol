@@ -5,7 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [features]
-test = []
+test = ["linera-base/test", "linera-chain/test", "linera-core/test", "linera-execution/test", "linera-storage/test"]
 
 [dependencies]
 anyhow = "1.0.57"
@@ -35,12 +35,7 @@ tokio-util = { version = "0.6.9", features = ["codec", "net"] }
 tonic = "0.8"
 
 [dev-dependencies]
-linera-base = { path = "../linera-base", features = ["test"] }
-linera-chain = { path = "../linera-chain", features = ["test"] }
-linera-core = { path = "../linera-core", default-features = false, features = ["test"] }
-linera-execution = { path = "../linera-execution", default-features = false, features = ["test"] }
 linera-rpc = { path = ".", features = ["test"] }
-linera-storage = { path = "../linera-storage", default-features = false, features = ["test"] }
 proptest = "1.0.0"
 serde-reflection = "0.3.5"
 serde_yaml = "0.8.21"

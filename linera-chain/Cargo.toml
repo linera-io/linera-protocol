@@ -5,7 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [features]
-test = ["tokio/macros", "async-lock"]
+test = ["tokio/macros", "async-lock", "linera-base/test", "linera-execution/test"]
 
 [dependencies]
 async-trait = "0.1.52"
@@ -20,7 +20,7 @@ thiserror = "1.0.31"
 tokio = "1.25.0"
 
 [dev-dependencies]
-linera-base = { path = "../linera-base", features = ["test"] }
+linera-chain = { path = ".", features = ["test"] }
 
 [package.metadata.cargo-machete]
 ignored = ["async-trait"]

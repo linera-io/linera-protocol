@@ -6,7 +6,7 @@ edition = "2021"
 
 [features]
 default = ["wasmer", "wasmtime"]
-test = ["tokio/macros", "tokio/rt", "tokio/test-util"]
+test = ["tokio/rt", "tokio/test-util", "tokio/time", "linera-execution/test", "linera-views/test"]
 wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
 aws = ["linera-views/aws"]
@@ -25,10 +25,9 @@ metrics = "0.20.1"
 tracing = "0.1.37"
 rocksdb = "0.19.0"
 serde = { version = "1.0.130", features = ["derive"] }
-tokio = "1.25.0"
+tokio = { version = "1.25.0", features = ["macros"] }
 
 [dev-dependencies]
 anyhow = "1.0.57"
-linera-execution = { path = "../linera-execution", default-features = false, features = ["test"] }
-linera-views = { path = "../linera-views", features = ["test"] }
+linera-storage = { path = ".", default-features = false, features = ["test"] }
 tempfile = "3.2.0"
