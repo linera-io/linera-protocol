@@ -25,8 +25,4 @@ debug = true
 # repository: https://github.com/ma2bd/cargo-all-features
 [workspace.metadata.cargo-all-features]
 skip_optional_dependencies = true
-max_combination_size = 2
-# This combination is already tested by default.
-skip_feature_sets = [
-    ["wasmer", "wasmtime"],
-]
+max_combination_size = 1
