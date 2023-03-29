@@ -6,9 +6,10 @@
 //! Helps with the construction of blocks, adding operations and
 
 use super::TestValidator;
+use crate::ToBcsBytes;
 use linera_base::{
     data_types::Timestamp,
-    identifiers::{ChainId, EffectId, Owner},
+    identifiers::{ApplicationId, ChainId, EffectId, Owner},
 };
 use linera_chain::data_types::{Block, Certificate, HashedValue, LiteVote, SignatureAggregator};
 use linera_execution::system::SystemOperation;
@@ -73,6 +74,25 @@ impl BlockBuilder {
         self.block
             .operations
             .push((linera_execution::ApplicationId::System, operation.into()));
+        self
+    }
+
+    /// Adds a user `operation` to this block.
+    ///
+    /// The operation is serialized using [`bcs`] and added to the block, marked to be executed by
+    /// `application`.
+    pub fn with_operation(
+        &mut self,
+        application: ApplicationId,
+        operation: impl ToBcsBytes,
+    ) -> &mut Self {
+        self.block.operations.push((
+            application.into(),
+            operation
+                .to_bcs_bytes()
+                .expect("Failed to serialize operation")
+                .into(),
+        ));
         self
     }
 
