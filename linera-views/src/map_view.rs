@@ -520,7 +520,7 @@ where
         Ok(indices)
     }
 
-    /// Execute a function on each index. Indices are visited in a stable,
+    /// Executes a function on each index. Indices are visited in a stable,
     /// yet unspecified order determined by the serialization.
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
