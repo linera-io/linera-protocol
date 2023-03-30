@@ -54,6 +54,7 @@ jobs:
       run: |
         cd linera-examples
         CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=../target/debug/test-runner cargo test --target wasm32-unknown-unknown
+        cargo test --target x86_64-unknown-linux-gnu
     - name: Build example applications
       run: |
         cd linera-examples
