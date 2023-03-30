@@ -628,6 +628,17 @@ enum ClientCommand {
         #[structopt(long)]
         chain: ChainId,
     },
+
+    /// Show the contents of the wallet.
+    #[structopt(name = "wallet")]
+    Wallet(WalletCommand),
+}
+
+#[derive(StructOpt)]
+enum WalletCommand {
+    Show {
+        chain_id: Option<ChainId>
+    },
 }
 
 struct Job(ClientContext, ClientCommand);
@@ -1030,7 +1041,7 @@ where
                 context.save_wallet();
             }
 
-            CreateGenesisConfig { .. } | KeyGen => unreachable!(),
+            CreateGenesisConfig { .. } | KeyGen | Wallet(_) => unreachable!(),
         }
         Ok(())
     }
@@ -1085,6 +1096,15 @@ async fn main() -> Result<(), anyhow::Error> {
             context.save_wallet();
             println!("{}", public);
             Ok(())
+        }
+
+        ClientCommand::Wallet(wallet_command) => {
+            match wallet_command {
+                WalletCommand::Show { chain_id } => {
+                    context.wallet_state.pretty_print(chain_id);
+                    Ok(())
+                }
+            }
         }
 
         command => {
