@@ -112,7 +112,7 @@ impl UserChain {
 #[derive(Default, Serialize, Deserialize)]
 pub struct WalletState {
     chains: BTreeMap<ChainId, UserChain>,
-    unassigned: HashMap<PublicKey, KeyPair>,
+    unassigned_key_pairs: HashMap<PublicKey, KeyPair>,
 }
 
 impl WalletState {
@@ -140,12 +140,12 @@ impl WalletState {
         self.chains.values_mut()
     }
 
-    pub fn add_unassigned_keypair(&mut self, keypair: KeyPair) {
-        self.unassigned.insert(keypair.public(), keypair);
+    pub fn add_unassigned_key_pair(&mut self, keypair: KeyPair) {
+        self.unassigned_key_pairs.insert(keypair.public(), keypair);
     }
 
     pub fn key_pair_for_pk(&self, key: &PublicKey) -> Option<KeyPair> {
-        self.unassigned.get(key).map(|key_pair| key_pair.copy())
+        self.unassigned_key_pairs.get(key).map(|key_pair| key_pair.copy())
     }
 
     pub fn assign_new_chain_to_key(
@@ -154,7 +154,7 @@ impl WalletState {
         chain_id: ChainId,
         timestamp: Timestamp,
     ) -> Result<(), anyhow::Error> {
-        let key_pair = self.unassigned.remove(&key).ok_or_else(|| {
+        let key_pair = self.unassigned_key_pairs.remove(&key).ok_or_else(|| {
             anyhow!("could not assign chain to key as unassigned key was not found")
         })?;
         let user_chain = UserChain {

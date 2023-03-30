@@ -1079,9 +1079,9 @@ async fn main() -> Result<(), anyhow::Error> {
         }
 
         ClientCommand::KeyGen => {
-            let keypair = KeyPair::generate();
-            let public = keypair.public();
-            context.wallet_state.add_unassigned_keypair(keypair);
+            let key_pair = KeyPair::generate();
+            let public = key_pair.public();
+            context.wallet_state.add_unassigned_key_pair(key_pair);
             context.save_wallet();
             println!("{}", public);
             Ok(())
