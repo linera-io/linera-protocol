@@ -93,9 +93,9 @@ impl WasmApplication {
         writable_system::add_to_linker(&mut linker, ContractState::system_api)?;
 
         let module = Module::new(&engine, &self.contract_bytecode)?;
-        let context_forwarder = WakerForwarder::default();
+        let waker_forwarder = WakerForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
-        let state = ContractState::new(storage, context_forwarder.clone(), queued_future_factory);
+        let state = ContractState::new(storage, waker_forwarder.clone(), queued_future_factory);
         let mut store = Store::new(&engine, state);
         let (contract, _instance) =
             contract::Contract::instantiate(&mut store, &module, &mut linker, ContractState::data)?;
@@ -106,7 +106,7 @@ impl WasmApplication {
             .expect("Fuel consumption wasn't properly enabled");
 
         Ok(WasmRuntimeContext {
-            context_forwarder,
+            waker_forwarder,
             application,
             future_queue,
             store,
@@ -125,16 +125,16 @@ impl WasmApplication {
         queryable_system::add_to_linker(&mut linker, ServiceState::system_api)?;
 
         let module = Module::new(&engine, &self.service_bytecode)?;
-        let context_forwarder = WakerForwarder::default();
+        let waker_forwarder = WakerForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
-        let state = ServiceState::new(storage, context_forwarder.clone());
+        let state = ServiceState::new(storage, waker_forwarder.clone());
         let mut store = Store::new(&engine, state);
         let (service, _instance) =
             service::Service::instantiate(&mut store, &module, &mut linker, ServiceState::data)?;
         let application = Service { service };
 
         Ok(WasmRuntimeContext {
-            context_forwarder,
+            waker_forwarder,
             application,
             future_queue,
             store,

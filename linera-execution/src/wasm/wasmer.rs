@@ -111,10 +111,10 @@ impl WasmApplication {
         let module = Module::new(&store, &self.contract_bytecode)
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
         let mut imports = imports! {};
-        let context_forwarder = WakerForwarder::default();
+        let waker_forwarder = WakerForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
         let (system_api, storage_guard) =
-            ContractSystemApi::new(context_forwarder.clone(), storage, queued_future_factory);
+            ContractSystemApi::new(waker_forwarder.clone(), storage, queued_future_factory);
         let system_api_setup =
             writable_system::add_to_imports(&mut store, &mut imports, system_api);
         let (contract, instance) =
@@ -127,7 +127,7 @@ impl WasmApplication {
         system_api_setup(&instance, &store)?;
 
         Ok(WasmRuntimeContext {
-            context_forwarder,
+            waker_forwarder,
             application,
             future_queue,
             store,
@@ -147,9 +147,9 @@ impl WasmApplication {
         let module = Module::new(&store, &self.service_bytecode)
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
         let mut imports = imports! {};
-        let context_forwarder = WakerForwarder::default();
+        let waker_forwarder = WakerForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
-        let (system_api, storage_guard) = ServiceSystemApi::new(context_forwarder.clone(), storage);
+        let (system_api, storage_guard) = ServiceSystemApi::new(waker_forwarder.clone(), storage);
         let system_api_setup =
             queryable_system::add_to_imports(&mut store, &mut imports, system_api);
         let (service, instance) = service::Service::instantiate(&mut store, &module, &mut imports)?;
@@ -161,7 +161,7 @@ impl WasmApplication {
         system_api_setup(&instance, &store)?;
 
         Ok(WasmRuntimeContext {
-            context_forwarder,
+            waker_forwarder,
             application,
             future_queue,
             store,

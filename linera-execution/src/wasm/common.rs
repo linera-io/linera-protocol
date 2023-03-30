@@ -202,7 +202,7 @@ where
 {
     /// Where to store the async task context to later be reused in async calls from the guest WASM
     /// module.
-    pub(crate) context_forwarder: WakerForwarder,
+    pub(crate) waker_forwarder: WakerForwarder,
 
     /// The application type.
     pub(crate) application: A,
