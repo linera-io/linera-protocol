@@ -330,7 +330,7 @@ impl<'storage> common::Service for Service<'storage> {
 /// Helper type with common functionality across the contract and service system API
 /// implementations.
 struct SystemApi<S> {
-    context: WakerForwarder,
+    waker: WakerForwarder,
     storage: Arc<Mutex<Option<S>>>,
 }
 
@@ -355,7 +355,7 @@ impl ContractSystemApi {
     /// The [`StorageGuard`] instance must be kept alive while the trait object is still expected to
     /// be alive and usable by the WASM application.
     pub fn new<'storage>(
-        context: WakerForwarder,
+        waker: WakerForwarder,
         storage: &'storage dyn WritableStorage,
         queued_future_factory: QueuedHostFutureFactory<'static>,
     ) -> (Self, StorageGuard<'storage, &'static dyn WritableStorage>) {
@@ -369,7 +369,7 @@ impl ContractSystemApi {
 
         (
             ContractSystemApi {
-                shared: SystemApi { context, storage },
+                shared: SystemApi { waker, storage },
                 queued_future_factory,
             },
             guard,
@@ -396,7 +396,7 @@ impl ContractSystemApi {
 
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
     fn context(&mut self) -> &mut WakerForwarder {
-        &mut self.shared.context
+        &mut self.shared.waker
     }
 }
 
@@ -422,7 +422,7 @@ impl ServiceSystemApi {
     /// The [`StorageGuard`] instance must be kept alive while the trait object is still expected to
     /// be alive and usable by the WASM application.
     pub fn new<'storage>(
-        context: WakerForwarder,
+        waker: WakerForwarder,
         storage: &'storage dyn QueryableStorage,
     ) -> (Self, StorageGuard<'storage, &'static dyn QueryableStorage>) {
         let storage_without_lifetime = unsafe { mem::transmute(storage) };
@@ -435,7 +435,7 @@ impl ServiceSystemApi {
 
         (
             ServiceSystemApi {
-                shared: SystemApi { context, storage },
+                shared: SystemApi { waker, storage },
             },
             guard,
         )
@@ -461,7 +461,7 @@ impl ServiceSystemApi {
 
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
     fn context(&mut self) -> &mut WakerForwarder {
-        &mut self.shared.context
+        &mut self.shared.waker
     }
 }
 

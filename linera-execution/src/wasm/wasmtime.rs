@@ -362,7 +362,7 @@ impl<'storage> common::Service for Service<'storage> {
 /// Helper type with common functionality across the contract and service system API
 /// implementations.
 struct SystemApi<S> {
-    context: WakerForwarder,
+    waker: WakerForwarder,
     storage: S,
 }
 
@@ -374,15 +374,15 @@ pub struct ContractSystemApi<'storage> {
 }
 
 impl<'storage> ContractSystemApi<'storage> {
-    /// Creates a new [`ContractSystemApi`] instance using the provided asynchronous `context` and
+    /// Creates a new [`ContractSystemApi`] instance using the provided asynchronous `waker` and
     /// exporting the API from `storage`.
     pub fn new(
-        context: WakerForwarder,
+        waker: WakerForwarder,
         storage: &'storage dyn WritableStorage,
         queued_future_factory: QueuedHostFutureFactory<'storage>,
     ) -> Self {
         ContractSystemApi {
-            shared: SystemApi { context, storage },
+            shared: SystemApi { waker, storage },
             queued_future_factory,
         }
     }
@@ -394,7 +394,7 @@ impl<'storage> ContractSystemApi<'storage> {
 
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
     fn context(&mut self) -> &mut WakerForwarder {
-        &mut self.shared.context
+        &mut self.shared.waker
     }
 }
 
@@ -407,11 +407,11 @@ pub struct ServiceSystemApi<'storage> {
 }
 
 impl<'storage> ServiceSystemApi<'storage> {
-    /// Creates a new [`ServiceSystemApi`] instance using the provided asynchronous `context` and
+    /// Creates a new [`ServiceSystemApi`] instance using the provided asynchronous `waker` and
     /// exporting the API from `storage`.
-    pub fn new(context: WakerForwarder, storage: &'storage dyn QueryableStorage) -> Self {
+    pub fn new(waker: WakerForwarder, storage: &'storage dyn QueryableStorage) -> Self {
         ServiceSystemApi {
-            shared: SystemApi { context, storage },
+            shared: SystemApi { waker, storage },
         }
     }
 
@@ -422,7 +422,7 @@ impl<'storage> ServiceSystemApi<'storage> {
 
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
     fn context(&mut self) -> &mut WakerForwarder {
-        &mut self.shared.context
+        &mut self.shared.waker
     }
 }
 
