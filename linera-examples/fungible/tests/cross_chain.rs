@@ -5,7 +5,7 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use fungible::{test_utils::InitialStateBuilder, Account, AccountOwner, Operation};
+use fungible::{Account, AccountOwner, InitialStateBuilder, Operation};
 use linera_sdk::{base::Amount, test::TestValidator};
 
 /// Test transfering tokens across micro-chains.
