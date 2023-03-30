@@ -82,7 +82,7 @@ macro_rules! impl_writable_system {
                 future: &Self::Lock,
             ) -> Result<writable_system::PollLock, Self::Error> {
                 use writable_system::PollLock;
-                match future.poll(self.context()) {
+                match future.poll(self.waker()) {
                     Poll::Pending => Ok(PollLock::Pending),
                     Poll::Ready(Ok(())) => Ok(PollLock::ReadyLocked),
                     Poll::Ready(Err(ExecutionError::ViewError(ViewError::TryLockError(_)))) => {
@@ -106,7 +106,7 @@ macro_rules! impl_writable_system {
                 future: &Self::ReadKeyBytes,
             ) -> Result<writable_system::PollReadKeyBytes, Self::Error> {
                 use writable_system::PollReadKeyBytes;
-                match future.poll(self.context()) {
+                match future.poll(self.waker()) {
                     Poll::Pending => Ok(PollReadKeyBytes::Pending),
                     Poll::Ready(opt_list) => Ok(PollReadKeyBytes::Ready(opt_list?)),
                 }
@@ -123,7 +123,7 @@ macro_rules! impl_writable_system {
                 future: &Self::FindKeys,
             ) -> Result<writable_system::PollFindKeys, Self::Error> {
                 use writable_system::PollFindKeys;
-                match future.poll(self.context()) {
+                match future.poll(self.waker()) {
                     Poll::Pending => Ok(PollFindKeys::Pending),
                     Poll::Ready(keys) => Ok(PollFindKeys::Ready(keys?)),
                 }
@@ -144,7 +144,7 @@ macro_rules! impl_writable_system {
                 future: &Self::FindKeyValues,
             ) -> Result<writable_system::PollFindKeyValues, Self::Error> {
                 use writable_system::PollFindKeyValues;
-                match future.poll(self.context()) {
+                match future.poll(self.waker()) {
                     Poll::Pending => Ok(PollFindKeyValues::Pending),
                     Poll::Ready(key_values) => Ok(PollFindKeyValues::Ready(key_values?)),
                 }
@@ -178,7 +178,7 @@ macro_rules! impl_writable_system {
                 future: &Self::WriteBatch,
             ) -> Result<writable_system::PollUnit, Self::Error> {
                 use writable_system::PollUnit;
-                match future.poll(self.context()) {
+                match future.poll(self.waker()) {
                     Poll::Pending => Ok(PollUnit::Pending),
                     Poll::Ready(Ok(())) => Ok(PollUnit::Ready),
                     Poll::Ready(Err(error)) => Err(error),
@@ -316,7 +316,7 @@ macro_rules! impl_queryable_system {
 
             fn load_poll(&mut self, future: &Self::Load) -> queryable_system::PollLoad {
                 use queryable_system::PollLoad;
-                match future.poll(self.context()) {
+                match future.poll(self.waker()) {
                     Poll::Pending => PollLoad::Pending,
                     Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
                     Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
@@ -329,7 +329,7 @@ macro_rules! impl_queryable_system {
 
             fn lock_poll(&mut self, future: &Self::Lock) -> queryable_system::PollLock {
                 use queryable_system::PollLock;
-                match future.poll(self.context()) {
+                match future.poll(self.waker()) {
                     Poll::Pending => PollLock::Pending,
                     Poll::Ready(Ok(())) => PollLock::Ready(Ok(())),
                     Poll::Ready(Err(error)) => PollLock::Ready(Err(error.to_string())),
@@ -342,7 +342,7 @@ macro_rules! impl_queryable_system {
 
             fn unlock_poll(&mut self, future: &Self::Lock) -> queryable_system::PollUnlock {
                 use queryable_system::PollUnlock;
-                match future.poll(self.context()) {
+                match future.poll(self.waker()) {
                     Poll::Pending => PollUnlock::Pending,
                     Poll::Ready(Ok(())) => PollUnlock::Ready(Ok(())),
                     Poll::Ready(Err(error)) => PollUnlock::Ready(Err(error.to_string())),
@@ -358,7 +358,7 @@ macro_rules! impl_queryable_system {
                 future: &Self::ReadKeyBytes,
             ) -> queryable_system::PollReadKeyBytes {
                 use queryable_system::PollReadKeyBytes;
-                match future.poll(self.context()) {
+                match future.poll(self.waker()) {
                     Poll::Pending => PollReadKeyBytes::Pending,
                     Poll::Ready(Ok(opt_list)) => PollReadKeyBytes::Ready(Ok(opt_list)),
                     Poll::Ready(Err(error)) => PollReadKeyBytes::Ready(Err(error.to_string())),
@@ -371,7 +371,7 @@ macro_rules! impl_queryable_system {
 
             fn find_keys_poll(&mut self, future: &Self::FindKeys) -> queryable_system::PollFindKeys {
                 use queryable_system::PollFindKeys;
-                match future.poll(self.context()) {
+                match future.poll(self.waker()) {
                     Poll::Pending => PollFindKeys::Pending,
                     Poll::Ready(Ok(keys)) => PollFindKeys::Ready(Ok(keys)),
                     Poll::Ready(Err(error)) => PollFindKeys::Ready(Err(error.to_string())),
@@ -390,7 +390,7 @@ macro_rules! impl_queryable_system {
                 future: &Self::FindKeyValues,
             ) -> queryable_system::PollFindKeyValues {
                 use queryable_system::PollFindKeyValues;
-                match future.poll(self.context()) {
+                match future.poll(self.waker()) {
                     Poll::Pending => PollFindKeyValues::Pending,
                     Poll::Ready(Ok(key_values)) => PollFindKeyValues::Ready(Ok(key_values)),
                     Poll::Ready(Err(error)) => PollFindKeyValues::Ready(Err(error.to_string())),
@@ -417,7 +417,7 @@ macro_rules! impl_queryable_system {
                 future: &Self::TryQueryApplication,
             ) -> queryable_system::PollLoad {
                 use queryable_system::PollLoad;
-                match future.poll(self.context()) {
+                match future.poll(self.waker()) {
                     Poll::Pending => PollLoad::Pending,
                     Poll::Ready(Ok(result)) => PollLoad::Ready(Ok(result)),
                     Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),

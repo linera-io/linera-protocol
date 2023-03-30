@@ -393,7 +393,7 @@ impl<'storage> ContractSystemApi<'storage> {
     }
 
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
-    fn context(&mut self) -> &mut WakerForwarder {
+    fn waker(&mut self) -> &mut WakerForwarder {
         &mut self.shared.waker
     }
 }
@@ -421,7 +421,7 @@ impl<'storage> ServiceSystemApi<'storage> {
     }
 
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
-    fn context(&mut self) -> &mut WakerForwarder {
+    fn waker(&mut self) -> &mut WakerForwarder {
         &mut self.shared.waker
     }
 }
