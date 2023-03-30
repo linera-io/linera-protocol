@@ -3,10 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use comfy_table::{
+    modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, ContentArrangement, Table,
+};
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Balance, BlockHeight, Timestamp},
-    identifiers::{ChainDescription, ChainId},
+    identifiers::{ChainDescription, ChainId, Owner},
 };
 use linera_core::client::{ChainClient, ValidatorNodeProvider};
 use linera_execution::committee::{Committee, ValidatorName, ValidatorState};
@@ -145,7 +148,9 @@ impl WalletState {
     }
 
     pub fn key_pair_for_pk(&self, key: &PublicKey) -> Option<KeyPair> {
-        self.unassigned_key_pairs.get(key).map(|key_pair| key_pair.copy())
+        self.unassigned_key_pairs
+            .get(key)
+            .map(|key_pair| key_pair.copy())
     }
 
     pub fn assign_new_chain_to_key(
@@ -205,6 +210,57 @@ impl WalletState {
         serde_json::to_writer_pretty(&mut writer, &self)?;
         writer.flush()?;
         Ok(())
+    }
+
+    pub fn pretty_print(&self, chain_id: Option<ChainId>) {
+        let mut table = Table::new();
+        table
+            .load_preset(UTF8_FULL)
+            .apply_modifier(UTF8_ROUND_CORNERS)
+            .set_content_arrangement(ContentArrangement::Dynamic)
+            .set_header(vec![
+                Cell::new("Chain Id").add_attribute(Attribute::Bold),
+                Cell::new("Latest Block").add_attribute(Attribute::Bold),
+            ]);
+        if let Some(chain_id) = chain_id {
+            let user_chain = self.chains.get(&chain_id).unwrap();
+            Self::update_table_with_chain(&mut table, chain_id, user_chain);
+        } else {
+            for (chain_id, user_chain) in &self.chains {
+                Self::update_table_with_chain(&mut table, *chain_id, user_chain);
+            }
+        }
+        println!("{}", table);
+    }
+
+    fn update_table_with_chain(table: &mut Table, chain_id: ChainId, user_chain: &UserChain) {
+        table.add_row(vec![
+            Cell::new(format!("{}", chain_id)),
+            Cell::new(format!(
+                r#"Public Key:         {}
+Owner:              {}
+Block Hash:         {}
+Timestamp:          {}
+Next Block Height:  {}"#,
+                user_chain
+                    .key_pair
+                    .as_ref()
+                    .map(|kp| kp.public().to_string())
+                    .unwrap_or("-".to_string()),
+                user_chain
+                    .key_pair
+                    .as_ref()
+                    .map(|kp| Owner::from(kp.public()))
+                    .map(|o| o.to_string())
+                    .unwrap_or("-".to_string()),
+                user_chain
+                    .block_hash
+                    .map(|bh| bh.to_string())
+                    .unwrap_or("-".to_string()),
+                user_chain.timestamp,
+                user_chain.next_block_height
+            )),
+        ]);
     }
 }
 
