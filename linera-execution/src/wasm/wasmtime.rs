@@ -160,16 +160,16 @@ pub struct ServiceState<'storage> {
 impl<'storage> ContractState<'storage> {
     /// Create a new instance of [`ContractState`].
     ///
-    /// Uses `storage` to export the system API, and the `context` to be able to correctly handle
+    /// Uses `storage` to export the system API, and the `waker` to be able to correctly handle
     /// asynchronous calls from the guest WASM module.
     pub fn new(
         storage: &'storage dyn WritableStorage,
-        context: WakerForwarder,
+        waker: WakerForwarder,
         queued_future_factory: QueuedHostFutureFactory<'storage>,
     ) -> Self {
         Self {
             data: ContractData::default(),
-            system_api: ContractSystemApi::new(context, storage, queued_future_factory),
+            system_api: ContractSystemApi::new(waker, storage, queued_future_factory),
             system_tables: WritableSystemTables::default(),
         }
     }
@@ -193,12 +193,12 @@ impl<'storage> ContractState<'storage> {
 impl<'storage> ServiceState<'storage> {
     /// Create a new instance of [`ServiceState`].
     ///
-    /// Uses `storage` to export the system API, and the `context` to be able to correctly handle
+    /// Uses `storage` to export the system API, and the `waker` to be able to correctly handle
     /// asynchronous calls from the guest WASM module.
-    pub fn new(storage: &'storage dyn QueryableStorage, context: WakerForwarder) -> Self {
+    pub fn new(storage: &'storage dyn QueryableStorage, waker: WakerForwarder) -> Self {
         Self {
             data: ServiceData::default(),
-            system_api: ServiceSystemApi::new(context, storage),
+            system_api: ServiceSystemApi::new(waker, storage),
             system_tables: QueryableSystemTables::default(),
         }
     }
