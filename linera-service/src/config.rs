@@ -116,6 +116,7 @@ impl UserChain {
 pub struct WalletState {
     chains: BTreeMap<ChainId, UserChain>,
     unassigned_key_pairs: HashMap<PublicKey, KeyPair>,
+    default: Option<ChainId>,
 }
 
 impl WalletState {
@@ -124,7 +125,14 @@ impl WalletState {
     }
 
     pub fn insert(&mut self, chain: UserChain) {
+        if self.chains.is_empty() {
+            self.default = Some(chain.chain_id);
+        }
         self.chains.insert(chain.chain_id, chain);
+    }
+
+    pub fn default_chain(&self) -> Option<ChainId> {
+        self.default
     }
 
     pub fn chain_ids(&self) -> Vec<ChainId> {
@@ -246,17 +254,17 @@ Next Block Height:  {}"#,
                     .key_pair
                     .as_ref()
                     .map(|kp| kp.public().to_string())
-                    .unwrap_or("-".to_string()),
+                    .unwrap_or_else(|| "-".to_string()),
                 user_chain
                     .key_pair
                     .as_ref()
                     .map(|kp| Owner::from(kp.public()))
                     .map(|o| o.to_string())
-                    .unwrap_or("-".to_string()),
+                    .unwrap_or_else(|| "-".to_string()),
                 user_chain
                     .block_hash
                     .map(|bh| bh.to_string())
-                    .unwrap_or("-".to_string()),
+                    .unwrap_or_else(|| "-".to_string()),
                 user_chain.timestamp,
                 user_chain.next_block_height
             )),

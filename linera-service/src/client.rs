@@ -636,9 +636,7 @@ enum ClientCommand {
 
 #[derive(StructOpt)]
 enum WalletCommand {
-    Show {
-        chain_id: Option<ChainId>
-    },
+    Show { chain_id: Option<ChainId> },
 }
 
 struct Job(ClientContext, ClientCommand);
@@ -743,7 +741,12 @@ where
             QueryValidators { chain_id } => {
                 let mut chain_client = context.make_chain_client(
                     storage,
-                    chain_id.unwrap_or(context.genesis_config.admin_id),
+                    chain_id.unwrap_or_else(||
+                        context
+                            .wallet_state
+                            .default_chain()
+                            .expect("No chain specified in wallet with no default chain"),
+                    ),
                 );
                 info!("Starting operation to query validators");
                 let time_start = Instant::now();
@@ -966,7 +969,12 @@ where
             }
 
             Service { chain_id, port } => {
-                let chain_id = chain_id.unwrap_or(context.genesis_config.admin_id);
+                let chain_id = chain_id.unwrap_or_else(||
+                    context
+                        .wallet_state
+                        .default_chain()
+                        .expect("No chain specified in wallet with no default chain"),
+                );
                 let chain_client = context.make_chain_client(storage, chain_id);
                 let service = linera_service::node_service::NodeService::new(chain_client, port);
 
@@ -980,7 +988,12 @@ where
                 publisher,
             } => {
                 let start_time = Instant::now();
-                let chain_id = publisher.unwrap_or(context.genesis_config.admin_id);
+                let chain_id = publisher.unwrap_or_else(||
+                    context
+                        .wallet_state
+                        .default_chain()
+                        .expect("No chain specified in wallet with no default chain"),
+                );
                 let mut chain_client = context.make_chain_client(storage, chain_id);
 
                 info!("Processing arguments...");
@@ -1098,14 +1111,12 @@ async fn main() -> Result<(), anyhow::Error> {
             Ok(())
         }
 
-        ClientCommand::Wallet(wallet_command) => {
-            match wallet_command {
-                WalletCommand::Show { chain_id } => {
-                    context.wallet_state.pretty_print(chain_id);
-                    Ok(())
-                }
+        ClientCommand::Wallet(wallet_command) => match wallet_command {
+            WalletCommand::Show { chain_id } => {
+                context.wallet_state.pretty_print(chain_id);
+                Ok(())
             }
-        }
+        },
 
         command => {
             let genesis_config = context.genesis_config.clone();
