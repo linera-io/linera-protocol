@@ -116,6 +116,7 @@ pub struct OperationContext {
     pub index: u64,
 }
 
+/// The context of the execution of an application's effect.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct EffectContext {
     /// The current chain id.
