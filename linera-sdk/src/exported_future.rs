@@ -152,7 +152,7 @@ macro_rules! instance_exported_future {
     ) => {
         pub struct $future($crate::$module::exported_futures::$future<$application>);
 
-        impl $crate::$module::$future for $future {
+        impl $crate::$module::wit_types::$future for $future {
             fn new(
                 $( $parameters: $parameter_types ),*
             ) -> $crate::wit_bindgen_guest_rust::Handle<Self> {
@@ -163,7 +163,7 @@ macro_rules! instance_exported_future {
                 )
             }
 
-            fn poll(&self) -> $crate::$module::$return_type {
+            fn poll(&self) -> $crate::$module::wit_types::$return_type {
                 self.0.poll()
             }
         }
