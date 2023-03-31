@@ -7,7 +7,8 @@ mod state;
 
 use async_trait::async_trait;
 use linera_sdk::{
-    service::system_api::ReadableWasmContext, FromBcsBytes, QueryContext, Service, ViewStateStorage,
+    service::system_api::ReadOnlyViewStorageContext, FromBcsBytes, QueryContext, Service,
+    ViewStateStorage,
 };
 use linera_views::views::ViewError;
 use social::{Key, OwnPost, Post, Query};
@@ -15,10 +16,10 @@ use state::Social;
 use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(Social<ReadableWasmContext>);
+linera_sdk::service!(Social<ReadOnlyViewStorageContext>);
 
 #[async_trait]
-impl Service for Social<ReadableWasmContext> {
+impl Service for Social<ReadOnlyViewStorageContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 
@@ -34,7 +35,7 @@ impl Service for Social<ReadableWasmContext> {
     }
 }
 
-impl Social<ReadableWasmContext> {
+impl Social<ReadOnlyViewStorageContext> {
     async fn handle_received_posts_query(self: Arc<Self>, count: u64) -> Result<Vec<u8>, Error> {
         let mut result = vec![];
         let count = count.try_into().unwrap_or(usize::MAX);

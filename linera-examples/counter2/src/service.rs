@@ -10,12 +10,12 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use linera_sdk::{
-    service::system_api::ReadableWasmContext, QueryContext, Service, ViewStateStorage,
+    service::system_api::ReadOnlyViewStorageContext, QueryContext, Service, ViewStateStorage,
 };
 use linera_views::{common::Context, views::ViewError};
 use thiserror::Error;
 
-linera_sdk::service!(Counter<ReadableWasmContext>);
+linera_sdk::service!(Counter<ReadOnlyViewStorageContext>);
 
 #[async_trait]
 impl<C> Service for Counter<C>

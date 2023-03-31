@@ -90,10 +90,12 @@ impl KeyValueStoreClient for ReadOnlyKeyValueStore {
     }
 }
 
-pub type ReadableWasmContext = ContextFromDb<(), ReadOnlyKeyValueStore>;
+/// Implementation of [`linera_views::common::Context`] that uses the [`ReadOnlyKeyValueStore`] to
+/// allow views to read data from the storage layer provided to Linera applications.
+pub type ReadOnlyViewStorageContext = ContextFromDb<(), ReadOnlyKeyValueStore>;
 
 /// Load the service state, without locking it for writes.
-pub async fn lock_and_load_view<State: View<ReadableWasmContext>>() -> State {
+pub async fn lock_and_load_view<State: View<ReadOnlyViewStorageContext>>() -> State {
     let future = system::Lock::new();
     future::poll_fn(|_context| -> Poll<Result<(), ViewError>> { future.poll().into() })
         .await
@@ -108,8 +110,8 @@ pub async fn unlock_view() {
 }
 
 /// Helper function to load the service state or create a new one if it doesn't exist.
-pub async fn load_view_using<State: View<ReadableWasmContext>>() -> State {
-    let context = ReadableWasmContext::default();
+pub async fn load_view_using<State: View<ReadOnlyViewStorageContext>>() -> State {
+    let context = ReadOnlyViewStorageContext::default();
     State::load(context)
         .await
         .expect("Failed to load contract state")

@@ -10,7 +10,7 @@
 use crate::{
     service::{
         self,
-        system_api::{self, ReadableWasmContext},
+        system_api::{self, ReadOnlyViewStorageContext},
     },
     ExportedFuture, Service, ServiceLogger, SimpleStateStorage, ViewStateStorage,
 };
@@ -47,7 +47,7 @@ where
 
 impl<Application> ServiceStateStorage for ViewStateStorage<Application>
 where
-    Application: Service + RootView<ReadableWasmContext>,
+    Application: Service + RootView<ReadOnlyViewStorageContext>,
 {
     fn query_application(
         context: service::QueryContext,

@@ -8,15 +8,15 @@ mod state;
 use self::state::FungibleToken;
 use async_trait::async_trait;
 use linera_sdk::{
-    service::system_api::ReadableWasmContext, QueryContext, Service, ViewStateStorage,
+    service::system_api::ReadOnlyViewStorageContext, QueryContext, Service, ViewStateStorage,
 };
 use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(FungibleToken<ReadableWasmContext>);
+linera_sdk::service!(FungibleToken<ReadOnlyViewStorageContext>);
 
 #[async_trait]
-impl Service for FungibleToken<ReadableWasmContext> {
+impl Service for FungibleToken<ReadOnlyViewStorageContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 

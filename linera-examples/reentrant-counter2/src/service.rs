@@ -8,13 +8,13 @@ mod state;
 use self::state::ReentrantCounter;
 use async_trait::async_trait;
 use linera_sdk::{
-    service::system_api::ReadableWasmContext, QueryContext, Service, ViewStateStorage,
+    service::system_api::ReadOnlyViewStorageContext, QueryContext, Service, ViewStateStorage,
 };
 use linera_views::{common::Context, views::ViewError};
 use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(ReentrantCounter<ReadableWasmContext>);
+linera_sdk::service!(ReentrantCounter<ReadOnlyViewStorageContext>);
 
 #[async_trait]
 impl<C> Service for ReentrantCounter<C>
