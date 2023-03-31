@@ -31,6 +31,8 @@
 //! The [`linera-examples`](https://github.com/linera-io/linera-protocol/tree/main/linera-examples)
 //! directory contains some example applications.
 
+#![deny(missing_docs)]
+
 pub mod base;
 pub mod contract;
 mod exported_future;
