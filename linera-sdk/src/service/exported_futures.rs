@@ -9,8 +9,8 @@
 
 use crate::{
     service::{
-        self,
         system_api::{self, ReadOnlyViewStorageContext},
+        wit_types,
     },
     ExportedFuture, Service, ServiceLogger, SimpleStateStorage, ViewStateStorage,
 };
@@ -22,7 +22,7 @@ use std::{marker::PhantomData, sync::Arc};
 pub trait ServiceStateStorage {
     /// Loads the application state and run the given query.
     fn query_application(
-        context: service::QueryContext,
+        context: wit_types::QueryContext,
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<Vec<u8>, String>>;
 }
@@ -32,7 +32,7 @@ where
     Application: Service + Default + DeserializeOwned + Serialize,
 {
     fn query_application(
-        context: service::QueryContext,
+        context: wit_types::QueryContext,
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<Vec<u8>, String>> {
         ExportedFuture::new(async move {
@@ -50,7 +50,7 @@ where
     Application: Service + RootView<ReadOnlyViewStorageContext>,
 {
     fn query_application(
-        context: service::QueryContext,
+        context: wit_types::QueryContext,
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<Vec<u8>, String>> {
         ExportedFuture::new(async move {
@@ -84,7 +84,7 @@ where
     /// Creates the exported future that the host can poll.
     ///
     /// This is called from the host.
-    pub fn new(context: service::QueryContext, argument: Vec<u8>) -> Self {
+    pub fn new(context: wit_types::QueryContext, argument: Vec<u8>) -> Self {
         ServiceLogger::install();
         QueryApplication {
             future: Application::Storage::query_application(context, argument),
@@ -95,7 +95,7 @@ where
     /// Polls the future export from the guest.
     ///
     /// This is called from the host.
-    pub fn poll(&self) -> service::PollQuery {
+    pub fn poll(&self) -> wit_types::PollQuery {
         self.future.poll()
     }
 }

@@ -26,13 +26,13 @@ macro_rules! service {
         $crate::export_service!($application);
 
         /// Mark the service type to be exported.
-        impl $crate::service::Service for $application {
+        impl $crate::service::wit_types::Service for $application {
             type QueryApplication = QueryApplication;
         }
 
         $crate::instance_exported_future! {
             service::QueryApplication<$application>(
-                context: $crate::service::QueryContext,
+                context: $crate::service::wit_types::QueryContext,
                 argument: Vec<u8>,
             ) -> PollQuery
         }
