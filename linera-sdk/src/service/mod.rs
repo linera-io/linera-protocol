@@ -7,17 +7,12 @@ mod conversions_from_wit;
 mod conversions_to_wit;
 pub mod exported_futures;
 pub mod system_api;
+pub mod wit_types;
+
+pub use self::wit_types::*;
 
 // Import the system interface.
 wit_bindgen_guest_rust::import!("queryable_system.wit");
-
-// Export the service interface.
-wit_bindgen_guest_rust::export!(
-    export_macro = "export_service"
-    types_path = "service"
-    reexported_crate_path = "wit_bindgen_guest_rust"
-    "service.wit"
-);
 
 /// Declares an implementation of the [`Service`][`crate::Service`] trait, exporting it from the
 /// WASM module.
