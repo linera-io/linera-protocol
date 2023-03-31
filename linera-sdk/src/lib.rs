@@ -142,6 +142,7 @@ pub struct CalleeContext {
     pub authenticated_caller_id: Option<ApplicationId>,
 }
 
+/// The context of the execution of an application's query.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct QueryContext {
     /// The current chain id.
