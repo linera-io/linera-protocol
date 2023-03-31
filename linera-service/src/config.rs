@@ -4,7 +4,8 @@
 
 use anyhow::anyhow;
 use comfy_table::{
-    modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, ContentArrangement, Table,
+    modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color, ContentArrangement,
+    Table,
 };
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
@@ -232,18 +233,38 @@ impl WalletState {
             ]);
         if let Some(chain_id) = chain_id {
             let user_chain = self.chains.get(&chain_id).unwrap();
-            Self::update_table_with_chain(&mut table, chain_id, user_chain);
+            Self::update_table_with_chain(
+                &mut table,
+                chain_id,
+                user_chain,
+                Some(chain_id) == self.default,
+            );
         } else {
             for (chain_id, user_chain) in &self.chains {
-                Self::update_table_with_chain(&mut table, *chain_id, user_chain);
+                Self::update_table_with_chain(
+                    &mut table,
+                    *chain_id,
+                    user_chain,
+                    Some(chain_id) == self.default.as_ref(),
+                );
             }
         }
         println!("{}", table);
     }
 
-    fn update_table_with_chain(table: &mut Table, chain_id: ChainId, user_chain: &UserChain) {
+    fn update_table_with_chain(
+        table: &mut Table,
+        chain_id: ChainId,
+        user_chain: &UserChain,
+        is_default_chain: bool,
+    ) {
+        let chain_id_cell = if is_default_chain {
+            Cell::new(format!("{}", chain_id)).fg(Color::Green)
+        } else {
+            Cell::new(format!("{}", chain_id))
+        };
         table.add_row(vec![
-            Cell::new(format!("{}", chain_id)),
+            chain_id_cell,
             Cell::new(format!(
                 r#"Public Key:         {}
 Owner:              {}
