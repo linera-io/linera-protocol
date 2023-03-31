@@ -26,7 +26,7 @@ macro_rules! contract {
         $crate::export_contract!($application);
 
         /// Mark the contract type to be exported.
-        impl $crate::contract::Contract for $application {
+        impl $crate::contract::wit_types::Contract for $application {
             type Initialize = Initialize;
             type ExecuteOperation = ExecuteOperation;
             type ExecuteEffect = ExecuteEffect;
@@ -92,39 +92,39 @@ macro_rules! contract {
 
         $crate::instance_exported_future! {
             contract::Initialize<$application>(
-                context: $crate::contract::OperationContext,
+                context: $crate::contract::wit_types::OperationContext,
                 argument: Vec<u8>,
             ) -> PollExecutionResult
         }
 
         $crate::instance_exported_future! {
             contract::ExecuteOperation<$application>(
-                context: $crate::contract::OperationContext,
+                context: $crate::contract::wit_types::OperationContext,
                 operation: Vec<u8>,
             ) -> PollExecutionResult
         }
 
         $crate::instance_exported_future! {
             contract::ExecuteEffect<$application>(
-                context: $crate::contract::EffectContext,
+                context: $crate::contract::wit_types::EffectContext,
                 effect: Vec<u8>,
             ) -> PollExecutionResult
         }
 
         $crate::instance_exported_future! {
             contract::HandleApplicationCall<$application>(
-                context: $crate::contract::CalleeContext,
+                context: $crate::contract::wit_types::CalleeContext,
                 argument: Vec<u8>,
-                forwarded_sessions: Vec<$crate::contract::SessionId>,
+                forwarded_sessions: Vec<$crate::contract::wit_types::SessionId>,
             ) -> PollCallApplication
         }
 
         $crate::instance_exported_future! {
             contract::HandleSessionCall<$application>(
-                context: $crate::contract::CalleeContext,
-                session: $crate::contract::Session,
+                context: $crate::contract::wit_types::CalleeContext,
+                session: $crate::contract::wit_types::Session,
                 argument: Vec<u8>,
-                forwarded_sessions: Vec<$crate::contract::SessionId>,
+                forwarded_sessions: Vec<$crate::contract::wit_types::SessionId>,
             ) -> PollCallSession
         }
 

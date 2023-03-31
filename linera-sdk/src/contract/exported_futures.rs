@@ -9,8 +9,8 @@
 
 use crate::{
     contract::{
-        self,
         system_api::{self, ViewStorageContext},
+        wit_types,
     },
     ApplicationCallResult, Contract, ContractLogger, ExecutionResult, ExportedFuture,
     SessionCallResult, SessionId, SimpleStateStorage, ViewStateStorage,
@@ -147,7 +147,7 @@ where
     /// Creates the exported future that the host can poll.
     ///
     /// This is called from the host.
-    pub fn new(context: contract::OperationContext, argument: Vec<u8>) -> Self {
+    pub fn new(context: wit_types::OperationContext, argument: Vec<u8>) -> Self {
         ContractLogger::install();
         Initialize {
             future: ExportedFuture::new(Application::Storage::execute_with_state(
@@ -162,7 +162,7 @@ where
     /// Polls the future export from the guest.
     ///
     /// This is called from the host.
-    pub fn poll(&self) -> contract::PollExecutionResult {
+    pub fn poll(&self) -> wit_types::PollExecutionResult {
         self.future.poll()
     }
 }
@@ -186,7 +186,7 @@ where
     /// Creates the exported future that the host can poll.
     ///
     /// This is called from the host.
-    pub fn new(context: contract::OperationContext, operation: Vec<u8>) -> Self {
+    pub fn new(context: wit_types::OperationContext, operation: Vec<u8>) -> Self {
         ContractLogger::install();
         ExecuteOperation {
             future: ExportedFuture::new(Application::Storage::execute_with_state(
@@ -206,7 +206,7 @@ where
     /// Polls the future export from the guest.
     ///
     /// This is called from the host.
-    pub fn poll(&self) -> contract::PollExecutionResult {
+    pub fn poll(&self) -> wit_types::PollExecutionResult {
         self.future.poll()
     }
 }
@@ -230,7 +230,7 @@ where
     /// Creates the exported future that the host can poll.
     ///
     /// This is called from the host.
-    pub fn new(context: contract::EffectContext, effect: Vec<u8>) -> Self {
+    pub fn new(context: wit_types::EffectContext, effect: Vec<u8>) -> Self {
         ContractLogger::install();
         ExecuteEffect {
             future: ExportedFuture::new(Application::Storage::execute_with_state(
@@ -246,7 +246,7 @@ where
     /// Polls the future export from the guest.
     ///
     /// This is called from the host.
-    pub fn poll(&self) -> contract::PollExecutionResult {
+    pub fn poll(&self) -> wit_types::PollExecutionResult {
         self.future.poll()
     }
 }
@@ -271,9 +271,9 @@ where
     ///
     /// This is called from the host.
     pub fn new(
-        context: contract::CalleeContext,
+        context: wit_types::CalleeContext,
         argument: Vec<u8>,
-        forwarded_sessions: Vec<contract::SessionId>,
+        forwarded_sessions: Vec<wit_types::SessionId>,
     ) -> Self {
         ContractLogger::install();
         HandleApplicationCall {
@@ -299,7 +299,7 @@ where
     /// Polls the future export from the guest.
     ///
     /// This is called from the host.
-    pub fn poll(&self) -> contract::PollCallApplication {
+    pub fn poll(&self) -> wit_types::PollCallApplication {
         self.future.poll()
     }
 }
@@ -324,10 +324,10 @@ where
     ///
     /// This is called from the host.
     pub fn new(
-        context: contract::CalleeContext,
-        session: contract::Session,
+        context: wit_types::CalleeContext,
+        session: wit_types::Session,
         argument: Vec<u8>,
-        forwarded_sessions: Vec<contract::SessionId>,
+        forwarded_sessions: Vec<wit_types::SessionId>,
     ) -> Self {
         ContractLogger::install();
         HandleSessionCall {
@@ -358,7 +358,7 @@ where
     /// Polls the future export from the guest.
     ///
     /// This is called from the host.
-    pub fn poll(&self) -> contract::PollCallSession {
+    pub fn poll(&self) -> wit_types::PollCallSession {
         self.future.poll()
     }
 }
