@@ -9,8 +9,6 @@ pub mod exported_futures;
 pub mod system_api;
 pub mod wit_types;
 
-pub use self::wit_types::*;
-
 // Import the system interface.
 wit_bindgen_guest_rust::import!("writable_system.wit");
 
