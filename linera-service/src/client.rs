@@ -496,7 +496,7 @@ enum ClientCommand {
     #[structopt(name = "query_balance")]
     QueryBalance {
         /// Chain id
-        chain_id: ChainId,
+        chain_id: Option<ChainId>,
     },
 
     /// Synchronize the local state of the chain (including a conservative estimation of the
@@ -504,7 +504,7 @@ enum ClientCommand {
     #[structopt(name = "sync_balance")]
     SynchronizeBalance {
         /// Chain id
-        chain_id: ChainId,
+        chain_id: Option<ChainId>,
     },
 
     /// Show the current set of validators for a chain.
@@ -709,6 +709,12 @@ where
             }
 
             QueryBalance { chain_id } => {
+                let chain_id = chain_id.unwrap_or_else(|| {
+                    context
+                        .wallet_state
+                        .default_chain()
+                        .expect("No chain specified in wallet with no default chain")
+                });
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting query for the local balance");
                 let time_start = Instant::now();
@@ -724,6 +730,12 @@ where
             }
 
             SynchronizeBalance { chain_id } => {
+                let chain_id = chain_id.unwrap_or_else(|| {
+                    context
+                        .wallet_state
+                        .default_chain()
+                        .expect("No chain specified in wallet with no default chain")
+                });
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Synchronize chain information");
                 let time_start = Instant::now();
@@ -741,12 +753,12 @@ where
             QueryValidators { chain_id } => {
                 let mut chain_client = context.make_chain_client(
                     storage,
-                    chain_id.unwrap_or_else(||
+                    chain_id.unwrap_or_else(|| {
                         context
                             .wallet_state
                             .default_chain()
-                            .expect("No chain specified in wallet with no default chain"),
-                    ),
+                            .expect("No chain specified in wallet with no default chain")
+                    }),
                 );
                 info!("Starting operation to query validators");
                 let time_start = Instant::now();
@@ -969,12 +981,12 @@ where
             }
 
             Service { chain_id, port } => {
-                let chain_id = chain_id.unwrap_or_else(||
+                let chain_id = chain_id.unwrap_or_else(|| {
                     context
                         .wallet_state
                         .default_chain()
-                        .expect("No chain specified in wallet with no default chain"),
-                );
+                        .expect("No chain specified in wallet with no default chain")
+                });
                 let chain_client = context.make_chain_client(storage, chain_id);
                 let service = linera_service::node_service::NodeService::new(chain_client, port);
 
@@ -988,12 +1000,12 @@ where
                 publisher,
             } => {
                 let start_time = Instant::now();
-                let chain_id = publisher.unwrap_or_else(||
+                let chain_id = publisher.unwrap_or_else(|| {
                     context
                         .wallet_state
                         .default_chain()
-                        .expect("No chain specified in wallet with no default chain"),
-                );
+                        .expect("No chain specified in wallet with no default chain")
+                });
                 let mut chain_client = context.make_chain_client(storage, chain_id);
 
                 info!("Processing arguments...");
