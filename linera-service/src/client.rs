@@ -1094,7 +1094,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 GenesisConfig::new(committee_config, ChainId::root(admin_root));
             let timestamp = start_timestamp
                 .map(|st| Timestamp::from(st.timestamp() as u64))
-                .unwrap_or_default();
+                .unwrap_or_else(Timestamp::now);
             for i in 0..num {
                 let description = ChainDescription::Root(i as usize);
                 // Create keys.
