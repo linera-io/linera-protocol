@@ -277,7 +277,7 @@ pub trait Context {
 
 /// Implementation of the [`Context`] trait on top of a DB client implementing
 /// [`KeyValueStoreClient`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct ContextFromDb<E, DB> {
     /// The DB client, usually shared between views.
     pub db: DB,

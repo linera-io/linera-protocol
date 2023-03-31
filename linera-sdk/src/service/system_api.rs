@@ -92,20 +92,6 @@ impl KeyValueStoreClient for ReadOnlyKeyValueStore {
 
 pub type ReadableWasmContext = ContextFromDb<(), ReadOnlyKeyValueStore>;
 
-pub trait ReadableWasmContextExt {
-    fn new() -> Self;
-}
-
-impl ReadableWasmContextExt for ReadableWasmContext {
-    fn new() -> Self {
-        Self {
-            db: ReadableWasmClient::default(),
-            base_key: Vec::new(),
-            extra: (),
-        }
-    }
-}
-
 /// Load the service state, without locking it for writes.
 pub async fn lock_and_load_view<State: View<ReadableWasmContext>>() -> State {
     let future = system::Lock::new();
@@ -123,7 +109,7 @@ pub async fn unlock_view() {
 
 /// Helper function to load the service state or create a new one if it doesn't exist.
 pub async fn load_view_using<State: View<ReadableWasmContext>>() -> State {
-    let context = ReadableWasmContext::new();
+    let context = ReadableWasmContext::default();
     State::load(context)
         .await
         .expect("Failed to load contract state")

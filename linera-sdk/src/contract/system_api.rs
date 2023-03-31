@@ -121,20 +121,6 @@ impl KeyValueStoreClient for KeyValueStore {
 
 pub type WasmContext = ContextFromDb<(), KeyValueStore>;
 
-pub trait WasmContextExt {
-    fn new() -> Self;
-}
-
-impl WasmContextExt for WasmContext {
-    fn new() -> Self {
-        Self {
-            db: WasmClient::default(),
-            base_key: Vec::new(),
-            extra: (),
-        }
-    }
-}
-
 /// Load the contract state and lock it for writes.
 pub async fn load_and_lock_view<State: View<WasmContext>>() -> Option<State> {
     let future = system::Lock::new();
@@ -147,7 +133,7 @@ pub async fn load_and_lock_view<State: View<WasmContext>>() -> Option<State> {
 
 /// Helper function to load the contract state or create a new one if it doesn't exist.
 pub async fn load_view_using<State: View<WasmContext>>() -> State {
-    let context = WasmContext::new();
+    let context = WasmContext::default();
     let r = State::load(context).await;
     r.expect("Failed to load contract state")
 }
