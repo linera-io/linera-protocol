@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Types and macros useful for writing an application service.
+
 mod conversions_from_wit;
 mod conversions_to_wit;
 pub mod exported_futures;
