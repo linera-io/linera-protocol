@@ -34,37 +34,39 @@ pub struct SimpleStateStorage<A>(std::marker::PhantomData<A>);
 /// A state management runtime based on `linera-views`.
 pub struct ViewStateStorage<A>(std::marker::PhantomData<A>);
 
-/// The public entry points provided by a contract.
+/// The public entry points provided by an application's contract.
+///
+/// Execution of these endpoints consume fuel, because they can change the application's state and
+/// are therefore consensus criticial.
 #[async_trait]
 pub trait Contract: Sized {
     /// Message reports for application execution errors.
     type Error: Error;
-    /// Tag the contract with the desired state management runtime.
+    /// The desired storage backend to use to store the application's state.
     type Storage;
 
-    /// Initialize the application on the chain that created it.
+    /// Initializes the application on the chain that created it.
     async fn initialize(
         &mut self,
         context: &OperationContext,
         argument: &[u8],
     ) -> Result<ExecutionResult, Self::Error>;
 
-    /// Apply an operation from the current block.
+    /// Applies an operation from the current block.
     async fn execute_operation(
         &mut self,
         context: &OperationContext,
         operation: &[u8],
     ) -> Result<ExecutionResult, Self::Error>;
 
-    /// Apply an effect originating from a cross-chain message.
+    /// Applies an effect originating from a cross-chain message.
     async fn execute_effect(
         &mut self,
         context: &EffectContext,
         effect: &[u8],
     ) -> Result<ExecutionResult, Self::Error>;
 
-    /// Allow an operation or an effect of other applications to call into this
-    /// application.
+    /// Handles a call from another application.
     async fn handle_application_call(
         &mut self,
         context: &CalleeContext,
@@ -72,8 +74,7 @@ pub trait Contract: Sized {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error>;
 
-    /// Allow an operation or an effect of other applications to call into a session that
-    /// we previously created.
+    /// Handles a call into a session created by this application.
     async fn handle_session_call(
         &mut self,
         context: &CalleeContext,
