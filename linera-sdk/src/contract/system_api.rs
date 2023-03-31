@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Functions and types to interface with the system API available to application contracts.
+
 use super::writable_system as system;
 use async_trait::async_trait;
 use futures::future;
