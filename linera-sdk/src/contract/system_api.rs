@@ -54,10 +54,11 @@ where
     system::store_and_unlock(&bcs::to_bytes(&state).expect("State serialization failed"));
 }
 
+/// A type to interface with the key value storage provided to applications.
 #[derive(Default, Clone)]
-pub struct WasmClient;
+pub struct KeyValueStore;
 
-impl WasmClient {
+impl KeyValueStore {
     async fn find_keys_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
         let future = system::FindKeys::new(key_prefix);
         future::poll_fn(|_context| future.poll().into()).await
@@ -70,7 +71,7 @@ impl WasmClient {
 }
 
 #[async_trait]
-impl KeyValueStoreClient for WasmClient {
+impl KeyValueStoreClient for KeyValueStore {
     type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -118,7 +119,7 @@ impl KeyValueStoreClient for WasmClient {
     }
 }
 
-pub type WasmContext = ContextFromDb<(), WasmClient>;
+pub type WasmContext = ContextFromDb<(), KeyValueStore>;
 
 pub trait WasmContextExt {
     fn new() -> Self;
