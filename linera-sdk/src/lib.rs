@@ -84,16 +84,18 @@ pub trait Contract: Sized {
     ) -> Result<SessionCallResult, Self::Error>;
 }
 
-/// The public entry points provided by a service.
+/// The public entry points provided by an application's service.
+///
+/// Execution of these endpoints does *not* consume fuel, because they can't change the
+/// application's state and are therefore *not* consensus criticial.
 #[async_trait]
 pub trait Service {
     /// Message reports for service execution errors.
     type Error: Error;
-    /// Mark the contract with the desired state management runtime.
+    /// The desired storage backend to use to read the application's state.
     type Storage;
 
-    /// Allow an end user to execute read-only queries on the state of this application.
-    /// NOTE: This is not meant to be metered and may not be exposed by validators.
+    /// Executes a read-only query on the state of this application.
     async fn query_application(
         self: Arc<Self>,
         context: &QueryContext,
