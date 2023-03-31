@@ -103,6 +103,7 @@ pub trait Service {
     ) -> Result<Vec<u8>, Self::Error>;
 }
 
+/// The context of the execution of an application's operation.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OperationContext {
     /// The current chain id.
