@@ -38,10 +38,11 @@ where
     }
 }
 
+/// A type to interface in a read-only manner with the key value storage provided to applications.
 #[derive(Default, Clone)]
-pub struct ReadableWasmClient;
+pub struct ReadOnlyKeyValueStore;
 
-impl ReadableWasmClient {
+impl ReadOnlyKeyValueStore {
     async fn find_keys_by_prefix_load(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
         let future = system::FindKeys::new(key_prefix);
         future::poll_fn(|_context| future.poll().into()).await
@@ -57,7 +58,7 @@ impl ReadableWasmClient {
 }
 
 #[async_trait]
-impl KeyValueStoreClient for ReadableWasmClient {
+impl KeyValueStoreClient for ReadOnlyKeyValueStore {
     type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -89,7 +90,7 @@ impl KeyValueStoreClient for ReadableWasmClient {
     }
 }
 
-pub type ReadableWasmContext = ContextFromDb<(), ReadableWasmClient>;
+pub type ReadableWasmContext = ContextFromDb<(), ReadOnlyKeyValueStore>;
 
 pub trait ReadableWasmContextExt {
     fn new() -> Self;
