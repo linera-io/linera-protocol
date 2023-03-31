@@ -3,7 +3,6 @@
 
 pub mod base;
 pub mod contract;
-mod ensure;
 mod exported_future;
 mod extensions;
 mod log;
@@ -25,6 +24,7 @@ pub use self::{
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
 };
+pub use linera_base::ensure;
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 
