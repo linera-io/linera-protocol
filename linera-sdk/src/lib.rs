@@ -130,6 +130,7 @@ pub struct EffectContext {
     pub effect_id: EffectId,
 }
 
+/// The context of the execution of an application's cross-application call or session call handler.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CalleeContext {
     /// The current chain id.
