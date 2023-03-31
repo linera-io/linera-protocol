@@ -12,16 +12,16 @@ use fungible::{
 };
 use linera_sdk::{
     base::{Amount, ApplicationId, Owner, SessionId},
-    contract::{system_api, system_api::WasmContext},
+    contract::{system_api, system_api::ViewStorageContext},
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
     OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
 use thiserror::Error;
 
-linera_sdk::contract!(FungibleToken<WasmContext>);
+linera_sdk::contract!(FungibleToken<ViewStorageContext>);
 
 #[async_trait]
-impl Contract for FungibleToken<WasmContext> {
+impl Contract for FungibleToken<ViewStorageContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 
@@ -119,7 +119,7 @@ impl Contract for FungibleToken<WasmContext> {
     }
 }
 
-impl FungibleToken<WasmContext> {
+impl FungibleToken<ViewStorageContext> {
     /// Verifies that a transfer is authenticated for this local account.
     fn check_account_authentication(
         authenticated_application_id: Option<ApplicationId>,

@@ -10,7 +10,7 @@
 use crate::{
     contract::{
         self,
-        system_api::{self, WasmContext},
+        system_api::{self, ViewStorageContext},
     },
     ApplicationCallResult, Contract, ContractLogger, ExecutionResult, ExportedFuture,
     SessionCallResult, SessionId, SimpleStateStorage, ViewStateStorage,
@@ -102,7 +102,7 @@ where
 #[async_trait]
 impl<Application> ContractStateStorage<Application> for ViewStateStorage<Application>
 where
-    Application: Contract + RootView<WasmContext> + Send + 'static,
+    Application: Contract + RootView<ViewStorageContext> + Send + 'static,
 {
     async fn load_and_lock() -> Application {
         system_api::load_and_lock_view()

@@ -9,16 +9,16 @@ use self::state::ReentrantCounter;
 use async_trait::async_trait;
 use linera_sdk::{
     base::SessionId,
-    contract::system_api::{self, WasmContext},
+    contract::system_api::{self, ViewStorageContext},
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
     OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
 use thiserror::Error;
 
-linera_sdk::contract!(ReentrantCounter<WasmContext>);
+linera_sdk::contract!(ReentrantCounter<ViewStorageContext>);
 
 #[async_trait]
-impl Contract for ReentrantCounter<WasmContext> {
+impl Contract for ReentrantCounter<ViewStorageContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 

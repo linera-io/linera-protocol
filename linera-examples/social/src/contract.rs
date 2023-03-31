@@ -8,7 +8,7 @@ mod state;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{ChannelName, Destination, SessionId},
-    contract::system_api::{self, WasmContext},
+    contract::system_api::{self, ViewStorageContext},
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
     OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
@@ -22,7 +22,7 @@ const POSTS_CHANNEL_NAME: &[u8] = b"posts";
 /// The number of recent posts sent in each cross-chain message.
 const RECENT_POSTS: usize = 10;
 
-linera_sdk::contract!(Social<WasmContext>);
+linera_sdk::contract!(Social<ViewStorageContext>);
 
 #[async_trait]
 impl<C> Contract for Social<C>

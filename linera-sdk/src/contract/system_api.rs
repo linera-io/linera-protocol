@@ -119,10 +119,12 @@ impl KeyValueStoreClient for KeyValueStore {
     }
 }
 
-pub type WasmContext = ContextFromDb<(), KeyValueStore>;
+/// Implementation of [`linera_views::common::Context`] that uses the [`KeyValueStore`] to
+/// allow views to store data in the storage layer provided to Linera applications.
+pub type ViewStorageContext = ContextFromDb<(), KeyValueStore>;
 
 /// Load the contract state and lock it for writes.
-pub async fn load_and_lock_view<State: View<WasmContext>>() -> Option<State> {
+pub async fn load_and_lock_view<State: View<ViewStorageContext>>() -> Option<State> {
     let future = system::Lock::new();
     if future::poll_fn(|_context| future.poll().into()).await {
         Some(load_view_using::<State>().await)
@@ -132,14 +134,14 @@ pub async fn load_and_lock_view<State: View<WasmContext>>() -> Option<State> {
 }
 
 /// Helper function to load the contract state or create a new one if it doesn't exist.
-pub async fn load_view_using<State: View<WasmContext>>() -> State {
-    let context = WasmContext::default();
+pub async fn load_view_using<State: View<ViewStorageContext>>() -> State {
+    let context = ViewStorageContext::default();
     let r = State::load(context).await;
     r.expect("Failed to load contract state")
 }
 
 /// Save the contract state and unlock it.
-pub async fn store_and_unlock_view<State: RootView<WasmContext>>(mut state: State) {
+pub async fn store_and_unlock_view<State: RootView<ViewStorageContext>>(mut state: State) {
     state.save().await.expect("save operation failed");
 }
 

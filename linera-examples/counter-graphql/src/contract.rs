@@ -9,15 +9,15 @@ use self::state::Counter;
 use crate::state::CounterOperation;
 use async_trait::async_trait;
 use linera_sdk::{
-    base::SessionId, contract::system_api::WasmContext, ApplicationCallResult, CalleeContext,
-    Contract, EffectContext, ExecutionResult, OperationContext, Session, SessionCallResult,
-    ViewStateStorage,
+    base::SessionId, contract::system_api::ViewStorageContext, ApplicationCallResult,
+    CalleeContext, Contract, EffectContext, ExecutionResult, OperationContext, Session,
+    SessionCallResult, ViewStateStorage,
 };
 use linera_views::{common::Context, views::ViewError};
 use std::num::ParseIntError;
 use thiserror::Error;
 
-linera_sdk::contract!(Counter<WasmContext>);
+linera_sdk::contract!(Counter<ViewStorageContext>);
 
 #[async_trait]
 impl<C> Contract for Counter<C>

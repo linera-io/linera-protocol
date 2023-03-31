@@ -10,7 +10,7 @@ use crowd_funding::{ApplicationCall, Operation};
 use fungible::{Account, AccountOwner, Destination};
 use linera_sdk::{
     base::{Amount, SessionId},
-    contract::{system_api, system_api::WasmContext},
+    contract::{system_api, system_api::ViewStorageContext},
     ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
     FromBcsBytes, OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
@@ -18,10 +18,10 @@ use linera_views::views::View;
 use state::{CrowdFunding, Status};
 use thiserror::Error;
 
-linera_sdk::contract!(CrowdFunding<WasmContext>);
+linera_sdk::contract!(CrowdFunding<ViewStorageContext>);
 
 #[async_trait]
-impl Contract for CrowdFunding<WasmContext> {
+impl Contract for CrowdFunding<ViewStorageContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 
@@ -105,7 +105,7 @@ impl Contract for CrowdFunding<WasmContext> {
     }
 }
 
-impl CrowdFunding<WasmContext> {
+impl CrowdFunding<ViewStorageContext> {
     /// Adds a pledge from a transfer.
     async fn execute_pledge_with_transfer(
         &mut self,
