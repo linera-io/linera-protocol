@@ -82,8 +82,8 @@ pub struct UnorderedBatch {
 }
 
 impl UnorderedBatch {
-    /// From an `UnorderedBatch`, create a [`SimpleUnorderedBatch`] that does not contain the `key_prefix_deletions`
-    /// This requires accessing the database to eliminate them.
+    /// From an `UnorderedBatch`, creates a [`SimpleUnorderedBatch`] that does not contain the
+    /// `key_prefix_deletions`. This requires accessing the database to eliminate them.
     pub async fn expand_delete_prefixes<DB: DeletePrefixExpander>(
         self,
         db: &DB,
