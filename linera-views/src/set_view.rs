@@ -105,7 +105,7 @@ where
     C: Context,
     ViewError: From<C::Error>,
 {
-    /// Set or insert a value.
+    /// Insert a value. If already present then it has no effect.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_test_context, set_view::ByteSetView};
@@ -121,7 +121,7 @@ where
         self.updates.insert(short_key, Update::Set(()));
     }
 
-    /// Remove a value from the set. If absent then no effect.
+    /// Removes a value from the set. If absent then no effect.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_test_context, set_view::ByteSetView};
@@ -152,7 +152,7 @@ where
     C: Context,
     ViewError: From<C::Error>,
 {
-    /// Return true if the given index exists in the set.
+    /// Returns true if the given index exists in the set.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_test_context, set_view::ByteSetView};
@@ -188,7 +188,7 @@ where
     C: Context,
     ViewError: From<C::Error>,
 {
-    /// Return the list of keys in the set.
+    /// Returns the list of keys in the set.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_test_context, set_view::ByteSetView};
@@ -317,7 +317,7 @@ where
     }
 }
 
-/// A ['View'] implementing the set functionality with the index I being a non-trivial type
+/// A ['View'] implementing the set functionality with the index I being a non-trivial type.
 #[derive(Debug)]
 pub struct SetView<C, I> {
     set: ByteSetView<C>,
@@ -366,7 +366,7 @@ where
     ViewError: From<C::Error>,
     I: Serialize,
 {
-    /// Set or insert a value.
+    /// Inserts a value. If already present then no effect.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -388,7 +388,7 @@ where
         Ok(())
     }
 
-    /// Remove a value.
+    /// Removes a value. If absent then nothing is done.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_test_context, set_view::SetView};
@@ -409,7 +409,7 @@ where
         Ok(())
     }
 
-    /// Obtain the extra data.
+    /// Obtains the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.set.extra()
     }
@@ -421,7 +421,7 @@ where
     ViewError: From<C::Error>,
     I: Serialize,
 {
-    /// Return true if the given index exists in the set.
+    /// Returns true if the given index exists in the set.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_test_context, set_view::SetView};
@@ -449,7 +449,7 @@ where
     ViewError: From<C::Error>,
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
 {
-    /// Return the list of indices in the set.
+    /// Returns the list of indices in the set.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_test_context, set_view::SetView};
@@ -555,7 +555,7 @@ where
     }
 }
 
-/// A ['View'] implementing the set functionality with the index I being a non-trivial type
+/// A ['View'] implementing the set functionality with the index I being a non-trivial type.
 #[derive(Debug)]
 pub struct CustomSetView<C, I> {
     set: ByteSetView<C>,
@@ -604,7 +604,7 @@ where
     ViewError: From<C::Error>,
     I: CustomSerialize,
 {
-    /// Set or insert a value.
+    /// Inserts a value. If present then it has no effect.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -626,7 +626,7 @@ where
         Ok(())
     }
 
-    /// Remove a value. If absent then nothing is done.
+    /// Removes a value. If absent then nothing is done.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -648,7 +648,7 @@ where
         Ok(())
     }
 
-    /// Obtain the extra data.
+    /// Obtains the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.set.extra()
     }
@@ -660,7 +660,7 @@ where
     ViewError: From<C::Error>,
     I: CustomSerialize,
 {
-    /// Return true if the given index exists in the set.
+    /// Returns true if the given index exists in the set.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -689,7 +689,7 @@ where
     ViewError: From<C::Error>,
     I: Sync + Clone + Send + CustomSerialize,
 {
-    /// Return the list of indices in the set.
+    /// Returns the list of indices in the set.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;

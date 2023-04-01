@@ -10,38 +10,38 @@
 /// The definition of the batches for writing in the datatbase.
 pub mod batch;
 
-/// The definitions used for the memory/rocksdb/dynamo_db
+/// The definitions used for the memory/rocksdb/dynamo_db.
 pub mod common;
 
 /// The definition of the `View` and related traits.
 pub mod views;
 
-/// The lru caching
+/// The LRU (least recently used) caching.
 pub mod lru_caching;
 
-/// The `RegisterView` allows to implement a register for a single value
+/// The `RegisterView` allows to implement a register for a single value.
 pub mod register_view;
 
-/// The `LogView` implements a log list that can be pushed
+/// The `LogView` implements a log list that can be pushed.
 pub mod log_view;
 
-/// The `QueueView` implements a queue that can pushed_backed and deleted on the front
+/// The `QueueView` implements a queue that can pushed_backed and deleted on the front.
 pub mod queue_view;
 
-/// The `MapView` implements a map with ordered keys
+/// The `MapView` implements a map with ordered keys.
 pub mod map_view;
 
-/// The `SetView` implements a set with ordered entries
+/// The `SetView` implements a set with ordered entries.
 pub mod set_view;
 
-/// The `CollectionView` implements a map structure whose keys are ordered and the values are views
+/// The `CollectionView` implements a map structure whose keys are ordered and the values are views.
 pub mod collection_view;
 
-/// The `ReentrantCollectionView` implements a map structure whose keys are ordered and the values are views with concurrent access
+/// The `ReentrantCollectionView` implements a map structure whose keys are ordered and the values are views with concurrent access.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod reentrant_collection_view;
 
-/// The implementation of a key value store view
+/// The implementation of a key value store view.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod key_value_store_view;
 
@@ -60,7 +60,7 @@ pub mod dynamo_db;
 #[cfg(feature = "aws")]
 pub mod localstack;
 
-/// Wrapping a view to compute a hash
+/// Wrapping a view to compute a hash.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod hashable_wrapper;
 
@@ -69,7 +69,7 @@ pub mod hashable_wrapper;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod test_utils;
 
-/// Macros used for the library
+/// Macros used for the library.
 #[doc(hidden)]
 pub use {async_trait::async_trait, generic_array, serde, sha3};
 

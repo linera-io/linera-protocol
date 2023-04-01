@@ -32,26 +32,26 @@ use std::{
 
 /// A write operation as requested by a view when it needs to persist staged changes.
 /// There are 3 possibilities for the batch:
-/// * Deletion of a specific key
-/// * Deletion of all keys matching a specific prefix
+/// * Deletion of a specific key.
+/// * Deletion of all keys matching a specific prefix.
 /// * Insertion or replacement of a key with a value.
 #[derive(Debug)]
 pub enum WriteOperation {
     /// Delete the given key.
     Delete {
-        /// The key that will be deleted
+        /// The key that will be deleted.
         key: Vec<u8>,
     },
     /// Delete all the keys matching the given prefix.
     DeletePrefix {
-        /// The prefix of the keys to be deleted
+        /// The prefix of the keys to be deleted.
         key_prefix: Vec<u8>,
     },
     /// Set or replace the value of a given key.
     Put {
-        /// The key to be inserted or replaced
+        /// The key to be inserted or replaced.
         key: Vec<u8>,
-        /// The value to be inserted on the key
+        /// The value to be inserted on the key.
         value: Vec<u8>,
     },
 }
@@ -59,11 +59,11 @@ pub enum WriteOperation {
 /// A batch of writes inside a transaction.
 #[derive(Default)]
 pub struct Batch {
-    /// The entries of the batch to be consumed when processed
+    /// The entries of the batch to be consumed when processed.
     pub operations: Vec<WriteOperation>,
 }
 
-/// Unordered list of deletes and puts being written
+/// Unordered list of deletes and puts being written.
 #[derive(Default, Serialize, Deserialize)]
 pub struct SimpleUnorderedBatch {
     /// list of deletes unordered
@@ -72,12 +72,12 @@ pub struct SimpleUnorderedBatch {
     pub insertions: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
-/// An unordered batch of deletes/puts and a collection of key prefix deletions
+/// An unordered batch of deletes/puts and a collection of key prefix deletions.
 #[derive(Default)]
 pub struct UnorderedBatch {
-    /// key prefix deletions
+    /// key prefix deletions.
     pub key_prefix_deletions: Vec<Vec<u8>>,
-    /// The delete and lists
+    /// The delete and lists.
     pub simple_unordered_batch: SimpleUnorderedBatch,
 }
 
@@ -123,12 +123,12 @@ fn is_prefix_matched(key_prefix_set: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
 }
 
 impl Batch {
-    /// Create an empty batch
+    /// Creates an empty batch.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// building a batch from a function
+    /// Builds a batch from a builder function.
     pub async fn build<F>(builder: F) -> Result<Self, ViewError>
     where
         F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>> + Send + Sync,
@@ -208,7 +208,7 @@ impl Batch {
         }
     }
 
-    /// Inserts the insertion of a key-value pair into the batch with a serializable value
+    /// Inserts the insertion of a `(key,value)` pair into the batch with a serializable value.
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
@@ -225,7 +225,7 @@ impl Batch {
         Ok(())
     }
 
-    /// Insert the insertion of a `(key,value)` pair into the batch with value a vector of u8
+    /// Inserts the insertion of a `(key,value)` pair into the batch with value a vector of `u8`.
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
@@ -236,7 +236,7 @@ impl Batch {
         self.operations.push(WriteOperation::Put { key, value });
     }
 
-    /// Insert the deletion of a `key` into the batch
+    /// Inserts the deletion of a `key` into the batch.
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
@@ -247,7 +247,7 @@ impl Batch {
         self.operations.push(WriteOperation::Delete { key });
     }
 
-    /// Insert the deletion of a `key_prefix` into the batch
+    /// Inserts the deletion of a `key_prefix` into the batch.
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
@@ -266,9 +266,9 @@ impl Batch {
 /// by a vector of the keys to be removed.
 #[async_trait]
 pub trait DeletePrefixExpander {
-    /// The error type that can happen when expanding the key_prefix
+    /// The error type that can happen when expanding the key_prefix.
     type Error: Debug;
-    /// Return the list of keys to be appended to the list.
+    /// Returns the list of keys to be appended to the list.
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 }
 

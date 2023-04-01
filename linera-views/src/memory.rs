@@ -23,7 +23,7 @@ pub type MemoryClient = Arc<RwLock<MutexGuardArc<MemoryStoreMap>>>;
 pub type MemoryContext<E> = ContextFromDb<E, MemoryClient>;
 
 impl<E> MemoryContext<E> {
-    /// Create a [`MemoryContext`]
+    /// Create a [`MemoryContext`].
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>, extra: E) -> Self {
         Self {
             db: Arc::new(RwLock::new(guard)),
@@ -110,10 +110,10 @@ impl KeyValueStoreClient for MemoryClient {
     }
 }
 
-/// The error type for [`MemoryContext`]
+/// The error type for [`MemoryContext`].
 #[derive(Error, Debug)]
 pub enum MemoryContextError {
-    /// Serialization error with BCS
+    /// Serialization error with BCS.
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
 }

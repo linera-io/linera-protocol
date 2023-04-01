@@ -53,11 +53,11 @@ impl<'a, W> std::ops::Deref for ReadGuardedView<'a, W> {
 /// collection is stored inside the collection).
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for specifying an index and serves to indicate the existence of an entry in the collection
+    /// Prefix for specifying an index and serves to indicate the existence of an entry in the collection.
     Index = MIN_VIEW_TAG,
     /// Prefix for specifying as the prefix for the sub-view.
     Subview,
-    /// Prefix for the hash value
+    /// Prefix for the hash value.
     Hash,
 }
 
@@ -232,7 +232,7 @@ where
         }
     }
 
-    /// Mark the entry so that it is removed in the next flush
+    /// Marks the entry so that it is removed in the next flush.
     pub async fn reset_entry_to_default(&mut self, short_key: Vec<u8>) -> Result<(), ViewError> {
         *self.hash.get_mut() = None;
         let view = self.load_entry_mut(short_key).await?;
@@ -240,7 +240,7 @@ where
         Ok(())
     }
 
-    /// Mark the entry so that it is removed in the next flush
+    /// Marks the entry so that it is removed in the next flush.
     pub fn remove_entry(&mut self, short_key: Vec<u8>) -> Result<(), ViewError> {
         *self.hash.get_mut() = None;
         if self.was_cleared {
@@ -359,7 +359,7 @@ where
         .await
     }
 
-    /// Return the list of indices in the collection.
+    /// Returns the list of indices in the collection.
     pub async fn keys(&self) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut keys = Vec::new();
         self.for_each_key(|key| {
@@ -509,7 +509,7 @@ where
         self.collection.try_load_entry(short_key).await
     }
 
-    /// Mark the entry so that it is removed in the next flush
+    /// Marks the entry so that it is removed in the next flush.
     pub async fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
@@ -519,7 +519,7 @@ where
         self.collection.reset_entry_to_default(short_key).await
     }
 
-    /// Mark the entry so that it is removed in the next flush
+    /// Marks the entry so that it is removed in the next flush.
     pub fn remove_entry<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
@@ -542,7 +542,7 @@ where
     I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
     W: View<C> + Sync,
 {
-    /// Return the list of indices in the collection.
+    /// Returns the list of indices in the collection.
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
         self.for_each_index(|index: I| {
@@ -612,7 +612,7 @@ where
     }
 }
 
-/// A MapView that serialize the indices
+/// A MapView that serialize the indices.
 #[derive(Debug)]
 pub struct CustomCollectionView<C, I, W> {
     collection: ByteCollectionView<C, W>,
@@ -696,7 +696,7 @@ where
         self.collection.try_load_entry(short_key).await
     }
 
-    /// Mark the entry so that it is removed in the next flush
+    /// Marks the entry so that it is removed in the next flush.
     pub async fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
@@ -706,7 +706,7 @@ where
         self.collection.reset_entry_to_default(short_key).await
     }
 
-    /// Mark the entry so that it is removed in the next flush
+    /// Marks the entry so that it is removed in the next flush.
     pub fn remove_entry<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
@@ -729,7 +729,7 @@ where
     I: Send + Debug + CustomSerialize,
     W: View<C> + Sync,
 {
-    /// Return the list of indices in the collection.
+    /// Returns the list of indices in the collection.
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
         self.for_each_index(|index: I| {

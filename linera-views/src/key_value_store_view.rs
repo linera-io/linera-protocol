@@ -39,13 +39,13 @@ use {
 /// Key tags to create the sub-keys of a KeyValueStoreView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for the indices of the view
+    /// Prefix for the indices of the view.
     Index = MIN_VIEW_TAG,
-    /// Prefix for the hash
+    /// Prefix for the hash.
     Hash,
 }
 
-/// A view that represents the function of KeyValueStoreClient (though not KeyValueStoreClient)
+/// A view that represents the function of KeyValueStoreClient (though not KeyValueStoreClient).
 ///
 /// Comment on the data set:
 /// In order to work, the view needs to store the updates and deleted_prefixes.
@@ -154,7 +154,7 @@ where
     ViewError: From<C::Error>,
 {
     /// Iterates over all indices. If the function f returns false, then the loop
-    /// prematurely ends
+    /// prematurely ends.
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
@@ -281,7 +281,7 @@ where
         .await
     }
 
-    /// Return the list of indices. The order is stable, yet not specified.
+    /// Returns the list of indices. The order is stable, yet not specified.
     pub async fn indices(&self) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut indices = Vec::new();
         self.for_each_index(|index| {
@@ -292,7 +292,7 @@ where
         Ok(indices)
     }
 
-    /// Obtain the value at the given index, if any.
+    /// Obtains the value at the given index, if any.
     pub async fn get(&self, index: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         if let Some(update) = self.updates.get(index) {
             let value = match update {
@@ -309,13 +309,13 @@ where
         Ok(value)
     }
 
-    /// Set or insert a value.
+    /// Sets or inserts a value.
     pub fn insert(&mut self, index: Vec<u8>, value: Vec<u8>) {
         self.updates.insert(index, Update::Set(value));
         *self.hash.get_mut() = None;
     }
 
-    /// Remove a value.
+    /// Removes a value.
     pub fn remove(&mut self, index: Vec<u8>) {
         *self.hash.get_mut() = None;
         if self.was_cleared {
@@ -325,7 +325,7 @@ where
         }
     }
 
-    /// Delete a key_prefix
+    /// Deletes a key_prefix.
     pub fn delete_prefix(&mut self, key_prefix: Vec<u8>) {
         *self.hash.get_mut() = None;
         let key_list: Vec<Vec<u8>> = self
@@ -458,7 +458,7 @@ where
         Ok(key_values)
     }
 
-    /// Apply the given batch of `crate::common::WriteOperation`.
+    /// Applies the given batch of `crate::common::WriteOperation`.
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
         *self.hash.get_mut() = None;
         for op in batch.operations {

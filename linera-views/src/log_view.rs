@@ -17,11 +17,11 @@ use std::{
 /// Key tags to create the sub-keys of a LogView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for the storing of the variable stored_count
+    /// Prefix for the storing of the variable stored_count.
     Store = MIN_VIEW_TAG,
-    /// Prefix for the indices of the log
+    /// Prefix for the indices of the log.
     Index,
-    /// Prefix for the hash
+    /// Prefix for the hash.
     Hash,
 }
 
@@ -115,7 +115,7 @@ impl<C, T> LogView<C, T>
 where
     C: Context,
 {
-    /// Push a value to the end of the log.
+    /// Pushes a value to the end of the log.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -131,7 +131,7 @@ where
         *self.hash.get_mut() = None;
     }
 
-    /// Read the size of the log.
+    /// Reads the size of the log.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -152,7 +152,7 @@ where
         }
     }
 
-    /// Obtain the extra data.
+    /// Obtains the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
@@ -200,7 +200,7 @@ where
         Ok(values)
     }
 
-    /// Read the logged values in the given range (including staged ones).
+    /// Reads the logged values in the given range (including staged ones).
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;

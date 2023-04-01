@@ -37,7 +37,7 @@ struct LruPrefixCache {
 }
 
 impl<'a> LruPrefixCache {
-    /// Create a LruPrefixCache
+    /// Creates a LruPrefixCache.
     pub fn new(max_cache_size: usize) -> Self {
         Self {
             map: BTreeMap::new(),
@@ -46,7 +46,7 @@ impl<'a> LruPrefixCache {
         }
     }
 
-    /// Insert an entry into the cache.
+    /// Inserts an entry into the cache.
     pub fn insert(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
         match self.map.entry(key.clone()) {
             btree_map::Entry::Occupied(mut entry) => {
@@ -66,14 +66,14 @@ impl<'a> LruPrefixCache {
         }
     }
 
-    /// Mark cached keys that match the prefix as deleted. Importantly, this does not create new entries in the cache.
+    /// Marks cached keys that match the prefix as deleted. Importantly, this does not create new entries in the cache.
     pub fn delete_prefix(&mut self, key_prefix: &[u8]) {
         for (_, value) in self.map.range_mut(get_interval(key_prefix.to_vec())) {
             *value = None;
         }
     }
 
-    /// Get the entry from the key
+    /// Gets the entry from the key.
     pub fn query(&'a self, key: &'a [u8]) -> Option<&'a Option<Vec<u8>>> {
         self.map.get(key)
     }
@@ -147,7 +147,7 @@ impl<K> LruCachingKeyValueClient<K>
 where
     K: KeyValueStoreClient,
 {
-    /// Create a new Key Value Store Client that implements LRU caching
+    /// Creates a new Key Value Store Client that implements LRU caching.
     pub fn new(client: K, max_size: usize) -> Self {
         let lru_read_keys = Arc::new(Mutex::new(LruPrefixCache::new(max_size)));
         Self {
@@ -163,7 +163,7 @@ pub type LruCachingMemoryContext<E> = ContextFromDb<E, LruCachingKeyValueClient<
 
 #[cfg(any(test, feature = "test"))]
 impl<E> LruCachingMemoryContext<E> {
-    /// Create a [`crate::key_value_store_view::KeyValueStoreMemoryContext`].
+    /// Creates a [`crate::key_value_store_view::KeyValueStoreMemoryContext`].
     pub async fn new(
         guard: MutexGuardArc<MemoryStoreMap>,
         base_key: Vec<u8>,

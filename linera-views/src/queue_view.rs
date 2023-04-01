@@ -18,11 +18,11 @@ use std::{
 /// Key tags to create the sub-keys of a QueueView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for the storing of the variable stored_indices
+    /// Prefix for the storing of the variable stored_indices.
     Store = MIN_VIEW_TAG,
-    /// Prefix for the indices of the log
+    /// Prefix for the indices of the log.
     Index,
-    /// Prefix for the hash
+    /// Prefix for the hash.
     Hash,
 }
 
@@ -149,7 +149,7 @@ where
         Ok(self.context.read_key(&key).await?)
     }
 
-    /// Read the front value, if any.
+    /// Reads the front value, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -172,7 +172,7 @@ where
         Ok(value)
     }
 
-    /// Read the back value, if any.
+    /// Reads the back value, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -194,7 +194,7 @@ where
         Ok(value)
     }
 
-    /// Delete the front value, if any.
+    /// Deletes the front value, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -216,7 +216,7 @@ where
         }
     }
 
-    /// Push a value to the end of the queue.
+    /// Pushes a value to the end of the queue.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -234,7 +234,7 @@ where
         self.new_back_values.push_back(value);
     }
 
-    /// Read the size of the queue.
+    /// Reads the size of the queue.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -250,7 +250,7 @@ where
         self.stored_count() + self.new_back_values.len()
     }
 
-    /// Obtain the extra data.
+    /// Obtains the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
@@ -267,7 +267,7 @@ where
         Ok(values)
     }
 
-    /// Read the `count` next values in the queue (including staged ones).
+    /// Reads the `count` next values in the queue (including staged ones).
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -308,7 +308,7 @@ where
         Ok(values)
     }
 
-    /// Read the `count` last values in the queue (including staged ones).
+    /// Reads the `count` last values in the queue (including staged ones).
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -345,7 +345,7 @@ where
         Ok(values)
     }
 
-    /// Read all the elements
+    /// Reads all the elements
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -390,7 +390,7 @@ where
         Ok(())
     }
 
-    /// Get a mutable iterator on the entries of the queue
+    /// Gets a mutable iterator on the entries of the queue
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;

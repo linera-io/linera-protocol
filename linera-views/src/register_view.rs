@@ -111,7 +111,7 @@ where
         }
     }
 
-    /// Set the value in the register.
+    /// Sets the value in the register.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -129,7 +129,7 @@ where
         *self.hash.get_mut() = None;
     }
 
-    /// Obtain the extra data.
+    /// Obtains the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
@@ -140,7 +140,7 @@ where
     C: Context,
     T: Clone + Serialize,
 {
-    /// Obtain a mutable reference to the value in the register.
+    /// Obtains a mutable reference to the value in the register.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;

@@ -31,13 +31,13 @@ use std::{borrow::Borrow, collections::BTreeMap, fmt::Debug, marker::PhantomData
 /// Key tags to create the sub-keys of a MapView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for the indices of the view
+    /// Prefix for the indices of the view.
     Index = MIN_VIEW_TAG,
-    /// Prefix for the hash
+    /// Prefix for the hash.
     Hash,
 }
 
-/// A view that supports inserting and removing values indexed by `Vec<u8>`
+/// A view that supports inserting and removing values indexed by `Vec<u8>`.
 #[derive(Debug)]
 pub struct ByteMapView<C, V> {
     context: C,
@@ -123,7 +123,7 @@ where
     C: Context,
     ViewError: From<C::Error>,
 {
-    /// Insert a value into the set
+    /// Inserts or resets the value of a key of the map.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -140,7 +140,7 @@ where
         self.updates.insert(short_key, Update::Set(value));
     }
 
-    /// Remove a value.
+    /// Removes a value. If absent then nothing is done.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -161,7 +161,7 @@ where
         }
     }
 
-    /// Obtain the extra data.
+    /// Obtains the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
@@ -173,7 +173,7 @@ where
     ViewError: From<C::Error>,
     V: Clone + DeserializeOwned + 'static,
 {
-    /// Read the value at the given position, if any.
+    /// Reads the value at the given position, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -200,7 +200,7 @@ where
         Ok(self.context.read_key(&key).await?)
     }
 
-    /// load the value in updates if that is at all possible
+    /// Loads the value in updates if that is at all possible.
     async fn load_value(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
         if !self.was_cleared && !self.updates.contains_key(short_key) {
             let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
@@ -212,7 +212,7 @@ where
         Ok(())
     }
 
-    /// Obtain a mutable reference to a value at a given position if available
+    /// Obtainw a mutable reference to a value at a given position if available.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -340,7 +340,7 @@ where
         .await
     }
 
-    /// Return the list of keys of the map
+    /// Returns the list of keys of the map
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -486,7 +486,7 @@ where
     ViewError: From<C::Error>,
     V: Default + DeserializeOwned + 'static,
 {
-    /// Obtain a mutable reference to a value at a given position.
+    /// Obtains a mutable reference to a value at a given position.
     /// Default value if the index is missing.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -615,7 +615,7 @@ where
     ViewError: From<C::Error>,
     I: Serialize,
 {
-    /// Set or insert a value.
+    /// Inserts or resets a value at an index.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -637,7 +637,7 @@ where
         Ok(())
     }
 
-    /// Remove a value. If absent then the operation does nothing.
+    /// Removes a value. If absent then the operation does nothing.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -659,7 +659,7 @@ where
         Ok(())
     }
 
-    /// Obtain the extra data.
+    /// Obtains the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.map.extra()
     }
@@ -672,7 +672,7 @@ where
     I: Serialize,
     V: Clone + DeserializeOwned + 'static,
 {
-    /// Read the value at the given position, if any.
+    /// Reads the value at the given position, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -694,7 +694,7 @@ where
         self.map.get(short_key).await
     }
 
-    /// Obtain a mutable reference to a value at a given position if available
+    /// Obtains a mutable reference to a value at a given position if available
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -726,7 +726,7 @@ where
     I: Sync + Send + Serialize + DeserializeOwned,
     V: Sync + Serialize + DeserializeOwned + 'static,
 {
-    /// Return the list of indices in the map.
+    /// Returns the list of indices in the map.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -888,7 +888,7 @@ where
     I: Serialize,
     V: Default + DeserializeOwned + 'static,
 {
-    /// Obtain a mutable reference to a value at a given position.
+    /// Obtains a mutable reference to a value at a given position.
     /// Default value if the index is missing.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -980,7 +980,7 @@ where
     ViewError: From<C::Error>,
     I: CustomSerialize,
 {
-    /// Set or insert a value.
+    /// Insert or resets a value.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -1002,7 +1002,7 @@ where
         Ok(())
     }
 
-    /// Remove a value. If absent then this does not do anything.
+    /// Removes a value. If absent then this does not do anything.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -1024,7 +1024,7 @@ where
         Ok(())
     }
 
-    /// Obtain the extra data.
+    /// Obtains the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.map.extra()
     }
@@ -1037,7 +1037,7 @@ where
     I: CustomSerialize,
     V: Clone + DeserializeOwned + 'static,
 {
-    /// Read the value at the given position, if any.
+    /// Reads the value at the given position, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -1059,7 +1059,7 @@ where
         self.map.get(short_key).await
     }
 
-    /// Obtain a mutable reference to a value at a given position if available
+    /// Obtains a mutable reference to a value at a given position if available
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -1090,7 +1090,7 @@ where
     I: Sync + Send + CustomSerialize,
     V: Sync + Serialize + DeserializeOwned + 'static,
 {
-    /// Return the list of indices in the map.
+    /// Returns the list of indices in the map.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -1253,7 +1253,7 @@ where
     I: CustomSerialize,
     V: Default + DeserializeOwned + 'static,
 {
-    /// Obtain a mutable reference to a value at a given position.
+    /// Obtains a mutable reference to a value at a given position.
     /// Default value if the index is missing.
     /// ```rust
     /// # tokio_test::block_on(async {

@@ -36,7 +36,7 @@ pub(crate) enum Update<T> {
     Set(T),
 }
 
-/// The minimum value for the view tags. values in 0..MIN_VIEW_TAG are used for other purposes
+/// The minimum value for the view tags. Values in 0..MIN_VIEW_TAG are used for other purposes.
 pub(crate) const MIN_VIEW_TAG: u8 = 1;
 
 /// When wanting to find the entries in a BTreeMap with a specific prefix,
@@ -103,22 +103,22 @@ pub trait KeyValueStoreClient {
     /// Return type for key-value search operations.
     type KeyValues: KeyValueIterable<Self::Error>;
 
-    /// Retrieve a `Vec<u8>` from the database using the provided `key`
+    /// Retrieves a `Vec<u8>` from the database using the provided `key`.
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
-    /// Find the keys matching the prefix. The prefix is not included in the returned keys.
+    /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error>;
 
-    /// Find the key-value pairs matching the prefix. The prefix is not included in the returned keys.
+    /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error>;
 
-    /// Write the `batch` in the database with `base_key` the base key of the entries for the journal
+    /// Writes the `batch` in the database with `base_key` the base key of the entries for the journal.
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error>;
 
-    /// Read a single `key` and deserialize the result if present.
+    /// Reads a single `key` and deserialize the result if present.
     async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
     where
         Self::Error: From<bcs::Error>,
@@ -132,8 +132,8 @@ pub trait KeyValueStoreClient {
         }
     }
 
-    /// Clearing any journal entry that may remain.
-    /// The journal located at the `base_key` will be cleared if existing.
+    /// Clears any journal entry that may remain.
+    /// The journal is located at the `base_key`.
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error>;
 }
 
@@ -235,28 +235,28 @@ pub trait Context {
     /// Getter for the user provided data.
     fn extra(&self) -> &Self::Extra;
 
-    /// Getter for the address of the current entry (aka the base_key)
+    /// Getter for the address of the current entry (aka the base_key).
     fn base_key(&self) -> Vec<u8>;
 
-    /// Concatenate the base_key and tag
+    /// Concatenates the base_key and tag.
     fn base_tag(&self, tag: u8) -> Vec<u8>;
 
-    /// Concatenate the base_key, tag and index
+    /// Concatenates the base_key, tag and index.
     fn base_tag_index(&self, tag: u8, index: &[u8]) -> Vec<u8>;
 
-    /// Obtain the `Vec<u8>` key from the key by serialization and using the base_key
+    /// Obtains the `Vec<u8>` key from the key by serialization and using the base_key.
     fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
 
-    /// Obtain the `Vec<u8>` key from the key by serialization and using the `base_key`
+    /// Obtains the `Vec<u8>` key from the key by serialization and using the `base_key`.
     fn derive_tag_key<I: Serialize>(&self, tag: u8, index: &I) -> Result<Vec<u8>, Self::Error>;
 
-    /// Obtain the short `Vec<u8>` key from the key by serialization
+    /// Obtains the short `Vec<u8>` key from the key by serialization.
     fn derive_short_key<I: Serialize + ?Sized>(index: &I) -> Result<Vec<u8>, Self::Error>;
 
-    /// Deserialize `value_byte`.
+    /// Deserialize `bytes` into type `Item`.
     fn deserialize_value<Item: DeserializeOwned>(bytes: &[u8]) -> Result<Item, Self::Error>;
 
-    /// Retrieve a generic `Item` from the database using the provided `key` prefixed by the current
+    /// Retrieves a generic `Item` from the database using the provided `key` prefixed by the current
     /// context.
     /// The `Item` is deserialized using [`bcs`].
     async fn read_key<Item: DeserializeOwned>(
@@ -264,23 +264,23 @@ pub trait Context {
         key: &[u8],
     ) -> Result<Option<Item>, Self::Error>;
 
-    /// Retrieve a `Vec<u8>` from the database using the provided `key` prefixed by the current
+    /// Retrieves a `Vec<u8>` from the database using the provided `key` prefixed by the current
     /// context.
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
     /// Find keys matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error>;
 
-    /// Find the key-value pairs matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
+    /// Find the `(key,value)` pairs matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error>;
 
-    /// Apply the operations from the `batch`, persisting the changes.
+    /// Applies the operations from the `batch`, persisting the changes.
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
 
-    /// Obtain a similar [`Context`] implementation with a different base key.
+    /// Obtains a similar [`Context`] implementation with a different base key.
     fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self;
 }
 
@@ -303,7 +303,7 @@ where
     DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<DB::Error>,
 {
-    /// Create a context from db that also clears the journal before making it available
+    /// Creates a context from db that also clears the journal before making it available.
     pub async fn create(
         db: DB,
         base_key: Vec<u8>,
@@ -420,7 +420,7 @@ where
 }
 
 /// Sometimes we need a serialization that is different from the usual one and
-/// and for example preserves order.
+/// for example preserves order.
 /// The {to/from}_custom_bytes has to be coherent with the Borrow trait.
 pub trait CustomSerialize {
     /// Serializes the value

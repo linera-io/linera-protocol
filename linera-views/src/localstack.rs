@@ -9,7 +9,7 @@ use thiserror::Error;
 /// Name of the environment variable with the address to a LocalStack instance.
 pub const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
 
-/// Get the [`Endpoint`] to connect to a LocalStack instance.
+/// Gets the [`Endpoint`] to connect to a LocalStack instance.
 ///
 /// The endpoint must be configured through a [`LOCALSTACK_ENDPOINT`] environment variable.
 pub fn get_endpoint() -> Result<Endpoint, EndpointError> {
@@ -20,7 +20,7 @@ pub fn get_endpoint() -> Result<Endpoint, EndpointError> {
 /// Failure to get the LocalStack endpoint.
 #[derive(Debug, Error)]
 pub enum EndpointError {
-    /// The endpoint was missing for the {LOCALSTACK_ENDPOINT:?} environment variable
+    /// The endpoint was missing for the {LOCALSTACK_ENDPOINT:?} environment variable.
     #[error("Missing LocalStack endpoint address in {LOCALSTACK_ENDPOINT:?} environment variable")]
     MissingEndpoint(#[from] env::VarError),
 

@@ -140,7 +140,7 @@ impl KeyValueStoreClient for RocksdbClient {
 }
 
 impl<E: Clone + Send + Sync> RocksdbContext<E> {
-    /// Create a [`RocksdbContext`]
+    /// Creates a [`RocksdbContext`].
     pub fn new(db: RocksdbClient, base_key: Vec<u8>, extra: E) -> Self {
         Self {
             db,
@@ -153,15 +153,15 @@ impl<E: Clone + Send + Sync> RocksdbContext<E> {
 /// The error type for [`RocksdbContext`]
 #[derive(Error, Debug)]
 pub enum RocksdbContextError {
-    /// Tokio join error in Rocksdb
+    /// Tokio join error in Rocksdb.
     #[error("tokio join error: {0}")]
     TokioJoinError(#[from] tokio::task::JoinError),
 
-    /// Rocksdb error
+    /// Rocksdb error.
     #[error("Rocksdb error: {0}")]
     Rocksdb(#[from] rocksdb::Error),
 
-    /// BCS serialization error
+    /// BCS serialization error.
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
 }
