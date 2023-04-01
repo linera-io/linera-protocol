@@ -715,7 +715,9 @@ impl KeyValueStoreClient for DynamoDbClient {
     }
 }
 
-/// An implementation of [`Context`] based on [`DynamoDbClient`].
+/// An implementation of [`Context`][trait1] based on [`DynamoDbClient`].
+///
+/// [trait1]: crate::common::Context
 pub type DynamoDbContext<E> = ContextFromDb<E, DynamoDbClient>;
 
 impl<E> DynamoDbContext<E>
