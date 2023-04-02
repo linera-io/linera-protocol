@@ -1,49 +1,69 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! A set of functionalities for building batches to be written into the database.
+//! A batch can contain three kinds of operations on a key/value store:
+//! * Insertion of a key with an associated value
+//! * Deletion of a specific key
+//! * Deletion of all keys which contain a specified prefix
+//!
+//! The deletion using prefixes is generally but not always faster than deleting keys
+//! one by one. The only purpose of the batch is to write some transaction into the
+//! database.
+//!
+//! Note that normally users should not have to manipulate batches. The functionality
+//! is public because some other libraries require it. But the users using views should
+//! not have to deal with batches.
+
 use crate::{
-    common::{get_interval, Context, KeyIterable},
+    common::{Context, KeyIterable},
     memory::{MemoryContext, MemoryContextError},
     views::ViewError,
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
+
+use crate::common::get_interval;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
-    fmt::Debug,
     ops::Bound,
 };
 
 /// A write operation as requested by a view when it needs to persist staged changes.
+/// There are 3 possibilities for the batch:
+/// * Deletion of a specific key.
+/// * Deletion of all keys matching a specific prefix.
+/// * Insertion or replacement of a key with a value.
 #[derive(Debug)]
 pub enum WriteOperation {
     /// Delete the given key.
     Delete {
-        /// The key that will be deleted
+        /// The key that will be deleted.
         key: Vec<u8>,
     },
     /// Delete all the keys matching the given prefix.
     DeletePrefix {
-        /// The prefix of the keys to be deleted
+        /// The prefix of the keys to be deleted.
         key_prefix: Vec<u8>,
     },
-    /// Set the value of the given key.
+    /// Set or replace the value of a given key.
     Put {
-        /// The key to be inserted or replaced
+        /// The key to be inserted or replaced.
         key: Vec<u8>,
-        /// The value to be inserted on the key
+        /// The value to be inserted on the key.
         value: Vec<u8>,
     },
 }
 
-/// A batch of writes inside a transaction;
+/// A batch of writes inside a transaction.
 #[derive(Default)]
 pub struct Batch {
-    /// The entries of batch
+    /// The entries of the batch to be consumed when processed.
     pub operations: Vec<WriteOperation>,
 }
 
-/// Unordered list of deletes and puts being written
+/// Unordered list of deletes and puts being written.
 #[derive(Default, Serialize, Deserialize)]
 pub struct SimpleUnorderedBatch {
     /// list of deletes unordered
@@ -52,18 +72,19 @@ pub struct SimpleUnorderedBatch {
     pub insertions: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
-/// An unordered batch of deletes/puts and a collection of key prefix deletions
+/// An unordered batch of deletes/puts and a collection of key prefix deletions.
 #[derive(Default)]
 pub struct UnorderedBatch {
-    /// key prefix deletions
+    /// key prefix deletions.
     pub key_prefix_deletions: Vec<Vec<u8>>,
-    /// The delete and lists
+    /// The delete and lists.
     pub simple_unordered_batch: SimpleUnorderedBatch,
 }
 
 impl UnorderedBatch {
-    /// From an UnorderedBatch, create a SimpleUnorderedBatch that does not contain the key_prefixes
-    pub async fn eliminate_delete_prefixes<DB: DeletePrefixExpander>(
+    /// From an `UnorderedBatch`, creates a [`SimpleUnorderedBatch`] that does not contain the
+    /// `key_prefix_deletions`. This requires accessing the database to eliminate them.
+    pub async fn expand_delete_prefixes<DB: DeletePrefixExpander>(
         self,
         db: &DB,
     ) -> Result<SimpleUnorderedBatch, DB::Error> {
@@ -102,12 +123,12 @@ fn is_prefix_matched(key_prefix_set: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
 }
 
 impl Batch {
-    /// Create an empty batch
+    /// Creates an empty batch.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// building a batch from a function
+    /// Builds a batch from a builder function.
     pub async fn build<F>(builder: F) -> Result<Self, ViewError>
     where
         F: FnOnce(&mut Batch) -> futures::future::BoxFuture<Result<(), ViewError>> + Send + Sync,
@@ -117,9 +138,20 @@ impl Batch {
         Ok(batch)
     }
 
-    /// A key may appear multiple times in the batch
-    /// The construction of BatchWriteItem and TransactWriteItem for DynamoDb does
-    /// not allow this to happen.
+    /// Simplifies the batch by removing operations that are overwritten by others.
+    ///
+    /// A key may appear multiple times in the batch, as an insert, a delete
+    /// or matched by a delete prefix.
+    /// ```rust
+    /// # use linera_views::batch::Batch;
+    ///   let mut batch = Batch::new();
+    ///   batch.put_key_value(vec![0,1], &(34 as u128));
+    ///   batch.delete_key(vec![0,1]);
+    ///   let unord_batch = batch.simplify();
+    ///   assert_eq!(unord_batch.key_prefix_deletions.len(), 0);
+    ///   assert_eq!(unord_batch.simple_unordered_batch.insertions.len(), 0);
+    ///   assert_eq!(unord_batch.simple_unordered_batch.deletions.len(), 1);
+    /// ```
     pub fn simplify(self) -> UnorderedBatch {
         let mut delete_and_insert_map = BTreeMap::new();
         let mut delete_prefix_set = BTreeSet::new();
@@ -176,7 +208,12 @@ impl Batch {
         }
     }
 
-    /// Insert a Put { key, value } into the batch
+    /// Inserts the insertion of a `(key,value)` pair into the batch with a serializable value.
+    /// ```rust
+    /// # use linera_views::batch::Batch;
+    ///   let mut batch = Batch::new();
+    ///   batch.put_key_value(vec![0,1], &(34 as u128));
+    /// ```
     #[inline]
     pub fn put_key_value(
         &mut self,
@@ -188,19 +225,34 @@ impl Batch {
         Ok(())
     }
 
-    /// Insert a Put { key, value } into the batch
+    /// Inserts the insertion of a `(key,value)` pair into the batch with value a vector of `u8`.
+    /// ```rust
+    /// # use linera_views::batch::Batch;
+    ///   let mut batch = Batch::new();
+    ///   batch.put_key_value_bytes(vec![0,1], vec![3,4,5]);
+    /// ```
     #[inline]
     pub fn put_key_value_bytes(&mut self, key: Vec<u8>, value: Vec<u8>) {
         self.operations.push(WriteOperation::Put { key, value });
     }
 
-    /// Insert a Delete { key } into the batch
+    /// Inserts the deletion of a `key` into the batch.
+    /// ```rust
+    /// # use linera_views::batch::Batch;
+    ///   let mut batch = Batch::new();
+    ///   batch.delete_key(vec![0,1]);
+    /// ```
     #[inline]
     pub fn delete_key(&mut self, key: Vec<u8>) {
         self.operations.push(WriteOperation::Delete { key });
     }
 
-    /// Insert a DeletePrefix { key_prefix } into the batch
+    /// Inserts the deletion of a `key_prefix` into the batch.
+    /// ```rust
+    /// # use linera_views::batch::Batch;
+    ///   let mut batch = Batch::new();
+    ///   batch.delete_key_prefix(vec![0,1]);
+    /// ```
     #[inline]
     pub fn delete_key_prefix(&mut self, key_prefix: Vec<u8>) {
         self.operations
@@ -209,11 +261,14 @@ impl Batch {
 }
 
 /// A trait to expand delete_prefix operations.
+/// Certain databases (e.g. DynamoDB) do not support the deletion by prefix.
+/// Thus we need to access the databases in order to replace a delete prefix
+/// by a vector of the keys to be removed.
 #[async_trait]
 pub trait DeletePrefixExpander {
-    /// The error type that can happen when expanding the key_prefix
+    /// The error type that can happen when expanding the key_prefix.
     type Error: Debug;
-    /// Return the list of keys to be appended to the list.
+    /// Returns the list of keys to be appended to the list.
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 }
 
@@ -276,7 +331,7 @@ mod tests {
         batch.delete_key_prefix(vec![1, 2]);
         let unordered_batch = batch.simplify();
         let simple_unordered_batch = unordered_batch
-            .eliminate_delete_prefixes(&context)
+            .expand_delete_prefixes(&context)
             .await
             .unwrap();
         assert_eq!(

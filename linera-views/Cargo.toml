@@ -37,6 +37,7 @@ aws-sdk-dynamodb = { version = "0.14.0", optional = true }
 aws-sdk-s3 = { version = "0.14.0", optional = true }
 aws-smithy-http = { version = "0.44.0", optional = true }
 aws-types = { version = "0.14.0", optional = true }
+tokio-test = "0.4.2"
 
 [dev-dependencies]
 linera-views = { path = ".", features = ["test"] }

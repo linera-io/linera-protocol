@@ -17,11 +17,11 @@ use std::{
 /// Key tags to create the sub-keys of a LogView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for the storing of the variable stored_count
+    /// Prefix for the storing of the variable stored_count.
     Store = MIN_VIEW_TAG,
-    /// Prefix for the indices of the log
+    /// Prefix for the indices of the log.
     Index,
-    /// Prefix for the hash
+    /// Prefix for the hash.
     Hash,
 }
 
@@ -115,13 +115,35 @@ impl<C, T> LogView<C, T>
 where
     C: Context,
 {
-    /// Push a value to the end of the log.
+    /// Pushes a value to the end of the log.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::log_view::LogView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut log = LogView::load(context).await.unwrap();
+    ///   log.push(34);
+    /// # })
+    /// ```
     pub fn push(&mut self, value: T) {
         self.new_values.push(value);
         *self.hash.get_mut() = None;
     }
 
-    /// Read the size of the log.
+    /// Reads the size of the log.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::log_view::LogView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut log = LogView::load(context).await.unwrap();
+    ///   log.push(34);
+    ///   log.push(42);
+    ///   assert_eq!(log.count(), 2);
+    /// # })
+    /// ```
     pub fn count(&self) -> usize {
         if self.was_cleared {
             self.new_values.len()
@@ -130,7 +152,7 @@ where
         }
     }
 
-    /// Obtain the extra data.
+    /// Obtains the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
@@ -142,7 +164,18 @@ where
     ViewError: From<C::Error>,
     T: Clone + DeserializeOwned + Serialize,
 {
-    /// Read the logged values in the given range (including staged ones).
+    /// Reads the logged value with the given index (including staged ones).
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::log_view::LogView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut log = LogView::load(context).await.unwrap();
+    ///   log.push(34);
+    ///   assert_eq!(log.get(0).await.unwrap(), Some(34));
+    /// # })
+    /// ```
     pub async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
         let value = if self.was_cleared {
             self.new_values.get(index).cloned()
@@ -166,7 +199,21 @@ where
         }
         Ok(values)
     }
-    /// Read the logged values in the given range (including staged ones).
+
+    /// Reads the logged values in the given range (including staged ones).
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::log_view::LogView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut log = LogView::load(context).await.unwrap();
+    ///   log.push(34);
+    ///   log.push(42);
+    ///   log.push(56);
+    ///   assert_eq!(log.read(0..2).await.unwrap(), vec![34,42]);
+    /// # })
+    /// ```
     pub async fn read<R>(&self, range: R) -> Result<Vec<T>, ViewError>
     where
         R: RangeBounds<usize>,

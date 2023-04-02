@@ -23,13 +23,13 @@ pub trait View<C>: Sized {
     /// Obtain a mutable reference to the internal context.
     fn context(&self) -> &C;
 
-    /// Create a view or a subview.
+    /// Creates a view or a subview.
     async fn load(context: C) -> Result<Self, ViewError>;
 
     /// Discard all pending changes. After that `flush` should have no effect to storage.
     fn rollback(&mut self);
 
-    /// Clear the view. That can be seen as resetting to default. In the case of a RegisterView
+    /// Clears the view. That can be seen as resetting to default. In the case of a RegisterView
     /// this means setting the value to T::default(). For LogView, QueueView, this leaves
     /// the range data to be left in the database.
     fn clear(&mut self);
@@ -55,25 +55,25 @@ pub enum ViewError {
     #[error("failed to serialize value to calculate its hash")]
     Serialization(#[from] bcs::Error),
 
-    /// We failed to acquire an entry in a CollectionView or a ReentrantCollectionView
+    /// We failed to acquire an entry in a CollectionView or a ReentrantCollectionView.
     #[error("trying to access a collection view or reentrant collection view while some entries are still being accessed")]
     CannotAcquireCollectionEntry,
 
-    /// Input output error
+    /// Input output error.
     #[error("IO error")]
     Io(#[from] std::io::Error),
 
-    /// An error happened while trying to lock
+    /// An error happened while trying to lock.
     #[cfg(not(target_arch = "wasm32"))]
     #[error("Failed to lock collection entry: {0}")]
     TryLockError(#[from] tokio::sync::TryLockError),
 
-    /// Tokio errors can happen while joining
+    /// Tokio errors can happen while joining.
     #[cfg(not(target_arch = "wasm32"))]
     #[error("Panic in sub-task: {0}")]
     TokioJoinError(#[from] tokio::task::JoinError),
 
-    /// Errors within the context can occur and are presented as ViewError
+    /// Errors within the context can occur and are presented as ViewError.
     #[error("Storage operation error in {backend}: {error}")]
     ContextError {
         /// backend can be e.g. RocksDb / AmazonDb / Memory / etc.
@@ -128,16 +128,16 @@ pub trait Hasher: Default + Write + Send + Sync + 'static {
     /// The output type.
     type Output: Debug + Clone + Eq + AsRef<[u8]> + 'static;
 
-    /// Finish the hashing process and return its output.
+    /// Finishes the hashing process and return its output.
     fn finalize(self) -> Self::Output;
 
-    /// Serialize a value with BCS and include it in the hash.
+    /// Serializes a value with BCS and include it in the hash.
     fn update_with_bcs_bytes(&mut self, value: &impl Serialize) -> Result<(), ViewError> {
         bcs::serialize_into(self, value)?;
         Ok(())
     }
 
-    /// Include bytes in the hash.
+    /// Includes bytes in the hash.
     fn update_with_bytes(&mut self, value: &[u8]) -> Result<(), ViewError> {
         self.write_all(value)?;
         Ok(())
@@ -155,10 +155,10 @@ impl Hasher for sha3::Sha3_256 {
 /// A [`View`] whose staged modifications can be saved in storage.
 #[async_trait]
 pub trait RootView<C>: View<C> {
-    /// Save the container view to a file
+    /// Saves the root view to the database context
     async fn save(&mut self) -> Result<(), ViewError>;
 
-    /// Delete the container view from the database
+    /// Deletes the root view to the database context
     async fn write_delete(self) -> Result<(), ViewError>;
 }
 

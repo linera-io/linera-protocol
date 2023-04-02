@@ -23,9 +23,9 @@ pub struct WrappedHashableContainerView<C, W, O> {
 /// Key tags to create the sub-keys of a MapView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for the indices of the view
+    /// Prefix for the indices of the view.
     Index = MIN_VIEW_TAG,
-    /// Prefix for the hash
+    /// Prefix for the hash.
     Hash,
 }
 
