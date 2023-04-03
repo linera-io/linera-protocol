@@ -35,7 +35,6 @@ use linera_execution::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
-use serde_json::Value;
 use std::{collections::BTreeMap, net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
@@ -479,30 +478,53 @@ where
     ViewError: From<S::ContextError>,
 {
     let graphql_res = user_application_query(application_id, service.clone(), req).await?;
-    let res_json = graphql_res.data.into_json()?;
-    let bytes = bytes_from_res(res_json).ok_or(NodeServiceError::MalformedApplicationResponse)?;
-    let operation = Operation::User {
-        application_id,
-        bytes,
-    };
+    let bcs_bytes_list = bytes_from_res(graphql_res.data);
+    if bcs_bytes_list.is_empty() {
+        return Err(NodeServiceError::MalformedApplicationResponse);
+    }
+    let operations = bcs_bytes_list
+        .into_iter()
+        .map(|bytes| Operation::User {
+            application_id,
+            bytes,
+        })
+        .collect();
 
     let mut client = service.0.client.lock().await;
     client.process_inbox().await?;
-    let certificate = client.execute_operation(operation).await?;
+    let certificate = client.execute_operations(operations).await?;
     let value = async_graphql::Value::from_json(serde_json::to_value(certificate)?)?;
     Ok(async_graphql::Response::new(value))
 }
 
 /// Extracts the underlying byte vector from a serialized GraphQL response
 /// from an application.
-fn bytes_from_res(json: Value) -> Option<Vec<u8>> {
-    Some(
-        json.get("executeOperation")?
-            .as_array()?
-            .iter()
-            .map(|v| v.as_u64().unwrap() as u8)
-            .collect(),
-    )
+fn bytes_from_res(data: async_graphql::Value) -> Vec<Vec<u8>> {
+    if let async_graphql::Value::Object(map) = data {
+        map.values()
+            .filter_map(|value| {
+                if let async_graphql::Value::List(list) = value {
+                    bytes_from_list(list)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    } else {
+        vec![]
+    }
+}
+
+fn bytes_from_list(list: &[async_graphql::Value]) -> Option<Vec<u8>> {
+    list.iter()
+        .map(|item| {
+            if let async_graphql::Value::Number(n) = item {
+                n.as_u64().map(|n| n as u8)
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 /// An HTML response constructing the GraphiQL web page.

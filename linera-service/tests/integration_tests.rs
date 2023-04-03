@@ -204,21 +204,49 @@ impl Client {
             .unwrap();
     }
 
-    async fn publish_application(&self, contract: PathBuf, service: PathBuf, arg: u64) {
-        self.client_run_with_storage()
-            .arg("publish")
-            .args([contract, service])
-            .arg(arg.to_string())
+    async fn run_command(command: &mut tokio::process::Command) -> Vec<u8> {
+        let output = command
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .spawn()
             .unwrap()
-            .wait()
+            .wait_with_output()
             .await
             .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "Command {:?} failed; stderr:\n{}\n(end stderr)",
+            command,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        output.stdout
     }
 
-    async fn run_node_service(&self) -> Child {
+    async fn publish_application<I, J>(
+        &self,
+        contract: PathBuf,
+        service: PathBuf,
+        arg: I,
+        publisher: J,
+    ) where
+        I: ToString,
+        J: Into<Option<ChainId>>,
+    {
+        Self::run_command(
+            self.client_run_with_storage()
+                .arg("publish")
+                .args([contract, service])
+                .arg(arg.to_string())
+                .args(publisher.into().iter().map(ChainId::to_string)),
+        )
+        .await;
+    }
+
+    async fn run_node_service<I: Into<Option<ChainId>>>(&self, chain_id: I) -> Child {
         self.client_run_with_storage()
             .arg("service")
+            .args(chain_id.into().as_ref().map(ChainId::to_string))
             .spawn()
             .unwrap()
     }
@@ -229,33 +257,29 @@ impl Client {
         if let Some(chain_id) = chain_id {
             command.arg(&chain_id.to_string());
         }
-        command.spawn().unwrap().wait().await.unwrap();
+        Self::run_command(&mut command).await;
     }
 
     async fn query_balance(&self, chain_id: ChainId) -> anyhow::Result<usize> {
-        let output = self
-            .client_run_with_storage()
-            .arg("query_balance")
-            .arg(&chain_id.to_string())
-            .stdout(Stdio::piped())
-            .spawn()?
-            .wait_with_output()
-            .await?;
-        let amount = String::from_utf8_lossy(output.stdout.as_slice()).to_string();
+        let stdout = Self::run_command(
+            self.client_run_with_storage()
+                .arg("query_balance")
+                .arg(&chain_id.to_string()),
+        )
+        .await;
+        let amount = String::from_utf8_lossy(stdout.as_slice()).to_string();
         Ok(amount.trim().parse()?)
     }
 
     async fn transfer(&self, amount: usize, from: ChainId, to: ChainId) {
-        self.client_run_with_storage()
-            .arg("transfer")
-            .arg(&amount.to_string())
-            .args(["--from", &from.to_string()])
-            .args(["--to", &to.to_string()])
-            .spawn()
-            .unwrap()
-            .wait()
-            .await
-            .unwrap();
+        Self::run_command(
+            self.client_run_with_storage()
+                .arg("transfer")
+                .arg(&amount.to_string())
+                .args(["--from", &from.to_string()])
+                .args(["--to", &to.to_string()]),
+        )
+        .await;
     }
 
     async fn benchmark(&self, max_in_flight: usize) {
@@ -283,13 +307,9 @@ impl Client {
             command.args(["--to-public-key", &owner.to_string()]);
         }
 
-        let output = command
-            .stdout(Stdio::piped())
-            .spawn()?
-            .wait_with_output()
-            .await?;
+        let stdout = Self::run_command(&mut command).await;
 
-        let as_string = String::from_utf8_lossy(output.stdout.as_slice());
+        let as_string = String::from_utf8_lossy(stdout.as_slice());
         let mut split = as_string.split('\n');
         let chain_id = ChainId::from_str(split.next().unwrap())?;
         let cert: Certificate = bcs::from_bytes(&hex::decode(split.next().unwrap())?)?;
@@ -307,39 +327,29 @@ impl Client {
 
     async fn set_validator(&self, name: &str, port: usize, votes: usize) {
         let address = format!("{}:127.0.0.1:{}", self.network.external_short(), port);
-        self.client_run_with_storage()
-            .arg("set_validator")
-            .args(["--name", name])
-            .args(["--address", &address])
-            .args(["--votes", &votes.to_string()])
-            .spawn()
-            .unwrap()
-            .wait()
-            .await
-            .unwrap();
+        Self::run_command(
+            self.client_run_with_storage()
+                .arg("set_validator")
+                .args(["--name", name])
+                .args(["--address", &address])
+                .args(["--votes", &votes.to_string()]),
+        )
+        .await;
     }
 
     async fn remove_validator(&self, name: &str) {
-        self.client_run_with_storage()
-            .arg("remove_validator")
-            .args(["--name", name])
-            .spawn()
-            .unwrap()
-            .wait()
-            .await
-            .unwrap();
+        Self::run_command(
+            self.client_run_with_storage()
+                .arg("remove_validator")
+                .args(["--name", name]),
+        )
+        .await;
     }
 
     async fn keygen(&self) -> anyhow::Result<Owner> {
-        let output = self
-            .client_run()
-            .arg("keygen")
-            .stdout(Stdio::piped())
-            .spawn()?
-            .wait_with_output()
-            .await?;
+        let stdout = Self::run_command(self.client_run().arg("keygen")).await;
         Ok(Owner::from_str(
-            String::from_utf8_lossy(output.stdout.as_slice()).trim(),
+            String::from_utf8_lossy(stdout.as_slice()).trim(),
         )?)
     }
 
@@ -349,28 +359,24 @@ impl Client {
         chain_id: ChainId,
         certificate: Certificate,
     ) -> anyhow::Result<()> {
-        self.client_run_with_storage()
-            .arg("assign")
-            .args(["--key", &owner.to_string()])
-            .args(["--chain", &chain_id.to_string()])
-            .args(["--certificate", &hex::encode(bcs::to_bytes(&certificate)?)])
-            .spawn()
-            .unwrap()
-            .wait()
-            .await
-            .unwrap();
+        Self::run_command(
+            self.client_run_with_storage()
+                .arg("assign")
+                .args(["--key", &owner.to_string()])
+                .args(["--chain", &chain_id.to_string()])
+                .args(["--certificate", &hex::encode(bcs::to_bytes(&certificate)?)]),
+        )
+        .await;
         Ok(())
     }
 
     async fn synchronize_balance(&self, chain_id: ChainId) {
-        self.client_run_with_storage()
-            .arg("sync_balance")
-            .arg(&chain_id.to_string())
-            .spawn()
-            .unwrap()
-            .wait()
-            .await
-            .unwrap();
+        Self::run_command(
+            self.client_run_with_storage()
+                .arg("sync_balance")
+                .arg(&chain_id.to_string()),
+        )
+        .await;
     }
 }
 
@@ -539,7 +545,7 @@ impl TestRunner {
         validators
     }
 
-    async fn build_application(&self) -> (PathBuf, PathBuf) {
+    async fn build_application(&self, name: &str) -> (PathBuf, PathBuf) {
         let examples_dir = env::current_dir().unwrap().join("../linera-examples/");
         tokio::process::Command::new("cargo")
             .current_dir(self.tmp_dir.path().canonicalize().unwrap())
@@ -547,7 +553,7 @@ impl TestRunner {
             .arg("--release")
             .args(["--target", "wasm32-unknown-unknown"])
             .arg("--manifest-path")
-            .arg(examples_dir.join("counter-graphql/Cargo.toml"))
+            .arg(examples_dir.join(name).join("Cargo.toml"))
             .stdout(Stdio::piped())
             .spawn()
             .unwrap()
@@ -555,17 +561,24 @@ impl TestRunner {
             .await
             .unwrap();
 
-        let contract = examples_dir
-            .join("target/wasm32-unknown-unknown/release/counter_graphql_contract.wasm");
-        let service =
-            examples_dir.join("target/wasm32-unknown-unknown/release/counter_graphql_service.wasm");
+        let release_dir = examples_dir.join("target/wasm32-unknown-unknown/release");
+        let contract = release_dir.join(format!("{}_contract.wasm", name.replace('-', "_")));
+        let service = release_dir.join(format!("{}_service.wasm", name.replace('-', "_")));
 
         (contract, service)
     }
 }
 
-async fn get_application_uri() -> String {
-    let query = json!({ "query": "query {  applications {    link    }}" });
+async fn get_application_uri<I: Into<Option<ChainId>>>(chain_id: I) -> String {
+    let query_string = if let Some(chain_id) = chain_id.into() {
+        format!(
+            "query {{ applications(chainId: \"{}\") {{ link }}}}",
+            chain_id
+        )
+    } else {
+        "query { applications { link }}".to_string()
+    };
+    let query = json!({ "query": query_string });
     let client = reqwest::Client::new();
     let res = client
         .post("http://localhost:8080/")
@@ -589,15 +602,7 @@ async fn get_application_uri() -> String {
 }
 
 async fn get_counter_value(application_uri: &str) -> u64 {
-    let query = json!({ "query": "query { value }" });
-    let client = reqwest::Client::new();
-    let res = client
-        .post(application_uri)
-        .json(&query)
-        .send()
-        .await
-        .unwrap();
-    let response_body: Value = res.json().await.unwrap();
+    let response_body = query_application(application_uri, "query { value }").await;
     response_body
         .get("data")
         .unwrap()
@@ -605,6 +610,25 @@ async fn get_counter_value(application_uri: &str) -> u64 {
         .unwrap()
         .as_u64()
         .unwrap()
+}
+
+async fn query_application(application_uri: &str, query_string: &str) -> Value {
+    let query = json!({ "query": query_string });
+    let client = reqwest::Client::new();
+    let res = client
+        .post(application_uri)
+        .json(&query)
+        .send()
+        .await
+        .unwrap();
+    if !res.status().is_success() {
+        panic!(
+            "Query \"{}\" failed: {}",
+            query_string,
+            res.text().await.unwrap()
+        );
+    }
+    res.json().await.unwrap()
 }
 
 async fn increment_counter_value(application_uri: &str, increment: u64) {
@@ -636,20 +660,20 @@ async fn end_to_end() {
     runner.generate_initial_server_config().await;
     client.generate_client_config().await;
     let _local_net = runner.run_local_net();
-    let (contract, service) = runner.build_application().await;
+    let (contract, service) = runner.build_application("counter-graphql").await;
 
     // wait for net to start
     tokio::time::sleep(Duration::from_millis(10_000)).await;
 
     client
-        .publish_application(contract, service, original_counter_value)
+        .publish_application(contract, service, original_counter_value, None)
         .await;
-    let _node_service = client.run_node_service().await;
+    let _node_service = client.run_node_service(None).await;
 
     // wait for node service to start
     tokio::time::sleep(Duration::from_millis(3_000)).await;
 
-    let application_uri = get_application_uri().await;
+    let application_uri = get_application_uri(None).await;
 
     let counter_value = get_counter_value(&application_uri).await;
     assert_eq!(counter_value, original_counter_value);
@@ -794,4 +818,78 @@ async fn test_reconfiguration(network: Network) {
     assert_eq!(client.query_balance(chain_1).await.unwrap(), 5);
     client.query_validators(None).await;
     client.query_validators(Some(chain_1)).await;
+}
+
+#[tokio::test]
+async fn social_user_pub_sub() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let network = Network::Grpc;
+    let runner = TestRunner::new(network);
+    let client = Client::new(runner.tmp_dir(), network, 1);
+
+    runner.generate_initial_server_config().await;
+    client.generate_client_config().await;
+    let _local_net = runner.run_local_net();
+    let (contract, service) = runner.build_application("social").await;
+
+    // wait for net to start
+    tokio::time::sleep(Duration::from_secs(10)).await;
+
+    let chain1 = client.get_wallet().default_chain().unwrap();
+    let (chain2, _) = client.open_chain(chain1, None).await.unwrap();
+
+    client
+        .publish_application(contract, service, "00", chain1)
+        .await;
+
+    let mut node_service = client.run_node_service(chain1).await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let app1 = get_application_uri(chain1).await;
+    let query = format!("mutation {{ subscribe(chainId: \"{}\") }}", chain2);
+    query_application(&app1, &query).await;
+    tokio::process::Command::new("kill")
+        .args(["-s", "INT", &node_service.id().unwrap().to_string()])
+        .spawn()
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    node_service.kill().await.unwrap();
+
+    client.synchronize_balance(chain1).await;
+    client.transfer(2, chain1, chain2).await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    client.synchronize_balance(chain2).await;
+    client.transfer(1, chain2, chain1).await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    let mut node_service = client.run_node_service(chain2).await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let app2 = get_application_uri(chain2).await;
+    let query = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
+    query_application(&app2, query).await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    tokio::process::Command::new("kill")
+        .args(["-s", "INT", &node_service.id().unwrap().to_string()])
+        .spawn()
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    node_service.kill().await.unwrap();
+
+    client.synchronize_balance(chain1).await;
+    client.transfer(1, chain1, chain2).await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    let _node_service = client.run_node_service(chain1).await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let app1 = get_application_uri(chain1).await;
+    let query = "query { receivedPostsKeys(count: 5) { author, index } }";
+    let expected_response = json!({"data": { "receivedPostsKeys": [
+        { "author": chain2, "index": 0 }
+    ]}});
+    let response = query_application(&app1, query).await;
+    assert_eq!(response, expected_response);
 }
