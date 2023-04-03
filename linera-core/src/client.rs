@@ -882,11 +882,16 @@ where
         Ok(final_certificate)
     }
 
-    /// Execute an operation.
-    pub async fn execute_operation(&mut self, operation: Operation) -> Result<Certificate> {
+    /// Execute a list of operations.
+    pub async fn execute_operations(&mut self, operations: Vec<Operation>) -> Result<Certificate> {
         self.prepare_chain().await?;
         let messages = self.pending_messages().await?;
-        self.execute_block(messages, vec![operation]).await
+        self.execute_block(messages, operations).await
+    }
+
+    /// Execute an operation.
+    pub async fn execute_operation(&mut self, operation: Operation) -> Result<Certificate> {
+        self.execute_operations(vec![operation]).await
     }
 
     /// Execute a new block
