@@ -2,7 +2,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::join_all;
 use linera_base::crypto::KeyPair;
@@ -25,12 +24,10 @@ use linera_service::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
-use std::{
-    net::SocketAddr,
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use serde::Deserialize;
+use std::{net::SocketAddr, path::PathBuf};
 use structopt::StructOpt;
+use tokio::fs;
 use tracing::{error, info};
 
 struct ServerContext {
@@ -200,7 +197,7 @@ struct ServerOptions {
     command: ServerCommand,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Deserialize)]
 struct ValidatorOptions {
     /// Path to the file containing the server configuration of this Linera validator (including its secret key)
     server_config_path: PathBuf,
@@ -231,57 +228,6 @@ struct ValidatorOptions {
 
     /// The public name and the port of each of the shards
     shards: Vec<ShardConfig>,
-}
-
-impl FromStr for ValidatorOptions {
-    type Err = anyhow::Error;
-
-    // TODO(#543): Use a config file instead of this string.
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts: Vec<&str> = s.split(':').collect();
-        ensure!(
-            parts.len() >= 9 && parts.len() % 2 == 1,
-            "Expecting format `file.json:(udp|tcp):host:port:(udp|tcp):internal_host:\
-            internal_port:metrics_host:metrics_port:host1:port1:...:hostN:portN`"
-        );
-
-        let server_config_path = Path::new(parts[0]).to_path_buf();
-        let external_protocol = parts[1].parse().map_err(|s| anyhow!("{}", s))?;
-        let host = parts[2].to_owned();
-        let port = parts[3].parse()?;
-        let internal_protocol = parts[4].parse().map_err(|s| anyhow!("{}", s))?;
-        let internal_host = parts[5].to_owned();
-        let internal_port = parts[6].parse()?;
-        let metrics_host = parts[7].to_owned();
-        let metrics_port = if parts[8].is_empty() {
-            None
-        } else {
-            Some(parts[8].parse()?)
-        };
-
-        let shards = parts[9..]
-            .chunks_exact(2)
-            .map(|shard_address| {
-                let host = shard_address[0].to_owned();
-                let port = shard_address[1].parse()?;
-
-                Ok(ShardConfig { host, port })
-            })
-            .collect::<Result<_, Self::Err>>()?;
-
-        Ok(Self {
-            server_config_path,
-            external_protocol,
-            internal_protocol,
-            host,
-            port,
-            internal_host,
-            internal_port,
-            shards,
-            metrics_host,
-            metrics_port,
-        })
-    }
 }
 
 fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
@@ -350,9 +296,9 @@ enum ServerCommand {
     /// Act as a trusted third-party and generate all server configurations
     #[structopt(name = "generate")]
     Generate {
-        /// Configuration of each validator in the committee encoded as `(Udp|Tcp):host:port:num-shards`
+        /// Configuration file of each validator in the committee
         #[structopt(long)]
-        validators: Vec<ValidatorOptions>,
+        validators: Vec<PathBuf>,
 
         /// Path where to write the description of the Linera committee
         #[structopt(long)]
@@ -422,7 +368,12 @@ async fn main() {
             committee,
         } => {
             let mut config_validators = Vec::new();
-            for options in validators {
+            for options_path in validators {
+                let options_string = fs::read_to_string(options_path)
+                    .await
+                    .expect("Unable to read validator options file");
+                let options: ValidatorOptions =
+                    toml::from_str(&options_string).expect("Invalid options file format");
                 let path = options.server_config_path.clone();
                 let server = make_server_config(options);
                 server
@@ -452,10 +403,26 @@ mod test {
 
     #[test]
     fn test_validator_options() {
-        let options = ValidatorOptions::from_str(
-            "server.json:tcp:host:9000:udp:internal_host:10000:metrics_host:5000:host1:9001:host2:9002",
-        )
-        .unwrap();
+        let toml_str = r#"
+            server_config_path = "server.json"
+            host = "host"
+            port = 9000
+            internal_host = "internal_host"
+            internal_port = 10000
+            metrics_host = "metrics_host"
+            metrics_port = 5000
+            external_protocol = { Simple = "Tcp" }
+            internal_protocol = { Simple = "Udp" }
+
+            [[shards]]
+            host = "host1"
+            port = 9001
+
+            [[shards]]
+            host = "host2"
+            port = 9002
+        "#;
+        let options: ValidatorOptions = toml::from_str(toml_str).unwrap();
         assert_eq!(
             options,
             ValidatorOptions {

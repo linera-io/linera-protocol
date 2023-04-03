@@ -1,4 +1,5 @@
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+CONF_DIR="${SCRIPT_DIR}/../configuration"
 
 cd $SCRIPT_DIR/..
 
@@ -13,15 +14,14 @@ rm -rf *.json *.txt *.db
 # Make sure to clean up child processes on exit.
 trap 'kill $(jobs -p)' EXIT
 
+set -x
+
 # Create configuration files for 4 validators with 4 shards each.
 # * Private server states are stored in `server*.json`.
 # * `committee.json` is the public description of the FastPay committee.
-./server generate --validators \
-   server_1.json:grpc:127.0.0.1:9100:grpc:127.0.0.1:10100:127.0.0.1:11100:127.0.0.1:9101:127.0.0.1:9102:127.0.0.1:9103:127.0.0.1:9104 \
-   server_2.json:grpc:127.0.0.1:9200:grpc:127.0.0.1:10200:127.0.0.1:11200:127.0.0.1:9201:127.0.0.1:9202:127.0.0.1:9203:127.0.0.1:9204 \
-   server_3.json:grpc:127.0.0.1:9300:grpc:127.0.0.1:10300:127.0.0.1:11300:127.0.0.1:9301:127.0.0.1:9302:127.0.0.1:9303:127.0.0.1:9304 \
-   server_4.json:grpc:127.0.0.1:9400:grpc:127.0.0.1:10400:127.0.0.1:11400:127.0.0.1:9401:127.0.0.1:9402:127.0.0.1:9403:127.0.0.1:9404 \
---committee committee.json
+./server generate \
+    --validators $CONF_DIR/validator_1.toml $CONF_DIR/validator_2.toml $CONF_DIR/validator_3.toml $CONF_DIR/validator_4.toml \
+    --committee committee.json
 
 # Create configuration files for 10 user chains.
 # * Private chain states are stored in one local wallet `wallet.json`.

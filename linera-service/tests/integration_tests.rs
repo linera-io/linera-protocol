@@ -10,7 +10,7 @@ use linera_views::test_utils::LocalStackTestContext;
 use once_cell::sync::Lazy;
 use serde_json::{json, Value};
 use std::{
-    env,
+    env, fs,
     io::Write,
     ops::Range,
     path::PathBuf,
@@ -122,12 +122,19 @@ enum Network {
 impl Network {
     fn internal(&self) -> &'static str {
         match self {
-            Network::Grpc => "grpc",
-            Network::Simple => "udp",
+            Network::Grpc => "\"Grpc\"",
+            Network::Simple => "{ Simple = \"Udp\" }",
         }
     }
 
     fn external(&self) -> &'static str {
+        match self {
+            Network::Grpc => "\"Grpc\"",
+            Network::Simple => "{ Simple = \"Tcp\" }",
+        }
+    }
+
+    fn external_short(&self) -> &'static str {
         match self {
             Network::Grpc => "grpc",
             Network::Simple => "tcp",
@@ -299,7 +306,7 @@ impl Client {
     }
 
     async fn set_validator(&self, name: &str, port: usize, votes: usize) {
-        let address = format!("{}:127.0.0.1:{}", self.network.external(), port);
+        let address = format!("{}:127.0.0.1:{}", self.network.external_short(), port);
         self.client_run_with_storage()
             .arg("set_validator")
             .args(["--name", name])
@@ -420,18 +427,47 @@ impl TestRunner {
     }
 
     fn configuration_string(&self, server_number: usize) -> String {
+        const TEMPLATE: &str = r#"
+            server_config_path = "server_%N%.json"
+            host = "127.0.0.1"
+            port = 9%N%00
+            internal_host = "127.0.0.1"
+            internal_port = 10%N%00
+            metrics_host = "127.0.0.1"
+            metrics_port = 11%N%00
+            external_protocol = %E%
+            internal_protocol = %I%
+
+            [[shards]]
+            host = "127.0.0.1"
+            port = 9%N%01
+
+            [[shards]]
+            host = "127.0.0.1"
+            port = 9%N%02
+
+            [[shards]]
+            host = "127.0.0.1"
+            port = 9%N%03
+
+            [[shards]]
+            host = "127.0.0.1"
+            port = 9%N%04
+        "#;
+
         let n = server_number;
-        let mut configuration = String::new();
-        configuration.push_str(&format!(
-            "server_{n}.json:{}:127.0.0.1:9{n}00:{}",
-            self.network.external(),
-            self.network.internal()
-        ));
-        configuration.push_str(&format!(":127.0.0.1:10{n}00:127.0.0.1:11{n}00"));
-        configuration.push_str(&format!(
-            ":127.0.0.1:9{n}01:127.0.0.1:9{n}02:127.0.0.1:9{n}03:127.0.0.1:9{n}04"
-        ));
-        configuration
+        let path = self
+            .tmp_dir()
+            .path()
+            .canonicalize()
+            .unwrap()
+            .join(format!("validator_{n}.toml"));
+        let content = TEMPLATE
+            .replace("%N%", &n.to_string())
+            .replace("%E%", self.network.external())
+            .replace("%I%", self.network.internal());
+        fs::write(&path, content).unwrap();
+        path.into_os_string().into_string().unwrap()
     }
 
     async fn generate_initial_server_config(&self) {
