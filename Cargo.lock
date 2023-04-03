@@ -2602,6 +2602,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "toml 0.7.3",
  "tonic",
  "tower-http 0.4.0",
  "tracing",

@@ -1,0 +1,25 @@
+server_config_path = "server_2.json"
+host = "127.0.0.1"
+port = 9200
+internal_host = "127.0.0.1"
+internal_port = 10200
+metrics_host = "127.0.0.1"
+metrics_port = 11200
+external_protocol = "Grpc"
+internal_protocol = "Grpc"
+
+[[shards]]
+host = "127.0.0.1"
+port = 9201
+
+[[shards]]
+host = "127.0.0.1"
+port = 9202
+
+[[shards]]
+host = "127.0.0.1"
+port = 9203
+
+[[shards]]
+host = "127.0.0.1"
+port = 9204

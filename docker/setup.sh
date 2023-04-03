@@ -9,13 +9,31 @@ if [ -z "$NUM_VALIDATORS" ] || [ -z "$NUM_SHARDS" ]; then
 fi
 
 # Clean up data files
-rm -rf config/*
+rm -rf config/* validator_*.toml
 
 # Create validator configuration directories and generate the command line options
 validator_options() {
     for server in $(seq 1 "${NUM_VALIDATORS}"); do
-        shards="$(seq -s':' 0 "$(expr "${NUM_SHARDS}" - 1)" | sed -e "s/[0-9]\\+/server-${server}-shard-&.server-${server}:9100/g")"
-        echo "server_${server}.json:tcp:validator-${server}:9100:tcp:validator-${server}:10100:${shards}"
+        cat << EOF > "validator_${server}.toml"
+server_config_path = "server_${server}.json"
+host = "validator-${server}"
+port = 9100
+internal_host = "validator-${server}"
+internal_port = 10100
+metrics_host = "validator-${server}"
+metrics_port = 11100
+external_protocol = { Simple = "Tcp" }
+internal_protocol = { Simple = "Tcp" }
+EOF
+        for ((shard=0; shard<${NUM_SHARDS}; shard++)); do
+            cat << EOF >> "validator_${server}.toml"
+
+[[shards]]
+host = "server-${server}-shard-${shard}.server-${server}"
+port = 9100
+EOF
+        done
+        echo "validator_${server}.toml"
     done
 }
 
@@ -38,7 +56,7 @@ VALIDATORS=($(validator_options))
 mkdir /config/
 mv genesis.json /config/
 mv wallet.json /config/
-
+mv validator_*.toml /config/
 mv server_*.json /config/
 
 # Run a HTTP server to serve the configuration files
