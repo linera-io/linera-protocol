@@ -41,8 +41,6 @@ done
 
 sleep 1;
 
-sleep 2;
-
 # Create second wallet with unassigned key.
 KEY=$(./client --wallet wallet_2.json --genesis genesis.json keygen)
 
