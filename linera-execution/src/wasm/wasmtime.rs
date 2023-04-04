@@ -37,7 +37,7 @@ use super::{
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     WasmApplication, WasmExecutionError,
 };
-use crate::{ExecutionError, ServiceRuntime, SessionId, WritableStorage};
+use crate::{ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
 use linera_views::{batch::Batch, views::ViewError};
 use std::{error::Error, task::Poll};
 use wasmtime::{Config, Engine, Linker, Module, Store, Trap};
@@ -80,7 +80,7 @@ impl WasmApplication {
     /// Prepare a runtime instance to call into the WASM contract.
     pub fn prepare_contract_runtime_with_wasmtime<'storage>(
         &self,
-        storage: &'storage dyn WritableStorage,
+        storage: &'storage dyn ContractRuntime,
     ) -> Result<WasmRuntimeContext<'storage, Contract<'storage>>, WasmExecutionError> {
         let mut config = Config::default();
         config
@@ -163,7 +163,7 @@ impl<'storage> ContractState<'storage> {
     /// Uses `storage` to export the system API, and the `waker` to be able to correctly handle
     /// asynchronous calls from the guest WASM module.
     pub fn new(
-        storage: &'storage dyn WritableStorage,
+        storage: &'storage dyn ContractRuntime,
         waker: WakerForwarder,
         queued_future_factory: QueuedHostFutureFactory<'storage>,
     ) -> Self {
@@ -369,7 +369,7 @@ struct SystemApi<S> {
 /// Implementation to forward contract system calls from the guest WASM module to the host
 /// implementation.
 pub struct ContractSystemApi<'storage> {
-    shared: SystemApi<&'storage dyn WritableStorage>,
+    shared: SystemApi<&'storage dyn ContractRuntime>,
     queued_future_factory: QueuedHostFutureFactory<'storage>,
 }
 
@@ -378,7 +378,7 @@ impl<'storage> ContractSystemApi<'storage> {
     /// exporting the API from `storage`.
     pub fn new(
         waker: WakerForwarder,
-        storage: &'storage dyn WritableStorage,
+        storage: &'storage dyn ContractRuntime,
         queued_future_factory: QueuedHostFutureFactory<'storage>,
     ) -> Self {
         ContractSystemApi {
@@ -387,8 +387,8 @@ impl<'storage> ContractSystemApi<'storage> {
         }
     }
 
-    /// Returns the [`WritableStorage`] trait object instance to handle a system call.
-    fn storage(&self) -> &'storage dyn WritableStorage {
+    /// Returns the [`ContractRuntime`] trait object instance to handle a system call.
+    fn storage(&self) -> &'storage dyn ContractRuntime {
         self.shared.storage
     }
 

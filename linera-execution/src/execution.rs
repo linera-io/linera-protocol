@@ -4,9 +4,9 @@
 use crate::{
     runtime::{ApplicationStatus, ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
-    ApplicationId, Effect, EffectContext, ExecutionError, ExecutionResult, ExecutionRuntimeContext,
-    Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemEffect,
-    UserApplicationDescription, UserApplicationId, WritableStorage,
+    ApplicationId, ContractRuntime, Effect, EffectContext, ExecutionError, ExecutionResult,
+    ExecutionRuntimeContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
+    Response, SystemEffect, UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
     ensure,

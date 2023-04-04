@@ -69,7 +69,7 @@ impl UserApplication for TestApplication {
     async fn initialize(
         &self,
         context: &OperationContext,
-        _storage: &dyn WritableStorage,
+        _storage: &dyn ContractRuntime,
         _argument: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         assert_eq!(context.authenticated_signer, Some(self.owner));
@@ -83,7 +83,7 @@ impl UserApplication for TestApplication {
     async fn execute_operation(
         &self,
         context: &OperationContext,
-        storage: &dyn WritableStorage,
+        storage: &dyn ContractRuntime,
         operation: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         // Who we are.
@@ -121,7 +121,7 @@ impl UserApplication for TestApplication {
     async fn execute_effect(
         &self,
         context: &EffectContext,
-        storage: &dyn WritableStorage,
+        storage: &dyn ContractRuntime,
         _effect: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         // Who we are.
@@ -140,7 +140,7 @@ impl UserApplication for TestApplication {
     async fn handle_application_call(
         &self,
         context: &CalleeContext,
-        _storage: &dyn WritableStorage,
+        _storage: &dyn ContractRuntime,
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
@@ -158,7 +158,7 @@ impl UserApplication for TestApplication {
     async fn handle_session_call(
         &self,
         context: &CalleeContext,
-        _storage: &dyn WritableStorage,
+        _storage: &dyn ContractRuntime,
         _session_kind: u64,
         _session_data: &mut Vec<u8>,
         _argument: &[u8],
