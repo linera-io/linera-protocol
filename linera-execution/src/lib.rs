@@ -250,7 +250,7 @@ pub struct QueryContext {
 }
 
 #[async_trait]
-pub trait ReadableStorage: Send + Sync {
+pub trait BaseRuntime: Send + Sync {
     /// The current chain id.
     fn chain_id(&self) -> ChainId;
 
@@ -292,7 +292,7 @@ pub trait ReadableStorage: Send + Sync {
 }
 
 #[async_trait]
-pub trait QueryableStorage: ReadableStorage {
+pub trait QueryableStorage: BaseRuntime {
     /// Query another application.
     async fn try_query_application(
         &self,
@@ -310,7 +310,7 @@ pub struct CallResult {
 }
 
 #[async_trait]
-pub trait WritableStorage: ReadableStorage {
+pub trait WritableStorage: BaseRuntime {
     /// Returns the amount of execution fuel remaining before execution is aborted.
     fn remaining_fuel(&self) -> u64;
 

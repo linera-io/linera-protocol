@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution::ExecutionStateView, CallResult, ExecutionError, ExecutionResult,
-    ExecutionRuntimeContext, NewSession, QueryableStorage, ReadableStorage, SessionId,
-    UserApplicationCode, UserApplicationDescription, UserApplicationId, WritableStorage,
+    execution::ExecutionStateView, BaseRuntime, CallResult, ExecutionError, ExecutionResult,
+    ExecutionRuntimeContext, NewSession, QueryableStorage, SessionId, UserApplicationCode,
+    UserApplicationDescription, UserApplicationId, WritableStorage,
 };
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
@@ -296,7 +296,7 @@ where
 }
 
 #[async_trait]
-impl<'a, C, const W: bool> ReadableStorage for ExecutionRuntime<'a, C, W>
+impl<'a, C, const W: bool> BaseRuntime for ExecutionRuntime<'a, C, W>
 where
     C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
