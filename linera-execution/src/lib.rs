@@ -157,7 +157,7 @@ pub trait UserApplication {
     async fn query_application(
         &self,
         context: &QueryContext,
-        storage: &dyn QueryableStorage,
+        storage: &dyn ServiceRuntime,
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError>;
 }
@@ -292,7 +292,7 @@ pub trait BaseRuntime: Send + Sync {
 }
 
 #[async_trait]
-pub trait QueryableStorage: BaseRuntime {
+pub trait ServiceRuntime: BaseRuntime {
     /// Query another application.
     async fn try_query_application(
         &self,

@@ -26,7 +26,7 @@ mod wasmtime;
 use self::sanitizer::sanitize;
 use crate::{
     ApplicationCallResult, Bytecode, CalleeContext, EffectContext, ExecutionError,
-    OperationContext, QueryContext, QueryableStorage, RawExecutionResult, SessionCallResult,
+    OperationContext, QueryContext, RawExecutionResult, ServiceRuntime, SessionCallResult,
     SessionId, UserApplication, WasmRuntime, WritableStorage,
 };
 use async_trait::async_trait;
@@ -226,7 +226,7 @@ impl UserApplication for WasmApplication {
     async fn query_application(
         &self,
         context: &QueryContext,
-        storage: &dyn QueryableStorage,
+        storage: &dyn ServiceRuntime,
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
         let result = match self.runtime {

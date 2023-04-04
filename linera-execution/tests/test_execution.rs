@@ -175,7 +175,7 @@ impl UserApplication for TestApplication {
     async fn query_application(
         &self,
         _context: &QueryContext,
-        storage: &dyn QueryableStorage,
+        storage: &dyn ServiceRuntime,
         _argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
         let chosen_key = vec![0];

@@ -35,7 +35,7 @@ use super::{
     WasmApplication, WasmExecutionError,
 };
 
-use crate::{ExecutionError, QueryableStorage, SessionId, WritableStorage};
+use crate::{ExecutionError, ServiceRuntime, SessionId, WritableStorage};
 use linera_views::{batch::Batch, views::ViewError};
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
 use tokio::sync::Mutex;
@@ -90,7 +90,7 @@ pub struct Service<'storage> {
 impl<'storage> ApplicationRuntimeContext for Service<'storage> {
     type Store = Store;
     type Error = RuntimeError;
-    type Extra = StorageGuard<'storage, &'static dyn QueryableStorage>;
+    type Extra = StorageGuard<'storage, &'static dyn ServiceRuntime>;
 }
 
 impl WasmApplication {
@@ -141,7 +141,7 @@ impl WasmApplication {
     /// Prepare a runtime instance to call into the WASM service.
     pub fn prepare_service_runtime_with_wasmer<'storage>(
         &self,
-        storage: &'storage dyn QueryableStorage,
+        storage: &'storage dyn ServiceRuntime,
     ) -> Result<WasmRuntimeContext<'static, Service<'storage>>, WasmExecutionError> {
         let mut store = Store::default();
         let module = Module::new(&store, &self.service_bytecode)
@@ -405,12 +405,12 @@ impl_writable_system!(ContractSystemApi);
 /// Implementation to forward service system calls from the guest WASM module to the host
 /// implementation.
 pub struct ServiceSystemApi {
-    shared: SystemApi<&'static dyn QueryableStorage>,
+    shared: SystemApi<&'static dyn ServiceRuntime>,
 }
 
 impl ServiceSystemApi {
     /// Creates a new [`ServiceSystemApi`] instance, ensuring that the lifetime of the
-    /// [`QueryableStorage`] trait object is respected.
+    /// [`ServiceRuntime`] trait object is respected.
     ///
     /// # Safety
     ///
@@ -423,8 +423,8 @@ impl ServiceSystemApi {
     /// be alive and usable by the WASM application.
     pub fn new<'storage>(
         waker: WakerForwarder,
-        storage: &'storage dyn QueryableStorage,
-    ) -> (Self, StorageGuard<'storage, &'static dyn QueryableStorage>) {
+        storage: &'storage dyn ServiceRuntime,
+    ) -> (Self, StorageGuard<'storage, &'static dyn ServiceRuntime>) {
         let storage_without_lifetime = unsafe { mem::transmute(storage) };
         let storage = Arc::new(Mutex::new(Some(storage_without_lifetime)));
 
@@ -441,7 +441,7 @@ impl ServiceSystemApi {
         )
     }
 
-    /// Safely obtains the [`QueryableStorage`] trait object instance to handle a system call.
+    /// Safely obtains the [`ServiceRuntime`] trait object instance to handle a system call.
     ///
     /// # Panics
     ///
@@ -449,7 +449,7 @@ impl ServiceSystemApi {
     /// is executed in a single thread) or if the trait object is no longer alive (or more
     /// accurately, if the [`StorageGuard`] returned by [`Self::new`] was dropped to indicate it's
     /// no longer alive).
-    fn storage(&self) -> &'static dyn QueryableStorage {
+    fn storage(&self) -> &'static dyn ServiceRuntime {
         *self
             .shared
             .storage
