@@ -474,9 +474,9 @@ enum ClientCommand {
     /// Open (i.e. activate) a new chain deriving the UID from an existing one.
     #[structopt(name = "open_chain")]
     OpenChain {
-        /// Sending chain id (must be one of our chains)
+        /// Sending chain id (must be one of our chains).
         #[structopt(long = "from")]
-        sender: ChainId,
+        sender: Option<ChainId>,
 
         /// Public key of the new owner (otherwise create a key pair and remember it)
         #[structopt(long = "to-public-key")]
@@ -673,6 +673,12 @@ where
             }
 
             OpenChain { sender, public_key } => {
+                let sender = sender.unwrap_or_else(|| {
+                    context
+                        .wallet_state
+                        .default_chain()
+                        .expect("No chain specified in wallet with no default chain")
+                });
                 let mut chain_client = context.make_chain_client(storage, sender);
                 let (new_public_key, key_pair) = match public_key {
                     Some(key) => (key, None),
