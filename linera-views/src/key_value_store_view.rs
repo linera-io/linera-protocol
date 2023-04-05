@@ -153,8 +153,26 @@ where
     C: Send + Context,
     ViewError: From<C::Error>,
 {
-    /// Iterates over all indices. If the function f returns false, then the loop
-    /// prematurely ends.
+    /// Iterates over all indices and apply the function f on it. If the function f returns
+    /// false, then the loop prematurely ends.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut kvsv = KeyValueStoreView::load(context).await.unwrap();
+    ///   kvsv.insert(vec![0,1], vec![0]);
+    ///   kvsv.insert(vec![0,2], vec![0]);
+    ///   kvsv.insert(vec![0,3], vec![0]);
+    ///   let mut count = 0;
+    ///   kvsv.for_each_index_while(|_key| {
+    ///     count += 1;
+    ///     Ok(count < 2)
+    ///   }).await.unwrap();
+    ///   assert_eq!(count, 2);
+    /// # })
+    /// ```
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
@@ -206,6 +224,24 @@ where
     }
 
     /// Iterates over all indices.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut kvsv = KeyValueStoreView::load(context).await.unwrap();
+    ///   kvsv.insert(vec![0,1], vec![0]);
+    ///   kvsv.insert(vec![0,2], vec![0]);
+    ///   kvsv.insert(vec![0,3], vec![0]);
+    ///   let mut count = 0;
+    ///   kvsv.for_each_index(|_key| {
+    ///     count += 1;
+    ///     Ok(())
+    ///   }).await.unwrap();
+    ///   assert_eq!(count, 3);
+    /// # })
+    /// ```
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
@@ -217,8 +253,25 @@ where
         .await
     }
 
-    /// Iterates over all the indices and values. If the function f returns false then
-    /// the loop prematurely ends.
+    /// Iterates over all the indices and values and applied the function f on them.
+    /// If the function f returns false then the loop prematurely ends.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut kvsv = KeyValueStoreView::load(context).await.unwrap();
+    ///   kvsv.insert(vec![0,1], vec![0]);
+    ///   kvsv.insert(vec![0,2], vec![0]);
+    ///   let mut values = Vec::new();
+    ///   kvsv.for_each_index_value_while(|_key, value| {
+    ///     values.push(value.to_vec());
+    ///     Ok(values.len() < 1)
+    ///   }).await.unwrap();
+    ///   assert_eq!(values, vec![vec![0]]);
+    /// # })
+    /// ```
     pub async fn for_each_index_value_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], &[u8]) -> Result<bool, ViewError> + Send,
@@ -269,7 +322,24 @@ where
         Ok(())
     }
 
-    /// Iterates over all the indices and values.
+    /// Iterates over all the indices and values and applies the function f on them.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut kvsv = KeyValueStoreView::load(context).await.unwrap();
+    ///   kvsv.insert(vec![0,1], vec![0]);
+    ///   kvsv.insert(vec![0,2], vec![0]);
+    ///   let mut part_keys = Vec::new();
+    ///   kvsv.for_each_index_while(|key| {
+    ///     part_keys.push(key.to_vec());
+    ///     Ok(part_keys.len() < 1)
+    ///   }).await.unwrap();
+    ///   assert_eq!(part_keys, vec![vec![0,1]]);
+    /// # })
+    /// ```
     pub async fn for_each_index_value<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], &[u8]) -> Result<(), ViewError> + Send,
@@ -282,6 +352,19 @@ where
     }
 
     /// Returns the list of indices. The order is stable, yet not specified.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut kvsv = KeyValueStoreView::load(context).await.unwrap();
+    ///   kvsv.insert(vec![0,1], vec![0]);
+    ///   kvsv.insert(vec![0,2], vec![0]);
+    ///   let indices = kvsv.indices().await.unwrap();
+    ///   assert_eq!(indices, vec![vec![0,1],vec![0,2]]);
+    /// # })
+    /// ```
     pub async fn indices(&self) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut indices = Vec::new();
         self.for_each_index(|index| {
@@ -293,6 +376,18 @@ where
     }
 
     /// Obtains the value at the given index, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut kvsv = KeyValueStoreView::load(context).await.unwrap();
+    ///   kvsv.insert(vec![0,1], vec![42]);
+    ///   assert_eq!(kvsv.get(&[0,1]).await.unwrap(), Some(vec![42]));
+    ///   assert_eq!(kvsv.get(&[0,2]).await.unwrap(), None);
+    /// # })
+    /// ```
     pub async fn get(&self, index: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         if let Some(update) = self.updates.get(index) {
             let value = match update {
@@ -310,12 +405,35 @@ where
     }
 
     /// Sets or inserts a value.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut kvsv = KeyValueStoreView::load(context).await.unwrap();
+    ///   kvsv.insert(vec![0,1], vec![34]);
+    ///   assert_eq!(kvsv.get(&[0,1]).await.unwrap(), Some(vec![34]));
+    /// # })
+    /// ```
     pub fn insert(&mut self, index: Vec<u8>, value: Vec<u8>) {
         self.updates.insert(index, Update::Set(value));
         *self.hash.get_mut() = None;
     }
 
-    /// Removes a value.
+    /// Removes a value. If absent then the action has no effect.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut kvsv = KeyValueStoreView::load(context).await.unwrap();
+    ///   kvsv.insert(vec![0,1], vec![34]);
+    ///   kvsv.remove(vec![0,1]);
+    ///   assert_eq!(kvsv.get(&[0,1]).await.unwrap(), None);
+    /// # })
+    /// ```
     pub fn remove(&mut self, index: Vec<u8>) {
         *self.hash.get_mut() = None;
         if self.was_cleared {
@@ -326,7 +444,7 @@ where
     }
 
     /// Deletes a key_prefix.
-    pub fn delete_prefix(&mut self, key_prefix: Vec<u8>) {
+    fn delete_prefix(&mut self, key_prefix: Vec<u8>) {
         *self.hash.get_mut() = None;
         let key_list: Vec<Vec<u8>> = self
             .updates
@@ -350,6 +468,19 @@ where
     }
 
     /// Iterates over all the keys matching the given prefix. The prefix is not included in the returned keys.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut kvsv = KeyValueStoreView::load(context).await.unwrap();
+    ///   kvsv.insert(vec![0,1], vec![34]);
+    ///   kvsv.insert(vec![3,4], vec![42]);
+    ///   let keys = kvsv.find_keys_by_prefix(&[0]).await.unwrap();
+    ///   assert_eq!(keys, vec![vec![1]]);
+    /// # })
+    /// ```
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
         let len = key_prefix.len();
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
@@ -403,6 +534,19 @@ where
 
     /// Iterates over all the key-value pairs, for keys matching the given prefix. The
     /// prefix is not included in the returned keys.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut kvsv = KeyValueStoreView::load(context).await.unwrap();
+    ///   kvsv.insert(vec![0,1], vec![34]);
+    ///   kvsv.insert(vec![3,4], vec![42]);
+    ///   let key_values = kvsv.find_key_values_by_prefix(&[0]).await.unwrap();
+    ///   assert_eq!(key_values, vec![(vec![1],vec![34])]);
+    /// # })
+    /// ```
     pub async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -459,6 +603,23 @@ where
     }
 
     /// Applies the given batch of `crate::common::WriteOperation`.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::batch::Batch;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut kvsv = KeyValueStoreView::load(context).await.unwrap();
+    ///   kvsv.insert(vec![0,1], vec![34]);
+    ///   kvsv.insert(vec![3,4], vec![42]);
+    ///   let mut batch = Batch::new();
+    ///   batch.delete_key_prefix(vec![0]);
+    ///   kvsv.write_batch(batch).await.unwrap();
+    ///   let key_values = kvsv.find_key_values_by_prefix(&[0]).await.unwrap();
+    ///   assert_eq!(key_values, vec![]);
+    /// # })
+    /// ```
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
         *self.hash.get_mut() = None;
         for op in batch.operations {
