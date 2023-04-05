@@ -87,7 +87,7 @@ where
                         .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
                         .into_inner();
                     view.flush(batch)?;
-                    self.add_index(batch, &index)?;
+                    self.add_index(batch, &index);
                 }
             }
         } else {
@@ -98,7 +98,7 @@ where
                             .map_err(|_| ViewError::CannotAcquireCollectionEntry)?
                             .into_inner();
                         view.flush(batch)?;
-                        self.add_index(batch, &index)?;
+                        self.add_index(batch, &index);
                     }
                     Update::Removed => {
                         let key_subview = self.get_subview_key(&index);
@@ -141,10 +141,9 @@ impl<C: Context, W> ReentrantByteCollectionView<C, W> {
         self.context.base_tag_index(KeyTag::Subview as u8, index)
     }
 
-    fn add_index(&self, batch: &mut Batch, index: &[u8]) -> Result<(), ViewError> {
+    fn add_index(&self, batch: &mut Batch, index: &[u8]) {
         let key = self.get_index_key(index);
-        batch.put_key_value(key, &())?;
-        Ok(())
+        batch.put_key_value_bytes(key, vec![]);
     }
 }
 
@@ -240,14 +239,13 @@ where
     }
 
     /// Marks the entry so that it is removed in the next flush.
-    pub fn remove_entry(&mut self, short_key: Vec<u8>) -> Result<(), ViewError> {
+    pub fn remove_entry(&mut self, short_key: Vec<u8>) {
         *self.hash.get_mut() = None;
         if self.was_cleared {
             self.updates.get_mut().remove(&short_key);
         } else {
             self.updates.get_mut().insert(short_key, Update::Removed);
         }
-        Ok(())
     }
 
     /// Marks the entry so that it is removed in the next flush.
@@ -483,7 +481,8 @@ where
         Q: Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
-        self.collection.remove_entry(short_key)
+        self.collection.remove_entry(short_key);
+        Ok(())
     }
 
     /// Marks the entry so that it is removed in the next flush.
@@ -655,7 +654,8 @@ where
         Q: CustomSerialize + ?Sized,
     {
         let short_key = index.to_custom_bytes::<C>()?;
-        self.collection.remove_entry(short_key)
+        self.collection.remove_entry(short_key);
+        Ok(())
     }
 
     /// Marks the entry so that it is removed in the next flush.
@@ -694,6 +694,21 @@ where
 
     /// Executes a function on each index. Indices are visited in an order
     /// determined by the custom serialization.
+    pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<bool, ViewError> + Send,
+    {
+        self.collection
+            .for_each_key_while(|key| {
+                let index = I::from_custom_bytes::<C>(key)?;
+                f(index)
+            })
+            .await?;
+        Ok(())
+    }
+
+    /// Executes a function on each index. Indices are visited in an order
+    /// determined by the custom serialization.
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
@@ -701,8 +716,7 @@ where
         self.collection
             .for_each_key(|key| {
                 let index = I::from_custom_bytes::<C>(key)?;
-                f(index)?;
-                Ok(())
+                f(index)
             })
             .await?;
         Ok(())
