@@ -427,34 +427,6 @@ impl TestRunner {
     }
 
     fn configuration_string(&self, server_number: usize) -> String {
-        const TEMPLATE: &str = r#"
-            server_config_path = "server_%N%.json"
-            host = "127.0.0.1"
-            port = 9%N%00
-            internal_host = "127.0.0.1"
-            internal_port = 10%N%00
-            metrics_host = "127.0.0.1"
-            metrics_port = 11%N%00
-            external_protocol = %E%
-            internal_protocol = %I%
-
-            [[shards]]
-            host = "127.0.0.1"
-            port = 9%N%01
-
-            [[shards]]
-            host = "127.0.0.1"
-            port = 9%N%02
-
-            [[shards]]
-            host = "127.0.0.1"
-            port = 9%N%03
-
-            [[shards]]
-            host = "127.0.0.1"
-            port = 9%N%04
-        "#;
-
         let n = server_number;
         let path = self
             .tmp_dir()
@@ -462,10 +434,35 @@ impl TestRunner {
             .canonicalize()
             .unwrap()
             .join(format!("validator_{n}.toml"));
-        let content = TEMPLATE
-            .replace("%N%", &n.to_string())
-            .replace("%E%", self.network.external())
-            .replace("%I%", self.network.internal());
+        let port = 9000 + n * 100;
+        let internal_port = 10000 + n * 100;
+        let metrics_port = 11000 + n * 100;
+        let external_protocol = self.network.external();
+        let internal_protocol = self.network.internal();
+        let mut content = format!(
+            r#"
+                server_config_path = "server_{n}.json"
+                host = "127.0.0.1"
+                port = {port}
+                internal_host = "127.0.0.1"
+                internal_port = {internal_port}
+                metrics_host = "127.0.0.1"
+                metrics_port = {metrics_port}
+                external_protocol = {external_protocol}
+                internal_protocol = {internal_protocol}
+            "#
+        );
+        for k in 1..=4 {
+            let shard_port = port + k;
+            content.push_str(&format!(
+                r#"
+                
+                [[shards]]
+                host = "127.0.0.1"
+                port = {shard_port}
+                "#
+            ));
+        }
         fs::write(&path, content).unwrap();
         path.into_os_string().into_string().unwrap()
     }
