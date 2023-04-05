@@ -56,9 +56,7 @@ trap 'kill $(jobs -p)' EXIT
 # Create configuration files for 4 validators with 4 shards each.
 # * Private server states are stored in `server*.json`.
 # * `committee.json` is the public description of the FastPay committee.
-./server generate \
-    --validators ../../configuration/validator_1.toml ../../configuration/validator_2.toml ../../configuration/validator_3.toml ../../configuration/validator_4.toml \
-    --committee committee.json
+./server generate --validators ../../configuration/validator_{1,2,3,4}.toml --committee committee.json
 
 # Create configuration files for 10 user chains.
 # * Private chain states are stored in one local wallet `wallet.json`.
