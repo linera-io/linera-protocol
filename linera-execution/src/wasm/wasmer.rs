@@ -61,15 +61,15 @@ impl<'runtime> ApplicationRuntimeContext for Contract<'runtime> {
     type Extra = WasmerContractExtra<'runtime>;
 
     fn finalize(context: &mut WasmRuntimeContext<Self>) {
-        let storage_guard = context
+        let runtime_guard = context
             .extra
-            .storage_guard
-            .storage
+            .runtime_guard
+            .runtime
             .try_lock()
             .expect("Unexpected concurrent access to ContractRuntime");
-        let storage = storage_guard
+        let runtime = runtime_guard
             .as_ref()
-            .expect("Storage guard dropped prematurely");
+            .expect("Runtime guard dropped prematurely");
 
         let remaining_fuel =
             match metering::get_remaining_points(&mut context.store, &context.extra.instance) {
@@ -77,7 +77,7 @@ impl<'runtime> ApplicationRuntimeContext for Contract<'runtime> {
                 MeteringPoints::Remaining(fuel) => fuel,
             };
 
-        storage.set_remaining_fuel(remaining_fuel);
+        runtime.set_remaining_fuel(remaining_fuel);
     }
 }
 
@@ -90,7 +90,7 @@ pub struct Service<'runtime> {
 impl<'runtime> ApplicationRuntimeContext for Service<'runtime> {
     type Store = Store;
     type Error = RuntimeError;
-    type Extra = StorageGuard<'runtime, &'static dyn ServiceRuntime>;
+    type Extra = RuntimeGuard<'runtime, &'static dyn ServiceRuntime>;
 }
 
 impl WasmApplication {
@@ -113,7 +113,7 @@ impl WasmApplication {
         let mut imports = imports! {};
         let waker_forwarder = WakerForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
-        let (system_api, storage_guard) =
+        let (system_api, runtime_guard) =
             ContractSystemApi::new(waker_forwarder.clone(), storage, queued_future_factory);
         let system_api_setup =
             writable_system::add_to_imports(&mut store, &mut imports, system_api);
@@ -133,7 +133,7 @@ impl WasmApplication {
             store,
             extra: WasmerContractExtra {
                 instance,
-                storage_guard,
+                runtime_guard,
             },
         })
     }
@@ -149,7 +149,7 @@ impl WasmApplication {
         let mut imports = imports! {};
         let waker_forwarder = WakerForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
-        let (system_api, storage_guard) = ServiceSystemApi::new(waker_forwarder.clone(), storage);
+        let (system_api, runtime_guard) = ServiceSystemApi::new(waker_forwarder.clone(), storage);
         let system_api_setup =
             queryable_system::add_to_imports(&mut store, &mut imports, system_api);
         let (service, instance) = service::Service::instantiate(&mut store, &module, &mut imports)?;
@@ -165,7 +165,7 @@ impl WasmApplication {
             application,
             future_queue,
             store,
-            extra: storage_guard,
+            extra: runtime_guard,
         })
     }
 
@@ -349,21 +349,21 @@ impl ContractSystemApi {
     ///
     /// This method uses a [`mem::transmute`] call to erase the lifetime of the `storage` trait
     /// object reference. However, this is safe because the lifetime is transfered to the returned
-    /// [`StorageGuard`], which removes the unsafe reference from memory when it is dropped,
+    /// [`RuntimeGuard`], which removes the unsafe reference from memory when it is dropped,
     /// ensuring the lifetime is respected.
     ///
-    /// The [`StorageGuard`] instance must be kept alive while the trait object is still expected to
+    /// The [`RuntimeGuard`] instance must be kept alive while the trait object is still expected to
     /// be alive and usable by the WASM application.
     pub fn new<'runtime>(
         waker: WakerForwarder,
         storage: &'runtime dyn ContractRuntime,
         queued_future_factory: QueuedHostFutureFactory<'static>,
-    ) -> (Self, StorageGuard<'runtime, &'static dyn ContractRuntime>) {
-        let storage_without_lifetime = unsafe { mem::transmute(storage) };
-        let storage = Arc::new(Mutex::new(Some(storage_without_lifetime)));
+    ) -> (Self, RuntimeGuard<'runtime, &'static dyn ContractRuntime>) {
+        let runtime_without_lifetime = unsafe { mem::transmute(storage) };
+        let storage = Arc::new(Mutex::new(Some(runtime_without_lifetime)));
 
-        let guard = StorageGuard {
-            storage: storage.clone(),
+        let guard = RuntimeGuard {
+            runtime: storage.clone(),
             _lifetime: PhantomData,
         };
 
@@ -382,7 +382,7 @@ impl ContractSystemApi {
     ///
     /// If there is a concurrent call from the WASM application (which is impossible as long as it
     /// is executed in a single thread) or if the trait object is no longer alive (or more
-    /// accurately, if the [`StorageGuard`] returned by [`Self::new`] was dropped to indicate it's
+    /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
     /// no longer alive).
     fn storage(&self) -> &'static dyn ContractRuntime {
         *self
@@ -416,20 +416,20 @@ impl ServiceSystemApi {
     ///
     /// This method uses a [`mem::transmute`] call to erase the lifetime of the `storage` trait
     /// object reference. However, this is safe because the lifetime is transfered to the returned
-    /// [`StorageGuard`], which removes the unsafe reference from memory when it is dropped,
+    /// [`RuntimeGuard`], which removes the unsafe reference from memory when it is dropped,
     /// ensuring the lifetime is respected.
     ///
-    /// The [`StorageGuard`] instance must be kept alive while the trait object is still expected to
+    /// The [`RuntimeGuard`] instance must be kept alive while the trait object is still expected to
     /// be alive and usable by the WASM application.
     pub fn new<'runtime>(
         waker: WakerForwarder,
         storage: &'runtime dyn ServiceRuntime,
-    ) -> (Self, StorageGuard<'runtime, &'static dyn ServiceRuntime>) {
-        let storage_without_lifetime = unsafe { mem::transmute(storage) };
-        let storage = Arc::new(Mutex::new(Some(storage_without_lifetime)));
+    ) -> (Self, RuntimeGuard<'runtime, &'static dyn ServiceRuntime>) {
+        let runtime_without_lifetime = unsafe { mem::transmute(storage) };
+        let storage = Arc::new(Mutex::new(Some(runtime_without_lifetime)));
 
-        let guard = StorageGuard {
-            storage: storage.clone(),
+        let guard = RuntimeGuard {
+            runtime: storage.clone(),
             _lifetime: PhantomData,
         };
 
@@ -447,7 +447,7 @@ impl ServiceSystemApi {
     ///
     /// If there is a concurrent call from the WASM application (which is impossible as long as it
     /// is executed in a single thread) or if the trait object is no longer alive (or more
-    /// accurately, if the [`StorageGuard`] returned by [`Self::new`] was dropped to indicate it's
+    /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
     /// no longer alive).
     fn storage(&self) -> &'static dyn ServiceRuntime {
         *self
@@ -469,22 +469,22 @@ impl_queryable_system!(ServiceSystemApi);
 
 /// Extra parameters necessary when cleaning up after contract execution.
 pub struct WasmerContractExtra<'runtime> {
-    storage_guard: StorageGuard<'runtime, &'static dyn ContractRuntime>,
+    runtime_guard: RuntimeGuard<'runtime, &'static dyn ContractRuntime>,
     instance: Instance,
 }
 
 /// A guard to unsure that the [`ContractRuntime`] trait object isn't called after it's no longer
 /// borrowed.
-pub struct StorageGuard<'runtime, S> {
-    storage: Arc<Mutex<Option<S>>>,
+pub struct RuntimeGuard<'runtime, S> {
+    runtime: Arc<Mutex<Option<S>>>,
     _lifetime: PhantomData<&'runtime ()>,
 }
 
-impl<S> Drop for StorageGuard<'_, S> {
+impl<S> Drop for RuntimeGuard<'_, S> {
     fn drop(&mut self) {
-        self.storage
+        self.runtime
             .try_lock()
-            .expect("Guard dropped while storage is still in use")
+            .expect("Guard dropped while runtime is still in use")
             .take();
     }
 }
