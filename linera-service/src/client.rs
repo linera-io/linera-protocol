@@ -994,8 +994,8 @@ where
                         .expect("No chain specified in wallet with no default chain")
                 });
                 let chain_client = context.make_chain_client(storage, chain_id);
-                let service = linera_service::node_service::NodeService::new(chain_client, port);
 
+                let service = linera_service::node_service::NodeService::new(chain_client, port);
                 service.run().await?;
             }
 
@@ -1051,9 +1051,10 @@ where
                 info!("{}", "Application published successfully!".green().bold());
                 info!(
                     "Application Id: {}\n",
-                    format!("{:?}", application_id).bold()
+                    hex::encode(bcs::to_bytes(&application_id).unwrap()).bold()
                 );
-                info!("Time elapsed: {}s", start_time.elapsed().as_secs())
+                info!("Time elapsed: {}s", start_time.elapsed().as_secs());
+                context.save_wallet();
             }
 
             Assign {

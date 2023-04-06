@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::tracker::NotificationTracker;
 use async_graphql::{
     futures_util::Stream,
     http::GraphiQLSource,
@@ -16,7 +17,7 @@ use axum::{
     routing::get,
     Extension, Router, Server,
 };
-use futures::lock::Mutex;
+use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::PublicKey,
     data_types::Amount,
@@ -25,7 +26,7 @@ use linera_base::{
 use linera_chain::{data_types::Certificate, ChainStateView};
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
-    worker::Notification,
+    worker::{Notification, Reason},
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -39,7 +40,7 @@ use serde_json::Value;
 use std::{collections::BTreeMap, net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
-use tracing::{error, info};
+use tracing::{debug, error, info, log::warn, trace};
 
 /// Our root GraphQL query type.
 struct QueryRoot<P, S>(Arc<NodeService<P, S>>);
@@ -67,14 +68,14 @@ enum NodeServiceError {
     #[error("graphql operations of different types submitted")]
     HeterogeneousOperations,
     #[error("failed to parse graphql query: {error}")]
-    GraphQLServerError { error: String },
+    GraphQLParseError { error: String },
     #[error("malformed application response")]
     MalformedApplicationResponse,
 }
 
 impl From<ServerError> for NodeServiceError {
     fn from(value: ServerError) -> Self {
-        NodeServiceError::GraphQLServerError {
+        NodeServiceError::GraphQLParseError {
             error: value.to_string(),
         }
     }
@@ -93,7 +94,7 @@ impl IntoResponse for NodeServiceError {
             NodeServiceError::MissingOperation
             | NodeServiceError::HeterogeneousOperations
             | NodeServiceError::UnsupportedQueryType => (StatusCode::BAD_REQUEST, self.to_string()),
-            NodeServiceError::GraphQLServerError { error } => (StatusCode::BAD_REQUEST, error),
+            NodeServiceError::GraphQLParseError { error } => (StatusCode::BAD_REQUEST, error),
         };
         tuple.into_response()
     }
@@ -107,11 +108,15 @@ where
     ViewError: From<S::ContextError>,
 {
     /// Get a subscription to a stream of `Notification`s for a collection of `ChainId`s.
+    /// An empty vector corresponds to the default chain.
     async fn notifications(
         &self,
         chain_ids: Vec<ChainId>,
     ) -> Result<impl Stream<Item = Notification>, Error> {
-        Ok(self.0.client.lock().await.subscribe_all(chain_ids).await?)
+        match chain_ids.len() {
+            0 => Ok(self.0.client.lock().await.subscribe_default().await?),
+            _ => Ok(self.0.client.lock().await.subscribe_all(chain_ids).await?),
+        }
     }
 }
 
@@ -478,11 +483,11 @@ where
     ViewError: From<S::ContextError>,
 {
     let graphql_res = user_application_query(application_id, service.clone(), req).await?;
+    trace!("{:?}", graphql_res);
     let res_json = graphql_res.data.into_json()?;
     let bcs_bytes =
         bytes_from_res(res_json).ok_or(NodeServiceError::MalformedApplicationResponse)?;
     let operation = Operation::User(bcs_bytes);
-
     let mut client = service.0.client.lock().await;
     client.process_inbox().await?;
     let certificate = client.execute_operation(application_id, operation).await?;
@@ -531,10 +536,55 @@ where
         Self { client, port }
     }
 
+    async fn start_notification_listener(self: Arc<Self>) -> Result<(), anyhow::Error> {
+        let mut notification_stream = self.client.lock().await.subscribe_default().await?;
+        tokio::spawn(async move {
+            let mut tracker = NotificationTracker::default();
+            while let Some(notification) = notification_stream.next().await {
+                debug!("Received notification: {:?}", notification);
+                if tracker.insert(notification.clone()) {
+                    if let Err(e) = self
+                        .client
+                        .lock()
+                        .await
+                        .synchronize_and_recompute_balance()
+                        .await
+                    {
+                        warn!("Failed to synchronize and recompute balance for notification {:?} with error: {:?}", notification, e);
+                        // If synchronization failed there is nothing to update validators about.
+                        continue;
+                    }
+                    match &notification.reason {
+                        Reason::NewBlock { .. } => {
+                            if let Err(e) = self
+                                .client
+                                .lock()
+                                .await
+                                .update_validators_about_local_chain()
+                                .await
+                            {
+                                warn!("Failed to update validators about the local chain after receiving notification {:?} with error: {:?}", notification, e);
+                            }
+                        }
+                        Reason::NewMessage { .. } => {
+                            if let Err(e) = self.client.lock().await.process_inbox().await {
+                                warn!("Failed to process inbox after receiving new message: {:?} with error: {:?}", notification, e);
+                            }
+                        }
+                    }
+                }
+            }
+            warn!("Notification stream ended.")
+        });
+        Ok(())
+    }
+
     /// Run the node service.
     pub async fn run(self) -> Result<(), anyhow::Error> {
         let port = self.port.get();
         let service = Arc::new(self);
+
+        Self::start_notification_listener(service.clone()).await?;
 
         let index_handler = get(graphiql).post(index_handler::<P, S>);
         let applications_handler = get(graphiql).post(application_handler::<P, S>);
