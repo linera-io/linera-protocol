@@ -5,9 +5,9 @@
 ///
 /// Generates the common code for contract system API types for all WASM runtimes.
 macro_rules! impl_writable_system {
-    ($contract_system_api:ident<$storage:lifetime>) => {
+    ($contract_system_api:ident<$runtime:lifetime>) => {
         impl_writable_system!(
-            @generate $contract_system_api<$storage>, wasmtime::Trap, $storage, <$storage>
+            @generate $contract_system_api<$runtime>, wasmtime::Trap, $runtime, <$runtime>
         );
     };
 
@@ -15,16 +15,16 @@ macro_rules! impl_writable_system {
         impl_writable_system!(@generate $contract_system_api, wasmer::RuntimeError, 'static);
     };
 
-    (@generate $contract_system_api:ty, $trap:ty, $storage:lifetime $(, <$param:lifetime> )?) => {
+    (@generate $contract_system_api:ty, $trap:ty, $runtime:lifetime $(, <$param:lifetime> )?) => {
         impl$(<$param>)? WritableSystem for $contract_system_api {
             type Error = ExecutionError;
 
-            type Lock = HostFuture<$storage, Result<(), ExecutionError>>;
-            type ReadKeyBytes = HostFuture<$storage, Result<Option<Vec<u8>>, ExecutionError>>;
-            type FindKeys = HostFuture<$storage, Result<Vec<Vec<u8>>, ExecutionError>>;
+            type Lock = HostFuture<$runtime, Result<(), ExecutionError>>;
+            type ReadKeyBytes = HostFuture<$runtime, Result<Option<Vec<u8>>, ExecutionError>>;
+            type FindKeys = HostFuture<$runtime, Result<Vec<Vec<u8>>, ExecutionError>>;
             type FindKeyValues =
-                HostFuture<$storage, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
-            type WriteBatch = HostFuture<$storage, Result<(), ExecutionError>>;
+                HostFuture<$runtime, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
+            type WriteBatch = HostFuture<$runtime, Result<(), ExecutionError>>;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -271,24 +271,24 @@ macro_rules! impl_writable_system {
 ///
 /// Generates the common code for service system API types for all WASM runtimes.
 macro_rules! impl_queryable_system {
-    ($service_system_api:ident<$storage:lifetime>) => {
-        impl_queryable_system!(@generate $service_system_api<$storage>, $storage, <$storage>);
+    ($service_system_api:ident<$runtime:lifetime>) => {
+        impl_queryable_system!(@generate $service_system_api<$runtime>, $runtime, <$runtime>);
     };
 
     ($service_system_api:ident) => {
         impl_queryable_system!(@generate $service_system_api, 'static);
     };
 
-    (@generate $service_system_api:ty, $storage:lifetime $(, <$param:lifetime> )?) => {
+    (@generate $service_system_api:ty, $runtime:lifetime $(, <$param:lifetime> )?) => {
         impl$(<$param>)? QueryableSystem for $service_system_api {
-            type Load = HostFuture<$storage, Result<Vec<u8>, ExecutionError>>;
-            type Lock = HostFuture<$storage, Result<(), ExecutionError>>;
-            type Unlock = HostFuture<$storage, Result<(), ExecutionError>>;
-            type ReadKeyBytes = HostFuture<$storage, Result<Option<Vec<u8>>, ExecutionError>>;
-            type FindKeys = HostFuture<$storage, Result<Vec<Vec<u8>>, ExecutionError>>;
+            type Load = HostFuture<$runtime, Result<Vec<u8>, ExecutionError>>;
+            type Lock = HostFuture<$runtime, Result<(), ExecutionError>>;
+            type Unlock = HostFuture<$runtime, Result<(), ExecutionError>>;
+            type ReadKeyBytes = HostFuture<$runtime, Result<Option<Vec<u8>>, ExecutionError>>;
+            type FindKeys = HostFuture<$runtime, Result<Vec<Vec<u8>>, ExecutionError>>;
             type FindKeyValues =
-                HostFuture<$storage, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
-            type TryQueryApplication = HostFuture<$storage, Result<Vec<u8>, ExecutionError>>;
+                HostFuture<$runtime, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
+            type TryQueryApplication = HostFuture<$runtime, Result<Vec<u8>, ExecutionError>>;
 
             fn chain_id(&mut self) -> queryable_system::ChainId {
                 self.storage().chain_id().into()
