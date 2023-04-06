@@ -106,7 +106,7 @@ pub trait UserApplication {
     async fn initialize(
         &self,
         context: &OperationContext,
-        storage: &dyn ContractRuntime,
+        runtime: &dyn ContractRuntime,
         argument: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
@@ -114,7 +114,7 @@ pub trait UserApplication {
     async fn execute_operation(
         &self,
         context: &OperationContext,
-        storage: &dyn ContractRuntime,
+        runtime: &dyn ContractRuntime,
         operation: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
@@ -122,7 +122,7 @@ pub trait UserApplication {
     async fn execute_effect(
         &self,
         context: &EffectContext,
-        storage: &dyn ContractRuntime,
+        runtime: &dyn ContractRuntime,
         effect: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
@@ -133,7 +133,7 @@ pub trait UserApplication {
     async fn handle_application_call(
         &self,
         context: &CalleeContext,
-        storage: &dyn ContractRuntime,
+        runtime: &dyn ContractRuntime,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError>;
@@ -142,7 +142,7 @@ pub trait UserApplication {
     async fn handle_session_call(
         &self,
         context: &CalleeContext,
-        storage: &dyn ContractRuntime,
+        runtime: &dyn ContractRuntime,
         session_kind: u64,
         session_data: &mut Vec<u8>,
         argument: &[u8],
@@ -157,7 +157,7 @@ pub trait UserApplication {
     async fn query_application(
         &self,
         context: &QueryContext,
-        storage: &dyn ServiceRuntime,
+        runtime: &dyn ServiceRuntime,
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError>;
 }

@@ -69,7 +69,7 @@ impl UserApplication for TestApplication {
     async fn initialize(
         &self,
         context: &OperationContext,
-        _storage: &dyn ContractRuntime,
+        _runtime: &dyn ContractRuntime,
         _argument: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         assert_eq!(context.authenticated_signer, Some(self.owner));
@@ -83,26 +83,26 @@ impl UserApplication for TestApplication {
     async fn execute_operation(
         &self,
         context: &OperationContext,
-        storage: &dyn ContractRuntime,
+        runtime: &dyn ContractRuntime,
         operation: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
-        let app_id = storage.application_id();
+        let app_id = runtime.application_id();
         // Modify our state.
         let chosen_key = vec![0];
-        storage.lock_view_user_state().await?;
-        let state = storage.read_key_bytes(chosen_key.clone()).await?;
+        runtime.lock_view_user_state().await?;
+        let state = runtime.read_key_bytes(chosen_key.clone()).await?;
         let mut state = state.unwrap_or_default();
         state.extend(operation);
         let mut batch = Batch::new();
         batch.put_key_value_bytes(chosen_key, state);
-        storage
+        runtime
             .write_batch_and_unlock(batch)
             .await
             .expect("State is locked at the start of the operation");
         // Call ourselves after the state => ok.
-        let call_result = storage
+        let call_result = runtime
             .try_call_application(/* authenticate */ true, app_id, &[], vec![])
             .await?;
         assert_eq!(call_result.value, Vec::<u8>::new());
@@ -110,7 +110,7 @@ impl UserApplication for TestApplication {
         if !operation.is_empty() {
             // Call the session to close it.
             let session_id = call_result.sessions[0];
-            storage
+            runtime
                 .try_call_session(/* authenticate */ false, session_id, &[], vec![])
                 .await?;
         }
@@ -121,18 +121,18 @@ impl UserApplication for TestApplication {
     async fn execute_effect(
         &self,
         context: &EffectContext,
-        storage: &dyn ContractRuntime,
+        runtime: &dyn ContractRuntime,
         _effect: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
-        let app_id = storage.application_id();
-        storage.lock_view_user_state().await?;
+        let app_id = runtime.application_id();
+        runtime.lock_view_user_state().await?;
         // Call ourselves while the state is locked => not ok.
-        storage
+        runtime
             .try_call_application(/* authenticate */ true, app_id, &[], vec![])
             .await?;
-        storage.unlock_view_user_state().await?;
+        runtime.unlock_view_user_state().await?;
         Ok(RawExecutionResult::default())
     }
 
@@ -140,7 +140,7 @@ impl UserApplication for TestApplication {
     async fn handle_application_call(
         &self,
         context: &CalleeContext,
-        _storage: &dyn ContractRuntime,
+        _runtime: &dyn ContractRuntime,
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
@@ -158,7 +158,7 @@ impl UserApplication for TestApplication {
     async fn handle_session_call(
         &self,
         context: &CalleeContext,
-        _storage: &dyn ContractRuntime,
+        _runtime: &dyn ContractRuntime,
         _session_kind: u64,
         _session_data: &mut Vec<u8>,
         _argument: &[u8],
@@ -175,14 +175,14 @@ impl UserApplication for TestApplication {
     async fn query_application(
         &self,
         _context: &QueryContext,
-        storage: &dyn ServiceRuntime,
+        runtime: &dyn ServiceRuntime,
         _argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
         let chosen_key = vec![0];
-        storage.lock_view_user_state().await?;
-        let state = storage.read_key_bytes(chosen_key).await?;
+        runtime.lock_view_user_state().await?;
+        let state = runtime.read_key_bytes(chosen_key).await?;
         let state = state.unwrap_or_default();
-        storage.unlock_view_user_state().await?;
+        runtime.unlock_view_user_state().await?;
         Ok(state)
     }
 }

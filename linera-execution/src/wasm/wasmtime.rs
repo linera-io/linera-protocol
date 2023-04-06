@@ -80,7 +80,7 @@ impl WasmApplication {
     /// Prepare a runtime instance to call into the WASM contract.
     pub fn prepare_contract_runtime_with_wasmtime<'runtime>(
         &self,
-        storage: &'runtime dyn ContractRuntime,
+        runtime: &'runtime dyn ContractRuntime,
     ) -> Result<WasmRuntimeContext<'runtime, Contract<'runtime>>, WasmExecutionError> {
         let mut config = Config::default();
         config
@@ -95,14 +95,14 @@ impl WasmApplication {
         let module = Module::new(&engine, &self.contract_bytecode)?;
         let waker_forwarder = WakerForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
-        let state = ContractState::new(storage, waker_forwarder.clone(), queued_future_factory);
+        let state = ContractState::new(runtime, waker_forwarder.clone(), queued_future_factory);
         let mut store = Store::new(&engine, state);
         let (contract, _instance) =
             contract::Contract::instantiate(&mut store, &module, &mut linker, ContractState::data)?;
         let application = Contract { contract };
 
         store
-            .add_fuel(storage.remaining_fuel())
+            .add_fuel(runtime.remaining_fuel())
             .expect("Fuel consumption wasn't properly enabled");
 
         Ok(WasmRuntimeContext {
@@ -117,7 +117,7 @@ impl WasmApplication {
     /// Prepare a runtime instance to call into the WASM service.
     pub fn prepare_service_runtime_with_wasmtime<'runtime>(
         &self,
-        storage: &'runtime dyn ServiceRuntime,
+        runtime: &'runtime dyn ServiceRuntime,
     ) -> Result<WasmRuntimeContext<'runtime, Service<'runtime>>, WasmExecutionError> {
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
@@ -127,7 +127,7 @@ impl WasmApplication {
         let module = Module::new(&engine, &self.service_bytecode)?;
         let waker_forwarder = WakerForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
-        let state = ServiceState::new(storage, waker_forwarder.clone());
+        let state = ServiceState::new(runtime, waker_forwarder.clone());
         let mut store = Store::new(&engine, state);
         let (service, _instance) =
             service::Service::instantiate(&mut store, &module, &mut linker, ServiceState::data)?;
@@ -160,16 +160,16 @@ pub struct ServiceState<'runtime> {
 impl<'runtime> ContractState<'runtime> {
     /// Create a new instance of [`ContractState`].
     ///
-    /// Uses `storage` to export the system API, and the `waker` to be able to correctly handle
+    /// Uses `runtime` to export the system API, and the `waker` to be able to correctly handle
     /// asynchronous calls from the guest WASM module.
     pub fn new(
-        storage: &'runtime dyn ContractRuntime,
+        runtime: &'runtime dyn ContractRuntime,
         waker: WakerForwarder,
         queued_future_factory: QueuedHostFutureFactory<'runtime>,
     ) -> Self {
         Self {
             data: ContractData::default(),
-            system_api: ContractSystemApi::new(waker, storage, queued_future_factory),
+            system_api: ContractSystemApi::new(waker, runtime, queued_future_factory),
             system_tables: WritableSystemTables::default(),
         }
     }
@@ -193,12 +193,12 @@ impl<'runtime> ContractState<'runtime> {
 impl<'runtime> ServiceState<'runtime> {
     /// Create a new instance of [`ServiceState`].
     ///
-    /// Uses `storage` to export the system API, and the `waker` to be able to correctly handle
+    /// Uses `runtime` to export the system API, and the `waker` to be able to correctly handle
     /// asynchronous calls from the guest WASM module.
-    pub fn new(storage: &'runtime dyn ServiceRuntime, waker: WakerForwarder) -> Self {
+    pub fn new(runtime: &'runtime dyn ServiceRuntime, waker: WakerForwarder) -> Self {
         Self {
             data: ServiceData::default(),
-            system_api: ServiceSystemApi::new(waker, storage),
+            system_api: ServiceSystemApi::new(waker, runtime),
             system_tables: QueryableSystemTables::default(),
         }
     }
@@ -363,7 +363,7 @@ impl<'runtime> common::Service for Service<'runtime> {
 /// implementations.
 struct SystemApi<S> {
     waker: WakerForwarder,
-    storage: S,
+    runtime: S,
 }
 
 /// Implementation to forward contract system calls from the guest WASM module to the host
@@ -375,21 +375,21 @@ pub struct ContractSystemApi<'runtime> {
 
 impl<'runtime> ContractSystemApi<'runtime> {
     /// Creates a new [`ContractSystemApi`] instance using the provided asynchronous `waker` and
-    /// exporting the API from `storage`.
+    /// exporting the API from `runtime`.
     pub fn new(
         waker: WakerForwarder,
-        storage: &'runtime dyn ContractRuntime,
+        runtime: &'runtime dyn ContractRuntime,
         queued_future_factory: QueuedHostFutureFactory<'runtime>,
     ) -> Self {
         ContractSystemApi {
-            shared: SystemApi { waker, storage },
+            shared: SystemApi { waker, runtime },
             queued_future_factory,
         }
     }
 
     /// Returns the [`ContractRuntime`] trait object instance to handle a system call.
     fn runtime(&self) -> &'runtime dyn ContractRuntime {
-        self.shared.storage
+        self.shared.runtime
     }
 
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
@@ -408,16 +408,16 @@ pub struct ServiceSystemApi<'runtime> {
 
 impl<'runtime> ServiceSystemApi<'runtime> {
     /// Creates a new [`ServiceSystemApi`] instance using the provided asynchronous `waker` and
-    /// exporting the API from `storage`.
-    pub fn new(waker: WakerForwarder, storage: &'runtime dyn ServiceRuntime) -> Self {
+    /// exporting the API from `runtime`.
+    pub fn new(waker: WakerForwarder, runtime: &'runtime dyn ServiceRuntime) -> Self {
         ServiceSystemApi {
-            shared: SystemApi { waker, storage },
+            shared: SystemApi { waker, runtime },
         }
     }
 
     /// Returns the [`ServiceRuntime`] trait object instance to handle a system call.
     fn runtime(&self) -> &'runtime dyn ServiceRuntime {
-        self.shared.storage
+        self.shared.runtime
     }
 
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.

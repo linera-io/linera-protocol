@@ -97,10 +97,10 @@ impl WasmApplication {
     /// Prepare a runtime instance to call into the WASM contract.
     pub fn prepare_contract_runtime_with_wasmer<'runtime>(
         &self,
-        storage: &'runtime dyn ContractRuntime,
+        runtime: &'runtime dyn ContractRuntime,
     ) -> Result<WasmRuntimeContext<'static, Contract<'runtime>>, WasmExecutionError> {
         let metering = Arc::new(Metering::new(
-            storage.remaining_fuel(),
+            runtime.remaining_fuel(),
             Self::operation_cost,
         ));
         let mut compiler_config = Singlepass::default();
@@ -114,7 +114,7 @@ impl WasmApplication {
         let waker_forwarder = WakerForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
         let (system_api, runtime_guard) =
-            ContractSystemApi::new(waker_forwarder.clone(), storage, queued_future_factory);
+            ContractSystemApi::new(waker_forwarder.clone(), runtime, queued_future_factory);
         let system_api_setup =
             writable_system::add_to_imports(&mut store, &mut imports, system_api);
         let (contract, instance) =
@@ -141,7 +141,7 @@ impl WasmApplication {
     /// Prepare a runtime instance to call into the WASM service.
     pub fn prepare_service_runtime_with_wasmer<'runtime>(
         &self,
-        storage: &'runtime dyn ServiceRuntime,
+        runtime: &'runtime dyn ServiceRuntime,
     ) -> Result<WasmRuntimeContext<'static, Service<'runtime>>, WasmExecutionError> {
         let mut store = Store::default();
         let module = Module::new(&store, &self.service_bytecode)
@@ -149,7 +149,7 @@ impl WasmApplication {
         let mut imports = imports! {};
         let waker_forwarder = WakerForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
-        let (system_api, runtime_guard) = ServiceSystemApi::new(waker_forwarder.clone(), storage);
+        let (system_api, runtime_guard) = ServiceSystemApi::new(waker_forwarder.clone(), runtime);
         let system_api_setup =
             queryable_system::add_to_imports(&mut store, &mut imports, system_api);
         let (service, instance) = service::Service::instantiate(&mut store, &module, &mut imports)?;
@@ -331,7 +331,7 @@ impl<'runtime> common::Service for Service<'runtime> {
 /// implementations.
 struct SystemApi<S> {
     waker: WakerForwarder,
-    storage: Arc<Mutex<Option<S>>>,
+    runtime: Arc<Mutex<Option<S>>>,
 }
 
 /// Implementation to forward contract system calls from the guest WASM module to the host
@@ -347,7 +347,7 @@ impl ContractSystemApi {
     ///
     /// # Safety
     ///
-    /// This method uses a [`mem::transmute`] call to erase the lifetime of the `storage` trait
+    /// This method uses a [`mem::transmute`] call to erase the lifetime of the `runtime` trait
     /// object reference. However, this is safe because the lifetime is transfered to the returned
     /// [`RuntimeGuard`], which removes the unsafe reference from memory when it is dropped,
     /// ensuring the lifetime is respected.
@@ -356,20 +356,20 @@ impl ContractSystemApi {
     /// be alive and usable by the WASM application.
     pub fn new<'runtime>(
         waker: WakerForwarder,
-        storage: &'runtime dyn ContractRuntime,
+        runtime: &'runtime dyn ContractRuntime,
         queued_future_factory: QueuedHostFutureFactory<'static>,
     ) -> (Self, RuntimeGuard<'runtime, &'static dyn ContractRuntime>) {
-        let runtime_without_lifetime = unsafe { mem::transmute(storage) };
-        let storage = Arc::new(Mutex::new(Some(runtime_without_lifetime)));
+        let runtime_without_lifetime = unsafe { mem::transmute(runtime) };
+        let runtime = Arc::new(Mutex::new(Some(runtime_without_lifetime)));
 
         let guard = RuntimeGuard {
-            runtime: storage.clone(),
+            runtime: runtime.clone(),
             _lifetime: PhantomData,
         };
 
         (
             ContractSystemApi {
-                shared: SystemApi { waker, storage },
+                shared: SystemApi { waker, runtime },
                 queued_future_factory,
             },
             guard,
@@ -387,11 +387,11 @@ impl ContractSystemApi {
     fn runtime(&self) -> &'static dyn ContractRuntime {
         *self
             .shared
-            .storage
+            .runtime
             .try_lock()
-            .expect("Unexpected concurrent storage access by application")
+            .expect("Unexpected concurrent runtime access by application")
             .as_ref()
-            .expect("Application called storage after it should have stopped")
+            .expect("Application called runtime after it should have stopped")
     }
 
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
@@ -414,7 +414,7 @@ impl ServiceSystemApi {
     ///
     /// # Safety
     ///
-    /// This method uses a [`mem::transmute`] call to erase the lifetime of the `storage` trait
+    /// This method uses a [`mem::transmute`] call to erase the lifetime of the `runtime` trait
     /// object reference. However, this is safe because the lifetime is transfered to the returned
     /// [`RuntimeGuard`], which removes the unsafe reference from memory when it is dropped,
     /// ensuring the lifetime is respected.
@@ -423,19 +423,19 @@ impl ServiceSystemApi {
     /// be alive and usable by the WASM application.
     pub fn new<'runtime>(
         waker: WakerForwarder,
-        storage: &'runtime dyn ServiceRuntime,
+        runtime: &'runtime dyn ServiceRuntime,
     ) -> (Self, RuntimeGuard<'runtime, &'static dyn ServiceRuntime>) {
-        let runtime_without_lifetime = unsafe { mem::transmute(storage) };
-        let storage = Arc::new(Mutex::new(Some(runtime_without_lifetime)));
+        let runtime_without_lifetime = unsafe { mem::transmute(runtime) };
+        let runtime = Arc::new(Mutex::new(Some(runtime_without_lifetime)));
 
         let guard = RuntimeGuard {
-            runtime: storage.clone(),
+            runtime: runtime.clone(),
             _lifetime: PhantomData,
         };
 
         (
             ServiceSystemApi {
-                shared: SystemApi { waker, storage },
+                shared: SystemApi { waker, runtime },
             },
             guard,
         )
@@ -452,11 +452,11 @@ impl ServiceSystemApi {
     fn runtime(&self) -> &'static dyn ServiceRuntime {
         *self
             .shared
-            .storage
+            .runtime
             .try_lock()
-            .expect("Unexpected concurrent storage access by application")
+            .expect("Unexpected concurrent runtime access by application")
             .as_ref()
-            .expect("Application called storage after it should have stopped")
+            .expect("Application called runtime after it should have stopped")
     }
 
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
