@@ -31,33 +31,33 @@ macro_rules! impl_writable_system {
             }
 
             fn chain_id(&mut self) -> Result<writable_system::ChainId, Self::Error> {
-                Ok(self.storage().chain_id().into())
+                Ok(self.runtime().chain_id().into())
             }
 
             fn application_id(&mut self) -> Result<writable_system::ApplicationId, Self::Error> {
-                Ok(self.storage().application_id().into())
+                Ok(self.runtime().application_id().into())
             }
 
             fn application_parameters(&mut self) -> Result<Vec<u8>, Self::Error> {
-                Ok(self.storage().application_parameters())
+                Ok(self.runtime().application_parameters())
             }
 
             fn read_system_balance(
                 &mut self,
             ) -> Result<writable_system::Balance, Self::Error> {
-                Ok(self.storage().read_system_balance().into())
+                Ok(self.runtime().read_system_balance().into())
             }
 
             fn read_system_timestamp(&mut self) -> Result<writable_system::Timestamp, Self::Error> {
-                Ok(self.storage().read_system_timestamp().micros())
+                Ok(self.runtime().read_system_timestamp().micros())
             }
 
             fn load(&mut self) -> Result<Vec<u8>, Self::Error> {
-                Self::block_on(self.storage().try_read_my_state())
+                Self::block_on(self.runtime().try_read_my_state())
             }
 
             fn load_and_lock(&mut self) -> Result<Option<Vec<u8>>, Self::Error> {
-                match Self::block_on(self.storage().try_read_and_lock_my_state()) {
+                match Self::block_on(self.runtime().try_read_and_lock_my_state()) {
                     Ok(bytes) => Ok(Some(bytes)),
                     Err(ExecutionError::ViewError(ViewError::NotFound(_))) => Ok(None),
                     Err(error) => Err(error),
@@ -66,7 +66,7 @@ macro_rules! impl_writable_system {
 
             fn store_and_unlock(&mut self, state: &[u8]) -> Result<bool, Self::Error> {
                 Ok(self
-                    .storage()
+                    .runtime()
                     .save_and_unlock_my_state(state.to_owned())
                     .is_ok())
             }
@@ -74,7 +74,7 @@ macro_rules! impl_writable_system {
             fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
                 Ok(self
                     .queued_future_factory
-                    .enqueue(self.storage().lock_view_user_state()))
+                    .enqueue(self.runtime().lock_view_user_state()))
             }
 
             fn lock_poll(
@@ -98,7 +98,7 @@ macro_rules! impl_writable_system {
             ) -> Result<Self::ReadKeyBytes, Self::Error> {
                 Ok(self
                     .queued_future_factory
-                    .enqueue(self.storage().read_key_bytes(key.to_owned())))
+                    .enqueue(self.runtime().read_key_bytes(key.to_owned())))
             }
 
             fn read_key_bytes_poll(
@@ -115,7 +115,7 @@ macro_rules! impl_writable_system {
             fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
                 Ok(self
                     .queued_future_factory
-                    .enqueue(self.storage().find_keys_by_prefix(key_prefix.to_owned())))
+                    .enqueue(self.runtime().find_keys_by_prefix(key_prefix.to_owned())))
             }
 
             fn find_keys_poll(
@@ -134,7 +134,7 @@ macro_rules! impl_writable_system {
                 key_prefix: &[u8],
             ) -> Result<Self::FindKeyValues, Self::Error> {
                 Ok(self.queued_future_factory.enqueue(
-                    self.storage()
+                    self.runtime()
                         .find_key_values_by_prefix(key_prefix.to_owned()),
                 ))
             }
@@ -170,7 +170,7 @@ macro_rules! impl_writable_system {
                 }
                 Ok(self
                     .queued_future_factory
-                    .enqueue(self.storage().write_batch_and_unlock(batch)))
+                    .enqueue(self.runtime().write_batch_and_unlock(batch)))
             }
 
             fn write_batch_poll(
@@ -199,7 +199,7 @@ macro_rules! impl_writable_system {
                     .collect();
                 let argument = Vec::from(argument);
 
-                Self::block_on(self.storage().try_call_application(
+                Self::block_on(self.runtime().try_call_application(
                     authenticated,
                     application.into(),
                     &argument,
@@ -222,7 +222,7 @@ macro_rules! impl_writable_system {
                     .collect();
                 let argument = Vec::from(argument);
 
-                Self::block_on(self.storage().try_call_session(
+                Self::block_on(self.runtime().try_call_session(
                     authenticated,
                     session.into(),
                     &argument,
@@ -291,27 +291,27 @@ macro_rules! impl_queryable_system {
             type TryQueryApplication = HostFuture<$runtime, Result<Vec<u8>, ExecutionError>>;
 
             fn chain_id(&mut self) -> queryable_system::ChainId {
-                self.storage().chain_id().into()
+                self.runtime().chain_id().into()
             }
 
             fn application_id(&mut self) -> queryable_system::ApplicationId {
-                self.storage().application_id().into()
+                self.runtime().application_id().into()
             }
 
             fn application_parameters(&mut self) -> Vec<u8> {
-                self.storage().application_parameters()
+                self.runtime().application_parameters()
             }
 
             fn read_system_balance(&mut self) -> queryable_system::Balance {
-                self.storage().read_system_balance().into()
+                self.runtime().read_system_balance().into()
             }
 
             fn read_system_timestamp(&mut self) -> queryable_system::Timestamp {
-                self.storage().read_system_timestamp().micros()
+                self.runtime().read_system_timestamp().micros()
             }
 
             fn load_new(&mut self) -> Self::Load {
-                HostFuture::new(self.storage().try_read_my_state())
+                HostFuture::new(self.runtime().try_read_my_state())
             }
 
             fn load_poll(&mut self, future: &Self::Load) -> queryable_system::PollLoad {
@@ -324,7 +324,7 @@ macro_rules! impl_queryable_system {
             }
 
             fn lock_new(&mut self) -> Self::Lock {
-                HostFuture::new(self.storage().lock_view_user_state())
+                HostFuture::new(self.runtime().lock_view_user_state())
             }
 
             fn lock_poll(&mut self, future: &Self::Lock) -> queryable_system::PollLock {
@@ -337,7 +337,7 @@ macro_rules! impl_queryable_system {
             }
 
             fn unlock_new(&mut self) -> Self::Unlock {
-                HostFuture::new(self.storage().unlock_view_user_state())
+                HostFuture::new(self.runtime().unlock_view_user_state())
             }
 
             fn unlock_poll(&mut self, future: &Self::Lock) -> queryable_system::PollUnlock {
@@ -350,7 +350,7 @@ macro_rules! impl_queryable_system {
             }
 
             fn read_key_bytes_new(&mut self, key: &[u8]) -> Self::ReadKeyBytes {
-                HostFuture::new(self.storage().read_key_bytes(key.to_owned()))
+                HostFuture::new(self.runtime().read_key_bytes(key.to_owned()))
             }
 
             fn read_key_bytes_poll(
@@ -366,7 +366,7 @@ macro_rules! impl_queryable_system {
             }
 
             fn find_keys_new(&mut self, key_prefix: &[u8]) -> Self::FindKeys {
-                HostFuture::new(self.storage().find_keys_by_prefix(key_prefix.to_owned()))
+                HostFuture::new(self.runtime().find_keys_by_prefix(key_prefix.to_owned()))
             }
 
             fn find_keys_poll(&mut self, future: &Self::FindKeys) -> queryable_system::PollFindKeys {
@@ -380,7 +380,7 @@ macro_rules! impl_queryable_system {
 
             fn find_key_values_new(&mut self, key_prefix: &[u8]) -> Self::FindKeyValues {
                 HostFuture::new(
-                    self.storage()
+                    self.runtime()
                         .find_key_values_by_prefix(key_prefix.to_owned()),
                 )
             }
@@ -402,11 +402,11 @@ macro_rules! impl_queryable_system {
                 application: queryable_system::ApplicationId,
                 argument: &[u8],
             ) -> Self::TryQueryApplication {
-                let storage = self.storage();
+                let runtime = self.runtime();
                 let argument = Vec::from(argument);
 
                 HostFuture::new(async move {
-                    storage
+                    runtime
                         .try_query_application(application.into(), &argument)
                         .await
                 })

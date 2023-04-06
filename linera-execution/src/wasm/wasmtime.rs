@@ -57,11 +57,11 @@ impl<'runtime> ApplicationRuntimeContext for Contract<'runtime> {
     type Extra = ();
 
     fn finalize(context: &mut WasmRuntimeContext<Self>) {
-        let storage = context.store.data().system_api.storage();
-        let initial_fuel = storage.remaining_fuel();
+        let runtime = context.store.data().system_api.runtime();
+        let initial_fuel = runtime.remaining_fuel();
         let remaining_fuel = initial_fuel - context.store.fuel_consumed().unwrap_or(0);
 
-        storage.set_remaining_fuel(remaining_fuel);
+        runtime.set_remaining_fuel(remaining_fuel);
     }
 }
 
@@ -388,7 +388,7 @@ impl<'runtime> ContractSystemApi<'runtime> {
     }
 
     /// Returns the [`ContractRuntime`] trait object instance to handle a system call.
-    fn storage(&self) -> &'runtime dyn ContractRuntime {
+    fn runtime(&self) -> &'runtime dyn ContractRuntime {
         self.shared.storage
     }
 
@@ -416,7 +416,7 @@ impl<'runtime> ServiceSystemApi<'runtime> {
     }
 
     /// Returns the [`ServiceRuntime`] trait object instance to handle a system call.
-    fn storage(&self) -> &'runtime dyn ServiceRuntime {
+    fn runtime(&self) -> &'runtime dyn ServiceRuntime {
         self.shared.storage
     }
 

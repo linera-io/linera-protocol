@@ -384,7 +384,7 @@ impl ContractSystemApi {
     /// is executed in a single thread) or if the trait object is no longer alive (or more
     /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
     /// no longer alive).
-    fn storage(&self) -> &'static dyn ContractRuntime {
+    fn runtime(&self) -> &'static dyn ContractRuntime {
         *self
             .shared
             .storage
@@ -449,7 +449,7 @@ impl ServiceSystemApi {
     /// is executed in a single thread) or if the trait object is no longer alive (or more
     /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
     /// no longer alive).
-    fn storage(&self) -> &'static dyn ServiceRuntime {
+    fn runtime(&self) -> &'static dyn ServiceRuntime {
         *self
             .shared
             .storage
