@@ -9,7 +9,6 @@ members = [
         "meta-counter",
         "counter2",
         "crowd-funding2",
-        "fungible2",
         "fungible-graphql",
         "reentrant-counter",
         "reentrant-counter2",
