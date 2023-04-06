@@ -50,15 +50,15 @@ use wit_bindgen_host_wasmer_rust::Le;
 ///
 /// The runtime has a lifetime so that it does not outlive the trait object used to export the
 /// system API.
-pub struct Contract<'storage> {
+pub struct Contract<'runtime> {
     contract: contract::Contract,
-    _lifetime: PhantomData<&'storage ()>,
+    _lifetime: PhantomData<&'runtime ()>,
 }
 
-impl<'storage> ApplicationRuntimeContext for Contract<'storage> {
+impl<'runtime> ApplicationRuntimeContext for Contract<'runtime> {
     type Store = Store;
     type Error = RuntimeError;
-    type Extra = WasmerContractExtra<'storage>;
+    type Extra = WasmerContractExtra<'runtime>;
 
     fn finalize(context: &mut WasmRuntimeContext<Self>) {
         let storage_guard = context
@@ -82,23 +82,23 @@ impl<'storage> ApplicationRuntimeContext for Contract<'storage> {
 }
 
 /// Type representing the [Wasmer](https://wasmer.io/) service runtime.
-pub struct Service<'storage> {
+pub struct Service<'runtime> {
     service: service::Service,
-    _lifetime: PhantomData<&'storage ()>,
+    _lifetime: PhantomData<&'runtime ()>,
 }
 
-impl<'storage> ApplicationRuntimeContext for Service<'storage> {
+impl<'runtime> ApplicationRuntimeContext for Service<'runtime> {
     type Store = Store;
     type Error = RuntimeError;
-    type Extra = StorageGuard<'storage, &'static dyn ServiceRuntime>;
+    type Extra = StorageGuard<'runtime, &'static dyn ServiceRuntime>;
 }
 
 impl WasmApplication {
     /// Prepare a runtime instance to call into the WASM contract.
-    pub fn prepare_contract_runtime_with_wasmer<'storage>(
+    pub fn prepare_contract_runtime_with_wasmer<'runtime>(
         &self,
-        storage: &'storage dyn ContractRuntime,
-    ) -> Result<WasmRuntimeContext<'static, Contract<'storage>>, WasmExecutionError> {
+        storage: &'runtime dyn ContractRuntime,
+    ) -> Result<WasmRuntimeContext<'static, Contract<'runtime>>, WasmExecutionError> {
         let metering = Arc::new(Metering::new(
             storage.remaining_fuel(),
             Self::operation_cost,
@@ -139,10 +139,10 @@ impl WasmApplication {
     }
 
     /// Prepare a runtime instance to call into the WASM service.
-    pub fn prepare_service_runtime_with_wasmer<'storage>(
+    pub fn prepare_service_runtime_with_wasmer<'runtime>(
         &self,
-        storage: &'storage dyn ServiceRuntime,
-    ) -> Result<WasmRuntimeContext<'static, Service<'storage>>, WasmExecutionError> {
+        storage: &'runtime dyn ServiceRuntime,
+    ) -> Result<WasmRuntimeContext<'static, Service<'runtime>>, WasmExecutionError> {
         let mut store = Store::default();
         let module = Module::new(&store, &self.service_bytecode)
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
@@ -187,7 +187,7 @@ impl WasmApplication {
     }
 }
 
-impl<'storage> common::Contract for Contract<'storage> {
+impl<'runtime> common::Contract for Contract<'runtime> {
     type Initialize = contract::Initialize;
     type ExecuteOperation = contract::ExecuteOperation;
     type ExecuteEffect = contract::ExecuteEffect;
@@ -304,7 +304,7 @@ impl<'storage> common::Contract for Contract<'storage> {
     }
 }
 
-impl<'storage> common::Service for Service<'storage> {
+impl<'runtime> common::Service for Service<'runtime> {
     type QueryApplication = service::QueryApplication;
     type QueryContext = service::QueryContext;
     type PollQuery = service::PollQuery;
@@ -354,11 +354,11 @@ impl ContractSystemApi {
     ///
     /// The [`StorageGuard`] instance must be kept alive while the trait object is still expected to
     /// be alive and usable by the WASM application.
-    pub fn new<'storage>(
+    pub fn new<'runtime>(
         waker: WakerForwarder,
-        storage: &'storage dyn ContractRuntime,
+        storage: &'runtime dyn ContractRuntime,
         queued_future_factory: QueuedHostFutureFactory<'static>,
-    ) -> (Self, StorageGuard<'storage, &'static dyn ContractRuntime>) {
+    ) -> (Self, StorageGuard<'runtime, &'static dyn ContractRuntime>) {
         let storage_without_lifetime = unsafe { mem::transmute(storage) };
         let storage = Arc::new(Mutex::new(Some(storage_without_lifetime)));
 
@@ -421,10 +421,10 @@ impl ServiceSystemApi {
     ///
     /// The [`StorageGuard`] instance must be kept alive while the trait object is still expected to
     /// be alive and usable by the WASM application.
-    pub fn new<'storage>(
+    pub fn new<'runtime>(
         waker: WakerForwarder,
-        storage: &'storage dyn ServiceRuntime,
-    ) -> (Self, StorageGuard<'storage, &'static dyn ServiceRuntime>) {
+        storage: &'runtime dyn ServiceRuntime,
+    ) -> (Self, StorageGuard<'runtime, &'static dyn ServiceRuntime>) {
         let storage_without_lifetime = unsafe { mem::transmute(storage) };
         let storage = Arc::new(Mutex::new(Some(storage_without_lifetime)));
 
@@ -468,16 +468,16 @@ impl ServiceSystemApi {
 impl_queryable_system!(ServiceSystemApi);
 
 /// Extra parameters necessary when cleaning up after contract execution.
-pub struct WasmerContractExtra<'storage> {
-    storage_guard: StorageGuard<'storage, &'static dyn ContractRuntime>,
+pub struct WasmerContractExtra<'runtime> {
+    storage_guard: StorageGuard<'runtime, &'static dyn ContractRuntime>,
     instance: Instance,
 }
 
 /// A guard to unsure that the [`ContractRuntime`] trait object isn't called after it's no longer
 /// borrowed.
-pub struct StorageGuard<'storage, S> {
+pub struct StorageGuard<'runtime, S> {
     storage: Arc<Mutex<Option<S>>>,
-    _lifetime: PhantomData<&'storage ()>,
+    _lifetime: PhantomData<&'runtime ()>,
 }
 
 impl<S> Drop for StorageGuard<'_, S> {

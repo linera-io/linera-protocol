@@ -47,12 +47,12 @@ use wit_bindgen_host_wasmtime_rust::Le;
 ///
 /// The runtime has a lifetime so that it does not outlive the trait object used to export the
 /// system API.
-pub struct Contract<'storage> {
-    contract: contract::Contract<ContractState<'storage>>,
+pub struct Contract<'runtime> {
+    contract: contract::Contract<ContractState<'runtime>>,
 }
 
-impl<'storage> ApplicationRuntimeContext for Contract<'storage> {
-    type Store = Store<ContractState<'storage>>;
+impl<'runtime> ApplicationRuntimeContext for Contract<'runtime> {
+    type Store = Store<ContractState<'runtime>>;
     type Error = Trap;
     type Extra = ();
 
@@ -66,22 +66,22 @@ impl<'storage> ApplicationRuntimeContext for Contract<'storage> {
 }
 
 /// Type representing the [Wasmtime](https://wasmtime.dev/) runtime for services.
-pub struct Service<'storage> {
-    service: service::Service<ServiceState<'storage>>,
+pub struct Service<'runtime> {
+    service: service::Service<ServiceState<'runtime>>,
 }
 
-impl<'storage> ApplicationRuntimeContext for Service<'storage> {
-    type Store = Store<ServiceState<'storage>>;
+impl<'runtime> ApplicationRuntimeContext for Service<'runtime> {
+    type Store = Store<ServiceState<'runtime>>;
     type Error = Trap;
     type Extra = ();
 }
 
 impl WasmApplication {
     /// Prepare a runtime instance to call into the WASM contract.
-    pub fn prepare_contract_runtime_with_wasmtime<'storage>(
+    pub fn prepare_contract_runtime_with_wasmtime<'runtime>(
         &self,
-        storage: &'storage dyn ContractRuntime,
-    ) -> Result<WasmRuntimeContext<'storage, Contract<'storage>>, WasmExecutionError> {
+        storage: &'runtime dyn ContractRuntime,
+    ) -> Result<WasmRuntimeContext<'runtime, Contract<'runtime>>, WasmExecutionError> {
         let mut config = Config::default();
         config
             .consume_fuel(true)
@@ -115,10 +115,10 @@ impl WasmApplication {
     }
 
     /// Prepare a runtime instance to call into the WASM service.
-    pub fn prepare_service_runtime_with_wasmtime<'storage>(
+    pub fn prepare_service_runtime_with_wasmtime<'runtime>(
         &self,
-        storage: &'storage dyn ServiceRuntime,
-    ) -> Result<WasmRuntimeContext<'storage, Service<'storage>>, WasmExecutionError> {
+        storage: &'runtime dyn ServiceRuntime,
+    ) -> Result<WasmRuntimeContext<'runtime, Service<'runtime>>, WasmExecutionError> {
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
 
@@ -144,28 +144,28 @@ impl WasmApplication {
 }
 
 /// Data stored by the runtime that's necessary for handling calls to and from the WASM module.
-pub struct ContractState<'storage> {
+pub struct ContractState<'runtime> {
     data: ContractData,
-    system_api: ContractSystemApi<'storage>,
-    system_tables: WritableSystemTables<ContractSystemApi<'storage>>,
+    system_api: ContractSystemApi<'runtime>,
+    system_tables: WritableSystemTables<ContractSystemApi<'runtime>>,
 }
 
 /// Data stored by the runtime that's necessary for handling queries to and from the WASM module.
-pub struct ServiceState<'storage> {
+pub struct ServiceState<'runtime> {
     data: ServiceData,
-    system_api: ServiceSystemApi<'storage>,
-    system_tables: QueryableSystemTables<ServiceSystemApi<'storage>>,
+    system_api: ServiceSystemApi<'runtime>,
+    system_tables: QueryableSystemTables<ServiceSystemApi<'runtime>>,
 }
 
-impl<'storage> ContractState<'storage> {
+impl<'runtime> ContractState<'runtime> {
     /// Create a new instance of [`ContractState`].
     ///
     /// Uses `storage` to export the system API, and the `waker` to be able to correctly handle
     /// asynchronous calls from the guest WASM module.
     pub fn new(
-        storage: &'storage dyn ContractRuntime,
+        storage: &'runtime dyn ContractRuntime,
         waker: WakerForwarder,
-        queued_future_factory: QueuedHostFutureFactory<'storage>,
+        queued_future_factory: QueuedHostFutureFactory<'runtime>,
     ) -> Self {
         Self {
             data: ContractData::default(),
@@ -183,19 +183,19 @@ impl<'storage> ContractState<'storage> {
     pub fn system_api(
         &mut self,
     ) -> (
-        &mut ContractSystemApi<'storage>,
-        &mut WritableSystemTables<ContractSystemApi<'storage>>,
+        &mut ContractSystemApi<'runtime>,
+        &mut WritableSystemTables<ContractSystemApi<'runtime>>,
     ) {
         (&mut self.system_api, &mut self.system_tables)
     }
 }
 
-impl<'storage> ServiceState<'storage> {
+impl<'runtime> ServiceState<'runtime> {
     /// Create a new instance of [`ServiceState`].
     ///
     /// Uses `storage` to export the system API, and the `waker` to be able to correctly handle
     /// asynchronous calls from the guest WASM module.
-    pub fn new(storage: &'storage dyn ServiceRuntime, waker: WakerForwarder) -> Self {
+    pub fn new(storage: &'runtime dyn ServiceRuntime, waker: WakerForwarder) -> Self {
         Self {
             data: ServiceData::default(),
             system_api: ServiceSystemApi::new(waker, storage),
@@ -212,14 +212,14 @@ impl<'storage> ServiceState<'storage> {
     pub fn system_api(
         &mut self,
     ) -> (
-        &mut ServiceSystemApi<'storage>,
-        &mut QueryableSystemTables<ServiceSystemApi<'storage>>,
+        &mut ServiceSystemApi<'runtime>,
+        &mut QueryableSystemTables<ServiceSystemApi<'runtime>>,
     ) {
         (&mut self.system_api, &mut self.system_tables)
     }
 }
 
-impl<'storage> common::Contract for Contract<'storage> {
+impl<'runtime> common::Contract for Contract<'runtime> {
     type Initialize = contract::Initialize;
     type ExecuteOperation = contract::ExecuteOperation;
     type ExecuteEffect = contract::ExecuteEffect;
@@ -236,7 +236,7 @@ impl<'storage> common::Contract for Contract<'storage> {
 
     fn initialize_new(
         &self,
-        store: &mut Store<ContractState<'storage>>,
+        store: &mut Store<ContractState<'runtime>>,
         context: contract::OperationContext,
         argument: &[u8],
     ) -> Result<contract::Initialize, Trap> {
@@ -245,7 +245,7 @@ impl<'storage> common::Contract for Contract<'storage> {
 
     fn initialize_poll(
         &self,
-        store: &mut Store<ContractState<'storage>>,
+        store: &mut Store<ContractState<'runtime>>,
         future: &contract::Initialize,
     ) -> Result<contract::PollExecutionResult, Trap> {
         contract::Contract::initialize_poll(&self.contract, store, future)
@@ -253,7 +253,7 @@ impl<'storage> common::Contract for Contract<'storage> {
 
     fn execute_operation_new(
         &self,
-        store: &mut Store<ContractState<'storage>>,
+        store: &mut Store<ContractState<'runtime>>,
         context: contract::OperationContext,
         operation: &[u8],
     ) -> Result<contract::ExecuteOperation, Trap> {
@@ -262,7 +262,7 @@ impl<'storage> common::Contract for Contract<'storage> {
 
     fn execute_operation_poll(
         &self,
-        store: &mut Store<ContractState<'storage>>,
+        store: &mut Store<ContractState<'runtime>>,
         future: &contract::ExecuteOperation,
     ) -> Result<contract::PollExecutionResult, Trap> {
         contract::Contract::execute_operation_poll(&self.contract, store, future)
@@ -270,7 +270,7 @@ impl<'storage> common::Contract for Contract<'storage> {
 
     fn execute_effect_new(
         &self,
-        store: &mut Store<ContractState<'storage>>,
+        store: &mut Store<ContractState<'runtime>>,
         context: contract::EffectContext,
         effect: &[u8],
     ) -> Result<contract::ExecuteEffect, Trap> {
@@ -279,7 +279,7 @@ impl<'storage> common::Contract for Contract<'storage> {
 
     fn execute_effect_poll(
         &self,
-        store: &mut Store<ContractState<'storage>>,
+        store: &mut Store<ContractState<'runtime>>,
         future: &contract::ExecuteEffect,
     ) -> Result<contract::PollExecutionResult, Trap> {
         contract::Contract::execute_effect_poll(&self.contract, store, future)
@@ -287,7 +287,7 @@ impl<'storage> common::Contract for Contract<'storage> {
 
     fn handle_application_call_new(
         &self,
-        store: &mut Store<ContractState<'storage>>,
+        store: &mut Store<ContractState<'runtime>>,
         context: contract::CalleeContext,
         argument: &[u8],
         forwarded_sessions: &[contract::SessionId],
@@ -303,7 +303,7 @@ impl<'storage> common::Contract for Contract<'storage> {
 
     fn handle_application_call_poll(
         &self,
-        store: &mut Store<ContractState<'storage>>,
+        store: &mut Store<ContractState<'runtime>>,
         future: &contract::HandleApplicationCall,
     ) -> Result<contract::PollCallApplication, Trap> {
         contract::Contract::handle_application_call_poll(&self.contract, store, future)
@@ -311,7 +311,7 @@ impl<'storage> common::Contract for Contract<'storage> {
 
     fn handle_session_call_new(
         &self,
-        store: &mut Store<ContractState<'storage>>,
+        store: &mut Store<ContractState<'runtime>>,
         context: contract::CalleeContext,
         session: contract::SessionParam,
         argument: &[u8],
@@ -329,21 +329,21 @@ impl<'storage> common::Contract for Contract<'storage> {
 
     fn handle_session_call_poll(
         &self,
-        store: &mut Store<ContractState<'storage>>,
+        store: &mut Store<ContractState<'runtime>>,
         future: &contract::HandleSessionCall,
     ) -> Result<contract::PollCallSession, Trap> {
         contract::Contract::handle_session_call_poll(&self.contract, store, future)
     }
 }
 
-impl<'storage> common::Service for Service<'storage> {
+impl<'runtime> common::Service for Service<'runtime> {
     type QueryApplication = service::QueryApplication;
     type QueryContext = service::QueryContext;
     type PollQuery = service::PollQuery;
 
     fn query_application_new(
         &self,
-        store: &mut Store<ServiceState<'storage>>,
+        store: &mut Store<ServiceState<'runtime>>,
         context: service::QueryContext,
         argument: &[u8],
     ) -> Result<service::QueryApplication, Trap> {
@@ -352,7 +352,7 @@ impl<'storage> common::Service for Service<'storage> {
 
     fn query_application_poll(
         &self,
-        store: &mut Store<ServiceState<'storage>>,
+        store: &mut Store<ServiceState<'runtime>>,
         future: &service::QueryApplication,
     ) -> Result<service::PollQuery, Trap> {
         service::Service::query_application_poll(&self.service, store, future)
@@ -368,18 +368,18 @@ struct SystemApi<S> {
 
 /// Implementation to forward contract system calls from the guest WASM module to the host
 /// implementation.
-pub struct ContractSystemApi<'storage> {
-    shared: SystemApi<&'storage dyn ContractRuntime>,
-    queued_future_factory: QueuedHostFutureFactory<'storage>,
+pub struct ContractSystemApi<'runtime> {
+    shared: SystemApi<&'runtime dyn ContractRuntime>,
+    queued_future_factory: QueuedHostFutureFactory<'runtime>,
 }
 
-impl<'storage> ContractSystemApi<'storage> {
+impl<'runtime> ContractSystemApi<'runtime> {
     /// Creates a new [`ContractSystemApi`] instance using the provided asynchronous `waker` and
     /// exporting the API from `storage`.
     pub fn new(
         waker: WakerForwarder,
-        storage: &'storage dyn ContractRuntime,
-        queued_future_factory: QueuedHostFutureFactory<'storage>,
+        storage: &'runtime dyn ContractRuntime,
+        queued_future_factory: QueuedHostFutureFactory<'runtime>,
     ) -> Self {
         ContractSystemApi {
             shared: SystemApi { waker, storage },
@@ -388,7 +388,7 @@ impl<'storage> ContractSystemApi<'storage> {
     }
 
     /// Returns the [`ContractRuntime`] trait object instance to handle a system call.
-    fn storage(&self) -> &'storage dyn ContractRuntime {
+    fn storage(&self) -> &'runtime dyn ContractRuntime {
         self.shared.storage
     }
 
@@ -398,25 +398,25 @@ impl<'storage> ContractSystemApi<'storage> {
     }
 }
 
-impl_writable_system!(ContractSystemApi<'storage>);
+impl_writable_system!(ContractSystemApi<'runtime>);
 
 /// Implementation to forward service system calls from the guest WASM module to the host
 /// implementation.
-pub struct ServiceSystemApi<'storage> {
-    shared: SystemApi<&'storage dyn ServiceRuntime>,
+pub struct ServiceSystemApi<'runtime> {
+    shared: SystemApi<&'runtime dyn ServiceRuntime>,
 }
 
-impl<'storage> ServiceSystemApi<'storage> {
+impl<'runtime> ServiceSystemApi<'runtime> {
     /// Creates a new [`ServiceSystemApi`] instance using the provided asynchronous `waker` and
     /// exporting the API from `storage`.
-    pub fn new(waker: WakerForwarder, storage: &'storage dyn ServiceRuntime) -> Self {
+    pub fn new(waker: WakerForwarder, storage: &'runtime dyn ServiceRuntime) -> Self {
         ServiceSystemApi {
             shared: SystemApi { waker, storage },
         }
     }
 
     /// Returns the [`ServiceRuntime`] trait object instance to handle a system call.
-    fn storage(&self) -> &'storage dyn ServiceRuntime {
+    fn storage(&self) -> &'runtime dyn ServiceRuntime {
         self.shared.storage
     }
 
@@ -426,7 +426,7 @@ impl<'storage> ServiceSystemApi<'storage> {
     }
 }
 
-impl_queryable_system!(ServiceSystemApi<'storage>);
+impl_queryable_system!(ServiceSystemApi<'runtime>);
 
 impl From<ExecutionError> for wasmtime::Trap {
     fn from(error: ExecutionError) -> Self {
