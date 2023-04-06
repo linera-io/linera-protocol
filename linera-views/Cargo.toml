@@ -7,6 +7,7 @@ edition = "2021"
 [features]
 test = ["anyhow", "tokio/macros", "tokio/parking_lot"]
 aws = ["aws-config", "aws-sdk-dynamodb", "aws-sdk-s3", "aws-smithy-http", "aws-types"]
+db_timings = []
 metrics = ["dep:hex", "dep:metrics"]
 
 [dependencies]
