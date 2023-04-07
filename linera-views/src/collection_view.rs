@@ -170,7 +170,7 @@ where
     ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   let view = coll.load_entry_mut(vec![0,1]).await.unwrap();
     ///   let value = view.get();
-    ///   assert_eq!(*value, String::from(""));
+    ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
     pub async fn load_entry_mut(&mut self, short_key: Vec<u8>) -> Result<&mut W, ViewError> {
@@ -188,10 +188,10 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_context();
     ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
-    ///   let view = coll.load_entry_mut(vec![0,1]).await.unwrap();
+    ///   coll.load_entry_mut(vec![0,1]).await.unwrap();
     ///   let view = coll.load_entry(vec![0,1]).await.unwrap();
     ///   let value = view.get();
-    ///   assert_eq!(*value, String::from(""));
+    ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
     pub async fn load_entry(&mut self, short_key: Vec<u8>) -> Result<&W, ViewError> {
@@ -210,7 +210,7 @@ where
     ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   let view = coll.try_load_entry(vec![0,1]).await.unwrap();
     ///   let value = view.get();
-    ///   assert_eq!(*value, String::from(""));
+    ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
     pub async fn try_load_entry(
@@ -274,7 +274,7 @@ where
     ///   coll.reset_entry_to_default(vec![0,1]).await.unwrap();
     ///   let view = coll.load_entry_mut(vec![0,1]).await.unwrap();
     ///   let value = view.get_mut();
-    ///   assert_eq!(*value, String::from(""));
+    ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
     pub async fn reset_entry_to_default(&mut self, short_key: Vec<u8>) -> Result<(), ViewError> {
@@ -295,7 +295,7 @@ where
     ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   let view = coll.load_entry_mut(vec![0,1]).await.unwrap();
     ///   let value = view.get_mut();
-    ///   assert_eq!(*value, String::from(""));
+    ///   assert_eq!(*value, String::default());
     ///   coll.remove_entry(vec![0,1]);
     ///   let keys = coll.keys().await.unwrap();
     ///   assert_eq!(keys.len(), 0);
@@ -368,8 +368,8 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_context();
     ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
-    ///   let view = coll.load_entry_mut(vec![0,1]).await.unwrap();
-    ///   let view = coll.load_entry_mut(vec![0,2]).await.unwrap();
+    ///   coll.load_entry_mut(vec![0,1]).await.unwrap();
+    ///   coll.load_entry_mut(vec![0,2]).await.unwrap();
     ///   let mut count = 0;
     ///   coll.for_each_key_while(|_key| {
     ///     count += 1;
@@ -463,8 +463,8 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_context();
     ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
-    ///   let view = coll.load_entry_mut(vec![0,1]).await.unwrap();
-    ///   let view = coll.load_entry_mut(vec![0,2]).await.unwrap();
+    ///   coll.load_entry_mut(vec![0,1]).await.unwrap();
+    ///   coll.load_entry_mut(vec![0,2]).await.unwrap();
     ///   let keys = coll.keys().await.unwrap();
     ///   assert_eq!(keys, vec![vec![0,1],vec![0,2]]);
     /// # })
@@ -597,7 +597,7 @@ where
     ///   let mut coll : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
     ///   let view = coll.load_entry_mut(&23).await.unwrap();
     ///   let value = view.get();
-    ///   assert_eq!(*value, String::from(""));
+    ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
     pub async fn load_entry_mut<Q>(&mut self, index: &Q) -> Result<&mut W, ViewError>
@@ -619,10 +619,10 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_context();
     ///   let mut coll : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
-    ///   let view = coll.load_entry_mut(&23).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
     ///   let view = coll.load_entry(&23).await.unwrap();
     ///   let value = view.get();
-    ///   assert_eq!(*value, String::from(""));
+    ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
     pub async fn load_entry<Q>(&mut self, index: &Q) -> Result<&W, ViewError>
@@ -646,7 +646,7 @@ where
     ///   let mut coll : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
     ///   let view = coll.try_load_entry(&23).await.unwrap();
     ///   let value = view.get();
-    ///   assert_eq!(*value, String::from(""));
+    ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
     pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
@@ -673,7 +673,7 @@ where
     ///   coll.reset_entry_to_default(&23).await.unwrap();
     ///   let view = coll.load_entry_mut(&23).await.unwrap();
     ///   let value = view.get_mut();
-    ///   assert_eq!(*value, String::from(""));
+    ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
     pub async fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
@@ -696,7 +696,7 @@ where
     ///   let mut coll : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
     ///   let view = coll.load_entry_mut(&23).await.unwrap();
     ///   let value = view.get_mut();
-    ///   assert_eq!(*value, String::from(""));
+    ///   assert_eq!(*value, String::default());
     ///   coll.remove_entry(&23);
     ///   let keys = coll.indices().await.unwrap();
     ///   assert_eq!(keys.len(), 0);
@@ -735,8 +735,8 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_context();
     ///   let mut coll : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
-    ///   let view = coll.load_entry_mut(&23).await.unwrap();
-    ///   let view = coll.load_entry_mut(&25).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
+    ///   coll.load_entry_mut(&25).await.unwrap();
     ///   let indices = coll.indices().await.unwrap();
     ///   assert_eq!(indices.len(), 2);
     /// # })
@@ -770,8 +770,8 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_context();
     ///   let mut coll : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
-    ///   let view = coll.load_entry_mut(&23).await.unwrap();
-    ///   let view = coll.load_entry_mut(&24).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
+    ///   coll.load_entry_mut(&24).await.unwrap();
     ///   let mut count = 0;
     ///   coll.for_each_index_while(|_key| {
     ///     count += 1;
@@ -803,8 +803,8 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_context();
     ///   let mut coll : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
-    ///   let view = coll.load_entry_mut(&23).await.unwrap();
-    ///   let view = coll.load_entry_mut(&28).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
+    ///   coll.load_entry_mut(&28).await.unwrap();
     ///   let mut count = 0;
     ///   coll.for_each_index(|_key| {
     ///     count += 1;
@@ -909,7 +909,7 @@ where
     ///   let mut coll : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
     ///   let view = coll.load_entry_mut(&23).await.unwrap();
     ///   let value = view.get();
-    ///   assert_eq!(*value, String::from(""));
+    ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
     pub async fn load_entry_mut<Q>(&mut self, index: &Q) -> Result<&mut W, ViewError>
@@ -931,10 +931,10 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_context();
     ///   let mut coll : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
-    ///   let view = coll.load_entry_mut(&23).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
     ///   let view = coll.load_entry(&23).await.unwrap();
     ///   let value = view.get();
-    ///   assert_eq!(*value, String::from(""));
+    ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
     pub async fn load_entry<Q>(&mut self, index: &Q) -> Result<&W, ViewError>
@@ -958,7 +958,7 @@ where
     ///   let mut coll : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
     ///   let view = coll.try_load_entry(&23).await.unwrap();
     ///   let value = view.get();
-    ///   assert_eq!(*value, String::from(""));
+    ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
     pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
@@ -985,7 +985,7 @@ where
     ///   coll.reset_entry_to_default(&23).await.unwrap();
     ///   let view = coll.load_entry_mut(&23).await.unwrap();
     ///   let value = view.get_mut();
-    ///   assert_eq!(*value, String::from(""));
+    ///   assert_eq!(*value, String::defaul());
     /// # })
     /// ```
     pub async fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
@@ -1008,7 +1008,7 @@ where
     ///   let mut coll : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
     ///   let view = coll.load_entry_mut(&23).await.unwrap();
     ///   let value = view.get_mut();
-    ///   assert_eq!(*value, String::from(""));
+    ///   assert_eq!(*value, String::default());
     ///   coll.remove_entry(&23);
     ///   let keys = coll.indices().await.unwrap();
     ///   assert_eq!(keys.len(), 0);
@@ -1046,8 +1046,8 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_context();
     ///   let mut coll : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
-    ///   let view = coll.load_entry_mut(&23).await.unwrap();
-    ///   let view = coll.load_entry_mut(&25).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
+    ///   coll.load_entry_mut(&25).await.unwrap();
     ///   let indices = coll.indices().await.unwrap();
     ///   assert_eq!(indices, vec![23,25]);
     /// # })
@@ -1081,9 +1081,9 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_context();
     ///   let mut coll : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
-    ///   let view = coll.load_entry_mut(&28).await.unwrap();
-    ///   let view = coll.load_entry_mut(&24).await.unwrap();
-    ///   let view = coll.load_entry_mut(&23).await.unwrap();
+    ///   coll.load_entry_mut(&28).await.unwrap();
+    ///   coll.load_entry_mut(&24).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
     ///   let mut part_indices = Vec::new();
     ///   coll.for_each_index_while(|index| {
     ///     part_indices.push(index);
@@ -1115,9 +1115,9 @@ where
     /// # use crate::linera_views::views::View;
     /// # let context = create_test_context();
     ///   let mut coll : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
-    ///   let view = coll.load_entry_mut(&28).await.unwrap();
-    ///   let view = coll.load_entry_mut(&24).await.unwrap();
-    ///   let view = coll.load_entry_mut(&23).await.unwrap();
+    ///   coll.load_entry_mut(&28).await.unwrap();
+    ///   coll.load_entry_mut(&24).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
     ///   let mut indices = Vec::new();
     ///   coll.for_each_index(|index| {
     ///     indices.push(index);
