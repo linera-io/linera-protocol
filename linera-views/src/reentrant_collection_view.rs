@@ -357,9 +357,9 @@ where
         Ok(keys)
     }
 
-    /// Executes a function on each serialized index (aka key). Keys are visited in a
+    /// Applies a function f on each index (aka key). Keys are visited in a
     /// lexicographic order. If the function returns false then the loop
-    /// prematurely ends.
+    /// ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -423,7 +423,7 @@ where
         Ok(())
     }
 
-    /// Executes a function on each serialized index (aka key). Keys are visited in a
+    /// Applies a function f on each index (aka key). Keys are visited in a
     /// lexicographic order.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -680,7 +680,8 @@ where
     I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
-    /// Returns the list of indices in the collection.
+    /// Returns the list of indices in the collection in an order determined
+    /// by the serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -705,9 +706,9 @@ where
         Ok(indices)
     }
 
-    /// Executes a function on each index. Indices are visited in an order
+    /// Applies a function f on each index. Indices are visited in an order
     /// determined by the serialization. If the function f returns false then
-    /// the loop prematurely ends.
+    /// the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -739,7 +740,7 @@ where
         Ok(())
     }
 
-    /// Executes a function on each index. Indices are visited in an order
+    /// Applies a function f on each index. Indices are visited in an order
     /// determined by the serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -966,7 +967,8 @@ where
     I: Sync + Clone + Send + Debug + CustomSerialize,
     W: View<C> + Send + Sync,
 {
-    /// Returns the list of indices in the collection.
+    /// Returns the list of indices in the collection. The order is determined by
+    /// the custom serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -991,8 +993,9 @@ where
         Ok(indices)
     }
 
-    /// Executes a function on each index. Indices are visited in an order
-    /// determined by the custom serialization.
+    /// Applies a function f on each index. Indices are visited in an order
+    /// determined by the custom serialization. If the function f returns false
+    /// then the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -1025,7 +1028,7 @@ where
         Ok(())
     }
 
-    /// Executes a function on each index. Indices are visited in an order
+    /// Applies a function f on each index. Indices are visited in an order
     /// determined by the custom serialization.
     /// ```rust
     /// # tokio_test::block_on(async {

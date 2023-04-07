@@ -246,8 +246,8 @@ where
     ViewError: From<C::Error>,
     V: Sync + Serialize + DeserializeOwned + 'static,
 {
-    /// Executes a function on each serialized index (aka key). Keys are visited
-    /// in a lexicographic order. If the function returns false, then
+    /// Applies the function f on each index (aka key). Keys are visited
+    /// in the lexicographic order. If the function returns false, then
     /// the loop exits
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -311,8 +311,8 @@ where
         Ok(())
     }
 
-    /// Executes a function on each serialized index (aka key). Keys are visited
-    /// in a lexicographic order.
+    /// Applies the function f on each index (aka key). Keys are visited
+    /// in the lexicographic order.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -340,7 +340,7 @@ where
         .await
     }
 
-    /// Returns the list of keys of the map
+    /// Returns the list of keys of the map in lexicographic order.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -364,9 +364,9 @@ where
         Ok(keys)
     }
 
-    /// Executes a function on each serialized index (aka key). Keys and values are visited
-    /// in a lexicographic order. If the function returns false, then
-    /// the loop exits.
+    /// Applies a function f on each index/value pair. Keys and values are visited
+    /// in the lexicographic order. If the function returns false, then loop
+    /// ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -436,8 +436,8 @@ where
         Ok(())
     }
 
-    /// Executes a function on each serialized index (aka key). Keys and values are visited
-    /// in a lexicographic order.
+    /// Applies a function f on each key/value pair. Keys and values are visited
+    /// in the lexicographic order.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -726,7 +726,7 @@ where
     I: Sync + Send + Serialize + DeserializeOwned,
     V: Sync + Serialize + DeserializeOwned + 'static,
 {
-    /// Returns the list of indices in the map.
+    /// Returns the list of indices in the map. The order is determined by the serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -748,9 +748,9 @@ where
         Ok(indices)
     }
 
-    /// Executes a function on each index. Indices are visited in an order
+    /// Applies a function f on each index. Indices are visited in an order
     /// determined by the serialization. If the function returns false, then
-    /// the loop exits.
+    /// the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -782,8 +782,8 @@ where
         Ok(())
     }
 
-    /// Executes a function on each index. Indices are visited in the order
-    /// determined by the serialization of the keys by the context.
+    /// Applies a function f on each index. Indices are visited in the order
+    /// determined by the serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -813,9 +813,9 @@ where
         Ok(())
     }
 
-    /// Executes a function on each index and value in the map. Indices and values are
+    /// Applies a function f on each index/value pair. Indices and values are
     /// visited in an order determined by the serialization.
-    /// If the function returns false, then the loop exits.
+    /// If the function returns false, then the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -848,7 +848,7 @@ where
         Ok(())
     }
 
-    /// Executes a function on each index and value in the map. Indices and values are
+    /// Applies a function on each index/value pair. Indices and values are
     /// visited in an order determined by the serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1090,7 +1090,8 @@ where
     I: Sync + Send + CustomSerialize,
     V: Sync + Serialize + DeserializeOwned + 'static,
 {
-    /// Returns the list of indices in the map.
+    /// Returns the list of indices in the map. The order is determined
+    /// by the custom serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -1113,9 +1114,9 @@ where
         Ok(indices)
     }
 
-    /// Executes a function on each index. Indices are visited in an order
+    /// Applies a function f on each index. Indices are visited in an order
     /// determined by the custom serialization. If the function returns false,
-    /// then the loop exits.
+    /// then the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -1146,7 +1147,7 @@ where
         Ok(())
     }
 
-    /// Executes a function on each index. Indices are visited in an order
+    /// Applies a function f on each index. Indices are visited in an order
     /// determined by the custom serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1178,9 +1179,9 @@ where
         Ok(())
     }
 
-    /// Executes a function on each index and value in the map. Indices and values are
+    /// Applies a function f on the index/value pairs. Indices and values are
     /// visited in an order determined by the custom serialization.
-    /// If the function returns false, then the loop exits.
+    /// If the function returns false, then the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -1212,7 +1213,7 @@ where
         Ok(())
     }
 
-    /// Executes a function on each index and value in the map. Indices and values are
+    /// Applies a function f on each index/value pair. Indices and values are
     /// visited in an order determined by the custom serialization.
     /// ```rust
     /// # tokio_test::block_on(async {

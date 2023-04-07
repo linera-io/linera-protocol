@@ -153,8 +153,8 @@ where
     C: Send + Context,
     ViewError: From<C::Error>,
 {
-    /// Iterates over all indices and apply the function f on it. If the function f returns
-    /// false, then the loop prematurely ends.
+    /// Applies the function f over all indices. If the function f returns
+    /// false, then the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -223,7 +223,7 @@ where
         Ok(())
     }
 
-    /// Iterates over all indices.
+    /// Applies the function f over all indices.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -253,8 +253,8 @@ where
         .await
     }
 
-    /// Iterates over all the indices and values and applied the function f on them.
-    /// If the function f returns false then the loop prematurely ends.
+    /// Applies the function f over all index/value pairs.
+    /// If the function f returns false then the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -322,7 +322,7 @@ where
         Ok(())
     }
 
-    /// Iterates over all the indices and values and applies the function f on them.
+    /// Applies the function f over all index/value pairs.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -351,7 +351,7 @@ where
         .await
     }
 
-    /// Returns the list of indices. The order is stable, yet not specified.
+    /// Returns the list of indices in lexicographic order.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
