@@ -98,12 +98,10 @@ pub enum NodeError {
     // This error must be normalized during conversions.
     #[error(
         "Cannot vote for block proposal of chain {chain_id:?} because a message \
-         from chain {origin:?} at height {height:?} (application {application_id:?}) \
-         has not been received yet"
+         from chain {origin:?} at height {height:?} has not been received yet"
     )]
     MissingCrossChainUpdate {
         chain_id: ChainId,
-        application_id: Box<ApplicationId>,
         origin: Origin,
         height: BlockHeight,
     },
@@ -200,12 +198,10 @@ impl From<ChainError> for NodeError {
         match error {
             ChainError::MissingCrossChainUpdate {
                 chain_id,
-                application_id,
                 origin,
                 height,
             } => Self::MissingCrossChainUpdate {
                 chain_id,
-                application_id: Box::new(application_id),
                 origin,
                 height,
             },

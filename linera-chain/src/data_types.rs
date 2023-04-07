@@ -87,8 +87,6 @@ pub struct BlockAndRound {
 /// A message received from a block of another chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Message {
-    /// The application on both ends of the message.
-    pub application_id: ApplicationId,
     /// The origin of the message (chain and channel if any).
     pub origin: Origin,
     /// The content of the message to be delivered to the inbox identified by
@@ -110,6 +108,8 @@ pub struct Event {
     pub authenticated_signer: Option<Owner>,
     /// The timestamp of the block that caused the effect.
     pub timestamp: Timestamp,
+    /// The application id the effect.
+    pub application_id: ApplicationId,
     /// The effect of the event (i.e. the actual payload of a message).
     pub effect: Effect,
 }
@@ -136,13 +136,22 @@ pub struct Target {
     pub medium: Medium,
 }
 
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+/// A channel name together with its application id.
+pub struct ChannelFullName {
+    /// The application owning the channel.
+    pub application_id: ApplicationId,
+    /// the name of the channel.
+    pub name: ChannelName,
+}
+
 /// The origin of a message coming from a particular chain. Used to identify each inbox.
-#[derive(Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
 pub enum Medium {
     /// The message is a direct message.
     Direct,
     /// The message is a channel broadcast.
-    Channel(ChannelName),
+    Channel(ChannelFullName),
 }
 
 /// An authenticated proposal for a new block.
@@ -313,7 +322,7 @@ impl Origin {
         }
     }
 
-    pub fn channel(sender: ChainId, name: ChannelName) -> Self {
+    pub fn channel(sender: ChainId, name: ChannelFullName) -> Self {
         Self {
             sender,
             medium: Medium::Channel(name),
@@ -329,7 +338,7 @@ impl Target {
         }
     }
 
-    pub fn channel(recipient: ChainId, name: ChannelName) -> Self {
+    pub fn channel(recipient: ChainId, name: ChannelFullName) -> Self {
         Self {
             recipient,
             medium: Medium::Channel(name),

@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_types::{Block, ChainAndHeight, Event, Medium, Origin, OutgoingEffect, Target},
+    data_types::{
+        Block, ChainAndHeight, ChannelFullName, Event, Medium, Origin, OutgoingEffect, Target,
+    },
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
     ChainError, ChainManager,
@@ -12,7 +14,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, Timestamp},
     ensure,
-    identifiers::{ChainId, ChannelName, Destination, EffectId},
+    identifiers::{ChainId, Destination, EffectId},
 };
 use linera_execution::{
     system::SystemEffect, ApplicationId, Effect, EffectContext, ExecutionResult,
@@ -51,7 +53,7 @@ pub struct ChainStateView<C> {
     pub received_log: LogView<C, ChainAndHeight>,
 
     /// Communication state of applications.
-    pub communication_states: CollectionView<C, ApplicationId, CommunicationStateView<C>>,
+    pub communication_state: CommunicationStateView<C>,
 }
 
 /// Block-chaining state.
@@ -71,7 +73,7 @@ pub struct CommunicationStateView<C> {
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: CollectionView<C, Target, OutboxStateView<C>>,
     /// Channels able to multicast messages to subscribers.
-    pub channels: CollectionView<C, ChannelName, ChannelStateView<C>>,
+    pub channels: CollectionView<C, ChannelFullName, ChannelStateView<C>>,
 }
 
 /// The state of a channel followed by subscribers.
@@ -122,14 +124,10 @@ where
 
     pub async fn mark_messages_as_received(
         &mut self,
-        application_id: ApplicationId,
         target: Target,
         height: BlockHeight,
     ) -> Result<bool, ChainError> {
-        let communication_state = self
-            .communication_states
-            .load_entry_mut(&application_id)
-            .await?;
+        let communication_state = &mut self.communication_state;
         let outbox = communication_state.outboxes.load_entry_mut(&target).await?;
         let updated = outbox.mark_messages_as_received(height).await?;
         if updated && outbox.queue.count() == 0 {
@@ -156,47 +154,36 @@ where
     /// have been properly received by now.
     pub async fn validate_incoming_messages(&mut self) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
-        for id in self.communication_states.indices().await? {
-            let state = self.communication_states.load_entry(&id).await?;
-            for origin in state.inboxes.indices().await? {
-                let inbox = state.inboxes.try_load_entry(&origin).await?;
-                let event = inbox.removed_events.front().await?;
-                ensure!(
-                    event.is_none(),
-                    ChainError::MissingCrossChainUpdate {
-                        chain_id,
-                        application_id: id,
-                        origin,
-                        height: event.unwrap().height,
-                    }
-                );
-            }
+        let state = &mut self.communication_state;
+        for origin in state.inboxes.indices().await? {
+            let inbox = state.inboxes.try_load_entry(&origin).await?;
+            let event = inbox.removed_events.front().await?;
+            ensure!(
+                event.is_none(),
+                ChainError::MissingCrossChainUpdate {
+                    chain_id,
+                    origin,
+                    height: event.unwrap().height,
+                }
+            );
         }
         Ok(())
     }
 
     pub async fn next_block_height_to_receive(
         &mut self,
-        application_id: ApplicationId,
         origin: Origin,
     ) -> Result<BlockHeight, ChainError> {
-        let communication_state = self
-            .communication_states
-            .load_entry(&application_id)
-            .await?;
+        let communication_state = &mut self.communication_state;
         let inbox = communication_state.inboxes.try_load_entry(&origin).await?;
         inbox.next_block_height_to_receive()
     }
 
     pub async fn last_anticipated_block_height(
         &mut self,
-        application_id: ApplicationId,
         origin: Origin,
     ) -> Result<Option<BlockHeight>, ChainError> {
-        let communication_state = self
-            .communication_states
-            .load_entry(&application_id)
-            .await?;
+        let communication_state = &mut self.communication_state;
         let inbox = communication_state.inboxes.try_load_entry(&origin).await?;
         match inbox.removed_events.back().await? {
             Some(event) => Ok(Some(event.height)),
@@ -209,7 +196,6 @@ where
     /// received by order of heights and indices.
     pub async fn receive_block(
         &mut self,
-        application_id: ApplicationId,
         origin: &Origin,
         height: BlockHeight,
         timestamp: Timestamp,
@@ -218,16 +204,12 @@ where
     ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         ensure!(
-            height
-                >= self
-                    .next_block_height_to_receive(application_id, origin.clone())
-                    .await?,
+            height >= self.next_block_height_to_receive(origin.clone()).await?,
             ChainError::InternalError("Trying to receive blocks in the wrong order".to_string())
         );
         tracing::trace!(
-            "Processing new messages to {:?} from {:?}::{:?} at height {}",
+            "Processing new messages to {:?} from {:?} at height {}",
             chain_id,
-            application_id,
             origin,
             height
         );
@@ -235,15 +217,11 @@ where
         let mut events = Vec::new();
         for (index, outgoing_effect) in effects.into_iter().enumerate() {
             let OutgoingEffect {
-                application_id: app_id,
+                application_id,
                 destination,
                 authenticated_signer,
                 effect,
             } = outgoing_effect;
-            // Skip events that do not belong to this application.
-            if app_id != application_id {
-                continue;
-            }
             // Skip events that do not belong to this origin OR have no effect on this
             // recipient.
             match destination {
@@ -253,12 +231,13 @@ where
                     }
                 }
                 Destination::Subscribers(name) => {
-                    if !matches!(&origin.medium, Medium::Channel(n) if n == &name) {
+                    if !matches!(&origin.medium, Medium::Channel(channel) if channel.application_id == application_id && channel.name == name)
+                    {
                         continue;
                     }
                 }
             }
-            if let ApplicationId::System = app_id {
+            if let ApplicationId::System = application_id {
                 // Handle special effects to be executed immediately.
                 let effect_id = EffectId {
                     chain_id: origin.sender,
@@ -275,6 +254,7 @@ where
                 index,
                 authenticated_signer,
                 timestamp,
+                application_id,
                 effect,
             });
         }
@@ -287,10 +267,7 @@ where
                 chain_id, origin, height))
         );
         // Process the inbox events and update the inbox state.
-        let communication_state = self
-            .communication_states
-            .load_entry_mut(&application_id)
-            .await?;
+        let communication_state = &mut self.communication_state;
         let inbox = communication_state.inboxes.load_entry_mut(origin).await?;
         for event in events {
             inbox.add_event(event).await.map_err(|error| match error {
@@ -351,8 +328,7 @@ where
         let chain_id = self.chain_id();
         for message in &block.incoming_messages {
             tracing::trace!(
-                "Updating inbox {:?}::{:?} in chain {:?}",
-                message.application_id,
+                "Updating inbox {:?} in chain {:?}",
                 message.origin,
                 chain_id
             );
@@ -364,22 +340,15 @@ where
                 });
             }
             // Mark the message as processed in the inbox.
-            let communication_state = self
-                .communication_states
-                .load_entry_mut(&message.application_id)
-                .await?;
+            let communication_state = &mut self.communication_state;
             let inbox = communication_state
                 .inboxes
                 .load_entry_mut(&message.origin)
                 .await?;
-            inbox.remove_event(&message.event).await.map_err(|error| {
-                ChainError::from((
-                    chain_id,
-                    message.application_id,
-                    message.origin.clone(),
-                    error,
-                ))
-            })?;
+            inbox
+                .remove_event(&message.event)
+                .await
+                .map_err(|error| ChainError::from((chain_id, message.origin.clone(), error)))?;
         }
         Ok(())
     }
@@ -416,10 +385,14 @@ where
             };
             let results = self
                 .execution_state
-                .execute_effect(message.application_id, &context, &message.event.effect)
+                .execute_effect(
+                    message.event.application_id,
+                    &context,
+                    &message.event.effect,
+                )
                 .await?;
             Self::process_execution_results(
-                &mut self.communication_states,
+                &mut self.communication_state,
                 &mut effects,
                 context.height,
                 results,
@@ -439,7 +412,7 @@ where
                 .execute_operation(*application_id, &context, operation)
                 .await?;
             Self::process_execution_results(
-                &mut self.communication_states,
+                &mut self.communication_state,
                 &mut effects,
                 context.height,
                 results,
@@ -457,7 +430,7 @@ where
     }
 
     async fn process_execution_results(
-        communication_states: &mut CollectionView<C, ApplicationId, CommunicationStateView<C>>,
+        communication_state: &mut CommunicationStateView<C>,
         effects: &mut Vec<OutgoingEffect>,
         height: BlockHeight,
         results: Vec<ExecutionResult>,
@@ -475,9 +448,6 @@ where
             }
         }
         if !sys_results.is_empty() {
-            let communication_state = communication_states
-                .load_entry_mut(&ApplicationId::System)
-                .await?;
             for result in sys_results {
                 Self::process_raw_execution_result(
                     ApplicationId::System,
@@ -491,9 +461,6 @@ where
             }
         }
         for (application_id, results) in result_map {
-            let communication_state = communication_states
-                .load_entry_mut(&ApplicationId::User(application_id))
-                .await?;
             for result in results {
                 Self::process_raw_execution_result(
                     ApplicationId::User(application_id),
@@ -512,7 +479,7 @@ where
     async fn process_raw_execution_result<E: Into<Effect>>(
         application_id: ApplicationId,
         outboxes: &mut CollectionView<C, Target, OutboxStateView<C>>,
-        channels: &mut CollectionView<C, ChannelName, ChannelStateView<C>>,
+        channels: &mut CollectionView<C, ChannelFullName, ChannelStateView<C>>,
         effects: &mut Vec<OutgoingEffect>,
         height: BlockHeight,
         raw_result: RawExecutionResult<E>,
@@ -551,27 +518,41 @@ where
 
         // Update the channels.
         for (name, id) in raw_result.unsubscribe {
-            let channel = channels.load_entry_mut(&name).await?;
+            let full_name = ChannelFullName {
+                application_id,
+                name,
+            };
+            let channel = channels.load_entry_mut(&full_name).await?;
             // Remove subscriber. Do not remove the channel outbox yet.
             channel.subscribers.remove(&id)?;
         }
         for name in channel_broadcasts {
-            let channel = channels.load_entry_mut(&name).await?;
+            let full_name = ChannelFullName {
+                application_id,
+                name,
+            };
+            let channel = channels.load_entry_mut(&full_name).await?;
             for recipient in channel.subscribers.indices().await? {
                 let outbox = outboxes
-                    .load_entry_mut(&Target::channel(recipient, name.clone()))
+                    .load_entry_mut(&Target::channel(recipient, full_name.clone()))
                     .await?;
                 outbox.schedule_message(height)?;
             }
             channel.block_height.set(Some(height));
         }
         for (name, id) in raw_result.subscribe {
-            let channel = channels.load_entry_mut(&name).await?;
+            let full_name = ChannelFullName {
+                application_id,
+                name,
+            };
+            let channel = channels.load_entry_mut(&full_name).await?;
             // Add subscriber.
             if !channel.subscribers.contains(&id).await? {
                 // Send the latest message if any.
                 if let Some(latest_height) = channel.block_height.get() {
-                    let outbox = outboxes.load_entry_mut(&Target::channel(id, name)).await?;
+                    let outbox = outboxes
+                        .load_entry_mut(&Target::channel(id, full_name.clone()))
+                        .await?;
                     outbox.schedule_message(*latest_height)?;
                 }
                 channel.subscribers.insert(&id)?;

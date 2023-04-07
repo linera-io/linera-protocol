@@ -13,8 +13,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, HashedValue, LiteCertificate, Medium,
-        Message, Origin, OutgoingEffect, Target, ValueKind,
+        Block, BlockAndRound, BlockProposal, Certificate, ChannelFullName, HashedValue,
+        LiteCertificate, Medium, Message, Origin, OutgoingEffect, Target, ValueKind,
     },
     ChainManagerOutcome, ChainStateView,
 };
@@ -116,14 +116,8 @@ pub struct Notification {
 #[allow(clippy::large_enum_variant)]
 /// Reason for the notification.
 pub enum Reason {
-    NewBlock {
-        height: BlockHeight,
-    },
-    NewMessage {
-        application_id: ApplicationId,
-        origin: Origin,
-        height: BlockHeight,
-    },
+    NewBlock { height: BlockHeight },
+    NewMessage { origin: Origin, height: BlockHeight },
 }
 
 /// Error type for [`ValidatorWorker`].
@@ -361,16 +355,12 @@ where
     async fn create_cross_chain_request(
         &mut self,
         confirmed_log: &mut LogView<Client::Context, CryptoHash>,
-        height_map: Vec<(ApplicationId, Medium, Vec<BlockHeight>)>,
+        height_map: Vec<(Medium, Vec<BlockHeight>)>,
         sender: ChainId,
         recipient: ChainId,
     ) -> Result<CrossChainRequest, WorkerError> {
-        let heights = BTreeSet::from_iter(
-            height_map
-                .iter()
-                .flat_map(|(_, _, heights)| heights)
-                .copied(),
-        );
+        let heights =
+            BTreeSet::from_iter(height_map.iter().flat_map(|(_, heights)| heights).copied());
         let mut keys = Vec::new();
         for height in heights {
             if let Some(key) = confirmed_log.get(u64::from(height) as usize).await? {
@@ -392,19 +382,14 @@ where
         chain: &mut ChainStateView<Client::Context>,
     ) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
-        for application_id in chain.communication_states.indices().await? {
-            let state = chain
-                .communication_states
-                .load_entry(&application_id)
-                .await?;
-            for target in state.outboxes.indices().await? {
-                let outbox = state.outboxes.try_load_entry(&target).await?;
-                let heights = outbox.block_heights().await?;
-                heights_by_recipient
-                    .entry(target.recipient)
-                    .or_default()
-                    .insert((application_id, target.medium), heights);
-            }
+        let state = &mut chain.communication_state;
+        for target in state.outboxes.indices().await? {
+            let outbox = state.outboxes.try_load_entry(&target).await?;
+            let heights = outbox.block_heights().await?;
+            heights_by_recipient
+                .entry(target.recipient)
+                .or_default()
+                .insert(target.medium, heights);
         }
         let mut actions = NetworkActions::default();
         let chain_id = chain.chain_id();
@@ -412,10 +397,7 @@ where
             let request = self
                 .create_cross_chain_request(
                     &mut chain.confirmed_log,
-                    height_map
-                        .into_iter()
-                        .map(|((app_id, medium), heights)| (app_id, medium, heights))
-                        .collect(),
+                    height_map.into_iter().collect(),
                     chain_id,
                     recipient,
                 )
@@ -622,19 +604,15 @@ where
 
     async fn process_cross_chain_update(
         &mut self,
-        application_id: ApplicationId,
         origin: Origin,
         recipient: ChainId,
         certificates: Vec<Certificate>,
     ) -> Result<NetworkActions, WorkerError> {
         let mut chain = self.storage.load_chain(recipient).await?;
         // Only process certificates with relevant heights and epochs.
-        let next_height_to_receive = chain
-            .next_block_height_to_receive(application_id, origin.clone())
-            .await?;
-        let last_anticipated_block_height = chain
-            .last_anticipated_block_height(application_id, origin.clone())
-            .await?;
+        let next_height_to_receive = chain.next_block_height_to_receive(origin.clone()).await?;
+        let last_anticipated_block_height =
+            chain.last_anticipated_block_height(origin.clone()).await?;
         let helper = CrossChainUpdateHelper {
             nickname: &self.nickname,
             allow_messages_from_deprecated_epochs: self.allow_messages_from_deprecated_epochs,
@@ -642,7 +620,6 @@ where
             committees: chain.execution_state.system.committees.get(),
         };
         let certificates = helper.select_certificates(
-            application_id,
             &origin,
             recipient,
             next_height_to_receive,
@@ -656,7 +633,6 @@ where
             // Update the staged chain state with the received block.
             chain
                 .receive_block(
-                    application_id,
                     &origin,
                     block.height,
                     block.timestamp,
@@ -671,7 +647,6 @@ where
         let cross_chain_requests =
             match last_updated_height.or_else(|| next_height_to_receive.try_sub_one().ok()) {
                 Some(height) => vec![CrossChainRequest::ConfirmUpdatedRecipient {
-                    application_id,
                     origin: origin.clone(),
                     recipient,
                     height,
@@ -685,7 +660,7 @@ where
                 // now. Accordingly, do not send a confirmation, so that the
                 // cross-chain update is retried later.
                 tracing::warn!(
-                    "[{}] Refusing to deliver messages to {recipient:?} from {application_id:?}::{origin:?} \
+                    "[{}] Refusing to deliver messages to {recipient:?} from {origin:?} \
                      at height {height} because the recipient is still inactive",
                     self.nickname
                 );
@@ -698,11 +673,7 @@ where
                 cross_chain_requests,
                 notifications: vec![Notification {
                     chain_id: recipient,
-                    reason: Reason::NewMessage {
-                        application_id,
-                        origin,
-                        height,
-                    },
+                    reason: Reason::NewMessage { origin, height },
                 }],
             })
         } else {
@@ -783,15 +754,15 @@ where
             sender: effect_id.chain_id,
             medium: match outgoing_effect.destination {
                 Destination::Recipient(_) => Medium::Direct,
-                Destination::Subscribers(channel) => Medium::Channel(channel),
+                Destination::Subscribers(name) => Medium::Channel(ChannelFullName {
+                    application_id,
+                    name,
+                }),
             },
         };
 
         let mut chain = self.storage.load_active_chain(chain_id).await?;
-        let communication_state = chain
-            .communication_states
-            .load_entry_mut(&application_id)
-            .await?;
+        let communication_state = &mut chain.communication_state;
         let inbox = communication_state.inboxes.load_entry_mut(&origin).await?;
 
         let certificate_hash = certificate.value.hash();
@@ -810,11 +781,7 @@ where
 
         assert_eq!(event.effect, outgoing_effect.effect);
 
-        Ok(Some(Message {
-            application_id,
-            origin,
-            event,
-        }))
+        Ok(Some(Message { origin, event }))
     }
 }
 
@@ -1001,23 +968,18 @@ where
         }
         if query.request_pending_messages {
             let mut messages = Vec::new();
-            for application_id in chain.communication_states.indices().await? {
-                let state = chain
-                    .communication_states
-                    .load_entry(&application_id)
-                    .await?;
-                for origin in state.inboxes.indices().await? {
-                    let inbox = state.inboxes.try_load_entry(&origin).await?;
-                    let count = inbox.added_events.count();
-                    for event in inbox.added_events.read_front(count).await? {
-                        messages.push(Message {
-                            application_id,
-                            origin: origin.clone(),
-                            event: event.clone(),
-                        });
-                    }
+            let state = &mut chain.communication_state;
+            for origin in state.inboxes.indices().await? {
+                let inbox = state.inboxes.try_load_entry(&origin).await?;
+                let count = inbox.added_events.count();
+                for event in inbox.added_events.read_front(count).await? {
+                    messages.push(Message {
+                        origin: origin.clone(),
+                        event: event.clone(),
+                    });
                 }
             }
+
             info.requested_pending_messages = messages;
         }
         if let Some(range) = query.request_sent_certificates_in_range {
@@ -1063,7 +1025,7 @@ where
                 certificates,
             } => {
                 let mut actions = NetworkActions::default();
-                for (application_id, medium, heights) in height_map {
+                for (medium, heights) in height_map {
                     let origin = Origin { sender, medium };
                     let app_certificates = certificates
                         .iter()
@@ -1072,7 +1034,6 @@ where
                         .collect();
                     actions.merge(
                         self.process_cross_chain_update(
-                            application_id,
                             origin.clone(),
                             recipient,
                             app_certificates,
@@ -1083,17 +1044,13 @@ where
                 Ok(actions)
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
-                application_id,
                 origin: Origin { sender, medium },
                 recipient,
                 height,
             } => {
                 let mut chain = self.storage.load_chain(sender).await?;
                 let target = Target { recipient, medium };
-                if chain
-                    .mark_messages_as_received(application_id, target, height)
-                    .await?
-                {
+                if chain.mark_messages_as_received(target, height).await? {
                     chain.save().await?;
                 }
                 Ok(NetworkActions::default())
@@ -1121,7 +1078,6 @@ impl<'a> CrossChainUpdateHelper<'a> {
     /// correctly.
     fn select_certificates(
         &self,
-        application_id: ApplicationId,
         origin: &'a Origin,
         recipient: ChainId,
         next_height_to_receive: BlockHeight,
@@ -1164,7 +1120,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
         if skipped_len > 0 {
             let sample_block = certificates[skipped_len - 1].value.block();
             tracing::warn!(
-                "[{}] Ignoring repeated messages to {recipient:?} from {application_id:?}::{origin:?} at height {}",
+                "[{}] Ignoring repeated messages to {recipient:?} from {origin:?} at height {}",
                 self.nickname,
                 sample_block.height,
             );
@@ -1172,7 +1128,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
         if skipped_len < certificates.len() && trusted_len < certificates.len() {
             let sample_block = certificates[trusted_len].value.block();
             tracing::warn!(
-                "[{}] Refusing messages to {recipient:?} from {application_id:?}::{origin:?} at height {} \
+                "[{}] Refusing messages to {recipient:?} from {origin:?} at height {} \
                  because the epoch {:?} is not trusted any more",
                 self.nickname,
                 sample_block.height,

@@ -15,7 +15,7 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, RoundNumber, Timestamp},
     identifiers::ChainId,
 };
-use linera_execution::{ApplicationId, ExecutionError};
+use linera_execution::ExecutionError;
 use linera_views::views::ViewError;
 pub use manager::{ChainManager, ChainManagerInfo, Outcome as ChainManagerOutcome};
 use thiserror::Error;
@@ -35,32 +35,29 @@ pub enum ChainError {
     InactiveChain(ChainId),
     #[error(
         "Cannot vote for block proposal of chain {chain_id:?} because a message \
-         from application {application_id:?} and origin {origin:?} at height {height:?} has not been received yet"
+         from origin {origin:?} at height {height:?} has not been received yet"
     )]
     MissingCrossChainUpdate {
         chain_id: ChainId,
-        application_id: ApplicationId,
         origin: Origin,
         height: BlockHeight,
     },
     #[error(
         "Message in block proposed to {chain_id:?} does not match the previously received messages from \
-        application {application_id:?} and origin {origin:?}: was {event:?} instead of {previous_event:?}"
+        origin {origin:?}: was {event:?} instead of {previous_event:?}"
     )]
     UnexpectedMessage {
         chain_id: ChainId,
-        application_id: ApplicationId,
         origin: Origin,
         event: Event,
         previous_event: Event,
     },
     #[error(
         "Message in block proposed to {chain_id:?} is out of order compared to previous messages from \
-         application {application_id:?} and origin {origin:?}: {event:?}. Block and height should be at least: {next_height}, {next_index}"
+         origin {origin:?}: {event:?}. Block and height should be at least: {next_height}, {next_index}"
     )]
     IncorrectMessageOrder {
         chain_id: ChainId,
-        application_id: ApplicationId,
         origin: Origin,
         event: Event,
         next_height: BlockHeight,

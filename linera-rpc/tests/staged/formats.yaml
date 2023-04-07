@@ -194,6 +194,12 @@ ChainManagerInfo:
       Multi:
         NEWTYPE:
           TYPENAME: MultiOwnerManagerInfo
+ChannelFullName:
+  STRUCT:
+    - application_id:
+        TYPENAME: ApplicationId
+    - name:
+        TYPENAME: ChannelName
 ChannelId:
   STRUCT:
     - chain_id:
@@ -221,7 +227,6 @@ CrossChainRequest:
           - height_map:
               SEQ:
                 TUPLE:
-                  - TYPENAME: ApplicationId
                   - TYPENAME: Medium
                   - SEQ:
                       TYPENAME: BlockHeight
@@ -235,8 +240,6 @@ CrossChainRequest:
     1:
       ConfirmUpdatedRecipient:
         STRUCT:
-          - application_id:
-              TYPENAME: ApplicationId
           - origin:
               TYPENAME: Origin
           - recipient:
@@ -288,6 +291,8 @@ Event:
           TYPENAME: Owner
     - timestamp:
         TYPENAME: Timestamp
+    - application_id:
+        TYPENAME: ApplicationId
     - effect:
         TYPENAME: Effect
 LiteCertificate:
@@ -320,11 +325,9 @@ Medium:
     1:
       Channel:
         NEWTYPE:
-          TYPENAME: ChannelName
+          TYPENAME: ChannelFullName
 Message:
   STRUCT:
-    - application_id:
-        TYPENAME: ApplicationId
     - origin:
         TYPENAME: Origin
     - event:
@@ -386,8 +389,6 @@ NodeError:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
-          - application_id:
-              TYPENAME: ApplicationId
           - origin:
               TYPENAME: Origin
           - height:

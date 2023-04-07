@@ -15,7 +15,9 @@ use linera_base::{
     data_types::{Balance, BlockHeight, Timestamp},
     identifiers::{BytecodeId, ChainDescription, ChainId, Destination, EffectId},
 };
-use linera_chain::data_types::{Event, HashedValue, Message, Origin, OutgoingEffect};
+use linera_chain::data_types::{
+    ChannelFullName, Event, HashedValue, Message, Origin, OutgoingEffect,
+};
 use linera_execution::{
     committee::Epoch,
     system::{SystemChannel, SystemEffect, SystemOperation},
@@ -181,7 +183,6 @@ where
 
     // Produce one more block to broadcast the bytecode ID.
     let broadcast_message = Message {
-        application_id: ApplicationId::System,
         origin: Origin::chain(publisher_chain.into()),
         event: Event {
             certificate_hash: publish_certificate.value.hash(),
@@ -189,6 +190,7 @@ where
             index: 0,
             authenticated_signer: None,
             timestamp: Timestamp::from(1),
+            application_id: ApplicationId::System,
             effect: Effect::System(publish_effect),
         },
     };
@@ -308,7 +310,6 @@ where
 
     // Accept subscription
     let accept_message = Message {
-        application_id: ApplicationId::System,
         origin: Origin::chain(creator_chain.into()),
         event: Event {
             certificate_hash: subscribe_certificate.value.hash(),
@@ -316,6 +317,7 @@ where
             index: 0,
             authenticated_signer: None,
             timestamp: Timestamp::from(2),
+            application_id: ApplicationId::System,
             effect: subscribe_effect.into(),
         },
     };
@@ -380,22 +382,23 @@ where
         required_application_ids: vec![],
         parameters: vec![],
     };
+    let publish_admin_channel = ChannelFullName {
+        application_id: ApplicationId::System,
+        name: SystemChannel::PublishedBytecodes.name(),
+    };
     let create_block = make_block(
         Epoch::from(0),
         creator_chain.into(),
         vec![create_operation],
         vec![Message {
-            application_id: ApplicationId::System,
-            origin: Origin::channel(
-                publisher_chain.into(),
-                SystemChannel::PublishedBytecodes.name(),
-            ),
+            origin: Origin::channel(publisher_chain.into(), publish_admin_channel),
             event: Event {
                 certificate_hash: broadcast_certificate.value.hash(),
                 height: broadcast_block_height,
                 index: 0,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(1),
+                application_id: ApplicationId::System,
                 effect: Effect::System(broadcast_effect),
             },
         }],
