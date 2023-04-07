@@ -74,9 +74,8 @@ message NewBlock {
 }
 
 message NewMessage {
-  ApplicationId application_id = 1;
-  Origin origin = 2;
-  BlockHeight height = 3;
+  Origin origin = 1;
+  BlockHeight height = 2;
 }
 
 // A wrapper around ChainInfoResponse which contains a serialized error variant
@@ -108,17 +107,15 @@ message UpdateRecipient {
 // An entry of UpdateRecipient, specifying which blocks are relevant for which application
 // and medium.
 message UpdateRecipientEntry {
-  ApplicationId application_id = 1;
-  Medium medium = 2;
-  repeated BlockHeight heights = 3;
+  Medium medium = 1;
+  repeated BlockHeight heights = 2;
 }
 
 // Acknowledge the height of the highest confirmed block communicated with `UpdateRecipient`.
 message ConfirmUpdatedRecipient {
-  ApplicationId application_id = 1;
-  Origin origin = 2;
-  ChainId recipient = 3;
-  BlockHeight height = 4;
+  Origin origin = 1;
+  ChainId recipient = 2;
+  BlockHeight height = 3;
 }
 
 // Message to obtain information on a chain.
@@ -159,7 +156,17 @@ message Origin {
 
 // The origin of a message coming from a particular chain. Used to identify each inbox.
 message Medium {
-  optional bytes channel = 1;
+  oneof inner {
+    // A direct message.
+    google.protobuf.Empty direct = 1;
+    // A channel message.
+    ChannelFullName channel = 2;
+  }
+}
+
+message ChannelFullName {
+  ApplicationId application_id = 1;
+  bytes name = 2;
 }
 
 // An authenticated proposal for a new block.

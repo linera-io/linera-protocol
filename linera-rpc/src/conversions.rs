@@ -13,8 +13,8 @@ use linera_base::{
     identifiers::{BytecodeId, ChainId, EffectId, Owner},
 };
 use linera_chain::data_types::{
-    BlockAndRound, BlockProposal, Certificate, CertificateWithDependencies, HashedValue,
-    LiteCertificate, LiteValue, Medium, Origin,
+    BlockAndRound, BlockProposal, Certificate, CertificateWithDependencies, ChannelFullName,
+    HashedValue, LiteCertificate, LiteValue, Medium, Origin,
 };
 use linera_core::{
     data_types::{
@@ -124,15 +124,12 @@ impl From<Reason> for grpc::Reason {
                 Reason::NewBlock { height } => grpc::reason::Inner::NewBlock(NewBlock {
                     height: Some(height.into()),
                 }),
-                Reason::NewMessage {
-                    application_id,
-                    origin,
-                    height,
-                } => grpc::reason::Inner::NewMessage(NewMessage {
-                    application_id: Some(application_id.into()),
-                    origin: Some(origin.into()),
-                    height: Some(height.into()),
-                }),
+                Reason::NewMessage { origin, height } => {
+                    grpc::reason::Inner::NewMessage(NewMessage {
+                        origin: Some(origin.into()),
+                        height: Some(height.into()),
+                    })
+                }
             }),
         }
     }
@@ -148,7 +145,6 @@ impl TryFrom<grpc::Reason> for Reason {
                     height: proto_convert!(new_block.height),
                 },
                 grpc::reason::Inner::NewMessage(new_message) => Reason::NewMessage {
-                    application_id: try_proto_convert!(new_message.application_id),
                     origin: try_proto_convert!(new_message.origin),
                     height: proto_convert!(new_message.height),
                 },
@@ -241,15 +237,9 @@ impl TryFrom<grpc::CrossChainRequest> for CrossChainRequest {
                 certificates,
             }) => {
                 let mut height_map = Vec::new();
-                for grpc::UpdateRecipientEntry {
-                    application_id,
-                    medium,
-                    heights,
-                } in grpc_height_map
-                {
+                for grpc::UpdateRecipientEntry { medium, heights } in grpc_height_map {
                     height_map.push((
-                        try_proto_convert!(application_id),
-                        proto_convert!(medium),
+                        try_proto_convert!(medium),
                         heights.into_iter().map(BlockHeight::from).collect(),
                     ));
                 }
@@ -261,12 +251,10 @@ impl TryFrom<grpc::CrossChainRequest> for CrossChainRequest {
                 }
             }
             Inner::ConfirmUpdatedRecipient(grpc::ConfirmUpdatedRecipient {
-                application_id,
                 origin,
                 recipient,
                 height,
             }) => ConfirmUpdatedRecipient {
-                application_id: try_proto_convert!(application_id),
                 origin: try_proto_convert!(origin),
                 recipient: try_proto_convert!(recipient),
                 height: proto_convert!(height),
@@ -291,25 +279,20 @@ impl TryFrom<CrossChainRequest> for grpc::CrossChainRequest {
             } => Inner::UpdateRecipient(grpc::UpdateRecipient {
                 height_map: height_map
                     .into_iter()
-                    .map(
-                        |(application_id, medium, heights)| grpc::UpdateRecipientEntry {
-                            application_id: Some(application_id.into()),
-                            medium: Some(medium.into()),
-                            heights: heights.into_iter().map(|height| height.into()).collect(),
-                        },
-                    )
+                    .map(|(medium, heights)| grpc::UpdateRecipientEntry {
+                        medium: Some(medium.into()),
+                        heights: heights.into_iter().map(|height| height.into()).collect(),
+                    })
                     .collect(),
                 sender: Some(sender.into()),
                 recipient: Some(recipient.into()),
                 certificates: try_proto_convert_vec!(certificates, grpc::Certificate),
             }),
             ConfirmUpdatedRecipient {
-                application_id,
                 origin,
                 recipient,
                 height,
             } => Inner::ConfirmUpdatedRecipient(grpc::ConfirmUpdatedRecipient {
-                application_id: Some(application_id.into()),
                 origin: Some(origin.into()),
                 recipient: Some(recipient.into()),
                 height: Some(height.into()),
@@ -501,23 +484,23 @@ impl TryFrom<ChainInfoQuery> for grpc::ChainInfoQuery {
     }
 }
 
-impl From<Medium> for grpc::Medium {
-    fn from(medium: Medium) -> Self {
-        match medium {
-            Medium::Direct => grpc::Medium { channel: None },
-            Medium::Channel(channel) => grpc::Medium {
-                channel: Some(channel.as_ref().to_owned()),
-            },
+impl From<ChannelFullName> for grpc::ChannelFullName {
+    fn from(full_name: ChannelFullName) -> Self {
+        Self {
+            application_id: Some(full_name.application_id.into()),
+            name: full_name.name.as_ref().to_owned(),
         }
     }
 }
 
-impl From<grpc::Medium> for Medium {
-    fn from(medium: grpc::Medium) -> Self {
-        match medium.channel {
-            None => Medium::Direct,
-            Some(medium) => Medium::Channel(medium.into()),
-        }
+impl TryFrom<grpc::ChannelFullName> for ChannelFullName {
+    type Error = ProtoConversionError;
+
+    fn try_from(full_name: grpc::ChannelFullName) -> Result<Self, Self::Error> {
+        Ok(Self {
+            application_id: try_proto_convert!(full_name.application_id),
+            name: full_name.name.into(),
+        })
     }
 }
 
@@ -576,6 +559,35 @@ impl TryFrom<grpc::ApplicationId> for ApplicationId {
                         creation: try_proto_convert!(user_application_id.creation),
                     })
                 }
+            },
+        )
+    }
+}
+
+impl From<Medium> for grpc::Medium {
+    fn from(medium: Medium) -> Self {
+        match medium {
+            Medium::Direct => grpc::Medium {
+                inner: Some(grpc::medium::Inner::Direct(())),
+            },
+            Medium::Channel(full_name) => grpc::Medium {
+                inner: Some(grpc::medium::Inner::Channel(full_name.into())),
+            },
+        }
+    }
+}
+
+impl TryFrom<grpc::Medium> for Medium {
+    type Error = ProtoConversionError;
+
+    fn try_from(medium: grpc::Medium) -> Result<Self, Self::Error> {
+        Ok(
+            match medium.inner.ok_or(ProtoConversionError::MissingField)? {
+                grpc::medium::Inner::Direct(_) => Medium::Direct,
+                grpc::medium::Inner::Channel(full_name) => Medium::Channel(ChannelFullName {
+                    application_id: try_proto_convert!(full_name.application_id),
+                    name: full_name.name.into(),
+                }),
             },
         )
     }
@@ -666,7 +678,7 @@ impl TryFrom<grpc::Origin> for Origin {
     fn try_from(origin: grpc::Origin) -> Result<Self, Self::Error> {
         Ok(Self {
             sender: try_proto_convert!(origin.sender),
-            medium: proto_convert!(origin.medium),
+            medium: try_proto_convert!(origin.medium),
         })
     }
 }
@@ -808,7 +820,23 @@ pub mod tests {
         let origin_direct = Origin::chain(ChainId::root(0));
         round_trip_check::<_, grpc::Origin>(origin_direct);
 
-        let origin_medium = Origin::channel(ChainId::root(0), vec![].into());
+        let effect_id = EffectId {
+            chain_id: ChainId::root(0),
+            height: BlockHeight(10),
+            index: 20,
+        };
+
+        let application_id = ApplicationId::User(UserApplicationId {
+            bytecode_id: BytecodeId(effect_id),
+            creation: effect_id,
+        });
+
+        let full_name = ChannelFullName {
+            application_id,
+            name: vec![].into(),
+        };
+
+        let origin_medium = Origin::channel(ChainId::root(0), full_name);
         round_trip_check::<_, grpc::Origin>(origin_medium);
     }
 
@@ -974,7 +1002,7 @@ pub mod tests {
     #[test]
     pub fn test_cross_chain_request() {
         let cross_chain_request_update_recipient = UpdateRecipient {
-            height_map: vec![(ApplicationId::System, Medium::Direct, vec![])],
+            height_map: vec![(Medium::Direct, vec![])],
             sender: ChainId::root(0),
             recipient: ChainId::root(0),
             certificates: vec![],
@@ -982,7 +1010,6 @@ pub mod tests {
         round_trip_check::<_, grpc::CrossChainRequest>(cross_chain_request_update_recipient);
 
         let cross_chain_request_confirm_updated_recipient = ConfirmUpdatedRecipient {
-            application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(0)),
             recipient: ChainId::root(0),
             height: Default::default(),
@@ -1030,7 +1057,6 @@ pub mod tests {
         round_trip_check::<_, grpc::Reason>(reason_new_block);
 
         let reason_new_message = Reason::NewMessage {
-            application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(0)),
             height: BlockHeight(0),
         };

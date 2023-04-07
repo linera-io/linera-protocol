@@ -14,7 +14,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    ApplicationId, ExecutionRuntimeContext,
+    ExecutionRuntimeContext,
 };
 use linera_storage::ChainRuntimeContext;
 use linera_views::{common::Context, views::ViewError};
@@ -156,14 +156,13 @@ pub enum CrossChainRequest {
     /// Communicate a number of confirmed blocks from the sender to the recipient.
     /// Blocks must be given by increasing heights.
     UpdateRecipient {
-        height_map: Vec<(ApplicationId, Medium, Vec<BlockHeight>)>,
+        height_map: Vec<(Medium, Vec<BlockHeight>)>,
         sender: ChainId,
         recipient: ChainId,
         certificates: Vec<Certificate>,
     },
     /// Acknowledge the height of the highest confirmed block communicated with `UpdateRecipient`.
     ConfirmUpdatedRecipient {
-        application_id: ApplicationId,
         origin: Origin,
         recipient: ChainId,
         height: BlockHeight,

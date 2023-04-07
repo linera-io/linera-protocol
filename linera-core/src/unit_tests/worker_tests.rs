@@ -8,8 +8,8 @@ mod wasm;
 use crate::{
     data_types::*,
     worker::{
-        ApplicationId::System, CrossChainUpdateHelper, Notification, Reason, Reason::NewMessage,
-        ValidatorWorker, WorkerError, WorkerState,
+        CrossChainUpdateHelper, Notification, Reason, Reason::NewMessage, ValidatorWorker,
+        WorkerError, WorkerState,
     },
 };
 use linera_base::{
@@ -19,8 +19,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, ChainAndHeight, Event, HashedValue,
-        LiteVote, Medium, Message, Origin, OutgoingEffect, SignatureAggregator,
+        Block, BlockAndRound, BlockProposal, Certificate, ChainAndHeight, ChannelFullName, Event,
+        HashedValue, LiteVote, Medium, Message, Origin, OutgoingEffect, SignatureAggregator,
     },
     ChainError,
 };
@@ -930,7 +930,6 @@ where
             Notification {
                 chain_id: ChainId::root(2),
                 reason: NewMessage {
-                    application_id: System,
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight(0)
                 }
@@ -938,7 +937,6 @@ where
             Notification {
                 chain_id: ChainId::root(2),
                 reason: NewMessage {
-                    application_id: System,
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight(1)
                 }
@@ -965,7 +963,6 @@ where
             Amount::from(5),
             vec![
                 Message {
-                    application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -973,6 +970,7 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
+                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(1),
@@ -980,7 +978,6 @@ where
                     },
                 },
                 Message {
-                    application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -988,6 +985,7 @@ where
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
+                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(2),
@@ -995,7 +993,6 @@ where
                     },
                 },
                 Message {
-                    application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate1.value.hash(),
@@ -1003,6 +1000,7 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
+                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(2), // wrong
@@ -1027,7 +1025,6 @@ where
             Amount::from(6),
             vec![
                 Message {
-                    application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -1035,6 +1032,7 @@ where
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
+                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(2),
@@ -1042,7 +1040,6 @@ where
                     },
                 },
                 Message {
-                    application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -1050,6 +1047,7 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
+                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(1),
@@ -1057,7 +1055,6 @@ where
                     },
                 },
                 Message {
-                    application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -1065,6 +1062,7 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
+                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(3),
@@ -1089,7 +1087,6 @@ where
             Amount::from(6),
             vec![
                 Message {
-                    application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate1.value.hash(),
@@ -1097,6 +1094,7 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
+                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(3),
@@ -1104,7 +1102,6 @@ where
                     },
                 },
                 Message {
-                    application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -1112,6 +1109,7 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
+                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(1),
@@ -1119,7 +1117,6 @@ where
                     },
                 },
                 Message {
-                    application_id: ApplicationId::System,
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -1127,6 +1124,7 @@ where
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
+                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(2),
@@ -1150,7 +1148,6 @@ where
             Recipient::Account(Account::chain(ChainId::root(3))),
             Amount::from(1),
             vec![Message {
-                application_id: ApplicationId::System,
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate0.value.hash(),
@@ -1158,6 +1155,7 @@ where
                     index: 0,
                     authenticated_signer: None,
                     timestamp: Timestamp::from(0),
+                    application_id: ApplicationId::System,
                     effect: Effect::System(SystemEffect::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::from(1),
@@ -1212,7 +1210,6 @@ where
             Recipient::Account(Account::chain(ChainId::root(3))),
             Amount::from(3),
             vec![Message {
-                application_id: ApplicationId::System,
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate1.value.hash(),
@@ -1220,6 +1217,7 @@ where
                     index: 0,
                     authenticated_signer: None,
                     timestamp: Timestamp::from(0),
+                    application_id: ApplicationId::System,
                     effect: Effect::System(SystemEffect::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::from(3),
@@ -1624,7 +1622,6 @@ where
         Recipient::Account(Account::chain(ChainId::root(2))),
         Amount::from(1000),
         vec![Message {
-            application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(3)),
             event: Event {
                 certificate_hash: CryptoHash::new(&Dummy),
@@ -1632,6 +1629,7 @@ where
                 index: 0,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
+                application_id: ApplicationId::System,
                 effect: Effect::System(SystemEffect::Credit {
                     account: Account::chain(ChainId::root(1)),
                     amount: Amount::from(995),
@@ -1664,10 +1662,7 @@ where
     assert_eq!(
         BlockHeight::from(0),
         chain
-            .communication_states
-            .load_entry_mut(&ApplicationId::System)
-            .await
-            .unwrap()
+            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(ChainId::root(3)))
             .await
@@ -1677,10 +1672,7 @@ where
     );
     assert_eq!(
         chain
-            .communication_states
-            .load_entry_mut(&ApplicationId::System)
-            .await
-            .unwrap()
+            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(ChainId::root(3)))
             .await
@@ -1691,10 +1683,7 @@ where
     );
     assert!(matches!(
         chain
-            .communication_states
-            .load_entry_mut(&ApplicationId::System)
-            .await
-            .unwrap()
+            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(ChainId::root(3)))
             .await
@@ -1710,6 +1699,7 @@ where
             index: 0,
             authenticated_signer: None,
             timestamp,
+            application_id: ApplicationId::System,
             effect: Effect::System(SystemEffect::Credit { amount, .. }),
         } if certificate_hash == CryptoHash::new(&Dummy)
             && height == BlockHeight::from(0)
@@ -1883,10 +1873,7 @@ where
     assert_eq!(
         BlockHeight::from(1),
         chain
-            .communication_states
-            .load_entry_mut(&ApplicationId::System)
-            .await
-            .unwrap()
+            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(ChainId::root(1)))
             .await
@@ -1896,10 +1883,7 @@ where
     );
     assert!(matches!(
         chain
-            .communication_states
-            .load_entry_mut(&ApplicationId::System)
-            .await
-            .unwrap()
+            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(ChainId::root(1)))
             .await
@@ -1915,6 +1899,7 @@ where
             index: 0,
             authenticated_signer: None,
             timestamp,
+            application_id: ApplicationId::System,
             effect: Effect::System(SystemEffect::Credit { amount, .. })
         } if certificate_hash == certificate.value.hash()
             && height == BlockHeight::from(0)
@@ -1985,11 +1970,7 @@ where
     .await;
     worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            height_map: vec![(
-                ApplicationId::System,
-                Medium::Direct,
-                vec![certificate.value.block().height],
-            )],
+            height_map: vec![(Medium::Direct, vec![certificate.value.block().height])],
             sender: ChainId::root(1),
             recipient: ChainId::root(2),
             certificates: vec![certificate.clone()],
@@ -2012,10 +1993,7 @@ where
     assert_eq!(
         BlockHeight::from(1),
         chain
-            .communication_states
-            .load_entry_mut(&ApplicationId::System)
-            .await
-            .unwrap()
+            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(ChainId::root(1)))
             .await
@@ -2025,10 +2003,7 @@ where
     );
     assert!(matches!(
         chain
-            .communication_states
-            .load_entry_mut(&ApplicationId::System)
-            .await
-            .unwrap()
+            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(ChainId::root(1)))
             .await
@@ -2044,6 +2019,7 @@ where
             index: 0,
             authenticated_signer: None,
             timestamp,
+            application_id: ApplicationId::System,
             effect: Effect::System(SystemEffect::Credit { amount, .. })
         } if certificate_hash == certificate.value.hash()
             && height == BlockHeight::from(0)
@@ -2101,11 +2077,7 @@ where
     .await;
     assert!(worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            height_map: vec![(
-                ApplicationId::System,
-                Medium::Direct,
-                vec![certificate.value.block().height],
-            )],
+            height_map: vec![(Medium::Direct, vec![certificate.value.block().height],)],
             sender: ChainId::root(1),
             recipient: ChainId::root(2),
             certificates: vec![certificate],
@@ -2116,12 +2088,13 @@ where
         .is_empty());
     let chain = worker.storage.load_chain(ChainId::root(2)).await.unwrap();
     // The target chain did not receive the message
-    assert!(!chain
-        .communication_states
+    assert!(chain
+        .communication_state
+        .inboxes
         .indices()
         .await
         .unwrap()
-        .contains(&ApplicationId::System));
+        .is_empty());
 }
 
 #[test(tokio::test)]
@@ -2171,11 +2144,7 @@ where
     // An inactive target chain is created and it acknowledges the message.
     let actions = worker
         .handle_cross_chain_request(CrossChainRequest::UpdateRecipient {
-            height_map: vec![(
-                ApplicationId::System,
-                Medium::Direct,
-                vec![certificate.value.block().height],
-            )],
+            height_map: vec![(Medium::Direct, vec![certificate.value.block().height])],
             sender: ChainId::root(1),
             recipient: ChainId::root(2),
             certificates: vec![certificate],
@@ -2191,18 +2160,14 @@ where
         vec![Notification {
             chain_id: ChainId::root(2),
             reason: Reason::NewMessage {
-                application_id: ApplicationId::System,
                 origin: Origin::chain(ChainId::root(1)),
                 height: BlockHeight::from(0),
             }
         }]
     );
-    let mut chain = worker.storage.load_chain(ChainId::root(2)).await.unwrap();
+    let chain = worker.storage.load_chain(ChainId::root(2)).await.unwrap();
     assert!(!chain
-        .communication_states
-        .load_entry_mut(&ApplicationId::System)
-        .await
-        .unwrap()
+        .communication_state
         .inboxes
         .indices()
         .await
@@ -2331,7 +2296,6 @@ where
         Recipient::Account(Account::chain(ChainId::root(3))),
         Amount::from(1),
         vec![Message {
-            application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(1)),
             event: Event {
                 certificate_hash: certificate.value.hash(),
@@ -2339,6 +2303,7 @@ where
                 index: 0,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
+                application_id: ApplicationId::System,
                 effect: Effect::System(SystemEffect::Credit {
                     account: Account::chain(ChainId::root(2)),
                     amount: Amount::from(5),
@@ -2517,7 +2482,11 @@ where
         chain_id: admin_id,
         name: SystemChannel::Admin.name(),
     };
-    let admin_channel_origin = Origin::channel(admin_id, SystemChannel::Admin.name());
+    let admin_channel_full_name = ChannelFullName {
+        application_id: ApplicationId::System,
+        name: SystemChannel::Admin.name(),
+    };
+    let admin_channel_origin = Origin::channel(admin_id, admin_channel_full_name.clone());
     // Have the admin chain create a user chain.
     let user_id = ChainId::child(EffectId {
         chain_id: admin_id,
@@ -2601,10 +2570,7 @@ where
             admin_chain.tip_state.get().next_block_height
         );
         assert!(admin_chain
-            .communication_states
-            .load_entry_mut(&ApplicationId::System)
-            .await
-            .unwrap()
+            .communication_state
             .outboxes
             .indices()
             .await
@@ -2616,15 +2582,12 @@ where
         );
         // The root chain has no subscribers yet.
         assert!(!admin_chain
-            .communication_states
-            .load_entry_mut(&ApplicationId::System)
-            .await
-            .unwrap()
+            .communication_state
             .channels
             .indices()
             .await
             .unwrap()
-            .contains(&SystemChannel::Admin.name()));
+            .contains(&admin_channel_full_name));
     }
 
     // Create a new committee and transfer money before accepting the subscription.
@@ -2714,7 +2677,6 @@ where
                 epoch: Epoch::from(1),
                 chain_id: admin_id,
                 incoming_messages: vec![Message {
-                    application_id: ApplicationId::System,
                     origin: Origin::chain(admin_id),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -2722,6 +2684,7 @@ where
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
+                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Subscribe {
                             id: user_id,
                             channel_id: admin_channel_id.clone(),
@@ -2767,12 +2730,9 @@ where
         admin_chain.validate_incoming_messages().await.unwrap();
         assert_eq!(
             admin_chain
-                .communication_states
-                .load_entry_mut(&ApplicationId::System)
-                .await
-                .unwrap()
+                .communication_state
                 .channels
-                .load_entry_mut(&SystemChannel::Admin.name())
+                .load_entry_mut(&admin_channel_full_name)
                 .await
                 .unwrap()
                 .subscribers
@@ -2808,10 +2768,7 @@ where
         user_chain.validate_incoming_messages().await.unwrap();
         matches!(
             user_chain
-                .communication_states
-                .load_entry_mut(&ApplicationId::System)
-                .await
-                .unwrap()
+                .communication_state
                 .inboxes
                 .load_entry_mut(&Origin::chain(admin_id))
                 .await
@@ -2837,10 +2794,7 @@ where
         );
         matches!(
             user_chain
-                .communication_states
-                .load_entry_mut(&ApplicationId::System)
-                .await
-                .unwrap()
+                .communication_state
                 .inboxes
                 .load_entry_mut(&admin_channel_origin.clone())
                 .await
@@ -2856,10 +2810,7 @@ where
         );
         assert_eq!(
             user_chain
-                .communication_states
-                .load_entry_mut(&ApplicationId::System)
-                .await
-                .unwrap()
+                .communication_state
                 .inboxes
                 .load_entry_mut(&admin_channel_origin)
                 .await
@@ -2880,7 +2831,6 @@ where
                 chain_id: user_id,
                 incoming_messages: vec![
                     Message {
-                        application_id: ApplicationId::System,
                         origin: admin_channel_origin.clone(),
                         event: Event {
                             certificate_hash: certificate1.value.hash(),
@@ -2888,6 +2838,7 @@ where
                             index: 0,
                             authenticated_signer: None,
                             timestamp: Timestamp::from(0),
+                            application_id: ApplicationId::System,
                             effect: Effect::System(SystemEffect::SetCommittees {
                                 admin_id,
                                 epoch: Epoch::from(1),
@@ -2896,7 +2847,6 @@ where
                         },
                     },
                     Message {
-                        application_id: ApplicationId::System,
                         origin: Origin::chain(admin_id),
                         event: Event {
                             certificate_hash: certificate1.value.hash(),
@@ -2904,6 +2854,7 @@ where
                             index: 1,
                             authenticated_signer: None,
                             timestamp: Timestamp::from(0),
+                            application_id: ApplicationId::System,
                             effect: Effect::System(SystemEffect::Credit {
                                 account: Account::chain(user_id),
                                 amount: Amount::from(2),
@@ -2911,7 +2862,6 @@ where
                         },
                     },
                     Message {
-                        application_id: ApplicationId::System,
                         origin: Origin::chain(admin_id),
                         event: Event {
                             certificate_hash: certificate2.value.hash(),
@@ -2919,6 +2869,7 @@ where
                             index: 0,
                             authenticated_signer: None,
                             timestamp: Timestamp::from(0),
+                            application_id: ApplicationId::System,
                             effect: Effect::System(SystemEffect::Notify { id: user_id }),
                         },
                     },
@@ -2983,10 +2934,7 @@ where
         user_chain.validate_incoming_messages().await.unwrap();
         {
             let inbox = user_chain
-                .communication_states
-                .load_entry_mut(&ApplicationId::System)
-                .await
-                .unwrap()
+                .communication_state
                 .inboxes
                 .load_entry_mut(&Origin::chain(admin_id))
                 .await
@@ -3000,10 +2948,7 @@ where
         }
         {
             let inbox = user_chain
-                .communication_states
-                .load_entry_mut(&ApplicationId::System)
-                .await
-                .unwrap()
+                .communication_state
                 .inboxes
                 .load_entry_mut(&admin_channel_origin)
                 .await
@@ -3200,10 +3145,7 @@ where
     let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
     assert_eq!(
         admin_chain
-            .communication_states
-            .load_entry_mut(&ApplicationId::System)
-            .await
-            .unwrap()
+            .communication_state
             .inboxes
             .indices()
             .await
@@ -3213,10 +3155,7 @@ where
     );
     matches!(
         admin_chain
-            .communication_states
-            .load_entry_mut(&ApplicationId::System)
-            .await
-            .unwrap()
+            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(user_id))
             .await
@@ -3432,12 +3371,9 @@ where
         );
 
         // .. but the message hasn't gone through.
-        let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
+        let admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
         assert!(admin_chain
-            .communication_states
-            .load_entry_mut(&ApplicationId::System)
-            .await
-            .unwrap()
+            .communication_state
             .inboxes
             .indices()
             .await
@@ -3454,7 +3390,6 @@ where
                 epoch: Epoch::from(1),
                 chain_id: admin_id,
                 incoming_messages: vec![Message {
-                    application_id: ApplicationId::System,
                     origin: Origin::chain(user_id),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -3462,6 +3397,7 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
+                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(admin_id),
                             amount: Amount::from(1),
@@ -3592,7 +3528,6 @@ async fn test_cross_chain_helper() {
     assert_eq!(
         helper
             .select_certificates(
-                ApplicationId::System,
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::from(0),
@@ -3606,7 +3541,6 @@ async fn test_cross_chain_helper() {
     assert_eq!(
         helper
             .select_certificates(
-                ApplicationId::System,
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::from(1),
@@ -3619,7 +3553,6 @@ async fn test_cross_chain_helper() {
     assert_eq!(
         helper
             .select_certificates(
-                ApplicationId::System,
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::from(2),
@@ -3632,7 +3565,6 @@ async fn test_cross_chain_helper() {
     // Order of certificates is checked.
     assert!(helper
         .select_certificates(
-            ApplicationId::System,
             &Origin::chain(id0),
             id1,
             BlockHeight::from(0),
@@ -3643,7 +3575,6 @@ async fn test_cross_chain_helper() {
     // Sender is checked.
     assert!(helper
         .select_certificates(
-            ApplicationId::System,
             &Origin::chain(id1),
             id0,
             BlockHeight::from(0),
@@ -3662,7 +3593,6 @@ async fn test_cross_chain_helper() {
     assert_eq!(
         helper
             .select_certificates(
-                ApplicationId::System,
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::from(0),
@@ -3676,7 +3606,6 @@ async fn test_cross_chain_helper() {
     assert_eq!(
         helper
             .select_certificates(
-                ApplicationId::System,
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::from(0),
@@ -3699,7 +3628,6 @@ async fn test_cross_chain_helper() {
     assert_eq!(
         helper
             .select_certificates(
-                ApplicationId::System,
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::from(1),
@@ -3717,7 +3645,6 @@ async fn test_cross_chain_helper() {
     assert_eq!(
         helper
             .select_certificates(
-                ApplicationId::System,
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::from(1),
@@ -3730,7 +3657,6 @@ async fn test_cross_chain_helper() {
     assert_eq!(
         helper
             .select_certificates(
-                ApplicationId::System,
                 &Origin::chain(id0),
                 id1,
                 BlockHeight::from(0),

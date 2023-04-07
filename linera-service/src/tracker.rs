@@ -4,14 +4,13 @@
 use linera_base::{data_types::BlockHeight, identifiers::ChainId};
 use linera_chain::data_types::Origin;
 use linera_core::worker::{Notification, Reason};
-use linera_execution::ApplicationId;
 use std::collections::HashMap;
 
 /// A structure which tracks the latest block heights seen for a given ChainId.
 #[derive(Default)]
 pub struct NotificationTracker {
     new_block: HashMap<ChainId, BlockHeight>,
-    new_message: HashMap<(ChainId, ApplicationId, Origin), BlockHeight>,
+    new_message: HashMap<(ChainId, Origin), BlockHeight>,
 }
 
 impl NotificationTracker {
@@ -22,11 +21,9 @@ impl NotificationTracker {
     pub fn insert(&mut self, notification: Notification) -> bool {
         match notification.reason {
             Reason::NewBlock { height } => self.insert_new_block(notification.chain_id, height),
-            Reason::NewMessage {
-                height,
-                application_id,
-                origin,
-            } => self.insert_new_message(notification.chain_id, application_id, origin, height),
+            Reason::NewMessage { height, origin } => {
+                self.insert_new_message(notification.chain_id, origin, height)
+            }
         }
     }
 
@@ -50,11 +47,10 @@ impl NotificationTracker {
     fn insert_new_message(
         &mut self,
         chain_id: ChainId,
-        application_id: ApplicationId,
         origin: Origin,
         height: BlockHeight,
     ) -> bool {
-        let key = (chain_id, application_id, origin);
+        let key = (chain_id, origin);
         match self.new_message.get(&key) {
             None => {
                 self.new_message.insert(key, height);
@@ -135,12 +131,10 @@ pub mod tests {
     #[test]
     fn test_application_origin() {
         let reason_0 = Reason::NewMessage {
-            application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(0)),
             height: BlockHeight::from(0),
         };
         let reason_1 = Reason::NewMessage {
-            application_id: ApplicationId::System,
             origin: Origin::chain(ChainId::root(0)),
             height: BlockHeight::from(1),
         };

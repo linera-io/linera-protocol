@@ -511,8 +511,7 @@ where
     )));
     assert!(messages
         .iter()
-        .any(|msg| matches!(&msg.event.effect, Effect::User(_))
-            && msg.application_id == ApplicationId::User(application_id)));
+        .any(|msg| matches!(&msg.event.effect, Effect::User(_))));
 
     // Make another transfer.
     let transfer = fungible::Operation::Transfer {
@@ -543,8 +542,7 @@ where
     )));
     assert!(messages
         .iter()
-        .any(|msg| matches!(&msg.event.effect, Effect::User(_))
-            && msg.application_id == ApplicationId::User(application_id)));
+        .any(|msg| matches!(&msg.event.effect, Effect::User(_))));
 
     // Try another transfer in the other direction except that the amount is too large.
     let transfer = fungible::Operation::Transfer {
@@ -680,8 +678,7 @@ where
         .block()
         .incoming_messages
         .iter()
-        .any(|msg| matches!(&msg.event.effect, Effect::User(_))
-            && msg.application_id == ApplicationId::User(application_id)));
+        .any(|msg| matches!(&msg.event.effect, Effect::User(_))));
 
     let query = social::Query::ReceivedPosts(10);
     let response = receiver

@@ -8,7 +8,6 @@ use linera_base::{
     ensure,
     identifiers::ChainId,
 };
-use linera_execution::ApplicationId;
 use linera_views::{
     common::Context,
     queue_view::QueueView,
@@ -102,9 +101,9 @@ impl Cursor {
     }
 }
 
-impl From<(ChainId, ApplicationId, Origin, InboxError)> for ChainError {
-    fn from(value: (ChainId, ApplicationId, Origin, InboxError)) -> Self {
-        let (chain_id, application_id, origin, error) = value;
+impl From<(ChainId, Origin, InboxError)> for ChainError {
+    fn from(value: (ChainId, Origin, InboxError)) -> Self {
+        let (chain_id, origin, error) = value;
         match error {
             InboxError::ViewError(e) => ChainError::ViewError(e),
             InboxError::ArithmeticError(e) => ChainError::ArithmeticError(e),
@@ -113,7 +112,6 @@ impl From<(ChainId, ApplicationId, Origin, InboxError)> for ChainError {
                 previous_event,
             } => ChainError::UnexpectedMessage {
                 chain_id,
-                application_id,
                 origin,
                 event,
                 previous_event,
@@ -121,7 +119,6 @@ impl From<(ChainId, ApplicationId, Origin, InboxError)> for ChainError {
             InboxError::IncorrectOrder { event, next_cursor } => {
                 ChainError::IncorrectMessageOrder {
                     chain_id,
-                    application_id,
                     origin,
                     event,
                     next_height: next_cursor.height,

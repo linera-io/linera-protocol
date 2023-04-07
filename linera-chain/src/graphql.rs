@@ -3,13 +3,13 @@
 
 use crate::{
     chain::{ChannelStateView, CommunicationStateView},
-    data_types::{Certificate, Event, Medium, Origin, Target},
+    data_types::{Certificate, ChannelFullName, Event, Medium, Origin, Target},
     inbox::InboxStateView,
     outbox::OutboxStateView,
     ChainManager,
 };
 use async_graphql::{scalar, Error, Object};
-use linera_base::identifiers::{ChainId, ChannelName};
+use linera_base::identifiers::ChainId;
 use linera_execution::ApplicationId;
 use linera_views::{collection_view::ReadGuardedView, common::Context, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -17,6 +17,7 @@ use std::ops::Deref;
 
 scalar!(Certificate);
 scalar!(ChainManager);
+scalar!(ChannelFullName);
 scalar!(Event);
 scalar!(Medium);
 scalar!(Range);
@@ -68,11 +69,11 @@ where
     async fn inbox(
         &self,
         chain_id: ChainId,
-        channel_name: Option<ChannelName>,
+        channel_full_name: Option<ChannelFullName>,
     ) -> Result<InboxStateElement<C>, Error> {
-        let origin = match channel_name {
+        let origin = match channel_full_name {
             None => Origin::chain(chain_id),
-            Some(channel_name) => Origin::channel(chain_id, channel_name),
+            Some(channel_full_name) => Origin::channel(chain_id, channel_full_name),
         };
         Ok(InboxStateElement {
             origin: origin.clone(),
@@ -87,11 +88,11 @@ where
     async fn outbox(
         &self,
         chain_id: ChainId,
-        channel_name: Option<ChannelName>,
+        channel_full_name: Option<ChannelFullName>,
     ) -> Result<OutboxStateElement<C>, Error> {
-        let target = match channel_name {
+        let target = match channel_full_name {
             None => Target::chain(chain_id),
-            Some(channel_name) => Target::channel(chain_id, channel_name),
+            Some(channel_full_name) => Target::channel(chain_id, channel_full_name),
         };
         Ok(OutboxStateElement {
             target: target.clone(),
@@ -103,14 +104,17 @@ where
         Ok(self.outboxes.indices().await?)
     }
 
-    async fn channel(&self, channel_name: ChannelName) -> Result<ChannelStateEntry<C>, Error> {
+    async fn channel(
+        &self,
+        channel_full_name: ChannelFullName,
+    ) -> Result<ChannelStateEntry<C>, Error> {
         Ok(ChannelStateEntry {
-            channel_name: channel_name.clone(),
-            guard: self.channels.try_load_entry(&channel_name).await?,
+            channel_full_name: channel_full_name.clone(),
+            guard: self.channels.try_load_entry(&channel_full_name).await?,
         })
     }
 
-    async fn channel_indices(&self) -> Result<Vec<ChannelName>, Error> {
+    async fn channel_indices(&self) -> Result<Vec<ChannelFullName>, Error> {
         Ok(self.channels.indices().await?)
     }
 }
@@ -168,7 +172,7 @@ where
     C: Sync + Send + Context + 'static,
     ViewError: From<C::Error>,
 {
-    channel_name: ChannelName,
+    channel_full_name: ChannelFullName,
     guard: ReadGuardedView<'a, ChannelStateView<C>>,
 }
 
@@ -178,8 +182,8 @@ where
     C: Sync + Send + Context + 'static + Clone,
     ViewError: From<C::Error>,
 {
-    async fn channel_name(&self) -> &ChannelName {
-        &self.channel_name
+    async fn channel_full_name(&self) -> &ChannelFullName {
+        &self.channel_full_name
     }
 
     async fn channel_state_view(&self) -> &ChannelStateView<C> {
