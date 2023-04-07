@@ -82,6 +82,7 @@ macro_rules! contract {
                             argument,
                             forwarded_sessions,
                         )
+                        .await
                     },
                 )
                 .await

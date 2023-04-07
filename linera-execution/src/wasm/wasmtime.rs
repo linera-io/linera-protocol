@@ -37,7 +37,7 @@ use super::{
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     WasmApplication, WasmExecutionError,
 };
-use crate::{ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
+use crate::{CallResult, ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
 use linera_views::{batch::Batch, views::ViewError};
 use std::{error::Error, task::Poll};
 use wasmtime::{Config, Engine, Linker, Module, Store, Trap};
