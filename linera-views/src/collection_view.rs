@@ -97,7 +97,7 @@ where
             for (index, update) in mem::take(self.updates.get_mut()) {
                 if let Update::Set(mut view) = update {
                     view.flush(batch)?;
-                    self.add_index(batch, &index)?;
+                    self.add_index(batch, &index);
                 }
             }
         } else {
@@ -105,7 +105,7 @@ where
                 match update {
                     Update::Set(mut view) => {
                         view.flush(batch)?;
-                        self.add_index(batch, &index)?;
+                        self.add_index(batch, &index);
                     }
                     Update::Removed => {
                         let key_subview = self.get_subview_key(&index);
@@ -153,24 +153,24 @@ where
         self.context.base_tag_index(KeyTag::Subview as u8, index)
     }
 
-    fn add_index(&self, batch: &mut Batch, index: &[u8]) -> Result<(), ViewError> {
+    fn add_index(&self, batch: &mut Batch, index: &[u8]) {
         let key = self.get_index_key(index);
-        batch.put_key_value(key, &())?;
-        Ok(())
+        batch.put_key_value_bytes(key, vec![]);
     }
 
     /// Loads a subview for the data at the given index in the collection. If the entry
     /// at that index was absent or had not been assigned then the default value is provided.
     /// ```rust
     /// # tokio_test::block_on(async {
-    ///   use linera_views::memory::{create_test_context, MemoryContext};
-    ///   use linera_views::collection_view::ByteCollectionView;
-    ///   use linera_views::register_view::RegisterView;
-    ///   use crate::linera_views::views::View;
-    ///   let context = create_test_context();
-    ///   let mut map : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
-    ///   let short_key : Vec<u8> = vec![0,1];
-    ///   let value = map.load_entry_mut(short_key).await.unwrap();
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::ByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
+    ///   let view = coll.load_entry_mut(vec![0,1]).await.unwrap();
+    ///   let value = view.get();
+    ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
     pub async fn load_entry_mut(&mut self, short_key: Vec<u8>) -> Result<&mut W, ViewError> {
@@ -180,12 +180,39 @@ where
 
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// was removed before or it was absent then a default entry is put on this index.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::ByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
+    ///   coll.load_entry_mut(vec![0,1]).await.unwrap();
+    ///   let view = coll.load_entry(vec![0,1]).await.unwrap();
+    ///   let value = view.get();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
     pub async fn load_entry(&mut self, short_key: Vec<u8>) -> Result<&W, ViewError> {
         Ok(self.do_load_entry_mut(short_key).await?)
     }
 
     /// Same as `load_entry_mut` but for read-only access. May fail if one subview is
     /// already being visited.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::ByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
+    ///   let view = coll.try_load_entry(vec![0,1]).await.unwrap();
+    ///   let value = view.get();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
     pub async fn try_load_entry(
         &self,
         short_key: Vec<u8>,
@@ -232,7 +259,24 @@ where
         }
     }
 
-    /// Marks the entry so that it is removed in the next flush.
+    /// Resets an entry to the default value.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::ByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
+    ///   let view = coll.load_entry_mut(vec![0,1]).await.unwrap();
+    ///   let value = view.get_mut();
+    ///   *value = String::from("Hello");
+    ///   coll.reset_entry_to_default(vec![0,1]).await.unwrap();
+    ///   let view = coll.load_entry_mut(vec![0,1]).await.unwrap();
+    ///   let value = view.get_mut();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
     pub async fn reset_entry_to_default(&mut self, short_key: Vec<u8>) -> Result<(), ViewError> {
         *self.hash.get_mut() = None;
         let view = self.load_entry_mut(short_key).await?;
@@ -240,15 +284,30 @@ where
         Ok(())
     }
 
-    /// Marks the entry so that it is removed in the next flush.
-    pub fn remove_entry(&mut self, short_key: Vec<u8>) -> Result<(), ViewError> {
+    /// Marks the entry as removed. If absent then nothing is done.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::ByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
+    ///   let view = coll.load_entry_mut(vec![0,1]).await.unwrap();
+    ///   let value = view.get_mut();
+    ///   assert_eq!(*value, String::default());
+    ///   coll.remove_entry(vec![0,1]);
+    ///   let keys = coll.keys().await.unwrap();
+    ///   assert_eq!(keys.len(), 0);
+    /// # })
+    /// ```
+    pub fn remove_entry(&mut self, short_key: Vec<u8>) {
         *self.hash.get_mut() = None;
         if self.was_cleared {
             self.updates.get_mut().remove(&short_key);
         } else {
             self.updates.get_mut().insert(short_key, Update::Removed);
         }
-        Ok(())
     }
 
     /// Get the extra data.
@@ -298,9 +357,27 @@ where
     ViewError: From<C::Error>,
     W: View<C> + Sync,
 {
-    /// Executes a function on each serialized index (aka key). Keys are visited in a
+    /// Applies a function f on each index (aka key). Keys are visited in the
     /// lexicographic order. If the function returns false, then the loop
-    /// is prematurely ended.
+    /// ends prematurely.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::ByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
+    ///   coll.load_entry_mut(vec![0,1]).await.unwrap();
+    ///   coll.load_entry_mut(vec![0,2]).await.unwrap();
+    ///   let mut count = 0;
+    ///   coll.for_each_key_while(|_key| {
+    ///     count += 1;
+    ///     Ok(count < 1)
+    ///   }).await.unwrap();
+    ///   assert_eq!(count, 1);
+    /// # })
+    /// ```
     pub async fn for_each_key_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
@@ -346,8 +423,26 @@ where
         Ok(())
     }
 
-    /// Executes a function on each serialized index (aka key). Keys are visited in a
+    /// Applies a function f on each index (aka key). Keys are visited in a
     /// lexicographic order.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::ByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
+    ///   coll.load_entry_mut(vec![0,1]).await.unwrap();
+    ///   coll.load_entry_mut(vec![0,2]).await.unwrap();
+    ///   let mut count = 0;
+    ///   coll.for_each_key(|_key| {
+    ///     count += 1;
+    ///     Ok(())
+    ///   }).await.unwrap();
+    ///   assert_eq!(count, 2);
+    /// # })
+    /// ```
     pub async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
@@ -359,7 +454,21 @@ where
         .await
     }
 
-    /// Returns the list of indices in the collection.
+    /// Returns the list of jeys in the collection. The order is lexicographic.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::ByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
+    ///   coll.load_entry_mut(vec![0,1]).await.unwrap();
+    ///   coll.load_entry_mut(vec![0,2]).await.unwrap();
+    ///   let keys = coll.keys().await.unwrap();
+    ///   assert_eq!(keys, vec![vec![0,1],vec![0,2]]);
+    /// # })
+    /// ```
     pub async fn keys(&self) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut keys = Vec::new();
         self.for_each_key(|key| {
@@ -478,6 +587,19 @@ where
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
+    ///   let view = coll.load_entry_mut(&23).await.unwrap();
+    ///   let value = view.get();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
     pub async fn load_entry_mut<Q>(&mut self, index: &Q) -> Result<&mut W, ViewError>
     where
         I: Borrow<Q>,
@@ -489,6 +611,20 @@ where
 
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
+    ///   let view = coll.load_entry(&23).await.unwrap();
+    ///   let value = view.get();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
     pub async fn load_entry<Q>(&mut self, index: &Q) -> Result<&W, ViewError>
     where
         I: Borrow<Q>,
@@ -500,6 +636,19 @@ where
 
     /// Same as `load_entry_mut` but for read-only access. May fail if one subview is
     /// already being visited.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
+    ///   let view = coll.try_load_entry(&23).await.unwrap();
+    ///   let value = view.get();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
     pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
     where
         I: Borrow<Q>,
@@ -509,7 +658,24 @@ where
         self.collection.try_load_entry(short_key).await
     }
 
-    /// Marks the entry so that it is removed in the next flush.
+    /// Resets an entry to the default value.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
+    ///   let view = coll.load_entry_mut(&23).await.unwrap();
+    ///   let value = view.get_mut();
+    ///   *value = String::from("Hello");
+    ///   coll.reset_entry_to_default(&23).await.unwrap();
+    ///   let view = coll.load_entry_mut(&23).await.unwrap();
+    ///   let value = view.get_mut();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
     pub async fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
@@ -519,14 +685,31 @@ where
         self.collection.reset_entry_to_default(short_key).await
     }
 
-    /// Marks the entry so that it is removed in the next flush.
+    /// Removes an entry from the CollectionView. If absent nothing happens.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
+    ///   let view = coll.load_entry_mut(&23).await.unwrap();
+    ///   let value = view.get_mut();
+    ///   assert_eq!(*value, String::default());
+    ///   coll.remove_entry(&23);
+    ///   let keys = coll.indices().await.unwrap();
+    ///   assert_eq!(keys.len(), 0);
+    /// # })
+    /// ```
     pub fn remove_entry<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
     {
         let short_key = C::derive_short_key(index)?;
-        self.collection.remove_entry(short_key)
+        self.collection.remove_entry(short_key);
+        Ok(())
     }
 
     /// Get the extra data.
@@ -542,7 +725,22 @@ where
     I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
     W: View<C> + Sync,
 {
-    /// Returns the list of indices in the collection.
+    /// Returns the list of indices in the collection in the order determined by
+    /// the serialization.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
+    ///   coll.load_entry_mut(&25).await.unwrap();
+    ///   let indices = coll.indices().await.unwrap();
+    ///   assert_eq!(indices.len(), 2);
+    /// # })
+    /// ```
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
         self.for_each_index(|index: I| {
@@ -561,9 +759,27 @@ where
     I: Debug + DeserializeOwned,
     W: View<C> + Sync,
 {
-    /// Executes a function on each index. Indices are visited in an order
+    /// Applies a function f on each index. Indices are visited in an order
     /// determined by the serialization. If the function returns false then
-    /// the function early terminates.
+    /// the loop ends prematurely.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
+    ///   coll.load_entry_mut(&24).await.unwrap();
+    ///   let mut count = 0;
+    ///   coll.for_each_index_while(|_key| {
+    ///     count += 1;
+    ///     Ok(count < 1)
+    ///   }).await.unwrap();
+    ///   assert_eq!(count, 1);
+    /// # })
+    /// ```
     pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<bool, ViewError> + Send,
@@ -577,8 +793,26 @@ where
         Ok(())
     }
 
-    /// Executes a function on each index. Indices are visited in an order
+    /// Applies a function f on each index. Indices are visited in an order
     /// determined by the serialization.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
+    ///   coll.load_entry_mut(&28).await.unwrap();
+    ///   let mut count = 0;
+    ///   coll.for_each_index(|_key| {
+    ///     count += 1;
+    ///     Ok(())
+    ///   }).await.unwrap();
+    ///   assert_eq!(count, 2);
+    /// # })
+    /// ```
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
@@ -665,6 +899,19 @@ where
 {
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
+    ///   let view = coll.load_entry_mut(&23).await.unwrap();
+    ///   let value = view.get();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
     pub async fn load_entry_mut<Q>(&mut self, index: &Q) -> Result<&mut W, ViewError>
     where
         I: Borrow<Q>,
@@ -676,6 +923,20 @@ where
 
     /// Loads a subview for the data at the given index in the collection. If an entry
     /// was removed before then a default entry is put on this index.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
+    ///   let view = coll.load_entry(&23).await.unwrap();
+    ///   let value = view.get();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
     pub async fn load_entry<Q>(&mut self, index: &Q) -> Result<&W, ViewError>
     where
         I: Borrow<Q>,
@@ -687,6 +948,19 @@ where
 
     /// Same as `load_entry_mut` but for read-only access. May fail if one subview is
     /// already being visited.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
+    ///   let view = coll.try_load_entry(&23).await.unwrap();
+    ///   let value = view.get();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
     pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<ReadGuardedView<W>, ViewError>
     where
         I: Borrow<Q>,
@@ -697,6 +971,23 @@ where
     }
 
     /// Marks the entry so that it is removed in the next flush.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
+    ///   let view = coll.load_entry_mut(&23).await.unwrap();
+    ///   let value = view.get_mut();
+    ///   *value = String::from("Hello");
+    ///   coll.reset_entry_to_default(&23).await.unwrap();
+    ///   let view = coll.load_entry_mut(&23).await.unwrap();
+    ///   let value = view.get_mut();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
     pub async fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
@@ -706,14 +997,31 @@ where
         self.collection.reset_entry_to_default(short_key).await
     }
 
-    /// Marks the entry so that it is removed in the next flush.
+    /// Removes an entry from the CollectionView. If absent nothing happens.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
+    ///   let view = coll.load_entry_mut(&23).await.unwrap();
+    ///   let value = view.get_mut();
+    ///   assert_eq!(*value, String::default());
+    ///   coll.remove_entry(&23);
+    ///   let keys = coll.indices().await.unwrap();
+    ///   assert_eq!(keys.len(), 0);
+    /// # })
+    /// ```
     pub fn remove_entry<Q>(&mut self, index: &Q) -> Result<(), ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
     {
         let short_key = index.to_custom_bytes::<C>()?;
-        self.collection.remove_entry(short_key)
+        self.collection.remove_entry(short_key);
+        Ok(())
     }
 
     /// Get the extra data.
@@ -729,7 +1037,21 @@ where
     I: Send + Debug + CustomSerialize,
     W: View<C> + Sync,
 {
-    /// Returns the list of indices in the collection.
+    /// Returns the list of indices in the collection in the order determined by the custom serialization.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
+    ///   coll.load_entry_mut(&25).await.unwrap();
+    ///   let indices = coll.indices().await.unwrap();
+    ///   assert_eq!(indices, vec![23,25]);
+    /// # })
+    /// ```
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
         let mut indices = Vec::new();
         self.for_each_index(|index: I| {
@@ -748,8 +1070,62 @@ where
     I: Debug + CustomSerialize,
     W: View<C> + Sync,
 {
-    /// Executes a function on each index. Indices are visited in an order
+    /// Applies a function f on each index. Indices are visited in an order
+    /// determined by the custom serialization. If the function f returns false
+    /// then the loops ends prematurely.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
+    ///   coll.load_entry_mut(&28).await.unwrap();
+    ///   coll.load_entry_mut(&24).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
+    ///   let mut part_indices = Vec::new();
+    ///   coll.for_each_index_while(|index| {
+    ///     part_indices.push(index);
+    ///     Ok(part_indices.len() < 2)
+    ///   }).await.unwrap();
+    ///   assert_eq!(part_indices, vec![23,24]);
+    /// # })
+    /// ```
+    pub async fn for_each_index_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    where
+        F: FnMut(I) -> Result<bool, ViewError> + Send,
+    {
+        self.collection
+            .for_each_key_while(|key| {
+                let index = I::from_custom_bytes::<C>(key)?;
+                f(index)
+            })
+            .await?;
+        Ok(())
+    }
+
+    /// Applies a function on each index. Indices are visited in an order
     /// determined by the custom serialization.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::CustomCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
+    ///   coll.load_entry_mut(&28).await.unwrap();
+    ///   coll.load_entry_mut(&24).await.unwrap();
+    ///   coll.load_entry_mut(&23).await.unwrap();
+    ///   let mut indices = Vec::new();
+    ///   coll.for_each_index(|index| {
+    ///     indices.push(index);
+    ///     Ok(())
+    ///   }).await.unwrap();
+    ///   assert_eq!(indices, vec![23,24,28]);
+    /// # })
+    /// ```
     pub async fn for_each_index<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
@@ -757,8 +1133,7 @@ where
         self.collection
             .for_each_key(|key| {
                 let index = I::from_custom_bytes::<C>(key)?;
-                f(index)?;
-                Ok(())
+                f(index)
             })
             .await?;
         Ok(())
