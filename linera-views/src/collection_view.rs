@@ -985,7 +985,7 @@ where
     ///   coll.reset_entry_to_default(&23).await.unwrap();
     ///   let view = coll.load_entry_mut(&23).await.unwrap();
     ///   let value = view.get_mut();
-    ///   assert_eq!(*value, String::defaul());
+    ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
     pub async fn reset_entry_to_default<Q>(&mut self, index: &Q) -> Result<(), ViewError>

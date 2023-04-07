@@ -230,7 +230,7 @@ where
     ///   assert_eq!(count, 2);
     /// # })
     /// ```
-    async fn for_each_key_while<F>(&self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_key_while<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
@@ -293,7 +293,7 @@ where
     ///   assert_eq!(count, 3);
     /// # })
     /// ```
-    async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
+    pub async fn for_each_key<F>(&self, mut f: F) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
     {
