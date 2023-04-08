@@ -11,8 +11,8 @@ pub mod system;
 mod wasm;
 
 pub use applications::{
-    ApplicationDescription, ApplicationId, ApplicationRegistryView, BytecodeLocation,
-    UserApplicationDescription, UserApplicationId,
+    ApplicationId, ApplicationRegistryView, BytecodeLocation, UserApplicationDescription,
+    UserApplicationId,
 };
 pub use execution::ExecutionStateView;
 pub use ownership::ChainOwnership;
