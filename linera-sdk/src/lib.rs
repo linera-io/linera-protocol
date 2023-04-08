@@ -39,7 +39,8 @@ mod exported_future;
 mod extensions;
 mod log;
 pub mod service;
-#[cfg(feature = "test")]
+#[cfg(all(not(target_arch = "wasm32"), feature = "test"))]
+#[path = "./test/integration/mod.rs"]
 pub mod test;
 
 use async_trait::async_trait;
