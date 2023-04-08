@@ -160,7 +160,6 @@ where
     let publish_block_proposal = HashedValue::new_confirmed(
         publish_block,
         vec![OutgoingEffect {
-            application_id: ApplicationId::System,
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
             effect: Effect::System(publish_effect.clone()),
@@ -190,7 +189,6 @@ where
             index: 0,
             authenticated_signer: None,
             timestamp: Timestamp::from(1),
-            application_id: ApplicationId::System,
             effect: Effect::System(publish_effect),
         },
     };
@@ -225,7 +223,6 @@ where
     let broadcast_block_proposal = HashedValue::new_confirmed(
         broadcast_block,
         vec![OutgoingEffect {
-            application_id: ApplicationId::System,
             destination: broadcast_channel,
             authenticated_signer: None,
             effect: Effect::System(broadcast_effect.clone()),
@@ -287,7 +284,6 @@ where
     let subscribe_block_proposal = HashedValue::new_confirmed(
         subscribe_block,
         vec![OutgoingEffect {
-            application_id: ApplicationId::System,
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
             effect: Effect::System(subscribe_effect.clone()),
@@ -317,7 +313,6 @@ where
             index: 0,
             authenticated_signer: None,
             timestamp: Timestamp::from(2),
-            application_id: ApplicationId::System,
             effect: subscribe_effect.into(),
         },
     };
@@ -335,7 +330,6 @@ where
     let accept_block_proposal = HashedValue::new_confirmed(
         accept_block,
         vec![OutgoingEffect {
-            application_id: ApplicationId::System,
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
             effect: Effect::System(SystemEffect::Notify {
@@ -398,7 +392,6 @@ where
                 index: 0,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(1),
-                application_id: ApplicationId::System,
                 effect: Effect::System(broadcast_effect),
             },
         }],
@@ -447,7 +440,10 @@ where
     let run_block = make_block(
         Epoch::from(0),
         creator_chain.into(),
-        vec![(application_id, user_operation.clone())],
+        vec![Operation::User {
+            application_id,
+            bytes: user_operation.clone(),
+        }],
         vec![],
         Some(&create_certificate),
         None,
@@ -462,9 +458,11 @@ where
     creator_state.add_fuel(10_000_000);
     creator_state
         .execute_operation(
-            ApplicationId::User(application_id),
             &operation_context,
-            &Operation::User(user_operation),
+            &Operation::User {
+                application_id,
+                bytes: user_operation,
+            },
         )
         .await?;
     creator_state.system.timestamp.set(Timestamp::from(5));

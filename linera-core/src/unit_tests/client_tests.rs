@@ -19,7 +19,7 @@ use linera_base::{
 use linera_execution::{
     committee::Epoch,
     system::{Account, Recipient, SystemOperation, UserData},
-    ApplicationId, Operation, Query, Response, SystemQuery, SystemResponse,
+    Operation, Query, Response, SystemQuery, SystemResponse,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -471,7 +471,7 @@ where
     assert!(certificate.value.is_confirmed());
     assert!(matches!(
         &certificate.value.block().operations[..],
-        &[(_, Operation::System(SystemOperation::OpenChain { id, .. }))] if new_id == id
+        &[Operation::System(SystemOperation::OpenChain { id, .. })] if new_id == id
     ));
     // Make a client to try the new chain.
     let mut client = builder
@@ -595,7 +595,7 @@ where
     assert!(certificate.value.is_confirmed());
     assert!(matches!(
         &certificate.value.block().operations[..],
-        &[(_, Operation::System(SystemOperation::CloseChain))]
+        &[Operation::System(SystemOperation::CloseChain)]
     ));
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
@@ -696,7 +696,7 @@ where
     assert_eq!(client1.local_balance().await.unwrap(), Balance::from(3));
     assert_eq!(
         client1
-            .query_application(ApplicationId::System, &Query::System(SystemQuery))
+            .query_application(&Query::System(SystemQuery))
             .await
             .unwrap(),
         Response::System(SystemResponse {
@@ -720,7 +720,7 @@ where
     assert_eq!(client1.local_balance().await.unwrap(), Balance::from(0));
     assert_eq!(
         client1
-            .query_application(ApplicationId::System, &Query::System(SystemQuery))
+            .query_application(&Query::System(SystemQuery))
             .await
             .unwrap(),
         Response::System(SystemResponse {
@@ -749,7 +749,7 @@ where
     // SystemResponse only reads the ChainState.
     assert_eq!(
         client2
-            .query_application(ApplicationId::System, &Query::System(SystemQuery))
+            .query_application(&Query::System(SystemQuery))
             .await
             .unwrap(),
         Response::System(SystemResponse {
@@ -779,7 +779,7 @@ where
     // Local balance from client2 is now consolidated.
     assert_eq!(
         client2
-            .query_application(ApplicationId::System, &Query::System(SystemQuery))
+            .query_application(&Query::System(SystemQuery))
             .await
             .unwrap(),
         Response::System(SystemResponse {

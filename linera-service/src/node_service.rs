@@ -30,8 +30,8 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{Recipient, SystemChannel, UserData},
-    ApplicationId, Bytecode, Operation, Query, Response, SystemOperation,
-    UserApplicationDescription, UserApplicationId,
+    Bytecode, Operation, Query, Response, SystemOperation, UserApplicationDescription,
+    UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -125,11 +125,10 @@ where
         &self,
         system_operation: SystemOperation,
     ) -> Result<Certificate, Error> {
-        let application_id = ApplicationId::System;
         let operation = Operation::System(system_operation);
         let mut client = self.0.client.lock().await;
         client.process_inbox().await?;
-        Ok(client.execute_operation(application_id, operation).await?)
+        Ok(client.execute_operation(operation).await?)
     }
 }
 
@@ -392,7 +391,7 @@ where
 /// Pattern matches on the `OperationType` of the query and routes the query
 /// accordingly.
 async fn application_handler<P, S>(
-    Path(user_application_id): Path<String>,
+    Path(application_id): Path<String>,
     service: Extension<Arc<NodeService<P, S>>>,
     req: GraphQLRequest,
 ) -> Result<GraphQLResponse, NodeServiceError>
@@ -406,9 +405,8 @@ where
     let parsed_query = req.parsed_query()?;
     let operation_type = operation_type(parsed_query)?;
 
-    let user_application_id_bytes = hex::decode(user_application_id)?;
-    let user_application_id: UserApplicationId = bcs::from_bytes(&user_application_id_bytes)?;
-    let application_id = ApplicationId::User(user_application_id);
+    let application_id_bytes = hex::decode(application_id)?;
+    let application_id: UserApplicationId = bcs::from_bytes(&application_id_bytes)?;
 
     let response = match operation_type {
         OperationType::Query => user_application_query(application_id, service, &req).await?,
@@ -441,23 +439,26 @@ fn operation_type(document: &ExecutableDocument) -> Result<OperationType, NodeSe
 
 /// Handles queries for user applications.
 async fn user_application_query<P, S>(
-    application_id: ApplicationId,
+    application_id: UserApplicationId,
     service: Extension<Arc<NodeService<P, S>>>,
-    req: &Request,
+    request: &Request,
 ) -> Result<async_graphql::Response, NodeServiceError>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    let serialized_request = serde_json::to_vec(&req)?;
-    let query = Query::User(serialized_request);
+    let bytes = serde_json::to_vec(&request)?;
+    let query = Query::User {
+        application_id,
+        bytes,
+    };
     let response = service
         .0
         .client
         .lock()
         .await
-        .query_application(application_id, &query)
+        .query_application(&query)
         .await?;
     let user_response_bytes = match response {
         Response::System(_) => unreachable!("cannot get a system response for a user query"),
@@ -468,7 +469,7 @@ where
 
 /// Handles mutations for user applications.
 async fn user_application_mutation<P, S>(
-    application_id: ApplicationId,
+    application_id: UserApplicationId,
     service: Extension<Arc<NodeService<P, S>>>,
     req: &Request,
 ) -> Result<async_graphql::Response, NodeServiceError>
@@ -479,13 +480,15 @@ where
 {
     let graphql_res = user_application_query(application_id, service.clone(), req).await?;
     let res_json = graphql_res.data.into_json()?;
-    let bcs_bytes =
-        bytes_from_res(res_json).ok_or(NodeServiceError::MalformedApplicationResponse)?;
-    let operation = Operation::User(bcs_bytes);
+    let bytes = bytes_from_res(res_json).ok_or(NodeServiceError::MalformedApplicationResponse)?;
+    let operation = Operation::User {
+        application_id,
+        bytes,
+    };
 
     let mut client = service.0.client.lock().await;
     client.process_inbox().await?;
-    let certificate = client.execute_operation(application_id, operation).await?;
+    let certificate = client.execute_operation(operation).await?;
     let value = async_graphql::Value::from_json(serde_json::to_value(certificate)?)?;
     Ok(async_graphql::Response::new(value))
 }

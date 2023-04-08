@@ -46,9 +46,11 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
 
     let result = view
         .execute_operation(
-            ApplicationId::User(app_id),
             &context,
-            &Operation::User(vec![]),
+            &Operation::User {
+                application_id: app_id,
+                bytes: vec![],
+            },
         )
         .await;
 
@@ -214,9 +216,11 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     };
     let result = view
         .execute_operation(
-            ApplicationId::User(app_id),
             &context,
-            &Operation::User(vec![1]),
+            &Operation::User {
+                application_id: app_id,
+                bytes: vec![1],
+            },
         )
         .await
         .unwrap();
@@ -239,9 +243,15 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
     };
     assert_eq!(
-        view.query_application(ApplicationId::User(app_id), &context, &Query::User(vec![]),)
-            .await
-            .unwrap(),
+        view.query_application(
+            &context,
+            &Query::User {
+                application_id: app_id,
+                bytes: vec![]
+            }
+        )
+        .await
+        .unwrap(),
         Response::User(vec![1])
     );
     Ok(())
@@ -275,9 +285,11 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
 
     let result = view
         .execute_operation(
-            ApplicationId::User(app_id),
             &context,
-            &Operation::User(vec![]),
+            &Operation::User {
+                application_id: app_id,
+                bytes: vec![],
+            },
         )
         .await;
 

@@ -10,10 +10,9 @@ use linera_base::{
 };
 use linera_execution::{
     system::{Account, Recipient, UserData},
-    ApplicationId, Effect, EffectContext, ExecutionResult, ExecutionStateView, Operation,
-    OperationContext, Query, QueryContext, RawExecutionResult, Response, SystemEffect,
-    SystemExecutionState, SystemOperation, SystemQuery, SystemResponse,
-    TestExecutionRuntimeContext,
+    Effect, EffectContext, ExecutionResult, ExecutionStateView, Operation, OperationContext, Query,
+    QueryContext, RawExecutionResult, Response, SystemEffect, SystemExecutionState,
+    SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
 };
 use linera_views::memory::MemoryContext;
 use serde::{Deserialize, Serialize};
@@ -39,11 +38,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         authenticated_signer: None,
     };
     let results = view
-        .execute_operation(
-            ApplicationId::System,
-            &context,
-            &Operation::System(operation),
-        )
+        .execute_operation(&context, &Operation::System(operation))
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Balance::from(0));
@@ -82,7 +77,7 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
         authenticated_signer: None,
     };
     let results = view
-        .execute_effect(ApplicationId::System, &context, &Effect::System(effect))
+        .execute_effect(&context, &Effect::System(effect))
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Balance::from(4));
@@ -105,7 +100,7 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
     };
     let response = view
-        .query_application(ApplicationId::System, &context, &Query::System(SystemQuery))
+        .query_application(&context, &Query::System(SystemQuery))
         .await
         .unwrap();
     assert_eq!(

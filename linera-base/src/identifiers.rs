@@ -14,6 +14,7 @@ use test_strategy::Arbitrary;
 /// The owner of a chain. This is currently the hash of the owner's public key used to
 /// verify signatures.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct Owner(pub CryptoHash);
 
 /// How to create a chain.
@@ -28,11 +29,12 @@ pub enum ChainDescription {
 /// The unique identifier (UID) of a chain. This is currently computed as the hash value
 /// of a [`ChainDescription`].
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Arbitrary))]
+#[cfg_attr(any(test, feature = "test"), derive(Arbitrary, Default))]
 pub struct ChainId(pub CryptoHash);
 
 /// The index of an effect in a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct EffectId {
     pub chain_id: ChainId,
     pub height: BlockHeight,
@@ -41,6 +43,7 @@ pub struct EffectId {
 
 /// A unique identifier for a user application.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Default))]
 #[serde(rename = "UserApplicationId")]
 pub struct ApplicationId {
     /// The bytecode to use for the application.
@@ -51,6 +54,7 @@ pub struct ApplicationId {
 
 /// A unique identifier for an application bytecode.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct BytecodeId(pub EffectId);
 
 /// The identifier of a session.

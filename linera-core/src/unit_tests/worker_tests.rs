@@ -29,7 +29,6 @@ use linera_execution::{
     system::{Account, Recipient, SystemChannel, SystemEffect, SystemOperation, UserData},
     ApplicationId, ApplicationRegistry, ChainOwnership, ChannelId, Effect, ExecutionStateView,
     Operation, Query, Response, SystemExecutionState, SystemQuery, SystemResponse,
-    UserApplicationId,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::views::{CryptoHashView, ViewError};
@@ -115,7 +114,7 @@ where
 fn make_block(
     epoch: Epoch,
     chain_id: ChainId,
-    operations: Vec<impl IntoApplicationIdAndOperation>,
+    operations: Vec<impl Into<Operation>>,
     incoming_messages: Vec<Message>,
     previous_confirmed_block: Option<&Certificate>,
     authenticated_signer: Option<Owner>,
@@ -132,10 +131,7 @@ fn make_block(
         epoch,
         chain_id,
         incoming_messages,
-        operations: operations
-            .into_iter()
-            .map(IntoApplicationIdAndOperation::into_application_id_and_operation)
-            .collect(),
+        operations: operations.into_iter().map(|x| x.into()).collect(),
         previous_block_hash,
         height,
         authenticated_signer,
@@ -270,7 +266,6 @@ async fn make_transfer_certificate_for_epoch<S>(
 
 fn direct_outgoing_effect(recipient: ChainId, effect: SystemEffect) -> OutgoingEffect {
     OutgoingEffect {
-        application_id: ApplicationId::System,
         destination: Destination::Recipient(recipient),
         authenticated_signer: None,
         effect: Effect::System(effect),
@@ -279,26 +274,9 @@ fn direct_outgoing_effect(recipient: ChainId, effect: SystemEffect) -> OutgoingE
 
 fn channel_outgoing_effect(name: ChannelName, effect: SystemEffect) -> OutgoingEffect {
     OutgoingEffect {
-        application_id: ApplicationId::System,
         destination: Destination::Subscribers(name),
         authenticated_signer: None,
         effect: Effect::System(effect),
-    }
-}
-
-trait IntoApplicationIdAndOperation {
-    fn into_application_id_and_operation(self) -> (ApplicationId, Operation);
-}
-
-impl IntoApplicationIdAndOperation for SystemOperation {
-    fn into_application_id_and_operation(self) -> (ApplicationId, Operation) {
-        (ApplicationId::System, Operation::System(self))
-    }
-}
-
-impl IntoApplicationIdAndOperation for (UserApplicationId, Vec<u8>) {
-    fn into_application_id_and_operation(self) -> (ApplicationId, Operation) {
-        (ApplicationId::User(self.0), Operation::User(self.1))
     }
 }
 
@@ -794,24 +772,18 @@ where
                 chain_id: ChainId::root(1),
                 incoming_messages: Vec::new(),
                 operations: vec![
-                    (
-                        ApplicationId::System,
-                        Operation::System(SystemOperation::Transfer {
-                            owner: None,
-                            recipient,
-                            amount: Amount::from(1),
-                            user_data: UserData::default(),
-                        }),
-                    ),
-                    (
-                        ApplicationId::System,
-                        Operation::System(SystemOperation::Transfer {
-                            owner: None,
-                            recipient,
-                            amount: Amount::from(2),
-                            user_data: UserData::default(),
-                        }),
-                    ),
+                    Operation::System(SystemOperation::Transfer {
+                        owner: None,
+                        recipient,
+                        amount: Amount::from(1),
+                        user_data: UserData::default(),
+                    }),
+                    Operation::System(SystemOperation::Transfer {
+                        owner: None,
+                        recipient,
+                        amount: Amount::from(2),
+                        user_data: UserData::default(),
+                    }),
                 ],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
@@ -861,15 +833,12 @@ where
                 epoch,
                 chain_id: ChainId::root(1),
                 incoming_messages: Vec::new(),
-                operations: vec![(
-                    ApplicationId::System,
-                    Operation::System(SystemOperation::Transfer {
-                        owner: None,
-                        recipient,
-                        amount: Amount::from(3),
-                        user_data: UserData::default(),
-                    }),
-                )],
+                operations: vec![Operation::System(SystemOperation::Transfer {
+                    owner: None,
+                    recipient,
+                    amount: Amount::from(3),
+                    user_data: UserData::default(),
+                })],
                 previous_block_hash: Some(certificate0.value.hash()),
                 height: BlockHeight::from(1),
                 authenticated_signer: None,
@@ -970,7 +939,6 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(1),
@@ -985,7 +953,6 @@ where
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(2),
@@ -1000,7 +967,6 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(2), // wrong
@@ -1032,7 +998,6 @@ where
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(2),
@@ -1047,7 +1012,6 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(1),
@@ -1062,7 +1026,6 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(3),
@@ -1094,7 +1057,6 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(3),
@@ -1109,7 +1071,6 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(1),
@@ -1124,7 +1085,6 @@ where
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from(2),
@@ -1155,7 +1115,6 @@ where
                     index: 0,
                     authenticated_signer: None,
                     timestamp: Timestamp::from(0),
-                    application_id: ApplicationId::System,
                     effect: Effect::System(SystemEffect::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::from(1),
@@ -1217,7 +1176,6 @@ where
                     index: 0,
                     authenticated_signer: None,
                     timestamp: Timestamp::from(0),
-                    application_id: ApplicationId::System,
                     effect: Effect::System(SystemEffect::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::from(3),
@@ -1629,7 +1587,6 @@ where
                 index: 0,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
-                application_id: ApplicationId::System,
                 effect: Effect::System(SystemEffect::Credit {
                     account: Account::chain(ChainId::root(1)),
                     amount: Amount::from(995),
@@ -1699,7 +1656,6 @@ where
             index: 0,
             authenticated_signer: None,
             timestamp,
-            application_id: ApplicationId::System,
             effect: Effect::System(SystemEffect::Credit { amount, .. }),
         } if certificate_hash == CryptoHash::new(&Dummy)
             && height == BlockHeight::from(0)
@@ -1899,7 +1855,6 @@ where
             index: 0,
             authenticated_signer: None,
             timestamp,
-            application_id: ApplicationId::System,
             effect: Effect::System(SystemEffect::Credit { amount, .. })
         } if certificate_hash == certificate.value.hash()
             && height == BlockHeight::from(0)
@@ -2019,7 +1974,6 @@ where
             index: 0,
             authenticated_signer: None,
             timestamp,
-            application_id: ApplicationId::System,
             effect: Effect::System(SystemEffect::Credit { amount, .. })
         } if certificate_hash == certificate.value.hash()
             && height == BlockHeight::from(0)
@@ -2224,11 +2178,7 @@ where
     .await;
     assert_eq!(
         worker
-            .query_application(
-                ChainId::root(1),
-                ApplicationId::System,
-                &Query::System(SystemQuery)
-            )
+            .query_application(ChainId::root(1), &Query::System(SystemQuery))
             .await
             .unwrap(),
         Response::System(SystemResponse {
@@ -2238,11 +2188,7 @@ where
     );
     assert_eq!(
         worker
-            .query_application(
-                ChainId::root(2),
-                ApplicationId::System,
-                &Query::System(SystemQuery)
-            )
+            .query_application(ChainId::root(2), &Query::System(SystemQuery))
             .await
             .unwrap(),
         Response::System(SystemResponse {
@@ -2276,11 +2222,7 @@ where
     assert!(info.manager.pending().is_none());
     assert_eq!(
         worker
-            .query_application(
-                ChainId::root(1),
-                ApplicationId::System,
-                &Query::System(SystemQuery)
-            )
+            .query_application(ChainId::root(1), &Query::System(SystemQuery))
             .await
             .unwrap(),
         Response::System(SystemResponse {
@@ -2303,7 +2245,6 @@ where
                 index: 0,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
-                application_id: ApplicationId::System,
                 effect: Effect::System(SystemEffect::Credit {
                     account: Account::chain(ChainId::root(2)),
                     amount: Amount::from(5),
@@ -2323,11 +2264,7 @@ where
 
     assert_eq!(
         worker
-            .query_application(
-                ChainId::root(2),
-                ApplicationId::System,
-                &Query::System(SystemQuery)
-            )
+            .query_application(ChainId::root(2), &Query::System(SystemQuery))
             .await
             .unwrap(),
         Response::System(SystemResponse {
@@ -2506,16 +2443,13 @@ where
                 epoch: Epoch::from(0),
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
-                operations: vec![(
-                    ApplicationId::System,
-                    Operation::System(SystemOperation::OpenChain {
-                        id: user_id,
-                        public_key: key_pair.public(),
-                        epoch: Epoch::from(0),
-                        committees: committees.clone(),
-                        admin_id,
-                    }),
-                )],
+                operations: vec![Operation::System(SystemOperation::OpenChain {
+                    id: user_id,
+                    public_key: key_pair.public(),
+                    epoch: Epoch::from(0),
+                    committees: committees.clone(),
+                    admin_id,
+                })],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
                 authenticated_signer: None,
@@ -2604,23 +2538,17 @@ where
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
                 operations: vec![
-                    (
-                        ApplicationId::System,
-                        Operation::System(SystemOperation::CreateCommittee {
-                            admin_id,
-                            epoch: Epoch::from(1),
-                            committee: committee.clone(),
-                        }),
-                    ),
-                    (
-                        ApplicationId::System,
-                        Operation::System(SystemOperation::Transfer {
-                            owner: None,
-                            recipient: Recipient::Account(Account::chain(user_id)),
-                            amount: Amount::from(2),
-                            user_data: UserData::default(),
-                        }),
-                    ),
+                    Operation::System(SystemOperation::CreateCommittee {
+                        admin_id,
+                        epoch: Epoch::from(1),
+                        committee: committee.clone(),
+                    }),
+                    Operation::System(SystemOperation::Transfer {
+                        owner: None,
+                        recipient: Recipient::Account(Account::chain(user_id)),
+                        amount: Amount::from(2),
+                        user_data: UserData::default(),
+                    }),
                 ],
                 previous_block_hash: Some(certificate0.value.hash()),
                 height: BlockHeight::from(1),
@@ -2684,7 +2612,6 @@ where
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Subscribe {
                             id: user_id,
                             channel_id: admin_channel_id.clone(),
@@ -2838,7 +2765,6 @@ where
                             index: 0,
                             authenticated_signer: None,
                             timestamp: Timestamp::from(0),
-                            application_id: ApplicationId::System,
                             effect: Effect::System(SystemEffect::SetCommittees {
                                 admin_id,
                                 epoch: Epoch::from(1),
@@ -2854,7 +2780,6 @@ where
                             index: 1,
                             authenticated_signer: None,
                             timestamp: Timestamp::from(0),
-                            application_id: ApplicationId::System,
                             effect: Effect::System(SystemEffect::Credit {
                                 account: Account::chain(user_id),
                                 amount: Amount::from(2),
@@ -2869,7 +2794,6 @@ where
                             index: 0,
                             authenticated_signer: None,
                             timestamp: Timestamp::from(0),
-                            application_id: ApplicationId::System,
                             effect: Effect::System(SystemEffect::Notify { id: user_id }),
                         },
                     },
@@ -3024,15 +2948,12 @@ where
                 epoch: Epoch::from(0),
                 chain_id: user_id,
                 incoming_messages: Vec::new(),
-                operations: vec![(
-                    ApplicationId::System,
-                    Operation::System(SystemOperation::Transfer {
-                        owner: None,
-                        recipient: Recipient::Account(Account::chain(admin_id)),
-                        amount: Amount::from(1),
-                        user_data: UserData::default(),
-                    }),
-                )],
+                operations: vec![Operation::System(SystemOperation::Transfer {
+                    owner: None,
+                    recipient: Recipient::Account(Account::chain(admin_id)),
+                    amount: Amount::from(1),
+                    user_data: UserData::default(),
+                })],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
                 authenticated_signer: None,
@@ -3076,14 +2997,11 @@ where
                 epoch: Epoch::from(0),
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
-                operations: vec![(
-                    ApplicationId::System,
-                    Operation::System(SystemOperation::CreateCommittee {
-                        admin_id,
-                        epoch: Epoch::from(1),
-                        committee: committee.clone(),
-                    }),
-                )],
+                operations: vec![Operation::System(SystemOperation::CreateCommittee {
+                    admin_id,
+                    epoch: Epoch::from(1),
+                    committee: committee.clone(),
+                })],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
                 authenticated_signer: None,
@@ -3232,15 +3150,12 @@ where
                 epoch: Epoch::from(0),
                 chain_id: user_id,
                 incoming_messages: Vec::new(),
-                operations: vec![(
-                    ApplicationId::System,
-                    Operation::System(SystemOperation::Transfer {
-                        owner: None,
-                        recipient: Recipient::Account(Account::chain(admin_id)),
-                        amount: Amount::from(1),
-                        user_data: UserData::default(),
-                    }),
-                )],
+                operations: vec![Operation::System(SystemOperation::Transfer {
+                    owner: None,
+                    recipient: Recipient::Account(Account::chain(admin_id)),
+                    amount: Amount::from(1),
+                    user_data: UserData::default(),
+                })],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
                 authenticated_signer: None,
@@ -3286,21 +3201,15 @@ where
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
                 operations: vec![
-                    (
-                        ApplicationId::System,
-                        Operation::System(SystemOperation::CreateCommittee {
-                            admin_id,
-                            epoch: Epoch::from(1),
-                            committee: committee.clone(),
-                        }),
-                    ),
-                    (
-                        ApplicationId::System,
-                        Operation::System(SystemOperation::RemoveCommittee {
-                            admin_id,
-                            epoch: Epoch::from(0),
-                        }),
-                    ),
+                    Operation::System(SystemOperation::CreateCommittee {
+                        admin_id,
+                        epoch: Epoch::from(1),
+                        committee: committee.clone(),
+                    }),
+                    Operation::System(SystemOperation::RemoveCommittee {
+                        admin_id,
+                        epoch: Epoch::from(0),
+                    }),
                 ],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
@@ -3397,7 +3306,6 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        application_id: ApplicationId::System,
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(admin_id),
                             amount: Amount::from(1),
