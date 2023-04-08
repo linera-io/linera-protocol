@@ -37,9 +37,7 @@ Block:
           TYPENAME: Message
     - operations:
         SEQ:
-          TUPLE:
-            - TYPENAME: ApplicationId
-            - TYPENAME: Operation
+          TYPENAME: Operation
     - height:
         TYPENAME: BlockHeight
     - timestamp:
@@ -269,7 +267,10 @@ Effect:
           TYPENAME: SystemEffect
     1:
       User:
-        NEWTYPE: BYTES
+        STRUCT:
+          - application_id:
+              TYPENAME: UserApplicationId
+          - bytes: BYTES
 EffectId:
   STRUCT:
     - chain_id:
@@ -291,8 +292,6 @@ Event:
           TYPENAME: Owner
     - timestamp:
         TYPENAME: Timestamp
-    - application_id:
-        TYPENAME: ApplicationId
     - effect:
         TYPENAME: Effect
 LiteCertificate:
@@ -459,7 +458,10 @@ Operation:
           TYPENAME: SystemOperation
     1:
       User:
-        NEWTYPE: BYTES
+        STRUCT:
+          - application_id:
+              TYPENAME: UserApplicationId
+          - bytes: BYTES
 Origin:
   STRUCT:
     - sender:
@@ -468,8 +470,6 @@ Origin:
         TYPENAME: Medium
 OutgoingEffect:
   STRUCT:
-    - application_id:
-        TYPENAME: ApplicationId
     - destination:
         TYPENAME: Destination
     - authenticated_signer:

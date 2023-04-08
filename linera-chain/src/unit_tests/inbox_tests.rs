@@ -4,7 +4,7 @@
 
 use super::*;
 use linera_base::crypto::{BcsSignable, CryptoHash};
-use linera_execution::{ApplicationId, Effect};
+use linera_execution::{Effect, UserApplicationId};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -27,8 +27,10 @@ fn make_event(
         index,
         authenticated_signer: None,
         timestamp: Default::default(),
-        application_id: ApplicationId::System, // hack
-        effect: Effect::User(effect.into()),
+        effect: Effect::User {
+            application_id: UserApplicationId::default(),
+            bytes: effect.into(),
+        },
     }
 }
 

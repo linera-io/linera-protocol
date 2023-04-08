@@ -21,8 +21,8 @@ use linera_chain::{
     ChainError, ChainManagerInfo,
 };
 use linera_execution::{
-    committee::ValidatorName, ApplicationId, BytecodeLocation, Query, Response,
-    UserApplicationDescription, UserApplicationId,
+    committee::ValidatorName, BytecodeLocation, Query, Response, UserApplicationDescription,
+    UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -433,15 +433,11 @@ where
     pub async fn query_application(
         &mut self,
         chain_id: ChainId,
-        application_id: ApplicationId,
         query: &Query,
     ) -> Result<Response, NodeError> {
         let node = self.node.clone();
         let mut node = node.lock().await;
-        let response = node
-            .state
-            .query_application(chain_id, application_id, query)
-            .await?;
+        let response = node.state.query_application(chain_id, query).await?;
         Ok(response)
     }
 

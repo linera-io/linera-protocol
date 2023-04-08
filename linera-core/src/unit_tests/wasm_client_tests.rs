@@ -17,8 +17,8 @@ use linera_base::{
 };
 use linera_chain::data_types::OutgoingEffect;
 use linera_execution::{
-    ApplicationId, Bytecode, Effect, Operation, Query, Response, SystemEffect,
-    UserApplicationDescription, WasmRuntime,
+    Bytecode, Effect, Operation, Query, Response, SystemEffect, UserApplicationDescription,
+    WasmRuntime,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -101,16 +101,19 @@ where
         .unwrap();
 
     let increment = 5_u128;
-    let user_operation = bcs::to_bytes(&increment)?;
+    let bytes = bcs::to_bytes(&increment)?;
     creator
-        .execute_operation(
-            ApplicationId::User(application_id),
-            Operation::User(user_operation),
-        )
+        .execute_operation(Operation::User {
+            application_id,
+            bytes,
+        })
         .await
         .unwrap();
     let response = creator
-        .query_application(ApplicationId::User(application_id), &Query::User(vec![]))
+        .query_application(&Query::User {
+            application_id,
+            bytes: vec![],
+        })
         .await
         .unwrap();
 
@@ -229,19 +232,22 @@ where
         .unwrap();
 
     let increment = 5_u128;
-    let user_operation = bcs::to_bytes(&(receiver_id, increment))?;
+    let bytes = bcs::to_bytes(&(receiver_id, increment))?;
     let cert = creator
-        .execute_operation(
-            ApplicationId::User(application_id2),
-            Operation::User(user_operation),
-        )
+        .execute_operation(Operation::User {
+            application_id: application_id2,
+            bytes,
+        })
         .await
         .unwrap();
 
     receiver.receive_certificate(cert).await.unwrap();
     receiver.process_inbox().await.unwrap();
     let response = receiver
-        .query_application(ApplicationId::User(application_id2), &Query::User(vec![]))
+        .query_application(&Query::User {
+            application_id: application_id2,
+            bytes: vec![],
+        })
         .await
         .unwrap();
 
@@ -355,18 +361,21 @@ where
         .unwrap();
 
     let increment = 51_u128;
-    let user_operation = bcs::to_bytes(&increment)?;
+    let bytes = bcs::to_bytes(&increment)?;
     let certificate = creator
-        .execute_operation(
-            ApplicationId::User(application_id),
-            Operation::User(user_operation),
-        )
+        .execute_operation(Operation::User {
+            application_id,
+            bytes,
+        })
         .await
         .unwrap();
     creator.receive_certificate(certificate).await.unwrap();
 
     let response = creator
-        .query_application(ApplicationId::User(application_id), &Query::User(vec![]))
+        .query_application(&Query::User {
+            application_id,
+            bytes: vec![],
+        })
         .await
         .unwrap();
 
@@ -481,23 +490,22 @@ where
         },
     };
     let cert = sender
-        .execute_operation(
-            ApplicationId::User(application_id),
-            Operation::User(bcs::to_bytes(&transfer)?),
-        )
+        .execute_operation(Operation::User {
+            application_id,
+            bytes: bcs::to_bytes(&transfer)?,
+        })
         .await?;
 
     assert!(cert
         .value
         .effects()
         .iter()
-        .any(|OutgoingEffect { application_id, destination, effect, .. }| {
+        .any(|OutgoingEffect { destination, effect, .. }| {
             matches!(
                 effect,
                 Effect::System(SystemEffect::RegisterApplications { applications })
                 if matches!(applications[0], UserApplicationDescription{ bytecode_id: b_id, .. } if b_id == bytecode_id)
             ) && *destination == Destination::Recipient(receiver.chain_id())
-                && matches!(application_id, ApplicationId::System)
         }));
     receiver.synchronize_and_recompute_balance().await.unwrap();
     receiver.receive_certificate(cert).await.unwrap();
@@ -511,7 +519,7 @@ where
     )));
     assert!(messages
         .iter()
-        .any(|msg| matches!(&msg.event.effect, Effect::User(_))));
+        .any(|msg| matches!(&msg.event.effect, Effect::User { .. })));
 
     // Make another transfer.
     let transfer = fungible::Operation::Transfer {
@@ -523,10 +531,10 @@ where
         },
     };
     let cert = sender
-        .execute_operation(
-            ApplicationId::User(application_id),
-            Operation::User(bcs::to_bytes(&transfer)?),
-        )
+        .execute_operation(Operation::User {
+            application_id,
+            bytes: bcs::to_bytes(&transfer)?,
+        })
         .await?;
 
     receiver.receive_certificate(cert).await?;
@@ -542,7 +550,7 @@ where
     )));
     assert!(messages
         .iter()
-        .any(|msg| matches!(&msg.event.effect, Effect::User(_))));
+        .any(|msg| matches!(&msg.event.effect, Effect::User { .. })));
 
     // Try another transfer in the other direction except that the amount is too large.
     let transfer = fungible::Operation::Transfer {
@@ -554,10 +562,10 @@ where
         },
     };
     assert!(receiver
-        .execute_operation(
-            ApplicationId::User(application_id),
-            Operation::User(bcs::to_bytes(&transfer)?),
-        )
+        .execute_operation(Operation::User {
+            application_id,
+            bytes: bcs::to_bytes(&transfer)?
+        })
         .await
         .is_err());
     receiver.clear_pending_block().await;
@@ -572,10 +580,10 @@ where
         },
     };
     receiver
-        .execute_operation(
-            ApplicationId::User(application_id),
-            Operation::User(bcs::to_bytes(&transfer)?),
-        )
+        .execute_operation(Operation::User {
+            application_id,
+            bytes: bcs::to_bytes(&transfer)?,
+        })
         .await
         .unwrap();
 
@@ -647,10 +655,10 @@ where
     // Request to subscribe to the sender.
     let request_subscribe = social::Operation::RequestSubscribe(sender.chain_id());
     let cert = receiver
-        .execute_operation(
-            ApplicationId::User(application_id),
-            Operation::User(bcs::to_bytes(&request_subscribe)?),
-        )
+        .execute_operation(Operation::User {
+            application_id,
+            bytes: bcs::to_bytes(&request_subscribe)?,
+        })
         .await?;
 
     // Subscribe the receiver. This also registers the application.
@@ -662,10 +670,10 @@ where
     let text = "Please like and subscribe! No, wait, like isn't supported yet.".to_string();
     let post = social::Operation::Post(text.clone());
     let cert = sender
-        .execute_operation(
-            ApplicationId::User(application_id),
-            Operation::User(bcs::to_bytes(&post)?),
-        )
+        .execute_operation(Operation::User {
+            application_id,
+            bytes: bcs::to_bytes(&post)?,
+        })
         .await?;
 
     receiver.receive_certificate(cert.clone()).await?;
@@ -678,14 +686,14 @@ where
         .block()
         .incoming_messages
         .iter()
-        .any(|msg| matches!(&msg.event.effect, Effect::User(_))));
+        .any(|msg| matches!(&msg.event.effect, Effect::User { .. })));
 
     let query = social::Query::ReceivedPosts(10);
     let response = receiver
-        .query_application(
-            ApplicationId::User(application_id),
-            &Query::User(bcs::to_bytes(&query)?),
-        )
+        .query_application(&Query::User {
+            application_id,
+            bytes: bcs::to_bytes(&query)?,
+        })
         .await?;
     let posts: Vec<social::Post> = match response {
         Response::System(_) => panic!("Expected user response."),
@@ -706,10 +714,10 @@ where
     // Request to unsubscribe from the sender.
     let request_unsubscribe = social::Operation::RequestUnsubscribe(sender.chain_id());
     let cert = receiver
-        .execute_operation(
-            ApplicationId::User(application_id),
-            Operation::User(bcs::to_bytes(&request_unsubscribe)?),
-        )
+        .execute_operation(Operation::User {
+            application_id,
+            bytes: bcs::to_bytes(&request_unsubscribe)?,
+        })
         .await?;
 
     // Unsubscribe the receiver.
@@ -720,10 +728,10 @@ where
     // Make a post.
     let post = social::Operation::Post("Nobody will read this!".to_string());
     let cert = sender
-        .execute_operation(
-            ApplicationId::User(application_id),
-            Operation::User(bcs::to_bytes(&post)?),
-        )
+        .execute_operation(Operation::User {
+            application_id,
+            bytes: bcs::to_bytes(&post)?,
+        })
         .await?;
 
     // The post will not be received by the unsubscribed chain.
@@ -734,10 +742,10 @@ where
     // There is still only one post it can see.
     let query = social::Query::ReceivedPosts(10);
     let response = receiver
-        .query_application(
-            ApplicationId::User(application_id),
-            &Query::User(bcs::to_bytes(&query)?),
-        )
+        .query_application(&Query::User {
+            application_id,
+            bytes: bcs::to_bytes(&query)?,
+        })
         .await?;
     let posts: Vec<social::Post> = match response {
         Response::System(_) => panic!("Expected user response."),

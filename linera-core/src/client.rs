@@ -28,7 +28,7 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
     system::{Account, Recipient, SystemChannel, SystemOperation, UserData},
-    ApplicationId, Bytecode, Effect, Operation, Query, Response, SystemEffect, UserApplicationId,
+    Bytecode, Effect, Operation, Query, Response, SystemEffect, UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -720,15 +720,12 @@ where
         let messages = self.pending_messages().await?;
         self.execute_block(
             messages,
-            vec![(
-                ApplicationId::System,
-                Operation::System(SystemOperation::Transfer {
-                    owner,
-                    recipient,
-                    amount,
-                    user_data,
-                }),
-            )],
+            vec![Operation::System(SystemOperation::Transfer {
+                owner,
+                recipient,
+                amount,
+                user_data,
+            })],
         )
         .await
     }
@@ -745,16 +742,13 @@ where
         let messages = self.pending_messages().await?;
         self.execute_block(
             messages,
-            vec![(
-                ApplicationId::System,
-                Operation::System(SystemOperation::Claim {
-                    owner,
-                    target,
-                    recipient,
-                    amount,
-                    user_data,
-                }),
-            )],
+            vec![Operation::System(SystemOperation::Claim {
+                owner,
+                target,
+                recipient,
+                amount,
+                user_data,
+            })],
         )
         .await
     }
@@ -889,22 +883,17 @@ where
     }
 
     /// Execute an operation.
-    pub async fn execute_operation(
-        &mut self,
-        application_id: ApplicationId,
-        operation: Operation,
-    ) -> Result<Certificate> {
+    pub async fn execute_operation(&mut self, operation: Operation) -> Result<Certificate> {
         self.prepare_chain().await?;
         let messages = self.pending_messages().await?;
-        self.execute_block(messages, vec![(application_id, operation)])
-            .await
+        self.execute_block(messages, vec![operation]).await
     }
 
     /// Execute a new block
     async fn execute_block(
         &mut self,
         incoming_messages: Vec<Message>,
-        operations: Vec<(ApplicationId, Operation)>,
+        operations: Vec<Operation>,
     ) -> Result<Certificate> {
         let timestamp = self.next_timestamp(&incoming_messages);
         let block = Block {
@@ -935,14 +924,10 @@ where
     }
 
     /// Query an application.
-    pub async fn query_application(
-        &mut self,
-        application_id: ApplicationId,
-        query: &Query,
-    ) -> Result<Response> {
+    pub async fn query_application(&mut self, query: &Query) -> Result<Response> {
         let response = self
             .node_client
-            .query_application(self.chain_id, application_id, query)
+            .query_application(self.chain_id, query)
             .await?;
         Ok(response)
     }
@@ -1046,10 +1031,9 @@ where
 
     /// Transfer ownership of the chain.
     pub async fn transfer_ownership(&mut self, new_public_key: PublicKey) -> Result<Certificate> {
-        self.execute_operation(
-            ApplicationId::System,
-            Operation::System(SystemOperation::ChangeOwner { new_public_key }),
-        )
+        self.execute_operation(Operation::System(SystemOperation::ChangeOwner {
+            new_public_key,
+        }))
         .await
     }
 
@@ -1060,12 +1044,9 @@ where
         let messages = self.pending_messages().await?;
         self.execute_block(
             messages,
-            vec![(
-                ApplicationId::System,
-                Operation::System(SystemOperation::ChangeMultipleOwners {
-                    new_public_keys: vec![public_key, new_public_key],
-                }),
-            )],
+            vec![Operation::System(SystemOperation::ChangeMultipleOwners {
+                new_public_keys: vec![public_key, new_public_key],
+            })],
         )
         .await
     }
@@ -1084,16 +1065,13 @@ where
             .execute_block(
                 // Cannot add incoming messages to preserve the effect id.
                 vec![],
-                vec![(
-                    ApplicationId::System,
-                    Operation::System(SystemOperation::OpenChain {
-                        id,
-                        public_key,
-                        committees,
-                        admin_id: self.admin_id,
-                        epoch,
-                    }),
-                )],
+                vec![Operation::System(SystemOperation::OpenChain {
+                    id,
+                    public_key,
+                    committees,
+                    admin_id: self.admin_id,
+                    epoch,
+                })],
             )
             .await?;
         Ok((id, certificate))
@@ -1101,11 +1079,8 @@ where
 
     /// Close the chain (and lose everything in it!!).
     pub async fn close_chain(&mut self) -> Result<Certificate> {
-        self.execute_operation(
-            ApplicationId::System,
-            Operation::System(SystemOperation::CloseChain),
-        )
-        .await
+        self.execute_operation(Operation::System(SystemOperation::CloseChain))
+            .await
     }
 
     /// Publish some bytecode.
@@ -1124,10 +1099,10 @@ where
             .execute_block(
                 // Cannot add incoming messages to preserve the effect id.
                 vec![],
-                vec![(
-                    ApplicationId::System,
-                    Operation::System(SystemOperation::PublishBytecode { contract, service }),
-                )],
+                vec![Operation::System(SystemOperation::PublishBytecode {
+                    contract,
+                    service,
+                })],
             )
             .await?;
         Ok((id, certificate))
@@ -1154,15 +1129,12 @@ where
             .execute_block(
                 // Cannot add incoming messages to preserve the effect id.
                 vec![],
-                vec![(
-                    ApplicationId::System,
-                    Operation::System(SystemOperation::CreateApplication {
-                        bytecode_id,
-                        parameters,
-                        initialization_argument,
-                        required_application_ids,
-                    }),
-                )],
+                vec![Operation::System(SystemOperation::CreateApplication {
+                    bytecode_id,
+                    parameters,
+                    initialization_argument,
+                    required_application_ids,
+                })],
             )
             .await?;
         Ok((id, certificate))
@@ -1179,14 +1151,11 @@ where
         let messages = self.pending_messages().await?;
         self.execute_block(
             messages,
-            vec![(
-                ApplicationId::System,
-                Operation::System(SystemOperation::CreateCommittee {
-                    admin_id: self.chain_id,
-                    epoch: epoch.try_add_one()?,
-                    committee,
-                }),
-            )],
+            vec![Operation::System(SystemOperation::CreateCommittee {
+                admin_id: self.chain_id,
+                epoch: epoch.try_add_one()?,
+                committee,
+            })],
         )
         .await
     }
@@ -1209,26 +1178,20 @@ where
     /// Start listening to the admin chain for new committees. (This is only useful for
     /// other genesis chains or for testing.)
     pub async fn subscribe_to_new_committees(&mut self) -> Result<Certificate> {
-        self.execute_operation(
-            ApplicationId::System,
-            Operation::System(SystemOperation::Subscribe {
-                chain_id: self.admin_id,
-                channel: SystemChannel::Admin,
-            }),
-        )
+        self.execute_operation(Operation::System(SystemOperation::Subscribe {
+            chain_id: self.admin_id,
+            channel: SystemChannel::Admin,
+        }))
         .await
     }
 
     /// Stop listening to the admin chain for new committees. (This is only useful for
     /// testing.)
     pub async fn unsubscribe_to_new_committees(&mut self) -> Result<Certificate> {
-        self.execute_operation(
-            ApplicationId::System,
-            Operation::System(SystemOperation::Unsubscribe {
-                chain_id: self.admin_id,
-                channel: SystemChannel::Admin,
-            }),
-        )
+        self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
+            chain_id: self.admin_id,
+            channel: SystemChannel::Admin,
+        }))
         .await
     }
 
@@ -1237,13 +1200,10 @@ where
         &mut self,
         chain_id: ChainId,
     ) -> Result<Certificate> {
-        self.execute_operation(
-            ApplicationId::System,
-            Operation::System(SystemOperation::Subscribe {
-                chain_id,
-                channel: SystemChannel::PublishedBytecodes,
-            }),
-        )
+        self.execute_operation(Operation::System(SystemOperation::Subscribe {
+            chain_id,
+            channel: SystemChannel::PublishedBytecodes,
+        }))
         .await
     }
 
@@ -1252,13 +1212,10 @@ where
         &mut self,
         chain_id: ChainId,
     ) -> Result<Certificate> {
-        self.execute_operation(
-            ApplicationId::System,
-            Operation::System(SystemOperation::Unsubscribe {
-                chain_id,
-                channel: SystemChannel::PublishedBytecodes,
-            }),
-        )
+        self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
+            chain_id,
+            channel: SystemChannel::PublishedBytecodes,
+        }))
         .await
     }
 
@@ -1274,13 +1231,10 @@ where
             .keys()
             .filter_map(|epoch| {
                 if *epoch != current_epoch {
-                    Some((
-                        ApplicationId::System,
-                        Operation::System(SystemOperation::RemoveCommittee {
-                            admin_id: self.admin_id,
-                            epoch: *epoch,
-                        }),
-                    ))
+                    Some(Operation::System(SystemOperation::RemoveCommittee {
+                        admin_id: self.admin_id,
+                        epoch: *epoch,
+                    }))
                 } else {
                     None
                 }
@@ -1300,15 +1254,12 @@ where
         account: Account,
         user_data: UserData,
     ) -> Result<Certificate> {
-        self.execute_operation(
-            ApplicationId::System,
-            Operation::System(SystemOperation::Transfer {
-                owner,
-                recipient: Recipient::Account(account),
-                amount,
-                user_data,
-            }),
-        )
+        self.execute_operation(Operation::System(SystemOperation::Transfer {
+            owner,
+            recipient: Recipient::Account(account),
+            amount,
+            user_data,
+        }))
         .await
     }
 }

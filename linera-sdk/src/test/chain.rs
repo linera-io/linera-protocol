@@ -361,7 +361,11 @@ impl ActiveChain {
     /// Executes a `query` on an `application`'s state on this micro-chain.
     ///
     /// Returns the deserialized `Output` response from the `application`.
-    pub async fn query<Output>(&self, application: ApplicationId, query: impl ToBcsBytes) -> Output
+    pub async fn query<Output>(
+        &self,
+        application_id: ApplicationId,
+        query: impl ToBcsBytes,
+    ) -> Output
     where
         Output: FromBcsBytes,
     {
@@ -371,8 +375,10 @@ impl ActiveChain {
             .await
             .query_application(
                 self.id(),
-                application.into(),
-                &Query::User(query.to_bcs_bytes().expect("Failed to serialize query")),
+                &Query::User {
+                    application_id,
+                    bytes: query.to_bcs_bytes().expect("Failed to serialize query"),
+                },
             )
             .await
             .expect("Failed to query application");

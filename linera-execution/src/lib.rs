@@ -356,11 +356,12 @@ pub enum Operation {
     /// A system operation.
     System(SystemOperation),
     /// A user operation (in serialized form).
-    User(
+    User {
+        application_id: UserApplicationId,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
-        Vec<u8>,
-    ),
+        bytes: Vec<u8>,
+    },
 }
 
 /// An effect to be sent and possibly executed in the receiver's block.
@@ -369,11 +370,12 @@ pub enum Effect {
     /// A system effect.
     System(SystemEffect),
     /// A user effect (in serialized form).
-    User(
+    User {
+        application_id: UserApplicationId,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
-        Vec<u8>,
-    ),
+        bytes: Vec<u8>,
+    },
 }
 
 /// An query to be sent and possibly executed in the receiver's block.
@@ -382,11 +384,12 @@ pub enum Query {
     /// A system query.
     System(SystemQuery),
     /// A user query (in serialized form).
-    User(
+    User {
+        application_id: UserApplicationId,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
-        Vec<u8>,
-    ),
+        bytes: Vec<u8>,
+    },
 }
 
 /// The response to a query.
@@ -524,9 +527,12 @@ impl From<SystemOperation> for Operation {
     }
 }
 
-impl From<Vec<u8>> for Operation {
-    fn from(operation: Vec<u8>) -> Self {
-        Operation::User(operation)
+impl Operation {
+    pub fn application_id(&self) -> ApplicationId {
+        match self {
+            Self::System(_) => ApplicationId::System,
+            Self::User { application_id, .. } => ApplicationId::User(*application_id),
+        }
     }
 }
 
@@ -536,9 +542,12 @@ impl From<SystemEffect> for Effect {
     }
 }
 
-impl From<Vec<u8>> for Effect {
-    fn from(effect: Vec<u8>) -> Self {
-        Effect::User(effect)
+impl Effect {
+    pub fn application_id(&self) -> ApplicationId {
+        match self {
+            Self::System(_) => ApplicationId::System,
+            Self::User { application_id, .. } => ApplicationId::User(*application_id),
+        }
     }
 }
 
@@ -548,9 +557,12 @@ impl From<SystemQuery> for Query {
     }
 }
 
-impl From<Vec<u8>> for Query {
-    fn from(query: Vec<u8>) -> Self {
-        Query::User(query)
+impl Query {
+    pub fn application_id(&self) -> ApplicationId {
+        match self {
+            Self::System(_) => ApplicationId::System,
+            Self::User { application_id, .. } => ApplicationId::User(*application_id),
+        }
     }
 }
 

@@ -33,6 +33,7 @@ type HasherOutput = generic_array::GenericArray<u8, HasherOutputSize>;
 
 /// A Sha3-256 value.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+#[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct CryptoHash(HasherOutput);
 
 /// A signature value.

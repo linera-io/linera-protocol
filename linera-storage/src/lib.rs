@@ -49,7 +49,7 @@ pub const READ_CERTIFICATE_COUNTER: &str = "read_certificate";
 pub const WRITE_CERTIFICATE_COUNTER: &str = "write_certificate";
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-use linera_execution::{ApplicationId, Operation, SystemOperation, WasmApplication};
+use linera_execution::{Operation, SystemOperation, WasmApplication};
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
@@ -186,14 +186,13 @@ pub trait Store: Sized {
             })?;
         let operations = &value.block().operations;
         match operations.get(bytecode_location.operation_index) {
-            Some((
-                ApplicationId::System,
-                Operation::System(SystemOperation::PublishBytecode { contract, service }),
-            )) => Ok(Arc::new(WasmApplication::new(
-                contract.clone(),
-                service.clone(),
-                wasm_runtime,
-            )?)),
+            Some(Operation::System(SystemOperation::PublishBytecode { contract, service })) => {
+                Ok(Arc::new(WasmApplication::new(
+                    contract.clone(),
+                    service.clone(),
+                    wasm_runtime,
+                )?))
+            }
             _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
         }
     }

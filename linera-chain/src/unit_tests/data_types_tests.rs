@@ -4,10 +4,7 @@
 
 use super::*;
 use linera_base::data_types::Amount;
-use linera_execution::{
-    system::{Account, Recipient, SystemOperation, UserData},
-    ApplicationId,
-};
+use linera_execution::system::{Account, Recipient, SystemOperation, UserData};
 
 #[test]
 fn test_signed_values() {
@@ -19,15 +16,12 @@ fn test_signed_values() {
         epoch: Epoch::from(0),
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
-        operations: vec![(
-            ApplicationId::System,
-            Operation::System(SystemOperation::Transfer {
-                owner: None,
-                recipient: Recipient::Account(Account::chain(ChainId::root(2))),
-                amount: Amount::from(1),
-                user_data: UserData::default(),
-            }),
-        )],
+        operations: vec![Operation::System(SystemOperation::Transfer {
+            owner: None,
+            recipient: Recipient::Account(Account::chain(ChainId::root(2))),
+            amount: Amount::from(1),
+            user_data: UserData::default(),
+        })],
         height: BlockHeight::from(0),
         timestamp: Default::default(),
         authenticated_signer: None,
@@ -57,15 +51,12 @@ fn test_certificates() {
         epoch: Epoch::from(0),
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
-        operations: vec![(
-            ApplicationId::System,
-            Operation::System(SystemOperation::Transfer {
-                owner: None,
-                recipient: Recipient::Account(Account::chain(ChainId::root(1))),
-                amount: Amount::from(1),
-                user_data: UserData::default(),
-            }),
-        )],
+        operations: vec![Operation::System(SystemOperation::Transfer {
+            owner: None,
+            recipient: Recipient::Account(Account::chain(ChainId::root(1))),
+            amount: Amount::from(1),
+            user_data: UserData::default(),
+        })],
         previous_block_hash: None,
         height: BlockHeight::from(0),
         authenticated_signer: None,

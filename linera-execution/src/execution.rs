@@ -4,7 +4,7 @@
 use crate::{
     runtime::{ApplicationStatus, ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
-    ApplicationId, ContractRuntime, Effect, EffectContext, ExecutionError, ExecutionResult,
+    ContractRuntime, Effect, EffectContext, ExecutionError, ExecutionResult,
     ExecutionRuntimeContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
     Response, SystemEffect, UserApplicationDescription, UserApplicationId,
 };
@@ -264,13 +264,12 @@ where
 
     pub async fn execute_operation(
         &mut self,
-        application_id: ApplicationId,
         context: &OperationContext,
         operation: &Operation,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        match (application_id, operation) {
-            (ApplicationId::System, Operation::System(op)) => {
+        match operation {
+            Operation::System(op) => {
                 let (mut result, new_application) =
                     self.system.execute_operation(context, op).await?;
                 result.authenticated_signer = context.authenticated_signer;
@@ -284,60 +283,65 @@ where
                 }
                 Ok(results)
             }
-            (ApplicationId::User(application_id), Operation::User(operation)) => {
+            Operation::User {
+                application_id,
+                bytes,
+            } => {
                 self.run_user_action(
-                    application_id,
+                    *application_id,
                     context.chain_id,
-                    UserAction::Operation(context, operation),
+                    UserAction::Operation(context, bytes),
                 )
                 .await
             }
-            _ => Err(ExecutionError::InvalidOperation),
         }
     }
 
     pub async fn execute_effect(
         &mut self,
-        application_id: ApplicationId,
         context: &EffectContext,
         effect: &Effect,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        match (application_id, effect) {
-            (ApplicationId::System, Effect::System(effect)) => {
+        match effect {
+            Effect::System(effect) => {
                 let result = self.system.execute_effect(context, effect).await?;
                 Ok(vec![ExecutionResult::System(result)])
             }
-            (ApplicationId::User(application_id), Effect::User(effect)) => {
+            Effect::User {
+                application_id,
+                bytes,
+            } => {
                 self.run_user_action(
-                    application_id,
+                    *application_id,
                     context.chain_id,
-                    UserAction::Effect(context, effect),
+                    UserAction::Effect(context, bytes),
                 )
                 .await
             }
-            _ => Err(ExecutionError::InvalidEffect),
         }
     }
 
     pub async fn query_application(
         &mut self,
-        application_id: ApplicationId,
         context: &QueryContext,
         query: &Query,
     ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        match (application_id, query) {
-            (ApplicationId::System, Query::System(query)) => {
+        match query {
+            Query::System(query) => {
                 let response = self.system.query_application(context, query).await?;
                 Ok(Response::System(response))
             }
-            (ApplicationId::User(application_id), Query::User(query)) => {
+            Query::User {
+                application_id,
+                bytes,
+            } => {
                 // Load the application.
                 let description = self
                     .system
                     .registry
-                    .describe_application(application_id)
+                    .describe_application(*application_id)
                     .await?;
                 let application = self
                     .context()
@@ -348,7 +352,7 @@ where
                 let mut session_manager = SessionManager::default();
                 let mut results = Vec::new();
                 let mut applications = vec![ApplicationStatus {
-                    id: application_id,
+                    id: *application_id,
                     parameters: description.parameters,
                     signer: None,
                 }];
@@ -362,14 +366,13 @@ where
                 );
                 // Run the query.
                 let response = application
-                    .query_application(context, &runtime, query)
+                    .query_application(context, &runtime, bytes)
                     .await?;
                 // Check that applications were correctly stacked and unstacked.
                 assert_eq!(applications.len(), 1);
-                assert_eq!(applications[0].id, application_id);
+                assert_eq!(&applications[0].id, application_id);
                 Ok(Response::User(response))
             }
-            _ => Err(ExecutionError::InvalidQuery),
         }
     }
 

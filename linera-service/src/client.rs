@@ -52,7 +52,7 @@ use {
     linera_execution::{
         committee::Epoch,
         system::{Recipient, SystemOperation},
-        ApplicationId, Operation,
+        Operation,
     },
     linera_rpc::{
         config::NetworkProtocol, grpc_network::GrpcMassClient, mass::MassClient, simple_network,
@@ -185,15 +185,12 @@ impl ClientContext {
                 epoch: Epoch::from(0),
                 chain_id: chain.chain_id,
                 incoming_messages: Vec::new(),
-                operations: vec![(
-                    ApplicationId::System,
-                    Operation::System(SystemOperation::Transfer {
-                        owner: None,
-                        recipient: Recipient::Account(Account::chain(next_recipient)),
-                        amount: Amount::from(1),
-                        user_data: UserData::default(),
-                    }),
-                )],
+                operations: vec![Operation::System(SystemOperation::Transfer {
+                    owner: None,
+                    recipient: Recipient::Account(Account::chain(next_recipient)),
+                    amount: Amount::from(1),
+                    user_data: UserData::default(),
+                })],
                 previous_block_hash: chain.block_hash,
                 height: chain.next_block_height,
                 authenticated_signer: None,

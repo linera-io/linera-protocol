@@ -14,7 +14,7 @@ use linera_base::{
 use linera_chain::data_types::{
     Block, Certificate, HashedValue, LiteVote, Message, SignatureAggregator,
 };
-use linera_execution::system::SystemOperation;
+use linera_execution::{system::SystemOperation, Operation};
 use std::mem;
 
 /// A helper type to build [`Block`]s using the builder pattern, and then signing them into
@@ -73,9 +73,7 @@ impl BlockBuilder {
 
     /// Adds a [`SystemOperation`] to this block.
     pub(crate) fn with_system_operation(&mut self, operation: SystemOperation) -> &mut Self {
-        self.block
-            .operations
-            .push((linera_execution::ApplicationId::System, operation.into()));
+        self.block.operations.push(operation.into());
         self
     }
 
@@ -85,16 +83,15 @@ impl BlockBuilder {
     /// `application`.
     pub fn with_operation(
         &mut self,
-        application: ApplicationId,
+        application_id: ApplicationId,
         operation: impl ToBcsBytes,
     ) -> &mut Self {
-        self.block.operations.push((
-            application.into(),
-            operation
+        self.block.operations.push(Operation::User {
+            application_id,
+            bytes: operation
                 .to_bcs_bytes()
-                .expect("Failed to serialize operation")
-                .into(),
-        ));
+                .expect("Failed to serialize operation"),
+        });
         self
     }
 

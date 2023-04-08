@@ -20,8 +20,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    ApplicationId, BytecodeLocation, Query, Response, UserApplicationDescription,
-    UserApplicationId,
+    BytecodeLocation, Query, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::{
@@ -329,11 +328,10 @@ where
     pub async fn query_application(
         &mut self,
         chain_id: ChainId,
-        application_id: ApplicationId,
         query: &Query,
     ) -> Result<Response, WorkerError> {
         let mut chain = self.storage.load_active_chain(chain_id).await?;
-        let response = chain.query_application(application_id, query).await?;
+        let response = chain.query_application(query).await?;
         Ok(response)
     }
 
@@ -749,7 +747,7 @@ where
             certificate.value.effects().get(effect_id.index as usize).cloned()
             else { return Ok(None) };
 
-        let application_id = outgoing_effect.application_id;
+        let application_id = outgoing_effect.effect.application_id();
         let origin = Origin {
             sender: effect_id.chain_id,
             medium: match outgoing_effect.destination {

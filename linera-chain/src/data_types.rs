@@ -38,7 +38,7 @@ pub struct Block {
     /// sender and height are grouped together for conciseness.
     pub incoming_messages: Vec<Message>,
     /// The operations to execute.
-    pub operations: Vec<(ApplicationId, Operation)>,
+    pub operations: Vec<Operation>,
     /// The block height.
     pub height: BlockHeight,
     /// The timestamp when this block was created. This must be later than all messages received
@@ -90,7 +90,7 @@ pub struct Message {
     /// The origin of the message (chain and channel if any).
     pub origin: Origin,
     /// The content of the message to be delivered to the inbox identified by
-    /// `(application_id, origin)`.
+    /// `origin`.
     pub event: Event,
 }
 
@@ -108,8 +108,6 @@ pub struct Event {
     pub authenticated_signer: Option<Owner>,
     /// The timestamp of the block that caused the effect.
     pub timestamp: Timestamp,
-    /// The application id the effect.
-    pub application_id: ApplicationId,
     /// The effect of the event (i.e. the actual payload of a message).
     pub effect: Effect,
 }
@@ -169,7 +167,6 @@ pub struct BlockProposal {
 /// An effect together with routing information.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct OutgoingEffect {
-    pub application_id: ApplicationId,
     pub destination: Destination,
     pub authenticated_signer: Option<Owner>,
     pub effect: Effect,

@@ -11,7 +11,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId},
 };
 use linera_execution::{
-    ApplicationId, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, OperationContext,
+    ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, Operation, OperationContext,
     Query, QueryContext, RawExecutionResult, Response, SystemExecutionState,
     TestExecutionRuntimeContext, WasmApplication, WasmRuntime,
 };
@@ -63,7 +63,13 @@ async fn test_fuel_for_counter_wasm_application(wasm_runtime: WasmRuntime) -> an
     for increment in &increments {
         let operation = bcs::to_bytes(increment).expect("Serialization of u128 failed");
         let result = view
-            .execute_operation(ApplicationId::User(app_id), &context, &operation.into())
+            .execute_operation(
+                &context,
+                &Operation::User {
+                    application_id: app_id,
+                    bytes: operation,
+                },
+            )
             .await?;
         assert_eq!(
             result,
@@ -80,8 +86,14 @@ async fn test_fuel_for_counter_wasm_application(wasm_runtime: WasmRuntime) -> an
     let expected_serialized_value =
         bcs::to_bytes(&expected_value).expect("Serialization of u128 failed");
     assert_eq!(
-        view.query_application(ApplicationId::User(app_id), &context, &Query::User(vec![]),)
-            .await?,
+        view.query_application(
+            &context,
+            &Query::User {
+                application_id: app_id,
+                bytes: vec![]
+            }
+        )
+        .await?,
         Response::User(expected_serialized_value)
     );
     Ok(())

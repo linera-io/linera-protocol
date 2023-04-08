@@ -95,17 +95,13 @@ where
         self.context().extra().chain_id()
     }
 
-    pub async fn query_application(
-        &mut self,
-        application_id: ApplicationId,
-        query: &Query,
-    ) -> Result<Response, ChainError> {
+    pub async fn query_application(&mut self, query: &Query) -> Result<Response, ChainError> {
         let context = QueryContext {
             chain_id: self.chain_id(),
         };
         let response = self
             .execution_state
-            .query_application(application_id, &context, query)
+            .query_application(&context, query)
             .await?;
         Ok(response)
     }
@@ -217,7 +213,6 @@ where
         let mut events = Vec::new();
         for (index, outgoing_effect) in effects.into_iter().enumerate() {
             let OutgoingEffect {
-                application_id,
                 destination,
                 authenticated_signer,
                 effect,
@@ -231,13 +226,13 @@ where
                     }
                 }
                 Destination::Subscribers(name) => {
-                    if !matches!(&origin.medium, Medium::Channel(channel) if channel.application_id == application_id && channel.name == name)
+                    if !matches!(&origin.medium, Medium::Channel(channel) if channel.application_id == effect.application_id() && channel.name == name)
                     {
                         continue;
                     }
                 }
             }
-            if let ApplicationId::System = application_id {
+            if let Effect::System(_) = effect {
                 // Handle special effects to be executed immediately.
                 let effect_id = EffectId {
                     chain_id: origin.sender,
@@ -254,7 +249,6 @@ where
                 index,
                 authenticated_signer,
                 timestamp,
-                application_id,
                 effect,
             });
         }
@@ -385,11 +379,7 @@ where
             };
             let results = self
                 .execution_state
-                .execute_effect(
-                    message.event.application_id,
-                    &context,
-                    &message.event.effect,
-                )
+                .execute_effect(&context, &message.event.effect)
                 .await?;
             Self::process_execution_results(
                 &mut self.communication_state,
@@ -400,7 +390,7 @@ where
             .await?;
         }
         // Second, execute the operations in the block and remember the recipients to notify.
-        for (index, (application_id, operation)) in block.operations.iter().enumerate() {
+        for (index, operation) in block.operations.iter().enumerate() {
             let context = OperationContext {
                 chain_id,
                 height: block.height,
@@ -409,7 +399,7 @@ where
             };
             let results = self
                 .execution_state
-                .execute_operation(*application_id, &context, operation)
+                .execute_operation(&context, operation)
                 .await?;
             Self::process_execution_results(
                 &mut self.communication_state,
@@ -451,6 +441,7 @@ where
             for result in sys_results {
                 Self::process_raw_execution_result(
                     ApplicationId::System,
+                    Effect::System,
                     &mut communication_state.outboxes,
                     &mut communication_state.channels,
                     effects,
@@ -464,6 +455,10 @@ where
             for result in results {
                 Self::process_raw_execution_result(
                     ApplicationId::User(application_id),
+                    |bytes| Effect::User {
+                        application_id,
+                        bytes,
+                    },
                     &mut communication_state.outboxes,
                     &mut communication_state.channels,
                     effects,
@@ -476,14 +471,18 @@ where
         Ok(())
     }
 
-    async fn process_raw_execution_result<E: Into<Effect>>(
+    async fn process_raw_execution_result<E, F>(
         application_id: ApplicationId,
+        lift: F,
         outboxes: &mut CollectionView<C, Target, OutboxStateView<C>>,
         channels: &mut CollectionView<C, ChannelFullName, ChannelStateView<C>>,
         effects: &mut Vec<OutgoingEffect>,
         height: BlockHeight,
         raw_result: RawExecutionResult<E>,
-    ) -> Result<(), ChainError> {
+    ) -> Result<(), ChainError>
+    where
+        F: Fn(E) -> Effect,
+    {
         // Record the effects of the execution. Effects are understood within an
         // application.
         let mut recipients = HashSet::new();
@@ -503,10 +502,9 @@ where
                 None
             };
             effects.push(OutgoingEffect {
-                application_id,
                 destination,
                 authenticated_signer,
-                effect: effect.into(),
+                effect: lift(effect),
             });
         }
 
