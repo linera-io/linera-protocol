@@ -21,9 +21,10 @@ use linera_chain::data_types::{
 use linera_execution::{
     committee::Epoch,
     system::{SystemChannel, SystemEffect, SystemOperation},
-    ApplicationId, ApplicationRegistry, Bytecode, BytecodeLocation, ChainOwnership, ChannelId,
-    Effect, ExecutionStateView, Operation, OperationContext, SystemExecutionState,
-    UserApplicationDescription, UserApplicationId, WasmApplication, WasmRuntime,
+    ApplicationId, ApplicationRegistry, Bytecode, BytecodeLocation, ChainOwnership,
+    ChannelSubscription, Effect, ExecutionStateView, Operation, OperationContext,
+    SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmApplication,
+    WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::views::{CryptoHashView, ViewError};
@@ -248,13 +249,13 @@ where
         chain_id: publisher_chain.into(),
         channel: SystemChannel::PublishedBytecodes,
     };
-    let publisher_channel = ChannelId {
+    let publisher_channel = ChannelSubscription {
         chain_id: publisher_chain.into(),
         name: SystemChannel::PublishedBytecodes.name(),
     };
     let subscribe_effect = SystemEffect::Subscribe {
         id: creator_chain.into(),
-        channel_id: publisher_channel.clone(),
+        subscription: publisher_channel.clone(),
     };
     let subscribe_block = make_block(
         Epoch::from(0),

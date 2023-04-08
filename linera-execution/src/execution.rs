@@ -77,11 +77,11 @@ where
         view.system.description.set(description);
         view.system.epoch.set(epoch);
         view.system.admin_id.set(admin_id);
-        for channel_id in subscriptions {
+        for subscription in subscriptions {
             view.system
                 .subscriptions
-                .insert(&channel_id)
-                .expect("serialization of channel_id should not fail");
+                .insert(&subscription)
+                .expect("serialization of subscription should not fail");
         }
         view.system.committees.set(committees);
         view.system.ownership.set(ownership);

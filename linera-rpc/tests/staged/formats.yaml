@@ -190,14 +190,14 @@ ChannelFullName:
         TYPENAME: ApplicationId
     - name:
         TYPENAME: ChannelName
-ChannelId:
+ChannelName:
+  NEWTYPESTRUCT: BYTES
+ChannelSubscription:
   STRUCT:
     - chain_id:
         TYPENAME: ChainId
     - name:
         TYPENAME: ChannelName
-ChannelName:
-  NEWTYPESTRUCT: BYTES
 Committee:
   STRUCT:
     - validators:
@@ -599,15 +599,15 @@ SystemEffect:
         STRUCT:
           - id:
               TYPENAME: ChainId
-          - channel_id:
-              TYPENAME: ChannelId
+          - subscription:
+              TYPENAME: ChannelSubscription
     5:
       Unsubscribe:
         STRUCT:
           - id:
               TYPENAME: ChainId
-          - channel_id:
-              TYPENAME: ChannelId
+          - subscription:
+              TYPENAME: ChannelSubscription
     6:
       BytecodePublished:
         STRUCT:

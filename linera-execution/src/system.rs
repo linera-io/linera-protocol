@@ -4,9 +4,9 @@
 
 use crate::{
     committee::{Committee, Epoch},
-    ApplicationRegistryView, Bytecode, BytecodeLocation, ChainOwnership, ChannelId, ChannelName,
-    Destination, EffectContext, OperationContext, QueryContext, RawExecutionResult,
-    UserApplicationDescription, UserApplicationId,
+    ApplicationRegistryView, Bytecode, BytecodeLocation, ChainOwnership, ChannelName,
+    ChannelSubscription, Destination, EffectContext, OperationContext, QueryContext,
+    RawExecutionResult, UserApplicationDescription, UserApplicationId,
 };
 use async_graphql::Enum;
 use custom_debug_derive::Debug;
@@ -45,7 +45,7 @@ pub struct SystemExecutionStateView<C> {
     /// The admin of the chain.
     pub admin_id: RegisterView<C, Option<ChainId>>,
     /// Track the channels that we have subscribed to.
-    pub subscriptions: SetView<C, ChannelId>,
+    pub subscriptions: SetView<C, ChannelSubscription>,
     /// The committees that we trust, indexed by epoch number.
     /// Not using a `MapView` because the set active of committees is supposed to be
     /// small. Plus, currently, we would create the `BTreeMap` anyway in various places
@@ -70,7 +70,7 @@ pub struct SystemExecutionState {
     pub description: Option<ChainDescription>,
     pub epoch: Option<Epoch>,
     pub admin_id: Option<ChainId>,
-    pub subscriptions: BTreeSet<ChannelId>,
+    pub subscriptions: BTreeSet<ChannelSubscription>,
     pub committees: BTreeMap<Epoch, Committee>,
     pub ownership: ChainOwnership,
     pub balance: Balance,
@@ -184,9 +184,15 @@ pub enum SystemEffect {
         committees: BTreeMap<Epoch, Committee>,
     },
     /// Subscribes to a channel.
-    Subscribe { id: ChainId, channel_id: ChannelId },
+    Subscribe {
+        id: ChainId,
+        subscription: ChannelSubscription,
+    },
     /// Unsubscribes to a channel.
-    Unsubscribe { id: ChainId, channel_id: ChannelId },
+    Unsubscribe {
+        id: ChainId,
+        subscription: ChannelSubscription,
+    },
     /// Notifies that a new application bytecode was published.
     BytecodePublished { operation_index: usize },
     /// Shares the locations of published bytecodes.
@@ -471,7 +477,7 @@ where
                         epoch: *epoch,
                     },
                 );
-                let channel_id = ChannelId {
+                let subscription = ChannelSubscription {
                     chain_id: *admin_id,
                     name: SystemChannel::Admin.name(),
                 };
@@ -480,7 +486,7 @@ where
                     false,
                     SystemEffect::Subscribe {
                         id: *id,
-                        channel_id,
+                        subscription,
                     },
                 );
                 result.effects.extend([e1, e2]);
@@ -496,13 +502,13 @@ where
                 self.ownership.set(ChainOwnership::default());
                 // Unsubscribe to all channels.
                 self.subscriptions
-                    .for_each_index(|channel_id| {
+                    .for_each_index(|subscription| {
                         result.effects.push((
-                            Destination::Recipient(channel_id.chain_id),
+                            Destination::Recipient(subscription.chain_id),
                             false,
                             SystemEffect::Unsubscribe {
                                 id: context.chain_id,
-                                channel_id,
+                                subscription,
                             },
                         ));
                         Ok(())
@@ -642,40 +648,40 @@ where
                         SystemExecutionError::InvalidAdminSubscription(context.chain_id, *channel)
                     );
                 }
-                let channel_id = ChannelId {
+                let subscription = ChannelSubscription {
                     chain_id: *chain_id,
                     name: channel.name(),
                 };
                 ensure!(
-                    !self.subscriptions.contains(&channel_id).await?,
+                    !self.subscriptions.contains(&subscription).await?,
                     SystemExecutionError::NoSuchChannel(context.chain_id, *channel)
                 );
-                self.subscriptions.insert(&channel_id)?;
+                self.subscriptions.insert(&subscription)?;
                 result.effects.push((
                     Destination::Recipient(*chain_id),
                     false,
                     SystemEffect::Subscribe {
                         id: context.chain_id,
-                        channel_id,
+                        subscription,
                     },
                 ));
             }
             Unsubscribe { chain_id, channel } => {
-                let channel_id = ChannelId {
+                let subscription = ChannelSubscription {
                     chain_id: *chain_id,
                     name: channel.name(),
                 };
                 ensure!(
-                    self.subscriptions.contains(&channel_id).await?,
+                    self.subscriptions.contains(&subscription).await?,
                     SystemExecutionError::InvalidUnsubscription(context.chain_id, *channel)
                 );
-                self.subscriptions.remove(&channel_id)?;
+                self.subscriptions.remove(&subscription)?;
                 result.effects.push((
                     Destination::Recipient(*chain_id),
                     false,
                     SystemEffect::Unsubscribe {
                         id: context.chain_id,
-                        channel_id,
+                        subscription,
                     },
                 ));
             }
@@ -779,7 +785,7 @@ where
                 self.epoch.set(Some(*epoch));
                 self.committees.set(committees.clone());
             }
-            Subscribe { id, channel_id } if channel_id.chain_id == context.chain_id => {
+            Subscribe { id, subscription } if subscription.chain_id == context.chain_id => {
                 // Notify the subscriber about this block, so that it is included in the
                 // receive_log of the subscriber and correctly synchronized.
                 result.effects.push((
@@ -787,15 +793,15 @@ where
                     false,
                     SystemEffect::Notify { id: *id },
                 ));
-                result.subscribe.push((channel_id.name.clone(), *id));
+                result.subscribe.push((subscription.name.clone(), *id));
             }
-            Unsubscribe { id, channel_id } if channel_id.chain_id == context.chain_id => {
+            Unsubscribe { id, subscription } if subscription.chain_id == context.chain_id => {
                 result.effects.push((
                     Destination::Recipient(*id),
                     false,
                     SystemEffect::Notify { id: *id },
                 ));
-                result.unsubscribe.push((channel_id.name.clone(), *id));
+                result.unsubscribe.push((subscription.name.clone(), *id));
             }
             BytecodePublished { operation_index } => {
                 let bytecode_id = BytecodeId(context.effect_id);
@@ -860,7 +866,7 @@ where
         self.committees.set(committees);
         self.admin_id.set(Some(admin_id));
         self.subscriptions
-            .insert(&ChannelId {
+            .insert(&ChannelSubscription {
                 chain_id: admin_id,
                 name: SystemChannel::Admin.name(),
             })
