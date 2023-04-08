@@ -4,7 +4,7 @@
 use crate::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
     system::{Recipient, UserData},
-    ApplicationId, Bytecode, ChainOwnership, ChannelId, ExecutionStateView,
+    ApplicationId, Bytecode, ChainOwnership, ChannelSubscription, ExecutionStateView,
     SystemExecutionStateView, UserApplicationDescription,
 };
 use async_graphql::{scalar, Error, Object};
@@ -74,7 +74,7 @@ where
         self.admin_id.get()
     }
 
-    async fn subscriptions(&self) -> Result<Vec<ChannelId>, Error> {
+    async fn subscriptions(&self) -> Result<Vec<ChannelSubscription>, Error> {
         Ok(self.subscriptions.indices().await?)
     }
 

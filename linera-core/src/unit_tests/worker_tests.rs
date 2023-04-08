@@ -27,8 +27,9 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{Account, Recipient, SystemChannel, SystemEffect, SystemOperation, UserData},
-    ApplicationId, ApplicationRegistry, ChainOwnership, ChannelId, Effect, ExecutionStateView,
-    Operation, Query, Response, SystemExecutionState, SystemQuery, SystemResponse,
+    ApplicationId, ApplicationRegistry, ChainOwnership, ChannelSubscription, Effect,
+    ExecutionStateView, Operation, Query, Response, SystemExecutionState, SystemQuery,
+    SystemResponse,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::views::{CryptoHashView, ViewError};
@@ -2415,7 +2416,7 @@ where
     let mut committees = BTreeMap::new();
     committees.insert(Epoch::from(0), committee.clone());
     let admin_id = ChainId::root(0);
-    let admin_channel_id = ChannelId {
+    let admin_channel_subscription = ChannelSubscription {
         chain_id: admin_id,
         name: SystemChannel::Admin.name(),
     };
@@ -2470,7 +2471,7 @@ where
                     admin_id,
                     SystemEffect::Subscribe {
                         id: user_id,
-                        channel_id: admin_channel_id.clone(),
+                        subscription: admin_channel_subscription.clone(),
                     },
                 ),
             ],
@@ -2614,7 +2615,7 @@ where
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Subscribe {
                             id: user_id,
-                            channel_id: admin_channel_id.clone(),
+                            subscription: admin_channel_subscription.clone(),
                         }),
                     },
                 }],
@@ -2810,7 +2811,7 @@ where
                     epoch: Some(Epoch::from(1)),
                     description: Some(user_description),
                     admin_id: Some(admin_id),
-                    subscriptions: [ChannelId {
+                    subscriptions: [ChannelSubscription {
                         chain_id: admin_id,
                         name: SystemChannel::Admin.name(),
                     }]

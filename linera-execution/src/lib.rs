@@ -425,7 +425,7 @@ pub struct RawExecutionResult<Effect> {
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash, Serialize, Deserialize, SimpleObject,
 )]
-pub struct ChannelId {
+pub struct ChannelSubscription {
     /// The chain id broadcasting on this channel.
     pub chain_id: ChainId,
     /// The name of the channel.

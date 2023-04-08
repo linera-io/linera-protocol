@@ -123,13 +123,13 @@ impl From<ExecutionResult> for wit_types::ExecutionResult {
         let subscribe = result
             .subscribe
             .into_iter()
-            .map(|(channel_id, chain_id)| (channel_id.into(), chain_id.0.into()))
+            .map(|(subscription, chain_id)| (subscription.into(), chain_id.0.into()))
             .collect();
 
         let unsubscribe = result
             .unsubscribe
             .into_iter()
-            .map(|(channel_id, chain_id)| (channel_id.into(), chain_id.0.into()))
+            .map(|(subscription, chain_id)| (subscription.into(), chain_id.0.into()))
             .collect();
 
         wit_types::ExecutionResult {
@@ -146,8 +146,8 @@ impl From<Destination> for wit_types::Destination {
             Destination::Recipient(chain_id) => {
                 wit_types::Destination::Recipient(chain_id.0.into())
             }
-            Destination::Subscribers(channel_id) => {
-                wit_types::Destination::Subscribers(channel_id.into())
+            Destination::Subscribers(subscription) => {
+                wit_types::Destination::Subscribers(subscription.into())
             }
         }
     }
