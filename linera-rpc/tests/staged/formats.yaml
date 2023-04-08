@@ -8,14 +8,6 @@ Account:
           TYPENAME: Owner
 Amount:
   NEWTYPESTRUCT: U64
-ApplicationDescription:
-  ENUM:
-    0:
-      System: UNIT
-    1:
-      User:
-        NEWTYPE:
-          TYPENAME: UserApplicationDescription
 ApplicationId:
   ENUM:
     0:

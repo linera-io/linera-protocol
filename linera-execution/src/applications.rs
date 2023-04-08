@@ -51,16 +51,6 @@ pub type UserApplicationId = linera_base::identifiers::ApplicationId;
 
 /// Description of the necessary information to run a user application.
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ApplicationDescription {
-    /// A special reference to the system application.
-    System,
-    /// A reference to a user application.
-    User(UserApplicationDescription),
-}
-
-/// Description of the necessary information to run a user application.
-#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
 pub struct UserApplicationDescription {
     /// The unique ID of the bytecode to use for the application.
@@ -75,15 +65,6 @@ pub struct UserApplicationDescription {
     pub parameters: Vec<u8>,
     /// Required dependencies.
     pub required_application_ids: Vec<UserApplicationId>,
-}
-
-impl From<&ApplicationDescription> for ApplicationId {
-    fn from(description: &ApplicationDescription) -> Self {
-        match description {
-            ApplicationDescription::System => ApplicationId::System,
-            ApplicationDescription::User(application) => ApplicationId::User(application.into()),
-        }
-    }
 }
 
 impl From<&UserApplicationDescription> for UserApplicationId {
