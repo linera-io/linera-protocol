@@ -8,6 +8,7 @@ edition = "2021"
 test = ["tokio/macros", "async-lock", "linera-base/test", "linera-execution/test"]
 
 [dependencies]
+futures = "0.3.17"
 async-trait = "0.1.52"
 async-lock = { version = "2.6.0", optional = true }
 async-graphql = "5.0.5"
