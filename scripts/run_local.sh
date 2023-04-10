@@ -37,9 +37,7 @@ do
     done
 done
 
-sleep 1;
-
-sleep 2;
+sleep 3;
 
 # Create second wallet with unassigned key.
 KEY=$(./client --wallet wallet_2.json --genesis genesis.json keygen)
@@ -52,6 +50,5 @@ CERT=$(echo "$CHAIN_AND_CERT" | sed -n '2 p')
 # Assign newly created chain to unassigned key.
 ./client --wallet wallet_2.json --genesis genesis.json --storage rocksdb:client_2.db assign --key "$KEY" --chain "$CHAIN" --certificate "$CERT"
 
-while :; do
-    sleep 5
-done
+read
+
