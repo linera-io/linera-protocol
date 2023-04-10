@@ -20,6 +20,7 @@ use linera_base::identifiers::{ApplicationId, ChainId};
 
 static mut MOCK_CHAIN_ID: Option<ChainId> = None;
 static mut MOCK_APPLICATION_ID: Option<ApplicationId> = None;
+static mut MOCK_APPLICATION_PARAMETERS: Option<Vec<u8>> = None;
 
 /// Sets the mocked chain ID.
 pub fn mock_chain_id(chain_id: impl Into<Option<ChainId>>) {
@@ -29,6 +30,11 @@ pub fn mock_chain_id(chain_id: impl Into<Option<ChainId>>) {
 /// Sets the mocked application ID.
 pub fn mock_application_id(application_id: impl Into<Option<ApplicationId>>) {
     unsafe { MOCK_APPLICATION_ID = application_id.into() };
+}
+
+/// Sets the mocked application parameters.
+pub fn mock_application_parameters(application_parameters: impl Into<Option<Vec<u8>>>) {
+    unsafe { MOCK_APPLICATION_PARAMETERS = application_parameters.into() };
 }
 
 /// Implementation of type that exports an interface for using the mock system API.
@@ -53,7 +59,12 @@ impl wit::MockSystemApi for MockSystemApi {
     }
 
     fn mocked_application_parameters() -> Vec<u8> {
-        todo!();
+        unsafe { MOCK_APPLICATION_PARAMETERS.clone() }
+            .expect(
+                "Unexpected call to the `application_parameters` system API. \
+                Please call `mock_application_parameters` first",
+            )
+            .into()
     }
 
     fn mocked_read_system_balance() -> wit::Balance {
