@@ -647,7 +647,7 @@ async fn end_to_end() {
     let _node_service = client.run_node_service().await;
 
     // wait for node service to start
-    tokio::time::sleep(Duration::from_millis(1_000)).await;
+    tokio::time::sleep(Duration::from_millis(3_000)).await;
 
     let application_uri = get_application_uri().await;
 
