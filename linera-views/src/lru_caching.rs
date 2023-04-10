@@ -108,6 +108,40 @@ where
         Ok(value)
     }
 
+    async fn read_multi_key_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
+        let len = keys.len();
+        let mut result = Vec::with_capacity(len);
+        let mut vector_miss_idx = Vec::<usize>::new();
+        let mut vector_query = Vec::<Vec<u8>>::new();
+        let lru_read_keys = self.lru_read_keys.lock().await;
+        for i in 0..len {
+            let key: &[u8] = keys.get(i).unwrap();
+            if let Some(value) = lru_read_keys.query(key) {
+                *result.get_mut(i).unwrap() = value.clone();
+            } else {
+                vector_miss_idx.push(i);
+                vector_query.push(key.to_vec());
+            }
+        }
+        drop(lru_read_keys);
+        let values = self
+            .client
+            .read_multi_key_bytes(vector_query.clone())
+            .await?;
+        let mut lru_read_keys = self.lru_read_keys.lock().await;
+        for u in 0..values.len() {
+            let i = *vector_miss_idx.get(u).unwrap();
+            let key = vector_query.get(u).unwrap();
+            let value = values.get(u).unwrap();
+            lru_read_keys.insert(key.to_vec(), value.clone());
+            *result.get_mut(i).unwrap() = value.clone();
+        }
+        Ok(result)
+    }
+
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
         self.client.find_keys_by_prefix(key_prefix).await
     }

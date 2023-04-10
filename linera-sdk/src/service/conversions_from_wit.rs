@@ -5,6 +5,7 @@
 use super::{
     queryable_system::{
         self, PollFindKeyValues, PollFindKeys, PollLoad, PollLock, PollReadKeyBytes,
+        PollReadMultiKeyBytes,
     },
     wit_types,
 };
@@ -100,6 +101,18 @@ impl From<PollReadKeyBytes> for Poll<Result<Option<Vec<u8>>, ViewError>> {
                 Poll::Ready(Err(ViewError::WasmHostGuestError(error)))
             }
             PollReadKeyBytes::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl From<PollReadMultiKeyBytes> for Poll<Result<Vec<Option<Vec<u8>>>, ViewError>> {
+    fn from(poll_read_multi_key_bytes: PollReadMultiKeyBytes) -> Self {
+        match poll_read_multi_key_bytes {
+            PollReadMultiKeyBytes::Ready(Ok(bytes)) => Poll::Ready(Ok(bytes)),
+            PollReadMultiKeyBytes::Ready(Err(error)) => {
+                Poll::Ready(Err(ViewError::WasmHostGuestError(error)))
+            }
+            PollReadMultiKeyBytes::Pending => Poll::Pending,
         }
     }
 }

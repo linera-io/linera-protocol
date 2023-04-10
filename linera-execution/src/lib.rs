@@ -278,6 +278,12 @@ pub trait BaseRuntime: Send + Sync {
     /// Read the key from the KV store
     async fn read_key_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError>;
 
+    /// Read several keys from the KV store
+    async fn read_multi_key_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError>;
+
     /// Reads the data from the keys having a specific prefix.
     async fn find_keys_by_prefix(
         &self,

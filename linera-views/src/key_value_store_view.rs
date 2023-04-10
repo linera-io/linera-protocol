@@ -404,6 +404,52 @@ where
         Ok(value)
     }
 
+    /// Obtains the values of a range of indices
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
+    ///   view.insert(vec![0,1], vec![42]);
+    ///   assert_eq!(view.multi_get(vec![vec![0,1], vec![0,2]]).await.unwrap(), vec![Some(vec![42]), None]);
+    /// # })
+    /// ```
+    pub async fn multi_get(
+        &self,
+        indices: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
+        let len = indices.len();
+        let mut result = Vec::with_capacity(len);
+        let mut vector_miss_idx = Vec::<usize>::new();
+        let mut vector_query = Vec::new();
+        for i in 0..len {
+            let index: &[u8] = indices.get(i).unwrap();
+            if let Some(update) = self.updates.get(index) {
+                let value = match update {
+                    Update::Removed => None,
+                    Update::Set(value) => Some(value.clone()),
+                };
+                result.push(value);
+            } else {
+                result.push(None);
+                vector_miss_idx.push(i);
+                let key = self.context.base_tag_index(KeyTag::Index as u8, index);
+                vector_query.push(key);
+            }
+        }
+        if !self.was_cleared {
+            let values = self.context.read_multi_key_bytes(vector_query).await?;
+            for u in 0..values.len() {
+                let i = *vector_miss_idx.get(u).unwrap();
+                let value = values.get(u).unwrap().clone();
+                *result.get_mut(i).unwrap() = value;
+            }
+        }
+        Ok(result)
+    }
+
     /// Sets or inserts a value.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -712,6 +758,14 @@ where
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         let kvsv = self.kvsv.read().await;
         kvsv.get(key).await
+    }
+
+    async fn read_multi_key_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
+        let kvsv = self.kvsv.read().await;
+        kvsv.multi_get(keys).await
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, ViewError> {
