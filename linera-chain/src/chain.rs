@@ -215,8 +215,11 @@ where
                     }
                 }
                 Destination::Subscribers(name) => {
-                    if !matches!(&origin.medium, Medium::Channel(channel) if channel.application_id == effect.application_id() && channel.name == name)
-                    {
+                    let expected_medium = Medium::Channel(ChannelFullName {
+                        application_id: effect.application_id(),
+                        name,
+                    });
+                    if origin.medium != expected_medium {
                         continue;
                     }
                 }
