@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use comfy_table::{
     modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color, ContentArrangement,
     Table,
@@ -179,6 +179,14 @@ impl WalletState {
             next_block_height: BlockHeight(0),
         };
         self.insert(user_chain);
+        Ok(())
+    }
+
+    pub fn set_default_chain(&mut self, chain_id: ChainId) -> Result<(), anyhow::Error> {
+        if !self.chains.contains_key(&chain_id) {
+            bail!("Chain {} cannot be assigned as the default chain since it does not exist in the wallet.", &chain_id);
+        }
+        self.default = Some(chain_id);
         Ok(())
     }
 
