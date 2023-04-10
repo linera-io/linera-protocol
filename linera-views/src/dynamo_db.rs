@@ -664,6 +664,19 @@ impl KeyValueStoreClient for DynamoDbClient {
         self.read_key_bytes_general(key_db).await
     }
 
+    async fn read_multi_key_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbContextError> {
+        let mut result = Vec::new();
+        for key in keys {
+            let key_db = build_key(key);
+            let value = self.read_key_bytes_general(key_db).await?;
+            result.push(value);
+        }
+        Ok(result)
+    }
+
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],

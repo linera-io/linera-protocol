@@ -54,6 +54,18 @@ impl KeyValueStoreClient for MemoryClient {
         Ok(map.get(key).cloned())
     }
 
+    async fn read_multi_key_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, MemoryContextError> {
+        let map = self.read().await;
+        let mut result = Vec::new();
+        for key in keys {
+            result.push(map.get(&key).cloned());
+        }
+        Ok(result)
+    }
+
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
