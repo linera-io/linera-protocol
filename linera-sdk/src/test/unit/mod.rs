@@ -27,6 +27,8 @@ static mut MOCK_APPLICATION_PARAMETERS: Option<Vec<u8>> = None;
 static mut MOCK_SYSTEM_BALANCE: Option<Balance> = None;
 static mut MOCK_SYSTEM_TIMESTAMP: Option<Timestamp> = None;
 static mut MOCK_LOG_COLLECTOR: Vec<(log::Level, String)> = Vec::new();
+static mut MOCK_APPLICATION_STATE: Option<Vec<u8>> = None;
+static mut MOCK_APPLICATION_STATE_LOCKED: bool = false;
 
 /// Sets the mocked chain ID.
 pub fn mock_chain_id(chain_id: impl Into<Option<ChainId>>) {
@@ -56,6 +58,11 @@ pub fn mock_system_timestamp(system_timestamp: impl Into<Option<Timestamp>>) {
 /// Returns all messages logged so far.
 pub fn log_messages() -> Vec<(log::Level, String)> {
     unsafe { MOCK_LOG_COLLECTOR.clone() }
+}
+
+/// Sets the mocked application state.
+pub fn mock_application_state(state: impl Into<Option<Vec<u8>>>) {
+    unsafe { MOCK_APPLICATION_STATE = state.into() };
 }
 
 /// Implementation of type that exports an interface for using the mock system API.
@@ -111,23 +118,56 @@ impl wit::MockSystemApi for MockSystemApi {
     }
 
     fn mocked_load() -> Vec<u8> {
-        todo!();
+        unsafe { MOCK_APPLICATION_STATE.clone() }.expect(
+            "Unexpected call to the `load` system API. \
+            Please call `mock_application_state` first",
+        )
     }
 
     fn mocked_load_and_lock() -> Option<Vec<u8>> {
-        todo!();
+        if unsafe { MOCK_APPLICATION_STATE_LOCKED } {
+            None
+        } else {
+            let state = unsafe { MOCK_APPLICATION_STATE.clone() }.expect(
+                "Unexpected call to the `load_and_lock` system API. \
+                Please call `mock_application_state` first",
+            );
+            unsafe { MOCK_APPLICATION_STATE_LOCKED = true };
+            Some(state)
+        }
     }
 
     fn mocked_store_and_unlock(state: Vec<u8>) -> bool {
-        todo!();
+        if unsafe { MOCK_APPLICATION_STATE_LOCKED } {
+            assert!(
+                unsafe { MOCK_APPLICATION_STATE.is_some() },
+                "Unexpected call to `store_and_unlock` system API. \
+                Please call `mock_application_state` first."
+            );
+            unsafe { MOCK_APPLICATION_STATE = Some(state) };
+            unsafe { MOCK_APPLICATION_STATE_LOCKED = false };
+            true
+        } else {
+            false
+        }
     }
 
     fn mocked_lock() -> bool {
-        todo!();
+        if unsafe { MOCK_APPLICATION_STATE_LOCKED } {
+            false
+        } else {
+            unsafe { MOCK_APPLICATION_STATE_LOCKED = true };
+            true
+        }
     }
 
     fn mocked_unlock() -> bool {
-        todo!();
+        if unsafe { MOCK_APPLICATION_STATE_LOCKED } {
+            unsafe { MOCK_APPLICATION_STATE_LOCKED = false };
+            true
+        } else {
+            false
+        }
     }
 
     fn mocked_read_key_bytes(key: Vec<u8>) -> Option<Vec<u8>> {
