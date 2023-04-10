@@ -486,16 +486,13 @@ fn generate_graphql_code(input: ItemStruct) -> TokenStream2 {
 #[proc_macro_derive(View)]
 pub fn derive_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    let stream = generate_view_code(input, false);
-    println!("1: view_code : stream={}", stream);
-    stream.into()
+    generate_view_code(input, false).into()
 }
 
 #[proc_macro_derive(HashableView)]
 pub fn derive_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), false);
-    println!("2: view_code : stream={}", stream);
     stream.extend(generate_hash_view_code(input));
     stream.into()
 }
@@ -504,7 +501,6 @@ pub fn derive_hash_view(input: TokenStream) -> TokenStream {
 pub fn derive_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), true);
-    println!("3: view_code : stream={}", stream);
     stream.extend(generate_save_delete_view_code(input));
     stream.into()
 }
@@ -513,7 +509,6 @@ pub fn derive_root_view(input: TokenStream) -> TokenStream {
 pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), false);
-    println!("4: view_code : stream={}", stream);
     stream.extend(generate_hash_view_code(input.clone()));
     stream.extend(generate_crypto_hash_code(input));
     stream.into()
@@ -523,7 +518,6 @@ pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
 pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), true);
-    println!("5: view_code : stream={}", stream);
     stream.extend(generate_save_delete_view_code(input.clone()));
     stream.extend(generate_hash_view_code(input.clone()));
     stream.extend(generate_crypto_hash_code(input));
@@ -535,7 +529,6 @@ pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
 pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), true);
-    println!("6: view_code : stream={}", stream);
     stream.extend(generate_save_delete_view_code(input.clone()));
     stream.extend(generate_hash_view_code(input));
     stream.into()
@@ -586,6 +579,7 @@ pub mod tests {
                     self.register.context()
                 }
                 async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
+                    use futures::join;
                     linera_views::increment_counter(
                         linera_views::LOAD_VIEW_COUNTER,
                         stringify!(TestView),
@@ -593,12 +587,15 @@ pub mod tests {
                     );
                     let index = 0;
                     let base_key = context.derive_key(&index)?;
-                    let register =
-                        RegisterView::load(context.clone_with_base_key(base_key)).await?;
+                    let register_fut =
+                        RegisterView::load(context.clone_with_base_key(base_key));
                     let index = 1;
                     let base_key = context.derive_key(&index)?;
-                    let collection =
-                        CollectionView::load(context.clone_with_base_key(base_key)).await?;
+                    let collection_fut =
+                        CollectionView::load(context.clone_with_base_key(base_key));
+                    let result = join!(register_fut, collection_fut);
+                    let register = result.0?;
+                    let collection = result.1?;
                     Ok(Self {
                         register,
                         collection
