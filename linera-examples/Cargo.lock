@@ -1733,7 +1733,9 @@ dependencies = [
  "wasmer",
  "wasmer-middlewares",
  "wasmparser 0.101.1",
+ "wasmtime",
  "wit-bindgen-host-wasmer-rust",
+ "wit-bindgen-host-wasmtime-rust",
 ]
 
 [[package]]
@@ -3990,6 +3992,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wit-bindgen-gen-host-wasmtime-rust"
+version = "0.2.0"
+source = "git+https://github.com/jvff/wit-bindgen?rev=b3f43500ec4a65379b65148e32941117c17bc2f1#b3f43500ec4a65379b65148e32941117c17bc2f1"
+dependencies = [
+ "heck",
+ "wit-bindgen-core",
+ "wit-bindgen-gen-rust-lib",
+]
+
+[[package]]
 name = "wit-bindgen-gen-rust-lib"
 version = "0.2.0"
 source = "git+https://github.com/jvff/wit-bindgen?rev=b3f43500ec4a65379b65148e32941117c17bc2f1#b3f43500ec4a65379b65148e32941117c17bc2f1"
@@ -4040,6 +4052,29 @@ dependencies = [
  "syn",
  "wit-bindgen-core",
  "wit-bindgen-gen-host-wasmer-rust",
+]
+
+[[package]]
+name = "wit-bindgen-host-wasmtime-rust"
+version = "0.2.0"
+source = "git+https://github.com/jvff/wit-bindgen?rev=b3f43500ec4a65379b65148e32941117c17bc2f1#b3f43500ec4a65379b65148e32941117c17bc2f1"
+dependencies = [
+ "anyhow",
+ "bitflags",
+ "thiserror",
+ "wasmtime",
+ "wit-bindgen-host-wasmtime-rust-macro",
+]
+
+[[package]]
+name = "wit-bindgen-host-wasmtime-rust-macro"
+version = "0.2.0"
+source = "git+https://github.com/jvff/wit-bindgen?rev=b3f43500ec4a65379b65148e32941117c17bc2f1#b3f43500ec4a65379b65148e32941117c17bc2f1"
+dependencies = [
+ "proc-macro2",
+ "syn",
+ "wit-bindgen-core",
+ "wit-bindgen-gen-host-wasmtime-rust",
 ]
 
 [[package]]
