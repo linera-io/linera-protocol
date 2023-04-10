@@ -634,6 +634,7 @@ enum ClientCommand {
 #[derive(StructOpt)]
 enum WalletCommand {
     Show { chain_id: Option<ChainId> },
+    SetDefault { chain_id: ChainId },
 }
 
 struct Job(ClientContext, ClientCommand);
@@ -1129,6 +1130,11 @@ async fn main() -> Result<(), anyhow::Error> {
         ClientCommand::Wallet(wallet_command) => match wallet_command {
             WalletCommand::Show { chain_id } => {
                 context.wallet_state.pretty_print(chain_id);
+                Ok(())
+            }
+            WalletCommand::SetDefault { chain_id } => {
+                context.wallet_state.set_default_chain(chain_id)?;
+                context.save_wallet();
                 Ok(())
             }
         },
