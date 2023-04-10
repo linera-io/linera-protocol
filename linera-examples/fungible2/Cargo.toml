@@ -13,6 +13,9 @@ linera-sdk = { path = "../../linera-sdk" }
 linera-views = { path = "../../linera-views" }
 thiserror = "1.0.31"
 
+[package.metadata.cargo-machete]
+ignored = ["futures"]
+
 [[bin]]
 name = "fungible2_contract"
 path = "src/contract.rs"

@@ -13,6 +13,9 @@ linera-views = { path = "../../linera-views" }
 thiserror = "1.0.31"
 futures-util = "0.3.26"
 
+[package.metadata.cargo-machete]
+ignored = ["futures"]
+
 [dev-dependencies]
 linera-sdk = { path = "../../linera-sdk", features = ["test"] }
 webassembly-test = "0.1.0"

@@ -15,6 +15,9 @@ linera-views = { path = "../../linera-views" }
 serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.31"
 
+[package.metadata.cargo-machete]
+ignored = ["futures"]
+
 [[bin]]
 name = "crowd-funding2_contract"
 path = "src/contract.rs"
