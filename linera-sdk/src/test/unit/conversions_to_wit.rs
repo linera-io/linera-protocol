@@ -56,3 +56,15 @@ impl From<Balance> for wit::Balance {
         }
     }
 }
+
+impl From<wit::LogLevel> for log::Level {
+    fn from(level: wit::LogLevel) -> Self {
+        match level {
+            wit::LogLevel::Trace => log::Level::Trace,
+            wit::LogLevel::Debug => log::Level::Debug,
+            wit::LogLevel::Info => log::Level::Info,
+            wit::LogLevel::Warn => log::Level::Warn,
+            wit::LogLevel::Error => log::Level::Error,
+        }
+    }
+}

@@ -26,6 +26,7 @@ static mut MOCK_APPLICATION_ID: Option<ApplicationId> = None;
 static mut MOCK_APPLICATION_PARAMETERS: Option<Vec<u8>> = None;
 static mut MOCK_SYSTEM_BALANCE: Option<Balance> = None;
 static mut MOCK_SYSTEM_TIMESTAMP: Option<Timestamp> = None;
+static mut MOCK_LOG_COLLECTOR: Vec<(log::Level, String)> = Vec::new();
 
 /// Sets the mocked chain ID.
 pub fn mock_chain_id(chain_id: impl Into<Option<ChainId>>) {
@@ -50,6 +51,11 @@ pub fn mock_system_balance(system_balance: impl Into<Option<Balance>>) {
 /// Sets the mocked system timestamp.
 pub fn mock_system_timestamp(system_timestamp: impl Into<Option<Timestamp>>) {
     unsafe { MOCK_SYSTEM_TIMESTAMP = system_timestamp.into() };
+}
+
+/// Returns all messages logged so far.
+pub fn log_messages() -> Vec<(log::Level, String)> {
+    unsafe { MOCK_LOG_COLLECTOR.clone() }
 }
 
 /// Implementation of type that exports an interface for using the mock system API.
@@ -101,7 +107,7 @@ impl wit::MockSystemApi for MockSystemApi {
     }
 
     fn mocked_log(message: String, level: wit::LogLevel) {
-        todo!();
+        unsafe { MOCK_LOG_COLLECTOR.push((level.into(), message)) }
     }
 
     fn mocked_load() -> Vec<u8> {
