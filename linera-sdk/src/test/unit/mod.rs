@@ -17,7 +17,7 @@ mod conversions_to_wit;
 
 use self::mock_system_api as wit;
 use linera_base::{
-    data_types::Balance,
+    data_types::{Balance, Timestamp},
     identifiers::{ApplicationId, ChainId},
 };
 
@@ -25,6 +25,7 @@ static mut MOCK_CHAIN_ID: Option<ChainId> = None;
 static mut MOCK_APPLICATION_ID: Option<ApplicationId> = None;
 static mut MOCK_APPLICATION_PARAMETERS: Option<Vec<u8>> = None;
 static mut MOCK_SYSTEM_BALANCE: Option<Balance> = None;
+static mut MOCK_SYSTEM_TIMESTAMP: Option<Timestamp> = None;
 
 /// Sets the mocked chain ID.
 pub fn mock_chain_id(chain_id: impl Into<Option<ChainId>>) {
@@ -44,6 +45,11 @@ pub fn mock_application_parameters(application_parameters: impl Into<Option<Vec<
 /// Sets the mocked system balance.
 pub fn mock_system_balance(system_balance: impl Into<Option<Balance>>) {
     unsafe { MOCK_SYSTEM_BALANCE = system_balance.into() };
+}
+
+/// Sets the mocked system timestamp.
+pub fn mock_system_timestamp(system_timestamp: impl Into<Option<Timestamp>>) {
+    unsafe { MOCK_SYSTEM_TIMESTAMP = system_timestamp.into() };
 }
 
 /// Implementation of type that exports an interface for using the mock system API.
@@ -86,7 +92,12 @@ impl wit::MockSystemApi for MockSystemApi {
     }
 
     fn mocked_read_system_timestamp() -> u64 {
-        todo!();
+        unsafe { MOCK_SYSTEM_TIMESTAMP }
+            .expect(
+                "Unexpected call to the `read_system_timestamp` system API. \
+                Please call `mock_system_timestamp` first",
+            )
+            .micros()
     }
 
     fn mocked_log(message: String, level: wit::LogLevel) {
