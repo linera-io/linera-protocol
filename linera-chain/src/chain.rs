@@ -30,7 +30,7 @@ use linera_views::{
     views::{CryptoHashView, GraphQLView, RootView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 
 /// A view accessing the state of a chain.
 #[derive(Debug, RootView, GraphQLView)]
@@ -399,47 +399,35 @@ where
         height: BlockHeight,
         results: Vec<ExecutionResult>,
     ) -> Result<(), ChainError> {
-        let mut sys_results = Vec::new();
-        let mut result_map: BTreeMap<_, Vec<_>> = Default::default();
         for result in results {
             match result {
                 ExecutionResult::System(result) => {
-                    sys_results.push(result);
+                    Self::process_raw_execution_result(
+                        ApplicationId::System,
+                        Effect::System,
+                        &mut self.outboxes,
+                        &mut self.channels,
+                        effects,
+                        height,
+                        result,
+                    )
+                    .await?;
                 }
                 ExecutionResult::User(application_id, result) => {
-                    result_map.entry(application_id).or_default().push(result);
+                    Self::process_raw_execution_result(
+                        ApplicationId::User(application_id),
+                        |bytes| Effect::User {
+                            application_id,
+                            bytes,
+                        },
+                        &mut self.outboxes,
+                        &mut self.channels,
+                        effects,
+                        height,
+                        result,
+                    )
+                    .await?;
                 }
-            }
-        }
-        if !sys_results.is_empty() {
-            for result in sys_results {
-                Self::process_raw_execution_result(
-                    ApplicationId::System,
-                    Effect::System,
-                    &mut self.outboxes,
-                    &mut self.channels,
-                    effects,
-                    height,
-                    result,
-                )
-                .await?;
-            }
-        }
-        for (application_id, results) in result_map {
-            for result in results {
-                Self::process_raw_execution_result(
-                    ApplicationId::User(application_id),
-                    |bytes| Effect::User {
-                        application_id,
-                        bytes,
-                    },
-                    &mut self.outboxes,
-                    &mut self.channels,
-                    effects,
-                    height,
-                    result,
-                )
-                .await?;
             }
         }
         Ok(())
