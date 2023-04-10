@@ -1620,7 +1620,6 @@ where
     assert_eq!(
         BlockHeight::from(0),
         chain
-            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(ChainId::root(3)))
             .await
@@ -1630,7 +1629,6 @@ where
     );
     assert_eq!(
         chain
-            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(ChainId::root(3)))
             .await
@@ -1641,7 +1639,6 @@ where
     );
     assert!(matches!(
         chain
-            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(ChainId::root(3)))
             .await
@@ -1830,7 +1827,6 @@ where
     assert_eq!(
         BlockHeight::from(1),
         chain
-            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(ChainId::root(1)))
             .await
@@ -1840,7 +1836,6 @@ where
     );
     assert!(matches!(
         chain
-            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(ChainId::root(1)))
             .await
@@ -1949,7 +1944,6 @@ where
     assert_eq!(
         BlockHeight::from(1),
         chain
-            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(ChainId::root(1)))
             .await
@@ -1959,7 +1953,6 @@ where
     );
     assert!(matches!(
         chain
-            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(ChainId::root(1)))
             .await
@@ -2043,13 +2036,7 @@ where
         .is_empty());
     let chain = worker.storage.load_chain(ChainId::root(2)).await.unwrap();
     // The target chain did not receive the message
-    assert!(chain
-        .communication_state
-        .inboxes
-        .indices()
-        .await
-        .unwrap()
-        .is_empty());
+    assert!(chain.inboxes.indices().await.unwrap().is_empty());
 }
 
 #[test(tokio::test)]
@@ -2121,13 +2108,7 @@ where
         }]
     );
     let chain = worker.storage.load_chain(ChainId::root(2)).await.unwrap();
-    assert!(!chain
-        .communication_state
-        .inboxes
-        .indices()
-        .await
-        .unwrap()
-        .is_empty());
+    assert!(!chain.inboxes.indices().await.unwrap().is_empty());
 }
 
 #[test(tokio::test)]
@@ -2504,20 +2485,13 @@ where
             BlockHeight::from(1),
             admin_chain.tip_state.get().next_block_height
         );
-        assert!(admin_chain
-            .communication_state
-            .outboxes
-            .indices()
-            .await
-            .unwrap()
-            .is_empty());
+        assert!(admin_chain.outboxes.indices().await.unwrap().is_empty());
         assert_eq!(
             *admin_chain.execution_state.system.admin_id.get(),
             Some(admin_id)
         );
         // The root chain has no subscribers yet.
         assert!(!admin_chain
-            .communication_state
             .channels
             .indices()
             .await
@@ -2658,7 +2632,6 @@ where
         admin_chain.validate_incoming_messages().await.unwrap();
         assert_eq!(
             admin_chain
-                .communication_state
                 .channels
                 .load_entry_mut(&admin_channel_full_name)
                 .await
@@ -2696,7 +2669,6 @@ where
         user_chain.validate_incoming_messages().await.unwrap();
         matches!(
             user_chain
-                .communication_state
                 .inboxes
                 .load_entry_mut(&Origin::chain(admin_id))
                 .await
@@ -2722,7 +2694,6 @@ where
         );
         matches!(
             user_chain
-                .communication_state
                 .inboxes
                 .load_entry_mut(&admin_channel_origin.clone())
                 .await
@@ -2738,7 +2709,6 @@ where
         );
         assert_eq!(
             user_chain
-                .communication_state
                 .inboxes
                 .load_entry_mut(&admin_channel_origin)
                 .await
@@ -2859,7 +2829,6 @@ where
         user_chain.validate_incoming_messages().await.unwrap();
         {
             let inbox = user_chain
-                .communication_state
                 .inboxes
                 .load_entry_mut(&Origin::chain(admin_id))
                 .await
@@ -2873,7 +2842,6 @@ where
         }
         {
             let inbox = user_chain
-                .communication_state
                 .inboxes
                 .load_entry_mut(&admin_channel_origin)
                 .await
@@ -3062,19 +3030,9 @@ where
 
     // .. and the message has gone through.
     let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
-    assert_eq!(
-        admin_chain
-            .communication_state
-            .inboxes
-            .indices()
-            .await
-            .unwrap()
-            .len(),
-        1
-    );
+    assert_eq!(admin_chain.inboxes.indices().await.unwrap().len(), 1);
     matches!(
         admin_chain
-            .communication_state
             .inboxes
             .load_entry_mut(&Origin::chain(user_id))
             .await
@@ -3282,13 +3240,7 @@ where
 
         // .. but the message hasn't gone through.
         let admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
-        assert!(admin_chain
-            .communication_state
-            .inboxes
-            .indices()
-            .await
-            .unwrap()
-            .is_empty());
+        assert!(admin_chain.inboxes.indices().await.unwrap().is_empty());
     }
 
     // Force the admin chain to receive the money nonetheless by anticipation.

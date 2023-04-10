@@ -380,9 +380,8 @@ where
         chain: &mut ChainStateView<Client::Context>,
     ) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
-        let state = &mut chain.communication_state;
-        for target in state.outboxes.indices().await? {
-            let outbox = state.outboxes.try_load_entry(&target).await?;
+        for target in chain.outboxes.indices().await? {
+            let outbox = chain.outboxes.try_load_entry(&target).await?;
             let heights = outbox.block_heights().await?;
             heights_by_recipient
                 .entry(target.recipient)
@@ -760,8 +759,7 @@ where
         };
 
         let mut chain = self.storage.load_active_chain(chain_id).await?;
-        let communication_state = &mut chain.communication_state;
-        let inbox = communication_state.inboxes.load_entry_mut(&origin).await?;
+        let inbox = chain.inboxes.load_entry_mut(&origin).await?;
 
         let certificate_hash = certificate.value.hash();
         let Some(event) =
@@ -966,9 +964,8 @@ where
         }
         if query.request_pending_messages {
             let mut messages = Vec::new();
-            let state = &mut chain.communication_state;
-            for origin in state.inboxes.indices().await? {
-                let inbox = state.inboxes.try_load_entry(&origin).await?;
+            for origin in chain.inboxes.indices().await? {
+                let inbox = chain.inboxes.try_load_entry(&origin).await?;
                 let count = inbox.added_events.count();
                 for event in inbox.added_events.read_front(count).await? {
                     messages.push(Message {

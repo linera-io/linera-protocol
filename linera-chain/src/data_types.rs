@@ -113,9 +113,7 @@ pub struct Event {
 }
 
 /// The origin of a message, relative to a particular application. Used to identify each inbox.
-#[derive(
-    Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize, SimpleObject,
-)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
 pub struct Origin {
     /// The chain ID of the sender.
     pub sender: ChainId,
@@ -124,9 +122,7 @@ pub struct Origin {
 }
 
 /// The target of a message, relative to a particular application. Used to identify each outbox.
-#[derive(
-    Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize, SimpleObject,
-)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Serialize, Deserialize)]
 pub struct Target {
     /// The chain ID of the recipient.
     pub recipient: ChainId,
