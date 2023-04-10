@@ -52,8 +52,12 @@ pub struct ChainStateView<C> {
     /// Sender chain and height of all certified blocks known as a receiver (local ordering).
     pub received_log: LogView<C, ChainAndHeight>,
 
-    /// Communication state of applications.
-    pub communication_state: CommunicationStateView<C>,
+    /// Mailboxes used to receive messages indexed by their origin.
+    pub inboxes: CollectionView<C, Origin, InboxStateView<C>>,
+    /// Mailboxes used to send messages, indexed by their target.
+    pub outboxes: CollectionView<C, Target, OutboxStateView<C>>,
+    /// Channels able to multicast messages to subscribers.
+    pub channels: CollectionView<C, ChannelFullName, ChannelStateView<C>>,
 }
 
 /// Block-chaining state.
@@ -63,17 +67,6 @@ pub struct ChainTipState {
     pub block_hash: Option<CryptoHash>,
     /// Sequence number tracking blocks.
     pub next_block_height: BlockHeight,
-}
-
-/// A view accessing the communication state of an application.
-#[derive(Debug, View)]
-pub struct CommunicationStateView<C> {
-    /// Mailboxes used to receive messages indexed by their origin.
-    pub inboxes: CollectionView<C, Origin, InboxStateView<C>>,
-    /// Mailboxes used to send messages, indexed by their target.
-    pub outboxes: CollectionView<C, Target, OutboxStateView<C>>,
-    /// Channels able to multicast messages to subscribers.
-    pub channels: CollectionView<C, ChannelFullName, ChannelStateView<C>>,
 }
 
 /// The state of a channel followed by subscribers.
@@ -123,11 +116,10 @@ where
         target: Target,
         height: BlockHeight,
     ) -> Result<bool, ChainError> {
-        let communication_state = &mut self.communication_state;
-        let outbox = communication_state.outboxes.load_entry_mut(&target).await?;
+        let outbox = self.outboxes.load_entry_mut(&target).await?;
         let updated = outbox.mark_messages_as_received(height).await?;
         if updated && outbox.queue.count() == 0 {
-            communication_state.outboxes.remove_entry(&target)?;
+            self.outboxes.remove_entry(&target)?;
         }
         Ok(updated)
     }
@@ -150,9 +142,8 @@ where
     /// have been properly received by now.
     pub async fn validate_incoming_messages(&mut self) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
-        let state = &mut self.communication_state;
-        for origin in state.inboxes.indices().await? {
-            let inbox = state.inboxes.try_load_entry(&origin).await?;
+        for origin in self.inboxes.indices().await? {
+            let inbox = self.inboxes.try_load_entry(&origin).await?;
             let event = inbox.removed_events.front().await?;
             ensure!(
                 event.is_none(),
@@ -170,8 +161,7 @@ where
         &mut self,
         origin: Origin,
     ) -> Result<BlockHeight, ChainError> {
-        let communication_state = &mut self.communication_state;
-        let inbox = communication_state.inboxes.try_load_entry(&origin).await?;
+        let inbox = self.inboxes.try_load_entry(&origin).await?;
         inbox.next_block_height_to_receive()
     }
 
@@ -179,8 +169,7 @@ where
         &mut self,
         origin: Origin,
     ) -> Result<Option<BlockHeight>, ChainError> {
-        let communication_state = &mut self.communication_state;
-        let inbox = communication_state.inboxes.try_load_entry(&origin).await?;
+        let inbox = self.inboxes.try_load_entry(&origin).await?;
         match inbox.removed_events.back().await? {
             Some(event) => Ok(Some(event.height)),
             None => Ok(None),
@@ -261,8 +250,7 @@ where
                 chain_id, origin, height))
         );
         // Process the inbox events and update the inbox state.
-        let communication_state = &mut self.communication_state;
-        let inbox = communication_state.inboxes.load_entry_mut(origin).await?;
+        let inbox = self.inboxes.load_entry_mut(origin).await?;
         for event in events {
             inbox.add_event(event).await.map_err(|error| match error {
                 InboxError::ViewError(error) => ChainError::ViewError(error),
@@ -334,11 +322,7 @@ where
                 });
             }
             // Mark the message as processed in the inbox.
-            let communication_state = &mut self.communication_state;
-            let inbox = communication_state
-                .inboxes
-                .load_entry_mut(&message.origin)
-                .await?;
+            let inbox = self.inboxes.load_entry_mut(&message.origin).await?;
             inbox
                 .remove_event(&message.event)
                 .await
@@ -381,13 +365,8 @@ where
                 .execution_state
                 .execute_effect(&context, &message.event.effect)
                 .await?;
-            Self::process_execution_results(
-                &mut self.communication_state,
-                &mut effects,
-                context.height,
-                results,
-            )
-            .await?;
+            self.process_execution_results(&mut effects, context.height, results)
+                .await?;
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
@@ -401,13 +380,8 @@ where
                 .execution_state
                 .execute_operation(&context, operation)
                 .await?;
-            Self::process_execution_results(
-                &mut self.communication_state,
-                &mut effects,
-                context.height,
-                results,
-            )
-            .await?;
+            self.process_execution_results(&mut effects, context.height, results)
+                .await?;
         }
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash().await?;
@@ -420,7 +394,7 @@ where
     }
 
     async fn process_execution_results(
-        communication_state: &mut CommunicationStateView<C>,
+        &mut self,
         effects: &mut Vec<OutgoingEffect>,
         height: BlockHeight,
         results: Vec<ExecutionResult>,
@@ -442,8 +416,8 @@ where
                 Self::process_raw_execution_result(
                     ApplicationId::System,
                     Effect::System,
-                    &mut communication_state.outboxes,
-                    &mut communication_state.channels,
+                    &mut self.outboxes,
+                    &mut self.channels,
                     effects,
                     height,
                     result,
@@ -459,8 +433,8 @@ where
                         application_id,
                         bytes,
                     },
-                    &mut communication_state.outboxes,
-                    &mut communication_state.channels,
+                    &mut self.outboxes,
+                    &mut self.channels,
                     effects,
                     height,
                     result,
