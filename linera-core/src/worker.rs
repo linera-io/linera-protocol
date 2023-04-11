@@ -381,7 +381,7 @@ where
     ) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
         for target in chain.outboxes.indices().await? {
-            let outbox = chain.outboxes.try_load_entry(&target).await?;
+            let outbox = chain.outboxes.load_entry(&target).await?;
             let heights = outbox.block_heights().await?;
             heights_by_recipient
                 .entry(target.recipient)
@@ -965,7 +965,7 @@ where
         if query.request_pending_messages {
             let mut messages = Vec::new();
             for origin in chain.inboxes.indices().await? {
-                let inbox = chain.inboxes.try_load_entry(&origin).await?;
+                let inbox = chain.inboxes.load_entry(&origin).await?;
                 let count = inbox.added_events.count();
                 for event in inbox.added_events.read_front(count).await? {
                     messages.push(Message {
