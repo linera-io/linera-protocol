@@ -2424,7 +2424,6 @@ dependencies = [
  "async-graphql",
  "async-lock",
  "async-trait",
- "futures",
  "linera-base",
  "linera-chain",
  "linera-execution",
@@ -4371,7 +4370,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bcs",
- "futures",
  "linera-sdk",
  "linera-views",
  "serde",

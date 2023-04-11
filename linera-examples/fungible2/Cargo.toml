@@ -5,16 +5,12 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
-futures = "0.3.17"
 async-trait = "0.1.52"
 bcs = "0.1.3"
 fungible = { path = "../fungible" }
 linera-sdk = { path = "../../linera-sdk" }
 linera-views = { path = "../../linera-views" }
 thiserror = "1.0.31"
-
-[package.metadata.cargo-machete]
-ignored = ["futures"]
 
 [[bin]]
 name = "fungible2_contract"

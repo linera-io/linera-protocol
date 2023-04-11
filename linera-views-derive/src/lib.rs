@@ -109,7 +109,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 #increment_counter
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                    use futures::join;
+                    use linera_views::futures::join;
                     #(#loades_a)*
                     let result = join!(#(#loades_b),*);
                     #(#loades_c)*
@@ -603,7 +603,7 @@ pub mod tests {
                     );
                     #[cfg(not(target_arch = "wasm32"))]
                     {
-                        use futures::join;
+                        use linera_view::futures::join;
                         let index = 0;
                         let base_key = context.derive_key(&index)?;
                         let register_fut =
