@@ -91,9 +91,8 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         quote! {}
     };
 
-    // At the present time the smart contract system does not correctly handle trully
-    // asynchronous operation and TryLockError occurs for the active_view_user_states
-    // variable.
+    // See TODO(#599) for the problem that we have with respect to the use of
+    // true async code for loading.
     quote! {
         #[async_trait::async_trait]
         impl #generics linera_views::views::View<#first_generic> for #struct_name #generics
@@ -105,21 +104,21 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 self.#first_name.context()
             }
 
+            #[cfg(not(target_arch = "wasm32"))]
             async fn load(context: #first_generic) -> Result<Self, linera_views::views::ViewError> {
                 #increment_counter
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    use linera_views::futures::join;
-                    #(#loades_a)*
-                    let result = join!(#(#loades_b),*);
-                    #(#loades_c)*
-                    Ok(Self {#(#names),*})
-                }
-                #[cfg(target_arch = "wasm32")]
-                {
-                    #(#loades_d)*
-                    Ok(Self {#(#names),*})
-                }
+                use linera_views::futures::join;
+                #(#loades_a)*
+                let result = join!(#(#loades_b),*);
+                #(#loades_c)*
+                Ok(Self {#(#names),*})
+            }
+
+            #[cfg(target_arch = "wasm32")]
+            async fn load(context: #first_generic) -> Result<Self, linera_views::views::ViewError> {
+                #increment_counter
+                #(#loades_d)*
+                Ok(Self {#(#names),*})
             }
 
             fn rollback(&mut self) {
@@ -595,46 +594,49 @@ pub mod tests {
                 fn context(&self) -> &C {
                     self.register.context()
                 }
+                #[cfg(not(target_arch = "wasm32"))]
                 async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
                     linera_views::increment_counter(
                         linera_views::LOAD_VIEW_COUNTER,
                         stringify!(TestView),
                         &context.base_key(),
                     );
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        use linera_view::futures::join;
-                        let index = 0;
-                        let base_key = context.derive_key(&index)?;
-                        let register_fut =
-                            RegisterView::load(context.clone_with_base_key(base_key));
-                        let index = 1;
-                        let base_key = context.derive_key(&index)?;
-                        let collection_fut =
-                            CollectionView::load(context.clone_with_base_key(base_key));
-                        let result = join!(register_fut, collection_fut);
-                        let register = result.0?;
-                        let collection = result.1?;
-                        Ok(Self {
-                            register,
-                            collection
-                        })
-                    }
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        let index = 0;
-                        let base_key = context.derive_key(&index)?;
-                        let register =
-                            RegisterView::load(context.clone_with_base_key(base_key)).await?;
-                        let index = 1;
-                        let base_key = context.derive_key(&index)?;
-                        let collection =
-                            CollectionView::load(context.clone_with_base_key(base_key)).await?;
-                        Ok(Self {
-                            register,
-                            collection
-                        })
-                    }
+                    use linera_views::futures::join;
+                    let index = 0;
+                    let base_key = context.derive_key(&index)?;
+                    let register_fut =
+                        RegisterView::load(context.clone_with_base_key(base_key));
+                    let index = 1;
+                    let base_key = context.derive_key(&index)?;
+                    let collection_fut =
+                        CollectionView::load(context.clone_with_base_key(base_key));
+                    let result = join!(register_fut, collection_fut);
+                    let register = result.0?;
+                    let collection = result.1?;
+                    Ok(Self {
+                        register,
+                        collection
+                    })
+                }
+                #[cfg(target_arch = "wasm32")]
+                async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
+                    linera_views::increment_counter(
+                        linera_views::LOAD_VIEW_COUNTER,
+                        stringify!(TestView),
+                        &context.base_key(),
+                    );
+                    let index = 0;
+                    let base_key = context.derive_key(&index)?;
+                    let register =
+                        RegisterView::load(context.clone_with_base_key(base_key)).await?;
+                    let index = 1;
+                    let base_key = context.derive_key(&index)?;
+                    let collection =
+                        CollectionView::load(context.clone_with_base_key(base_key)).await?;
+                    Ok(Self {
+                        register,
+                        collection
+                    })
                 }
                 fn rollback(&mut self) {
                     self.register.rollback();
