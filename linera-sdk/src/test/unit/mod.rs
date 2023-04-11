@@ -13,12 +13,19 @@
 // Import the contract system interface.
 wit_bindgen_guest_rust::export!("mock_system_api.wit");
 
+mod conversions_from_wit;
 mod conversions_to_wit;
 
 use self::mock_system_api as wit;
+use futures::FutureExt;
 use linera_base::{
     data_types::{Balance, Timestamp},
     identifiers::{ApplicationId, ChainId},
+};
+use linera_views::{
+    batch::{Batch, WriteOperation},
+    common::Context,
+    memory::MemoryContext,
 };
 
 static mut MOCK_CHAIN_ID: Option<ChainId> = None;
@@ -29,6 +36,7 @@ static mut MOCK_SYSTEM_TIMESTAMP: Option<Timestamp> = None;
 static mut MOCK_LOG_COLLECTOR: Vec<(log::Level, String)> = Vec::new();
 static mut MOCK_APPLICATION_STATE: Option<Vec<u8>> = None;
 static mut MOCK_APPLICATION_STATE_LOCKED: bool = false;
+static mut MOCK_KEY_VALUE_STORE: Option<MemoryContext<()>> = None;
 
 /// Sets the mocked chain ID.
 pub fn mock_chain_id(chain_id: impl Into<Option<ChainId>>) {
@@ -63,6 +71,13 @@ pub fn log_messages() -> Vec<(log::Level, String)> {
 /// Sets the mocked application state.
 pub fn mock_application_state(state: impl Into<Option<Vec<u8>>>) {
     unsafe { MOCK_APPLICATION_STATE = state.into() };
+}
+
+/// Initializes and returns a view context for using as the mocked key-value store.
+pub fn mock_key_value_store() -> MemoryContext<()> {
+    let store = linera_views::memory::create_test_context();
+    unsafe { MOCK_KEY_VALUE_STORE = Some(store.clone()) };
+    store
 }
 
 /// Implementation of type that exports an interface for using the mock system API.
@@ -171,19 +186,53 @@ impl wit::MockSystemApi for MockSystemApi {
     }
 
     fn mocked_read_key_bytes(key: Vec<u8>) -> Option<Vec<u8>> {
-        todo!();
+        unsafe { MOCK_KEY_VALUE_STORE.as_mut() }
+            .expect(
+                "Unexpected call to `read_key_bytes` system API. \
+                Please call `mock_key_value_store` first.",
+            )
+            .read_key_bytes(&key)
+            .now_or_never()
+            .expect("Attempt to read from key-value store while it is being written to")
+            .expect("Failed to read from memory store")
     }
 
     fn mocked_find_keys(prefix: Vec<u8>) -> Vec<Vec<u8>> {
-        todo!();
+        unsafe { MOCK_KEY_VALUE_STORE.as_mut() }
+            .expect(
+                "Unexpected call to `find_keys` system API. \
+                Please call `mock_key_value_store` first.",
+            )
+            .find_keys_by_prefix(&prefix)
+            .now_or_never()
+            .expect("Attempt to read from key-value store while it is being written to")
+            .expect("Failed to read from memory store")
     }
 
     fn mocked_find_key_values(prefix: Vec<u8>) -> Vec<(Vec<u8>, Vec<u8>)> {
-        todo!();
+        unsafe { MOCK_KEY_VALUE_STORE.as_mut() }
+            .expect(
+                "Unexpected call to `find_key_values` system API. \
+                Please call `mock_key_value_store` first.",
+            )
+            .find_key_values_by_prefix(&prefix)
+            .now_or_never()
+            .expect("Attempt to read from key-value store while it is being written to")
+            .expect("Failed to read from memory store")
     }
 
     fn mocked_write_batch(operations: Vec<wit::WriteOperation>) {
-        todo!();
+        unsafe { MOCK_KEY_VALUE_STORE.as_mut() }
+            .expect(
+                "Unexpected call to `write_batch` system API. \
+                Please call `mock_key_value_store` first.",
+            )
+            .write_batch(Batch {
+                operations: operations.into_iter().map(WriteOperation::from).collect(),
+            })
+            .now_or_never()
+            .expect("Attempt to write to key-value store while it is being used")
+            .expect("Failed to write to memory store")
     }
 
     fn mocked_try_query_application(
