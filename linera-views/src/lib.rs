@@ -71,7 +71,7 @@ pub mod test_utils;
 
 /// Macros used for the library.
 #[doc(hidden)]
-pub use {async_trait::async_trait, futures, generic_array, serde, sha3, linera_base::crypto};
+pub use {async_trait::async_trait, futures, generic_array, linera_base::crypto, serde, sha3};
 
 /// Does nothing. Use the metrics feature to enable.
 #[cfg(not(feature = "metrics"))]
