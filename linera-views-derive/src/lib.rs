@@ -42,10 +42,10 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         .expect("failed to find the first generic parameter");
 
     let mut names = Vec::new();
-    let mut loades_a = Vec::new();
-    let mut loades_b = Vec::new();
-    let mut loades_c = Vec::new();
-    let mut loades_d = Vec::new();
+    let mut loades_futures = Vec::new();
+    let mut loades_ident = Vec::new();
+    let mut loades_results = Vec::new();
+    let mut loades_wasm = Vec::new();
     let mut rollbackes = Vec::new();
     let mut flushes = Vec::new();
     let mut deletes = Vec::new();
@@ -55,18 +55,18 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         let fut = format_ident!("{}_fut", name.to_string());
         let idx_lit = syn::LitInt::new(&idx.to_string(), Span::call_site());
         let type_ident = get_type_field(e).expect("Failed to find the type");
-        loades_a.push(quote! {
+        loades_futures.push(quote! {
             let index = #idx_lit;
             let base_key = context.derive_key(&index)?;
             let #fut = #type_ident::load(context.clone_with_base_key(base_key));
         });
-        loades_b.push(quote! {
+        loades_ident.push(quote! {
             #fut
         });
-        loades_c.push(quote! {
+        loades_results.push(quote! {
             let #name = result.#idx_lit?;
         });
-        loades_d.push(quote! {
+        loades_wasm.push(quote! {
             let index = #idx_lit;
             let base_key = context.derive_key(&index)?;
             let #name = #type_ident::load(context.clone_with_base_key(base_key)).await?;
@@ -108,16 +108,16 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             async fn load(context: #first_generic) -> Result<Self, linera_views::views::ViewError> {
                 #increment_counter
                 use linera_views::futures::join;
-                #(#loades_a)*
-                let result = join!(#(#loades_b),*);
-                #(#loades_c)*
+                #(#loades_futures)*
+                let result = join!(#(#loades_ident),*);
+                #(#loades_results)*
                 Ok(Self {#(#names),*})
             }
 
             #[cfg(target_arch = "wasm32")]
             async fn load(context: #first_generic) -> Result<Self, linera_views::views::ViewError> {
                 #increment_counter
-                #(#loades_d)*
+                #(#loades_wasm)*
                 Ok(Self {#(#names),*})
             }
 
