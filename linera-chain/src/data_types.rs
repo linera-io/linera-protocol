@@ -135,7 +135,7 @@ pub struct Target {
 pub struct ChannelFullName {
     /// The application owning the channel.
     pub application_id: ApplicationId,
-    /// the name of the channel.
+    /// The name of the channel.
     pub name: ChannelName,
 }
 

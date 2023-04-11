@@ -143,7 +143,7 @@ where
     pub async fn validate_incoming_messages(&mut self) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         for origin in self.inboxes.indices().await? {
-            let inbox = self.inboxes.try_load_entry(&origin).await?;
+            let inbox = self.inboxes.load_entry(&origin).await?;
             let event = inbox.removed_events.front().await?;
             ensure!(
                 event.is_none(),
@@ -161,7 +161,7 @@ where
         &mut self,
         origin: Origin,
     ) -> Result<BlockHeight, ChainError> {
-        let inbox = self.inboxes.try_load_entry(&origin).await?;
+        let inbox = self.inboxes.load_entry(&origin).await?;
         inbox.next_block_height_to_receive()
     }
 
@@ -169,7 +169,7 @@ where
         &mut self,
         origin: Origin,
     ) -> Result<Option<BlockHeight>, ChainError> {
-        let inbox = self.inboxes.try_load_entry(&origin).await?;
+        let inbox = self.inboxes.load_entry(&origin).await?;
         match inbox.removed_events.back().await? {
             Some(event) => Ok(Some(event.height)),
             None => Ok(None),

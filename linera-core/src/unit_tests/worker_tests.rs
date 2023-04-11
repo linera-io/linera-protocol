@@ -132,7 +132,7 @@ fn make_block(
         epoch,
         chain_id,
         incoming_messages,
-        operations: operations.into_iter().map(|x| x.into()).collect(),
+        operations: operations.into_iter().map(Into::into).collect(),
         previous_block_hash,
         height,
         authenticated_signer,
