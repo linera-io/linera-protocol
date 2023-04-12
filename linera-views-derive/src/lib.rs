@@ -77,7 +77,9 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         delete_quotes.push(quote! { self.#name.delete(batch); });
         clear_quotes.push(quote! { self.#name.clear(); });
     }
-    let first_name_quote = name_quotes.get(0).expect("list of names should be non-empty");
+    let first_name_quote = name_quotes
+        .get(0)
+        .expect("list of names should be non-empty");
 
     let increment_counter = if root {
         quote! {
