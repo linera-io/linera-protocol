@@ -2587,6 +2587,7 @@ dependencies = [
  "tokio",
  "wasmtime",
  "wit-bindgen-guest-rust",
+ "wit-bindgen-host-wasmtime-rust",
 ]
 
 [[package]]

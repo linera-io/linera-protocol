@@ -27,6 +27,8 @@
 #[cfg(target_arch = "wasm32")]
 compile_error!("The test runner is meant to be compiled for the host target");
 
+mod mock_system_api;
+
 use anyhow::{bail, Result};
 use std::process::ExitCode;
 use wasmtime::*;
@@ -44,6 +46,8 @@ async fn main() -> Result<ExitCode> {
     let mut linker = Linker::new(&engine);
     let test_module = load_test_module(&engine)?;
     let tests: Vec<_> = test_module.exports().filter_map(Test::new).collect();
+
+    mock_system_api::add_to_linker(&mut linker)?;
 
     linker.define_unknown_imports_as_traps(&test_module)?;
 
