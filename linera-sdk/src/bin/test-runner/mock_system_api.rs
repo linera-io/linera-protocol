@@ -139,6 +139,32 @@ pub fn add_to_linker(linker: &mut Linker<()>) -> Result<()> {
             })
         },
     )?;
+    linker.func_wrap1_async(
+        "writable_system",
+        "read-system-balance: func() -> record { lower-half: u64, upper-half: u64 }",
+        move |mut caller: Caller<'_, ()>, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-read-system-balance: \
+                        func() -> record { lower-half: u64, upper-half: u64 }",
+                )
+                .expect(
+                    "Missing `mocked-read-system-balance` function in the module. \
+                    Please ensure `linera_sdk::test::mock_system_balance` was called",
+                );
+
+                let (result_offset,) = function
+                    .typed::<(), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-read-system-balance` function signature")
+                    .call_async(&mut caller, ())
+                    .await
+                    .expect("Failed to call `mocked-read-system-balance` function");
+
+                copy_memory_slices(&mut caller, result_offset, return_offset, 16);
+            })
+        },
+    )?;
 
     linker.func_wrap1_async(
         "queryable_system",
@@ -235,6 +261,32 @@ pub fn add_to_linker(linker: &mut Linker<()>) -> Result<()> {
                     .expect("Failed to call `mocked-application-parameters` function");
 
                 copy_memory_slices(&mut caller, result_offset, return_offset, 8);
+            })
+        },
+    )?;
+    linker.func_wrap1_async(
+        "queryable_system",
+        "read-system-balance: func() -> record { lower-half: u64, upper-half: u64 }",
+        move |mut caller: Caller<'_, ()>, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-read-system-balance: \
+                        func() -> record { lower-half: u64, upper-half: u64 }",
+                )
+                .expect(
+                    "Missing `mocked-read-system-balance` function in the module. \
+                    Please ensure `linera_sdk::test::mock_system_balance` was called",
+                );
+
+                let (result_offset,) = function
+                    .typed::<(), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-read-system-balance` function signature")
+                    .call_async(&mut caller, ())
+                    .await
+                    .expect("Failed to call `mocked-read-system-balance` function");
+
+                copy_memory_slices(&mut caller, result_offset, return_offset, 16);
             })
         },
     )?;
