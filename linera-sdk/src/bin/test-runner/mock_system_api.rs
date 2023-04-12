@@ -67,6 +67,53 @@ pub fn add_to_linker(linker: &mut Linker<()>) -> Result<()> {
             })
         },
     )?;
+    linker.func_wrap1_async(
+        "writable_system",
+        "application-id: func() -> record { \
+            bytecode-id: record { \
+                chain-id: record { part1: u64, part2: u64, part3: u64, part4: u64 }, \
+                height: u64, \
+                index: u32 \
+            }, \
+            creation: record { \
+                chain-id: record { part1: u64, part2: u64, part3: u64, part4: u64 }, \
+                height: u64, \
+                index: u32 \
+            } \
+        }",
+        move |mut caller: Caller<'_, ()>, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-application-id: func() -> record { \
+                        bytecode-id: record { \
+                            chain-id: record { part1: u64, part2: u64, part3: u64, part4: u64 }, \
+                            height: u64, \
+                            index: u32 \
+                        }, \
+                        creation: record { \
+                            chain-id: record { part1: u64, part2: u64, part3: u64, part4: u64 }, \
+                            height: u64, \
+                            index: u32 \
+                        } \
+                    }",
+                )
+                .expect(
+                    "Missing `mocked-application-id` function in the module. \
+                    Please ensure `linera_sdk::test::mock_application_id` was called",
+                );
+
+                let (result_offset,) = function
+                    .typed::<(), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-application-id` function signature")
+                    .call_async(&mut caller, ())
+                    .await
+                    .expect("Failed to call `mocked-application-id` function");
+
+                copy_memory_slices(&mut caller, result_offset, return_offset, 96);
+            })
+        },
+    )?;
 
     linker.func_wrap1_async(
         "queryable_system",
@@ -91,6 +138,53 @@ pub fn add_to_linker(linker: &mut Linker<()>) -> Result<()> {
                     .expect("Failed to call `mocked-chain-id` function");
 
                 copy_memory_slices(&mut caller, result_offset, return_offset, 32);
+            })
+        },
+    )?;
+    linker.func_wrap1_async(
+        "queryable_system",
+        "application-id: func() -> record { \
+            bytecode-id: record { \
+                chain-id: record { part1: u64, part2: u64, part3: u64, part4: u64 }, \
+                height: u64, \
+                index: u32 \
+            }, \
+            creation: record { \
+                chain-id: record { part1: u64, part2: u64, part3: u64, part4: u64 }, \
+                height: u64, \
+                index: u32 \
+            } \
+        }",
+        move |mut caller: Caller<'_, ()>, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-application-id: func() -> record { \
+                        bytecode-id: record { \
+                            chain-id: record { part1: u64, part2: u64, part3: u64, part4: u64 }, \
+                            height: u64, \
+                            index: u32 \
+                        }, \
+                        creation: record { \
+                            chain-id: record { part1: u64, part2: u64, part3: u64, part4: u64 }, \
+                            height: u64, \
+                            index: u32 \
+                        } \
+                    }",
+                )
+                .expect(
+                    "Missing `mocked-application-id` function in the module. \
+                    Please ensure `linera_sdk::test::mock_application_id` was called",
+                );
+
+                let (result_offset,) = function
+                    .typed::<(), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-application-id` function signature")
+                    .call_async(&mut caller, ())
+                    .await
+                    .expect("Failed to call `mocked-application-id` function");
+
+                copy_memory_slices(&mut caller, result_offset, return_offset, 96);
             })
         },
     )?;
