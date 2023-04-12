@@ -41,43 +41,43 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         .get(0)
         .expect("failed to find the first generic parameter");
 
-    let mut names = Vec::new();
-    let mut loades_futures = Vec::new();
-    let mut loades_ident = Vec::new();
-    let mut loades_results = Vec::new();
-    let mut loades_wasm = Vec::new();
-    let mut rollbackes = Vec::new();
-    let mut flushes = Vec::new();
-    let mut deletes = Vec::new();
-    let mut cleares = Vec::new();
+    let mut name_quotes = Vec::new();
+    let mut load_future_quotes = Vec::new();
+    let mut load_ident_quotes = Vec::new();
+    let mut load_result_quotes = Vec::new();
+    let mut load_wasm_quotes = Vec::new();
+    let mut rollback_quotes = Vec::new();
+    let mut flush_quotes = Vec::new();
+    let mut delete_quotes = Vec::new();
+    let mut clear_quotes = Vec::new();
     for (idx, e) in input.fields.into_iter().enumerate() {
         let name = e.clone().ident.unwrap();
         let fut = format_ident!("{}_fut", name.to_string());
         let idx_lit = syn::LitInt::new(&idx.to_string(), Span::call_site());
         let type_ident = get_type_field(e).expect("Failed to find the type");
-        loades_futures.push(quote! {
+        load_future_quotes.push(quote! {
             let index = #idx_lit;
             let base_key = context.derive_key(&index)?;
             let #fut = #type_ident::load(context.clone_with_base_key(base_key));
         });
-        loades_ident.push(quote! {
+        load_ident_quotes.push(quote! {
             #fut
         });
-        loades_results.push(quote! {
+        load_result_quotes.push(quote! {
             let #name = result.#idx_lit?;
         });
-        loades_wasm.push(quote! {
+        load_wasm_quotes.push(quote! {
             let index = #idx_lit;
             let base_key = context.derive_key(&index)?;
             let #name = #type_ident::load(context.clone_with_base_key(base_key)).await?;
         });
-        names.push(quote! { #name });
-        rollbackes.push(quote! { self.#name.rollback(); });
-        flushes.push(quote! { self.#name.flush(batch)?; });
-        deletes.push(quote! { self.#name.delete(batch); });
-        cleares.push(quote! { self.#name.clear(); });
+        name_quotes.push(quote! { #name });
+        rollback_quotes.push(quote! { self.#name.rollback(); });
+        flush_quotes.push(quote! { self.#name.flush(batch)?; });
+        delete_quotes.push(quote! { self.#name.delete(batch); });
+        clear_quotes.push(quote! { self.#name.clear(); });
     }
-    let first_name = names.get(0).expect("list of names should be non-empty");
+    let first_name_quote = name_quotes.get(0).expect("list of names should be non-empty");
 
     let increment_counter = if root {
         quote! {
@@ -101,41 +101,41 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             linera_views::views::ViewError: From<#first_generic::Error>,
         {
             fn context(&self) -> &#first_generic {
-                self.#first_name.context()
+                self.#first_name_quote.context()
             }
 
             #[cfg(not(target_arch = "wasm32"))]
             async fn load(context: #first_generic) -> Result<Self, linera_views::views::ViewError> {
                 #increment_counter
                 use linera_views::futures::join;
-                #(#loades_futures)*
-                let result = join!(#(#loades_ident),*);
-                #(#loades_results)*
-                Ok(Self {#(#names),*})
+                #(#load_future_quotes)*
+                let result = join!(#(#load_ident_quotes),*);
+                #(#load_result_quotes)*
+                Ok(Self {#(#name_quotes),*})
             }
 
             #[cfg(target_arch = "wasm32")]
             async fn load(context: #first_generic) -> Result<Self, linera_views::views::ViewError> {
                 #increment_counter
-                #(#loades_wasm)*
-                Ok(Self {#(#names),*})
+                #(#load_wasm_quotes)*
+                Ok(Self {#(#name_quotes),*})
             }
 
             fn rollback(&mut self) {
-                #(#rollbackes)*
+                #(#rollback_quotes)*
             }
 
             fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<(), linera_views::views::ViewError> {
-                #(#flushes)*
+                #(#flush_quotes)*
                 Ok(())
             }
 
             fn delete(self, batch: &mut linera_views::batch::Batch) {
-                #(#deletes)*
+                #(#delete_quotes)*
             }
 
             fn clear(&mut self) {
-                #(#cleares)*
+                #(#clear_quotes)*
             }
         }
     }

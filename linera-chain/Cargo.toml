@@ -23,4 +23,4 @@ tokio = "1.25.0"
 linera-chain = { path = ".", features = ["test"] }
 
 [package.metadata.cargo-machete]
-ignored = ["async-trait", "futures"]
+ignored = ["async-trait"]
