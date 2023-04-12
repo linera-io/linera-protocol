@@ -2,8 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::identifiers::{ChainId, Owner};
+use async_graphql::InputType;
+use linera_base::identifiers::{BytecodeId, ChainId, EffectId, Owner};
 use linera_chain::data_types::Certificate;
+use linera_execution::Bytecode;
 use linera_service::config::WalletState;
 #[cfg(feature = "aws")]
 use linera_views::test_utils::LocalStackTestContext;
@@ -177,7 +179,9 @@ impl Client {
             .args(["--bin", "client"])
             .arg("--")
             .args(["--wallet", &self.wallet])
-            .args(["--genesis", &self.genesis]);
+            .args(["--genesis", &self.genesis])
+            .args(["--send-timeout-us", "10000000"])
+            .args(["--recv-timeout-us", "10000000"]);
         command
     }
 
@@ -243,10 +247,18 @@ impl Client {
         .await;
     }
 
-    async fn run_node_service<I: Into<Option<ChainId>>>(&self, chain_id: I) -> Child {
+    async fn run_node_service<I, P>(&self, chain_id: I, port: P) -> Child
+    where
+        I: Into<Option<ChainId>>,
+        P: Into<Option<u16>>,
+    {
         self.client_run_with_storage()
             .arg("service")
             .args(chain_id.into().as_ref().map(ChainId::to_string))
+            .args([
+                "--port".to_string(),
+                port.into().unwrap_or(8080).to_string(),
+            ])
             .spawn()
             .unwrap()
     }
@@ -569,7 +581,11 @@ impl TestRunner {
     }
 }
 
-async fn get_application_uri<I: Into<Option<ChainId>>>(chain_id: I) -> String {
+async fn get_application_uri<I, P>(chain_id: I, port: P) -> String
+where
+    I: Into<Option<ChainId>>,
+    P: Into<Option<u16>>,
+{
     let query_string = if let Some(chain_id) = chain_id.into() {
         format!(
             "query {{ applications(chainId: \"{}\") {{ link }}}}",
@@ -581,7 +597,7 @@ async fn get_application_uri<I: Into<Option<ChainId>>>(chain_id: I) -> String {
     let query = json!({ "query": query_string });
     let client = reqwest::Client::new();
     let res = client
-        .post("http://localhost:8080/")
+        .post(format!("http://localhost:{}/", port.into().unwrap_or(8080)))
         .json(&query)
         .send()
         .await
@@ -599,6 +615,71 @@ async fn get_application_uri<I: Into<Option<ChainId>>>(chain_id: I) -> String {
         .get("link")
         .unwrap();
     application_uri.as_str().unwrap().to_string()
+}
+
+async fn publish_application<P>(contract: PathBuf, service: PathBuf, port: P) -> Certificate
+where
+    P: Into<Option<u16>>,
+{
+    let contract_code = Bytecode::load_from_file(&contract).await.unwrap();
+    let service_code = Bytecode::load_from_file(&service).await.unwrap();
+    let query_string = format!(
+        "mutation {{ publishBytecodes(contract: {}, service: {}) }}",
+        contract_code.to_value(),
+        service_code.to_value(),
+    );
+    let query = json!({ "query": query_string });
+    let client = reqwest::Client::new();
+    let res = client
+        .post(format!("http://localhost:{}/", port.into().unwrap_or(8080)))
+        .json(&query)
+        .send()
+        .await
+        .unwrap();
+    let response_body: Value = res.json().await.unwrap();
+    if let Some(errors) = response_body.get("errors") {
+        let mut error_string = errors.to_string();
+        if error_string.len() > 10000 {
+            error_string = format!(
+                "{}..{}",
+                &error_string[..5000],
+                &error_string[(error_string.len() - 5000)..]
+            );
+        }
+        panic!("publish_application failed: {}", error_string);
+    }
+    serde_json::from_value(
+        response_body
+            .get("data")
+            .unwrap()
+            .get("publishBytecodes")
+            .unwrap()
+            .clone(),
+    )
+    .unwrap()
+}
+
+async fn create_application<P>(bytecode_id: BytecodeId, port: P)
+where
+    P: Into<Option<u16>>,
+{
+    let query_string = format!(
+        "mutation {{ createApplication(bytecodeId: {}, parameters: [], \
+        initializationArgument: [], requiredApplicationIds: []) }}",
+        bytecode_id.to_value(),
+    );
+    let query = json!({ "query": query_string });
+    let client = reqwest::Client::new();
+    let res = client
+        .post(format!("http://localhost:{}/", port.into().unwrap_or(8080)))
+        .json(&query)
+        .send()
+        .await
+        .unwrap();
+    let response_body: Value = res.json().await.unwrap();
+    if let Some(errors) = response_body.get("errors") {
+        panic!("create_application failed: {}", errors);
+    }
 }
 
 async fn get_counter_value(application_uri: &str) -> u64 {
@@ -668,12 +749,12 @@ async fn end_to_end() {
     client
         .publish_application(contract, service, original_counter_value, None)
         .await;
-    let _node_service = client.run_node_service(None).await;
+    let _node_service = client.run_node_service(None, None).await;
 
     // wait for node service to start
     tokio::time::sleep(Duration::from_millis(3_000)).await;
 
-    let application_uri = get_application_uri(None).await;
+    let application_uri = get_application_uri(None, None).await;
 
     let counter_value = get_counter_value(&application_uri).await;
     assert_eq!(counter_value, original_counter_value);
@@ -826,66 +907,55 @@ async fn social_user_pub_sub() {
 
     let network = Network::Grpc;
     let runner = TestRunner::new(network);
-    let client = Client::new(runner.tmp_dir(), network, 1);
+    let client1 = Client::new(runner.tmp_dir(), network, 1);
+    let client2 = Client::new(runner.tmp_dir(), network, 2);
 
+    // Create initial server and client config.
     runner.generate_initial_server_config().await;
-    client.generate_client_config().await;
+    client1.generate_client_config().await;
+
+    // Start local network.
     let _local_net = runner.run_local_net();
     let (contract, service) = runner.build_application("social").await;
 
     // wait for net to start
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    let chain1 = client1.get_wallet().default_chain().unwrap();
+    let client2key = client2.keygen().await.unwrap();
+
+    // Open chain on behalf of Client 2.
+    let (chain2, cert) = client1.open_chain(chain1, Some(client2key)).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    // Assign chain_2 to client_2_key.
+    client2.assign(client2key, chain2, cert).await.unwrap();
+
+    let _node_service1 = client1.run_node_service(chain1, 8080).await;
+    let _node_service2 = client2.run_node_service(chain2, 8081).await;
     tokio::time::sleep(Duration::from_secs(10)).await;
 
-    let chain1 = client.get_wallet().default_chain().unwrap();
-    let (chain2, _) = client.open_chain(chain1, None).await.unwrap();
-
-    client
-        .publish_application(contract, service, "00", chain1)
-        .await;
-
-    let mut node_service = client.run_node_service(chain1).await;
+    let cert = publish_application(contract, service, 8080).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    assert_eq!(cert.value.effects().len(), 1);
+    let bytecode_id = BytecodeId(EffectId {
+        chain_id: chain1,
+        height: cert.value.block().height,
+        index: 0,
+    });
+    create_application(bytecode_id, 8080).await;
     tokio::time::sleep(Duration::from_secs(2)).await;
-    let app1 = get_application_uri(chain1).await;
+
+    let app1 = get_application_uri(chain1, 8080).await;
     let query = format!("mutation {{ subscribe(chainId: \"{}\") }}", chain2);
     query_application(&app1, &query).await;
-    tokio::process::Command::new("kill")
-        .args(["-s", "INT", &node_service.id().unwrap().to_string()])
-        .spawn()
-        .unwrap()
-        .wait()
-        .await
-        .unwrap();
-    node_service.kill().await.unwrap();
-
-    client.synchronize_balance(chain1).await;
-    client.transfer(2, chain1, chain2).await;
-    tokio::time::sleep(Duration::from_secs(2)).await;
-    client.synchronize_balance(chain2).await;
-    client.transfer(1, chain2, chain1).await;
     tokio::time::sleep(Duration::from_secs(2)).await;
 
-    let mut node_service = client.run_node_service(chain2).await;
-    tokio::time::sleep(Duration::from_secs(2)).await;
-    let app2 = get_application_uri(chain2).await;
+    let app2 = get_application_uri(chain2, 8081).await;
     let query = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
     query_application(&app2, query).await;
     tokio::time::sleep(Duration::from_secs(2)).await;
-    tokio::process::Command::new("kill")
-        .args(["-s", "INT", &node_service.id().unwrap().to_string()])
-        .spawn()
-        .unwrap()
-        .wait()
-        .await
-        .unwrap();
-    node_service.kill().await.unwrap();
 
-    client.synchronize_balance(chain1).await;
-    client.transfer(1, chain1, chain2).await;
-    tokio::time::sleep(Duration::from_secs(2)).await;
-
-    let _node_service = client.run_node_service(chain1).await;
-    tokio::time::sleep(Duration::from_secs(2)).await;
-    let app1 = get_application_uri(chain1).await;
     let query = "query { receivedPostsKeys(count: 5) { author, index } }";
     let expected_response = json!({"data": { "receivedPostsKeys": [
         { "author": chain2, "index": 0 }
