@@ -16,7 +16,7 @@ use axum::{
     routing::get,
     Extension, Router, Server,
 };
-use futures::lock::Mutex;
+use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::PublicKey,
     data_types::Amount,
@@ -25,7 +25,7 @@ use linera_base::{
 use linera_chain::{data_types::Certificate, ChainStateView};
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
-    worker::Notification,
+    worker::{Notification, Reason},
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -39,6 +39,8 @@ use std::{collections::BTreeMap, net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info};
+
+use crate::tracker::NotificationTracker;
 
 /// Our root GraphQL query type.
 struct QueryRoot<P, S>(Arc<NodeService<P, S>>);
@@ -245,7 +247,7 @@ where
         self.execute_system_operation(operation).await
     }
 
-    /// Unsubscribes to a system channel.
+    /// Unsubscribes from a system channel.
     async fn unsubscribe(
         &self,
         chain_id: ChainId,
@@ -557,9 +559,11 @@ where
     }
 
     /// Run the node service.
-    pub async fn run(self) -> Result<(), anyhow::Error> {
+    pub async fn run(mut self) -> Result<(), anyhow::Error> {
         let port = self.port.get();
+        let chain_id = self.client.get_mut().chain_id();
         let service = Arc::new(self);
+        let service_sync = service.clone();
 
         let index_handler = get(graphiql).post(index_handler::<P, S>);
         let applications_handler = get(graphiql).post(application_handler::<P, S>);
@@ -581,9 +585,61 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        Server::bind(&SocketAddr::from(([127, 0, 0, 1], port)))
-            .serve(app.into_make_service())
-            .await?;
+        // TODO: Deduplicate with client.rs Synchronize handling.
+        let sync_fut =
+            async move {
+                let mut notification_stream = service_sync
+                    .client
+                    .lock()
+                    .await
+                    .subscribe_all(vec![chain_id])
+                    .await?;
+                let mut tracker = NotificationTracker::default();
+                while let Some(notification) = notification_stream.next().await {
+                    tracing::debug!("Received notification: {:?}", notification);
+                    let mut client = service_sync.client.lock().await;
+                    if tracker.insert(notification.clone()) {
+                        if let Err(e) = client.synchronize_and_recompute_balance().await {
+                            tracing::warn!(
+                            "Failed to synchronize and recompute balance for notification {:?} \
+                            with error: {:?}",
+                            notification,
+                            e
+                        );
+                            // If synchronization failed there is nothing to update validators
+                            // about.
+                            continue;
+                        }
+                        match &notification.reason {
+                            Reason::NewBlock { .. } => {
+                                if let Err(e) = client.update_validators_about_local_chain().await {
+                                    tracing::warn!(
+                                        "Failed to update validators about the local chain after \
+                                    receiving notification {:?} with error: {:?}",
+                                        notification,
+                                        e
+                                    );
+                                }
+                            }
+                            Reason::NewMessage { .. } => {
+                                if let Err(e) = client.process_inbox().await {
+                                    tracing::warn!(
+                                    "Failed to process inbox after receiving new message: {:?} \
+                                    with error: {:?}", notification, e);
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok::<(), anyhow::Error>(())
+            };
+
+        let serve_fut =
+            Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
+
+        let (serve_res, sync_res) = futures::join!(serve_fut, sync_fut);
+        serve_res?;
+        sync_res?;
 
         Ok(())
     }
