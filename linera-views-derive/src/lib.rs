@@ -8,7 +8,7 @@ extern crate syn;
 use crate::util::{create_entry_name, snakify};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{parse_macro_input, Field, GenericArgument, ItemStruct, PathArguments, Type, TypePath};
 
 fn get_seq_parameter(generics: syn::Generics) -> Vec<syn::Ident> {
@@ -41,28 +41,45 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         .get(0)
         .expect("failed to find the first generic parameter");
 
-    let mut names = Vec::new();
-    let mut loades = Vec::new();
-    let mut rollbackes = Vec::new();
-    let mut flushes = Vec::new();
-    let mut deletes = Vec::new();
-    let mut cleares = Vec::new();
+    let mut name_quotes = Vec::new();
+    let mut load_future_quotes = Vec::new();
+    let mut load_ident_quotes = Vec::new();
+    let mut load_result_quotes = Vec::new();
+    let mut load_wasm_quotes = Vec::new();
+    let mut rollback_quotes = Vec::new();
+    let mut flush_quotes = Vec::new();
+    let mut delete_quotes = Vec::new();
+    let mut clear_quotes = Vec::new();
     for (idx, e) in input.fields.into_iter().enumerate() {
         let name = e.clone().ident.unwrap();
+        let fut = format_ident!("{}_fut", name.to_string());
         let idx_lit = syn::LitInt::new(&idx.to_string(), Span::call_site());
         let type_ident = get_type_field(e).expect("Failed to find the type");
-        loades.push(quote! {
+        load_future_quotes.push(quote! {
+            let index = #idx_lit;
+            let base_key = context.derive_key(&index)?;
+            let #fut = #type_ident::load(context.clone_with_base_key(base_key));
+        });
+        load_ident_quotes.push(quote! {
+            #fut
+        });
+        load_result_quotes.push(quote! {
+            let #name = result.#idx_lit?;
+        });
+        load_wasm_quotes.push(quote! {
             let index = #idx_lit;
             let base_key = context.derive_key(&index)?;
             let #name = #type_ident::load(context.clone_with_base_key(base_key)).await?;
         });
-        names.push(quote! { #name });
-        rollbackes.push(quote! { self.#name.rollback(); });
-        flushes.push(quote! { self.#name.flush(batch)?; });
-        deletes.push(quote! { self.#name.delete(batch); });
-        cleares.push(quote! { self.#name.clear(); });
+        name_quotes.push(quote! { #name });
+        rollback_quotes.push(quote! { self.#name.rollback(); });
+        flush_quotes.push(quote! { self.#name.flush(batch)?; });
+        delete_quotes.push(quote! { self.#name.delete(batch); });
+        clear_quotes.push(quote! { self.#name.clear(); });
     }
-    let first_name = names.get(0).expect("list of names should be non-empty");
+    let first_name_quote = name_quotes
+        .get(0)
+        .expect("list of names should be non-empty");
 
     let increment_counter = if root {
         quote! {
@@ -76,6 +93,8 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         quote! {}
     };
 
+    // See TODO(#599) for the problem that we have with respect to the use of
+    // true async code for loading.
     quote! {
         #[async_trait::async_trait]
         impl #generics linera_views::views::View<#first_generic> for #struct_name #generics
@@ -84,30 +103,41 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             linera_views::views::ViewError: From<#first_generic::Error>,
         {
             fn context(&self) -> &#first_generic {
-                self.#first_name.context()
+                self.#first_name_quote.context()
             }
 
+            #[cfg(not(target_arch = "wasm32"))]
             async fn load(context: #first_generic) -> Result<Self, linera_views::views::ViewError> {
                 #increment_counter
-                #(#loades)*
-                Ok(Self {#(#names),*})
+                use linera_views::futures::join;
+                #(#load_future_quotes)*
+                let result = join!(#(#load_ident_quotes),*);
+                #(#load_result_quotes)*
+                Ok(Self {#(#name_quotes),*})
+            }
+
+            #[cfg(target_arch = "wasm32")]
+            async fn load(context: #first_generic) -> Result<Self, linera_views::views::ViewError> {
+                #increment_counter
+                #(#load_wasm_quotes)*
+                Ok(Self {#(#name_quotes),*})
             }
 
             fn rollback(&mut self) {
-                #(#rollbackes)*
+                #(#rollback_quotes)*
             }
 
             fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<(), linera_views::views::ViewError> {
-                #(#flushes)*
+                #(#flush_quotes)*
                 Ok(())
             }
 
             fn delete(self, batch: &mut linera_views::batch::Batch) {
-                #(#deletes)*
+                #(#delete_quotes)*
             }
 
             fn clear(&mut self) {
-                #(#cleares)*
+                #(#clear_quotes)*
             }
         }
     }
@@ -566,6 +596,31 @@ pub mod tests {
                 fn context(&self) -> &C {
                     self.register.context()
                 }
+                #[cfg(not(target_arch = "wasm32"))]
+                async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
+                    linera_views::increment_counter(
+                        linera_views::LOAD_VIEW_COUNTER,
+                        stringify!(TestView),
+                        &context.base_key(),
+                    );
+                    use linera_views::futures::join;
+                    let index = 0;
+                    let base_key = context.derive_key(&index)?;
+                    let register_fut =
+                        RegisterView::load(context.clone_with_base_key(base_key));
+                    let index = 1;
+                    let base_key = context.derive_key(&index)?;
+                    let collection_fut =
+                        CollectionView::load(context.clone_with_base_key(base_key));
+                    let result = join!(register_fut, collection_fut);
+                    let register = result.0?;
+                    let collection = result.1?;
+                    Ok(Self {
+                        register,
+                        collection
+                    })
+                }
+                #[cfg(target_arch = "wasm32")]
                 async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
                     linera_views::increment_counter(
                         linera_views::LOAD_VIEW_COUNTER,
