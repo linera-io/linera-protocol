@@ -373,9 +373,7 @@ where
     }
 
     fn derive_short_key<I: Serialize + ?Sized>(index: &I) -> Result<Vec<u8>, Self::Error> {
-        let mut key = Vec::new();
-        bcs::serialize_into(&mut key, index)?;
-        Ok(key)
+        Ok(bcs::to_bytes(index)?)
     }
 
     fn deserialize_value<Item: DeserializeOwned>(bytes: &[u8]) -> Result<Item, Self::Error> {
