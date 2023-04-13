@@ -33,6 +33,7 @@ thiserror = "1.0.31"
 tokio = "1.25.0"
 tokio-util = { version = "0.6.9", features = ["codec", "net"] }
 tonic = "0.8"
+tonic-health = "0.8"
 
 [dev-dependencies]
 linera-rpc = { path = ".", features = ["test"] }

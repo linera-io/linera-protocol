@@ -40,6 +40,7 @@ tokio = { version = "1.25.0", features = ["full"] }
 tokio-stream = "0.1.11"
 toml = "0.7.3"
 tonic = "0.8"
+tonic-health = "0.8"
 tower-http = { version = "0.4.0", features = ["cors"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 comfy-table = "6.1.4"
@@ -56,6 +57,7 @@ once_cell = "1.17.1"
 proptest = "1.0.0"
 reqwest = { version = "0.11.14", features = ["json"] }
 tempfile = "3.2.0"
+test-log = { version = "0.2.11", default-features = false, features = ["trace"] }
 test-strategy = "0.2.0"
 tokio = { version = "1.25.0", features = ["full", "test-util"] }
 
