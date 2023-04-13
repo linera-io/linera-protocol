@@ -115,10 +115,7 @@ impl GrpcProxy {
     where
         R: Debug + Proxyable,
     {
-        debug!(
-            "handler [ValidatorWorker] proxying request from {:?}",
-            request.remote_addr()
-        );
+        debug!("proxying request from {:?}", request.remote_addr());
         let inner = request.into_inner();
         let shard = self
             .shard_for(&inner)
