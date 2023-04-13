@@ -20,8 +20,6 @@ host = "validator-${server}"
 port = 9100
 internal_host = "validator-${server}"
 internal_port = 10100
-metrics_host = "validator-${server}"
-metrics_port = 11100
 external_protocol = { Simple = "Tcp" }
 internal_protocol = { Simple = "Tcp" }
 EOF
@@ -31,6 +29,8 @@ EOF
 [[shards]]
 host = "server-${server}-shard-${shard}.server-${server}"
 port = 9100
+metrics_host = "server-${server}-shard-${shard}.server-${server}"
+metrics_port = 11100
 EOF
         done
         echo "validator_${server}.toml"

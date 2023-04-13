@@ -3,23 +3,29 @@ host = "127.0.0.1"
 port = 9100
 internal_host = "127.0.0.1"
 internal_port = 10100
-metrics_host = "127.0.0.1"
-metrics_port = 11100
 external_protocol = "Grpc"
 internal_protocol = "Grpc"
 
 [[shards]]
 host = "127.0.0.1"
 port = 9101
+metrics_host = "127.0.0.1"
+metrics_port = 11101
 
 [[shards]]
 host = "127.0.0.1"
 port = 9102
+metrics_host = "127.0.0.1"
+metrics_port = 11102
 
 [[shards]]
 host = "127.0.0.1"
 port = 9103
+metrics_host = "127.0.0.1"
+metrics_port = 11103
 
 [[shards]]
 host = "127.0.0.1"
 port = 9104
+metrics_host = "127.0.0.1"
+metrics_port = 11104

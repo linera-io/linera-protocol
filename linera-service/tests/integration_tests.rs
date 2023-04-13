@@ -446,20 +446,21 @@ impl TestRunner {
                 port = {port}
                 internal_host = "127.0.0.1"
                 internal_port = {internal_port}
-                metrics_host = "127.0.0.1"
-                metrics_port = {metrics_port}
                 external_protocol = {external_protocol}
                 internal_protocol = {internal_protocol}
             "#
         );
         for k in 1..=4 {
             let shard_port = port + k;
+            let shard_metrics_port = metrics_port + k;
             content.push_str(&format!(
                 r#"
                 
                 [[shards]]
                 host = "127.0.0.1"
                 port = {shard_port}
+                metrics_host = "127.0.0.1"
+                metrics_port = {shard_metrics_port}
                 "#
             ));
         }

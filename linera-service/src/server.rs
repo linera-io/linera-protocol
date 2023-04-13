@@ -81,6 +81,23 @@ impl ServerContext {
             let internal_network = internal_network.clone();
             let cross_chain_config = self.cross_chain_config.clone();
             handles.push(async move {
+                if let Some(port) = shard.metrics_port {
+                    let host = &shard.metrics_host;
+                    match format!("{}:{}", host, port).parse::<SocketAddr>() {
+                        Err(err) => error!("Invalid metrics address: {err}"),
+                        Ok(address) => {
+                            if let Err(error) = metrics_exporter_tcp::TcpBuilder::new()
+                                .listen_address(address)
+                                .install()
+                            {
+                                tracing::warn!(
+                                    ?error, %address,
+                                    "Could not install TCP metrics exporter."
+                                );
+                            }
+                        }
+                    }
+                }
                 let server = simple_network::Server::new(
                     internal_network,
                     listen_address.to_string(),
@@ -214,12 +231,6 @@ struct ValidatorOptions {
     /// The port of the proxy on the internal network.
     internal_port: u16,
 
-    /// The host on which metrics are served.
-    metrics_host: String,
-
-    /// The port on which metrics are served.
-    metrics_port: Option<u16>,
-
     /// The network protocol for the frontend.
     external_protocol: NetworkProtocol,
 
@@ -241,8 +252,6 @@ fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
         shards: options.shards,
         host: options.internal_host,
         port: options.internal_port,
-        metrics_host: options.metrics_host,
-        metrics_port: options.metrics_port,
     };
     let key = KeyPair::generate();
     let name = ValidatorName(key.public());
@@ -337,18 +346,6 @@ async fn main() {
                 .expect("Fail to read initial chain config");
             let server_config = ValidatorServerConfig::read(&server_config_path)
                 .expect("Fail to read server config");
-            if let Some(port) = server_config.internal_network.metrics_port {
-                let host = &server_config.internal_network.metrics_host;
-                let address: SocketAddr = format!("{}:{}", host, port)
-                    .parse()
-                    .expect("Invalid metrics address");
-                if let Err(error) = metrics_exporter_tcp::TcpBuilder::new()
-                    .listen_address(address)
-                    .install()
-                {
-                    tracing::warn!(?error, %address, "Could not install TCP metrics exporter.");
-                }
-            }
             let job = ServerContext {
                 server_config,
                 cross_chain_config,
@@ -409,18 +406,20 @@ mod test {
             port = 9000
             internal_host = "internal_host"
             internal_port = 10000
-            metrics_host = "metrics_host"
-            metrics_port = 5000
             external_protocol = { Simple = "Tcp" }
             internal_protocol = { Simple = "Udp" }
 
             [[shards]]
             host = "host1"
             port = 9001
+            metrics_host = "metrics_host1"
+            metrics_port = 5001
 
             [[shards]]
             host = "host2"
             port = 9002
+            metrics_host = "metrics_host2"
+            metrics_port = 5002
         "#;
         let options: ValidatorOptions = toml::from_str(toml_str).unwrap();
         assert_eq!(
@@ -437,14 +436,16 @@ mod test {
                     ShardConfig {
                         host: "host1".into(),
                         port: 9001,
+                        metrics_host: "metrics_host1".into(),
+                        metrics_port: Some(5001),
                     },
                     ShardConfig {
                         host: "host2".into(),
                         port: 9002,
+                        metrics_host: "metrics_host2".into(),
+                        metrics_port: Some(5002),
                     },
                 ],
-                metrics_host: "metrics_host".into(),
-                metrics_port: Some(5000),
             }
         );
     }
