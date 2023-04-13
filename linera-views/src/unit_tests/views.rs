@@ -8,6 +8,7 @@ use crate::{
     queue_view::QueueView,
     rocksdb::RocksdbContext,
     views::{View, ViewError},
+    rocksdb::RocksdbClient,
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -203,12 +204,8 @@ impl TestContextFactory for RocksdbContextFactory {
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let directory = TempDir::new()?;
-        let mut options = rocksdb::Options::default();
-        options.create_if_missing(true);
-        let db =
-            rocksdb::DBWithThreadMode::<rocksdb::MultiThreaded>::open(&options, directory.path())?;
-
-        let context = RocksdbContext::new(Arc::new(db), vec![], ());
+        let client = RocksdbClient::new(directory.path());
+        let context = RocksdbContext::new(client, vec![], ());
 
         self.temporary_directories.push(directory);
 

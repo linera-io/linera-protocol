@@ -18,7 +18,7 @@ use linera_views::{
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
-    rocksdb::{RocksdbContext, DB},
+    rocksdb::{RocksdbContext, RocksdbClient},
     set_view::SetView,
     test_utils::{
         get_random_byte_vector, get_random_key_value_operations, get_random_key_value_vec,
@@ -124,14 +124,14 @@ impl StateStore for LruMemoryStore {
 }
 
 pub struct RocksdbTestStore {
-    db: Arc<DB>,
+    db: RocksdbClient,
     accessed_chains: BTreeSet<usize>,
 }
 
 impl RocksdbTestStore {
-    fn new(db: DB) -> Self {
+    fn new(db: RocksdbClient) -> Self {
         Self {
-            db: Arc::new(db),
+            db,
             accessed_chains: BTreeSet::new(),
         }
     }
@@ -630,11 +630,9 @@ async fn test_views_in_key_value_store_view_memory() {
 async fn test_views_in_rocksdb_param(config: &TestConfig) {
     tracing::warn!("Testing config {:?} with rocksdb", config);
     let dir = tempfile::TempDir::new().unwrap();
-    let mut options = rocksdb::Options::default();
-    options.create_if_missing(true);
+    let client = RocksdbClient::new(&dir);
 
-    let db = DB::open(&options, &dir).unwrap();
-    let mut store = RocksdbTestStore::new(db);
+    let mut store = RocksdbTestStore::new(client);
     let hash = test_store(&mut store, config).await;
     assert_eq!(store.accessed_chains.len(), 1);
 
@@ -713,11 +711,9 @@ async fn test_store_rollback() {
     test_store_rollback_kernel(&mut store).await;
 
     let dir = tempfile::TempDir::new().unwrap();
-    let mut options = rocksdb::Options::default();
-    options.create_if_missing(true);
+    let client = RocksdbClient::new(&dir);
 
-    let db = DB::open(&options, &dir).unwrap();
-    let mut store = RocksdbTestStore::new(db);
+    let mut store = RocksdbTestStore::new(client);
     test_store_rollback_kernel(&mut store).await;
 }
 

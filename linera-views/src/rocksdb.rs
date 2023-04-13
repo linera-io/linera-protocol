@@ -11,18 +11,53 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
+use std::path::Path;
 
 /// The RocksDb client in use.
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
+/// The internal client
+pub type DbInternal = Arc<DB>;
+
 /// A shared DB client for RocksDB.
-pub type RocksdbClient = Arc<DB>;
+#[cfg(not(feature = "lru_caching"))]
+#[derive(Clone)]
+pub struct RocksdbClient {
+    client: DbInternal,
+}
+
+#[cfg(feature = "lru_caching")]
+pub type RocksdbClient = LruCachingKeyValueClient<DbInternal>;
+
+#[cfg(not(feature = "lru_caching"))]
+impl RocksdbClient {
+    /// Create a rocksdb database from a path
+    pub fn new<P: AsRef<Path>>(path: P) -> RocksdbClient {
+        let mut options = rocksdb::Options::default();
+        options.create_if_missing(true);
+        let db = DB::open(&options, path).unwrap();
+        Self { client: Arc::new(db) }
+    }
+}
+
+#[cfg(feature = "lru_caching")]
+impl RocksdbClient {
+    /// Create a rocksdb database from a path
+    pub fn new<P: AsRef<Path>>(path: P) -> RocksdbClient {
+        let mut options = rocksdb::Options::default();
+        options.create_if_missing(true);
+        let db = DB::open(&options, path).unwrap();
+        let client = Arc::new(db);
+        let n = 1000;
+        LruCachingKeyValueClient::new(client, n);
+    }
+}
 
 /// An implementation of [`crate::common::Context`] based on Rocksdb
 pub type RocksdbContext<E> = ContextFromDb<E, RocksdbClient>;
 
 #[async_trait]
-impl KeyValueStoreClient for RocksdbClient {
+impl KeyValueStoreClient for DbInternal {
     type Error = RocksdbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -138,6 +173,45 @@ impl KeyValueStoreClient for RocksdbClient {
         Ok(())
     }
 }
+
+#[cfg(not(feature = "lru_caching"))]
+#[async_trait]
+impl KeyValueStoreClient for RocksdbClient {
+    type Error = RocksdbContextError;
+    type Keys = Vec<Vec<u8>>;
+    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksdbContextError> {
+        self.client.read_key_bytes(key).await
+    }
+
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, RocksdbContextError> {
+        self.client.find_keys_by_prefix(key_prefix).await
+    }
+
+    async fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValues, RocksdbContextError> {
+        self.client.find_key_values_by_prefix(key_prefix).await
+    }
+
+    async fn write_batch(
+        &self,
+        batch: Batch,
+        base_key: &[u8],
+    ) -> Result<(), RocksdbContextError> {
+        self.client.write_batch(batch, base_key).await
+    }
+
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
+        self.client.clear_journal(base_key).await
+    }
+}
+
 
 impl<E: Clone + Send + Sync> RocksdbContext<E> {
     /// Creates a [`RocksdbContext`].
