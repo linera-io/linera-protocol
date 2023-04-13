@@ -578,6 +578,7 @@ where
         let app = Router::new()
             .route("/", index_handler)
             .route("/applications/:id", applications_handler)
+            .route("/ready", axum::routing::get(|| async { "ready!" }))
             .route_service("/ws", GraphQLSubscription::new(schema.clone()))
             .layer(Extension(service))
             // TODO(#551): Provide application authentication.

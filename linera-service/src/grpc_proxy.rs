@@ -95,10 +95,15 @@ impl GrpcProxy {
     #[instrument(skip_all, fields(public_address = %self.public_address(), internal_address = %self.internal_address()), err)]
     pub async fn run(self) -> Result<()> {
         info!("Starting gRPC server");
+        let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+        health_reporter
+            .set_serving::<ValidatorNodeServer<GrpcProxy>>()
+            .await;
         let internal_server = Server::builder()
             .add_service(self.as_notifier_service())
             .serve(self.internal_address());
         let public_server = Server::builder()
+            .add_service(health_service)
             .add_service(self.as_validator_node())
             .serve(self.public_address());
         select! {
