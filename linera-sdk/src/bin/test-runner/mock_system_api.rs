@@ -188,6 +188,51 @@ pub fn add_to_linker(linker: &mut Linker<()>) -> Result<()> {
             })
         },
     )?;
+    linker.func_wrap3_async(
+        "writable_system",
+        "log: func(message: string, level: enum { trace, debug, info, warn, error }) -> unit",
+        move |mut caller: Caller<'_, ()>, message_address: i32, message_length: i32, level: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-log: func(\
+                        message: string, \
+                        level: enum { trace, debug, info, warn, error }\
+                    ) -> unit",
+                )
+                .expect(
+                    "Missing `mocked-log` function in the module. \
+                    Please ensure `linera_sdk` is compiled with the `test` feature enabled",
+                );
+
+                let alloc_function = get_function(&mut caller, "cabi_realloc").expect(
+                    "Missing `cabi_realloc` function in the module. \
+                    Please ensure `linera_sdk` is compiled in with the module",
+                );
+
+                let new_message_address = alloc_function
+                    .typed::<(i32, i32, i32, i32), i32, _>(&mut caller)
+                    .expect("Incorrect `cabi_realloc` function signature")
+                    .call_async(&mut caller, (0, 0, 1, message_length))
+                    .await
+                    .expect("Failed to call `cabi_realloc` function");
+
+                copy_memory_slices(
+                    &mut caller,
+                    message_address,
+                    new_message_address,
+                    message_length,
+                );
+
+                function
+                    .typed::<(i32, i32, i32), (), _>(&mut caller)
+                    .expect("Incorrect `mocked-log` function signature")
+                    .call_async(&mut caller, (new_message_address, message_length, level))
+                    .await
+                    .expect("Failed to call `mocked-log` function");
+            })
+        },
+    )?;
 
     linker.func_wrap1_async(
         "queryable_system",
@@ -333,6 +378,51 @@ pub fn add_to_linker(linker: &mut Linker<()>) -> Result<()> {
                     .expect("Failed to call `mocked-read-system-timestamp` function");
 
                 timestamp
+            })
+        },
+    )?;
+    linker.func_wrap3_async(
+        "queryable_system",
+        "log: func(message: string, level: enum { trace, debug, info, warn, error }) -> unit",
+        move |mut caller: Caller<'_, ()>, message_address: i32, message_length: i32, level: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-log: func(\
+                        message: string, \
+                        level: enum { trace, debug, info, warn, error }\
+                    ) -> unit",
+                )
+                .expect(
+                    "Missing `mocked-log` function in the module. \
+                    Please ensure `linera_sdk` is compiled with the `test` feature enabled",
+                );
+
+                let alloc_function = get_function(&mut caller, "cabi_realloc").expect(
+                    "Missing `cabi_realloc` function in the module. \
+                    Please ensure `linera_sdk` is compiled in with the module",
+                );
+
+                let new_message_address = alloc_function
+                    .typed::<(i32, i32, i32, i32), i32, _>(&mut caller)
+                    .expect("Incorrect `cabi_realloc` function signature")
+                    .call_async(&mut caller, (0, 0, 1, message_length))
+                    .await
+                    .expect("Failed to call `cabi_realloc` function");
+
+                copy_memory_slices(
+                    &mut caller,
+                    message_address,
+                    new_message_address,
+                    message_length,
+                );
+
+                function
+                    .typed::<(i32, i32, i32), (), _>(&mut caller)
+                    .expect("Incorrect `mocked-log` function signature")
+                    .call_async(&mut caller, (new_message_address, message_length, level))
+                    .await
+                    .expect("Failed to call `mocked-log` function");
             })
         },
     )?;
