@@ -176,6 +176,7 @@ impl Client {
             .kill_on_drop(true)
             .env("RUST_LOG", "ERROR")
             .arg("run")
+            .arg("--release")
             .arg("--features")
             .arg("benchmark")
             .arg("--manifest-path")
@@ -455,6 +456,7 @@ impl TestRunner {
             .current_dir(&self.tmp_dir.path().canonicalize().unwrap())
             .kill_on_drop(true)
             .arg("run")
+            .arg("--release")
             .arg("--manifest-path")
             .arg(env::current_dir().unwrap().join("Cargo.toml"))
             .arg("--features")
@@ -520,15 +522,16 @@ impl TestRunner {
         path.into_os_string().into_string().unwrap()
     }
 
-    async fn generate_initial_server_config(&self) {
-        self.cargo_run()
+    async fn generate_initial_server_config(&self, n_validators: usize) {
+        let mut command = self.cargo_run();
+        command
             .args(["--bin", "server"])
             .arg("generate")
-            .arg("--validators")
-            .arg(&self.configuration_string(1))
-            .arg(&self.configuration_string(2))
-            .arg(&self.configuration_string(3))
-            .arg(&self.configuration_string(4))
+            .arg("--validators");
+        for i in 1..n_validators + 1 {
+            command.arg(&self.configuration_string(i));
+        }
+        command
             .args(["--committee", "committee.json"])
             .spawn()
             .unwrap()
@@ -634,8 +637,8 @@ impl TestRunner {
         child
     }
 
-    async fn run_local_net(&self) -> Vec<Validator> {
-        self.start_validators(1..5).await
+    async fn run_local_net(&self, n_validators: usize) -> Vec<Validator> {
+        self.start_validators(1..n_validators + 1).await
     }
 
     async fn start_validators(&self, validator_range: Range<usize>) -> Vec<Validator> {
@@ -829,13 +832,14 @@ async fn end_to_end() {
     let network = Network::Grpc;
     let runner = TestRunner::new(network);
     let client = Client::new(runner.tmp_dir(), network, 1);
+    let n_validators = 4;
 
     let original_counter_value = 35;
     let increment = 5;
 
-    runner.generate_initial_server_config().await;
+    runner.generate_initial_server_config(n_validators).await;
     client.generate_client_config().await;
-    let _local_net = runner.run_local_net().await;
+    let _local_net = runner.run_local_net(n_validators).await;
     let (contract, service) = runner.build_application("counter-graphql").await;
 
     client
@@ -862,13 +866,14 @@ async fn test_multiple_wallets() {
     let runner = TestRunner::new(Network::Grpc);
     let client_1 = Client::new(runner.tmp_dir(), Network::Grpc, 1);
     let client_2 = Client::new(runner.tmp_dir(), Network::Grpc, 2);
+    let n_validators = 4;
 
     // Create initial server and client config.
-    runner.generate_initial_server_config().await;
+    runner.generate_initial_server_config(n_validators).await;
     client_1.generate_client_config().await;
 
     // Start local network.
-    let _local_net = runner.run_local_net().await;
+    let _local_net = runner.run_local_net(n_validators).await;
 
     // Get some chain owned by Client 1.
     let chain_1 = *client_1.get_wallet().chain_ids().first().unwrap();
@@ -918,10 +923,11 @@ async fn reconfiguration_test_simple() {
 async fn test_reconfiguration(network: Network) {
     let runner = TestRunner::new(network);
     let client = Client::new(runner.tmp_dir(), network, 1);
+    let n_validators = 4;
 
-    runner.generate_initial_server_config().await;
+    runner.generate_initial_server_config(n_validators).await;
     client.generate_client_config().await;
-    let mut local_net = runner.run_local_net().await;
+    let mut local_net = runner.run_local_net(n_validators).await;
 
     client.query_validators(None).await;
 
@@ -991,13 +997,14 @@ async fn social_user_pub_sub() {
     let runner = TestRunner::new(network);
     let client1 = Client::new(runner.tmp_dir(), network, 1);
     let client2 = Client::new(runner.tmp_dir(), network, 2);
+    let n_validators = 4;
 
     // Create initial server and client config.
-    runner.generate_initial_server_config().await;
+    runner.generate_initial_server_config(n_validators).await;
     client1.generate_client_config().await;
 
     // Start local network.
-    let _local_net = runner.run_local_net().await;
+    let _local_net = runner.run_local_net(n_validators).await;
     let (contract, service) = runner.build_application("social").await;
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
@@ -1013,6 +1020,7 @@ async fn social_user_pub_sub() {
     let _node_service2 = client2.run_node_service(chain2, 8081).await;
 
     let cert = publish_application(contract, service, 8080).await;
+
     assert_eq!(cert.value.effects().len(), 1);
     let bytecode_id = BytecodeId(EffectId {
         chain_id: chain1,
