@@ -23,11 +23,15 @@ use std::{
 };
 use tempfile::{tempdir, TempDir};
 use tokio::{process::Child, sync::Mutex};
+use tonic_health::proto::{
+    health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
+};
+use tracing::{info, warn};
 
 /// A static lock to prevent integration tests from running in parallel.
 static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_examples_in_readme_simple() -> std::io::Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -88,7 +92,7 @@ mod aws_test {
     const BUILD: &str = "cargo build";
     const AWS_BUILD: &str = "cargo build --features aws";
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_examples_in_readme_with_dynamo_db() -> anyhow::Result<()> {
         let _localstack_guard = LocalStackTestContext::new().await?;
         let dir = tempdir().unwrap();
@@ -252,15 +256,29 @@ impl Client {
         I: Into<Option<ChainId>>,
         P: Into<Option<u16>>,
     {
-        self.client_run_with_storage()
+        let port = port.into().unwrap_or(8080);
+        let child = self
+            .client_run_with_storage()
             .arg("service")
             .args(chain_id.into().as_ref().map(ChainId::to_string))
-            .args([
-                "--port".to_string(),
-                port.into().unwrap_or(8080).to_string(),
-            ])
+            .args(["--port".to_string(), port.to_string()])
             .spawn()
-            .unwrap()
+            .unwrap();
+        let client = reqwest::Client::new();
+        loop {
+            let request = client
+                .get(format!("http://localhost:{}/", port))
+                .send()
+                .await;
+            if request.is_ok() {
+                info!("Node service has started");
+                break;
+            } else {
+                warn!("Waiting for node service to start");
+                tokio::time::sleep(Duration::from_millis(1_000)).await;
+            }
+        }
+        child
     }
 
     async fn query_validators(&self, chain_id: Option<ChainId>) {
@@ -444,6 +462,22 @@ impl TestRunner {
         command
     }
 
+    fn proxy_port(i: usize) -> usize {
+        9000 + i * 100
+    }
+
+    fn shard_port(i: usize, j: usize) -> usize {
+        9000 + i * 100 + j
+    }
+
+    fn internal_port(i: usize) -> usize {
+        10000 + i * 100
+    }
+
+    fn metrics_port(i: usize) -> usize {
+        11000 + i * 100
+    }
+
     fn configuration_string(&self, server_number: usize) -> String {
         let n = server_number;
         let path = self
@@ -452,9 +486,9 @@ impl TestRunner {
             .canonicalize()
             .unwrap()
             .join(format!("validator_{n}.toml"));
-        let port = 9000 + n * 100;
-        let internal_port = 10000 + n * 100;
-        let metrics_port = 11000 + n * 100;
+        let port = Self::proxy_port(n);
+        let internal_port = Self::internal_port(n);
+        let metrics_port = Self::metrics_port(n);
         let external_protocol = self.network.external();
         let internal_protocol = self.network.internal();
         let mut content = format!(
@@ -469,7 +503,7 @@ impl TestRunner {
             "#
         );
         for k in 1..=4 {
-            let shard_port = port + k;
+            let shard_port = Self::shard_port(n, k);
             let shard_metrics_port = metrics_port + k;
             content.push_str(&format!(
                 r#"
@@ -521,17 +555,47 @@ impl TestRunner {
             .to_string())
     }
 
-    fn run_proxy(&self, i: usize) -> Child {
-        self.cargo_run()
+    async fn run_proxy(&self, i: usize) -> Child {
+        let child = self
+            .cargo_run()
             .args(["--bin", "proxy"])
             .arg("--")
             .arg(format!("server_{}.json", i))
             .spawn()
-            .unwrap()
+            .unwrap();
+
+        match self.network {
+            Network::Grpc => {
+                let port = Self::proxy_port(i);
+                let connection =
+                    tonic::transport::Endpoint::new(format!("http://127.0.0.1:{port}"))
+                        .unwrap()
+                        .connect_lazy();
+                let mut client = HealthClient::new(connection);
+                loop {
+                    let result = client.check(HealthCheckRequest::default()).await;
+                    if result.is_ok()
+                        && result.unwrap().get_ref().status() == ServingStatus::Serving
+                    {
+                        info!("Validator proxy {i} has started");
+                        break;
+                    } else {
+                        warn!("Waiting for validator proxy {i} to start");
+                        tokio::time::sleep(Duration::from_millis(1_000)).await;
+                    }
+                }
+            }
+            Network::Simple => {
+                info!("Letting validator proxy {i} start");
+                tokio::time::sleep(Duration::from_millis(2_000)).await;
+            }
+        }
+        child
     }
 
-    fn run_server(&self, i: usize, j: usize) -> Child {
-        self.cargo_run()
+    async fn run_server(&self, i: usize, j: usize) -> Child {
+        let child = self
+            .cargo_run()
             .args(["--bin", "server"])
             .arg("run")
             .args(["--storage", &format!("rocksdb:server_{}_{}.db", i, j)])
@@ -539,19 +603,49 @@ impl TestRunner {
             .args(["--shard", &j.to_string()])
             .args(["--genesis", "genesis.json"])
             .spawn()
-            .unwrap()
+            .unwrap();
+
+        match self.network {
+            Network::Grpc => {
+                let port = Self::shard_port(i, j);
+                let connection =
+                    tonic::transport::Endpoint::new(format!("http://127.0.0.1:{port}"))
+                        .unwrap()
+                        .connect_lazy();
+                let mut client = HealthClient::new(connection);
+                loop {
+                    let result = client.check(HealthCheckRequest::default()).await;
+                    if result.is_ok()
+                        && result.unwrap().get_ref().status() == ServingStatus::Serving
+                    {
+                        info!("Validator server {i}:{j} has started");
+                        break;
+                    } else {
+                        warn!("Waiting for validator server {i}:{j} to start");
+                        tokio::time::sleep(Duration::from_millis(1_000)).await;
+                    }
+                }
+            }
+            Network::Simple => {
+                info!("Letting validator server {i}:{j} start");
+                tokio::time::sleep(Duration::from_millis(2_000)).await;
+            }
+        }
+        child
     }
 
-    fn run_local_net(&self) -> Vec<Validator> {
-        self.start_validators(1..5)
+    async fn run_local_net(&self) -> Vec<Validator> {
+        self.start_validators(1..5).await
     }
 
-    fn start_validators(&self, validator_range: Range<usize>) -> Vec<Validator> {
+    async fn start_validators(&self, validator_range: Range<usize>) -> Vec<Validator> {
         let mut validators = vec![];
         for i in validator_range {
-            let mut validator = Validator::new(self.run_proxy(i));
+            let proxy = self.run_proxy(i).await;
+            let mut validator = Validator::new(proxy);
             for j in 0..4 {
-                validator.add_server(self.run_server(i, j));
+                let server = self.run_server(i, j).await;
+                validator.add_server(server);
             }
             validators.push(validator);
         }
@@ -728,7 +822,7 @@ async fn increment_counter_value(application_uri: &str, increment: u64) {
         .unwrap();
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn end_to_end() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -741,19 +835,13 @@ async fn end_to_end() {
 
     runner.generate_initial_server_config().await;
     client.generate_client_config().await;
-    let _local_net = runner.run_local_net();
+    let _local_net = runner.run_local_net().await;
     let (contract, service) = runner.build_application("counter-graphql").await;
-
-    // wait for net to start
-    tokio::time::sleep(Duration::from_millis(10_000)).await;
 
     client
         .publish_application(contract, service, original_counter_value, None)
         .await;
     let _node_service = client.run_node_service(None, None).await;
-
-    // wait for node service to start
-    tokio::time::sleep(Duration::from_millis(3_000)).await;
 
     let application_uri = get_application_uri(None, None).await;
 
@@ -766,7 +854,7 @@ async fn end_to_end() {
     assert_eq!(counter_value, original_counter_value + increment);
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_multiple_wallets() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -780,7 +868,7 @@ async fn test_multiple_wallets() {
     client_1.generate_client_config().await;
 
     // Start local network.
-    let _local_net = runner.run_local_net();
+    let _local_net = runner.run_local_net().await;
 
     // Get some chain owned by Client 1.
     let chain_1 = *client_1.get_wallet().chain_ids().first().unwrap();
@@ -815,13 +903,13 @@ async fn test_multiple_wallets() {
     assert_eq!(client_2.query_balance(chain_2).await.unwrap(), 3);
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn reconfiguration_test_grpc() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     test_reconfiguration(Network::Grpc).await;
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn reconfiguration_test_simple() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     test_reconfiguration(Network::Simple).await;
@@ -833,9 +921,7 @@ async fn test_reconfiguration(network: Network) {
 
     runner.generate_initial_server_config().await;
     client.generate_client_config().await;
-    let mut local_net = runner.run_local_net();
-
-    tokio::time::sleep(Duration::from_millis(5_000)).await;
+    let mut local_net = runner.run_local_net().await;
 
     client.query_validators(None).await;
 
@@ -856,8 +942,7 @@ async fn test_reconfiguration(network: Network) {
     // Restart last server (dropping it kills the process)
     let validator_4 = local_net.get_mut(3).unwrap();
     validator_4.kill_server(3);
-    validator_4.add_server(runner.run_server(4, 3));
-    tokio::time::sleep(Duration::from_millis(1_000)).await;
+    validator_4.add_server(runner.run_server(4, 3).await);
 
     // Query balances again
     assert_eq!(client.query_balance(chain_1).await.unwrap(), 5);
@@ -877,9 +962,7 @@ async fn test_reconfiguration(network: Network) {
     let server_6 = runner.generate_server_config(6).await.unwrap();
 
     // Start the validators
-    local_net.extend(runner.start_validators(5..7));
-
-    tokio::time::sleep(Duration::from_millis(1_000)).await;
+    local_net.extend(runner.start_validators(5..7).await);
 
     // Add validator 5
     client.set_validator(&server_5, 9500, 100).await;
@@ -891,8 +974,6 @@ async fn test_reconfiguration(network: Network) {
     // Add validator 6
     client.set_validator(&server_6, 9600, 100).await;
 
-    tokio::time::sleep(Duration::from_millis(1_000)).await;
-
     // Remove validator 5
     client.remove_validator(&server_5).await;
     local_net.remove(4);
@@ -902,7 +983,7 @@ async fn test_reconfiguration(network: Network) {
     client.query_validators(Some(chain_1)).await;
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn social_user_pub_sub() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -916,28 +997,22 @@ async fn social_user_pub_sub() {
     client1.generate_client_config().await;
 
     // Start local network.
-    let _local_net = runner.run_local_net();
+    let _local_net = runner.run_local_net().await;
     let (contract, service) = runner.build_application("social").await;
-
-    // wait for net to start
-    tokio::time::sleep(Duration::from_secs(2)).await;
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
     let client2key = client2.keygen().await.unwrap();
 
     // Open chain on behalf of Client 2.
     let (chain2, cert) = client1.open_chain(chain1, Some(client2key)).await.unwrap();
-    tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Assign chain_2 to client_2_key.
     client2.assign(client2key, chain2, cert).await.unwrap();
 
     let _node_service1 = client1.run_node_service(chain1, 8080).await;
     let _node_service2 = client2.run_node_service(chain2, 8081).await;
-    tokio::time::sleep(Duration::from_secs(10)).await;
 
     let cert = publish_application(contract, service, 8080).await;
-    tokio::time::sleep(Duration::from_secs(10)).await;
     assert_eq!(cert.value.effects().len(), 1);
     let bytecode_id = BytecodeId(EffectId {
         chain_id: chain1,
@@ -945,17 +1020,17 @@ async fn social_user_pub_sub() {
         index: 0,
     });
     create_application(bytecode_id, 8080).await;
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
     let app1 = get_application_uri(chain1, 8080).await;
     let query = format!("mutation {{ subscribe(chainId: \"{}\") }}", chain2);
     query_application(&app1, &query).await;
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
     let app2 = get_application_uri(chain2, 8081).await;
     let query = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
     query_application(&app2, query).await;
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
     let query = "query { receivedPostsKeys(count: 5) { author, index } }";
     let expected_response = json!({"data": { "receivedPostsKeys": [

@@ -154,6 +154,11 @@ where
 
         let (complete, receiver) = futures::channel::oneshot::channel();
 
+        let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+        health_reporter
+            .set_serving::<ValidatorWorkerServer<Self>>()
+            .await;
+
         let grpc_server = GrpcServer {
             state,
             shard_id,
@@ -161,11 +166,11 @@ where
             cross_chain_sender,
             notification_sender,
         };
-
         let worker_node = ValidatorWorkerServer::new(grpc_server);
 
         let handle = tokio::spawn(
             Server::builder()
+                .add_service(health_service)
                 .add_service(worker_node)
                 .serve_with_shutdown(server_address, receiver.map(|_| ())),
         );
