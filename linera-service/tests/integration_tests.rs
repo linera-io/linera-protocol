@@ -174,7 +174,6 @@ impl Client {
         command
             .current_dir(&self.tmp_dir.path().canonicalize().unwrap())
             .kill_on_drop(true)
-            .env("RUST_LOG", "ERROR")
             .arg("run")
             .arg("--release")
             .arg("--features")
@@ -543,7 +542,6 @@ impl TestRunner {
     async fn generate_server_config(&self, server_number: usize) -> anyhow::Result<String> {
         let output = self
             .cargo_run()
-            .env("RUST_LOG", "ERROR")
             .args(["--bin", "server"])
             .arg("generate")
             .arg("--validators")
