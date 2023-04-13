@@ -139,10 +139,8 @@ where
             .expect("single-threaded execution should not lock `active_simple_user_states`")
     }
 
-    fn active_view_user_states_mut(&self) -> MutexGuard<'_, ActiveViewUserStates<C>> {
-        self.active_view_user_states
-            .try_lock()
-            .expect("single-threaded execution should not lock `active_view_user_states`")
+    async fn active_view_user_states_mut(&self) -> MutexGuard<'_, ActiveViewUserStates<C>> {
+        self.active_view_user_states.lock().await
     }
 
     fn active_sessions_mut(&self) -> MutexGuard<'_, ActiveSessions> {
@@ -347,6 +345,7 @@ where
             .try_load_entry_mut(&self.application_id())
             .await?;
         self.active_view_user_states_mut()
+            .await
             .insert(self.application_id(), view);
         Ok(())
     }
@@ -355,6 +354,7 @@ where
         // Make the view available again.
         match self
             .active_view_user_states_mut()
+            .await
             .remove(&self.application_id())
         {
             Some(_) => Ok(()),
@@ -366,6 +366,7 @@ where
         // read a key from the KV store
         match self
             .active_view_user_states_mut()
+            .await
             .get(&self.application_id())
         {
             Some(view) => Ok(view.get(&key).await?),
@@ -380,6 +381,7 @@ where
         // Read keys matching a prefix. We have to collect since iterators do not pass the wit barrier
         match self
             .active_view_user_states_mut()
+            .await
             .get(&self.application_id())
         {
             Some(view) => Ok(view.find_keys_by_prefix(&key_prefix).await?),
@@ -394,6 +396,7 @@ where
         // Read key/values matching a prefix. We have to collect since iterators do not pass the wit barrier
         match self
             .active_view_user_states_mut()
+            .await
             .get(&self.application_id())
         {
             Some(view) => Ok(view.find_key_values_by_prefix(&key_prefix).await?),
@@ -486,6 +489,7 @@ where
         // Write the batch and make the view available again.
         match self
             .active_view_user_states_mut()
+            .await
             .remove(&self.application_id())
         {
             Some(mut view) => Ok(view.write_batch(batch).await?),
