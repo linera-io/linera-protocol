@@ -195,6 +195,9 @@ macro_rules! impl_writable_system {
                 forwarded_sessions: &[Le<writable_system::SessionId>],
             ) -> Result<Self::TryCallApplication, Self::Error> {
                 let runtime = self.runtime();
+                let next_call = Arc::new(Notify::new());
+                let previous_call =
+                    std::mem::replace(&mut self.cross_application_call_queue, next_call.clone());
                 let forwarded_sessions = forwarded_sessions
                     .iter()
                     .map(Le::get)
@@ -203,14 +206,20 @@ macro_rules! impl_writable_system {
                 let argument = Vec::from(argument);
 
                 Ok(self.queued_future_factory.enqueue(async move {
-                    runtime
+                    previous_call.notified().await;
+
+                    let result = runtime
                         .try_call_application(
                             authenticated,
                             application.into(),
                             &argument,
                             forwarded_sessions,
                         )
-                        .await
+                        .await;
+
+                    next_call.notify_one();
+
+                    result
                 }))
             }
 
@@ -233,6 +242,9 @@ macro_rules! impl_writable_system {
                 forwarded_sessions: &[Le<writable_system::SessionId>],
             ) -> Result<Self::TryCallSession, Self::Error> {
                 let runtime = self.runtime();
+                let next_call = Arc::new(Notify::new());
+                let previous_call =
+                    std::mem::replace(&mut self.cross_application_call_queue, next_call.clone());
                 let forwarded_sessions = forwarded_sessions
                     .iter()
                     .map(Le::get)
@@ -241,14 +253,20 @@ macro_rules! impl_writable_system {
                 let argument = Vec::from(argument);
 
                 Ok(self.queued_future_factory.enqueue(async move {
-                    runtime
+                    previous_call.notified().await;
+
+                    let result = runtime
                         .try_call_session(
                             authenticated,
                             session.into(),
                             &argument,
                             forwarded_sessions,
                         )
-                        .await
+                        .await;
+
+                    next_call.notify_one();
+
+                    result
                 }))
             }
 

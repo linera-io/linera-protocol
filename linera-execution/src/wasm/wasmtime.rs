@@ -39,7 +39,8 @@ use super::{
 };
 use crate::{CallResult, ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
 use linera_views::{batch::Batch, views::ViewError};
-use std::{error::Error, task::Poll};
+use std::{error::Error, sync::Arc, task::Poll};
+use tokio::sync::Notify;
 use wasmtime::{Config, Engine, Linker, Module, Store, Trap};
 use wit_bindgen_host_wasmtime_rust::Le;
 
@@ -371,6 +372,7 @@ struct SystemApi<S> {
 pub struct ContractSystemApi<'runtime> {
     shared: SystemApi<&'runtime dyn ContractRuntime>,
     queued_future_factory: QueuedHostFutureFactory<'runtime>,
+    cross_application_call_queue: Arc<Notify>,
 }
 
 impl<'runtime> ContractSystemApi<'runtime> {
@@ -381,9 +383,14 @@ impl<'runtime> ContractSystemApi<'runtime> {
         runtime: &'runtime dyn ContractRuntime,
         queued_future_factory: QueuedHostFutureFactory<'runtime>,
     ) -> Self {
+        let cross_application_call_queue = Arc::new(Notify::new());
+
+        cross_application_call_queue.notify_one();
+
         ContractSystemApi {
             shared: SystemApi { waker, runtime },
             queued_future_factory,
+            cross_application_call_queue,
         }
     }
 
