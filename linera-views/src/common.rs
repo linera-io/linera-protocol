@@ -314,7 +314,13 @@ pub trait Context {
     where
         Item: DeserializeOwned,
     {
-        self.db.read_key(key).await
+        match self.read_key_bytes(key).await? {
+            Some(bytes) => {
+                let value = bcs::from_bytes(&bytes)?;
+                Ok(Some(value))
+            }
+            None => Ok(None),
+        }
     }
 }
 
