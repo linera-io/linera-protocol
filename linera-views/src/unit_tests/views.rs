@@ -6,9 +6,8 @@ use crate::{
     common::Context,
     memory::MemoryContext,
     queue_view::QueueView,
-    rocksdb::RocksdbContext,
+    rocksdb::{RocksdbClient, RocksdbContext},
     views::{View, ViewError},
-    rocksdb::RocksdbClient,
 };
 use async_lock::Mutex;
 use async_trait::async_trait;

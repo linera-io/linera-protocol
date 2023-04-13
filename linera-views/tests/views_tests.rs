@@ -18,7 +18,7 @@ use linera_views::{
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
-    rocksdb::{RocksdbContext, RocksdbClient},
+    rocksdb::{RocksdbClient, RocksdbContext},
     set_view::SetView,
     test_utils::{
         get_random_byte_vector, get_random_key_value_operations, get_random_key_value_vec,

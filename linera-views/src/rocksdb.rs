@@ -4,15 +4,16 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{get_upper_bound, ContextFromDb, KeyValueStoreClient},
-    lru_caching::LruCachingKeyValueClient,
 };
+#[cfg(feature = "lru_caching")]
+use crate::lru_caching::LruCachingKeyValueClient;
 use async_trait::async_trait;
 use std::{
     ops::{Bound, Bound::Excluded},
+    path::Path,
     sync::Arc,
 };
 use thiserror::Error;
-use std::path::Path;
 
 /// The RocksDb client in use.
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
@@ -41,7 +42,9 @@ impl RocksdbClient {
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
         let db = DB::open(&options, path).unwrap();
-        Self { client: Arc::new(db) }
+        Self {
+            client: Arc::new(db),
+        }
     }
 }
 
@@ -54,7 +57,9 @@ impl RocksdbClient {
         let db = DB::open(&options, path).unwrap();
         let client = Arc::new(db);
         let n = 1000;
-        Self { client: LruCachingKeyValueClient::new(client, n) }
+        Self {
+            client: LruCachingKeyValueClient::new(client, n),
+        }
     }
 }
 
@@ -203,11 +208,7 @@ impl KeyValueStoreClient for RocksdbClient {
         self.client.find_key_values_by_prefix(key_prefix).await
     }
 
-    async fn write_batch(
-        &self,
-        batch: Batch,
-        base_key: &[u8],
-    ) -> Result<(), RocksdbContextError> {
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), RocksdbContextError> {
         self.client.write_batch(batch, base_key).await
     }
 
@@ -215,7 +216,6 @@ impl KeyValueStoreClient for RocksdbClient {
         self.client.clear_journal(base_key).await
     }
 }
-
 
 impl<E: Clone + Send + Sync> RocksdbContext<E> {
     /// Creates a [`RocksdbContext`].
