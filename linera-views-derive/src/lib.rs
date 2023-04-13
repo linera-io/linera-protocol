@@ -45,7 +45,6 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let mut load_future_quotes = Vec::new();
     let mut load_ident_quotes = Vec::new();
     let mut load_result_quotes = Vec::new();
-    let mut load_wasm_quotes = Vec::new();
     let mut rollback_quotes = Vec::new();
     let mut flush_quotes = Vec::new();
     let mut delete_quotes = Vec::new();
@@ -65,11 +64,6 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         });
         load_result_quotes.push(quote! {
             let #name = result.#idx_lit?;
-        });
-        load_wasm_quotes.push(quote! {
-            let index = #idx_lit;
-            let base_key = context.derive_key(&index)?;
-            let #name = #type_ident::load(context.clone_with_base_key(base_key)).await?;
         });
         name_quotes.push(quote! { #name });
         rollback_quotes.push(quote! { self.#name.rollback(); });
@@ -106,7 +100,6 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 self.#first_name_quote.context()
             }
 
-            #[cfg(not(target_arch = "wasm32"))]
             async fn load(context: #first_generic) -> Result<Self, linera_views::views::ViewError> {
                 #increment_counter
                 use linera_views::futures::join;
@@ -116,12 +109,6 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 Ok(Self {#(#name_quotes),*})
             }
 
-            #[cfg(target_arch = "wasm32")]
-            async fn load(context: #first_generic) -> Result<Self, linera_views::views::ViewError> {
-                #increment_counter
-                #(#load_wasm_quotes)*
-                Ok(Self {#(#name_quotes),*})
-            }
 
             fn rollback(&mut self) {
                 #(#rollback_quotes)*
@@ -596,7 +583,6 @@ pub mod tests {
                 fn context(&self) -> &C {
                     self.register.context()
                 }
-                #[cfg(not(target_arch = "wasm32"))]
                 async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
                     linera_views::increment_counter(
                         linera_views::LOAD_VIEW_COUNTER,
@@ -615,26 +601,6 @@ pub mod tests {
                     let result = join!(register_fut, collection_fut);
                     let register = result.0?;
                     let collection = result.1?;
-                    Ok(Self {
-                        register,
-                        collection
-                    })
-                }
-                #[cfg(target_arch = "wasm32")]
-                async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
-                    linera_views::increment_counter(
-                        linera_views::LOAD_VIEW_COUNTER,
-                        stringify!(TestView),
-                        &context.base_key(),
-                    );
-                    let index = 0;
-                    let base_key = context.derive_key(&index)?;
-                    let register =
-                        RegisterView::load(context.clone_with_base_key(base_key)).await?;
-                    let index = 1;
-                    let base_key = context.derive_key(&index)?;
-                    let collection =
-                        CollectionView::load(context.clone_with_base_key(base_key)).await?;
                     Ok(Self {
                         register,
                         collection
