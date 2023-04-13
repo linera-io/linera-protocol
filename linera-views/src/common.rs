@@ -373,8 +373,9 @@ where
     F: Future<Output = O>,
     D: Display,
 {
-    if cfg!(feature = "timings") {
+    if cfg!(feature = "db_timings") {
         let (out, duration) = time_async(f).await;
+        let duration = duration.as_nanos();
         println!("|{name}|={duration:?}");
         out
     } else {
