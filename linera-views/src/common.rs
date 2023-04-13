@@ -14,11 +14,13 @@ use crate::{batch::Batch, views::ViewError};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
-    fmt::Debug,
+    fmt::{Debug, Display},
+    future::Future,
     ops::{
         Bound,
         Bound::{Excluded, Included, Unbounded},
     },
+    time::{Duration, Instant},
 };
 
 #[cfg(test)]
@@ -232,38 +234,6 @@ pub trait Context {
     /// Return type for key-value search operations.
     type KeyValues: KeyValueIterable<Self::Error>;
 
-    /// Getter for the user provided data.
-    fn extra(&self) -> &Self::Extra;
-
-    /// Getter for the address of the current entry (aka the base_key).
-    fn base_key(&self) -> Vec<u8>;
-
-    /// Concatenates the base_key and tag.
-    fn base_tag(&self, tag: u8) -> Vec<u8>;
-
-    /// Concatenates the base_key, tag and index.
-    fn base_tag_index(&self, tag: u8, index: &[u8]) -> Vec<u8>;
-
-    /// Obtains the `Vec<u8>` key from the key by serialization and using the base_key.
-    fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error>;
-
-    /// Obtains the `Vec<u8>` key from the key by serialization and using the `base_key`.
-    fn derive_tag_key<I: Serialize>(&self, tag: u8, index: &I) -> Result<Vec<u8>, Self::Error>;
-
-    /// Obtains the short `Vec<u8>` key from the key by serialization.
-    fn derive_short_key<I: Serialize + ?Sized>(index: &I) -> Result<Vec<u8>, Self::Error>;
-
-    /// Deserialize `bytes` into type `Item`.
-    fn deserialize_value<Item: DeserializeOwned>(bytes: &[u8]) -> Result<Item, Self::Error>;
-
-    /// Retrieves a generic `Item` from the database using the provided `key` prefixed by the current
-    /// context.
-    /// The `Item` is deserialized using [`bcs`].
-    async fn read_key<Item: DeserializeOwned>(
-        &self,
-        key: &[u8],
-    ) -> Result<Option<Item>, Self::Error>;
-
     /// Retrieves a `Vec<u8>` from the database using the provided `key` prefixed by the current
     /// context.
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
@@ -280,8 +250,78 @@ pub trait Context {
     /// Applies the operations from the `batch`, persisting the changes.
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
 
+    /// Getter for the user provided data.
+    fn extra(&self) -> &Self::Extra;
+
     /// Obtains a similar [`Context`] implementation with a different base key.
     fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self;
+
+    /// Getter for the address of the current entry (aka the base_key).
+    fn base_key(&self) -> Vec<u8>;
+
+    /// Concatenates the base_key and tag.
+    fn base_tag(&self, tag: u8) -> Vec<u8> {
+        assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
+        let mut key = self.base_key();
+        key.extend([tag]);
+        key
+    }
+
+    /// Concatenates the base_key, tag and index.
+    fn base_tag_index(&self, tag: u8, index: &[u8]) -> Vec<u8> {
+        assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
+        let mut key = self.base_key();
+        key.extend([tag]);
+        key.extend_from_slice(index);
+        key
+    }
+
+    /// Obtains the `Vec<u8>` key from the key by serialization and using the base_key.
+    fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error> {
+        let mut key = self.base_key();
+        bcs::serialize_into(&mut key, index)?;
+        assert!(
+            key.len() > self.base_key().len(),
+            "Empty indices are not allowed"
+        );
+        Ok(key)
+    }
+
+    /// Obtains the `Vec<u8>` key from the key by serialization and using the `base_key`.
+    fn derive_tag_key<I: Serialize>(&self, tag: u8, index: &I) -> Result<Vec<u8>, Self::Error> {
+        assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
+        let mut key = self.base_key();
+        key.extend([tag]);
+        bcs::serialize_into(&mut key, index)?;
+        Ok(key)
+    }
+
+    /// Obtains the short `Vec<u8>` key from the key by serialization.
+    fn derive_short_key<I: Serialize + ?Sized>(index: &I) -> Result<Vec<u8>, Self::Error> {
+        Ok(bcs::to_bytes(index)?)
+    }
+
+    /// Deserialize `bytes` into type `Item`.
+    fn deserialize_value<Item: DeserializeOwned>(bytes: &[u8]) -> Result<Item, Self::Error> {
+        let value = bcs::from_bytes(bytes)?;
+        Ok(value)
+    }
+
+    /// Retrieves a generic `Item` from the database using the provided `key` prefixed by the current
+    /// context.
+    /// The `Item` is deserialized using [`bcs`].
+    async fn read_key<Item>(&self, key: &[u8]) -> Result<Option<Item>, Self::Error>
+    where
+        Item: DeserializeOwned,
+    {
+        match self.read_key_bytes(key).await? {
+            Some(bytes) => {
+                let value = bcs::from_bytes(&bytes)?;
+                Ok(Some(value))
+            }
+            None => Ok(None),
+        }
+    }
 }
 
 /// Implementation of the [`Context`] trait on top of a DB client implementing
@@ -318,6 +358,31 @@ where
     }
 }
 
+async fn time_async<F, O>(f: F) -> (O, Duration)
+where
+    F: Future<Output = O>,
+{
+    let start = Instant::now();
+    let out = f.await;
+    let duration = start.elapsed();
+    (out, duration)
+}
+
+async fn log_time_async<F, D, O>(f: F, name: D) -> O
+where
+    F: Future<Output = O>,
+    D: Display,
+{
+    if cfg!(feature = "db_timings") {
+        let (out, duration) = time_async(f).await;
+        let duration = duration.as_nanos();
+        println!("|{name}|={duration:?}");
+        out
+    } else {
+        f.await
+    }
+}
+
 #[async_trait]
 impl<E, DB> Context for ContextFromDb<E, DB>
 where
@@ -339,73 +404,31 @@ where
         self.base_key.clone()
     }
 
-    fn base_tag(&self, tag: u8) -> Vec<u8> {
-        assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
-        let mut key = self.base_key.clone();
-        key.extend([tag]);
-        key
-    }
-
-    fn base_tag_index(&self, tag: u8, index: &[u8]) -> Vec<u8> {
-        assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
-        let mut key = self.base_key.clone();
-        key.extend([tag]);
-        key.extend_from_slice(index);
-        key
-    }
-
-    fn derive_key<I: Serialize>(&self, index: &I) -> Result<Vec<u8>, Self::Error> {
-        let mut key = self.base_key.clone();
-        bcs::serialize_into(&mut key, index)?;
-        assert!(
-            key.len() > self.base_key.len(),
-            "Empty indices are not allowed"
-        );
-        Ok(key)
-    }
-
-    fn derive_tag_key<I: Serialize>(&self, tag: u8, index: &I) -> Result<Vec<u8>, Self::Error> {
-        assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
-        let mut key = self.base_key.clone();
-        key.extend([tag]);
-        bcs::serialize_into(&mut key, index)?;
-        Ok(key)
-    }
-
-    fn derive_short_key<I: Serialize + ?Sized>(index: &I) -> Result<Vec<u8>, Self::Error> {
-        Ok(bcs::to_bytes(index)?)
-    }
-
-    fn deserialize_value<Item: DeserializeOwned>(bytes: &[u8]) -> Result<Item, Self::Error> {
-        let value = bcs::from_bytes(bytes)?;
-        Ok(value)
-    }
-
-    async fn read_key<Item>(&self, key: &[u8]) -> Result<Option<Item>, Self::Error>
-    where
-        Item: DeserializeOwned,
-    {
-        self.db.read_key(key).await
-    }
-
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.db.read_key_bytes(key).await
+        log_time_async(self.db.read_key_bytes(key), "read_key_bytes").await
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
-        self.db.find_keys_by_prefix(key_prefix).await
+        log_time_async(
+            self.db.find_keys_by_prefix(key_prefix),
+            "find_keys_by_prefix",
+        )
+        .await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error> {
-        self.db.find_key_values_by_prefix(key_prefix).await
+        log_time_async(
+            self.db.find_key_values_by_prefix(key_prefix),
+            "find_key_values_by_prefix",
+        )
+        .await
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
-        self.db.write_batch(batch, &self.base_key).await?;
-        Ok(())
+        log_time_async(self.db.write_batch(batch, &self.base_key), "write_batch").await
     }
 
     fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self {

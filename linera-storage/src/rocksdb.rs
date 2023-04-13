@@ -3,7 +3,7 @@
 
 use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
 use linera_execution::WasmRuntime;
-use linera_views::rocksdb::{RocksdbClient, DB};
+use linera_views::rocksdb::RocksdbClient;
 use std::{path::PathBuf, sync::Arc};
 
 #[cfg(test)]
@@ -24,11 +24,9 @@ impl RocksdbStoreClient {
 
 impl RocksdbStore {
     pub fn new(dir: PathBuf, wasm_runtime: Option<WasmRuntime>) -> Self {
-        let mut options = rocksdb::Options::default();
-        options.create_if_missing(true);
-        let db = DB::open(&options, dir).unwrap();
+        let client = RocksdbClient::new(dir);
         Self {
-            client: Arc::new(db),
+            client,
             guards: ChainGuards::default(),
             user_applications: Arc::default(),
             wasm_runtime,

@@ -169,7 +169,7 @@ where
 
 impl<C, V> ByteMapView<C, V>
 where
-    C: Context,
+    C: Context + Sync,
     ViewError: From<C::Error>,
     V: Clone + DeserializeOwned + 'static,
 {
@@ -482,7 +482,7 @@ where
 
 impl<C, V> ByteMapView<C, V>
 where
-    C: Context,
+    C: Context + Sync,
     ViewError: From<C::Error>,
     V: Default + DeserializeOwned + 'static,
 {
@@ -611,7 +611,7 @@ where
 
 impl<C, I, V> MapView<C, I, V>
 where
-    C: Context,
+    C: Context + Sync,
     ViewError: From<C::Error>,
     I: Serialize,
 {
@@ -667,7 +667,7 @@ where
 
 impl<C, I, V> MapView<C, I, V>
 where
-    C: Context,
+    C: Context + Sync,
     ViewError: From<C::Error>,
     I: Serialize,
     V: Clone + DeserializeOwned + 'static,
@@ -721,7 +721,7 @@ where
 
 impl<C, I, V> MapView<C, I, V>
 where
-    C: Context,
+    C: Context + Sync,
     ViewError: From<C::Error>,
     I: Sync + Send + Serialize + DeserializeOwned,
     V: Sync + Serialize + DeserializeOwned + 'static,
@@ -883,7 +883,7 @@ where
 
 impl<C, I, V> MapView<C, I, V>
 where
-    C: Context,
+    C: Context + Sync,
     ViewError: From<C::Error>,
     I: Serialize,
     V: Default + DeserializeOwned + 'static,
@@ -976,7 +976,7 @@ where
 
 impl<C, I, V> CustomMapView<C, I, V>
 where
-    C: Context,
+    C: Context + Sync,
     ViewError: From<C::Error>,
     I: CustomSerialize,
 {
@@ -1032,7 +1032,7 @@ where
 
 impl<C, I, V> CustomMapView<C, I, V>
 where
-    C: Context,
+    C: Context + Sync,
     ViewError: From<C::Error>,
     I: CustomSerialize,
     V: Clone + DeserializeOwned + 'static,
@@ -1085,7 +1085,7 @@ where
 
 impl<C, I, V> CustomMapView<C, I, V>
 where
-    C: Context,
+    C: Context + Sync,
     ViewError: From<C::Error>,
     I: Sync + Send + CustomSerialize,
     V: Sync + Serialize + DeserializeOwned + 'static,
@@ -1249,7 +1249,7 @@ where
 
 impl<C, I, V> CustomMapView<C, I, V>
 where
-    C: Context,
+    C: Context + Sync,
     ViewError: From<C::Error>,
     I: CustomSerialize,
     V: Default + DeserializeOwned + 'static,
