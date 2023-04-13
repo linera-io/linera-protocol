@@ -4,6 +4,7 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{get_upper_bound, ContextFromDb, KeyValueStoreClient},
+    lru_caching::LruCachingKeyValueClient,
 };
 use async_trait::async_trait;
 use std::{
@@ -26,8 +27,12 @@ pub struct RocksdbClient {
     client: DbInternal,
 }
 
+/// A shared DB client for RocksDB implementing LruCaching
 #[cfg(feature = "lru_caching")]
-pub type RocksdbClient = LruCachingKeyValueClient<DbInternal>;
+#[derive(Clone)]
+pub struct RocksdbClient {
+    client: LruCachingKeyValueClient<DbInternal>,
+}
 
 #[cfg(not(feature = "lru_caching"))]
 impl RocksdbClient {
@@ -49,7 +54,7 @@ impl RocksdbClient {
         let db = DB::open(&options, path).unwrap();
         let client = Arc::new(db);
         let n = 1000;
-        LruCachingKeyValueClient::new(client, n);
+        Self { client: LruCachingKeyValueClient::new(client, n) }
     }
 }
 
@@ -174,7 +179,6 @@ impl KeyValueStoreClient for DbInternal {
     }
 }
 
-#[cfg(not(feature = "lru_caching"))]
 #[async_trait]
 impl KeyValueStoreClient for RocksdbClient {
     type Error = RocksdbContextError;
