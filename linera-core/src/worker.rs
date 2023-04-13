@@ -1114,7 +1114,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
         }
         if skipped_len > 0 {
             let sample_block = certificates[skipped_len - 1].value.block();
-            tracing::warn!(
+            tracing::info!(
                 "[{}] Ignoring repeated messages to {recipient:?} from {origin:?} at height {}",
                 self.nickname,
                 sample_block.height,
