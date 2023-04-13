@@ -33,7 +33,8 @@ macro_rules! ensure {
     };
 }
 
-/// Formats a byte sequence as a hexadecimal string.
+/// Formats a byte sequence as a hexadecimal string, and elides bytes in the middle if it is longer
+/// than 32 bytes.
 ///
 /// This function is intended to be used with the `#[debug(with = "hex_debug")]` field
 /// annotation of `custom_debug_derive::Debug`.
@@ -55,10 +56,28 @@ macro_rules! ensure {
 /// };
 ///
 /// assert_eq!(format!("{:?}", msg), "Message { bytes: 12345678 }");
+///
+/// let long_msg = Message {
+///     bytes: b"        10        20        30        40        50".to_vec(),
+/// };
+///
+/// assert_eq!(
+///     format!("{:?}", long_msg),
+///     "Message { bytes: 20202020202020203130202020202020..20202020343020202020202020203530 }"
+/// );
 /// ```
 pub fn hex_debug<T: AsRef<[u8]>>(bytes: &T, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    for byte in bytes.as_ref() {
-        write!(f, "{:02x}", byte)?;
+    const ELIDE_AFTER: usize = 16;
+    let bytes = bytes.as_ref();
+    if bytes.len() <= 2 * ELIDE_AFTER {
+        write!(f, "{}", hex::encode(bytes))?;
+    } else {
+        write!(
+            f,
+            "{}..{}",
+            hex::encode(&bytes[..ELIDE_AFTER]),
+            hex::encode(&bytes[(bytes.len() - ELIDE_AFTER)..])
+        )?;
     }
     Ok(())
 }

@@ -116,8 +116,7 @@ impl GrpcProxy {
         R: Debug + Proxyable,
     {
         debug!(
-            "handler [ValidatorWorker] proxying request [{:?}] from {:?}",
-            request,
+            "handler [ValidatorWorker] proxying request from {:?}",
             request.remote_addr()
         );
         let inner = request.into_inner();

@@ -295,14 +295,10 @@ where
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        debug!(request = ?request, "Handling block proposal");
+        let proposal = request.into_inner().try_into()?;
+        debug!(?proposal, "Handling block proposal");
         Ok(Response::new(
-            match self
-                .state
-                .clone()
-                .handle_block_proposal(request.into_inner().try_into()?)
-                .await
-            {
+            match self.state.clone().handle_block_proposal(proposal).await {
                 Ok((info, actions)) => {
                     self.handle_network_actions(actions);
                     info.try_into()?
@@ -320,11 +316,12 @@ where
         &self,
         request: Request<LiteCertificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        debug!(request = ?request, "Handling lite certificate");
+        let certificate = request.into_inner().try_into()?;
+        debug!(?certificate, "Handling lite certificate");
         match self
             .state
             .clone()
-            .handle_lite_certificate(request.into_inner().try_into()?)
+            .handle_lite_certificate(certificate)
             .await
         {
             Ok((info, actions)) => {
@@ -347,9 +344,9 @@ where
         &self,
         request: Request<CertificateWithDependencies>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        debug!(request = ?request, "Handling certificate");
         let cert_with_deps: data_types::CertificateWithDependencies =
             request.into_inner().try_into()?;
+        debug!(certificate = ?cert_with_deps.certificate, "Handling certificate");
         match self
             .state
             .clone()
@@ -372,9 +369,9 @@ where
         &self,
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let request = request.into_inner().try_into()?;
-        debug!(request = ?request, "Handling chain info query");
-        match self.state.clone().handle_chain_info_query(request).await {
+        let query = request.into_inner().try_into()?;
+        debug!(?query, "Handling chain info query");
+        match self.state.clone().handle_chain_info_query(query).await {
             Ok((info, actions)) => {
                 self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
@@ -391,13 +388,9 @@ where
         &self,
         request: Request<CrossChainRequest>,
     ) -> Result<Response<()>, Status> {
-        debug!(request = ?request, "Handling cross-chain request");
-        match self
-            .state
-            .clone()
-            .handle_cross_chain_request(request.into_inner().try_into()?)
-            .await
-        {
+        let request = request.into_inner().try_into()?;
+        debug!(?request, "Handling cross-chain request");
+        match self.state.clone().handle_cross_chain_request(request).await {
             Ok(actions) => self.handle_network_actions(actions),
             Err(error) => {
                 error!(nickname = self.state.nickname(), %error, "Failed to handle cross-chain request");
