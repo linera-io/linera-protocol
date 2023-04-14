@@ -272,20 +272,20 @@ impl Client {
             .spawn()
             .unwrap();
         let client = reqwest::Client::new();
-        loop {
+        for i in 0..10 {
+            tokio::time::sleep(Duration::from_secs(i)).await;
             let request = client
                 .get(format!("http://localhost:{}/", port))
                 .send()
                 .await;
             if request.is_ok() {
                 info!("Node service has started");
-                break;
+                return child;
             } else {
                 warn!("Waiting for node service to start");
-                tokio::time::sleep(Duration::from_millis(1_000)).await;
             }
         }
-        child
+        panic!("Failed to start node service");
     }
 
     async fn query_validators(&self, chain_id: Option<ChainId>) {
@@ -574,30 +574,33 @@ impl TestRunner {
         match self.network {
             Network::Grpc => {
                 let port = Self::proxy_port(i);
-                let connection =
-                    tonic::transport::Endpoint::new(format!("http://127.0.0.1:{port}"))
-                        .unwrap()
-                        .connect_lazy();
-                let mut client = HealthClient::new(connection);
-                loop {
-                    let result = client.check(HealthCheckRequest::default()).await;
-                    if result.is_ok()
-                        && result.unwrap().get_ref().status() == ServingStatus::Serving
-                    {
-                        info!("Validator proxy {i} has started");
-                        break;
-                    } else {
-                        warn!("Waiting for validator proxy {i} to start");
-                        tokio::time::sleep(Duration::from_millis(1_000)).await;
-                    }
-                }
+                let nickname = format!("validator proxy {i}");
+                Self::ensure_grpc_server_has_started(&nickname, port).await;
             }
             Network::Simple => {
                 info!("Letting validator proxy {i} start");
-                tokio::time::sleep(Duration::from_millis(2_000)).await;
+                tokio::time::sleep(Duration::from_secs(2)).await;
             }
         }
         child
+    }
+
+    async fn ensure_grpc_server_has_started(nickname: &str, port: usize) {
+        let connection = tonic::transport::Endpoint::new(format!("http://127.0.0.1:{port}"))
+            .unwrap()
+            .connect_lazy();
+        let mut client = HealthClient::new(connection);
+        for i in 0..10 {
+            tokio::time::sleep(Duration::from_secs(i)).await;
+            let result = client.check(HealthCheckRequest::default()).await;
+            if result.is_ok() && result.unwrap().get_ref().status() == ServingStatus::Serving {
+                info!("Successfully started {nickname}");
+                return;
+            } else {
+                warn!("Waiting for {nickname} to start");
+            }
+        }
+        panic!("Failed to start {nickname}");
     }
 
     async fn run_server(&self, i: usize, j: usize) -> Child {
@@ -615,27 +618,12 @@ impl TestRunner {
         match self.network {
             Network::Grpc => {
                 let port = Self::shard_port(i, j);
-                let connection =
-                    tonic::transport::Endpoint::new(format!("http://127.0.0.1:{port}"))
-                        .unwrap()
-                        .connect_lazy();
-                let mut client = HealthClient::new(connection);
-                loop {
-                    let result = client.check(HealthCheckRequest::default()).await;
-                    if result.is_ok()
-                        && result.unwrap().get_ref().status() == ServingStatus::Serving
-                    {
-                        info!("Validator server {i}:{j} has started");
-                        break;
-                    } else {
-                        warn!("Waiting for validator server {i}:{j} to start");
-                        tokio::time::sleep(Duration::from_millis(1_000)).await;
-                    }
-                }
+                let nickname = format!("validator server {i}:{j}");
+                Self::ensure_grpc_server_has_started(&nickname, port).await;
             }
             Network::Simple => {
                 info!("Letting validator server {i}:{j} start");
-                tokio::time::sleep(Duration::from_millis(2_000)).await;
+                tokio::time::sleep(Duration::from_secs(2)).await;
             }
         }
         child
@@ -688,7 +676,25 @@ where
     I: Into<Option<ChainId>>,
     P: Into<Option<u16>>,
 {
-    let query_string = if let Some(chain_id) = chain_id.into() {
+    let chain_id = chain_id.into();
+    let port = port.into();
+    for i in 0..10 {
+        tokio::time::sleep(Duration::from_secs(i)).await;
+        let values = try_get_applications_uri(chain_id, port).await;
+        assert!(values.len() <= 1);
+        if values.len() == 1 {
+            return values.get(0).unwrap().clone();
+        }
+        warn!(
+            "Waiting for application to be visible on chain {:?}",
+            chain_id
+        );
+    }
+    panic!("Could not find application uri");
+}
+
+async fn try_get_applications_uri(chain_id: Option<ChainId>, port: Option<u16>) -> Vec<String> {
+    let query_string = if let Some(chain_id) = chain_id {
         format!(
             "query {{ applications(chainId: \"{}\") {{ link }}}}",
             chain_id
@@ -699,24 +705,22 @@ where
     let query = json!({ "query": query_string });
     let client = reqwest::Client::new();
     let res = client
-        .post(format!("http://localhost:{}/", port.into().unwrap_or(8080)))
+        .post(format!("http://localhost:{}/", port.unwrap_or(8080)))
         .json(&query)
         .send()
         .await
         .unwrap();
     let response_body: Value = res.json().await.unwrap();
-    let application_uri = response_body
+    response_body
         .get("data")
         .unwrap()
         .get("applications")
         .unwrap()
         .as_array()
         .unwrap()
-        .get(0)
-        .unwrap()
-        .get("link")
-        .unwrap();
-    application_uri.as_str().unwrap().to_string()
+        .iter()
+        .map(|a| a.get("link").unwrap().as_str().unwrap().to_string())
+        .collect()
 }
 
 async fn publish_application<P>(contract: PathBuf, service: PathBuf, port: P) -> Certificate
@@ -1032,22 +1036,27 @@ async fn social_user_pub_sub() {
         index: 0,
     });
     create_application(bytecode_id, 8080).await;
-    tokio::time::sleep(Duration::from_secs(3)).await;
 
     let app1 = get_application_uri(chain1, 8080).await;
-    let query = format!("mutation {{ subscribe(chainId: \"{}\") }}", chain2);
-    query_application(&app1, &query).await;
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    let subscribe = format!("mutation {{ subscribe(chainId: \"{}\") }}", chain2);
+    query_application(&app1, &subscribe).await;
 
     let app2 = get_application_uri(chain2, 8081).await;
-    let query = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
-    query_application(&app2, query).await;
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    let post = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
+    query_application(&app2, post).await;
 
     let query = "query { receivedPostsKeys(count: 5) { author, index } }";
     let expected_response = json!({"data": { "receivedPostsKeys": [
         { "author": chain2, "index": 0 }
     ]}});
-    let response = query_application(&app1, query).await;
-    assert_eq!(response, expected_response);
+    'success: {
+        for i in 0..10 {
+            tokio::time::sleep(Duration::from_secs(i)).await;
+            let response = query_application(&app1, query).await;
+            if response == expected_response {
+                break 'success;
+            }
+        }
+        panic!("failed to confirm post");
+    }
 }
