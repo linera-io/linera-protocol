@@ -616,11 +616,11 @@ impl std::fmt::Debug for Bytecode {
 #[cfg_attr(any(feature = "wasmtime", feature = "wasmer"), derive(Debug, Default))]
 pub enum WasmRuntime {
     #[cfg(feature = "wasmer")]
-    #[cfg_attr(not(feature = "wasmtime"), default)]
+    #[default]
     #[display(fmt = "wasmer")]
     Wasmer,
     #[cfg(feature = "wasmtime")]
-    #[default]
+    #[cfg_attr(not(feature = "wasmer"), default)]
     #[display(fmt = "wasmtime")]
     Wasmtime,
 }
