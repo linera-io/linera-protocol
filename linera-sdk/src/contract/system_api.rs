@@ -83,13 +83,6 @@ impl KeyValueStoreClient for KeyValueStore {
         Ok(future::poll_fn(|_context| future.poll().into()).await)
     }
 
-    async fn read_multi_key_bytes(
-        &self,
-        _key: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        unimplemented!();
-    }
-
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, ViewError> {
         let keys = self.find_keys_by_prefix_load(key_prefix).await;
         Ok(keys)
