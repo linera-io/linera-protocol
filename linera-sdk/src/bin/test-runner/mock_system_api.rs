@@ -3,7 +3,10 @@
 
 use anyhow::Result;
 use wasmtime::{Caller, Extern, Func, Linker};
-use wit_bindgen_host_wasmtime_rust::rt::get_memory;
+use wit_bindgen_host_wasmtime_rust::{
+    rt::{get_memory, RawMem},
+    Endian,
+};
 
 /// Retrieves a function exported from the guest WebAssembly module.
 fn get_function(caller: &mut Caller<'_, ()>, name: &str) -> Option<Func> {
@@ -33,6 +36,16 @@ fn copy_memory_slices(
         usize::try_from(destination_offset).expect("Invalid pointer to copy data to");
 
     memory_data.copy_within(source_start..source_end, destination_start);
+}
+
+/// Stores a `value` at the `offset` of the guest WebAssembly module's memory.
+fn store_in_memory(caller: &mut Caller<'_, ()>, offset: i32, value: impl Endian) {
+    let memory = get_memory(caller, "memory").expect("Missing `memory` export in the module.");
+    let memory_data = memory.data_mut(caller);
+
+    memory_data
+        .store(offset, value)
+        .expect("Failed to write to guest WebAssembly module");
 }
 
 /// Adds the mock system APIs to the linker, so that they are available to guest WebAsembly
@@ -233,6 +246,27 @@ pub fn add_to_linker(linker: &mut Linker<()>) -> Result<()> {
             })
         },
     )?;
+    linker.func_wrap1_async(
+        "writable_system",
+        "load: func() -> list<u8>",
+        move |mut caller: Caller<'_, ()>, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(&mut caller, "mocked-load: func() -> list<u8>").expect(
+                    "Missing `mocked-load` function in the module. \
+                    Please ensure `linera_sdk::test::mock_application_state` was called",
+                );
+
+                let (result_offset,) = function
+                    .typed::<(), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-load` function signature")
+                    .call_async(&mut caller, ())
+                    .await
+                    .expect("Failed to call `mocked-load` function");
+
+                copy_memory_slices(&mut caller, result_offset, return_offset, 8);
+            })
+        },
+    )?;
 
     linker.func_wrap1_async(
         "queryable_system",
@@ -425,6 +459,41 @@ pub fn add_to_linker(linker: &mut Linker<()>) -> Result<()> {
                     .expect("Failed to call `mocked-log` function");
             })
         },
+    )?;
+    linker.func_wrap0_async(
+        "queryable_system",
+        "load::new: func() -> handle<load>",
+        move |_: Caller<'_, ()>| Box::new(async move { 0 }),
+    )?;
+    linker.func_wrap2_async(
+        "queryable_system",
+        "load::poll: \
+            func(self: handle<load>) -> variant { pending(unit), ready(result<list<u8>, string>) }",
+        move |mut caller: Caller<'_, ()>, _handle: i32, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(&mut caller, "mocked-load: func() -> list<u8>").expect(
+                    "Missing `mocked-load` function in the module. \
+                    Please ensure `linera_sdk::test::mock_application_state` was called",
+                );
+
+                let (result_offset,) = function
+                    .typed::<(), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-load` function signature")
+                    .call_async(&mut caller, ())
+                    .await
+                    .expect("Failed to call `mocked-load` function");
+
+                store_in_memory(&mut caller, return_offset, 1_i32);
+                store_in_memory(&mut caller, return_offset + 4, 0_i32);
+                copy_memory_slices(&mut caller, result_offset, return_offset + 8, 8);
+            })
+        },
+    )?;
+
+    linker.func_wrap1_async(
+        "canonical_abi",
+        "resource_drop_load",
+        move |_: Caller<'_, ()>, _handle: i32| Box::new(async move {}),
     )?;
 
     Ok(())
