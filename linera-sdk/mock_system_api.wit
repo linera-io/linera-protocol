@@ -1,0 +1,66 @@
+mocked-chain-id: func() -> chain-id
+mocked-application-id: func() -> application-id
+mocked-application-parameters: func() -> list<u8>
+mocked-read-system-balance: func() -> balance
+mocked-read-system-timestamp: func() -> timestamp
+
+mocked-log: func(message: string, level: log-level)
+
+enum log-level {
+    trace,
+    debug,
+    info,
+    warn,
+    error,
+}
+
+mocked-load: func() -> list<u8>
+mocked-load-and-lock: func() -> option<list<u8>>
+mocked-store-and-unlock: func(value: list<u8>) -> bool
+mocked-lock: func() -> bool
+mocked-unlock: func() -> bool
+
+mocked-read-key-bytes: func(key: list<u8>) -> option<list<u8>>
+mocked-find-keys: func(prefix: list<u8>) -> list<list<u8>>
+mocked-find-key-values: func(prefix: list<u8>) -> list<tuple<list<u8>,list<u8>>>
+mocked-write-batch: func(operations: list<write-operation>)
+
+mocked-try-query-application: func(
+    application: application-id,
+    query: list<u8>,
+) -> result<list<u8>, string>
+
+variant write-operation {
+    delete(list<u8>),
+    deleteprefix(list<u8>),
+    put(tuple<list<u8>,list<u8>>),
+}
+
+record application-id {
+    bytecode-id: bytecode-id,
+    creation: effect-id,
+}
+
+type bytecode-id = effect-id
+
+record effect-id {
+    chain-id: chain-id,
+    height: block-height,
+    index: u32,
+}
+
+type chain-id = crypto-hash
+type block-height = u64
+type timestamp = u64
+
+record crypto-hash {
+    part1: u64,
+    part2: u64,
+    part3: u64,
+    part4: u64,
+}
+
+record balance {
+    lower-half: u64,
+    upper-half: u64,
+}
