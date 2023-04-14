@@ -39,6 +39,16 @@ variant poll-read-key-bytes {
     ready(option<list<u8>>),
 }
 
+resource read-multi-key-bytes {
+    static new: func(key: list<list<u8>>) -> read-multi-key-bytes
+    poll: func() -> poll-read-multi-key-bytes
+}
+
+variant poll-read-multi-key-bytes {
+    pending,
+    ready(list<option<list<u8>>>),
+}
+
 resource find-keys {
     static new: func(prefix: list<u8>) -> find-keys
     poll: func() -> poll-find-keys

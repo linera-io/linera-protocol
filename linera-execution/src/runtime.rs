@@ -373,6 +373,20 @@ where
         }
     }
 
+    async fn read_multi_key_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, ExecutionError> {
+        // read a key from the KV store
+        match self
+            .active_view_user_states_mut()
+            .get(&self.application_id())
+        {
+            Some(view) => Ok(view.multi_get(keys).await?),
+            None => Err(ExecutionError::ApplicationStateNotLocked),
+        }
+    }
+
     async fn find_keys_by_prefix(
         &self,
         key_prefix: Vec<u8>,
