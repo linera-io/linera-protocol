@@ -31,6 +31,10 @@ use tracing::{info, warn};
 /// A static lock to prevent integration tests from running in parallel.
 static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
+/// The name of the environment variable that allows specifying additional arguments to be passed
+/// to `cargo` when starting client, server and proxy processes.
+const CARGO_ENV: &str = "INTEGRATION_TEST_CARGO_PARAMS";
+
 #[test_log::test(tokio::test)]
 async fn test_examples_in_readme_simple() -> std::io::Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -174,8 +178,11 @@ impl Client {
         command
             .current_dir(&self.tmp_dir.path().canonicalize().unwrap())
             .kill_on_drop(true)
-            .arg("run")
-            .arg("--release")
+            .arg("run");
+        if let Ok(var) = env::var(CARGO_ENV) {
+            command.args(var.split_whitespace());
+        }
+        command
             .arg("--features")
             .arg("benchmark")
             .arg("--manifest-path")
@@ -655,10 +662,15 @@ impl TestRunner {
 
     async fn build_application(&self, name: &str) -> (PathBuf, PathBuf) {
         let examples_dir = env::current_dir().unwrap().join("../linera-examples/");
-        tokio::process::Command::new("cargo")
+        let mut command = tokio::process::Command::new("cargo");
+        command
             .current_dir(self.tmp_dir.path().canonicalize().unwrap())
-            .arg("build")
-            .arg("--release")
+            .arg("build");
+        if let Ok(var) = env::var(CARGO_ENV) {
+            command.args(var.split_whitespace());
+        }
+        command
+            .args(env::var(CARGO_ENV).unwrap().split_whitespace())
             .args(["--target", "wasm32-unknown-unknown"])
             .arg("--manifest-path")
             .arg(examples_dir.join(name).join("Cargo.toml"))
