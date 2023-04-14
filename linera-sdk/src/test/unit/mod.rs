@@ -13,14 +13,28 @@
 // Import the contract system interface.
 wit_bindgen_guest_rust::export!("mock_system_api.wit");
 
+mod conversions_to_wit;
+
 use self::mock_system_api as wit;
+use linera_base::identifiers::ChainId;
+
+static mut MOCK_CHAIN_ID: Option<ChainId> = None;
+
+/// Sets the mocked chain ID.
+pub fn mock_chain_id(chain_id: impl Into<Option<ChainId>>) {
+    unsafe { MOCK_CHAIN_ID = chain_id.into() };
+}
 
 /// Implementation of type that exports an interface for using the mock system API.
 pub struct MockSystemApi;
 
 impl wit::MockSystemApi for MockSystemApi {
     fn mocked_chain_id() -> wit::CryptoHash {
-        todo!();
+        unsafe { MOCK_CHAIN_ID }
+            .expect(
+                "Unexpected call to the `chain_id` system API. Please call `mock_chain_id` first",
+            )
+            .into()
     }
 
     fn mocked_application_id() -> wit::ApplicationId {
