@@ -16,11 +16,15 @@ wit_bindgen_guest_rust::export!("mock_system_api.wit");
 mod conversions_to_wit;
 
 use self::mock_system_api as wit;
-use linera_base::identifiers::{ApplicationId, ChainId};
+use linera_base::{
+    data_types::Balance,
+    identifiers::{ApplicationId, ChainId},
+};
 
 static mut MOCK_CHAIN_ID: Option<ChainId> = None;
 static mut MOCK_APPLICATION_ID: Option<ApplicationId> = None;
 static mut MOCK_APPLICATION_PARAMETERS: Option<Vec<u8>> = None;
+static mut MOCK_SYSTEM_BALANCE: Option<Balance> = None;
 
 /// Sets the mocked chain ID.
 pub fn mock_chain_id(chain_id: impl Into<Option<ChainId>>) {
@@ -35,6 +39,11 @@ pub fn mock_application_id(application_id: impl Into<Option<ApplicationId>>) {
 /// Sets the mocked application parameters.
 pub fn mock_application_parameters(application_parameters: impl Into<Option<Vec<u8>>>) {
     unsafe { MOCK_APPLICATION_PARAMETERS = application_parameters.into() };
+}
+
+/// Sets the mocked system balance.
+pub fn mock_system_balance(system_balance: impl Into<Option<Balance>>) {
+    unsafe { MOCK_SYSTEM_BALANCE = system_balance.into() };
 }
 
 /// Implementation of type that exports an interface for using the mock system API.
@@ -68,7 +77,12 @@ impl wit::MockSystemApi for MockSystemApi {
     }
 
     fn mocked_read_system_balance() -> wit::Balance {
-        todo!();
+        unsafe { MOCK_SYSTEM_BALANCE }
+            .expect(
+                "Unexpected call to the `read_system_balance` system API. \
+                Please call `mock_system_balance` first",
+            )
+            .into()
     }
 
     fn mocked_read_system_timestamp() -> u64 {
