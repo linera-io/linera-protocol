@@ -21,7 +21,6 @@ macro_rules! impl_writable_system {
 
             type Lock = HostFuture<$runtime, Result<(), ExecutionError>>;
             type ReadKeyBytes = HostFuture<$runtime, Result<Option<Vec<u8>>, ExecutionError>>;
-            type ReadMultiKeyBytes = HostFuture<$runtime, Result<Vec<Option<Vec<u8>>>, ExecutionError>>;
             type FindKeys = HostFuture<$runtime, Result<Vec<Vec<u8>>, ExecutionError>>;
             type FindKeyValues =
                 HostFuture<$runtime, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
@@ -110,30 +109,6 @@ macro_rules! impl_writable_system {
                 match future.poll(self.waker()) {
                     Poll::Pending => Ok(PollReadKeyBytes::Pending),
                     Poll::Ready(opt_list) => Ok(PollReadKeyBytes::Ready(opt_list?)),
-                }
-            }
-
-            fn read_multi_key_bytes_new(
-                &mut self,
-                keys: Vec<&[u8]>,
-            ) -> Result<Self::ReadMultiKeyBytes, Self::Error> {
-                let mut keys_a = Vec::<Vec<u8>>::new();
-                for key in keys {
-                    keys_a.push(key.to_vec());
-                }
-                Ok(self
-                    .queued_future_factory
-                    .enqueue(self.runtime().read_multi_key_bytes(keys_a)))
-            }
-
-            fn read_multi_key_bytes_poll(
-                &mut self,
-                future: &Self::ReadMultiKeyBytes,
-            ) -> Result<writable_system::PollReadMultiKeyBytes, Self::Error> {
-                use writable_system::PollReadMultiKeyBytes;
-                match future.poll(self.waker()) {
-                    Poll::Pending => Ok(PollReadMultiKeyBytes::Pending),
-                    Poll::Ready(opt_list) => Ok(PollReadMultiKeyBytes::Ready(opt_list?)),
                 }
             }
 
@@ -310,7 +285,6 @@ macro_rules! impl_queryable_system {
             type Lock = HostFuture<$runtime, Result<(), ExecutionError>>;
             type Unlock = HostFuture<$runtime, Result<(), ExecutionError>>;
             type ReadKeyBytes = HostFuture<$runtime, Result<Option<Vec<u8>>, ExecutionError>>;
-            type ReadMultiKeyBytes = HostFuture<$runtime, Result<Vec<Option<Vec<u8>>>, ExecutionError>>;
             type FindKeys = HostFuture<$runtime, Result<Vec<Vec<u8>>, ExecutionError>>;
             type FindKeyValues =
                 HostFuture<$runtime, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
@@ -388,26 +362,6 @@ macro_rules! impl_queryable_system {
                     Poll::Pending => PollReadKeyBytes::Pending,
                     Poll::Ready(Ok(opt_list)) => PollReadKeyBytes::Ready(Ok(opt_list)),
                     Poll::Ready(Err(error)) => PollReadKeyBytes::Ready(Err(error.to_string())),
-                }
-            }
-
-            fn read_multi_key_bytes_new(&mut self, keys: Vec<&[u8]>) -> Self::ReadMultiKeyBytes {
-                let mut keys_a = Vec::<Vec<u8>>::new();
-                for key in keys {
-                    keys_a.push(key.to_vec());
-                }
-                HostFuture::new(self.runtime().read_multi_key_bytes(keys_a))
-            }
-
-            fn read_multi_key_bytes_poll(
-                &mut self,
-                future: &Self::ReadMultiKeyBytes,
-            ) -> queryable_system::PollReadMultiKeyBytes {
-                use queryable_system::PollReadMultiKeyBytes;
-                match future.poll(self.waker()) {
-                    Poll::Pending => PollReadMultiKeyBytes::Pending,
-                    Poll::Ready(Ok(opt_list)) => PollReadMultiKeyBytes::Ready(Ok(opt_list)),
-                    Poll::Ready(Err(error)) => PollReadMultiKeyBytes::Ready(Err(error.to_string())),
                 }
             }
 

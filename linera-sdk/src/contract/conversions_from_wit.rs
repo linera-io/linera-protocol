@@ -6,8 +6,7 @@
 use super::{
     wit_types,
     writable_system::{
-        self as system, PollFindKeyValues, PollFindKeys, PollLock, PollReadKeyBytes,
-        PollReadMultiKeyBytes, PollUnit,
+        self as system, PollFindKeyValues, PollFindKeys, PollLock, PollReadKeyBytes, PollUnit,
     },
 };
 use linera_base::{
@@ -184,15 +183,6 @@ impl From<PollReadKeyBytes> for Poll<Option<Vec<u8>>> {
         match poll_read_key_bytes {
             PollReadKeyBytes::Ready(bytes) => Poll::Ready(bytes),
             PollReadKeyBytes::Pending => Poll::Pending,
-        }
-    }
-}
-
-impl From<PollReadMultiKeyBytes> for Poll<Vec<Option<Vec<u8>>>> {
-    fn from(poll_read_multi_key_bytes: PollReadMultiKeyBytes) -> Self {
-        match poll_read_multi_key_bytes {
-            PollReadMultiKeyBytes::Ready(result) => Poll::Ready(result),
-            PollReadMultiKeyBytes::Pending => Poll::Pending,
         }
     }
 }
