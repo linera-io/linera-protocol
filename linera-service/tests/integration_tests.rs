@@ -670,7 +670,6 @@ impl TestRunner {
             command.args(var.split_whitespace());
         }
         command
-            .args(env::var(CARGO_ENV).unwrap().split_whitespace())
             .args(["--target", "wasm32-unknown-unknown"])
             .arg("--manifest-path")
             .arg(examples_dir.join(name).join("Cargo.toml"))
