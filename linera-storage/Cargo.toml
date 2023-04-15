@@ -5,7 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [features]
-default = ["wasmer", "wasmtime"]
+default = ["wasmer"]
 test = ["tokio/rt", "tokio/test-util", "tokio/time", "linera-execution/test", "linera-views/test"]
 wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
