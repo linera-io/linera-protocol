@@ -267,6 +267,31 @@ pub fn add_to_linker(linker: &mut Linker<()>) -> Result<()> {
             })
         },
     )?;
+    linker.func_wrap1_async(
+        "writable_system",
+        "load-and-lock: func() -> option<list<u8>>",
+        move |mut caller: Caller<'_, ()>, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-load-and-lock: func() -> option<list<u8>>",
+                )
+                .expect(
+                    "Missing `mocked-load-and-lock` function in the module. \
+                    Please ensure `linera_sdk::test::mock_application_state` was called",
+                );
+
+                let (result_offset,) = function
+                    .typed::<(), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-load-and-lock` function signature")
+                    .call_async(&mut caller, ())
+                    .await
+                    .expect("Failed to call `mocked-load`-and-lock function");
+
+                copy_memory_slices(&mut caller, result_offset, return_offset, 12);
+            })
+        },
+    )?;
 
     linker.func_wrap1_async(
         "queryable_system",
