@@ -47,8 +47,15 @@ impl WasmApplication {
         service_bytecode: Bytecode,
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
+        let contract_bytecode = if runtime.needs_sanitizer() {
+            // Ensure bytecode normalization whenever wasmer and wasmtime are possibly
+            // compared.
+            sanitize(contract_bytecode)?
+        } else {
+            contract_bytecode
+        };
         Ok(WasmApplication {
-            contract_bytecode: sanitize(contract_bytecode)?,
+            contract_bytecode,
             service_bytecode,
             runtime,
         })
@@ -100,13 +107,13 @@ impl UserApplication for WasmApplication {
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         let result = match self.runtime {
             #[cfg(feature = "wasmtime")]
-            WasmRuntime::Wasmtime => {
+            WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
                 self.prepare_contract_runtime_with_wasmtime(runtime)?
                     .initialize(context, argument)
                     .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmRuntime::Wasmer => {
+            WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
                 self.prepare_contract_runtime_with_wasmer(runtime)?
                     .initialize(context, argument)
                     .await?
@@ -123,13 +130,13 @@ impl UserApplication for WasmApplication {
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         let result = match self.runtime {
             #[cfg(feature = "wasmtime")]
-            WasmRuntime::Wasmtime => {
+            WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
                 self.prepare_contract_runtime_with_wasmtime(runtime)?
                     .execute_operation(context, operation)
                     .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmRuntime::Wasmer => {
+            WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
                 self.prepare_contract_runtime_with_wasmer(runtime)?
                     .execute_operation(context, operation)
                     .await?
@@ -146,13 +153,13 @@ impl UserApplication for WasmApplication {
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         let result = match self.runtime {
             #[cfg(feature = "wasmtime")]
-            WasmRuntime::Wasmtime => {
+            WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
                 self.prepare_contract_runtime_with_wasmtime(runtime)?
                     .execute_effect(context, effect)
                     .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmRuntime::Wasmer => {
+            WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
                 self.prepare_contract_runtime_with_wasmer(runtime)?
                     .execute_effect(context, effect)
                     .await?
@@ -170,13 +177,13 @@ impl UserApplication for WasmApplication {
     ) -> Result<ApplicationCallResult, ExecutionError> {
         let result = match self.runtime {
             #[cfg(feature = "wasmtime")]
-            WasmRuntime::Wasmtime => {
+            WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
                 self.prepare_contract_runtime_with_wasmtime(runtime)?
                     .handle_application_call(context, argument, forwarded_sessions)
                     .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmRuntime::Wasmer => {
+            WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
                 self.prepare_contract_runtime_with_wasmer(runtime)?
                     .handle_application_call(context, argument, forwarded_sessions)
                     .await?
@@ -196,7 +203,7 @@ impl UserApplication for WasmApplication {
     ) -> Result<SessionCallResult, ExecutionError> {
         let result = match self.runtime {
             #[cfg(feature = "wasmtime")]
-            WasmRuntime::Wasmtime => {
+            WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
                 self.prepare_contract_runtime_with_wasmtime(runtime)?
                     .handle_session_call(
                         context,
@@ -208,7 +215,7 @@ impl UserApplication for WasmApplication {
                     .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmRuntime::Wasmer => {
+            WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
                 self.prepare_contract_runtime_with_wasmer(runtime)?
                     .handle_session_call(
                         context,
@@ -231,13 +238,13 @@ impl UserApplication for WasmApplication {
     ) -> Result<Vec<u8>, ExecutionError> {
         let result = match self.runtime {
             #[cfg(feature = "wasmtime")]
-            WasmRuntime::Wasmtime => {
+            WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
                 self.prepare_service_runtime_with_wasmtime(runtime)?
                     .query_application(context, argument)
                     .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmRuntime::Wasmer => {
+            WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
                 self.prepare_service_runtime_with_wasmer(runtime)?
                     .query_application(context, argument)
                     .await?
