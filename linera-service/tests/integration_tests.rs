@@ -461,8 +461,11 @@ impl TestRunner {
         command
             .current_dir(&self.tmp_dir.path().canonicalize().unwrap())
             .kill_on_drop(true)
-            .arg("run")
-            .arg("--release")
+            .arg("run");
+        if let Ok(var) = env::var(CARGO_ENV) {
+            command.args(var.split_whitespace());
+        }
+        command
             .arg("--manifest-path")
             .arg(env::current_dir().unwrap().join("Cargo.toml"))
             .arg("--features")
@@ -662,14 +665,10 @@ impl TestRunner {
 
     async fn build_application(&self, name: &str) -> (PathBuf, PathBuf) {
         let examples_dir = env::current_dir().unwrap().join("../linera-examples/");
-        let mut command = tokio::process::Command::new("cargo");
-        command
+        tokio::process::Command::new("cargo")
             .current_dir(self.tmp_dir.path().canonicalize().unwrap())
-            .arg("build");
-        if let Ok(var) = env::var(CARGO_ENV) {
-            command.args(var.split_whitespace());
-        }
-        command
+            .arg("build")
+            .arg("--release")
             .args(["--target", "wasm32-unknown-unknown"])
             .arg("--manifest-path")
             .arg(examples_dir.join(name).join("Cargo.toml"))
