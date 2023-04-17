@@ -880,9 +880,6 @@ pub mod tests {
                     let count = count.unwrap_or_else(|| self.queue.count());
                     Ok(self.queue.read_front(count).await?)
                 }
-                async fn map(&self) -> Result<Vec<String>, async_graphql::Error> {
-                    Ok(self.map.indices().await?)
-                }
                 async fn map(&self, string: String) -> Result<Option<usize>, async_graphql::Error> {
                     Ok(self.map.get(&string).await?)
                 }
