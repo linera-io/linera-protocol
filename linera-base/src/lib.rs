@@ -10,6 +10,9 @@ pub mod data_types;
 mod graphql;
 pub mod identifiers;
 
+#[doc(hidden)]
+pub use {async_graphql, bcs, hex};
+
 /// A macro for asserting that a condition is true, returning an error if it is not.
 ///
 /// # Examples
