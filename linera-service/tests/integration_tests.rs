@@ -219,7 +219,7 @@ impl Client {
             .unwrap();
     }
 
-    async fn run_command(command: &mut tokio::process::Command) -> Vec<u8> {
+    async fn run_command(command: &mut tokio::process::Command) -> String {
         let output = command
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -235,7 +235,7 @@ impl Client {
             command,
             String::from_utf8_lossy(&output.stderr)
         );
-        output.stdout
+        String::from_utf8(output.stdout).unwrap()
     }
 
     async fn publish_application<I, J>(
@@ -304,8 +304,8 @@ impl Client {
                 .arg(&chain_id.to_string()),
         )
         .await;
-        let amount = String::from_utf8_lossy(stdout.as_slice()).to_string();
-        Ok(amount.trim().parse()?)
+        let amount = stdout.trim().parse()?;
+        Ok(amount)
     }
 
     async fn transfer(&self, amount: usize, from: ChainId, to: ChainId) {
@@ -345,9 +345,7 @@ impl Client {
         }
 
         let stdout = Self::run_command(&mut command).await;
-
-        let as_string = String::from_utf8_lossy(stdout.as_slice());
-        let mut split = as_string.split('\n');
+        let mut split = stdout.split('\n');
         let chain_id = ChainId::from_str(split.next().unwrap())?;
         let cert: Certificate = bcs::from_bytes(&hex::decode(split.next().unwrap())?)?;
 
@@ -385,9 +383,7 @@ impl Client {
 
     async fn keygen(&self) -> anyhow::Result<Owner> {
         let stdout = Self::run_command(self.client_run().arg("keygen")).await;
-        Ok(Owner::from_str(
-            String::from_utf8_lossy(stdout.as_slice()).trim(),
-        )?)
+        Ok(Owner::from_str(stdout.trim())?)
     }
 
     async fn assign(
