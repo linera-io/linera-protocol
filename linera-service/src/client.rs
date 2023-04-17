@@ -1030,7 +1030,6 @@ where
                     .context("failed to publish bytecode")?;
 
                 info!("{}", "Bytecode published successfully!".green().bold());
-                info!("Bytecode Id: {}", format!("{:?}", bytecode_id).bold());
 
                 info!("Synchronizing...");
                 chain_client.synchronize_and_recompute_balance().await?;
@@ -1047,10 +1046,7 @@ where
                     .context("failed to create application")?;
 
                 info!("{}", "Application published successfully!".green().bold());
-                info!(
-                    "Application Id: {}\n",
-                    format!("{:?}", application_id).bold()
-                );
+                println!("{}", serde_json::to_string(&application_id).unwrap());
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs())
             }
 
