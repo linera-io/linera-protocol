@@ -1,6 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(not(feature = "disable_caching"))]
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) const STANDARD_MAX_CACHE_SIZE: usize = 1000;
+#[cfg(feature = "disable_caching")]
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) const STANDARD_MAX_CACHE_SIZE: usize = 0;
+
 use crate::{
     batch::{Batch, WriteOperation},
     common::{get_interval, KeyValueStoreClient},
@@ -83,6 +90,7 @@ impl<'a> LruPrefixCache {
 #[derive(Clone)]
 pub struct LruCachingKeyValueClient<K> {
     client: K,
+    max_cache_size: usize,
     lru_read_keys: Arc<Mutex<LruPrefixCache>>,
 }
 
@@ -96,6 +104,9 @@ where
     type KeyValues = K::KeyValues;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        if self.max_cache_size == 0 {
+            return self.client.read_key_bytes(key).await;
+        }
         // First inquiring in the read_key_bytes LRU
         let lru_read_keys = self.lru_read_keys.lock().await;
         if let Some(value) = lru_read_keys.query(key) {
@@ -150,6 +161,9 @@ where
     }
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
+        if self.max_cache_size == 0 {
+            return self.client.write_batch(batch, base_key).await;
+        }
         let mut lru_read_keys = self.lru_read_keys.lock().await;
         for operation in &batch.operations {
             match operation {
@@ -182,6 +196,7 @@ where
         let lru_read_keys = Arc::new(Mutex::new(LruPrefixCache::new(max_size)));
         Self {
             client,
+            max_cache_size: max_size,
             lru_read_keys,
         }
     }

@@ -5,6 +5,7 @@ use crate::{
     batch::{Batch, DeletePrefixExpander, SimpleUnorderedBatch},
     common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient, MIN_VIEW_TAG},
     localstack,
+    lru_caching::{LruCachingKeyValueClient, STANDARD_MAX_CACHE_SIZE},
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -171,7 +172,7 @@ impl TransactionBuilder {
     fn insert_delete_request(
         &mut self,
         key: Vec<u8>,
-        db: &DynamoDbClient,
+        db: &DynamoDbClientInternal,
     ) -> Result<(), DynamoDbContextError> {
         if key.is_empty() {
             return Err(DynamoDbContextError::ZeroLengthKey);
@@ -189,7 +190,7 @@ impl TransactionBuilder {
         &mut self,
         key: Vec<u8>,
         value: Vec<u8>,
-        db: &DynamoDbClient,
+        db: &DynamoDbClientInternal,
     ) -> Result<(), DynamoDbContextError> {
         if key.is_empty() {
             return Err(DynamoDbContextError::ZeroLengthKey);
@@ -206,7 +207,7 @@ impl TransactionBuilder {
         Ok(())
     }
 
-    async fn submit(self, db: &DynamoDbClient) -> Result<(), DynamoDbContextError> {
+    async fn submit(self, db: &DynamoDbClientInternal) -> Result<(), DynamoDbContextError> {
         if self.transacts.len() > MAX_TRANSACT_WRITE_ITEM_SIZE {
             return Err(DynamoDbContextError::TransactUpperLimitSize);
         }
@@ -255,7 +256,7 @@ impl JournalHeader {
     /// Resolves the database by using the header that has been retrieved
     async fn coherently_resolve_journal(
         mut self,
-        db: &DynamoDbClient,
+        db: &DynamoDbClientInternal,
         base_key: &[u8],
     ) -> Result<(), DynamoDbContextError> {
         loop {
@@ -300,7 +301,7 @@ impl DynamoDbBatch {
     fn add_journal_header_operations(
         transact_builder: &mut TransactionBuilder,
         header: &JournalHeader,
-        db: &DynamoDbClient,
+        db: &DynamoDbClientInternal,
         base_key: &[u8],
     ) -> Result<(), DynamoDbContextError> {
         let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
@@ -316,7 +317,7 @@ impl DynamoDbBatch {
     /// Writes blocks to the database so as to be resolved later.
     pub async fn write_journal(
         self,
-        db: &DynamoDbClient,
+        db: &DynamoDbClientInternal,
         base_key: &[u8],
     ) -> Result<JournalHeader, DynamoDbContextError> {
         let delete_count = self.0.deletions.len();
@@ -375,7 +376,7 @@ impl DynamoDbBatch {
     /// This code is for submitting the transaction in one single transaction when that is possible.
     pub async fn write_fastpath_failsafe(
         self,
-        db: &DynamoDbClient,
+        db: &DynamoDbClientInternal,
     ) -> Result<(), DynamoDbContextError> {
         let mut tb = TransactionBuilder::default();
         for key in self.0.deletions {
@@ -387,7 +388,10 @@ impl DynamoDbBatch {
         tb.submit(db).await
     }
 
-    async fn from_batch(db: &DynamoDbClient, batch: Batch) -> Result<Self, DynamoDbContextError> {
+    async fn from_batch(
+        db: &DynamoDbClientInternal,
+        batch: Batch,
+    ) -> Result<Self, DynamoDbContextError> {
         // As a matter of fact the DynamoDB does not support the deleteprefix operation.
         // Therefore it does not make sense to have a delete prefix and they have to
         // be downloaded for making a list.
@@ -497,13 +501,13 @@ impl KeyValueIterable<DynamoDbContextError> for DynamoDbKeyValues {
 
 /// A DynamoDB client.
 #[derive(Debug, Clone)]
-pub struct DynamoDbClient {
+pub struct DynamoDbClientInternal {
     client: Client,
     table: TableName,
 }
 
 #[async_trait]
-impl DeletePrefixExpander for DynamoDbClient {
+impl DeletePrefixExpander for DynamoDbClientInternal {
     type Error = DynamoDbContextError;
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let mut vector_list = Vec::new();
@@ -514,11 +518,20 @@ impl DeletePrefixExpander for DynamoDbClient {
     }
 }
 
-impl DynamoDbClient {
-    /// Creates a new [`DynamoDbClient`] instance.
-    pub async fn new(table: TableName) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let config = aws_config::load_from_env().await;
-        DynamoDbClient::from_config(&config, table).await
+impl DynamoDbClientInternal {
+    /// Creates a new [`DynamoDbClientInternal`] instance using the provided `config` parameters.
+    pub async fn from_config(
+        config: impl Into<Config>,
+        table: TableName,
+    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
+        let db = DynamoDbClientInternal {
+            client: Client::from_conf(config.into()),
+            table,
+        };
+
+        let table_status = db.create_table_if_needed().await?;
+
+        Ok((db, table_status))
     }
 
     async fn get_query_output(
@@ -622,40 +635,10 @@ impl DynamoDbClient {
             Err(error) => Err(error.into()),
         }
     }
-
-    /// Creates a new [`DynamoDbClient`] instance using the provided `config` parameters.
-    pub async fn from_config(
-        config: impl Into<Config>,
-        table: TableName,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let db = DynamoDbClient {
-            client: Client::from_conf(config.into()),
-            table,
-        };
-
-        let table_status = db.create_table_if_needed().await?;
-
-        Ok((db, table_status))
-    }
-
-    /// Creates a new [`DynamoDbClient`] instance using a LocalStack endpoint.
-    ///
-    /// Requires a `LOCALSTACK_ENDPOINT` environment variable with the endpoint address to connect
-    /// to the LocalStack instance. Creates the table if it doesn't exist yet, reporting a
-    /// [`TableStatus`] to indicate if the table was created or if it already exists.
-    pub async fn with_localstack(
-        table: TableName,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let base_config = aws_config::load_from_env().await;
-        let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
-            .endpoint_resolver(localstack::get_endpoint()?)
-            .build();
-        DynamoDbClient::from_config(config, table).await
-    }
 }
 
 #[async_trait]
-impl KeyValueStoreClient for DynamoDbClient {
+impl KeyValueStoreClient for DynamoDbClientInternal {
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
@@ -727,6 +710,104 @@ impl KeyValueStoreClient for DynamoDbClient {
             header.coherently_resolve_journal(self, base_key).await?;
         }
         Ok(())
+    }
+}
+
+/// A shared DB client for DynamoDb implementing LruCaching
+#[derive(Clone)]
+pub struct DynamoDbClient {
+    client: LruCachingKeyValueClient<DynamoDbClientInternal>,
+}
+
+#[async_trait]
+impl KeyValueStoreClient for DynamoDbClient {
+    type Error = DynamoDbContextError;
+    type Keys = DynamoDbKeys;
+    type KeyValues = DynamoDbKeyValues;
+
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
+        self.client.read_key_bytes(key).await
+    }
+
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, DynamoDbContextError> {
+        self.client.find_keys_by_prefix(key_prefix).await
+    }
+
+    async fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValues, DynamoDbContextError> {
+        self.client.find_key_values_by_prefix(key_prefix).await
+    }
+
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
+        self.client.write_batch(batch, base_key).await
+    }
+
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
+        self.client.clear_journal(base_key).await
+    }
+}
+
+#[cfg(not(feature = "lru_caching"))]
+impl DynamoDbClient {
+    /// Creation of the DynamoDbClient
+    pub async fn from_config(
+        config: impl Into<Config>,
+        table: TableName,
+    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
+        let (client, table_name) = DynamoDbClientInternal::from_config(config, table).await?;
+        let cache_size = STANDARD_MAX_CACHE_SIZE;
+        Ok((
+            Self {
+                client: LruCachingKeyValueClient::new(client, cache_size),
+            },
+            table_name,
+        ))
+    }
+}
+
+#[cfg(feature = "lru_caching")]
+impl DynamoDbClient {
+    /// Creation of the DynamoDbClient with an LRU caching
+    pub async fn from_config(
+        config: impl Into<Config>,
+        table: TableName,
+    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
+        let (client, table_name) = DynamoDbClientInternal::from_config(config, table).await?;
+        let cache_size = STANDARD_MAX_CACHE_SIZE;
+        Ok((
+            Self {
+                client: LruCachingKeyValueClient::new(client, cache_size),
+            },
+            table_name,
+        ))
+    }
+}
+
+impl DynamoDbClient {
+    /// Creates a new [`DynamoDbClientInternal`] instance.
+    pub async fn new(table: TableName) -> Result<(Self, TableStatus), DynamoDbContextError> {
+        let config = aws_config::load_from_env().await;
+        DynamoDbClient::from_config(&config, table).await
+    }
+
+    /// Creates a new [`DynamoDbClientInternal`] instance using a LocalStack endpoint.
+    ///
+    /// Requires a `LOCALSTACK_ENDPOINT` environment variable with the endpoint address to connect
+    /// to the LocalStack instance. Creates the table if it doesn't exist yet, reporting a
+    /// [`TableStatus`] to indicate if the table was created or if it already exists.
+    pub async fn with_localstack(
+        table: TableName,
+    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
+        let base_config = aws_config::load_from_env().await;
+        let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
+            .endpoint_resolver(localstack::get_endpoint()?)
+            .build();
+        DynamoDbClient::from_config(config, table).await
     }
 }
 

@@ -1,11 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "lru_caching")]
-use crate::lru_caching::LruCachingKeyValueClient;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{get_upper_bound, ContextFromDb, KeyValueStoreClient},
+    lru_caching::{LruCachingKeyValueClient, STANDARD_MAX_CACHE_SIZE},
 };
 use async_trait::async_trait;
 use std::{
@@ -21,34 +20,12 @@ pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 /// The internal client
 pub type DbInternal = Arc<DB>;
 
-/// A shared DB client for RocksDB.
-#[cfg(not(feature = "lru_caching"))]
-#[derive(Clone)]
-pub struct RocksdbClient {
-    client: DbInternal,
-}
-
 /// A shared DB client for RocksDB implementing LruCaching
-#[cfg(feature = "lru_caching")]
 #[derive(Clone)]
 pub struct RocksdbClient {
     client: LruCachingKeyValueClient<DbInternal>,
 }
 
-#[cfg(not(feature = "lru_caching"))]
-impl RocksdbClient {
-    /// Creates a rocksdb database from a specified path
-    pub fn new<P: AsRef<Path>>(path: P) -> RocksdbClient {
-        let mut options = rocksdb::Options::default();
-        options.create_if_missing(true);
-        let db = DB::open(&options, path).unwrap();
-        Self {
-            client: Arc::new(db),
-        }
-    }
-}
-
-#[cfg(feature = "lru_caching")]
 impl RocksdbClient {
     /// Creates a rocksdb database from a specified path
     pub fn new<P: AsRef<Path>>(path: P) -> RocksdbClient {
@@ -56,7 +33,7 @@ impl RocksdbClient {
         options.create_if_missing(true);
         let db = DB::open(&options, path).unwrap();
         let client = Arc::new(db);
-        let cache_size = 1000;
+        let cache_size = STANDARD_MAX_CACHE_SIZE;
         Self {
             client: LruCachingKeyValueClient::new(client, cache_size),
         }

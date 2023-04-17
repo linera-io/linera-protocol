@@ -16,9 +16,6 @@ pub mod common;
 /// The definition of the `View` and related traits.
 pub mod views;
 
-/// The LRU (least recently used) caching.
-pub mod lru_caching;
-
 /// The `RegisterView` allows to implement a register for a single value.
 pub mod register_view;
 
@@ -37,6 +34,13 @@ pub mod set_view;
 /// The `CollectionView` implements a map structure whose keys are ordered and the values are views.
 pub mod collection_view;
 
+/// Helper definitions for in-memory storage.
+pub mod memory;
+
+/// The LRU (least recently used) caching.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod lru_caching;
+
 /// The `ReentrantCollectionView` implements a map structure whose keys are ordered and the values are views with concurrent access.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod reentrant_collection_view;
@@ -45,8 +49,9 @@ pub mod reentrant_collection_view;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod key_value_store_view;
 
-/// Helper definitions for in-memory storage.
-pub mod memory;
+/// Wrapping a view to compute a hash.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod hashable_wrapper;
 
 /// Helper definitions for Rocksdb storage.
 #[cfg(not(target_arch = "wasm32"))]
@@ -59,10 +64,6 @@ pub mod dynamo_db;
 /// Helper types for interfacing with a LocalStack instance.
 #[cfg(feature = "aws")]
 pub mod localstack;
-
-/// Wrapping a view to compute a hash.
-#[cfg(not(target_arch = "wasm32"))]
-pub mod hashable_wrapper;
 
 /// Helper types for tests.
 #[cfg(any(test, feature = "test"))]
