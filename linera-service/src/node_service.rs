@@ -20,7 +20,7 @@ use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::PublicKey,
     data_types::Amount,
-    identifiers::{BytecodeId, ChainId, Owner},
+    identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
 };
 use linera_chain::{data_types::Certificate, ChainStateView};
 use linera_core::{
@@ -35,7 +35,7 @@ use linera_execution::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
-use std::{collections::BTreeMap, net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info};
@@ -149,13 +149,11 @@ where
         amount: Amount,
         user_data: Option<UserData>,
     ) -> Result<Certificate, Error> {
-        let operation = SystemOperation::Transfer {
-            owner,
-            recipient,
-            amount,
-            user_data: user_data.unwrap_or_default(),
-        };
-        self.execute_system_operation(operation).await
+        let mut client = self.0.client.lock().await;
+        let certificate = client
+            .transfer(owner, amount, recipient, user_data.unwrap_or_default())
+            .await?;
+        Ok(certificate)
     }
 
     /// Claims `amount` units of value from the given owner's account in
@@ -169,40 +167,32 @@ where
         amount: Amount,
         user_data: Option<UserData>,
     ) -> Result<Certificate, Error> {
-        let operation = SystemOperation::Claim {
-            owner,
-            target,
-            recipient,
-            amount,
-            user_data: user_data.unwrap_or_default(),
-        };
-        self.execute_system_operation(operation).await
+        let mut client = self.0.client.lock().await;
+        let certificate = client
+            .claim(
+                owner,
+                target,
+                recipient,
+                amount,
+                user_data.unwrap_or_default(),
+            )
+            .await?;
+        Ok(certificate)
     }
 
     /// Creates (or activates) a new chain by installing the given authentication key.
     /// This will automatically subscribe to the future committees created by `admin_id`.
-    async fn open_chain(
-        &self,
-        id: ChainId,
-        public_key: PublicKey,
-        admin_id: ChainId,
-        epoch: Epoch,
-        committees: BTreeMap<Epoch, Committee>,
-    ) -> Result<Certificate, Error> {
-        let operation = SystemOperation::OpenChain {
-            id,
-            public_key,
-            admin_id,
-            epoch,
-            committees,
-        };
-        self.execute_system_operation(operation).await
+    async fn open_chain(&self, public_key: PublicKey) -> Result<ChainId, Error> {
+        let mut client = self.0.client.lock().await;
+        let (chain_id, _) = client.open_chain(public_key).await?;
+        Ok(chain_id)
     }
 
     /// Closes the chain.
     async fn close_chain(&self) -> Result<Certificate, Error> {
-        let operation = SystemOperation::CloseChain;
-        self.execute_system_operation(operation).await
+        let mut client = self.0.client.lock().await;
+        let certificate = client.close_chain().await?;
+        Ok(certificate)
     }
 
     /// Changes the authentication key of the chain.
@@ -270,13 +260,14 @@ where
     }
 
     /// Publishes a new application bytecode.
-    async fn publish_bytecodes(
+    async fn publish_bytecode(
         &self,
         contract: Bytecode,
         service: Bytecode,
-    ) -> Result<Certificate, Error> {
-        let operation = SystemOperation::PublishBytecode { contract, service };
-        self.execute_system_operation(operation).await
+    ) -> Result<BytecodeId, Error> {
+        let mut client = self.0.client.lock().await;
+        let (bytecode_id, _) = client.publish_bytecode(contract, service).await?;
+        Ok(bytecode_id)
     }
 
     async fn create_application(
@@ -285,14 +276,17 @@ where
         parameters: Vec<u8>,
         initialization_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<Certificate, Error> {
-        let operation = SystemOperation::CreateApplication {
-            bytecode_id,
-            parameters,
-            initialization_argument,
-            required_application_ids,
-        };
-        self.execute_system_operation(operation).await
+    ) -> Result<ApplicationId, Error> {
+        let mut client = self.0.client.lock().await;
+        let (application_id, _) = client
+            .create_application(
+                bytecode_id,
+                parameters,
+                initialization_argument,
+                required_application_ids,
+            )
+            .await?;
+        Ok(application_id)
     }
 }
 
