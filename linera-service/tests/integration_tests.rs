@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::InputType;
-use linera_base::identifiers::{ApplicationId, BytecodeId, ChainId, EffectId, Owner};
+use linera_base::identifiers::{ChainId, Owner};
 use linera_chain::data_types::Certificate;
 use linera_execution::Bytecode;
 use linera_service::config::WalletState;
@@ -724,15 +724,15 @@ async fn try_get_applications_uri(
         .collect()
 }
 
-async fn publish_application(
+async fn publish_bytecode(
     contract: PathBuf,
     service: PathBuf,
     port: impl Into<Option<u16>>,
-) -> Certificate {
+) -> String {
     let contract_code = Bytecode::load_from_file(&contract).await.unwrap();
     let service_code = Bytecode::load_from_file(&service).await.unwrap();
     let query_string = format!(
-        "mutation {{ publishBytecodes(contract: {}, service: {}) }}",
+        "mutation {{ publishBytecode(contract: {}, service: {}) }}",
         contract_code.to_value(),
         service_code.to_value(),
     );
@@ -760,14 +760,14 @@ async fn publish_application(
         response_body
             .get("data")
             .unwrap()
-            .get("publishBytecodes")
+            .get("publishBytecode")
             .unwrap()
             .clone(),
     )
     .unwrap()
 }
 
-async fn create_application(bytecode_id: &str, port: impl Into<Option<u16>>) -> Certificate {
+async fn create_application(bytecode_id: &str, port: impl Into<Option<u16>>) -> String {
     let query_string = format!(
         "mutation {{ createApplication(\
             bytecodeId: \"{bytecode_id}\", \
@@ -1038,27 +1038,8 @@ async fn social_user_pub_sub() {
     let _node_service1 = client1.run_node_service(chain1, 8080).await;
     let _node_service2 = client2.run_node_service(chain2, 8081).await;
 
-    let cert = publish_application(contract, service, 8080).await;
-
-    assert_eq!(cert.value.effects().len(), 1);
-    let bytecode_id = BytecodeId(EffectId {
-        chain_id: chain1,
-        height: cert.value.block().height,
-        index: 0,
-    });
-    let cert = create_application(&hex::encode(bcs::to_bytes(&bytecode_id).unwrap()), 8080).await;
-    assert_eq!(cert.value.block().operations.len(), 1);
-    let application_id = hex::encode(
-        bcs::to_bytes(&ApplicationId {
-            bytecode_id,
-            creation: EffectId {
-                chain_id: chain1,
-                height: cert.value.block().height,
-                index: 0,
-            },
-        })
-        .unwrap(),
-    );
+    let bytecode_id = publish_bytecode(contract, service, 8080).await;
+    let application_id = create_application(&bytecode_id, 8080).await;
 
     let app1 = get_application_uri(&application_id, chain1, 8080).await;
     let subscribe = format!("mutation {{ subscribe(chainId: \"{}\") }}", chain2);
