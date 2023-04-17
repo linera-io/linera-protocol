@@ -297,6 +297,7 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
         _ => panic!(),
     };
 
+    let view_name = view_type.to_string();
     match view_type.to_string().as_str() {
         "RegisterView" => {
             let generic_arguments = generic_argument_from_type_path(&type_path);
@@ -310,14 +311,14 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
             };
             (r#impl, None)
         }
-        "CollectionView" => {
+        "CollectionView" | "CustomCollectionView" => {
             let generic_arguments = generic_argument_from_type_path(&type_path);
             let index_ident = generic_arguments
                 .get(1)
-                .expect("no index specified for 'CollectionView'");
+                .unwrap_or_else(|| panic!("no index specified for '{}'", view_name));
             let generic_ident = generic_arguments
                 .get(2)
-                .expect("no generic type specified for 'CollectionView'");
+                .unwrap_or_else(|| panic!("no generic type specified for '{}'", view_name));
 
             let index_name = snakify(index_ident);
             let entry_name = create_entry_name(generic_ident);
@@ -362,11 +363,11 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
 
             (r#impl, Some(r#struct))
         }
-        "SetView" => {
+        "SetView" | "CustomSetView" => {
             let generic_arguments = generic_argument_from_type_path(&type_path);
             let generic_ident = generic_arguments
                 .get(1)
-                .expect("no generic type specified for 'SetView'");
+                .unwrap_or_else(|| panic!("no generic type specified for '{}'", view_name));
 
             let r#impl = quote! {
                 async fn #field_name(&self) -> Result<Vec<#generic_ident>, async_graphql::Error> {
@@ -422,14 +423,27 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
             };
             (r#impl, None)
         }
+        "ByteMapView" => {
+            let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_ident = generic_arguments
+                .get(1)
+                .expect("no generic type specified for 'ByteMapView'");
+
+            let r#impl = quote! {
+                async fn #field_name(&self, short_key: Vec<u8>) -> Result<Option<#generic_ident>, async_graphql::Error> {
+                    Ok(self.#field_name.get(&short_key).await?)
+                }
+            };
+            (r#impl, None)
+        }
         "MapView" | "CustomMapView" => {
             let generic_arguments = generic_argument_from_type_path(&type_path);
             let index_ident = generic_arguments
                 .get(1)
-                .expect("no index specified for 'CustomMapView'");
+                .unwrap_or_else(|| panic!("no index specified for '{}'", view_name));
             let generic_ident = generic_arguments
                 .get(2)
-                .expect("no generic type specified for 'CustomMapView'");
+                .unwrap_or_else(|| panic!("no generic type specified for '{}'", view_name));
 
             let index_name = snakify(index_ident);
             let field_keys = concat(&field_name, "_keys");
