@@ -1046,8 +1046,8 @@ where
                     .context("failed to create application")?;
 
                 info!("{}", "Application published successfully!".green().bold());
-                println!("{}", serde_json::to_string(&application_id).unwrap());
-                info!("Time elapsed: {}s", start_time.elapsed().as_secs())
+                println!("{}", hex::encode(bcs::to_bytes(&application_id).unwrap()));
+                info!("Time elapsed: {}s", start_time.elapsed().as_secs());
             }
 
             Assign {

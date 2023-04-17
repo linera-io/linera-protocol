@@ -242,7 +242,7 @@ impl Client {
         service: PathBuf,
         arg: impl ToString,
         publisher: impl Into<Option<ChainId>>,
-    ) -> ApplicationId {
+    ) -> String {
         let stdout = Self::run_command(
             self.client_run_with_storage()
                 .arg("publish")
@@ -251,7 +251,7 @@ impl Client {
                 .args(publisher.into().iter().map(ChainId::to_string)),
         )
         .await;
-        serde_json::from_str(stdout.trim()).expect("Output should be a valid application id.")
+        stdout.trim().to_string()
     }
 
     async fn run_node_service(
@@ -668,7 +668,7 @@ impl TestRunner {
 }
 
 async fn get_application_uri(
-    application_id: ApplicationId,
+    application_id: &str,
     chain_id: impl Into<Option<ChainId>>,
     port: impl Into<Option<u16>>,
 ) -> String {
@@ -677,7 +677,7 @@ async fn get_application_uri(
     for i in 0..10 {
         tokio::time::sleep(Duration::from_secs(i)).await;
         let values = try_get_applications_uri(chain_id, port).await;
-        if let Some(link) = values.get(&application_id) {
+        if let Some(link) = values.get(application_id) {
             return link.to_string();
         }
         warn!(
@@ -691,7 +691,7 @@ async fn get_application_uri(
 async fn try_get_applications_uri(
     chain_id: Option<ChainId>,
     port: Option<u16>,
-) -> HashMap<ApplicationId, String> {
+) -> HashMap<String, String> {
     let query_string = if let Some(chain_id) = chain_id {
         format!(
             "query {{ applications(chainId: \"{}\") {{ id link }}}}",
@@ -717,8 +717,7 @@ async fn try_get_applications_uri(
         .unwrap()
         .iter()
         .map(|a| {
-            let id = serde_json::from_value(a.get("id").unwrap().clone())
-                .expect("id should be a valid application id");
+            let id = a.get("id").unwrap().as_str().unwrap().to_string();
             let link = a.get("link").unwrap().as_str().unwrap().to_string();
             (id, link)
         })
@@ -768,11 +767,14 @@ async fn publish_application(
     .unwrap()
 }
 
-async fn create_application(bytecode_id: BytecodeId, port: impl Into<Option<u16>>) -> Certificate {
+async fn create_application(bytecode_id: &str, port: impl Into<Option<u16>>) -> Certificate {
     let query_string = format!(
-        "mutation {{ createApplication(bytecodeId: {}, parameters: [], \
-        initializationArgument: [], requiredApplicationIds: []) }}",
-        bytecode_id.to_value(),
+        "mutation {{ createApplication(\
+            bytecodeId: \"{bytecode_id}\", \
+            parameters: [], \
+            initializationArgument: [], \
+            requiredApplicationIds: []) \
+        }}"
     );
     let query = json!({ "query": query_string });
     let client = reqwest::Client::new();
@@ -864,7 +866,7 @@ async fn test_counter_end_to_end() {
         .await;
     let _node_service = client.run_node_service(None, None).await;
 
-    let application_uri = get_application_uri(application_id, None, None).await;
+    let application_uri = get_application_uri(&application_id, None, None).await;
 
     let counter_value = get_counter_value(&application_uri).await;
     assert_eq!(counter_value, original_counter_value);
@@ -1044,22 +1046,25 @@ async fn social_user_pub_sub() {
         height: cert.value.block().height,
         index: 0,
     });
-    let cert = create_application(bytecode_id, 8080).await;
+    let cert = create_application(&hex::encode(bcs::to_bytes(&bytecode_id).unwrap()), 8080).await;
     assert_eq!(cert.value.block().operations.len(), 1);
-    let application_id = ApplicationId {
-        bytecode_id,
-        creation: EffectId {
-            chain_id: chain1,
-            height: cert.value.block().height,
-            index: 0,
-        },
-    };
+    let application_id = hex::encode(
+        bcs::to_bytes(&ApplicationId {
+            bytecode_id,
+            creation: EffectId {
+                chain_id: chain1,
+                height: cert.value.block().height,
+                index: 0,
+            },
+        })
+        .unwrap(),
+    );
 
-    let app1 = get_application_uri(application_id, chain1, 8080).await;
+    let app1 = get_application_uri(&application_id, chain1, 8080).await;
     let subscribe = format!("mutation {{ subscribe(chainId: \"{}\") }}", chain2);
     query_application(&app1, &subscribe).await;
 
-    let app2 = get_application_uri(application_id, chain2, 8081).await;
+    let app2 = get_application_uri(&application_id, chain2, 8081).await;
     let post = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
     query_application(&app2, post).await;
 
