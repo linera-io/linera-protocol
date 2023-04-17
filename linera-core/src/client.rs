@@ -1192,7 +1192,7 @@ where
 
     /// Stop listening to the admin chain for new committees. (This is only useful for
     /// testing.)
-    pub async fn unsubscribe_to_new_committees(&mut self) -> Result<Certificate> {
+    pub async fn unsubscribe_from_new_committees(&mut self) -> Result<Certificate> {
         self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
             chain_id: self.admin_id,
             channel: SystemChannel::Admin,
@@ -1213,7 +1213,7 @@ where
     }
 
     /// Stop listening to the given chain for published bytecodes.
-    pub async fn unsubscribe_to_published_bytecodes(
+    pub async fn unsubscribe_from_published_bytecodes(
         &mut self,
         chain_id: ChainId,
     ) -> Result<Certificate> {

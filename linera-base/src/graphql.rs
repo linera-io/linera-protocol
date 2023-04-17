@@ -26,8 +26,8 @@ macro_rules! bcs_scalar {
 
             fn to_value(&self) -> $crate::async_graphql::Value {
                 let ::std::result::Result::Ok(bytes) = $crate::bcs::to_bytes(self) else {
-                                            return $crate::async_graphql::Value::Null;
-                                        };
+                                                    return $crate::async_graphql::Value::Null;
+                                                };
                 let hex = $crate::hex::encode(&bytes);
                 $crate::async_graphql::to_value(hex)
                     .unwrap_or_else(|_| $crate::async_graphql::Value::Null)
