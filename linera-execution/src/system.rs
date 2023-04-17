@@ -128,7 +128,7 @@ pub enum SystemOperation {
         chain_id: ChainId,
         channel: SystemChannel,
     },
-    /// Unsubscribes to a system channel.
+    /// Unsubscribes from a system channel.
     Unsubscribe {
         chain_id: ChainId,
         channel: SystemChannel,
@@ -188,7 +188,7 @@ pub enum SystemEffect {
         id: ChainId,
         subscription: ChannelSubscription,
     },
-    /// Unsubscribes to a channel.
+    /// Unsubscribes from a channel.
     Unsubscribe {
         id: ChainId,
         subscription: ChannelSubscription,
