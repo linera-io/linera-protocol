@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::InputType;
-use linera_base::identifiers::{BytecodeId, ChainId, EffectId, Owner};
+use linera_base::identifiers::{ApplicationId, BytecodeId, ChainId, EffectId, Owner};
 use linera_chain::data_types::Certificate;
 use linera_execution::Bytecode;
 use linera_service::config::WalletState;
@@ -12,6 +12,7 @@ use linera_views::test_utils::LocalStackTestContext;
 use once_cell::sync::Lazy;
 use serde_json::{json, Value};
 use std::{
+    collections::HashMap,
     env, fs,
     io::Write,
     ops::Range,
@@ -241,8 +242,8 @@ impl Client {
         service: PathBuf,
         arg: impl ToString,
         publisher: impl Into<Option<ChainId>>,
-    ) {
-        Self::run_command(
+    ) -> ApplicationId {
+        let stdout = Self::run_command(
             self.client_run_with_storage()
                 .arg("publish")
                 .args([contract, service])
@@ -250,6 +251,7 @@ impl Client {
                 .args(publisher.into().iter().map(ChainId::to_string)),
         )
         .await;
+        serde_json::from_str(stdout.trim()).expect("Output should be a valid application id.")
     }
 
     async fn run_node_service(
@@ -666,6 +668,7 @@ impl TestRunner {
 }
 
 async fn get_application_uri(
+    application_id: ApplicationId,
     chain_id: impl Into<Option<ChainId>>,
     port: impl Into<Option<u16>>,
 ) -> String {
@@ -674,22 +677,24 @@ async fn get_application_uri(
     for i in 0..10 {
         tokio::time::sleep(Duration::from_secs(i)).await;
         let values = try_get_applications_uri(chain_id, port).await;
-        assert!(values.len() <= 1);
-        if values.len() == 1 {
-            return values.get(0).unwrap().clone();
+        if let Some(link) = values.get(&application_id) {
+            return link.to_string();
         }
         warn!(
-            "Waiting for application to be visible on chain {:?}",
+            "Waiting for application {application_id:?} to be visible on chain {:?}",
             chain_id
         );
     }
     panic!("Could not find application uri");
 }
 
-async fn try_get_applications_uri(chain_id: Option<ChainId>, port: Option<u16>) -> Vec<String> {
+async fn try_get_applications_uri(
+    chain_id: Option<ChainId>,
+    port: Option<u16>,
+) -> HashMap<ApplicationId, String> {
     let query_string = if let Some(chain_id) = chain_id {
         format!(
-            "query {{ applications(chainId: \"{}\") {{ link }}}}",
+            "query {{ applications(chainId: \"{}\") {{ id link }}}}",
             chain_id
         )
     } else {
@@ -712,7 +717,13 @@ async fn try_get_applications_uri(chain_id: Option<ChainId>, port: Option<u16>) 
         .as_array()
         .unwrap()
         .iter()
-        .map(|a| a.get("link").unwrap().as_str().unwrap().to_string())
+        .map(|a| {
+            println!("{:?}", a);
+            let id = serde_json::from_value(a.get("id").unwrap().clone())
+                .expect("id should be a valid application id");
+            let link = a.get("link").unwrap().as_str().unwrap().to_string();
+            (id, link)
+        })
         .collect()
 }
 
@@ -759,7 +770,7 @@ async fn publish_application(
     .unwrap()
 }
 
-async fn create_application(bytecode_id: BytecodeId, port: impl Into<Option<u16>>) {
+async fn create_application(bytecode_id: BytecodeId, port: impl Into<Option<u16>>) -> Certificate {
     let query_string = format!(
         "mutation {{ createApplication(bytecodeId: {}, parameters: [], \
         initializationArgument: [], requiredApplicationIds: []) }}",
@@ -777,6 +788,15 @@ async fn create_application(bytecode_id: BytecodeId, port: impl Into<Option<u16>
     if let Some(errors) = response_body.get("errors") {
         panic!("create_application failed: {}", errors);
     }
+    serde_json::from_value(
+        response_body
+            .get("data")
+            .unwrap()
+            .get("createApplication")
+            .unwrap()
+            .clone(),
+    )
+    .unwrap()
 }
 
 async fn get_counter_value(application_uri: &str) -> u64 {
@@ -841,12 +861,12 @@ async fn test_counter_end_to_end() {
     let _local_net = runner.run_local_net(n_validators).await;
     let (contract, service) = runner.build_application("counter-graphql").await;
 
-    client
+    let application_id = client
         .publish_application(contract, service, original_counter_value, None)
         .await;
     let _node_service = client.run_node_service(None, None).await;
 
-    let application_uri = get_application_uri(None, None).await;
+    let application_uri = get_application_uri(application_id, None, None).await;
 
     let counter_value = get_counter_value(&application_uri).await;
     assert_eq!(counter_value, original_counter_value);
@@ -1026,13 +1046,22 @@ async fn social_user_pub_sub() {
         height: cert.value.block().height,
         index: 0,
     });
-    create_application(bytecode_id, 8080).await;
+    let cert = create_application(bytecode_id, 8080).await;
+    assert_eq!(cert.value.block().operations.len(), 1);
+    let application_id = ApplicationId {
+        bytecode_id,
+        creation: EffectId {
+            chain_id: chain1,
+            height: cert.value.block().height,
+            index: 0,
+        },
+    };
 
-    let app1 = get_application_uri(chain1, 8080).await;
+    let app1 = get_application_uri(application_id, chain1, 8080).await;
     let subscribe = format!("mutation {{ subscribe(chainId: \"{}\") }}", chain2);
     query_application(&app1, &subscribe).await;
 
-    let app2 = get_application_uri(chain2, 8081).await;
+    let app2 = get_application_uri(application_id, chain2, 8081).await;
     let post = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
     query_application(&app2, post).await;
 
