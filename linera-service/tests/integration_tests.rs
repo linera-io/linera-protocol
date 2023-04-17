@@ -825,7 +825,7 @@ async fn increment_counter_value(application_uri: &str, increment: u64) {
 }
 
 #[test_log::test(tokio::test)]
-async fn end_to_end() {
+async fn test_counter_end_to_end() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
