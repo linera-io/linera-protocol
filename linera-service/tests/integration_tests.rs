@@ -60,10 +60,7 @@ async fn test_examples_in_readme_simple() -> std::io::Result<()> {
 }
 
 #[allow(clippy::while_let_on_iterator)]
-fn get_bash_quotes<R>(reader: R) -> std::io::Result<Vec<String>>
-where
-    R: std::io::BufRead,
-{
+fn get_bash_quotes(reader: impl std::io::BufRead) -> std::io::Result<Vec<String>> {
     let mut result = Vec::new();
     let mut lines = reader.lines();
 
@@ -238,16 +235,13 @@ impl Client {
         String::from_utf8(output.stdout).unwrap()
     }
 
-    async fn publish_application<I, J>(
+    async fn publish_application(
         &self,
         contract: PathBuf,
         service: PathBuf,
-        arg: I,
-        publisher: J,
-    ) where
-        I: ToString,
-        J: Into<Option<ChainId>>,
-    {
+        arg: impl ToString,
+        publisher: impl Into<Option<ChainId>>,
+    ) {
         Self::run_command(
             self.client_run_with_storage()
                 .arg("publish")
@@ -258,11 +252,11 @@ impl Client {
         .await;
     }
 
-    async fn run_node_service<I, P>(&self, chain_id: I, port: P) -> Child
-    where
-        I: Into<Option<ChainId>>,
-        P: Into<Option<u16>>,
-    {
+    async fn run_node_service(
+        &self,
+        chain_id: impl Into<Option<ChainId>>,
+        port: impl Into<Option<u16>>,
+    ) -> Child {
         let port = port.into().unwrap_or(8080);
         let child = self
             .client_run_with_storage()
@@ -671,11 +665,10 @@ impl TestRunner {
     }
 }
 
-async fn get_application_uri<I, P>(chain_id: I, port: P) -> String
-where
-    I: Into<Option<ChainId>>,
-    P: Into<Option<u16>>,
-{
+async fn get_application_uri(
+    chain_id: impl Into<Option<ChainId>>,
+    port: impl Into<Option<u16>>,
+) -> String {
     let chain_id = chain_id.into();
     let port = port.into();
     for i in 0..10 {
@@ -700,7 +693,7 @@ async fn try_get_applications_uri(chain_id: Option<ChainId>, port: Option<u16>) 
             chain_id
         )
     } else {
-        "query { applications { link }}".to_string()
+        "query { applications { id link }}".to_string()
     };
     let query = json!({ "query": query_string });
     let client = reqwest::Client::new();
@@ -723,10 +716,11 @@ async fn try_get_applications_uri(chain_id: Option<ChainId>, port: Option<u16>) 
         .collect()
 }
 
-async fn publish_application<P>(contract: PathBuf, service: PathBuf, port: P) -> Certificate
-where
-    P: Into<Option<u16>>,
-{
+async fn publish_application(
+    contract: PathBuf,
+    service: PathBuf,
+    port: impl Into<Option<u16>>,
+) -> Certificate {
     let contract_code = Bytecode::load_from_file(&contract).await.unwrap();
     let service_code = Bytecode::load_from_file(&service).await.unwrap();
     let query_string = format!(
@@ -765,10 +759,7 @@ where
     .unwrap()
 }
 
-async fn create_application<P>(bytecode_id: BytecodeId, port: P)
-where
-    P: Into<Option<u16>>,
-{
+async fn create_application(bytecode_id: BytecodeId, port: impl Into<Option<u16>>) {
     let query_string = format!(
         "mutation {{ createApplication(bytecodeId: {}, parameters: [], \
         initializationArgument: [], requiredApplicationIds: []) }}",
