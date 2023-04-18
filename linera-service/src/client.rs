@@ -600,9 +600,9 @@ enum ClientCommand {
         port: NonZeroU16,
     },
 
-    /// Create an application.
-    #[structopt(name = "publish")]
-    Publish {
+    /// Create an application, and publish the required bytecode.
+    #[structopt(name = "publish_and_create")]
+    PublishAndCreate {
         contract: PathBuf,
         service: PathBuf,
         arguments: String,
@@ -997,7 +997,7 @@ where
                 service.run().await?;
             }
 
-            Publish {
+            PublishAndCreate {
                 contract,
                 service,
                 arguments,

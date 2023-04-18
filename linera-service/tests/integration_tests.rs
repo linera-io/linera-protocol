@@ -236,7 +236,7 @@ impl Client {
         String::from_utf8(output.stdout).unwrap()
     }
 
-    async fn publish_application(
+    async fn publish_and_create(
         &self,
         contract: PathBuf,
         service: PathBuf,
@@ -245,7 +245,7 @@ impl Client {
     ) -> String {
         let stdout = Self::run_command(
             self.client_run_with_storage()
-                .arg("publish")
+                .arg("publish_and_create")
                 .args([contract, service])
                 .arg(arg.to_string())
                 .args(publisher.into().iter().map(ChainId::to_string)),
@@ -754,7 +754,7 @@ async fn publish_bytecode(
                 &error_string[(error_string.len() - 5000)..]
             );
         }
-        panic!("publish_application failed: {}", error_string);
+        panic!("publish_and_create failed: {}", error_string);
     }
     serde_json::from_value(
         response_body
@@ -862,7 +862,7 @@ async fn test_counter_end_to_end() {
     let (contract, service) = runner.build_application("counter-graphql").await;
 
     let application_id = client
-        .publish_application(contract, service, original_counter_value, None)
+        .publish_and_create(contract, service, original_counter_value, None)
         .await;
     let _node_service = client.run_node_service(None, None).await;
 
