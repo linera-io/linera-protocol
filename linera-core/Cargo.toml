@@ -51,7 +51,7 @@ test-case = "3.0.0"
 tracing-subscriber = { version = "0.3.16", default-features = false, features = ["env-filter", "fmt"] }
 
 [package.metadata.cargo-machete]
-ignored = ["proptest"]
+ignored = ["proptest", "async-graphql"]
 
 [[bench]]
 name = "client_benchmarks"
