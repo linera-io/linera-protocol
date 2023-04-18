@@ -13,6 +13,11 @@ use linera_sdk::{
     base::{ApplicationId, Balance, BlockHeight, BytecodeId, ChainId, EffectId, Timestamp},
     contract, service, test, ContractLogger, ServiceLogger,
 };
+use linera_views::{
+    common::Context,
+    register_view::RegisterView,
+    views::{RootView, View},
+};
 use webassembly_test::webassembly_test;
 
 /// Test if the chain ID getter API is mocked successfully.
@@ -163,4 +168,48 @@ fn mock_load_and_lock_blob_state() {
         contract::system_api::load_and_lock::<Vec<u8>>(),
         Some(state)
     );
+}
+
+/// A dummy view to test the key value store.
+#[derive(RootView)]
+struct DummyView<C> {
+    one: RegisterView<C, u8>,
+    two: RegisterView<C, u16>,
+    three: RegisterView<C, u32>,
+}
+
+/// Test if views are loaded from a memory key-value store.
+#[webassembly_test]
+fn mock_load_view() {
+    let store = test::mock_key_value_store();
+    let mut initial_view = DummyView::load(store)
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately")
+        .expect("Failed to initialize `DummyView` with the mock key value store");
+
+    initial_view.one.set(1);
+    initial_view.two.set(2);
+    initial_view.three.set(3);
+    initial_view
+        .save()
+        .now_or_never()
+        .expect("Persisting a view to memory should be instantaneous")
+        .expect("Failed to persist view state");
+
+    let contract_view = contract::system_api::load_and_lock_view::<DummyView<_>>()
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately")
+        .expect("Failed to lock view");
+
+    assert_eq!(initial_view.one.get(), contract_view.one.get());
+    assert_eq!(initial_view.two.get(), contract_view.two.get());
+    assert_eq!(initial_view.three.get(), contract_view.three.get());
+
+    let service_view = service::system_api::lock_and_load_view::<DummyView<_>>()
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately");
+
+    assert_eq!(initial_view.one.get(), service_view.one.get());
+    assert_eq!(initial_view.two.get(), service_view.two.get());
+    assert_eq!(initial_view.three.get(), service_view.three.get());
 }

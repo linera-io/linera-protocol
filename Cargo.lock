@@ -2594,9 +2594,11 @@ dependencies = [
 name = "linera-sdk-wasm-tests"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "bcs",
  "futures",
  "linera-sdk",
+ "linera-views",
  "log",
  "webassembly-test",
 ]
