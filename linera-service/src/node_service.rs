@@ -18,11 +18,11 @@ use axum::{
 };
 use futures::{lock::Mutex, StreamExt};
 use linera_base::{
-    crypto::PublicKey,
+    crypto::{CryptoHash, PublicKey},
     data_types::Amount,
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
 };
-use linera_chain::{data_types::Certificate, ChainStateView};
+use linera_chain::ChainStateView;
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
     worker::{Notification, Reason},
@@ -125,11 +125,11 @@ where
     async fn execute_system_operation(
         &self,
         system_operation: SystemOperation,
-    ) -> Result<Certificate, Error> {
+    ) -> Result<CryptoHash, Error> {
         let operation = Operation::System(system_operation);
         let mut client = self.0.client.lock().await;
         client.process_inbox().await?;
-        Ok(client.execute_operation(operation).await?)
+        Ok(client.execute_operation(operation).await?.value.hash())
     }
 }
 
@@ -148,12 +148,12 @@ where
         recipient: Recipient,
         amount: Amount,
         user_data: Option<UserData>,
-    ) -> Result<Certificate, Error> {
+    ) -> Result<CryptoHash, Error> {
         let mut client = self.0.client.lock().await;
         let certificate = client
             .transfer(owner, amount, recipient, user_data.unwrap_or_default())
             .await?;
-        Ok(certificate)
+        Ok(certificate.value.hash())
     }
 
     /// Claims `amount` units of value from the given owner's account in
@@ -166,7 +166,7 @@ where
         recipient: Recipient,
         amount: Amount,
         user_data: Option<UserData>,
-    ) -> Result<Certificate, Error> {
+    ) -> Result<CryptoHash, Error> {
         let mut client = self.0.client.lock().await;
         let certificate = client
             .claim(
@@ -177,7 +177,7 @@ where
                 user_data.unwrap_or_default(),
             )
             .await?;
-        Ok(certificate)
+        Ok(certificate.value.hash())
     }
 
     /// Creates (or activates) a new chain by installing the given authentication key.
@@ -189,14 +189,14 @@ where
     }
 
     /// Closes the chain.
-    async fn close_chain(&self) -> Result<Certificate, Error> {
+    async fn close_chain(&self) -> Result<CryptoHash, Error> {
         let mut client = self.0.client.lock().await;
         let certificate = client.close_chain().await?;
-        Ok(certificate)
+        Ok(certificate.value.hash())
     }
 
     /// Changes the authentication key of the chain.
-    async fn change_owner(&self, new_public_key: PublicKey) -> Result<Certificate, Error> {
+    async fn change_owner(&self, new_public_key: PublicKey) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeOwner { new_public_key };
         self.execute_system_operation(operation).await
     }
@@ -205,7 +205,7 @@ where
     async fn change_multiple_owners(
         &self,
         new_public_keys: Vec<PublicKey>,
-    ) -> Result<Certificate, Error> {
+    ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::ChangeMultipleOwners { new_public_keys };
         self.execute_system_operation(operation).await
     }
@@ -218,7 +218,7 @@ where
         admin_id: ChainId,
         epoch: Epoch,
         committee: Committee,
-    ) -> Result<Certificate, Error> {
+    ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::CreateCommittee {
             admin_id,
             epoch,
@@ -232,7 +232,7 @@ where
         &self,
         chain_id: ChainId,
         channel: SystemChannel,
-    ) -> Result<Certificate, Error> {
+    ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::Subscribe { chain_id, channel };
         self.execute_system_operation(operation).await
     }
@@ -242,7 +242,7 @@ where
         &self,
         chain_id: ChainId,
         channel: SystemChannel,
-    ) -> Result<Certificate, Error> {
+    ) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::Unsubscribe { chain_id, channel };
         self.execute_system_operation(operation).await
     }
@@ -250,11 +250,7 @@ where
     /// (admin chain only) Removes a committee. Once this message is accepted by a chain,
     /// blocks from the retired epoch will not be accepted until they are followed (hence
     /// re-certified) by a block certified by a recent committee.
-    async fn remove_committee(
-        &self,
-        admin_id: ChainId,
-        epoch: Epoch,
-    ) -> Result<Certificate, Error> {
+    async fn remove_committee(&self, admin_id: ChainId, epoch: Epoch) -> Result<CryptoHash, Error> {
         let operation = SystemOperation::RemoveCommittee { admin_id, epoch };
         self.execute_system_operation(operation).await
     }
