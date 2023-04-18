@@ -23,10 +23,19 @@ macro_rules! doc_scalar {
     };
 }
 
+/// An error trying to parse the hex-digits of a BCS-encoded value.
+#[derive(thiserror::Error, Debug)]
+pub enum BcsHexParseError {
+    #[error("Invalid BCS: {0}")]
+    Bcs(#[from] bcs::Error),
+    #[error("Invalid hexadecimal: {0}")]
+    Hex(#[from] hex::FromHexError),
+}
+
 /// Defines a GraphQL scalar type using the hex-representation of the value's BCS-serialized form.
 ///
 /// This is a modified implementation of [`async_graphql::scalar`].
-/// In addition, it implements `Display` to also show the hex-representation.
+/// In addition, it implements `Display` and `FromStr`, also using hex-representation.
 #[macro_export]
 macro_rules! bcs_scalar {
     ($ty:ty, $desc:literal) => {
@@ -143,6 +152,15 @@ macro_rules! bcs_scalar {
                         ::std::write!(f, "invalid {}", ::std::stringify!($ty))
                     }
                 }
+            }
+        }
+
+        impl ::std::str::FromStr for $ty {
+            type Err = $crate::BcsHexParseError;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                let bytes = $crate::hex::decode(s)?;
+                ::std::result::Result::Ok($crate::bcs::from_bytes(&bytes)?)
             }
         }
     };

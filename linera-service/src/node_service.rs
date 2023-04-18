@@ -21,6 +21,7 @@ use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::Amount,
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
+    BcsHexParseError,
 };
 use linera_chain::ChainStateView;
 use linera_core::{
@@ -53,6 +54,8 @@ struct MutationRoot<P, S>(Arc<NodeService<P, S>>);
 
 #[derive(Debug, ThisError)]
 enum NodeServiceError {
+    #[error(transparent)]
+    BcsHexError(#[from] BcsHexParseError),
     #[error("could not decode query string")]
     QueryStringError(#[from] hex::FromHexError),
     #[error(transparent)]
@@ -84,6 +87,7 @@ impl From<ServerError> for NodeServiceError {
 impl IntoResponse for NodeServiceError {
     fn into_response(self) -> response::Response {
         let tuple = match self {
+            NodeServiceError::BcsHexError(e) => (StatusCode::BAD_REQUEST, e.to_string()),
             NodeServiceError::QueryStringError(e) => (StatusCode::BAD_REQUEST, e.to_string()),
             NodeServiceError::BcsError(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             NodeServiceError::JsonError(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
@@ -390,8 +394,7 @@ where
     let parsed_query = req.parsed_query()?;
     let operation_type = operation_type(parsed_query)?;
 
-    let application_id_bytes = hex::decode(application_id)?;
-    let application_id: UserApplicationId = bcs::from_bytes(&application_id_bytes)?;
+    let application_id: UserApplicationId = application_id.parse()?;
 
     let response = match operation_type {
         OperationType::Query => user_application_query(application_id, service, &req).await?,
