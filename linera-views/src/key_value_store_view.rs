@@ -741,7 +741,7 @@ where
 #[cfg(any(test, feature = "test"))]
 #[derive(Debug, Clone)]
 pub struct ViewContainer<C> {
-    kvsv: Arc<RwLock<KeyValueStoreView<C>>>,
+    view: Arc<RwLock<KeyValueStoreView<C>>>,
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -756,37 +756,37 @@ where
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
-        let kvsv = self.kvsv.read().await;
-        kvsv.get(key).await
+        let view = self.view.read().await;
+        view.get(key).await
     }
 
     async fn read_multi_key_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
-        let kvsv = self.kvsv.read().await;
-        kvsv.multi_get(keys).await
+        let view = self.view.read().await;
+        view.multi_get(keys).await
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, ViewError> {
-        let kvsv = self.kvsv.read().await;
-        kvsv.find_keys_by_prefix(key_prefix).await
+        let view = self.view.read().await;
+        view.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, ViewError> {
-        let kvsv = self.kvsv.read().await;
-        kvsv.find_key_values_by_prefix(key_prefix).await
+        let view = self.view.read().await;
+        view.find_key_values_by_prefix(key_prefix).await
     }
 
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
-        let mut kvsv = self.kvsv.write().await;
-        kvsv.write_batch(batch).await?;
+        let mut view = self.view.write().await;
+        view.write_batch(batch).await?;
         let mut batch = Batch::new();
-        kvsv.flush(&mut batch)?;
-        kvsv.context().write_batch(batch).await?;
+        view.flush(&mut batch)?;
+        view.context().write_batch(batch).await?;
         Ok(())
     }
 
@@ -878,9 +878,9 @@ where
 {
     /// Create a [`ViewContainer`].
     pub async fn new(context: C) -> Result<Self, ViewError> {
-        let kvsv = KeyValueStoreView::load(context).await?;
+        let view = KeyValueStoreView::load(context).await?;
         Ok(Self {
-            kvsv: Arc::new(RwLock::new(kvsv)),
+            view: Arc::new(RwLock::new(view)),
         })
     }
 }

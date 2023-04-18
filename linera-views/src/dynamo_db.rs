@@ -6,6 +6,7 @@ use crate::{
     common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient, MIN_VIEW_TAG},
     localstack,
 };
+use futures::future::join_all;
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
     model::{
@@ -668,13 +669,18 @@ impl KeyValueStoreClient for DynamoDbClient {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbContextError> {
-        let mut result = Vec::new();
+        let mut handles = Vec::new();
         for key in keys {
             let key_db = build_key(key);
-            let value = self.read_key_bytes_general(key_db).await?;
-            result.push(value);
+            let handle = self.read_key_bytes_general(key_db);
+            handles.push(handle);
         }
-        Ok(result)
+        let result = join_all(handles).await;
+        let mut result_ret = Vec::new();
+        for entry in result {
+            result_ret.push(entry?);
+        }
+        Ok(result_ret)
     }
 
     async fn find_keys_by_prefix(

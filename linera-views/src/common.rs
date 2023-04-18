@@ -424,7 +424,7 @@ where
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        self.db.read_multi_key_bytes(keys).await
+        log_time_async(self.db.read_multi_key_bytes(keys), "read_multi_key_bytes").await
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {

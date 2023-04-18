@@ -112,33 +112,28 @@ where
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        let len = keys.len();
-        let mut result = Vec::with_capacity(len);
-        let mut vector_miss_idx = Vec::<usize>::new();
-        let mut vector_query = Vec::<Vec<u8>>::new();
+        let mut result = Vec::with_capacity(keys.len());
+        let mut cache_miss_indices = Vec::new();
+        let mut miss_keys = Vec::new();
         let lru_read_keys = self.lru_read_keys.lock().await;
-        for i in 0..len {
-            let key: &[u8] = keys.get(i).unwrap();
-            if let Some(value) = lru_read_keys.query(key) {
+        for (i,key) in keys.into_iter().enumerate() {
+            if let Some(value) = lru_read_keys.query(&key) {
                 result.push(value.clone());
             } else {
                 result.push(None);
-                vector_miss_idx.push(i);
-                vector_query.push(key.to_vec());
+                cache_miss_indices.push(i);
+                miss_keys.push(key.to_vec());
             }
         }
         drop(lru_read_keys);
         let values = self
             .client
-            .read_multi_key_bytes(vector_query.clone())
+            .read_multi_key_bytes(miss_keys.clone())
             .await?;
         let mut lru_read_keys = self.lru_read_keys.lock().await;
-        for u in 0..values.len() {
-            let i = *vector_miss_idx.get(u).unwrap();
-            let key = vector_query.get(u).unwrap();
-            let value = values.get(u).unwrap();
-            lru_read_keys.insert(key.to_vec(), value.clone());
-            *result.get_mut(i).unwrap() = value.clone();
+        for (i, (key, value)) in cache_miss_indices.into_iter().zip(miss_keys.into_iter().zip(values)) {
+            lru_read_keys.insert(key, value.clone());
+            result[i] = value;
         }
         Ok(result)
     }
