@@ -61,6 +61,56 @@ fn copy_memory_slices(
     memory_data.copy_within(source_start..source_end, destination_start);
 }
 
+/// Loads a vector of `length` bytes starting at `offset` from the WebAssembly module's memory.
+fn load_bytes(caller: &mut Caller<'_, Resources>, offset: i32, length: i32) -> Vec<u8> {
+    let start = usize::try_from(offset).expect("Invalid address");
+    let length = usize::try_from(length).expect("Invalid length");
+    let end = start + length;
+
+    let memory =
+        get_memory(&mut *caller, "memory").expect("Missing `memory` export in the module.");
+    let memory_data = memory.data_mut(caller);
+
+    memory_data[start..end].to_vec()
+}
+
+/// Stores some bytes from a host-side resource to the WebAssembly module's memory.
+///
+/// Returns the offset of the module's memory where the bytes were stored, and how many bytes were
+/// stored.
+async fn store_bytes_from_resource(
+    caller: &mut Caller<'_, Resources>,
+    bytes_getter: impl Fn(&Resources) -> &[u8],
+) -> (i32, i32) {
+    let resources = caller.data_mut();
+    let bytes = bytes_getter(resources);
+    let length = i32::try_from(bytes.len()).expect("Resource bytes is too large");
+
+    let alloc_function = get_function(&mut *caller, "cabi_realloc")
+        .expect(
+            "Missing `cabi_realloc` function in the module. \
+            Please ensure `linera_sdk` is compiled in with the module",
+        )
+        .typed::<(i32, i32, i32, i32), i32, _>(&mut *caller)
+        .expect("Incorrect `cabi_realloc` function signature");
+
+    let address = alloc_function
+        .call_async(&mut *caller, (0, 0, 1, length))
+        .await
+        .expect("Failed to call `cabi_realloc` function");
+
+    let memory = get_memory(caller, "memory").expect("Missing `memory` export in the module.");
+    let (memory, resources) = memory.data_and_store_mut(caller);
+
+    let bytes = bytes_getter(resources);
+    let start = usize::try_from(address).expect("Invalid address allocated");
+    let end = start + bytes.len();
+
+    memory[start..end].copy_from_slice(bytes);
+
+    (address, length)
+}
+
 /// Stores a `value` at the `offset` of the guest WebAssembly module's memory.
 fn store_in_memory(caller: &mut Caller<'_, Resources>, offset: i32, value: impl Endian) {
     let memory = get_memory(caller, "memory").expect("Missing `memory` export in the module.");
@@ -351,6 +401,54 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
             })
         },
     )?;
+    linker.func_wrap2_async(
+        "writable_system",
+        "read-key-bytes::new: func(key: list<u8>) -> handle<read-key-bytes>",
+        move |mut caller: Caller<'_, Resources>, key_address: i32, key_length: i32| {
+            Box::new(async move {
+                let key = load_bytes(&mut caller, key_address, key_length);
+                let resources = caller.data_mut();
+
+                resources.insert(key)
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "writable_system",
+        "read-key-bytes::poll: func(self: handle<read-key-bytes>) -> variant { \
+            pending(unit), \
+            ready(option<list<u8>>) \
+        }",
+        move |mut caller: Caller<'_, Resources>, handle: i32, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-read-key-bytes: func(key: list<u8>) -> option<list<u8>>",
+                )
+                .expect(
+                    "Missing `mocked-read-key-bytes` function in the module. \
+                    Please ensure `linera_sdk::test::mock_key_value_store` was called",
+                );
+
+                let (key_address, key_length) =
+                    store_bytes_from_resource(&mut caller, |resources| {
+                        let key: &Vec<u8> = resources.get(handle);
+                        key
+                    })
+                    .await;
+
+                let (result_offset,) = function
+                    .typed::<(i32, i32), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-read-key-bytes` function signature")
+                    .call_async(&mut caller, (key_address, key_length))
+                    .await
+                    .expect("Failed to call `mocked-read-key-bytes` function");
+
+                store_in_memory(&mut caller, return_offset, 1_i32);
+                copy_memory_slices(&mut caller, result_offset, return_offset + 4, 12);
+            })
+        },
+    )?;
 
     linker.func_wrap1_async(
         "queryable_system",
@@ -628,8 +726,57 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
             })
         },
     )?;
+    linker.func_wrap2_async(
+        "queryable_system",
+        "read-key-bytes::new: func(key: list<u8>) -> handle<read-key-bytes>",
+        move |mut caller: Caller<'_, Resources>, key_address: i32, key_length: i32| {
+            Box::new(async move {
+                let key = load_bytes(&mut caller, key_address, key_length);
+                let resources = caller.data_mut();
 
-    let resource_names = ["load", "lock"];
+                resources.insert(key)
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "queryable_system",
+        "read-key-bytes::poll: func(self: handle<read-key-bytes>) -> variant { \
+            pending(unit), \
+            ready(result<option<list<u8>>, string>) \
+        }",
+        move |mut caller: Caller<'_, Resources>, handle: i32, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-read-key-bytes: func(key: list<u8>) -> option<list<u8>>",
+                )
+                .expect(
+                    "Missing `mocked-read-key-bytes` function in the module. \
+                    Please ensure `linera_sdk::test::mock_key_value_store` was called",
+                );
+
+                let (key_address, key_length) =
+                    store_bytes_from_resource(&mut caller, |resources| {
+                        let key: &Vec<u8> = resources.get(handle);
+                        key
+                    })
+                    .await;
+
+                let (result_offset,) = function
+                    .typed::<(i32, i32), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-read-key-bytes` function signature")
+                    .call_async(&mut caller, (key_address, key_length))
+                    .await
+                    .expect("Failed to call `mocked-read-key-bytes` function");
+
+                store_in_memory(&mut caller, return_offset, 1_i32);
+                store_in_memory(&mut caller, return_offset + 4, 0_i32);
+                copy_memory_slices(&mut caller, result_offset, return_offset + 8, 12);
+            })
+        },
+    )?;
+
+    let resource_names = ["load", "lock", "read-key-bytes"];
 
     for resource_name in resource_names {
         linker.func_wrap1_async(
