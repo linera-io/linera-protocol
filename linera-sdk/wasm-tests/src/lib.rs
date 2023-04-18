@@ -9,7 +9,7 @@
 #![cfg(target_arch = "wasm32")]
 
 use linera_sdk::{
-    base::{ApplicationId, BlockHeight, BytecodeId, ChainId, EffectId},
+    base::{ApplicationId, Balance, BlockHeight, BytecodeId, ChainId, EffectId},
     contract, service, test,
 };
 use webassembly_test::webassembly_test;
@@ -68,4 +68,15 @@ fn mock_application_parameters() {
         service::system_api::current_application_parameters(),
         parameters
     );
+}
+
+/// Test if the system balance getter API is mocked successfully.
+#[webassembly_test]
+fn mock_system_balance() {
+    let balance = Balance::from(0x00010203_04050607_08090a0b_0c0d0e0f);
+
+    test::mock_system_balance(balance);
+
+    assert_eq!(contract::system_api::current_system_balance(), balance);
+    assert_eq!(service::system_api::current_system_balance(), balance);
 }
