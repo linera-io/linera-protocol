@@ -30,6 +30,7 @@ compile_error!("The test runner is meant to be compiled for the host target");
 mod mock_system_api;
 
 use anyhow::{bail, Result};
+use mock_system_api::Resources;
 use std::process::ExitCode;
 use wasmtime::*;
 
@@ -104,7 +105,7 @@ impl<'a> Test<'a> {
     pub async fn run(
         self,
         report: &mut TestReport,
-        linker: &Linker<()>,
+        linker: &Linker<Resources>,
         test_module: &Module,
     ) -> Result<()> {
         eprint!("test {} ...", self.name);
@@ -112,7 +113,7 @@ impl<'a> Test<'a> {
         if self.ignore {
             report.ignore();
         } else {
-            let mut store = Store::new(linker.engine(), ());
+            let mut store = Store::new(linker.engine(), Resources::default());
             let instance = linker.instantiate_async(&mut store, test_module).await?;
 
             let function = instance.get_typed_func::<(), (), _>(&mut store, self.function)?;
