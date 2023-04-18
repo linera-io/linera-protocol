@@ -393,7 +393,7 @@ impl Client {
                 .arg("assign")
                 .args(["--key", &owner.to_string()])
                 .args(["--chain", &chain_id.to_string()])
-                .args(["--certificate", &hex::encode(bcs::to_bytes(&certificate)?)]),
+                .args(["--certificate", &certificate.to_string()]),
         )
         .await;
         Ok(())

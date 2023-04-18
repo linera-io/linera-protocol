@@ -6,8 +6,9 @@ use crate::{
     ChainManager,
 };
 use async_graphql::scalar;
+use linera_base::bcs_scalar;
 
-scalar!(Certificate);
+bcs_scalar!(Certificate);
 scalar!(ChainManager);
 scalar!(ChannelFullName);
 scalar!(Event);

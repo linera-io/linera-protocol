@@ -11,6 +11,7 @@ use async_graphql::scalar;
 /// Defines a GraphQL scalar type using the hex-representation of the value's BCS-serialized form.
 ///
 /// This is a modified implementation of [`async_graphql::scalar`].
+/// In addition, it implements `Display` to also show the hex-representation.
 #[macro_export]
 macro_rules! bcs_scalar {
     ($ty:ty) => {
@@ -108,6 +109,21 @@ macro_rules! bcs_scalar {
                 >,
             ) -> $crate::async_graphql::ServerResult<$crate::async_graphql::Value> {
                 ::std::result::Result::Ok($crate::async_graphql::ScalarType::to_value(self))
+            }
+        }
+
+        impl ::std::fmt::Display for $ty {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>)
+                -> ::std::result::Result<(), ::std::fmt::Error>
+            {
+                match $crate::bcs::to_bytes(self) {
+                    ::std::result::Result::Ok(bytes) => {
+                        ::std::fmt::Display::fmt(&$crate::hex::encode(&bytes), f)
+                    }
+                    ::std::result::Result::Err(_) => {
+                        ::std::write!(f, "invalid {}", ::std::stringify!($ty))
+                    }
+                }
             }
         }
     };
