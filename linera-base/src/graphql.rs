@@ -8,13 +8,28 @@ use crate::{
 };
 use async_graphql::scalar;
 
+/// Defines a GraphQL scalar with a description string.
+///
+/// This is equivalent to `scalar!` but always uses the stringified identifier as the name.
+#[macro_export]
+macro_rules! doc_scalar {
+    ($ty:ty, $desc:literal) => {
+        $crate::async_graphql::scalar_internal!(
+            $ty,
+            ::std::stringify!($ty),
+            ::std::option::Option::Some(::std::string::ToString::to_string($desc)),
+            ::std::option::Option::None
+        );
+    };
+}
+
 /// Defines a GraphQL scalar type using the hex-representation of the value's BCS-serialized form.
 ///
 /// This is a modified implementation of [`async_graphql::scalar`].
 /// In addition, it implements `Display` to also show the hex-representation.
 #[macro_export]
 macro_rules! bcs_scalar {
-    ($ty:ty) => {
+    ($ty:ty, $desc:literal) => {
         impl $crate::async_graphql::ScalarType for $ty {
             fn parse(
                 value: $crate::async_graphql::Value,
@@ -49,7 +64,9 @@ macro_rules! bcs_scalar {
                     $crate::async_graphql::registry::MetaTypeId::Scalar,
                     |_| $crate::async_graphql::registry::MetaType::Scalar {
                         name: ::std::borrow::ToOwned::to_owned(::std::stringify!($ty)),
-                        description: ::std::option::Option::None,
+                        description: ::std::option::Option::Some(
+                            ::std::string::ToString::to_string($desc)
+                        ),
                         is_valid: ::std::option::Option::Some(::std::sync::Arc::new(|value| {
                             <$ty as $crate::async_graphql::ScalarType>::is_valid(value)
                         })),
@@ -89,7 +106,9 @@ macro_rules! bcs_scalar {
                     $crate::async_graphql::registry::MetaTypeId::Scalar,
                     |_| $crate::async_graphql::registry::MetaType::Scalar {
                         name: ::std::borrow::ToOwned::to_owned(::std::stringify!($ty)),
-                        description: ::std::option::Option::None,
+                        description: ::std::option::Option::Some(
+                            ::std::string::ToString::to_string($desc)
+                        ),
                         is_valid: ::std::option::Option::Some(::std::sync::Arc::new(|value| {
                             <$ty as $crate::async_graphql::ScalarType>::is_valid(value)
                         })),
@@ -129,16 +148,30 @@ macro_rules! bcs_scalar {
     };
 }
 
-scalar!(Amount);
-bcs_scalar!(ApplicationId);
-scalar!(Balance);
+doc_scalar!(Amount, "A non-negative amount of money to be transferred");
+bcs_scalar!(ApplicationId, "A unique identifier for a user application");
+doc_scalar!(Balance, "The balance of a chain");
 scalar!(BlockHeight);
-bcs_scalar!(BytecodeId);
-scalar!(ChainDescription);
-scalar!(ChainId);
-scalar!(ChannelName);
-scalar!(CryptoHash);
-scalar!(Owner);
-scalar!(PublicKey);
-scalar!(Signature);
-scalar!(Timestamp);
+bcs_scalar!(
+    BytecodeId,
+    "A unique identifier for an application bytecode"
+);
+doc_scalar!(ChainDescription, "How to create a chain");
+doc_scalar!(
+    ChainId,
+    "The unique identifier (UID) of a chain. This is currently computed as the hash value of a \
+    ChainDescription."
+);
+doc_scalar!(ChannelName, "The name of a subscription channel");
+doc_scalar!(CryptoHash, "A Sha3-256 value");
+doc_scalar!(
+    Owner,
+    "The owner of a chain. This is currently the hash of the owner's public key used to verify \
+    signatures."
+);
+doc_scalar!(PublicKey, "A signature public key");
+doc_scalar!(Signature, "A signature value");
+doc_scalar!(
+    Timestamp,
+    "A timestamp, in microseconds since the Unix epoch"
+);

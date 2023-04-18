@@ -7,22 +7,29 @@ use crate::{
     ApplicationId, Bytecode, ChainOwnership, ChannelSubscription, ExecutionStateView,
     SystemExecutionStateView, UserApplicationDescription,
 };
-use async_graphql::{scalar, Error, Object};
+use async_graphql::{Error, Object};
 use linera_base::{
     data_types::{Balance, Timestamp},
+    doc_scalar,
     identifiers::{ChainDescription, ChainId},
 };
 use linera_views::{common::Context, views::ViewError};
 use std::collections::BTreeMap;
 
-scalar!(ApplicationId);
-scalar!(Bytecode);
-scalar!(ChainOwnership);
-scalar!(Epoch);
-scalar!(Recipient);
-scalar!(UserApplicationDescription);
-scalar!(UserData);
-scalar!(ValidatorName);
+doc_scalar!(ApplicationId, "A unique identifier for an application");
+doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
+doc_scalar!(ChainOwnership, "Represents the owner(s) of a chain");
+doc_scalar!(
+    Epoch,
+    "A number identifying the configuration of the chain (aka the committee)"
+);
+doc_scalar!(Recipient, "The recipient of a transfer");
+doc_scalar!(
+    UserApplicationDescription,
+    "Description of the necessary information to run a user application"
+);
+doc_scalar!(UserData, "Optional user message attached to a transfer");
+doc_scalar!(ValidatorName, "The identity of a validator");
 
 #[Object]
 impl Committee {

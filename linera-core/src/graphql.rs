@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::worker::Notification;
-use async_graphql::scalar;
+use linera_base::doc_scalar;
 
-scalar!(Notification);
+doc_scalar!(
+    Notification,
+    "Notify that a chain has a new certified block or a new message"
+);
