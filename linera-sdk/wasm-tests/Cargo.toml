@@ -6,4 +6,5 @@ edition = "2021"
 
 [dev-dependencies]
 linera-sdk = { path = "..", features = ["test"] }
+log = "0.4.17"
 webassembly-test = "0.1.0"
