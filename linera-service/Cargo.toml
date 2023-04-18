@@ -44,6 +44,7 @@ tonic-health = "0.8"
 tower-http = { version = "0.4.0", features = ["cors"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 comfy-table = "6.1.4"
+dirs = "5.0.0"
 
 [dev-dependencies]
 linera-base = { path = "../linera-base", features = ["test"] }

@@ -31,6 +31,7 @@ use linera_service::{
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{
+    fs,
     num::NonZeroU16,
     path::PathBuf,
     time::{Duration, Instant},
@@ -79,7 +80,10 @@ impl ClientContext {
         genesis_config: GenesisConfig,
         chains: Vec<UserChain>,
     ) -> Self {
-        let wallet_state_path = options.wallet_state_path.clone();
+        let wallet_state_path = options
+            .wallet_state_path
+            .clone()
+            .unwrap_or_else(Self::default_wallet_path);
         let mut wallet_state = WalletState::create(&wallet_state_path, genesis_config)
             .unwrap_or_else(|e| {
                 panic!(
@@ -94,7 +98,10 @@ impl ClientContext {
     }
 
     fn from_options(options: &ClientOptions) -> Self {
-        let wallet_state_path = options.wallet_state_path.clone();
+        let wallet_state_path = options
+            .wallet_state_path
+            .clone()
+            .unwrap_or_else(Self::default_wallet_path);
         let wallet_state = WalletState::read(&wallet_state_path).unwrap_or_else(|e| {
             panic!(
                 "Unable to read user chains at {:?}: {:?}",
@@ -122,6 +129,19 @@ impl ClientContext {
             cross_chain_delay,
             cross_chain_retries: options.cross_chain_retries,
         }
+    }
+
+    fn default_wallet_path() -> PathBuf {
+        let mut config_dir = dirs::config_dir().unwrap();
+        config_dir.push("linera");
+        // create linera dir if it does not already exist.
+        if !config_dir.exists() {
+            info!("{} does not exist, creating...", config_dir.display());
+            fs::create_dir(&config_dir).unwrap();
+            info!("{} created.", config_dir.display());
+        }
+        config_dir.push("wallet.json");
+        config_dir
     }
 
     #[cfg(feature = "benchmark")]
@@ -478,7 +498,7 @@ fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
 struct ClientOptions {
     /// Sets the file storing the private state of user chains (an empty one will be created if missing)
     #[structopt(long = "wallet")]
-    wallet_state_path: PathBuf,
+    wallet_state_path: Option<PathBuf>,
 
     /// Storage configuration for the blockchain history.
     #[structopt(long = "storage", default_value = "memory")]
