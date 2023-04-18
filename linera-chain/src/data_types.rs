@@ -5,9 +5,10 @@
 use crate::ChainError;
 use async_graphql::SimpleObject;
 use linera_base::{
+    bcs_scalar,
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
     data_types::{BlockHeight, RoundNumber, Timestamp},
-    ensure,
+    doc_scalar, ensure,
     identifiers::{ChainId, ChannelName, Destination, Owner},
 };
 use linera_execution::{
@@ -603,3 +604,25 @@ impl BcsSignable for BlockAndRound {}
 impl BcsHashable for Value {}
 
 impl BcsSignable for LiteValue {}
+
+bcs_scalar!(Certificate, "A certified statement from the committee");
+doc_scalar!(
+    ChannelFullName,
+    "A channel name together with its application id"
+);
+doc_scalar!(
+    Event,
+    "An effect together with non replayable information to ensure uniqueness in a particular inbox"
+);
+doc_scalar!(
+    Medium,
+    "The origin of a message coming from a particular chain. Used to identify each inbox."
+);
+doc_scalar!(
+    Origin,
+    "The origin of a message, relative to a particular application. Used to identify each inbox."
+);
+doc_scalar!(
+    Target,
+    "The target of a message, relative to a particular application. Used to identify each outbox."
+);

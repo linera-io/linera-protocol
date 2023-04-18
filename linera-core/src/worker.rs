@@ -8,7 +8,7 @@ use futures::{future, FutureExt};
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
     data_types::{ArithmeticError, BlockHeight, Timestamp},
-    ensure,
+    doc_scalar, ensure,
     identifiers::{ChainId, Owner},
 };
 use linera_chain::{
@@ -110,6 +110,11 @@ pub struct Notification {
     pub chain_id: ChainId,
     pub reason: Reason,
 }
+
+doc_scalar!(
+    Notification,
+    "Notify that a chain has a new certified block or a new message"
+);
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
