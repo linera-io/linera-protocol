@@ -10,6 +10,7 @@ pub mod data_types;
 mod graphql;
 pub mod identifiers;
 
+pub use graphql::BcsHexParseError;
 #[doc(hidden)]
 pub use {async_graphql, bcs, hex};
 

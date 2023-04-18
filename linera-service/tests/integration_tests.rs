@@ -254,6 +254,38 @@ impl Client {
         stdout.trim().to_string()
     }
 
+    async fn publish_bytecode(
+        &self,
+        contract: PathBuf,
+        service: PathBuf,
+        publisher: impl Into<Option<ChainId>>,
+    ) -> String {
+        let stdout = Self::run_command(
+            self.client_run_with_storage()
+                .arg("publish_bytecode")
+                .args([contract, service])
+                .args(publisher.into().iter().map(ChainId::to_string)),
+        )
+        .await;
+        stdout.trim().to_string()
+    }
+
+    async fn create_application(
+        &self,
+        bytecode_id: String,
+        arg: impl ToString,
+        creator: impl Into<Option<ChainId>>,
+    ) -> String {
+        let stdout = Self::run_command(
+            self.client_run_with_storage()
+                .arg("create_application")
+                .args([bytecode_id, arg.to_string()])
+                .args(creator.into().iter().map(ChainId::to_string)),
+        )
+        .await;
+        stdout.trim().to_string()
+    }
+
     async fn run_node_service(
         &self,
         chain_id: impl Into<Option<ChainId>>,
@@ -343,7 +375,7 @@ impl Client {
         let stdout = Self::run_command(&mut command).await;
         let mut split = stdout.split('\n');
         let chain_id = ChainId::from_str(split.next().unwrap())?;
-        let cert: Certificate = bcs::from_bytes(&hex::decode(split.next().unwrap())?)?;
+        let cert: Certificate = split.next().unwrap().parse()?;
 
         Ok((chain_id, cert))
     }
@@ -863,6 +895,40 @@ async fn test_counter_end_to_end() {
 
     let application_id = client
         .publish_and_create(contract, service, original_counter_value, None)
+        .await;
+    let _node_service = client.run_node_service(None, None).await;
+
+    let application_uri = get_application_uri(&application_id, None, None).await;
+
+    let counter_value = get_counter_value(&application_uri).await;
+    assert_eq!(counter_value, original_counter_value);
+
+    increment_counter_value(&application_uri, increment).await;
+
+    let counter_value = get_counter_value(&application_uri).await;
+    assert_eq!(counter_value, original_counter_value + increment);
+}
+
+#[test_log::test(tokio::test)]
+async fn test_counter_end_to_end_publish_create() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let network = Network::Grpc;
+    let runner = TestRunner::new(network);
+    let client = Client::new(runner.tmp_dir(), network, 1);
+    let n_validators = 4;
+
+    let original_counter_value = 35;
+    let increment = 5;
+
+    runner.generate_initial_server_config(n_validators).await;
+    client.generate_client_config().await;
+    let _local_net = runner.run_local_net(n_validators).await;
+    let (contract, service) = runner.build_application("counter-graphql").await;
+
+    let bytecode_id = client.publish_bytecode(contract, service, None).await;
+    let application_id = client
+        .create_application(bytecode_id, original_counter_value, None)
         .await;
     let _node_service = client.run_node_service(None, None).await;
 

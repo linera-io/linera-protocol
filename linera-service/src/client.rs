@@ -10,7 +10,7 @@ use futures::StreamExt;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{Amount, Balance, BlockHeight, Timestamp},
-    identifiers::{ChainDescription, ChainId},
+    identifiers::{BytecodeId, ChainDescription, ChainId},
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{
@@ -130,8 +130,13 @@ impl ClientContext {
     fn make_chain_client<S>(
         &self,
         storage: S,
-        chain_id: ChainId,
+        chain_id: impl Into<Option<ChainId>>,
     ) -> ChainClient<impl ValidatorNodeProvider, S> {
+        let chain_id = chain_id.into().unwrap_or_else(|| {
+            self.wallet_state
+                .default_chain()
+                .expect("No chain specified in wallet with no default chain")
+        });
         let chain = self
             .wallet_state
             .get(chain_id)
@@ -389,6 +394,40 @@ impl ClientContext {
             self.update_wallet_from_client(&mut chain_client).await;
         }
     }
+
+    async fn publish_bytecode<S>(
+        &self,
+        chain_client: &mut ChainClient<impl ValidatorNodeProvider, S>,
+        contract: PathBuf,
+        service: PathBuf,
+    ) -> Result<BytecodeId, anyhow::Error>
+    where
+        S: Store + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
+        info!("Loading bytecode files...");
+        let contract_bytecode = Bytecode::load_from_file(&contract).await.context(format!(
+            "failed to load contract bytecode from {:?}",
+            &contract
+        ))?;
+        let service_bytecode = Bytecode::load_from_file(&service).await.context(format!(
+            "failed to load service bytecode from {:?}",
+            &service
+        ))?;
+
+        info!("Publishing bytecode...");
+        let (bytecode_id, _cert) = chain_client
+            .publish_bytecode(contract_bytecode, service_bytecode)
+            .await
+            .context("failed to publish bytecode")?;
+
+        info!("{}", "Bytecode published successfully!".green().bold());
+
+        info!("Synchronizing...");
+        chain_client.synchronize_and_recompute_balance().await?;
+        chain_client.process_inbox().await?;
+        Ok(bytecode_id)
+    }
 }
 
 #[cfg(feature = "benchmark")]
@@ -600,6 +639,22 @@ enum ClientCommand {
         port: NonZeroU16,
     },
 
+    /// Publish bytecode.
+    #[structopt(name = "publish_bytecode")]
+    PublishBytecode {
+        contract: PathBuf,
+        service: PathBuf,
+        publisher: Option<ChainId>,
+    },
+
+    /// Create an application.
+    #[structopt(name = "create_application")]
+    CreateApplication {
+        bytecode_id: BytecodeId,
+        arguments: String,
+        creator: Option<ChainId>,
+    },
+
     /// Create an application, and publish the required bytecode.
     #[structopt(name = "publish_and_create")]
     PublishAndCreate {
@@ -671,12 +726,6 @@ where
             }
 
             OpenChain { sender, public_key } => {
-                let sender = sender.unwrap_or_else(|| {
-                    context
-                        .wallet_state
-                        .default_chain()
-                        .expect("No chain specified in wallet with no default chain")
-                });
                 let mut chain_client = context.make_chain_client(storage, sender);
                 let (new_public_key, key_pair) = match public_key {
                     Some(key) => (key, None),
@@ -713,12 +762,6 @@ where
             }
 
             QueryBalance { chain_id } => {
-                let chain_id = chain_id.unwrap_or_else(|| {
-                    context
-                        .wallet_state
-                        .default_chain()
-                        .expect("No chain specified in wallet with no default chain")
-                });
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting query for the local balance");
                 let time_start = Instant::now();
@@ -734,12 +777,6 @@ where
             }
 
             SynchronizeBalance { chain_id } => {
-                let chain_id = chain_id.unwrap_or_else(|| {
-                    context
-                        .wallet_state
-                        .default_chain()
-                        .expect("No chain specified in wallet with no default chain")
-                });
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Synchronize chain information");
                 let time_start = Instant::now();
@@ -755,15 +792,7 @@ where
             }
 
             QueryValidators { chain_id } => {
-                let mut chain_client = context.make_chain_client(
-                    storage,
-                    chain_id.unwrap_or_else(|| {
-                        context
-                            .wallet_state
-                            .default_chain()
-                            .expect("No chain specified in wallet with no default chain")
-                    }),
-                );
+                let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting operation to query validators");
                 let time_start = Instant::now();
                 let committee = chain_client.local_committee().await.unwrap();
@@ -985,16 +1014,50 @@ where
             }
 
             Service { chain_id, port } => {
-                let chain_id = chain_id.unwrap_or_else(|| {
-                    context
-                        .wallet_state
-                        .default_chain()
-                        .expect("No chain specified in wallet with no default chain")
-                });
                 let chain_client = context.make_chain_client(storage, chain_id);
                 let service = linera_service::node_service::NodeService::new(chain_client, port);
 
                 service.run().await?;
+            }
+
+            PublishBytecode {
+                contract,
+                service,
+                publisher,
+            } => {
+                let start_time = Instant::now();
+                let mut chain_client = context.make_chain_client(storage, publisher);
+                let bytecode_id = context
+                    .publish_bytecode(&mut chain_client, contract, service)
+                    .await?;
+                println!("{}", bytecode_id);
+                info!("Time elapsed: {}s", start_time.elapsed().as_secs());
+            }
+
+            CreateApplication {
+                bytecode_id,
+                arguments,
+                creator,
+            } => {
+                let start_time = Instant::now();
+                let mut chain_client = context.make_chain_client(storage, creator);
+
+                info!("Processing arguments...");
+                let arguments = hex::decode(&arguments)?;
+
+                info!("Synchronizing...");
+                chain_client.synchronize_and_recompute_balance().await?;
+                chain_client.process_inbox().await?;
+
+                info!("Creating application...");
+                let (application_id, _) = chain_client
+                    .create_application(bytecode_id, vec![], arguments, vec![])
+                    .await
+                    .context("failed to create application")?;
+
+                info!("{}", "Application published successfully!".green().bold());
+                println!("{}", application_id);
+                info!("Time elapsed: {}s", start_time.elapsed().as_secs());
             }
 
             PublishAndCreate {
@@ -1004,40 +1067,14 @@ where
                 publisher,
             } => {
                 let start_time = Instant::now();
-                let chain_id = publisher.unwrap_or_else(|| {
-                    context
-                        .wallet_state
-                        .default_chain()
-                        .expect("No chain specified in wallet with no default chain")
-                });
-                let mut chain_client = context.make_chain_client(storage, chain_id);
+                let mut chain_client = context.make_chain_client(storage, publisher);
 
                 info!("Processing arguments...");
                 let arguments = hex::decode(&arguments)?;
 
-                info!("Loading bytecode files...");
-                let contract_bytecode = Bytecode::load_from_file(&contract).await.context(
-                    format!("failed to load contract bytecode from {:?}", &contract),
-                )?;
-                let service_bytecode = Bytecode::load_from_file(&service).await.context(
-                    format!("failed to load service bytecode from {:?}", &service),
-                )?;
-
-                info!("Publishing bytecode...");
-                let (bytecode_id, cert) = chain_client
-                    .publish_bytecode(contract_bytecode, service_bytecode)
-                    .await
-                    .context("failed to publish bytecode")?;
-
-                info!("{}", "Bytecode published successfully!".green().bold());
-
-                info!("Synchronizing...");
-                chain_client.synchronize_and_recompute_balance().await?;
-                chain_client.process_inbox().await?;
-
-                info!("Processing inbox...");
-                chain_client.receive_certificate(cert).await?;
-                chain_client.process_inbox().await?;
+                let bytecode_id = context
+                    .publish_bytecode(&mut chain_client, contract, service)
+                    .await?;
 
                 info!("Creating application...");
                 let (application_id, _) = chain_client
@@ -1055,7 +1092,7 @@ where
                 certificate,
                 chain,
             } => {
-                let certificate: Certificate = bcs::from_bytes(&hex::decode(certificate)?)?;
+                let certificate: Certificate = certificate.parse()?;
                 let timestamp = certificate.value.block().timestamp;
                 context
                     .wallet_state
