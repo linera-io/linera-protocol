@@ -5,6 +5,8 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dev-dependencies]
+bcs = "0.1.3"
+futures = "0.3.17"
 linera-sdk = { path = "..", features = ["test"] }
 log = "0.4.17"
 webassembly-test = "0.1.0"

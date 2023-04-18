@@ -8,6 +8,7 @@
 #![cfg(test)]
 #![cfg(target_arch = "wasm32")]
 
+use futures::FutureExt;
 use linera_sdk::{
     base::{ApplicationId, Balance, BlockHeight, BytecodeId, ChainId, EffectId, Timestamp},
     contract, service, test, ContractLogger, ServiceLogger,
@@ -134,4 +135,17 @@ fn mock_service_log() {
     ];
 
     assert_eq!(test::log_messages(), expected);
+}
+
+/// Test loading a mocked application state without locking it.
+#[webassembly_test]
+fn mock_load_blob_state() {
+    let state = vec![0, 1, 2, 3, 4, 5, 6];
+
+    test::mock_application_state(
+        bcs::to_bytes(&state).expect("Failed to serialize vector using BCS"),
+    );
+
+    assert_eq!(contract::system_api::load::<Vec<u8>>(), state);
+    assert_eq!(service::system_api::load().now_or_never(), Some(state));
 }
