@@ -10,7 +10,7 @@
 
 use linera_sdk::{
     base::{ApplicationId, Balance, BlockHeight, BytecodeId, ChainId, EffectId, Timestamp},
-    contract, service, test, ContractLogger,
+    contract, service, test, ContractLogger, ServiceLogger,
 };
 use webassembly_test::webassembly_test;
 
@@ -96,6 +96,28 @@ fn mock_system_timestamp() {
 #[webassembly_test]
 fn mock_contract_log() {
     ContractLogger::install();
+
+    log::trace!("Trace");
+    log::debug!("Debug");
+    log::info!("Info");
+    log::warn!("Warn");
+    log::error!("Error");
+
+    let expected = vec![
+        (log::Level::Trace, "Trace".to_owned()),
+        (log::Level::Debug, "Debug".to_owned()),
+        (log::Level::Info, "Info".to_owned()),
+        (log::Level::Warn, "Warn".to_owned()),
+        (log::Level::Error, "Error".to_owned()),
+    ];
+
+    assert_eq!(test::log_messages(), expected);
+}
+
+/// Test if messages logged by a service can be inspected.
+#[webassembly_test]
+fn mock_service_log() {
+    ServiceLogger::install();
 
     log::trace!("Trace");
     log::debug!("Debug");
