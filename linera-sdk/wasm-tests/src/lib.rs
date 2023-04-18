@@ -9,7 +9,7 @@
 #![cfg(target_arch = "wasm32")]
 
 use linera_sdk::{
-    base::{ApplicationId, Balance, BlockHeight, BytecodeId, ChainId, EffectId},
+    base::{ApplicationId, Balance, BlockHeight, BytecodeId, ChainId, EffectId, Timestamp},
     contract, service, test,
 };
 use webassembly_test::webassembly_test;
@@ -79,4 +79,15 @@ fn mock_system_balance() {
 
     assert_eq!(contract::system_api::current_system_balance(), balance);
     assert_eq!(service::system_api::current_system_balance(), balance);
+}
+
+/// Test if the system timestamp getter API is mocked successfully.
+#[webassembly_test]
+fn mock_system_timestamp() {
+    let timestamp = Timestamp::from(0x00010203_04050607);
+
+    test::mock_system_timestamp(timestamp);
+
+    assert_eq!(contract::system_api::current_system_time(), timestamp);
+    assert_eq!(service::system_api::current_system_time(), timestamp);
 }
