@@ -76,14 +76,14 @@ enum NodeServiceError {
     #[error("graphql operations of different types submitted")]
     HeterogeneousOperations,
     #[error("failed to parse graphql query: {error}")]
-    GraphQLServerError { error: String },
+    GraphQLParseError { error: String },
     #[error("malformed application response")]
     MalformedApplicationResponse,
 }
 
 impl From<ServerError> for NodeServiceError {
     fn from(value: ServerError) -> Self {
-        NodeServiceError::GraphQLServerError {
+        NodeServiceError::GraphQLParseError {
             error: value.to_string(),
         }
     }
@@ -103,7 +103,7 @@ impl IntoResponse for NodeServiceError {
             NodeServiceError::MissingOperation
             | NodeServiceError::HeterogeneousOperations
             | NodeServiceError::UnsupportedQueryType => (StatusCode::BAD_REQUEST, self.to_string()),
-            NodeServiceError::GraphQLServerError { error } => (StatusCode::BAD_REQUEST, error),
+            NodeServiceError::GraphQLParseError { error } => (StatusCode::BAD_REQUEST, error),
         };
         tuple.into_response()
     }
@@ -117,11 +117,15 @@ where
     ViewError: From<S::ContextError>,
 {
     /// Gets a subscription to a stream of `Notification`s for a collection of `ChainId`s.
+    /// An empty vector corresponds to the default chain.
     async fn notifications(
         &self,
         chain_ids: Vec<ChainId>,
     ) -> Result<impl Stream<Item = Notification>, Error> {
-        Ok(self.client.lock().await.subscribe_all(chain_ids).await?)
+        match chain_ids.len() {
+            0 => Ok(self.client.lock().await.subscribe_default().await?),
+            _ => Ok(self.client.lock().await.subscribe_all(chain_ids).await?),
+        }
     }
 }
 
