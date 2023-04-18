@@ -149,3 +149,18 @@ fn mock_load_blob_state() {
     assert_eq!(contract::system_api::load::<Vec<u8>>(), state);
     assert_eq!(service::system_api::load().now_or_never(), Some(state));
 }
+
+/// Test loading and locking a mocked application state.
+#[webassembly_test]
+fn mock_load_and_lock_blob_state() {
+    let state = vec![0, 1, 2, 3, 4, 5, 6];
+
+    test::mock_application_state(
+        bcs::to_bytes(&state).expect("Failed to serialize vector using BCS"),
+    );
+
+    assert_eq!(
+        contract::system_api::load_and_lock::<Vec<u8>>(),
+        Some(state)
+    );
+}
