@@ -6,6 +6,7 @@ members = [
         "linera-execution",
         "linera-rpc",
         "linera-sdk",
+        "linera-sdk/wasm-tests",
         "linera-service",
         "linera-storage",
         "linera-views",

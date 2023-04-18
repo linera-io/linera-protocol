@@ -1,0 +1,9 @@
+[package]
+name = "linera-sdk-wasm-tests"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dev-dependencies]
+linera-sdk = { path = "..", features = ["test"] }
+webassembly-test = "0.1.0"

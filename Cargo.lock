@@ -2591,6 +2591,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-sdk-wasm-tests"
+version = "0.1.0"
+dependencies = [
+ "linera-sdk",
+ "webassembly-test",
+]
+
+[[package]]
 name = "linera-service"
 version = "0.1.0"
 dependencies = [
@@ -5835,6 +5843,16 @@ checksum = "bcda906d8be16e728fd5adc5b729afad4e444e106ab28cd1c7256e54fa61510f"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "webassembly-test"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45e64391864794db026d27b15cbe6edd3c25864222bd90229dfa1a26ebf30705"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]
