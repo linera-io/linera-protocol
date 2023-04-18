@@ -685,7 +685,7 @@ async fn get_application_uri(
             chain_id
         );
     }
-    panic!("Could not find application uri");
+    panic!("Could not find application URI");
 }
 
 async fn try_get_applications_uri(
@@ -702,15 +702,14 @@ async fn try_get_applications_uri(
     };
     let query = json!({ "query": query_string });
     let client = reqwest::Client::new();
-    let res = client
+    let response = client
         .post(format!("http://localhost:{}/", port.unwrap_or(8080)))
         .json(&query)
         .send()
         .await
         .unwrap();
-    let response_body: Value = res.json().await.unwrap();
-    response_body
-        .get("data")
+    let body: Value = response.json().await.unwrap();
+    body.get("data")
         .unwrap()
         .get("applications")
         .unwrap()
@@ -718,7 +717,6 @@ async fn try_get_applications_uri(
         .unwrap()
         .iter()
         .map(|a| {
-            println!("{:?}", a);
             let id = serde_json::from_value(a.get("id").unwrap().clone())
                 .expect("id should be a valid application id");
             let link = a.get("link").unwrap().as_str().unwrap().to_string();
