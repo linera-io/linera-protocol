@@ -1,13 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    crypto::{CryptoHash, PublicKey, Signature},
-    data_types::{Amount, Balance, BlockHeight, Timestamp},
-    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, ChannelName, Owner},
-};
-use async_graphql::scalar;
-
 /// Defines a GraphQL scalar with a description string.
 ///
 /// This is equivalent to `scalar!` but always uses the stringified identifier as the name.
@@ -165,31 +158,3 @@ macro_rules! bcs_scalar {
         }
     };
 }
-
-doc_scalar!(Amount, "A non-negative amount of money to be transferred");
-bcs_scalar!(ApplicationId, "A unique identifier for a user application");
-doc_scalar!(Balance, "The balance of a chain");
-scalar!(BlockHeight);
-bcs_scalar!(
-    BytecodeId,
-    "A unique identifier for an application bytecode"
-);
-doc_scalar!(ChainDescription, "How to create a chain");
-doc_scalar!(
-    ChainId,
-    "The unique identifier (UID) of a chain. This is currently computed as the hash value of a \
-    ChainDescription."
-);
-doc_scalar!(ChannelName, "The name of a subscription channel");
-doc_scalar!(CryptoHash, "A Sha3-256 value");
-doc_scalar!(
-    Owner,
-    "The owner of a chain. This is currently the hash of the owner's public key used to verify \
-    signatures."
-);
-doc_scalar!(PublicKey, "A signature public key");
-doc_scalar!(Signature, "A signature value");
-doc_scalar!(
-    Timestamp,
-    "A timestamp, in microseconds since the Unix epoch"
-);

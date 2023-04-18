@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    bcs_scalar,
     crypto::{BcsHashable, CryptoError, CryptoHash, PublicKey},
     data_types::BlockHeight,
+    doc_scalar,
 };
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -182,3 +184,21 @@ impl ChainId {
 }
 
 impl BcsHashable for ChainDescription {}
+
+bcs_scalar!(ApplicationId, "A unique identifier for a user application");
+bcs_scalar!(
+    BytecodeId,
+    "A unique identifier for an application bytecode"
+);
+doc_scalar!(ChainDescription, "How to create a chain");
+doc_scalar!(
+    ChainId,
+    "The unique identifier (UID) of a chain. This is currently computed as the hash value of a \
+    ChainDescription."
+);
+doc_scalar!(ChannelName, "The name of a subscription channel");
+doc_scalar!(
+    Owner,
+    "The owner of a chain. This is currently the hash of the owner's public key used to verify \
+    signatures."
+);

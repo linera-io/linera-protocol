@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use std::{num::ParseIntError, str::FromStr};
 use thiserror::Error;
 
+use crate::doc_scalar;
+
 #[cfg(any(test, feature = "test"))]
 use {
     proptest::{
@@ -477,6 +479,10 @@ impl Arbitrary for CryptoHash {
 }
 
 impl BcsHashable for PublicKey {}
+
+doc_scalar!(CryptoHash, "A Sha3-256 value");
+doc_scalar!(PublicKey, "A signature public key");
+doc_scalar!(Signature, "A signature value");
 
 #[test]
 #[allow(clippy::disallowed_names)]

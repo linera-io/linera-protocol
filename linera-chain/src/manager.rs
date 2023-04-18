@@ -11,7 +11,7 @@ use crate::{
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{BlockHeight, RoundNumber},
-    ensure,
+    doc_scalar, ensure,
     identifiers::Owner,
 };
 use linera_execution::ChainOwnership;
@@ -29,6 +29,8 @@ pub enum ChainManager {
     /// The chain is managed by multiple owners.
     Multi(Box<MultiOwnerManager>),
 }
+
+doc_scalar!(ChainManager, "How to produce new blocks");
 
 /// The specific state of a chain managed by one owner.
 #[derive(Clone, Debug, Serialize, Deserialize)]

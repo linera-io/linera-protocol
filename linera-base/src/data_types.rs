@@ -14,6 +14,8 @@ use test_strategy::Arbitrary;
 #[cfg(not(target_arch = "wasm32"))]
 use chrono::NaiveDateTime;
 
+use crate::doc_scalar;
+
 /// A non-negative amount of money to be transferred.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
@@ -250,3 +252,11 @@ impl TryFrom<Balance> for Amount {
         Ok(Amount(val.0.try_into()?))
     }
 }
+
+doc_scalar!(Amount, "A non-negative amount of money to be transferred");
+doc_scalar!(Balance, "The balance of a chain");
+doc_scalar!(BlockHeight, "A block height to identify blocks in a chain");
+doc_scalar!(
+    Timestamp,
+    "A timestamp, in microseconds since the Unix epoch"
+);

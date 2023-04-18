@@ -8,5 +8,4 @@ pub mod node;
 pub mod notifier;
 pub mod worker;
 
-mod graphql;
 pub(crate) mod updater;
