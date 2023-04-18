@@ -218,7 +218,7 @@ fn mock_load_view() {
 
 /// Test if key prefix search works in the mocked key-value store.
 #[webassembly_test]
-fn mock_lock_view_contract() {
+fn mock_find_keys() {
     let store = test::mock_key_value_store();
     let mut initial_view = DummyView::load(store)
         .now_or_never()
@@ -266,4 +266,71 @@ fn mock_lock_view_contract() {
         .expect("Failed to load keys of dummy map view");
 
     assert_eq!(service_keys, keys);
+}
+
+/// Test if key prefix search works in the mocked key-value store.
+#[webassembly_test]
+fn mock_find_key_value_pairs() {
+    let store = test::mock_key_value_store();
+    let mut initial_view = DummyView::load(store)
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately")
+        .expect("Failed to initialize `DummyView` with the mock key value store");
+
+    let keys = [32, 36, 40, 44];
+    let mut expected_pairs = Vec::new();
+
+    for &key in &keys {
+        let value = -(key as i8);
+
+        initial_view
+            .map
+            .insert(&key, value)
+            .expect("Failed to insert value into dumy map view");
+
+        expected_pairs.push((key, value));
+    }
+
+    initial_view
+        .save()
+        .now_or_never()
+        .expect("Persisting a view to memory should be instantaneous")
+        .expect("Failed to persist view state");
+
+    let contract_view = contract::system_api::load_and_lock_view::<DummyView<_>>()
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately")
+        .expect("Failed to lock view");
+
+    let mut contract_pairs = Vec::new();
+
+    contract_view
+        .map
+        .for_each_index_value(|key, value| {
+            contract_pairs.push((key, value));
+            Ok(())
+        })
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately")
+        .expect("Failed to load key value pairs of dummy map view");
+
+    assert_eq!(contract_pairs, expected_pairs);
+
+    let service_view = service::system_api::lock_and_load_view::<DummyView<_>>()
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately");
+
+    let mut service_pairs = Vec::new();
+
+    service_view
+        .map
+        .for_each_index_value(|key, value| {
+            service_pairs.push((key, value));
+            Ok(())
+        })
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately")
+        .expect("Failed to load key value pairs of dummy map view");
+
+    assert_eq!(service_pairs, expected_pairs);
 }
