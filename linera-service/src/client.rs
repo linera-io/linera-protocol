@@ -24,7 +24,7 @@ use linera_execution::{
 };
 use linera_rpc::node_provider::NodeProvider;
 use linera_service::{
-    config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
+    config::{CommitteeConfig, GenesisConfig, Import, UserChain, WalletState},
     storage::{Runnable, StorageConfig},
     tracker::NotificationTracker,
 };
@@ -38,6 +38,7 @@ use std::{
 use structopt::StructOpt;
 use tracing::{debug, info, warn};
 
+use linera_service::config::Export;
 #[cfg(feature = "benchmark")]
 use {
     linera_base::data_types::RoundNumber,
@@ -63,7 +64,6 @@ use {
 };
 
 struct ClientContext {
-    genesis_config: GenesisConfig,
     wallet_state_path: PathBuf,
     wallet_state: WalletState,
     max_pending_messages: usize,
@@ -74,27 +74,46 @@ struct ClientContext {
 }
 
 impl ClientContext {
+    fn create(
+        options: &ClientOptions,
+        genesis_config: GenesisConfig,
+        chains: Vec<UserChain>,
+    ) -> Self {
+        let wallet_state_path = options.wallet_state_path.clone();
+        let mut wallet_state = WalletState::create(&wallet_state_path, genesis_config)
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Unable to create user chains at {:?}: {:?}",
+                    &wallet_state_path, e
+                )
+            });
+        chains
+            .into_iter()
+            .for_each(|chain| wallet_state.insert(chain));
+        Self::configure(options, wallet_state_path, wallet_state)
+    }
+
     fn from_options(options: &ClientOptions) -> Self {
         let wallet_state_path = options.wallet_state_path.clone();
-        let wallet_state = WalletState::read_or_create(&wallet_state_path).unwrap_or_else(|e| {
+        let wallet_state = WalletState::read(&wallet_state_path).unwrap_or_else(|e| {
             panic!(
                 "Unable to read user chains at {:?}: {:?}",
                 &wallet_state_path, e
             )
         });
-        let genesis_config = match options.command {
-            ClientCommand::CreateGenesisConfig { admin_root, .. } => {
-                GenesisConfig::new(CommitteeConfig::default(), ChainId::root(admin_root))
-            }
-            _ => GenesisConfig::read(&options.genesis_config_path)
-                .expect("Fail to read initial chain config"),
-        };
+        Self::configure(options, wallet_state_path, wallet_state)
+    }
+
+    fn configure(
+        options: &ClientOptions,
+        wallet_state_path: PathBuf,
+        wallet_state: WalletState,
+    ) -> Self {
         let send_timeout = Duration::from_micros(options.send_timeout_us);
         let recv_timeout = Duration::from_micros(options.recv_timeout_us);
         let cross_chain_delay = Duration::from_micros(options.cross_chain_delay_ms);
 
         ClientContext {
-            genesis_config,
             wallet_state_path,
             wallet_state,
             max_pending_messages: options.max_pending_messages,
@@ -108,7 +127,7 @@ impl ClientContext {
     #[cfg(feature = "benchmark")]
     fn make_validator_mass_clients(&self, max_in_flight: u64) -> Vec<Box<dyn MassClient>> {
         let mut validator_clients = Vec::new();
-        for config in &self.genesis_config.committee.validators {
+        for config in &self.wallet_state.genesis_config().committee.validators {
             let client: Box<dyn MassClient> = match config.network.protocol {
                 NetworkProtocol::Simple(protocol) => {
                     let network = config.network.clone_with_protocol(protocol);
@@ -152,7 +171,7 @@ impl ClientContext {
                 .collect(),
             node_provider,
             storage,
-            self.genesis_config.admin_id,
+            self.wallet_state.genesis_admin_chain(),
             self.max_pending_messages,
             chain.block_hash,
             chain.timestamp,
@@ -222,7 +241,12 @@ impl ClientContext {
     /// Try to aggregate votes into certificates.
     #[cfg(feature = "benchmark")]
     fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<Certificate> {
-        let committee = self.genesis_config.committee.clone().into_committee();
+        let committee = self
+            .wallet_state
+            .genesis_config()
+            .committee
+            .clone()
+            .into_committee();
         let mut aggregators = HashMap::new();
         let mut certificates = Vec::new();
         let mut done_senders = HashSet::new();
@@ -368,7 +392,8 @@ impl ClientContext {
             if let Ok(cert) = chain_client.subscribe_to_new_committees().await {
                 info!(
                     "Subscribed {:?} to the admin chain {:?}",
-                    chain_id, self.genesis_config.admin_id,
+                    chain_id,
+                    self.wallet_state.genesis_admin_chain(),
                 );
                 certificates.push(cert);
                 self.update_wallet_from_client(&mut chain_client).await;
@@ -459,10 +484,6 @@ struct ClientOptions {
     #[structopt(long = "storage", default_value = "memory")]
     storage_config: StorageConfig,
 
-    /// Optional path to the file describing the initial user chains (aka genesis state)
-    #[structopt(long = "genesis")]
-    genesis_config_path: PathBuf,
-
     /// Timeout for sending queries (us)
     #[structopt(long, default_value = "4000000")]
     send_timeout_us: u64,
@@ -490,7 +511,7 @@ struct ClientOptions {
     command: ClientCommand,
 }
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone)]
 enum ClientCommand {
     /// Transfer funds
     #[structopt(name = "transfer")]
@@ -587,12 +608,18 @@ enum ClientCommand {
         max_proposals: Option<usize>,
     },
 
+    /// Create genesis configuration for a Linera deployment.
     /// Create initial user chains and print information to be used for initialization of validator setup.
+    /// This will also create create the wallet.
     #[structopt(name = "create_genesis_config")]
     CreateGenesisConfig {
         /// Sets the file describing the public configurations of all validators
         #[structopt(long = "committee")]
         committee_config_path: PathBuf,
+
+        /// The output config path to be consumed by the server
+        #[structopt(long = "genesis")]
+        genesis_config_path: PathBuf,
 
         /// Index of the admin chain in the genesis config
         #[structopt(long, default_value = "0")]
@@ -608,6 +635,14 @@ enum ClientCommand {
 
         /// Number of additional chains to create
         num: u32,
+    },
+
+    /// Initialise a wallet from the genesis configuration.
+    #[structopt(name = "init")]
+    Init {
+        /// The path to the genesis configuration for a Linera deployment.
+        #[structopt(long = "genesis")]
+        genesis_config_path: PathBuf,
     },
 
     /// Watch the network for notifications.
@@ -686,7 +721,7 @@ enum ClientCommand {
     Wallet(WalletCommand),
 }
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone)]
 enum WalletCommand {
     Show { chain_id: Option<ChainId> },
     SetDefault { chain_id: ChainId },
@@ -809,8 +844,8 @@ where
 
                 // Make sure genesis chains are subscribed to the admin chain.
                 let certificates = context.ensure_admin_subscription(&storage).await;
-                let mut admin_state =
-                    context.make_chain_client(storage.clone(), context.genesis_config.admin_id);
+                let mut admin_state = context
+                    .make_chain_client(storage.clone(), context.wallet_state.genesis_admin_chain());
                 for cert in certificates {
                     admin_state.receive_certificate(cert).await.unwrap();
                 }
@@ -821,7 +856,7 @@ where
                     .into_iter()
                     .map(|c| c.value.effects().len())
                     .sum::<usize>();
-                tracing::info!("Subscribed {} chains to new committees", n);
+                info!("Subscribed {} chains to new committees", n);
 
                 // Create the new committee.
                 let committee = admin_state.local_committee().await.unwrap();
@@ -1103,7 +1138,7 @@ where
                 context.save_wallet();
             }
 
-            CreateGenesisConfig { .. } | KeyGen | Wallet(_) => unreachable!(),
+            CreateGenesisConfig { .. } | KeyGen | Wallet(_) | Init { .. } => unreachable!(),
         }
         Ok(())
     }
@@ -1116,22 +1151,24 @@ async fn main() -> Result<(), anyhow::Error> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
     let options = ClientOptions::from_args();
-    let mut context = ClientContext::from_options(&options);
+
     match options.command {
         ClientCommand::CreateGenesisConfig {
-            committee_config_path,
+            ref committee_config_path,
+            ref genesis_config_path,
             admin_root,
             initial_funding,
             start_timestamp,
             num,
         } => {
-            let committee_config = CommitteeConfig::read(&committee_config_path)
+            let committee_config = CommitteeConfig::read(committee_config_path)
                 .expect("Unable to read committee config file");
             let mut genesis_config =
                 GenesisConfig::new(committee_config, ChainId::root(admin_root));
             let timestamp = start_timestamp
                 .map(|st| Timestamp::from(st.timestamp() as u64))
                 .unwrap_or_else(Timestamp::now);
+            let mut chains = vec![];
             for i in 0..num {
                 let description = ChainDescription::Root(i as usize);
                 // Create keys.
@@ -1144,43 +1181,62 @@ async fn main() -> Result<(), anyhow::Error> {
                     timestamp,
                 ));
                 // Private keys.
-                context.wallet_state.insert(chain);
+                chains.push(chain);
             }
+            let context = ClientContext::create(&options, genesis_config.clone(), chains);
+            genesis_config.write(genesis_config_path)?;
             context.save_wallet();
-            genesis_config.write(&options.genesis_config_path)?;
             Ok(())
         }
 
-        ClientCommand::KeyGen => {
-            let key_pair = KeyPair::generate();
-            let public = key_pair.public();
-            context.wallet_state.add_unassigned_key_pair(key_pair);
+        ClientCommand::Init {
+            ref genesis_config_path,
+        } => {
+            let genesis_config = GenesisConfig::read(genesis_config_path)?;
+            let context = ClientContext::create(&options, genesis_config, vec![]);
             context.save_wallet();
-            println!("{}", public);
             Ok(())
         }
 
-        ClientCommand::Wallet(wallet_command) => match wallet_command {
-            WalletCommand::Show { chain_id } => {
-                context.wallet_state.pretty_print(chain_id);
-                Ok(())
-            }
-            WalletCommand::SetDefault { chain_id } => {
-                context.wallet_state.set_default_chain(chain_id)?;
-                context.save_wallet();
-                Ok(())
-            }
-        },
+        ref command => {
+            let mut context = ClientContext::from_options(&options);
+            match command {
+                ClientCommand::KeyGen => {
+                    let key_pair = KeyPair::generate();
+                    let public = key_pair.public();
+                    context.wallet_state.add_unassigned_key_pair(key_pair);
+                    context.save_wallet();
+                    println!("{}", public);
+                    Ok(())
+                }
 
-        command => {
-            let genesis_config = context.genesis_config.clone();
-            let wasm_runtime = options.wasm_runtime.with_wasm_default();
+                ClientCommand::Wallet(wallet_command) => match wallet_command {
+                    WalletCommand::Show { chain_id } => {
+                        context.wallet_state.pretty_print(*chain_id);
+                        Ok(())
+                    }
+                    WalletCommand::SetDefault { chain_id } => {
+                        context.wallet_state.set_default_chain(*chain_id)?;
+                        context.save_wallet();
+                        Ok(())
+                    }
+                },
 
-            options
-                .storage_config
-                .run_with_storage(&genesis_config, wasm_runtime, Job(context, command))
-                .await?;
-            Ok(())
+                command => {
+                    let genesis_config = context.wallet_state.genesis_config().clone();
+                    let wasm_runtime = options.wasm_runtime.with_wasm_default();
+
+                    options
+                        .storage_config
+                        .run_with_storage(
+                            &genesis_config,
+                            wasm_runtime,
+                            Job(context, command.clone()),
+                        )
+                        .await?;
+                    Ok(())
+                }
+            }
         }
     }
 }

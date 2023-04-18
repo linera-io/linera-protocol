@@ -113,11 +113,12 @@ impl UserChain {
     }
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct WalletState {
     chains: BTreeMap<ChainId, UserChain>,
     unassigned_key_pairs: HashMap<PublicKey, KeyPair>,
     default: Option<ChainId>,
+    genesis_config: GenesisConfig,
 }
 
 impl WalletState {
@@ -208,7 +209,20 @@ impl WalletState {
         );
     }
 
-    pub fn read_or_create(path: &Path) -> Result<Self, std::io::Error> {
+    pub fn genesis_admin_chain(&self) -> ChainId {
+        self.genesis_config.admin_id
+    }
+
+    pub fn genesis_config(&self) -> &GenesisConfig {
+        &self.genesis_config
+    }
+
+    pub fn read(path: &Path) -> Result<Self, anyhow::Error> {
+        let file = OpenOptions::new().read(true).write(true).open(path)?;
+        Ok(serde_json::from_reader(BufReader::new(file))?)
+    }
+
+    pub fn create(path: &Path, genesis_config: GenesisConfig) -> Result<Self, anyhow::Error> {
         let file = OpenOptions::new()
             .create(true)
             .write(true)
@@ -216,7 +230,12 @@ impl WalletState {
             .open(path)?;
         let mut reader = BufReader::new(file);
         if reader.fill_buf()?.is_empty() {
-            return Ok(Self::default());
+            return Ok(Self {
+                chains: Default::default(),
+                unassigned_key_pairs: Default::default(),
+                default: None,
+                genesis_config,
+            });
         }
         Ok(serde_json::from_reader(reader)?)
     }

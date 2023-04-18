@@ -154,7 +154,6 @@ struct Client {
     tmp_dir: Rc<TempDir>,
     storage: String,
     wallet: String,
-    genesis: String,
     max_pending_messages: usize,
     network: Network,
 }
@@ -165,7 +164,6 @@ impl Client {
             tmp_dir,
             storage: format!("rocksdb:client_{}.db", id),
             wallet: format!("wallet_{}.json", id),
-            genesis: "genesis.json".to_string(),
             max_pending_messages: 10_000,
             network,
         }
@@ -188,7 +186,6 @@ impl Client {
             .args(["--bin", "client"])
             .arg("--")
             .args(["--wallet", &self.wallet])
-            .args(["--genesis", &self.genesis])
             .args(["--send-timeout-us", "10000000"])
             .args(["--recv-timeout-us", "10000000"]);
         command
@@ -205,11 +202,23 @@ impl Client {
         command
     }
 
-    async fn generate_client_config(&self) {
+    async fn create_genesis_config(&self) {
         self.client_run()
             .args(["create_genesis_config", "10"])
             .args(["--initial-funding", "10"])
             .args(["--committee", "committee.json"])
+            .args(["--genesis", "genesis.json"])
+            .spawn()
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+    }
+
+    async fn init(&self) {
+        self.client_run()
+            .arg("init")
+            .args(["--genesis", "genesis.json"])
             .spawn()
             .unwrap()
             .wait()
@@ -381,7 +390,7 @@ impl Client {
     }
 
     fn get_wallet(&self) -> WalletState {
-        WalletState::read_or_create(self.tmp_dir.path().join(&self.wallet).as_path()).unwrap()
+        WalletState::read(self.tmp_dir.path().join(&self.wallet).as_path()).unwrap()
     }
 
     async fn check_for_chain_in_wallet(&self, chain: ChainId) -> bool {
@@ -889,7 +898,7 @@ async fn test_counter_end_to_end() {
     let increment = 5;
 
     runner.generate_initial_server_config(n_validators).await;
-    client.generate_client_config().await;
+    client.create_genesis_config().await;
     let _local_net = runner.run_local_net(n_validators).await;
     let (contract, service) = runner.build_application("counter-graphql").await;
 
@@ -922,7 +931,7 @@ async fn test_counter_end_to_end_publish_create() {
     let increment = 5;
 
     runner.generate_initial_server_config(n_validators).await;
-    client.generate_client_config().await;
+    client.create_genesis_config().await;
     let _local_net = runner.run_local_net(n_validators).await;
     let (contract, service) = runner.build_application("counter-graphql").await;
 
@@ -955,7 +964,8 @@ async fn test_multiple_wallets() {
 
     // Create initial server and client config.
     runner.generate_initial_server_config(n_validators).await;
-    client_1.generate_client_config().await;
+    client_1.create_genesis_config().await;
+    client_2.init().await;
 
     // Start local network.
     let _local_net = runner.run_local_net(n_validators).await;
@@ -1011,7 +1021,7 @@ async fn test_reconfiguration(network: Network) {
     let n_validators = 4;
 
     runner.generate_initial_server_config(n_validators).await;
-    client.generate_client_config().await;
+    client.create_genesis_config().await;
     let mut local_net = runner.run_local_net(n_validators).await;
 
     client.query_validators(None).await;
@@ -1086,7 +1096,8 @@ async fn social_user_pub_sub() {
 
     // Create initial server and client config.
     runner.generate_initial_server_config(n_validators).await;
-    client1.generate_client_config().await;
+    client1.create_genesis_config().await;
+    client2.init().await;
 
     // Start local network.
     let _local_net = runner.run_local_net(n_validators).await;
