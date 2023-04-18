@@ -694,9 +694,9 @@ where
                 context.update_wallet_from_client(&mut chain_client).await;
                 let timestamp = certificate.value.block().timestamp;
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
-                // Print the new chain id(s) on stdout for the scripting purposes.
+                // Print the new chain id and certificate on stdout for the scripting purposes.
                 println!("{}", id);
-                println!("{}", hex::encode(bcs::to_bytes(&certificate).unwrap()));
+                println!("{}", certificate);
                 context.save_wallet();
             }
 
@@ -1046,7 +1046,7 @@ where
                     .context("failed to create application")?;
 
                 info!("{}", "Application published successfully!".green().bold());
-                println!("{}", hex::encode(bcs::to_bytes(&application_id).unwrap()));
+                println!("{}", application_id);
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs());
             }
 

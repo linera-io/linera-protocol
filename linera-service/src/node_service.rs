@@ -348,16 +348,10 @@ impl ApplicationOverview {
         description: UserApplicationDescription,
         port: NonZeroU16,
     ) -> Self {
-        let id_bytes = bcs::to_bytes(&id).expect("user application ids should be bcs serializable");
-        let encoded_id = hex::encode(id_bytes);
         Self {
             id,
             description,
-            link: format!(
-                "http://localhost:{}/applications/{}",
-                port.get(),
-                encoded_id
-            ),
+            link: format!("http://localhost:{}/applications/{}", port.get(), id),
         }
     }
 }
