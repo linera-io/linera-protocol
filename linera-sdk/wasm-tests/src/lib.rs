@@ -15,6 +15,7 @@ use linera_sdk::{
 };
 use linera_views::{
     common::Context,
+    map_view::MapView,
     register_view::RegisterView,
     views::{RootView, View},
 };
@@ -176,6 +177,7 @@ struct DummyView<C> {
     one: RegisterView<C, u8>,
     two: RegisterView<C, u16>,
     three: RegisterView<C, u32>,
+    map: MapView<C, u8, i8>,
 }
 
 /// Test if views are loaded from a memory key-value store.
@@ -212,4 +214,56 @@ fn mock_load_view() {
     assert_eq!(initial_view.one.get(), service_view.one.get());
     assert_eq!(initial_view.two.get(), service_view.two.get());
     assert_eq!(initial_view.three.get(), service_view.three.get());
+}
+
+/// Test if key prefix search works in the mocked key-value store.
+#[webassembly_test]
+fn mock_lock_view_contract() {
+    let store = test::mock_key_value_store();
+    let mut initial_view = DummyView::load(store)
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately")
+        .expect("Failed to initialize `DummyView` with the mock key value store");
+
+    let keys = [32, 36, 40, 44];
+
+    for &key in &keys {
+        initial_view
+            .map
+            .insert(&key, -(key as i8))
+            .expect("Failed to insert value into dumy map view");
+    }
+
+    initial_view
+        .save()
+        .now_or_never()
+        .expect("Persisting a view to memory should be instantaneous")
+        .expect("Failed to persist view state");
+
+    let contract_view = contract::system_api::load_and_lock_view::<DummyView<_>>()
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately")
+        .expect("Failed to lock view");
+
+    let contract_keys = contract_view
+        .map
+        .indices()
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately")
+        .expect("Failed to load keys of dummy map view");
+
+    assert_eq!(contract_keys, keys);
+
+    let service_view = service::system_api::lock_and_load_view::<DummyView<_>>()
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately");
+
+    let service_keys = service_view
+        .map
+        .indices()
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately")
+        .expect("Failed to load keys of dummy map view");
+
+    assert_eq!(service_keys, keys);
 }
