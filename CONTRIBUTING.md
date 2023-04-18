@@ -49,9 +49,17 @@ English words (e.g. `database` -> `db`). Abbreviations are never a single letter
 
 However, single letter variables `i`, `x`, `n` are accepted for short-lived integer types (e.g. a for-loop).
 
+Prefer plural names for collections of objects: `let values = vec![1, 2, 3];`.
+
 ## API coding guidelines
 
 Contributions should generally follow the [Rust API guidelines](https://rust-lang.github.io/api-guidelines/checklist.html) whenever possible.
+
+## Additional code style guidelines
+
+* Type annotations (such as `let x : t = ...;`, `Vec::<usize>::new()`) should be present only when required by the compiler.
+
+* Re-exports (`pub use foo = bar::foo`) should be limited to definitions that would be private otherwise.
 
 ## Formatting and linting
 
@@ -101,7 +109,7 @@ See https://github.com/zefchain/serde-reflection for more context.
 ## WASM support
 
 The support of WASM is controlled by the features `wasmer` and the `wasmtime`, and
-currently defaults to `wasmtime`.
+currently defaults to `wasmer` only.
 
 Testing the WASM application examples requires configuring a custom test runner included with
 `linera-sdk`. First it has to be built:
