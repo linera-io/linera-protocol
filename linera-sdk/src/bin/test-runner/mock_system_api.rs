@@ -497,6 +497,55 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
             })
         },
     )?;
+    linker.func_wrap2_async(
+        "writable_system",
+        "find-key-values::new: func(prefix: list<u8>) -> handle<find-key-values>",
+        move |mut caller: Caller<'_, Resources>, prefix_address: i32, prefix_length: i32| {
+            Box::new(async move {
+                let prefix = load_bytes(&mut caller, prefix_address, prefix_length);
+                let resources = caller.data_mut();
+
+                resources.insert(prefix)
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "writable_system",
+        "find-key-values::poll: func(self: handle<find-key-values>) -> variant { \
+            pending(unit), \
+            ready(list<tuple<list<u8>, list<u8>>>) \
+        }",
+        move |mut caller: Caller<'_, Resources>, handle: i32, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-find-key-values: \
+                        func(prefix: list<u8>) -> list<tuple<list<u8>, list<u8>>>",
+                )
+                .expect(
+                    "Missing `mocked-find-key-values` function in the module. \
+                    Please ensure `linera_sdk::test::mock_key_value_store` was called",
+                );
+
+                let (prefix_address, prefix_length) =
+                    store_bytes_from_resource(&mut caller, |resources| {
+                        let prefix: &Vec<u8> = resources.get(handle);
+                        prefix
+                    })
+                    .await;
+
+                let (result_offset,) = function
+                    .typed::<(i32, i32), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-find-key-values` function signature")
+                    .call_async(&mut caller, (prefix_address, prefix_length))
+                    .await
+                    .expect("Failed to call `mocked-find-key-values` function");
+
+                store_in_memory(&mut caller, return_offset, 1_i32);
+                copy_memory_slices(&mut caller, result_offset, return_offset + 4, 12);
+            })
+        },
+    )?;
 
     linker.func_wrap1_async(
         "queryable_system",
@@ -872,8 +921,64 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
             })
         },
     )?;
+    linker.func_wrap2_async(
+        "queryable_system",
+        "find-key-values::new: func(prefix: list<u8>) -> handle<find-key-values>",
+        move |mut caller: Caller<'_, Resources>, prefix_address: i32, prefix_length: i32| {
+            Box::new(async move {
+                let prefix = load_bytes(&mut caller, prefix_address, prefix_length);
+                let resources = caller.data_mut();
 
-    let resource_names = ["load", "lock", "read-key-bytes", "find-keys"];
+                resources.insert(prefix)
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "queryable_system",
+        "find-key-values::poll: func(self: handle<find-key-values>) -> variant { \
+            pending(unit), \
+            ready(result<list<tuple<list<u8>, list<u8>>>, string>) \
+        }",
+        move |mut caller: Caller<'_, Resources>, handle: i32, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-find-key-values: \
+                        func(prefix: list<u8>) -> list<tuple<list<u8>, list<u8>>>",
+                )
+                .expect(
+                    "Missing `mocked-find-key-values` function in the module. \
+                    Please ensure `linera_sdk::test::mock_key_value_store` was called",
+                );
+
+                let (prefix_address, prefix_length) =
+                    store_bytes_from_resource(&mut caller, |resources| {
+                        let prefix: &Vec<u8> = resources.get(handle);
+                        prefix
+                    })
+                    .await;
+
+                let (result_offset,) = function
+                    .typed::<(i32, i32), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-find-key-values` function signature")
+                    .call_async(&mut caller, (prefix_address, prefix_length))
+                    .await
+                    .expect("Failed to call `mocked-find-key-values` function");
+
+                store_in_memory(&mut caller, return_offset, 1_i32);
+                store_in_memory(&mut caller, return_offset + 4, 0_i32);
+                copy_memory_slices(&mut caller, result_offset, return_offset + 8, 12);
+            })
+        },
+    )?;
+
+    let resource_names = [
+        "load",
+        "lock",
+        "read-key-bytes",
+        "find-keys",
+        "find-key-values",
+    ];
 
     for resource_name in resource_names {
         linker.func_wrap1_async(
