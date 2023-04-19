@@ -637,14 +637,6 @@ enum ClientCommand {
         num: u32,
     },
 
-    /// Initialize a wallet from the genesis configuration.
-    #[structopt(name = "init")]
-    Init {
-        /// The path to the genesis configuration for a Linera deployment.
-        #[structopt(long = "genesis")]
-        genesis_config_path: PathBuf,
-    },
-
     /// Watch the network for notifications.
     #[structopt(name = "watch")]
     Watch {
@@ -723,8 +715,18 @@ enum ClientCommand {
 
 #[derive(StructOpt, Clone)]
 enum WalletCommand {
+    /// Show the contents of the wallet.
     Show { chain_id: Option<ChainId> },
+
+    /// Change the wallet default chain.
     SetDefault { chain_id: ChainId },
+
+    /// Initialize a wallet from the genesis configuration.
+    Init {
+        /// The path to the genesis configuration for a Linera deployment.
+        #[structopt(long = "genesis")]
+        genesis_config_path: PathBuf,
+    },
 }
 
 struct Job(ClientContext, ClientCommand);
@@ -1138,7 +1140,7 @@ where
                 context.save_wallet();
             }
 
-            CreateGenesisConfig { .. } | KeyGen | Wallet(_) | Init { .. } => unreachable!(),
+            CreateGenesisConfig { .. } | KeyGen | Wallet(_) => unreachable!(),
         }
         Ok(())
     }
@@ -1189,54 +1191,51 @@ async fn main() -> Result<(), anyhow::Error> {
             Ok(())
         }
 
-        ClientCommand::Init {
-            genesis_config_path,
-        } => {
-            let genesis_config = GenesisConfig::read(genesis_config_path)?;
-            let context = ClientContext::create(&options, genesis_config, vec![]);
-            context.save_wallet();
-            Ok(())
-        }
-
-        command => {
-            let mut context = ClientContext::from_options(&options);
-            match command {
-                ClientCommand::KeyGen => {
-                    let key_pair = KeyPair::generate();
-                    let public = key_pair.public();
-                    context.wallet_state.add_unassigned_key_pair(key_pair);
-                    context.save_wallet();
-                    println!("{}", public);
-                    Ok(())
-                }
-
-                ClientCommand::Wallet(wallet_command) => match wallet_command {
-                    WalletCommand::Show { chain_id } => {
-                        context.wallet_state.pretty_print(*chain_id);
-                        Ok(())
-                    }
-                    WalletCommand::SetDefault { chain_id } => {
-                        context.wallet_state.set_default_chain(*chain_id)?;
-                        context.save_wallet();
-                        Ok(())
-                    }
-                },
-
-                _ => {
-                    let genesis_config = context.wallet_state.genesis_config().clone();
-                    let wasm_runtime = options.wasm_runtime.with_wasm_default();
-
-                    options
-                        .storage_config
-                        .run_with_storage(
-                            &genesis_config,
-                            wasm_runtime,
-                            Job(context, options.command),
-                        )
-                        .await?;
-                    Ok(())
-                }
+        command => match command {
+            ClientCommand::KeyGen => {
+                let mut context = ClientContext::from_options(&options);
+                let key_pair = KeyPair::generate();
+                let public = key_pair.public();
+                context.wallet_state.add_unassigned_key_pair(key_pair);
+                context.save_wallet();
+                println!("{}", public);
+                Ok(())
             }
-        }
+
+            ClientCommand::Wallet(wallet_command) => match wallet_command {
+                WalletCommand::Show { chain_id } => {
+                    let context = ClientContext::from_options(&options);
+                    context.wallet_state.pretty_print(*chain_id);
+                    Ok(())
+                }
+                WalletCommand::SetDefault { chain_id } => {
+                    let mut context = ClientContext::from_options(&options);
+                    context.wallet_state.set_default_chain(*chain_id)?;
+                    context.save_wallet();
+                    Ok(())
+                }
+
+                WalletCommand::Init {
+                    genesis_config_path,
+                } => {
+                    let genesis_config = GenesisConfig::read(genesis_config_path)?;
+                    let context = ClientContext::create(&options, genesis_config, vec![]);
+                    context.save_wallet();
+                    Ok(())
+                }
+            },
+
+            _ => {
+                let context = ClientContext::from_options(&options);
+                let genesis_config = context.wallet_state.genesis_config().clone();
+                let wasm_runtime = options.wasm_runtime.with_wasm_default();
+
+                options
+                    .storage_config
+                    .run_with_storage(&genesis_config, wasm_runtime, Job(context, options.command))
+                    .await?;
+                Ok(())
+            }
+        },
     }
 }

@@ -217,7 +217,7 @@ impl Client {
 
     async fn init(&self) {
         self.client_run()
-            .arg("init")
+            .args(["wallet", "init"])
             .args(["--genesis", "genesis.json"])
             .spawn()
             .unwrap()
@@ -240,7 +240,7 @@ impl Client {
             Some(0),
             "Command {:?} failed; stderr:\n{}\n(end stderr)",
             command,
-            String::from_utf8_lossy(&output.stderr)
+            String::from_utf8_lossy(&output.stderr),
         );
         String::from_utf8(output.stdout).unwrap()
     }
