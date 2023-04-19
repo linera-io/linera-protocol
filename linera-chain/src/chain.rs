@@ -201,7 +201,7 @@ where
         // Process immediate effects and create inbox events.
         let mut events = Vec::new();
         for (index, outgoing_effect) in effects.into_iter().enumerate() {
-            let index = u64::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
+            let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let OutgoingEffect {
                 destination,
                 authenticated_signer,
@@ -369,7 +369,7 @@ where
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
-            let index = u64::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
+            let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let context = OperationContext {
                 chain_id,
                 height: block.height,

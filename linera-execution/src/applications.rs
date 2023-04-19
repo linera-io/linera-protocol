@@ -88,7 +88,7 @@ pub struct BytecodeLocation {
     /// The certificate that published the bytecode.
     pub certificate_hash: CryptoHash,
     /// The index in the certificate of the operation that published the bytecode (not the effect!).
-    pub operation_index: u64,
+    pub operation_index: u32,
 }
 
 #[derive(Debug, HashableView)]

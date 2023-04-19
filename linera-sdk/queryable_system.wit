@@ -93,7 +93,7 @@ type bytecode-id = effect-id
 record effect-id {
     chain-id: chain-id,
     height: block-height,
-    index: u64,
+    index: u32,
 }
 
 type chain-id = crypto-hash
