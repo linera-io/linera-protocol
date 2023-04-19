@@ -92,6 +92,21 @@ pub trait ValidatorNodeProvider {
     type Node: ValidatorNode + Clone + Send + Sync + 'static;
 
     async fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
+
+    async fn make_nodes(
+        &self,
+        committee: Committee,
+    ) -> Result<Vec<(ValidatorName, Self::Node)>, NodeError> {
+        futures::future::join_all(committee.validators.into_iter().map(
+            |(name, validator)| async move {
+                let node = self.make_node(&validator.network_address).await?;
+                Ok((name, node))
+            },
+        ))
+        .await
+        .into_iter()
+        .collect()
+    }
 }
 
 impl<P, S> ChainClient<P, S> {
@@ -139,6 +154,7 @@ impl<P, S> ChainClient<P, S> {
         self.chain_id
     }
 
+    /// Returns the hash of the latest known block.
     pub fn block_hash(&self) -> Option<CryptoHash> {
         self.block_hash
     }
@@ -183,14 +199,14 @@ where
         Ok(Arc::new(chain_state_view))
     }
 
-    /// Obtain the basic `ChainInfo` data for the local chain.
+    /// Obtains the basic `ChainInfo` data for the local chain.
     async fn chain_info(&mut self) -> Result<ChainInfo, NodeError> {
         let query = ChainInfoQuery::new(self.chain_id);
         let response = self.node_client.handle_chain_info_query(query).await?;
         Ok(response.info)
     }
 
-    /// Obtain up to `self.max_pending_messages` pending messages for the local chain.
+    /// Obtains up to `self.max_pending_messages` pending messages for the local chain.
     ///
     /// Messages known to be redundant are filtered out: A `RegisterApplications` effect whose
     /// entries are already known never needs to be included in a block.
@@ -401,25 +417,20 @@ where
                 NodeError::InvalidLocalBlockChaining
             );
         }
-        if matches!(info.manager, ChainManagerInfo::Multi(_)) {
-            // For multi-owner chains, we could be missing recent certificates created by
-            // other owners. Further synchronize blocks from the network. This is a
-            // best-effort that depends on network conditions.
+        if !matches!(
+            &info.manager,
+            ChainManagerInfo::Single(single) if self.known_key_pairs.contains_key(&single.owner))
+        {
+            // For multi-owner chains, or for single-owner chains that are owned by someone else, we
+            // could be missing recent certificates created by other owners. Further synchronize
+            // blocks from the network. This is a best-effort that depends on network conditions.
             let nodes = self.validator_nodes().await?;
             info = self
                 .node_client
                 .synchronize_chain_state(nodes, self.chain_id)
                 .await?;
         }
-        // Update chain information tracked by the client.
-        if (info.next_block_height, info.manager.next_round())
-            > (self.next_block_height, self.next_round)
-        {
-            self.next_block_height = info.next_block_height;
-            self.next_round = info.manager.next_round();
-            self.block_hash = info.block_hash;
-            self.timestamp = info.timestamp;
-        }
+        self.update_from_info(&info);
         Ok(())
     }
 
@@ -613,10 +624,7 @@ where
                     let mut new_tracker = tracker;
                     for cah in response.info.requested_received_log {
                         let query = ChainInfoQuery::new(cah.chain_id)
-                            .with_sent_certificates_in_range(BlockHeightRange {
-                                start: cah.height,
-                                limit: Some(1),
-                            });
+                            .with_sent_certificates_in_range(BlockHeightRange::single(cah.height));
 
                         let mut response = client.handle_chain_info_query(query).await?;
                         let Some(certificate) = response.info
@@ -763,6 +771,12 @@ where
             .handle_certificate(certificate, blobs)
             .await?
             .info;
+        self.update_from_info(&info);
+        Ok(())
+    }
+
+    /// Updates the latest block and next block height and round information from the chain info.
+    fn update_from_info(&mut self, info: &ChainInfo) {
         if info.chain_id == self.chain_id
             && (info.next_block_height, info.manager.next_round())
                 > (self.next_block_height, self.next_round)
@@ -772,7 +786,6 @@ where
             self.next_round = info.manager.next_round();
             self.timestamp = info.timestamp;
         }
-        Ok(())
     }
 
     /// Execute (or retry) a regular block proposal. Update local balance.
@@ -1057,13 +1070,13 @@ where
     }
 
     /// Open a new chain with a derived UID.
-    pub async fn open_chain(&mut self, public_key: PublicKey) -> Result<(ChainId, Certificate)> {
+    pub async fn open_chain(&mut self, public_key: PublicKey) -> Result<(EffectId, Certificate)> {
         self.prepare_chain().await?;
-        let id = ChainId::child(EffectId {
+        let effect_id = EffectId {
             chain_id: self.chain_id,
             height: self.next_block_height,
             index: 0,
-        });
+        };
         let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         let epoch = epoch.ok_or(NodeError::InactiveLocalChain(self.chain_id))?;
         let certificate = self
@@ -1071,7 +1084,6 @@ where
                 // Cannot add incoming messages to preserve the effect id.
                 vec![],
                 vec![Operation::System(SystemOperation::OpenChain {
-                    id,
                     public_key,
                     committees,
                     admin_id: self.admin_id,
@@ -1079,7 +1091,10 @@ where
                 })],
             )
             .await?;
-        Ok((id, certificate))
+        if !certificate.value.has_effect(&effect_id) {
+            bail!("Failed to open a new chain");
+        }
+        Ok((effect_id, certificate))
     }
 
     /// Close the chain (and lose everything in it!!).

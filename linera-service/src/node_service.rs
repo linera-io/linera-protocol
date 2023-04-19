@@ -188,8 +188,8 @@ where
     /// This will automatically subscribe to the future committees created by `admin_id`.
     async fn open_chain(&self, public_key: PublicKey) -> Result<ChainId, Error> {
         let mut client = self.0.client.lock().await;
-        let (chain_id, _) = client.open_chain(public_key).await?;
-        Ok(chain_id)
+        let (effect_id, _) = client.open_chain(public_key).await?;
+        Ok(ChainId::child(effect_id))
     }
 
     /// Closes the chain.

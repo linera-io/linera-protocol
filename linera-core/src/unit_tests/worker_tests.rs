@@ -2529,7 +2529,6 @@ where
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::System(SystemOperation::OpenChain {
-                    id: user_id,
                     public_key: key_pair.public(),
                     epoch: Epoch::from(0),
                     committees: committees.clone(),

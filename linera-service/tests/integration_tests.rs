@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::InputType;
-use linera_base::identifiers::{ChainId, Owner};
-use linera_chain::data_types::Certificate;
+use linera_base::identifiers::{ChainId, EffectId, Owner};
 use linera_execution::Bytecode;
 use linera_service::config::WalletState;
 #[cfg(feature = "aws")]
@@ -371,7 +370,7 @@ impl Client {
         &self,
         from: ChainId,
         to_owner: Option<Owner>,
-    ) -> anyhow::Result<(ChainId, Certificate)> {
+    ) -> anyhow::Result<(EffectId, ChainId)> {
         let mut command = self.client_run_with_storage();
         command
             .arg("open_chain")
@@ -383,10 +382,10 @@ impl Client {
 
         let stdout = Self::run_command(&mut command).await;
         let mut split = stdout.split('\n');
+        let effect_id: EffectId = split.next().unwrap().parse()?;
         let chain_id = ChainId::from_str(split.next().unwrap())?;
-        let cert: Certificate = split.next().unwrap().parse()?;
 
-        Ok((chain_id, cert))
+        Ok((effect_id, chain_id))
     }
 
     fn get_wallet(&self) -> WalletState {
@@ -423,21 +422,18 @@ impl Client {
         Ok(Owner::from_str(stdout.trim())?)
     }
 
-    async fn assign(
-        &self,
-        owner: Owner,
-        chain_id: ChainId,
-        certificate: Certificate,
-    ) -> anyhow::Result<()> {
-        Self::run_command(
+    async fn assign(&self, owner: Owner, effect_id: EffectId) -> anyhow::Result<ChainId> {
+        let stdout = Self::run_command(
             self.client_run_with_storage()
                 .arg("assign")
                 .args(["--key", &owner.to_string()])
-                .args(["--chain", &chain_id.to_string()])
-                .args(["--certificate", &certificate.to_string()]),
+                .args(["--effect-id", &effect_id.to_string()]),
         )
         .await;
-        Ok(())
+
+        let chain_id = ChainId::from_str(stdout.trim())?;
+
+        Ok(chain_id)
     }
 
     async fn synchronize_balance(&self, chain_id: ChainId) {
@@ -977,13 +973,16 @@ async fn test_multiple_wallets() {
     let client_2_key = client_2.keygen().await.unwrap();
 
     // Open chain on behalf of Client 2.
-    let (chain_2, cert) = client_1
+    let (effect_id, chain_2) = client_1
         .open_chain(chain_1, Some(client_2_key))
         .await
         .unwrap();
 
     // Assign chain_2 to client_2_key.
-    client_2.assign(client_2_key, chain_2, cert).await.unwrap();
+    assert_eq!(
+        chain_2,
+        client_2.assign(client_2_key, effect_id).await.unwrap()
+    );
 
     // Check initial balance of Chain 1.
     assert_eq!(client_1.query_balance(chain_1).await.unwrap(), 10);
@@ -1049,7 +1048,7 @@ async fn test_reconfiguration(network: Network) {
     client.benchmark(500).await;
 
     // Create derived chain
-    let (chain_3, _) = client.open_chain(chain_1, None).await.unwrap();
+    let (_, chain_3) = client.open_chain(chain_1, None).await.unwrap();
 
     // Inspect state of derived chain
     assert!(client.check_for_chain_in_wallet(chain_3).await);
@@ -1103,10 +1102,10 @@ async fn social_user_pub_sub() {
     let client2key = client2.keygen().await.unwrap();
 
     // Open chain on behalf of Client 2.
-    let (chain2, cert) = client1.open_chain(chain1, Some(client2key)).await.unwrap();
+    let (effect_id, chain2) = client1.open_chain(chain1, Some(client2key)).await.unwrap();
 
     // Assign chain_2 to client_2_key.
-    client2.assign(client2key, chain2, cert).await.unwrap();
+    assert_eq!(chain2, client2.assign(client2key, effect_id).await.unwrap());
 
     let _node_service1 = client1.run_node_service(chain1, 8080).await;
     let _node_service2 = client2.run_node_service(chain2, 8081).await;

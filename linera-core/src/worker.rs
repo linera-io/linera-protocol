@@ -841,8 +841,7 @@ where
             *round,
         )? == ChainManagerOutcome::Skip
         {
-            // If we just processed the same pending block, return the chain info
-            // unchanged.
+            // If we just processed the same pending block, return the chain info unchanged.
             return Ok((
                 ChainInfoResponse::new(&chain, self.key_pair()),
                 NetworkActions::default(),

@@ -197,6 +197,7 @@ doc_scalar!(
     ChainDescription."
 );
 doc_scalar!(ChannelName, "The name of a subscription channel");
+bcs_scalar!(EffectId, "The index of an effect in a chain");
 doc_scalar!(
     Owner,
     "The owner of a chain. This is currently the hash of the owner's public key used to verify \
