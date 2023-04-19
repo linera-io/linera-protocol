@@ -17,7 +17,7 @@ use linera_views::{
     common::Context,
     map_view::MapView,
     register_view::RegisterView,
-    views::{RootView, View},
+    views::{HashableView, RootView, View},
 };
 use webassembly_test::webassembly_test;
 
@@ -333,4 +333,75 @@ fn mock_find_key_value_pairs() {
         .expect("Failed to load key value pairs of dummy map view");
 
     assert_eq!(service_pairs, expected_pairs);
+}
+
+/// Test the write operations of the key-value store.
+#[webassembly_test]
+fn mock_write_batch() {
+    let store = test::mock_key_value_store();
+    let mut initial_view = DummyView::load(store.clone())
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately")
+        .expect("Failed to initialize `DummyView` with the mock key value store");
+
+    let keys = [17, 23, 31, 37];
+    let mut expected_pairs = Vec::new();
+
+    for &key in &keys {
+        let value = -(key as i8);
+
+        initial_view
+            .map
+            .insert(&key, value)
+            .expect("Failed to insert value into dumy map view");
+
+        expected_pairs.push((key, value));
+    }
+
+    initial_view.one.set(1);
+    initial_view.two.set(2);
+    initial_view
+        .two
+        .hash()
+        .now_or_never()
+        .expect("Access to mock key-value store should be immediate")
+        .expect("Failed to calculate the hash of a `RegisterView`");
+    initial_view.three.set(3);
+    initial_view
+        .save()
+        .now_or_never()
+        .expect("Persisting a view to memory should be instantaneous")
+        .expect("Failed to persist view state");
+
+    let mut altered_view = contract::system_api::load_and_lock_view::<DummyView<_>>()
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately")
+        .expect("Failed to lock view");
+
+    altered_view.one.set(100);
+    altered_view.two.clear();
+    altered_view.map.clear();
+
+    altered_view
+        .save()
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately")
+        .expect("Failed to store key value pairs of dummy map view");
+
+    let loaded_view = DummyView::load(store)
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately")
+        .expect("Failed to initialize `DummyView` with the mock key value store");
+
+    let loaded_keys = loaded_view
+        .map
+        .indices()
+        .now_or_never()
+        .expect("Memory key value store should always resolve immediately")
+        .expect("Failed to load keys of dummy map view");
+
+    assert_eq!(loaded_view.one.get(), altered_view.one.get());
+    assert_eq!(loaded_view.two.get(), altered_view.two.get());
+    assert_eq!(loaded_view.three.get(), initial_view.three.get());
+    assert!(loaded_keys.is_empty());
 }
