@@ -75,7 +75,7 @@ BytecodeLocation:
   STRUCT:
     - certificate_hash:
         TYPENAME: CryptoHash
-    - operation_index: U64
+    - operation_index: U32
 Certificate:
   STRUCT:
     - value:
@@ -269,7 +269,7 @@ EffectId:
         TYPENAME: ChainId
     - height:
         TYPENAME: BlockHeight
-    - index: U64
+    - index: U32
 Epoch:
   NEWTYPESTRUCT: U64
 Event:
@@ -278,7 +278,7 @@ Event:
         TYPENAME: CryptoHash
     - height:
         TYPENAME: BlockHeight
-    - index: U64
+    - index: U32
     - authenticated_signer:
         OPTION:
           TYPENAME: Owner
@@ -609,7 +609,7 @@ SystemEffect:
     6:
       BytecodePublished:
         STRUCT:
-          - operation_index: U64
+          - operation_index: U32
     7:
       BytecodeLocations:
         STRUCT:

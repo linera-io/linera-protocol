@@ -23,10 +23,10 @@ use test_case::test_case;
 /// called correctly and consume the expected amount of fuel.
 ///
 /// To update the bytecode files, run `linera-execution/update_wasm_fixtures.sh`.
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, 9_966_004; "wasmer"))]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, 9_965_658; "wasmer_with_sanitizer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, 9_965_658 ; "wasmtime"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer, 9_965_658 ; "wasmtime_with_sanitizer"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, 9_965_746; "wasmer"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, 9_965_385; "wasmer_with_sanitizer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, 9_965_385 ; "wasmtime"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer, 9_965_385 ; "wasmtime_with_sanitizer"))]
 #[test_log::test(tokio::test)]
 async fn test_fuel_for_counter_wasm_application(
     wasm_runtime: WasmRuntime,

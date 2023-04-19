@@ -50,7 +50,7 @@ record operation-context {
     chain-id: chain-id,
     authenticated-signer: option<owner>,
     height: block-height,
-    index: u64,
+    index: u32,
 }
 
 record effect-context {
@@ -63,7 +63,7 @@ record effect-context {
 record effect-id {
     chain-id: chain-id,
     height: block-height,
-    index: u64,
+    index: u32,
 }
 
 record callee-context {

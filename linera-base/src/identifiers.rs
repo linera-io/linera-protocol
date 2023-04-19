@@ -40,7 +40,7 @@ pub struct ChainId(pub CryptoHash);
 pub struct EffectId {
     pub chain_id: ChainId,
     pub height: BlockHeight,
-    pub index: u64,
+    pub index: u32,
 }
 
 /// A unique identifier for a user application.

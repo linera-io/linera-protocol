@@ -104,7 +104,7 @@ pub struct Event {
     /// The height of the block that created the event.
     pub height: BlockHeight,
     /// The index of the effect.
-    pub index: u64,
+    pub index: u32,
     /// The authenticated signer for the operation that created the event, if any
     pub authenticated_signer: Option<Owner>,
     /// The timestamp of the block that caused the effect.

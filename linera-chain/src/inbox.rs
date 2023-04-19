@@ -66,7 +66,7 @@ pub struct InboxStateView<C> {
 )]
 pub struct Cursor {
     height: BlockHeight,
-    index: u64,
+    index: u32,
 }
 
 #[derive(Error, Debug)]

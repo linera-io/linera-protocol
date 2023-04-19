@@ -268,7 +268,7 @@ message EffectId {
 
   BlockHeight height = 2;
 
-  uint64 index = 3;
+  uint32 index = 3;
 }
 
 message ChainId {

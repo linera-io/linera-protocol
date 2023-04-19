@@ -216,7 +216,7 @@ pub struct OperationContext {
     /// The current block height.
     pub height: BlockHeight,
     /// The current index of the operation.
-    pub index: u64,
+    pub index: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
