@@ -24,7 +24,10 @@ set -x
 # Create configuration files for 10 user chains.
 # * Private chain states are stored in one local wallet `wallet.json`.
 # * `genesis.json` will contain the initial balances of chains as well as the initial committee.
-./client --wallet wallet.json --genesis genesis.json create_genesis_config 10 --initial-funding 10 --committee committee.json
+./client --wallet wallet.json create_genesis_config 10 --genesis genesis.json --initial-funding 10 --committee committee.json
+
+# Initialise the second wallet.
+./client --wallet wallet_2.json wallet init --genesis genesis.json
 
 # Start servers and create initial chains in DB
 for I in 1 2 3 4
@@ -40,15 +43,15 @@ done
 sleep 3;
 
 # Create second wallet with unassigned key.
-KEY=$(./client --wallet wallet_2.json --genesis genesis.json keygen)
+KEY=$(./client --wallet wallet_2.json keygen)
 
 # Open chain on behalf of wallet 2.
-CHAIN_AND_CERT=$(./client --wallet wallet.json --genesis genesis.json open_chain --to-public-key "$KEY")
+CHAIN_AND_CERT=$(./client --wallet wallet.json open_chain --to-public-key "$KEY")
 CHAIN=$(echo "$CHAIN_AND_CERT" | sed -n '1 p')
 CERT=$(echo "$CHAIN_AND_CERT" | sed -n '2 p')
 
 # Assign newly created chain to unassigned key.
-./client --wallet wallet_2.json --genesis genesis.json --storage rocksdb:client_2.db assign --key "$KEY" --chain "$CHAIN" --certificate "$CERT"
+./client --wallet wallet_2.json --storage rocksdb:client_2.db assign --key "$KEY" --chain "$CHAIN" --certificate "$CERT"
 
 read
 
