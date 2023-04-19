@@ -623,7 +623,7 @@ enum ClientCommand {
 
         /// Index of the admin chain in the genesis config
         #[structopt(long, default_value = "0")]
-        admin_root: usize,
+        admin_root: u32,
 
         /// Known initial balance of the chain
         #[structopt(long, default_value = "0")]
@@ -1168,11 +1168,15 @@ async fn main() -> Result<(), anyhow::Error> {
             let mut genesis_config =
                 GenesisConfig::new(committee_config, ChainId::root(*admin_root));
             let timestamp = start_timestamp
-                .map(|st| Timestamp::from(st.timestamp() as u64))
+                .map(|st| {
+                    Timestamp::from(
+                        u64::try_from(st.timestamp()).expect("Start timestamp before 1970"),
+                    )
+                })
                 .unwrap_or_else(Timestamp::now);
             let mut chains = vec![];
             for i in 0..*num {
-                let description = ChainDescription::Root(i as usize);
+                let description = ChainDescription::Root(i);
                 // Create keys.
                 let chain = UserChain::make_initial(description, timestamp);
                 // Public "genesis" state.

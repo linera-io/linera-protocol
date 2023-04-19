@@ -571,9 +571,12 @@ where
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
+        let limit = u64::from(stop)
+            .checked_sub(u64::from(start))
+            .ok_or(ArithmeticError::Overflow)?;
         let range = BlockHeightRange {
             start,
-            limit: Some((u64::from(stop) - u64::from(start)) as usize),
+            limit: Some(limit),
         };
         let query = ChainInfoQuery::new(chain_id).with_sent_certificates_in_range(range);
         if let Ok(response) = client.handle_chain_info_query(query).await {

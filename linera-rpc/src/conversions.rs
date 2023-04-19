@@ -519,7 +519,7 @@ impl TryFrom<grpc::BlockHeightRange> for BlockHeightRange {
     fn try_from(block_height_range: grpc::BlockHeightRange) -> Result<Self, Self::Error> {
         Ok(Self {
             start: proto_convert!(block_height_range.start),
-            limit: map_as!(block_height_range.limit, usize),
+            limit: block_height_range.limit,
         })
     }
 }

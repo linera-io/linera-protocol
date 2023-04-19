@@ -20,7 +20,7 @@ use linera_execution::{
 };
 use linera_storage::{MemoryStoreClient, Store};
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicU32, Ordering},
     Arc,
 };
 use tokio::sync::{Mutex, MutexGuard};
@@ -30,7 +30,7 @@ pub struct TestValidator {
     key_pair: KeyPair,
     committee: Committee,
     worker: Arc<Mutex<WorkerState<MemoryStoreClient>>>,
-    root_chain_counter: Arc<AtomicUsize>,
+    root_chain_counter: Arc<AtomicU32>,
     chains: Arc<DashMap<ChainId, ActiveChain>>,
 }
 

@@ -118,7 +118,7 @@ where
             chain_id,
             authenticated_signer: None,
             height: application_description.creation.height,
-            index: application_description.creation.index as usize,
+            index: application_description.creation.index,
         };
 
         let action = UserAction::Initialize(&context, initialization_argument);

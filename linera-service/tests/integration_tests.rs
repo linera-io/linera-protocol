@@ -1027,12 +1027,8 @@ async fn test_reconfiguration(network: Network) {
     client.query_validators(None).await;
 
     // Query balance for first and last user chain
-    let chain_1 =
-        ChainId::from_str("91c7b394ef500cd000e365807b770d5b76a6e8c9c2f2af8e58c205e521b5f646")
-            .unwrap();
-    let chain_2 =
-        ChainId::from_str("170883d704512b1682064639bdda0aab27756727af8e0dc5732bae70b2e15997")
-            .unwrap();
+    let chain_1 = ChainId::root(0);
+    let chain_2 = ChainId::root(9);
     assert_eq!(client.query_balance(chain_1).await.unwrap(), 10);
     assert_eq!(client.query_balance(chain_2).await.unwrap(), 10);
 

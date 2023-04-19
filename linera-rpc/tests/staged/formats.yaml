@@ -95,7 +95,7 @@ ChainDescription:
   ENUM:
     0:
       Root:
-        NEWTYPE: U64
+        NEWTYPE: U32
     1:
       Child:
         NEWTYPE:

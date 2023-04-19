@@ -31,7 +31,7 @@ pub struct BlockHeightRange {
     /// Starting point
     pub start: BlockHeight,
     /// Optional limit on the number of elements.
-    pub limit: Option<usize>,
+    pub limit: Option<u64>,
 }
 
 /// Message to obtain information on a chain.

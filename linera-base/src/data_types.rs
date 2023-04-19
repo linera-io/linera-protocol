@@ -213,6 +213,24 @@ macro_rules! impl_wrapped_number {
                 Self(value)
             }
         }
+
+        impl TryInto<usize> for $name {
+            type Error = ArithmeticError;
+
+            fn try_into(self) -> Result<usize, ArithmeticError> {
+                usize::try_from(self.0).map_err(|_| ArithmeticError::Overflow)
+            }
+        }
+
+        impl TryFrom<usize> for $name {
+            type Error = ArithmeticError;
+
+            fn try_from(value: usize) -> Result<$name, ArithmeticError> {
+                $wrapped::try_from(value)
+                    .map_err(|_| ArithmeticError::Overflow)
+                    .map(Self)
+            }
+        }
     };
 }
 

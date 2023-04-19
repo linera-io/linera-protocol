@@ -366,7 +366,7 @@ where
             BTreeSet::from_iter(height_map.iter().flat_map(|(_, heights)| heights).copied());
         let mut keys = Vec::new();
         for height in heights {
-            if let Some(key) = confirmed_log.get(u64::from(height) as usize).await? {
+            if let Some(key) = confirmed_log.get(height.try_into()?).await? {
                 keys.push(key);
             }
         }
@@ -714,7 +714,7 @@ where
         height: BlockHeight,
     ) -> Result<Option<Certificate>, WorkerError> {
         let chain = self.storage.load_active_chain(chain_id).await?;
-        let certificate_hash = match chain.confirmed_log.get(height.0 as usize).await? {
+        let certificate_hash = match chain.confirmed_log.get(height.try_into()?).await? {
             Some(hash) => hash,
             None => return Ok(None),
         };
@@ -747,8 +747,8 @@ where
         let Some(certificate) = self.read_certificate(effect_id.chain_id, effect_id.height).await?
             else { return Ok(None) };
 
-        let Some(outgoing_effect) =
-            certificate.value.effects().get(effect_id.index as usize).cloned()
+        let index = usize::try_from(effect_id.index).map_err(|_| ArithmeticError::Overflow)?;
+        let Some(outgoing_effect) = certificate.value.effects().get(index).cloned()
             else { return Ok(None) };
 
         let application_id = outgoing_effect.effect.application_id();
@@ -775,7 +775,7 @@ where
                 .find(|event| {
                     event.certificate_hash == certificate_hash
                         && event.height == effect_id.height
-                        && event.index == effect_id.index as usize
+                        && event.index == effect_id.index
                 })
                 .cloned()
             else { return Ok(None) };
@@ -982,10 +982,13 @@ where
             info.requested_pending_messages = messages;
         }
         if let Some(range) = query.request_sent_certificates_in_range {
-            let start = u64::from(range.start) as usize;
+            let start: usize = range.start.try_into()?;
             let end = match range.limit {
                 None => chain.confirmed_log.count(),
-                Some(limit) => std::cmp::min(start + limit, chain.confirmed_log.count()),
+                Some(limit) => start
+                    .checked_add(usize::try_from(limit).map_err(|_| ArithmeticError::Overflow)?)
+                    .ok_or(ArithmeticError::Overflow)?
+                    .min(chain.confirmed_log.count()),
             };
             let keys = chain.confirmed_log.read(start..end).await?;
             let certs = self.storage.read_certificates(keys).await?;
