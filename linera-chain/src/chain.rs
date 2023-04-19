@@ -231,7 +231,7 @@ where
                     height,
                     index: index as u64,
                 };
-                self.execute_immediate_effect(effect_id, &effect, chain_id, timestamp)
+                self.execute_immediate_effect(effect_id, &effect, timestamp)
                     .await?;
             }
             // Record the inbox event to process it below.
@@ -274,36 +274,31 @@ where
         &mut self,
         effect_id: EffectId,
         effect: &Effect,
-        chain_id: ChainId,
         timestamp: Timestamp,
     ) -> Result<(), ChainError> {
-        match &effect {
-            Effect::System(SystemEffect::OpenChain {
-                id,
-                public_key,
-                epoch,
-                committees,
-                admin_id,
-            }) if id == &chain_id => {
-                // Initialize ourself.
-                self.execution_state.system.open_chain(
-                    effect_id,
-                    *id,
-                    *public_key,
-                    *epoch,
-                    committees.clone(),
-                    *admin_id,
-                    timestamp,
-                );
-                // Recompute the state hash.
-                let hash = self.execution_state.crypto_hash().await?;
-                self.execution_state_hash.set(Some(hash));
-                // Last, reset the consensus state based on the current ownership.
-                self.manager
-                    .get_mut()
-                    .reset(self.execution_state.system.ownership.get());
-            }
-            _ => (),
+        if let Effect::System(SystemEffect::OpenChain {
+            public_key,
+            epoch,
+            committees,
+            admin_id,
+        }) = effect
+        {
+            // Initialize ourself.
+            self.execution_state.system.open_chain(
+                effect_id,
+                *public_key,
+                *epoch,
+                committees.clone(),
+                *admin_id,
+                timestamp,
+            );
+            // Recompute the state hash.
+            let hash = self.execution_state.crypto_hash().await?;
+            self.execution_state_hash.set(Some(hash));
+            // Last, reset the consensus state based on the current ownership.
+            self.manager
+                .get_mut()
+                .reset(self.execution_state.system.ownership.get());
         }
         Ok(())
     }
