@@ -6,7 +6,6 @@ use crate::{
     common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient, MIN_VIEW_TAG},
     localstack,
 };
-use futures::future::join_all;
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
     model::{
@@ -17,6 +16,7 @@ use aws_sdk_dynamodb::{
     types::{Blob, SdkError},
     Client,
 };
+use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, mem, str::FromStr};
 use thiserror::Error;

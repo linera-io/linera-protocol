@@ -116,7 +116,7 @@ where
         let mut cache_miss_indices = Vec::new();
         let mut miss_keys = Vec::new();
         let lru_read_keys = self.lru_read_keys.lock().await;
-        for (i,key) in keys.into_iter().enumerate() {
+        for (i, key) in keys.into_iter().enumerate() {
             if let Some(value) = lru_read_keys.query(&key) {
                 result.push(value.clone());
             } else {
@@ -126,12 +126,12 @@ where
             }
         }
         drop(lru_read_keys);
-        let values = self
-            .client
-            .read_multi_key_bytes(miss_keys.clone())
-            .await?;
+        let values = self.client.read_multi_key_bytes(miss_keys.clone()).await?;
         let mut lru_read_keys = self.lru_read_keys.lock().await;
-        for (i, (key, value)) in cache_miss_indices.into_iter().zip(miss_keys.into_iter().zip(values)) {
+        for (i, (key, value)) in cache_miss_indices
+            .into_iter()
+            .zip(miss_keys.into_iter().zip(values))
+        {
             lru_read_keys.insert(key, value.clone());
             result[i] = value;
         }

@@ -420,13 +420,11 @@ where
         &self,
         indices: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
-        let len = indices.len();
-        let mut result = Vec::with_capacity(len);
-        let mut vector_miss_idx = Vec::<usize>::new();
+        let mut result = Vec::with_capacity(indices.len());
+        let mut missed_indices = Vec::new();
         let mut vector_query = Vec::new();
-        for i in 0..len {
-            let index: &[u8] = indices.get(i).unwrap();
-            if let Some(update) = self.updates.get(index) {
+        for (i, index) in indices.into_iter().enumerate() {
+            if let Some(update) = self.updates.get(&index) {
                 let value = match update {
                     Update::Removed => None,
                     Update::Set(value) => Some(value.clone()),
@@ -434,17 +432,15 @@ where
                 result.push(value);
             } else {
                 result.push(None);
-                vector_miss_idx.push(i);
-                let key = self.context.base_tag_index(KeyTag::Index as u8, index);
+                missed_indices.push(i);
+                let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                 vector_query.push(key);
             }
         }
         if !self.was_cleared {
             let values = self.context.read_multi_key_bytes(vector_query).await?;
-            for u in 0..values.len() {
-                let i = *vector_miss_idx.get(u).unwrap();
-                let value = values.get(u).unwrap().clone();
-                *result.get_mut(i).unwrap() = value;
+            for (i, value) in missed_indices.into_iter().zip(values) {
+                result[i] = value;
             }
         }
         Ok(result)
