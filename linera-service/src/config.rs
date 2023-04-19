@@ -218,7 +218,7 @@ impl WalletState {
     }
 
     pub fn read(path: &Path) -> Result<Self, anyhow::Error> {
-        let file = OpenOptions::new().read(true).write(true).open(path)?;
+        let file = OpenOptions::new().read(true).open(path)?;
         Ok(serde_json::from_reader(BufReader::new(file))?)
     }
 
