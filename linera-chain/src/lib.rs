@@ -60,7 +60,7 @@ pub enum ChainError {
         origin: Origin,
         event: Event,
         next_height: BlockHeight,
-        next_index: usize,
+        next_index: u64,
     },
     #[error(
         "Incoming message in block proposed to {chain_id:?} has timestamp {message_timestamp:},

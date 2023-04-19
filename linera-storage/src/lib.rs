@@ -185,7 +185,9 @@ pub trait Store: Sized {
                 _ => error.into(),
             })?;
         let operations = &value.block().operations;
-        match operations.get(bytecode_location.operation_index) {
+        let index = usize::try_from(bytecode_location.operation_index)
+            .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?;
+        match operations.get(index) {
             Some(Operation::System(SystemOperation::PublishBytecode { contract, service })) => {
                 Ok(Arc::new(WasmApplication::new(
                     contract.clone(),

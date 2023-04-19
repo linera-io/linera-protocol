@@ -8,9 +8,9 @@ sleep 30
 # Command line prefix for client calls
 CLIENT=(./client --storage rocksdb:client.db --wallet wallet.json --genesis genesis.json)
 
-# Query balance for first and last user chain
-CHAIN1="7817752ff06b8266d77df8febf5c4b524cec096bd83dc54f989074fb94f833737ae984f32be2cee1dfab766fe2d0c726503c4d97117eb59023e9cc65a8ecd1f7"
-CHAIN2="8ec607f670dd82d6986e95815b6ba64e4aad748e6f023f8dde42439222959c0c4aa9d3af00a983deec3f1ab0e64ef27ff80a1a8e1c1990be677ef5cfb316de85"
+# Query balance for first and last user chain, root chains 0 and 999
+CHAIN1="e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+CHAIN2="9c8a838e8f7b63194f6c7585455667a8379d2b5db19a3300e9961f0b1e9091ea"
 ${CLIENT[@]} query_balance "$CHAIN1"
 ${CLIENT[@]} query_balance "$CHAIN2"
 

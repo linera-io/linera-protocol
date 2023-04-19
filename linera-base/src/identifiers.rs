@@ -23,7 +23,7 @@ pub struct Owner(pub CryptoHash);
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub enum ChainDescription {
     /// The chain was created by the genesis configuration.
-    Root(usize),
+    Root(u32),
     /// The chain was created by an effect from another chain.
     Child(EffectId),
 }
@@ -174,7 +174,7 @@ impl From<ChainDescription> for ChainId {
 }
 
 impl ChainId {
-    pub fn root(index: usize) -> Self {
+    pub fn root(index: u32) -> Self {
         Self(CryptoHash::new(&ChainDescription::Root(index)))
     }
 
@@ -202,3 +202,26 @@ doc_scalar!(
     "The owner of a chain. This is currently the hash of the owner's public key used to verify \
     signatures."
 );
+
+#[cfg(test)]
+mod tests {
+    use super::ChainId;
+
+    /// Verifies that chain IDs that are explicitly used in some example and test scripts don't
+    /// change.
+    #[test]
+    fn chain_ids() {
+        assert_eq!(
+            &ChainId::root(0).to_string(),
+            "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+        );
+        assert_eq!(
+            &ChainId::root(9).to_string(),
+            "256e1dbc00482ddd619c293cc0df94d366afe7980022bb22d99e33036fd465dd"
+        );
+        assert_eq!(
+            &ChainId::root(999).to_string(),
+            "9c8a838e8f7b63194f6c7585455667a8379d2b5db19a3300e9961f0b1e9091ea"
+        );
+    }
+}

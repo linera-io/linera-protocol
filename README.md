@@ -82,9 +82,9 @@ ${CLIENT[@]} query_validators
 # Give some time for server startup
 sleep 1
 
-# Query balance for first and last user chain
-CHAIN1="91c7b394ef500cd000e365807b770d5b76a6e8c9c2f2af8e58c205e521b5f646"
-CHAIN2="170883d704512b1682064639bdda0aab27756727af8e0dc5732bae70b2e15997"
+# Query balance for first and last user chain, root chains 0 and 9
+CHAIN1="e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+CHAIN2="256e1dbc00482ddd619c293cc0df94d366afe7980022bb22d99e33036fd465dd"
 ${CLIENT[@]} query_balance "$CHAIN1"
 ${CLIENT[@]} query_balance "$CHAIN2"
 

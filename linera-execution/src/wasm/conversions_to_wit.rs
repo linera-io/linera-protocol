@@ -21,10 +21,7 @@ impl From<OperationContext> for contract::OperationContext {
             chain_id: host.chain_id.into(),
             authenticated_signer: host.authenticated_signer.map(|owner| owner.0.into()),
             height: host.height.0,
-            index: host
-                .index
-                .try_into()
-                .expect("Operation index should fit in a `u64`"),
+            index: host.index,
         }
     }
 }

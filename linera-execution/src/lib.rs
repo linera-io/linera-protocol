@@ -37,7 +37,7 @@ use dashmap::DashMap;
 use derive_more::Display;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Balance, BlockHeight, Timestamp},
+    data_types::{ArithmeticError, Balance, BlockHeight, Timestamp},
     hex_debug,
     identifiers::{BytecodeId, ChainId, ChannelName, Destination, EffectId, Owner, SessionId},
 };
@@ -53,6 +53,8 @@ pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;
 pub enum ExecutionError {
     #[error(transparent)]
     ViewError(ViewError),
+    #[error(transparent)]
+    ArithmeticError(#[from] ArithmeticError),
     #[error(transparent)]
     SystemError(#[from] SystemExecutionError),
     #[error("User application reported an error: {0}")]
@@ -214,7 +216,7 @@ pub struct OperationContext {
     /// The current block height.
     pub height: BlockHeight,
     /// The current index of the operation.
-    pub index: usize,
+    pub index: u64,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -473,7 +475,7 @@ impl From<OperationContext> for EffectId {
         Self {
             chain_id: context.chain_id,
             height: context.height,
-            index: context.index as u64,
+            index: context.index,
         }
     }
 }

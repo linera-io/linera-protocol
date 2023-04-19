@@ -193,7 +193,7 @@ pub enum SystemEffect {
         subscription: ChannelSubscription,
     },
     /// Notifies that a new application bytecode was published.
-    BytecodePublished { operation_index: usize },
+    BytecodePublished { operation_index: u64 },
     /// Shares the locations of published bytecodes.
     BytecodeLocations {
         locations: Vec<(BytecodeId, BytecodeLocation)>,

@@ -18,7 +18,7 @@ impl BcsSignable for Dummy2 {}
 fn make_event(
     certificate_hash: CryptoHash,
     height: u64,
-    index: usize,
+    index: u64,
     effect: impl Into<Vec<u8>>,
 ) -> Event {
     Event {

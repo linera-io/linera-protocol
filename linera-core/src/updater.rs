@@ -18,6 +18,7 @@ use linera_views::views::ViewError;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     hash::Hash,
+    ops::Range,
     time::Duration,
 };
 
@@ -318,8 +319,8 @@ where
             jobs.into_iter().rev()
         {
             // Obtain chain state.
-            let range = (u64::from(initial_block_height) as usize)
-                ..(u64::from(target_block_height) as usize);
+            let range: Range<usize> =
+                initial_block_height.try_into()?..target_block_height.try_into()?;
             if !range.is_empty() {
                 let keys = {
                     let chain = self.store.load_chain(chain_id).await?;
