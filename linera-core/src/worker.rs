@@ -387,7 +387,7 @@ where
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
         for target in chain.outboxes.indices().await? {
             let outbox = chain.outboxes.load_entry(&target).await?;
-            let heights = outbox.block_heights().await?;
+            let heights = outbox.queue.elements().await?;
             heights_by_recipient
                 .entry(target.recipient)
                 .or_default()
@@ -971,8 +971,7 @@ where
             let mut messages = Vec::new();
             for origin in chain.inboxes.indices().await? {
                 let inbox = chain.inboxes.load_entry(&origin).await?;
-                let count = inbox.added_events.count();
-                for event in inbox.added_events.read_front(count).await? {
+                for event in inbox.added_events.elements().await? {
                     messages.push(Message {
                         origin: origin.clone(),
                         event: event.clone(),
