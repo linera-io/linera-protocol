@@ -676,11 +676,7 @@ impl KeyValueStoreClient for DynamoDbClient {
             handles.push(handle);
         }
         let result = join_all(handles).await;
-        let mut result_ret = Vec::new();
-        for entry in result {
-            result_ret.push(entry?);
-        }
-        Ok(result_ret)
+        Ok(result.into_iter().collect::<Result<_,_>>()?)
     }
 
     async fn find_keys_by_prefix(

@@ -83,11 +83,8 @@ impl KeyValueStoreClient for DbInternal {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksdbContextError> {
         let db = self.clone();
-        let mut output = Vec::new();
-        for entry in tokio::task::spawn_blocking(move || db.multi_get(&keys)).await? {
-            output.push(entry?);
-        }
-        Ok(output)
+        let entries = tokio::task::spawn_blocking(move || db.multi_get(&keys)).await?;
+        Ok(entries.into_iter().collect::<Result<_,_>>()?)
     }
 
     async fn find_keys_by_prefix(

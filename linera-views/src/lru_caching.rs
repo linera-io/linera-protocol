@@ -122,7 +122,7 @@ where
             } else {
                 result.push(None);
                 cache_miss_indices.push(i);
-                miss_keys.push(key.to_vec());
+                miss_keys.push(key);
             }
         }
         drop(lru_read_keys);
