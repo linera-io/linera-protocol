@@ -103,7 +103,6 @@ pub enum SystemOperation {
     /// Creates (or activates) a new chain by installing the given authentication key.
     /// This will automatically subscribe to the future committees created by `admin_id`.
     OpenChain {
-        id: ChainId,
         public_key: PublicKey,
         admin_id: ChainId,
         epoch: Epoch,
@@ -439,20 +438,15 @@ where
         let mut new_application = None;
         match operation {
             OpenChain {
-                id,
                 public_key,
                 committees,
                 admin_id,
                 epoch,
             } => {
-                let expected_id = ChainId::child((*context).into());
-                ensure!(
-                    id == &expected_id,
-                    SystemExecutionError::InvalidNewChainId(*id)
-                );
+                let child_id = ChainId::child((*context).into());
                 ensure!(
                     self.admin_id.get().as_ref() == Some(admin_id),
-                    SystemExecutionError::InvalidNewChainAdminId(*id)
+                    SystemExecutionError::InvalidNewChainAdminId(child_id)
                 );
                 ensure!(
                     self.committees.get() == committees,
@@ -461,12 +455,12 @@ where
                 ensure!(
                     self.epoch.get().as_ref() == Some(epoch),
                     SystemExecutionError::InvalidEpoch {
-                        chain_id: *id,
+                        chain_id: child_id,
                         epoch: *epoch
                     }
                 );
                 let e1 = (
-                    Destination::Recipient(*id),
+                    Destination::Recipient(child_id),
                     false,
                     SystemEffect::OpenChain {
                         public_key: *public_key,
@@ -483,7 +477,7 @@ where
                     Destination::Recipient(*admin_id),
                     false,
                     SystemEffect::Subscribe {
-                        id: *id,
+                        id: child_id,
                         subscription,
                     },
                 );

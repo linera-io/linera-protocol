@@ -12,7 +12,7 @@ use futures::{future, lock::Mutex, Stream};
 use linera_base::{
     crypto::CryptoError,
     data_types::{ArithmeticError, BlockHeight},
-    identifiers::ChainId,
+    identifiers::{ChainId, EffectId},
 };
 use linera_chain::{
     data_types::{
@@ -249,8 +249,7 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let node = self.node.clone();
-        let mut node = node.lock().await;
+        let mut node = self.node.lock().await;
         // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
         let (response, _actions) = node.state.handle_block_proposal(proposal).await?;
         Ok(response)
@@ -260,8 +259,7 @@ where
         &mut self,
         certificate: LiteCertificate,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let node = self.node.clone();
-        let mut node = node.lock().await;
+        let mut node = self.node.lock().await;
         let mut notifications = Vec::new();
         let value = node
             .state
@@ -291,8 +289,7 @@ where
         certificate: Certificate,
         blobs: Vec<HashedValue>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let node = self.node.clone();
-        let mut node = node.lock().await;
+        let mut node = self.node.lock().await;
         let mut notifications = Vec::new();
         let response = node
             .state
@@ -313,15 +310,9 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
+        let mut node = self.node.lock().await;
         // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
-        let (response, _actions) = self
-            .node
-            .clone()
-            .lock()
-            .await
-            .state
-            .handle_chain_info_query(query)
-            .await?;
+        let (response, _actions) = node.state.handle_chain_info_query(query).await?;
         Ok(response)
     }
 
@@ -346,8 +337,7 @@ where
     S: Clone,
 {
     pub(crate) async fn storage_client(&self) -> S {
-        let node = self.node.clone();
-        let node = node.lock().await;
+        let node = self.node.lock().await;
         node.state.storage_client().clone()
     }
 }
@@ -361,14 +351,8 @@ where
         &self,
         block: &Block,
     ) -> Result<(Vec<OutgoingEffect>, ChainInfoResponse), NodeError> {
-        let (effects, info) = self
-            .node
-            .clone()
-            .lock()
-            .await
-            .state
-            .stage_block_execution(block)
-            .await?;
+        let mut node = self.node.lock().await;
+        let (effects, info) = node.state.stage_block_execution(block).await?;
         Ok((effects, info))
     }
 
@@ -435,8 +419,7 @@ where
         chain_id: ChainId,
         query: &Query,
     ) -> Result<Response, NodeError> {
-        let node = self.node.clone();
-        let mut node = node.lock().await;
+        let mut node = self.node.lock().await;
         let response = node.state.query_application(chain_id, query).await?;
         Ok(response)
     }
@@ -446,8 +429,7 @@ where
         chain_id: ChainId,
         application_id: UserApplicationId,
     ) -> Result<UserApplicationDescription, NodeError> {
-        let node = self.node.clone();
-        let mut node = node.lock().await;
+        let mut node = self.node.lock().await;
         let response = node
             .state
             .describe_application(chain_id, application_id)
@@ -558,6 +540,24 @@ where
             }
         }
         Ok(None)
+    }
+
+    /// Obtains the certificate containing the specified effect.
+    pub async fn certificate_for(
+        &mut self,
+        effect_id: &EffectId,
+    ) -> Result<Certificate, NodeError> {
+        let query = ChainInfoQuery::new(effect_id.chain_id)
+            .with_sent_certificates_in_range(BlockHeightRange::single(effect_id.height));
+        let info = self.handle_chain_info_query(query).await?.info;
+        let certificate = info
+            .requested_sent_certificates
+            .into_iter()
+            .find(|certificate| certificate.value.has_effect(effect_id))
+            .ok_or_else(|| {
+                ViewError::not_found("could not find certificate with effect {}", effect_id)
+            })?;
+        Ok(certificate)
     }
 
     async fn try_download_certificates_from<A>(

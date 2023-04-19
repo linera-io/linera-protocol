@@ -10,12 +10,14 @@ use futures::StreamExt;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{Amount, Balance, BlockHeight, Timestamp},
-    identifiers::{BytecodeId, ChainDescription, ChainId},
+    identifiers::{BytecodeId, ChainDescription, ChainId, EffectId},
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
-    worker::Reason,
+    data_types::ChainInfoQuery,
+    node::{LocalNodeClient, ValidatorNode},
+    worker::{Reason, WorkerState},
 };
 use linera_execution::{
     committee::{ValidatorName, ValidatorState},
@@ -24,7 +26,7 @@ use linera_execution::{
 };
 use linera_rpc::node_provider::NodeProvider;
 use linera_service::{
-    config::{CommitteeConfig, GenesisConfig, Import, UserChain, WalletState},
+    config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     storage::{Runnable, StorageConfig},
     tracker::NotificationTracker,
 };
@@ -39,18 +41,13 @@ use std::{
 use structopt::StructOpt;
 use tracing::{debug, info, warn};
 
-use linera_service::config::Export;
 #[cfg(feature = "benchmark")]
 use {
     linera_base::data_types::RoundNumber,
     linera_chain::data_types::{
         Block, BlockAndRound, BlockProposal, HashedValue, SignatureAggregator, Vote,
     },
-    linera_core::{
-        data_types::{ChainInfoQuery, ChainInfoResponse},
-        node::{LocalNodeClient, ValidatorNode},
-        worker::WorkerState,
-    },
+    linera_core::data_types::ChainInfoResponse,
     linera_execution::{
         committee::Epoch,
         system::{Recipient, SystemOperation},
@@ -178,7 +175,6 @@ impl ClientContext {
             .wallet_state
             .get(chain_id)
             .unwrap_or_else(|| panic!("Unknown chain: {}", chain_id));
-        let node_provider = NodeProvider::new(self.send_timeout, self.recv_timeout);
         ChainClient::new(
             chain_id,
             chain
@@ -187,7 +183,7 @@ impl ClientContext {
                 .map(|kp| kp.copy())
                 .into_iter()
                 .collect(),
-            node_provider,
+            self.make_node_provider(),
             storage,
             self.wallet_state.genesis_admin_chain(),
             self.max_pending_messages,
@@ -197,6 +193,10 @@ impl ClientContext {
             self.cross_chain_delay,
             self.cross_chain_retries,
         )
+    }
+
+    fn make_node_provider(&self) -> NodeProvider {
+        NodeProvider::new(self.send_timeout, self.recv_timeout)
     }
 
     #[cfg(feature = "benchmark")]
@@ -724,10 +724,7 @@ enum ClientCommand {
         key: PublicKey,
 
         #[structopt(long)]
-        certificate: String,
-
-        #[structopt(long)]
-        chain: ChainId,
+        effect_id: EffectId,
     },
 
     /// Show the contents of the wallet.
@@ -795,16 +792,18 @@ where
                 };
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
-                let (id, certificate) = chain_client.open_chain(new_public_key).await.unwrap();
+                let (effect_id, certificate) =
+                    chain_client.open_chain(new_public_key).await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
                 info!("{:#?}", certificate);
                 context.update_wallet_from_client(&mut chain_client).await;
+                let id = ChainId::child(effect_id);
                 let timestamp = certificate.value.block().timestamp;
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
-                // Print the new chain id and certificate on stdout for the scripting purposes.
-                println!("{}", id);
-                println!("{}", certificate);
+                // Print the new chain ID and effect ID on stdout for scripting purposes.
+                println!("{}", effect_id);
+                println!("{}", ChainId::child(effect_id));
                 context.save_wallet();
             }
 
@@ -1146,19 +1145,45 @@ where
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs());
             }
 
-            Assign {
-                key,
-                certificate,
-                chain,
-            } => {
-                let certificate: Certificate = certificate.parse()?;
+            Assign { key, effect_id } => {
+                let state = WorkerState::new("Local node".to_string(), None, storage)
+                    .with_allow_inactive_chains(true)
+                    .with_allow_messages_from_deprecated_epochs(true);
+                let mut node_client = LocalNodeClient::new(state);
+
+                // Take the latest committee we know of.
+                let admin_chain_id = context.wallet_state.genesis_admin_chain();
+                let query = ChainInfoQuery::new(admin_chain_id).with_committees();
+                let info = node_client.handle_chain_info_query(query).await?.info;
+                let Some(epoch) = info.epoch else {
+                    bail!("Invalid chain info response; missing epoch");
+                };
+                let Some(committee) = info
+                    .requested_committees
+                    .and_then(|mut committees| committees.remove(&epoch)) else {
+                    bail!("Invalid chain info response; missing latest committee");
+                };
+                let nodes = context.make_node_provider().make_nodes(committee).await?;
+
+                // Download the parent chain.
+                let target_height = effect_id.height.try_add_one()?;
+                node_client
+                    .download_certificates(nodes, effect_id.chain_id, target_height)
+                    .await
+                    .context("failed to download parent chain")?;
+
+                // The initial timestamp for the new chain is taken from the block with the effect.
+                let certificate = node_client
+                    .certificate_for(&effect_id)
+                    .await
+                    .context("could not find OpenChain effect")?;
                 let timestamp = certificate.value.block().timestamp;
+                let chain_id = ChainId::child(effect_id);
                 context
                     .wallet_state
-                    .assign_new_chain_to_key(key, chain, timestamp)
-                    .unwrap();
-                let mut chain_client = context.make_chain_client(storage, chain);
-                chain_client.receive_certificate(certificate).await.unwrap();
+                    .assign_new_chain_to_key(key, chain_id, timestamp)
+                    .context("could not assign the new chain")?;
+                println!("{}", chain_id);
                 context.save_wallet();
             }
 

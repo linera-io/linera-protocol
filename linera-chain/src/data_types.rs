@@ -9,7 +9,7 @@ use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
     data_types::{BlockHeight, RoundNumber, Timestamp},
     doc_scalar, ensure,
-    identifiers::{ChainId, ChannelName, Destination, Owner},
+    identifiers::{ChainId, ChannelName, Destination, EffectId, Owner},
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
@@ -376,6 +376,13 @@ impl Value {
     pub fn with_hash_unchecked(self, hash: CryptoHash) -> HashedValue {
         HashedValue { value: self, hash }
     }
+
+    /// Returns whether this value contains the effect with the specified ID.
+    pub fn has_effect(&self, effect_id: &EffectId) -> bool {
+        self.block.height == effect_id.height
+            && self.block.chain_id == effect_id.chain_id
+            && self.effects.len() > usize::try_from(effect_id.index).unwrap_or(usize::MAX)
+    }
 }
 
 impl HashedValue {
@@ -448,6 +455,11 @@ impl HashedValue {
 
     pub fn into_confirmed(self) -> HashedValue {
         Self::new_confirmed(self.value.block, self.value.effects, self.value.state_hash)
+    }
+
+    /// Returns whether this value contains the effect with the specified ID.
+    pub fn has_effect(&self, effect_id: &EffectId) -> bool {
+        self.value.has_effect(effect_id)
     }
 }
 

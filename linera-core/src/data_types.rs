@@ -34,6 +34,14 @@ pub struct BlockHeightRange {
     pub limit: Option<u64>,
 }
 
+impl BlockHeightRange {
+    /// Creates a range containing only the single specified block height.
+    pub fn single(start: BlockHeight) -> BlockHeightRange {
+        let limit = Some(1);
+        BlockHeightRange { start, limit }
+    }
+}
+
 /// Message to obtain information on a chain.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Arbitrary, Eq, PartialEq))]

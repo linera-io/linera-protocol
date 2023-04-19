@@ -13,6 +13,7 @@ use std::{str::FromStr, time::Duration};
 
 /// A general node provider which delegates node provision to the underlying
 /// node provider according to the `ValidatorPublicNetworkConfig`.
+#[derive(Copy, Clone)]
 pub struct NodeProvider {
     grpc: GrpcNodeProvider,
     simple: SimpleNodeProvider,
@@ -49,6 +50,7 @@ impl ValidatorNodeProvider for NodeProvider {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct GrpcNodeProvider {
     send_timeout: Duration,
     recv_timeout: Duration,
@@ -88,6 +90,7 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
 }
 
 /// A client without an address - serves as a client factory.
+#[derive(Copy, Clone)]
 pub struct SimpleNodeProvider {
     send_timeout: Duration,
     recv_timeout: Duration,
