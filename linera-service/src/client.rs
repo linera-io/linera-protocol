@@ -511,7 +511,7 @@ struct ClientOptions {
     command: ClientCommand,
 }
 
-#[derive(StructOpt, Clone)]
+#[derive(StructOpt)]
 enum ClientCommand {
     /// Transfer funds
     #[structopt(name = "transfer")]
@@ -610,7 +610,7 @@ enum ClientCommand {
 
     /// Create genesis configuration for a Linera deployment.
     /// Create initial user chains and print information to be used for initialization of validator setup.
-    /// This will also create create the wallet.
+    /// This will also create an initial wallet for the owner of the initial "root" chains.
     #[structopt(name = "create_genesis_config")]
     CreateGenesisConfig {
         /// Sets the file describing the public configurations of all validators
@@ -637,7 +637,7 @@ enum ClientCommand {
         num: u32,
     },
 
-    /// Initialise a wallet from the genesis configuration.
+    /// Initialize a wallet from the genesis configuration.
     #[structopt(name = "init")]
     Init {
         /// The path to the genesis configuration for a Linera deployment.
@@ -1152,10 +1152,10 @@ async fn main() -> Result<(), anyhow::Error> {
         .init();
     let options = ClientOptions::from_args();
 
-    match options.command {
+    match &options.command {
         ClientCommand::CreateGenesisConfig {
-            ref committee_config_path,
-            ref genesis_config_path,
+            committee_config_path,
+            genesis_config_path,
             admin_root,
             initial_funding,
             start_timestamp,
@@ -1164,12 +1164,12 @@ async fn main() -> Result<(), anyhow::Error> {
             let committee_config = CommitteeConfig::read(committee_config_path)
                 .expect("Unable to read committee config file");
             let mut genesis_config =
-                GenesisConfig::new(committee_config, ChainId::root(admin_root));
+                GenesisConfig::new(committee_config, ChainId::root(*admin_root));
             let timestamp = start_timestamp
                 .map(|st| Timestamp::from(st.timestamp() as u64))
                 .unwrap_or_else(Timestamp::now);
             let mut chains = vec![];
-            for i in 0..num {
+            for i in 0..*num {
                 let description = ChainDescription::Root(i as usize);
                 // Create keys.
                 let chain = UserChain::make_initial(description, timestamp);
@@ -1177,7 +1177,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 genesis_config.chains.push((
                     description,
                     chain.key_pair.as_ref().unwrap().public(),
-                    initial_funding,
+                    *initial_funding,
                     timestamp,
                 ));
                 // Private keys.
@@ -1190,7 +1190,7 @@ async fn main() -> Result<(), anyhow::Error> {
         }
 
         ClientCommand::Init {
-            ref genesis_config_path,
+            genesis_config_path,
         } => {
             let genesis_config = GenesisConfig::read(genesis_config_path)?;
             let context = ClientContext::create(&options, genesis_config, vec![]);
@@ -1198,7 +1198,7 @@ async fn main() -> Result<(), anyhow::Error> {
             Ok(())
         }
 
-        ref command => {
+        command => {
             let mut context = ClientContext::from_options(&options);
             match command {
                 ClientCommand::KeyGen => {
@@ -1222,7 +1222,7 @@ async fn main() -> Result<(), anyhow::Error> {
                     }
                 },
 
-                command => {
+                _ => {
                     let genesis_config = context.wallet_state.genesis_config().clone();
                     let wasm_runtime = options.wasm_runtime.with_wasm_default();
 
@@ -1231,7 +1231,7 @@ async fn main() -> Result<(), anyhow::Error> {
                         .run_with_storage(
                             &genesis_config,
                             wasm_runtime,
-                            Job(context, command.clone()),
+                            Job(context, options.command),
                         )
                         .await?;
                     Ok(())
