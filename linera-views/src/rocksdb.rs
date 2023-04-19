@@ -78,6 +78,15 @@ impl KeyValueStoreClient for DbInternal {
         Ok(tokio::task::spawn_blocking(move || db.get(&key)).await??)
     }
 
+    async fn read_multi_key_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, RocksdbContextError> {
+        let db = self.clone();
+        let entries = tokio::task::spawn_blocking(move || db.multi_get(&keys)).await?;
+        Ok(entries.into_iter().collect::<Result<_, _>>()?)
+    }
+
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -192,6 +201,13 @@ impl KeyValueStoreClient for RocksdbClient {
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksdbContextError> {
         self.client.read_key_bytes(key).await
+    }
+
+    async fn read_multi_key_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, RocksdbContextError> {
+        self.client.read_multi_key_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(

@@ -16,6 +16,7 @@ use aws_sdk_dynamodb::{
     types::{Blob, SdkError},
     Client,
 };
+use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, mem, str::FromStr};
 use thiserror::Error;
@@ -662,6 +663,20 @@ impl KeyValueStoreClient for DynamoDbClient {
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
         let key_db = build_key(key.to_vec());
         self.read_key_bytes_general(key_db).await
+    }
+
+    async fn read_multi_key_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbContextError> {
+        let mut handles = Vec::new();
+        for key in keys {
+            let key_db = build_key(key);
+            let handle = self.read_key_bytes_general(key_db);
+            handles.push(handle);
+        }
+        let result = join_all(handles).await;
+        Ok(result.into_iter().collect::<Result<_, _>>()?)
     }
 
     async fn find_keys_by_prefix(

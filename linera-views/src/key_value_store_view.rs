@@ -404,6 +404,48 @@ where
         Ok(value)
     }
 
+    /// Obtains the values of a range of indices
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
+    ///   view.insert(vec![0,1], vec![42]);
+    ///   assert_eq!(view.multi_get(vec![vec![0,1], vec![0,2]]).await.unwrap(), vec![Some(vec![42]), None]);
+    /// # })
+    /// ```
+    pub async fn multi_get(
+        &self,
+        indices: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
+        let mut result = Vec::with_capacity(indices.len());
+        let mut missed_indices = Vec::new();
+        let mut vector_query = Vec::new();
+        for (i, index) in indices.into_iter().enumerate() {
+            if let Some(update) = self.updates.get(&index) {
+                let value = match update {
+                    Update::Removed => None,
+                    Update::Set(value) => Some(value.clone()),
+                };
+                result.push(value);
+            } else {
+                result.push(None);
+                missed_indices.push(i);
+                let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
+                vector_query.push(key);
+            }
+        }
+        if !self.was_cleared {
+            let values = self.context.read_multi_key_bytes(vector_query).await?;
+            for (i, value) in missed_indices.into_iter().zip(values) {
+                result[i] = value;
+            }
+        }
+        Ok(result)
+    }
+
     /// Sets or inserts a value.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -695,7 +737,7 @@ where
 #[cfg(any(test, feature = "test"))]
 #[derive(Debug, Clone)]
 pub struct ViewContainer<C> {
-    kvsv: Arc<RwLock<KeyValueStoreView<C>>>,
+    view: Arc<RwLock<KeyValueStoreView<C>>>,
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -710,29 +752,37 @@ where
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
-        let kvsv = self.kvsv.read().await;
-        kvsv.get(key).await
+        let view = self.view.read().await;
+        view.get(key).await
+    }
+
+    async fn read_multi_key_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
+        let view = self.view.read().await;
+        view.multi_get(keys).await
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, ViewError> {
-        let kvsv = self.kvsv.read().await;
-        kvsv.find_keys_by_prefix(key_prefix).await
+        let view = self.view.read().await;
+        view.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, ViewError> {
-        let kvsv = self.kvsv.read().await;
-        kvsv.find_key_values_by_prefix(key_prefix).await
+        let view = self.view.read().await;
+        view.find_key_values_by_prefix(key_prefix).await
     }
 
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
-        let mut kvsv = self.kvsv.write().await;
-        kvsv.write_batch(batch).await?;
+        let mut view = self.view.write().await;
+        view.write_batch(batch).await?;
         let mut batch = Batch::new();
-        kvsv.flush(&mut batch)?;
-        kvsv.context().write_batch(batch).await?;
+        view.flush(&mut batch)?;
+        view.context().write_batch(batch).await?;
         Ok(())
     }
 
@@ -824,9 +874,9 @@ where
 {
     /// Create a [`ViewContainer`].
     pub async fn new(context: C) -> Result<Self, ViewError> {
-        let kvsv = KeyValueStoreView::load(context).await?;
+        let view = KeyValueStoreView::load(context).await?;
         Ok(Self {
-            kvsv: Arc::new(RwLock::new(kvsv)),
+            view: Arc::new(RwLock::new(view)),
         })
     }
 }
