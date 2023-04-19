@@ -169,9 +169,8 @@ pub enum SystemEffect {
         recipient: Recipient,
         user_data: UserData,
     },
-    /// Creates (or activate) a new chain by installing the given authentication key.
+    /// Creates (or activates) a new chain by installing the given authentication key.
     OpenChain {
-        id: ChainId,
         public_key: PublicKey,
         admin_id: ChainId,
         epoch: Epoch,
@@ -470,7 +469,6 @@ where
                     Destination::Recipient(*id),
                     false,
                     SystemEffect::OpenChain {
-                        id: *id,
                         public_key: *public_key,
                         committees: committees.clone(),
                         admin_id: *admin_id,
@@ -848,7 +846,6 @@ where
     pub fn open_chain(
         &mut self,
         effect_id: EffectId,
-        chain_id: ChainId,
         public_key: PublicKey,
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
@@ -860,7 +857,6 @@ where
         assert!(!self.ownership.get().is_active());
         assert!(self.committees.get().is_empty());
         let description = ChainDescription::Child(effect_id);
-        assert_eq!(chain_id, description.into());
         self.description.set(Some(description));
         self.epoch.set(Some(epoch));
         self.committees.set(committees);

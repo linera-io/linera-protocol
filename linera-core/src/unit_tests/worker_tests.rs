@@ -2441,7 +2441,6 @@ where
                 direct_outgoing_effect(
                     user_id,
                     SystemEffect::OpenChain {
-                        id: user_id,
                         public_key: key_pair.public(),
                         epoch: Epoch::from(0),
                         committees: committees.clone(),

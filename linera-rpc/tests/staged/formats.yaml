@@ -567,8 +567,6 @@ SystemEffect:
     2:
       OpenChain:
         STRUCT:
-          - id:
-              TYPENAME: ChainId
           - public_key:
               TYPENAME: PublicKey
           - admin_id:
