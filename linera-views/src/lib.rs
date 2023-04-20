@@ -38,6 +38,7 @@ pub mod collection_view;
 pub mod memory;
 
 /// The LRU (least recently used) caching.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod lru_caching;
 
 /// The `ReentrantCollectionView` implements a map structure whose keys are ordered and the values are views with concurrent access.
