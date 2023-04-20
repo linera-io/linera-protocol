@@ -1237,7 +1237,12 @@ async fn main() -> Result<(), anyhow::Error> {
 
                 options
                     .storage_config
-                    .run_with_storage(&genesis_config, wasm_runtime, cache_size, Job(context, options.command))
+                    .run_with_storage(
+                        &genesis_config,
+                        wasm_runtime,
+                        cache_size,
+                        Job(context, options.command),
+                    )
                     .await?;
                 Ok(())
             }

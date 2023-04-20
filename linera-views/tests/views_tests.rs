@@ -12,7 +12,7 @@ use linera_views::{
     common::Context,
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
     log_view::LogView,
-    lru_caching::LruCachingMemoryContext,
+    lru_caching::{LruCachingMemoryContext, TEST_CACHE_SIZE},
     map_view::MapView,
     memory::{MemoryContext, MemoryStoreMap},
     queue_view::QueueView,
@@ -25,7 +25,6 @@ use linera_views::{
         random_shuffle, span_random_reordering_put_delete,
     },
     views::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},
-    lru_caching::TEST_CACHE_SIZE,
 };
 use rand::{Rng, RngCore, SeedableRng};
 use std::{

@@ -4,11 +4,11 @@
 use crate::{
     batch::Batch,
     common::Context,
+    lru_caching::TEST_CACHE_SIZE,
     memory::MemoryContext,
     queue_view::QueueView,
     rocksdb::{RocksdbClient, RocksdbContext},
     views::{View, ViewError},
-    lru_caching::TEST_CACHE_SIZE,
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -236,7 +236,8 @@ impl TestContextFactory for DynamoDbContextFactory {
 
         let dummy_key_prefix = vec![0];
         let (context, _) =
-            DynamoDbContext::from_config(config, table, TEST_CACHE_SIZE, dummy_key_prefix, ()).await?;
+            DynamoDbContext::from_config(config, table, TEST_CACHE_SIZE, dummy_key_prefix, ())
+                .await?;
 
         Ok(context)
     }

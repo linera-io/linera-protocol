@@ -6,10 +6,10 @@ use linera_views::{
     batch::Batch,
     common::{KeyIterable, KeyValueStoreClient},
     key_value_store_view::ViewContainer,
+    lru_caching::TEST_CACHE_SIZE,
     memory::MemoryContext,
     rocksdb::DB,
     test_utils::get_random_key_value_vec_prefix,
-    lru_caching::TEST_CACHE_SIZE,
 };
 use rand::SeedableRng;
 use std::{

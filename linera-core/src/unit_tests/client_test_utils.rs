@@ -20,8 +20,7 @@ use linera_execution::{
     WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
-use linera_views::views::ViewError;
-use linera_views::lru_caching::TEST_CACHE_SIZE;
+use linera_views::{lru_caching::TEST_CACHE_SIZE, views::ViewError};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
@@ -512,7 +511,11 @@ impl StoreBuilder for MakeRocksdbStoreClient {
         let path = dir.path().to_path_buf();
         self.temp_dirs.push(dir);
         let standard_max_cache_size = 1000;
-        Ok(RocksdbStoreClient::new(path, self.wasm_runtime, standard_max_cache_size))
+        Ok(RocksdbStoreClient::new(
+            path,
+            self.wasm_runtime,
+            standard_max_cache_size,
+        ))
     }
 }
 
@@ -549,7 +552,9 @@ impl StoreBuilder for MakeDynamoDbStoreClient {
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
         let table = format!("linera{}", self.instance_counter).parse()?;
         self.instance_counter += 1;
-        let (store, _) = DynamoDbStoreClient::from_config(config, table, TEST_CACHE_SIZE, self.wasm_runtime).await?;
+        let (store, _) =
+            DynamoDbStoreClient::from_config(config, table, TEST_CACHE_SIZE, self.wasm_runtime)
+                .await?;
         Ok(store)
     }
 }

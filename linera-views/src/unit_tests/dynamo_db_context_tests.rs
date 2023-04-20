@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{DynamoDbContext, TableName, TableStatus};
-use crate::test_utils::{list_tables, LocalStackTestContext};
-use crate::lru_caching::TEST_CACHE_SIZE;
+use crate::{
+    lru_caching::TEST_CACHE_SIZE,
+    test_utils::{list_tables, LocalStackTestContext},
+};
 use anyhow::Error;
 
 /// Test if the table for the storage is created when needed.
@@ -16,9 +18,14 @@ async fn table_is_created() -> Result<(), Error> {
     let initial_tables = list_tables(&client).await?;
     assert!(!initial_tables.contains(table.as_ref()));
 
-    let (_storage, table_status) =
-        DynamoDbContext::from_config(localstack.dynamo_db_config(), table.clone(), TEST_CACHE_SIZE, vec![], ())
-            .await?;
+    let (_storage, table_status) = DynamoDbContext::from_config(
+        localstack.dynamo_db_config(),
+        table.clone(),
+        TEST_CACHE_SIZE,
+        vec![],
+        (),
+    )
+    .await?;
 
     let tables = list_tables(&client).await?;
     assert!(tables.contains(table.as_ref()));

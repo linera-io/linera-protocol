@@ -32,8 +32,10 @@ use linera_execution::{
     SystemResponse,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
-use linera_views::views::{CryptoHashView, ViewError};
-use linera_views::lru_caching::TEST_CACHE_SIZE;
+use linera_views::{
+    lru_caching::TEST_CACHE_SIZE,
+    views::{CryptoHashView, ViewError},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;
@@ -300,8 +302,13 @@ async fn test_rocksdb_handle_block_proposal_bad_signature() {
 async fn test_dynamo_db_handle_block_proposal_bad_signature() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_block_proposal_bad_signature(client).await;
     Ok(())
 }
@@ -374,8 +381,13 @@ async fn test_rocksdb_handle_block_proposal_zero_amount() {
 async fn test_dynamo_db_handle_block_proposal_zero_amount() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_block_proposal_zero_amount(client).await;
     Ok(())
 }
@@ -445,8 +457,13 @@ async fn test_rocksdb_handle_block_proposal_ticks() {
 async fn test_dynamo_db_handle_block_proposal_ticks() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_block_proposal_ticks(client).await;
     Ok(())
 }
@@ -545,8 +562,13 @@ async fn test_rocksdb_handle_block_proposal_unknown_sender() {
 async fn test_dynamo_db_handle_block_proposal_unknown_sender() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_block_proposal_unknown_sender(client).await;
     Ok(())
 }
@@ -619,8 +641,13 @@ async fn test_rocksdb_handle_block_proposal_with_chaining() {
 async fn test_dynamo_db_handle_block_proposal_with_chaining() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_block_proposal_with_chaining(client).await;
     Ok(())
 }
@@ -733,8 +760,13 @@ async fn test_dynamo_db_handle_block_proposal_with_incoming_messages() -> Result
 {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_block_proposal_with_incoming_messages(client).await;
     Ok(())
 }
@@ -1211,8 +1243,13 @@ async fn test_rocksdb_handle_block_proposal_exceed_balance() {
 async fn test_dynamo_db_handle_block_proposal_exceed_balance() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_block_proposal_exceed_balance(client).await;
     Ok(())
 }
@@ -1278,8 +1315,13 @@ async fn test_rocksdb_handle_block_proposal() {
 async fn test_dynamo_db_handle_block_proposal() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_block_proposal(client).await;
     Ok(())
 }
@@ -1348,8 +1390,13 @@ async fn test_rocksdb_handle_block_proposal_replay() {
 async fn test_dynamo_db_handle_block_proposal_replay() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_block_proposal_replay(client).await;
     Ok(())
 }
@@ -1420,8 +1467,13 @@ async fn test_rocksdb_handle_certificate_unknown_sender() {
 async fn test_dynamo_db_handle_certificate_unknown_sender() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_certificate_unknown_sender(client).await;
     Ok(())
 }
@@ -1477,8 +1529,13 @@ async fn test_rocksdb_handle_certificate_bad_block_height() {
 async fn test_dynamo_db_handle_certificate_bad_block_height() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_certificate_bad_block_height(client).await;
     Ok(())
 }
@@ -1547,8 +1604,13 @@ async fn test_dynamo_db_handle_certificate_with_anticipated_incoming_message(
 ) -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_certificate_with_anticipated_incoming_message(client).await;
     Ok(())
 }
@@ -1692,8 +1754,13 @@ async fn test_dynamo_db_handle_certificate_receiver_balance_overflow() -> Result
 {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_certificate_receiver_balance_overflow(client).await;
     Ok(())
 }
@@ -1784,8 +1851,13 @@ async fn test_rocksdb_handle_certificate_receiver_equal_sender() {
 async fn test_dynamo_db_handle_certificate_receiver_equal_sender() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_certificate_receiver_equal_sender(client).await;
     Ok(())
 }
@@ -1887,8 +1959,13 @@ async fn test_rocksdb_handle_cross_chain_request() {
 async fn test_dynamo_db_handle_cross_chain_request() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_cross_chain_request(client).await;
     Ok(())
 }
@@ -1999,8 +2076,13 @@ async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain() -> Resul
 {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_cross_chain_request_no_recipient_chain(client).await;
     Ok(())
 }
@@ -2059,8 +2141,13 @@ async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain_on_client(
 ) -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
     Ok(())
 }
@@ -2130,8 +2217,13 @@ async fn test_rocksdb_handle_certificate_to_active_recipient() {
 async fn test_dynamo_db_handle_certificate_to_active_recipient() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_certificate_to_active_recipient(client).await;
     Ok(())
 }
@@ -2310,8 +2402,13 @@ async fn test_rocksdb_handle_certificate_to_inactive_recipient() {
 async fn test_dynamo_db_handle_certificate_to_inactive_recipient() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_handle_certificate_to_inactive_recipient(client).await;
     Ok(())
 }
@@ -2374,8 +2471,13 @@ async fn test_rocksdb_chain_creation_with_committee_creation() {
 async fn test_dynamo_db_chain_creation_with_committee_creation() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_chain_creation_with_committee_creation(client).await;
     Ok(())
 }
@@ -2874,8 +2976,13 @@ async fn test_rocksdb_transfers_and_committee_creation() {
 async fn test_dynamo_db_transfers_and_committee_creation() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_transfers_and_committee_creation(client).await;
     Ok(())
 }
@@ -3066,8 +3173,13 @@ async fn test_rocksdb_transfers_and_committee_removal() {
 async fn test_dynamo_db_transfers_and_committee_removal() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
-    let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
+    let (client, _) = DynamoDbStoreClient::from_config(
+        localstack.dynamo_db_config(),
+        table,
+        TEST_CACHE_SIZE,
+        None,
+    )
+    .await?;
     run_test_transfers_and_committee_removal(client).await;
     Ok(())
 }

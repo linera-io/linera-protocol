@@ -778,7 +778,10 @@ impl DynamoDbClient {
 
 impl DynamoDbClient {
     /// Creates a new [`DynamoDbClientInternal`] instance.
-    pub async fn new(table: TableName, cache_size: usize) -> Result<(Self, TableStatus), DynamoDbContextError> {
+    pub async fn new(
+        table: TableName,
+        cache_size: usize,
+    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let config = aws_config::load_from_env().await;
         DynamoDbClient::from_config(&config, table, cache_size).await
     }
