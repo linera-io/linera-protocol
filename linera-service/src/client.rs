@@ -84,6 +84,9 @@ impl ClientContext {
             .wallet_state_path
             .clone()
             .unwrap_or_else(Self::default_wallet_path);
+        if wallet_state_path.exists() {
+            panic!("Wallet already exists at {}. Aborting...", wallet_state_path.display())
+        }
         let mut wallet_state = WalletState::create(&wallet_state_path, genesis_config)
             .unwrap_or_else(|e| {
                 panic!(
