@@ -90,8 +90,7 @@ impl<'a> LruPrefixCache {
 #[derive(Clone)]
 pub struct LruCachingKeyValueClient<K> {
     client: K,
-    max_cache_size: usize,
-    lru_read_keys: Arc<Mutex<LruPrefixCache>>,
+    lru_read_keys: Option<Arc<Mutex<LruPrefixCache>>>,
 }
 
 #[async_trait]
@@ -104,49 +103,60 @@ where
     type KeyValues = K::KeyValues;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        if self.max_cache_size == 0 {
-            return self.client.read_key_bytes(key).await;
+        match &self.lru_read_keys {
+            None => {
+                return self.client.read_key_bytes(key).await;
+            }
+            Some(lru_read_keys) => {
+                // First inquiring in the read_key_bytes LRU
+                let lru_read_keys_container = lru_read_keys.lock().await;
+                if let Some(value) = lru_read_keys_container.query(key) {
+                    return Ok(value.clone());
+                }
+                drop(lru_read_keys_container);
+                let value = self.client.read_key_bytes(key).await?;
+                let mut lru_read_keys = lru_read_keys.lock().await;
+                lru_read_keys.insert(key.to_vec(), value.clone());
+                Ok(value)
+            }
         }
-        // First inquiring in the read_key_bytes LRU
-        let lru_read_keys = self.lru_read_keys.lock().await;
-        if let Some(value) = lru_read_keys.query(key) {
-            return Ok(value.clone());
-        }
-        drop(lru_read_keys);
-        let value = self.client.read_key_bytes(key).await?;
-        let mut lru_read_keys = self.lru_read_keys.lock().await;
-        lru_read_keys.insert(key.to_vec(), value.clone());
-        Ok(value)
     }
 
     async fn read_multi_key_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        let mut result = Vec::with_capacity(keys.len());
-        let mut cache_miss_indices = Vec::new();
-        let mut miss_keys = Vec::new();
-        let lru_read_keys = self.lru_read_keys.lock().await;
-        for (i, key) in keys.into_iter().enumerate() {
-            if let Some(value) = lru_read_keys.query(&key) {
-                result.push(value.clone());
-            } else {
-                result.push(None);
-                cache_miss_indices.push(i);
-                miss_keys.push(key);
+        match &self.lru_read_keys {
+            None => {
+                return self.client.read_multi_key_bytes(keys).await;
+            }
+            Some(lru_read_keys) => {
+                let mut result = Vec::with_capacity(keys.len());
+                let mut cache_miss_indices = Vec::new();
+                let mut miss_keys = Vec::new();
+                let lru_read_keys_container = lru_read_keys.lock().await;
+                for (i, key) in keys.into_iter().enumerate() {
+                    if let Some(value) = lru_read_keys_container.query(&key) {
+                        result.push(value.clone());
+                    } else {
+                        result.push(None);
+                        cache_miss_indices.push(i);
+                        miss_keys.push(key);
+                    }
+                }
+                drop(lru_read_keys_container);
+                let values = self.client.read_multi_key_bytes(miss_keys.clone()).await?;
+                let mut lru_read_keys = lru_read_keys.lock().await;
+                for (i, (key, value)) in cache_miss_indices
+                    .into_iter()
+                    .zip(miss_keys.into_iter().zip(values))
+                {
+                    lru_read_keys.insert(key, value.clone());
+                    result[i] = value;
+                }
+                Ok(result)
             }
         }
-        drop(lru_read_keys);
-        let values = self.client.read_multi_key_bytes(miss_keys.clone()).await?;
-        let mut lru_read_keys = self.lru_read_keys.lock().await;
-        for (i, (key, value)) in cache_miss_indices
-            .into_iter()
-            .zip(miss_keys.into_iter().zip(values))
-        {
-            lru_read_keys.insert(key, value.clone());
-            result[i] = value;
-        }
-        Ok(result)
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
@@ -161,25 +171,29 @@ where
     }
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
-        if self.max_cache_size == 0 {
-            return self.client.write_batch(batch, base_key).await;
-        }
-        let mut lru_read_keys = self.lru_read_keys.lock().await;
-        for operation in &batch.operations {
-            match operation {
-                WriteOperation::Put { key, value } => {
-                    lru_read_keys.insert(key.to_vec(), Some(value.to_vec()));
+        match &self.lru_read_keys {
+            None => {
+                return self.client.write_batch(batch, base_key).await;
+            }
+            Some(lru_read_keys) => {
+                let mut lru_read_keys = lru_read_keys.lock().await;
+                for operation in &batch.operations {
+                    match operation {
+                        WriteOperation::Put { key, value } => {
+                            lru_read_keys.insert(key.to_vec(), Some(value.to_vec()));
+                        }
+                        WriteOperation::Delete { key } => {
+                            lru_read_keys.insert(key.to_vec(), None);
+                        }
+                        WriteOperation::DeletePrefix { key_prefix } => {
+                            lru_read_keys.delete_prefix(key_prefix);
+                        }
+                    }
                 }
-                WriteOperation::Delete { key } => {
-                    lru_read_keys.insert(key.to_vec(), None);
-                }
-                WriteOperation::DeletePrefix { key_prefix } => {
-                    lru_read_keys.delete_prefix(key_prefix);
-                }
+                drop(lru_read_keys);
+                self.client.write_batch(batch, base_key).await
             }
         }
-        drop(lru_read_keys);
-        self.client.write_batch(batch, base_key).await
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
@@ -193,11 +207,17 @@ where
 {
     /// Creates a new Key Value Store Client that implements LRU caching.
     pub fn new(client: K, max_size: usize) -> Self {
-        let lru_read_keys = Arc::new(Mutex::new(LruPrefixCache::new(max_size)));
-        Self {
-            client,
-            max_cache_size: max_size,
-            lru_read_keys,
+        if max_size == 0 {
+            Self {
+                client,
+                lru_read_keys: None,
+            }
+        } else {
+            let lru_read_keys = Some(Arc::new(Mutex::new(LruPrefixCache::new(max_size))));
+            Self {
+                client,
+                lru_read_keys,
+            }
         }
     }
 }
