@@ -33,6 +33,7 @@ use linera_execution::{
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::views::{CryptoHashView, ViewError};
+use linera_views::lru_caching::TEST_CACHE_SIZE;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;
@@ -56,9 +57,6 @@ async fn make_state_hash(state: SystemExecutionState, fuel: u64) -> CryptoHash {
 
 /// The test worker accepts blocks with a timestamp this far in the future.
 const TEST_GRACE_PERIOD_MICROS: u64 = 500_000;
-
-/// The cache size used for the tests.
-const STANDARD_MAX_CACHE_SIZE: usize = 1000;
 
 /// Instantiate the protocol with a single validator. Returns the corresponding committee
 /// and the (non-sharded, in-memory) "worker" that we can interact with.
@@ -293,7 +291,7 @@ async fn test_memory_handle_block_proposal_bad_signature() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_bad_signature() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_block_proposal_bad_signature(client).await;
 }
 
@@ -303,7 +301,7 @@ async fn test_dynamo_db_handle_block_proposal_bad_signature() -> Result<(), anyh
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_block_proposal_bad_signature(client).await;
     Ok(())
 }
@@ -367,7 +365,7 @@ async fn test_memory_handle_block_proposal_zero_amount() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_zero_amount() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_block_proposal_zero_amount(client).await;
 }
 
@@ -377,7 +375,7 @@ async fn test_dynamo_db_handle_block_proposal_zero_amount() -> Result<(), anyhow
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_block_proposal_zero_amount(client).await;
     Ok(())
 }
@@ -438,7 +436,7 @@ async fn test_memory_handle_block_proposal_ticks() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_ticks() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_block_proposal_ticks(client).await;
 }
 
@@ -448,7 +446,7 @@ async fn test_dynamo_db_handle_block_proposal_ticks() -> Result<(), anyhow::Erro
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_block_proposal_ticks(client).await;
     Ok(())
 }
@@ -538,7 +536,7 @@ async fn test_memory_handle_block_proposal_unknown_sender() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_unknown_sender() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_block_proposal_unknown_sender(client).await;
 }
 
@@ -548,7 +546,7 @@ async fn test_dynamo_db_handle_block_proposal_unknown_sender() -> Result<(), any
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_block_proposal_unknown_sender(client).await;
     Ok(())
 }
@@ -612,7 +610,7 @@ async fn test_memory_handle_block_proposal_with_chaining() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_with_chaining() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_block_proposal_with_chaining(client).await;
 }
 
@@ -622,7 +620,7 @@ async fn test_dynamo_db_handle_block_proposal_with_chaining() -> Result<(), anyh
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_block_proposal_with_chaining(client).await;
     Ok(())
 }
@@ -725,7 +723,7 @@ async fn test_memory_handle_block_proposal_with_incoming_messages() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_with_incoming_messages() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_block_proposal_with_incoming_messages(client).await;
 }
 
@@ -736,7 +734,7 @@ async fn test_dynamo_db_handle_block_proposal_with_incoming_messages() -> Result
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_block_proposal_with_incoming_messages(client).await;
     Ok(())
 }
@@ -1204,7 +1202,7 @@ async fn test_memory_handle_block_proposal_exceed_balance() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_exceed_balance() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_block_proposal_exceed_balance(client).await;
 }
 
@@ -1214,7 +1212,7 @@ async fn test_dynamo_db_handle_block_proposal_exceed_balance() -> Result<(), any
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_block_proposal_exceed_balance(client).await;
     Ok(())
 }
@@ -1271,7 +1269,7 @@ async fn test_memory_handle_block_proposal() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_block_proposal(client).await;
 }
 
@@ -1281,7 +1279,7 @@ async fn test_dynamo_db_handle_block_proposal() -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_block_proposal(client).await;
     Ok(())
 }
@@ -1341,7 +1339,7 @@ async fn test_memory_handle_block_proposal_replay() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_replay() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_block_proposal_replay(client).await;
 }
 
@@ -1351,7 +1349,7 @@ async fn test_dynamo_db_handle_block_proposal_replay() -> Result<(), anyhow::Err
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_block_proposal_replay(client).await;
     Ok(())
 }
@@ -1413,7 +1411,7 @@ async fn test_memory_handle_certificate_unknown_sender() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_certificate_unknown_sender() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_certificate_unknown_sender(client).await;
 }
 
@@ -1423,7 +1421,7 @@ async fn test_dynamo_db_handle_certificate_unknown_sender() -> Result<(), anyhow
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_certificate_unknown_sender(client).await;
     Ok(())
 }
@@ -1470,7 +1468,7 @@ async fn test_memory_handle_certificate_bad_block_height() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_certificate_bad_block_height() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_certificate_bad_block_height(client).await;
 }
 
@@ -1480,7 +1478,7 @@ async fn test_dynamo_db_handle_certificate_bad_block_height() -> Result<(), anyh
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_certificate_bad_block_height(client).await;
     Ok(())
 }
@@ -1539,7 +1537,7 @@ async fn test_memory_handle_certificate_with_anticipated_incoming_message() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_certificate_with_anticipated_incoming_message() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_certificate_with_anticipated_incoming_message(client).await;
 }
 
@@ -1550,7 +1548,7 @@ async fn test_dynamo_db_handle_certificate_with_anticipated_incoming_message(
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_certificate_with_anticipated_incoming_message(client).await;
     Ok(())
 }
@@ -1684,7 +1682,7 @@ async fn test_memory_handle_certificate_receiver_balance_overflow() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_certificate_receiver_balance_overflow() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_certificate_receiver_balance_overflow(client).await;
 }
 
@@ -1695,7 +1693,7 @@ async fn test_dynamo_db_handle_certificate_receiver_balance_overflow() -> Result
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_certificate_receiver_balance_overflow(client).await;
     Ok(())
 }
@@ -1777,7 +1775,7 @@ async fn test_memory_handle_certificate_receiver_equal_sender() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_certificate_receiver_equal_sender() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_certificate_receiver_equal_sender(client).await;
 }
 
@@ -1787,7 +1785,7 @@ async fn test_dynamo_db_handle_certificate_receiver_equal_sender() -> Result<(),
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_certificate_receiver_equal_sender(client).await;
     Ok(())
 }
@@ -1880,7 +1878,7 @@ async fn test_memory_handle_cross_chain_request() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_cross_chain_request() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_cross_chain_request(client).await;
 }
 
@@ -1890,7 +1888,7 @@ async fn test_dynamo_db_handle_cross_chain_request() -> Result<(), anyhow::Error
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_cross_chain_request(client).await;
     Ok(())
 }
@@ -1991,7 +1989,7 @@ async fn test_memory_handle_cross_chain_request_no_recipient_chain() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_cross_chain_request_no_recipient_chain() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_cross_chain_request_no_recipient_chain(client).await;
 }
 
@@ -2002,7 +2000,7 @@ async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain() -> Resul
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_cross_chain_request_no_recipient_chain(client).await;
     Ok(())
 }
@@ -2051,7 +2049,7 @@ async fn test_memory_handle_cross_chain_request_no_recipient_chain_on_client() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_cross_chain_request_no_recipient_chain_on_client() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
 }
 
@@ -2062,7 +2060,7 @@ async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain_on_client(
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
     Ok(())
 }
@@ -2123,7 +2121,7 @@ async fn test_memory_handle_certificate_to_active_recipient() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_certificate_to_active_recipient() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_certificate_to_active_recipient(client).await;
 }
 
@@ -2133,7 +2131,7 @@ async fn test_dynamo_db_handle_certificate_to_active_recipient() -> Result<(), a
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_certificate_to_active_recipient(client).await;
     Ok(())
 }
@@ -2303,7 +2301,7 @@ async fn test_memory_handle_certificate_to_inactive_recipient() {
 #[test(tokio::test)]
 async fn test_rocksdb_handle_certificate_to_inactive_recipient() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_handle_certificate_to_inactive_recipient(client).await;
 }
 
@@ -2313,7 +2311,7 @@ async fn test_dynamo_db_handle_certificate_to_inactive_recipient() -> Result<(),
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_handle_certificate_to_inactive_recipient(client).await;
     Ok(())
 }
@@ -2367,7 +2365,7 @@ async fn test_memory_chain_creation_with_committee_creation() {
 #[test(tokio::test)]
 async fn test_rocksdb_chain_creation_with_committee_creation() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_chain_creation_with_committee_creation(client).await;
 }
 
@@ -2377,7 +2375,7 @@ async fn test_dynamo_db_chain_creation_with_committee_creation() -> Result<(), a
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_chain_creation_with_committee_creation(client).await;
     Ok(())
 }
@@ -2867,7 +2865,7 @@ async fn test_memory_transfers_and_committee_creation() {
 #[test(tokio::test)]
 async fn test_rocksdb_transfers_and_committee_creation() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_transfers_and_committee_creation(client).await;
 }
 
@@ -2877,7 +2875,7 @@ async fn test_dynamo_db_transfers_and_committee_creation() -> Result<(), anyhow:
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_transfers_and_committee_creation(client).await;
     Ok(())
 }
@@ -3059,7 +3057,7 @@ async fn test_memory_transfers_and_committee_removal() {
 #[test(tokio::test)]
 async fn test_rocksdb_transfers_and_committee_removal() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
     run_test_transfers_and_committee_removal(client).await;
 }
 
@@ -3069,7 +3067,7 @@ async fn test_dynamo_db_transfers_and_committee_removal() -> Result<(), anyhow::
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, None).await?;
     run_test_transfers_and_committee_removal(client).await;
     Ok(())
 }

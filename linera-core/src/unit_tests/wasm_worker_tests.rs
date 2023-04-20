@@ -28,6 +28,7 @@ use linera_execution::{
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::views::{CryptoHashView, ViewError};
+use linera_views::lru_caching::TEST_CACHE_SIZE;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -36,8 +37,6 @@ use test_case::test_case;
 
 #[cfg(feature = "aws")]
 use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
-
-const STANDARD_MAX_CACHE_SIZE: usize = 1000;
 
 #[derive(Copy, Clone, Debug)]
 enum StorageKind {
@@ -68,7 +67,7 @@ async fn test_rocksdb_handle_certificates_to_create_application(
     storage_kind: StorageKind,
 ) -> Result<(), anyhow::Error> {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), Some(wasm_runtime), STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbStoreClient::new(dir.path().to_path_buf(), Some(wasm_runtime), TEST_CACHE_SIZE);
     run_test_handle_certificates_to_create_application(client, storage_kind).await
 }
 
@@ -85,7 +84,7 @@ async fn test_dynamo_db_handle_certificates_to_create_application(
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
     let (client, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, Some(wasm_runtime))
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, TEST_CACHE_SIZE, Some(wasm_runtime))
             .await?;
     run_test_handle_certificates_to_create_application(client, storage_kind).await
 }

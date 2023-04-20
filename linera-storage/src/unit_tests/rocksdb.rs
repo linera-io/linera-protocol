@@ -4,16 +4,15 @@
 use super::RocksdbStoreClient;
 use crate::Store;
 use linera_base::identifiers::ChainId;
+use linera_views::lru_caching::TEST_CACHE_SIZE;
 use std::mem;
 use tempfile::TempDir;
-
-const STANDARD_MAX_CACHE_SIZE: usize = 1000;
 
 /// Test if released guards don't use memory.
 #[tokio::test]
 async fn guards_dont_leak() -> Result<(), anyhow::Error> {
     let directory = TempDir::new()?;
-    let store = RocksdbStoreClient::new(directory.path().to_owned(), None, STANDARD_MAX_CACHE_SIZE);
+    let store = RocksdbStoreClient::new(directory.path().to_owned(), None, TEST_CACHE_SIZE);
     let chain_id = ChainId::root(1);
     // There should be no active guards when initialized
     assert_eq!(store.client.guards.active_guards(), 0);

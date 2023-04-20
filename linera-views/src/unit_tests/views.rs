@@ -8,6 +8,7 @@ use crate::{
     queue_view::QueueView,
     rocksdb::{RocksdbClient, RocksdbContext},
     views::{View, ViewError},
+    lru_caching::TEST_CACHE_SIZE,
 };
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -19,8 +20,6 @@ use tempfile::TempDir;
 
 #[cfg(feature = "aws")]
 use crate::{dynamo_db::DynamoDbContext, test_utils::LocalStackTestContext};
-
-const STANDARD_MAX_CACHE_SIZE: usize = 1000;
 
 #[tokio::test]
 async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error> {
@@ -205,7 +204,7 @@ impl TestContextFactory for RocksdbContextFactory {
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let directory = TempDir::new()?;
-        let client = RocksdbClient::new(directory.path(), STANDARD_MAX_CACHE_SIZE);
+        let client = RocksdbClient::new(directory.path(), TEST_CACHE_SIZE);
         let context = RocksdbContext::new(client, vec![], ());
 
         self.temporary_directories.push(directory);
@@ -237,7 +236,7 @@ impl TestContextFactory for DynamoDbContextFactory {
 
         let dummy_key_prefix = vec![0];
         let (context, _) =
-            DynamoDbContext::from_config(config, table, STANDARD_MAX_CACHE_SIZE, dummy_key_prefix, ()).await?;
+            DynamoDbContext::from_config(config, table, TEST_CACHE_SIZE, dummy_key_prefix, ()).await?;
 
         Ok(context)
     }

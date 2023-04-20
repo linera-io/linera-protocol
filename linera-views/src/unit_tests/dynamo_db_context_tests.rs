@@ -3,9 +3,8 @@
 
 use super::{DynamoDbContext, TableName, TableStatus};
 use crate::test_utils::{list_tables, LocalStackTestContext};
+use crate::lru_caching::TEST_CACHE_SIZE;
 use anyhow::Error;
-
-const STANDARD_MAX_CACHE_SIZE: usize = 1000;
 
 /// Test if the table for the storage is created when needed.
 #[tokio::test]
@@ -18,7 +17,7 @@ async fn table_is_created() -> Result<(), Error> {
     assert!(!initial_tables.contains(table.as_ref()));
 
     let (_storage, table_status) =
-        DynamoDbContext::from_config(localstack.dynamo_db_config(), table.clone(), STANDARD_MAX_CACHE_SIZE, vec![], ())
+        DynamoDbContext::from_config(localstack.dynamo_db_config(), table.clone(), TEST_CACHE_SIZE, vec![], ())
             .await?;
 
     let tables = list_tables(&client).await?;
@@ -43,7 +42,7 @@ async fn separate_tables_are_created() -> Result<(), Error> {
     let (_storage, first_table_status) = DynamoDbContext::from_config(
         localstack.dynamo_db_config(),
         first_table.clone(),
-        STANDARD_MAX_CACHE_SIZE,
+        TEST_CACHE_SIZE,
         vec![],
         (),
     )
@@ -51,7 +50,7 @@ async fn separate_tables_are_created() -> Result<(), Error> {
     let (_storage, second_table_status) = DynamoDbContext::from_config(
         localstack.dynamo_db_config(),
         second_table.clone(),
-        STANDARD_MAX_CACHE_SIZE,
+        TEST_CACHE_SIZE,
         vec![],
         (),
     )

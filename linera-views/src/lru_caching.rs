@@ -1,12 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//#[cfg(not(feature = "disable_caching"))]
-//#[cfg(not(target_arch = "wasm32"))]
-//pub(crate) const STANDARD_MAX_CACHE_SIZE: usize = 1000;
-//#[cfg(feature = "disable_caching")]
-//#[cfg(not(target_arch = "wasm32"))]
-//pub(crate) const STANDARD_MAX_CACHE_SIZE: usize = 0;
+/// The standard cache size used for tests.
+pub const TEST_CACHE_SIZE: usize = 1000;
 
 use crate::{
     batch::{Batch, WriteOperation},

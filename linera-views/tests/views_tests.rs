@@ -25,6 +25,7 @@ use linera_views::{
         random_shuffle, span_random_reordering_put_delete,
     },
     views::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},
+    lru_caching::TEST_CACHE_SIZE,
 };
 use rand::{Rng, RngCore, SeedableRng};
 use std::{
@@ -34,9 +35,6 @@ use std::{
 
 #[cfg(feature = "aws")]
 use linera_views::{dynamo_db::DynamoDbContext, test_utils::LocalStackTestContext};
-
-/// The standard cache size being used
-const STANDARD_MAX_CACHE_SIZE: usize = 1000;
 
 #[allow(clippy::type_complexity)]
 #[derive(CryptoHashRootView)]
@@ -179,7 +177,7 @@ impl StateStore for DynamoDbTestStore {
         let (context, _) = DynamoDbContext::from_config(
             self.localstack.dynamo_db_config(),
             "test_table".parse().expect("Invalid table name"),
-            STANDARD_MAX_CACHE_SIZE,
+            TEST_CACHE_SIZE,
             vec![0],
             id,
         )
@@ -634,7 +632,7 @@ async fn test_views_in_key_value_store_view_memory() {
 async fn test_views_in_rocksdb_param(config: &TestConfig) {
     tracing::warn!("Testing config {:?} with rocksdb", config);
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbClient::new(&dir, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbClient::new(&dir, TEST_CACHE_SIZE);
 
     let mut store = RocksdbTestStore::new(client);
     let hash = test_store(&mut store, config).await;
@@ -715,7 +713,7 @@ async fn test_store_rollback() {
     test_store_rollback_kernel(&mut store).await;
 
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbClient::new(&dir, STANDARD_MAX_CACHE_SIZE);
+    let client = RocksdbClient::new(&dir, TEST_CACHE_SIZE);
 
     let mut store = RocksdbTestStore::new(client);
     test_store_rollback_kernel(&mut store).await;
