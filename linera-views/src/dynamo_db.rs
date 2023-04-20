@@ -729,7 +729,10 @@ impl KeyValueStoreClient for DynamoDbClient {
         self.client.read_key_bytes(key).await
     }
 
-    async fn read_multi_key_bytes(&self, key: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, DynamoDbContextError> {
+    async fn read_multi_key_bytes(
+        &self,
+        key: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbContextError> {
         self.client.read_multi_key_bytes(key).await
     }
 
