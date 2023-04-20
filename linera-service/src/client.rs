@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context;
+use anyhow::{anyhow, bail, Context};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
@@ -79,39 +79,33 @@ impl ClientContext {
         options: &ClientOptions,
         genesis_config: GenesisConfig,
         chains: Vec<UserChain>,
-    ) -> Self {
-        let wallet_state_path = options
-            .wallet_state_path
-            .clone()
-            .unwrap_or_else(Self::default_wallet_path);
+    ) -> Result<Self, anyhow::Error> {
+        let wallet_state_path = match &options.wallet_state_path {
+            Some(path) => path.clone(),
+            None => Self::create_default_wallet_path()?,
+        };
         if wallet_state_path.exists() {
-            panic!("Wallet already exists at {}. Aborting...", wallet_state_path.display())
+            bail!(
+                "Wallet already exists at {}. Aborting...",
+                wallet_state_path.display()
+            )
         }
         let mut wallet_state = WalletState::create(&wallet_state_path, genesis_config)
-            .unwrap_or_else(|e| {
-                panic!(
-                    "Unable to create user chains at {:?}: {:?}",
-                    &wallet_state_path, e
-                )
-            });
+            .with_context(|| format!("Unable to create wallet at {:?}", &wallet_state_path))?;
         chains
             .into_iter()
             .for_each(|chain| wallet_state.insert(chain));
-        Self::configure(options, wallet_state_path, wallet_state)
+        Ok(Self::configure(options, wallet_state_path, wallet_state))
     }
 
-    fn from_options(options: &ClientOptions) -> Self {
-        let wallet_state_path = options
-            .wallet_state_path
-            .clone()
-            .unwrap_or_else(Self::default_wallet_path);
-        let wallet_state = WalletState::read(&wallet_state_path).unwrap_or_else(|e| {
-            panic!(
-                "Unable to read user chains at {:?}: {:?}",
-                &wallet_state_path, e
-            )
-        });
-        Self::configure(options, wallet_state_path, wallet_state)
+    fn from_options(options: &ClientOptions) -> Result<Self, anyhow::Error> {
+        let wallet_state_path = match &options.wallet_state_path {
+            Some(path) => path.clone(),
+            None => Self::create_default_wallet_path()?,
+        };
+        let wallet_state = WalletState::read(&wallet_state_path)
+            .with_context(|| format!("Unable to read wallet at {:?}:", &wallet_state_path))?;
+        Ok(Self::configure(options, wallet_state_path, wallet_state))
     }
 
     fn configure(
@@ -134,17 +128,18 @@ impl ClientContext {
         }
     }
 
-    fn default_wallet_path() -> PathBuf {
-        let mut config_dir = dirs::config_dir().unwrap();
+    fn create_default_wallet_path() -> Result<PathBuf, anyhow::Error> {
+        let mut config_dir = dirs::config_dir().ok_or_else(|| {
+            anyhow!("Default configuration directory not supported. Please specify a path.")
+        })?;
         config_dir.push("linera");
-        // create linera dir if it does not already exist.
         if !config_dir.exists() {
             info!("{} does not exist, creating...", config_dir.display());
-            fs::create_dir(&config_dir).unwrap();
+            fs::create_dir(&config_dir)?;
             info!("{} created.", config_dir.display());
         }
         config_dir.push("wallet.json");
-        config_dir
+        Ok(config_dir)
     }
 
     #[cfg(feature = "benchmark")]
@@ -1212,7 +1207,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 // Private keys.
                 chains.push(chain);
             }
-            let context = ClientContext::create(&options, genesis_config.clone(), chains);
+            let context = ClientContext::create(&options, genesis_config.clone(), chains)?;
             genesis_config.write(genesis_config_path)?;
             context.save_wallet();
             Ok(())
@@ -1220,7 +1215,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
         command => match command {
             ClientCommand::KeyGen => {
-                let mut context = ClientContext::from_options(&options);
+                let mut context = ClientContext::from_options(&options)?;
                 let key_pair = KeyPair::generate();
                 let public = key_pair.public();
                 context.wallet_state.add_unassigned_key_pair(key_pair);
@@ -1231,12 +1226,12 @@ async fn main() -> Result<(), anyhow::Error> {
 
             ClientCommand::Wallet(wallet_command) => match wallet_command {
                 WalletCommand::Show { chain_id } => {
-                    let context = ClientContext::from_options(&options);
+                    let context = ClientContext::from_options(&options)?;
                     context.wallet_state.pretty_print(*chain_id);
                     Ok(())
                 }
                 WalletCommand::SetDefault { chain_id } => {
-                    let mut context = ClientContext::from_options(&options);
+                    let mut context = ClientContext::from_options(&options)?;
                     context.wallet_state.set_default_chain(*chain_id)?;
                     context.save_wallet();
                     Ok(())
@@ -1246,14 +1241,14 @@ async fn main() -> Result<(), anyhow::Error> {
                     genesis_config_path,
                 } => {
                     let genesis_config = GenesisConfig::read(genesis_config_path)?;
-                    let context = ClientContext::create(&options, genesis_config, vec![]);
+                    let context = ClientContext::create(&options, genesis_config, vec![])?;
                     context.save_wallet();
                     Ok(())
                 }
             },
 
             _ => {
-                let context = ClientContext::from_options(&options);
+                let context = ClientContext::from_options(&options)?;
                 let genesis_config = context.wallet_state.genesis_config().clone();
                 let wasm_runtime = options.wasm_runtime.with_wasm_default();
 
