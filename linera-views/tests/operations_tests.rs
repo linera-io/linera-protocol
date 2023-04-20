@@ -19,6 +19,8 @@ use std::{
 #[cfg(feature = "aws")]
 use linera_views::{dynamo_db::DynamoDbClient, test_utils::LocalStackTestContext};
 
+const STANDARD_MAX_CACHE_SIZE: usize = 1000;
+
 #[cfg(test)]
 async fn test_ordering_keys_key_value_vec<OP: KeyValueStoreClient + Sync>(
     key_value_operation: OP,
@@ -106,6 +108,7 @@ async fn test_ordering_dynamodb() {
     let (key_value_operation, _) = DynamoDbClient::from_config(
         localstack.dynamo_db_config(),
         "test_table".parse().expect("Invalid table name"),
+        STANDARD_MAX_CACHE_SIZE,
     )
     .await
     .unwrap();

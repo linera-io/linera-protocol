@@ -4,7 +4,7 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{get_upper_bound, ContextFromDb, KeyValueStoreClient},
-    lru_caching::{LruCachingKeyValueClient, STANDARD_MAX_CACHE_SIZE},
+    lru_caching::LruCachingKeyValueClient,
 };
 use async_trait::async_trait;
 use std::{
@@ -28,12 +28,11 @@ pub struct RocksdbClient {
 
 impl RocksdbClient {
     /// Creates a rocksdb database from a specified path
-    pub fn new<P: AsRef<Path>>(path: P) -> RocksdbClient {
+    pub fn new<P: AsRef<Path>>(path: P, cache_size: usize) -> RocksdbClient {
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
         let db = DB::open(&options, path).unwrap();
         let client = Arc::new(db);
-        let cache_size = STANDARD_MAX_CACHE_SIZE;
         Self {
             client: LruCachingKeyValueClient::new(client, cache_size),
         }

@@ -7,13 +7,15 @@ use linera_base::identifiers::ChainId;
 use linera_views::test_utils::LocalStackTestContext;
 use std::mem;
 
+const STANDARD_MAX_CACHE_SIZE: usize = 1000;
+
 /// Test if released guards don't use memory.
 #[tokio::test]
 async fn guards_dont_leak() -> Result<(), anyhow::Error> {
     let localstack = LocalStackTestContext::new().await?;
     let table = "linera".parse()?;
     let (store, _) =
-        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, None).await?;
+        DynamoDbStoreClient::from_config(localstack.dynamo_db_config(), table, STANDARD_MAX_CACHE_SIZE, None).await?;
     let chain_id = ChainId::root(1);
     // There should be no active guards when initialized
     assert_eq!(store.client.guards.active_guards(), 0);

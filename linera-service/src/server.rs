@@ -300,6 +300,10 @@ enum ServerCommand {
         /// The WebAssembly runtime to use.
         #[structopt(long)]
         wasm_runtime: Option<WasmRuntime>,
+
+        /// The size of the cache
+        #[structopt(long)]
+        cache_size: Option<usize>,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -341,6 +345,7 @@ async fn main() {
             shard,
             grace_period,
             wasm_runtime,
+            cache_size,
         } => {
             let genesis_config = GenesisConfig::read(&genesis_config_path)
                 .expect("Fail to read initial chain config");
@@ -354,8 +359,9 @@ async fn main() {
                 grace_period_micros: grace_period,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
+            let cache_size = cache_size.unwrap_or_default();
             storage_config
-                .run_with_storage(&genesis_config, wasm_runtime, job)
+                .run_with_storage(&genesis_config, wasm_runtime, cache_size, job)
                 .await
                 .unwrap();
         }

@@ -31,6 +31,8 @@ use tokio::sync::{oneshot, Semaphore};
 #[cfg(feature = "aws")]
 use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
 
+const STANDARD_MAX_CACHE_SIZE: usize = 1000;
+
 /// An validator used for testing. "Faulty" validators ignore block proposals (but not
 /// certificates or info queries) and have the wrong initial balance for all chains.
 ///
@@ -510,7 +512,8 @@ impl StoreBuilder for MakeRocksdbStoreClient {
         let dir = tempfile::TempDir::new()?;
         let path = dir.path().to_path_buf();
         self.temp_dirs.push(dir);
-        Ok(RocksdbStoreClient::new(path, self.wasm_runtime))
+        let standard_max_cache_size = 1000;
+        Ok(RocksdbStoreClient::new(path, self.wasm_runtime, standard_max_cache_size))
     }
 }
 
@@ -547,7 +550,7 @@ impl StoreBuilder for MakeDynamoDbStoreClient {
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
         let table = format!("linera{}", self.instance_counter).parse()?;
         self.instance_counter += 1;
-        let (store, _) = DynamoDbStoreClient::from_config(config, table, self.wasm_runtime).await?;
+        let (store, _) = DynamoDbStoreClient::from_config(config, table, STANDARD_MAX_CACHE_SIZE, self.wasm_runtime).await?;
         Ok(store)
     }
 }

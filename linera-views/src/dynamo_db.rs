@@ -5,7 +5,7 @@ use crate::{
     batch::{Batch, DeletePrefixExpander, SimpleUnorderedBatch},
     common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient, MIN_VIEW_TAG},
     localstack,
-    lru_caching::{LruCachingKeyValueClient, STANDARD_MAX_CACHE_SIZE},
+    lru_caching::LruCachingKeyValueClient,
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -759,33 +759,14 @@ impl KeyValueStoreClient for DynamoDbClient {
     }
 }
 
-#[cfg(not(feature = "lru_caching"))]
-impl DynamoDbClient {
-    /// Creation of the DynamoDbClient
-    pub async fn from_config(
-        config: impl Into<Config>,
-        table: TableName,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (client, table_name) = DynamoDbClientInternal::from_config(config, table).await?;
-        let cache_size = STANDARD_MAX_CACHE_SIZE;
-        Ok((
-            Self {
-                client: LruCachingKeyValueClient::new(client, cache_size),
-            },
-            table_name,
-        ))
-    }
-}
-
-#[cfg(feature = "lru_caching")]
 impl DynamoDbClient {
     /// Creation of the DynamoDbClient with an LRU caching
     pub async fn from_config(
         config: impl Into<Config>,
         table: TableName,
+        cache_size: usize,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let (client, table_name) = DynamoDbClientInternal::from_config(config, table).await?;
-        let cache_size = STANDARD_MAX_CACHE_SIZE;
         Ok((
             Self {
                 client: LruCachingKeyValueClient::new(client, cache_size),
@@ -797,9 +778,9 @@ impl DynamoDbClient {
 
 impl DynamoDbClient {
     /// Creates a new [`DynamoDbClientInternal`] instance.
-    pub async fn new(table: TableName) -> Result<(Self, TableStatus), DynamoDbContextError> {
+    pub async fn new(table: TableName, cache_size: usize) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let config = aws_config::load_from_env().await;
-        DynamoDbClient::from_config(&config, table).await
+        DynamoDbClient::from_config(&config, table, cache_size).await
     }
 
     /// Creates a new [`DynamoDbClientInternal`] instance using a LocalStack endpoint.
@@ -809,12 +790,13 @@ impl DynamoDbClient {
     /// [`TableStatus`] to indicate if the table was created or if it already exists.
     pub async fn with_localstack(
         table: TableName,
+        cache_size: usize,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let base_config = aws_config::load_from_env().await;
         let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
             .endpoint_resolver(localstack::get_endpoint()?)
             .build();
-        DynamoDbClient::from_config(config, table).await
+        DynamoDbClient::from_config(config, table, cache_size).await
     }
 }
 
@@ -843,10 +825,11 @@ where
     /// Creates a new [`DynamoDbContext`] instance.
     pub async fn new(
         table: TableName,
+        cache_size: usize,
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let db_tablestatus = DynamoDbClient::new(table).await?;
+        let db_tablestatus = DynamoDbClient::new(table, cache_size).await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 
@@ -854,10 +837,11 @@ where
     pub async fn from_config(
         config: impl Into<Config>,
         table: TableName,
+        cache_size: usize,
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let db_tablestatus = DynamoDbClient::from_config(config, table).await?;
+        let db_tablestatus = DynamoDbClient::from_config(config, table, cache_size).await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 
@@ -868,10 +852,11 @@ where
     /// [`TableStatus`] to indicate if the table was created or if it already exists.
     pub async fn with_localstack(
         table: TableName,
+        cache_size: usize,
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let db_tablestatus = DynamoDbClient::with_localstack(table).await?;
+        let db_tablestatus = DynamoDbClient::with_localstack(table, cache_size).await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 }
