@@ -6,7 +6,6 @@ use linera_views::{
     batch::Batch,
     common::{KeyIterable, KeyValueStoreClient},
     key_value_store_view::ViewContainer,
-    lru_caching::TEST_CACHE_SIZE,
     memory::MemoryContext,
     rocksdb::DB,
     test_utils::get_random_key_value_vec_prefix,
@@ -18,7 +17,9 @@ use std::{
 };
 
 #[cfg(feature = "aws")]
-use linera_views::{dynamo_db::DynamoDbClient, test_utils::LocalStackTestContext};
+use linera_views::{
+    dynamo_db::DynamoDbClient, lru_caching::TEST_CACHE_SIZE, test_utils::LocalStackTestContext,
+};
 
 #[cfg(test)]
 async fn test_ordering_keys_key_value_vec<OP: KeyValueStoreClient + Sync>(
