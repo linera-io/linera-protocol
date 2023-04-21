@@ -75,19 +75,32 @@ variant poll-unit {
     ready,
 }
 
-try-call-application: func(
-    authenticated: bool,
-    application: application-id,
-    argument: list<u8>,
-    forwarded-sessions: list<session-id>,
-) -> call-result
+resource try-call-application {
+    static new: func(
+        authenticated: bool,
+        application: application-id,
+        argument: list<u8>,
+        forwarded-sessions: list<session-id>,
+    ) -> try-call-application
 
-try-call-session: func(
-    authenticated: bool,
-    session: session-id,
-    argument: list<u8>,
-    forwarded-sessions: list<session-id>,
-) -> call-result
+    poll: func() -> poll-call-result
+}
+
+resource try-call-session {
+    static new: func(
+        authenticated: bool,
+        session: session-id,
+        argument: list<u8>,
+        forwarded-sessions: list<session-id>,
+    ) -> try-call-session
+
+    poll: func() -> poll-call-result
+}
+
+variant poll-call-result {
+    pending,
+    ready(call-result),
+}
 
 record call-result {
     value: list<u8>,

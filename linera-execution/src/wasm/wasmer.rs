@@ -34,12 +34,11 @@ use super::{
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     WasmApplication, WasmExecutionError,
 };
-
-use crate::{ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
+use crate::{CallResult, ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
 use linera_views::{batch::Batch, views::ViewError};
 use once_cell::sync::Lazy;
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
 use wasmer::{
     imports, wasmparser::Operator, CompilerConfig, EngineBuilder, Instance, Module, RuntimeError,
     Singlepass, Store,
@@ -351,6 +350,7 @@ struct SystemApi<S> {
 pub struct ContractSystemApi {
     shared: SystemApi<&'static dyn ContractRuntime>,
     queued_future_factory: QueuedHostFutureFactory<'static>,
+    cross_application_call_queue: Arc<Notify>,
 }
 
 impl ContractSystemApi {
@@ -373,6 +373,9 @@ impl ContractSystemApi {
     ) -> (Self, RuntimeGuard<'runtime, &'static dyn ContractRuntime>) {
         let runtime_without_lifetime = unsafe { mem::transmute(runtime) };
         let runtime = Arc::new(Mutex::new(Some(runtime_without_lifetime)));
+        let cross_application_call_queue = Arc::new(Notify::new());
+
+        cross_application_call_queue.notify_one();
 
         let guard = RuntimeGuard {
             runtime: runtime.clone(),
@@ -383,6 +386,7 @@ impl ContractSystemApi {
             ContractSystemApi {
                 shared: SystemApi { waker, runtime },
                 queued_future_factory,
+                cross_application_call_queue,
             },
             guard,
         )

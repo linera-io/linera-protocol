@@ -25,6 +25,8 @@ macro_rules! impl_writable_system {
             type FindKeyValues =
                 HostFuture<$runtime, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
             type WriteBatch = HostFuture<$runtime, Result<(), ExecutionError>>;
+            type TryCallApplication = HostFuture<$runtime, Result<CallResult, ExecutionError>>;
+            type TryCallSession = HostFuture<$runtime, Result<CallResult, ExecutionError>>;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -185,13 +187,17 @@ macro_rules! impl_writable_system {
                 }
             }
 
-            fn try_call_application(
+            fn try_call_application_new(
                 &mut self,
                 authenticated: bool,
                 application: writable_system::ApplicationId,
                 argument: &[u8],
                 forwarded_sessions: &[Le<writable_system::SessionId>],
-            ) -> Result<writable_system::CallResult, Self::Error> {
+            ) -> Result<Self::TryCallApplication, Self::Error> {
+                let runtime = self.runtime();
+                let next_call = Arc::new(Notify::new());
+                let previous_call =
+                    std::mem::replace(&mut self.cross_application_call_queue, next_call.clone());
                 let forwarded_sessions = forwarded_sessions
                     .iter()
                     .map(Le::get)
@@ -199,22 +205,46 @@ macro_rules! impl_writable_system {
                     .collect();
                 let argument = Vec::from(argument);
 
-                Self::block_on(self.runtime().try_call_application(
-                    authenticated,
-                    application.into(),
-                    &argument,
-                    forwarded_sessions,
-                ))
-                .map(writable_system::CallResult::from)
+                Ok(self.queued_future_factory.enqueue(async move {
+                    previous_call.notified().await;
+
+                    let result = runtime
+                        .try_call_application(
+                            authenticated,
+                            application.into(),
+                            &argument,
+                            forwarded_sessions,
+                        )
+                        .await;
+
+                    next_call.notify_one();
+
+                    result
+                }))
             }
 
-            fn try_call_session(
+            fn try_call_application_poll(
+                &mut self,
+                future: &Self::TryCallApplication,
+            ) -> Result<writable_system::PollCallResult, Self::Error> {
+                use writable_system::PollCallResult;
+                match future.poll(self.waker()) {
+                    Poll::Pending => Ok(PollCallResult::Pending),
+                    Poll::Ready(result) => Ok(PollCallResult::Ready(result?.into())),
+                }
+            }
+
+            fn try_call_session_new(
                 &mut self,
                 authenticated: bool,
                 session: writable_system::SessionId,
                 argument: &[u8],
                 forwarded_sessions: &[Le<writable_system::SessionId>],
-            ) -> Result<writable_system::CallResult, Self::Error> {
+            ) -> Result<Self::TryCallSession, Self::Error> {
+                let runtime = self.runtime();
+                let next_call = Arc::new(Notify::new());
+                let previous_call =
+                    std::mem::replace(&mut self.cross_application_call_queue, next_call.clone());
                 let forwarded_sessions = forwarded_sessions
                     .iter()
                     .map(Le::get)
@@ -222,13 +252,33 @@ macro_rules! impl_writable_system {
                     .collect();
                 let argument = Vec::from(argument);
 
-                Self::block_on(self.runtime().try_call_session(
-                    authenticated,
-                    session.into(),
-                    &argument,
-                    forwarded_sessions,
-                ))
-                .map(writable_system::CallResult::from)
+                Ok(self.queued_future_factory.enqueue(async move {
+                    previous_call.notified().await;
+
+                    let result = runtime
+                        .try_call_session(
+                            authenticated,
+                            session.into(),
+                            &argument,
+                            forwarded_sessions,
+                        )
+                        .await;
+
+                    next_call.notify_one();
+
+                    result
+                }))
+            }
+
+            fn try_call_session_poll(
+                &mut self,
+                future: &Self::TryCallSession,
+            ) -> Result<writable_system::PollCallResult, Self::Error> {
+                use writable_system::PollCallResult;
+                match future.poll(self.waker()) {
+                    Poll::Pending => Ok(PollCallResult::Pending),
+                    Poll::Ready(result) => Ok(PollCallResult::Ready(result?.into())),
+                }
             }
 
             fn log(

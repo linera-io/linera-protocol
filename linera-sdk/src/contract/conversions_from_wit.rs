@@ -6,7 +6,8 @@
 use super::{
     wit_types,
     writable_system::{
-        self as system, PollFindKeyValues, PollFindKeys, PollLock, PollReadKeyBytes, PollUnit,
+        self as system, PollCallResult, PollFindKeyValues, PollFindKeys, PollLock,
+        PollReadKeyBytes, PollUnit,
     },
 };
 use linera_base::{
@@ -150,6 +151,15 @@ impl From<PollLock> for Poll<bool> {
             PollLock::ReadyLocked => Poll::Ready(true),
             PollLock::ReadyNotLocked => Poll::Ready(false),
             PollLock::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl From<PollCallResult> for Poll<(Vec<u8>, Vec<SessionId>)> {
+    fn from(poll_call_result: PollCallResult) -> Poll<(Vec<u8>, Vec<SessionId>)> {
+        match poll_call_result {
+            PollCallResult::Ready(result) => Poll::Ready(result.into()),
+            PollCallResult::Pending => Poll::Pending,
         }
     }
 }
