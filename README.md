@@ -7,8 +7,7 @@
 # Linera
 
 This repository is dedicated to developing the Linera protocol. For an overview of how
-the Linera protocol functions refer to the [whitepaper](https://github.com/linera-io/linera-internal/tree/main/whitepaper).
-<!-- Refer to public whitepaper once this repository is made public -->
+the Linera protocol functions refer to the [whitepaper](https://linera.io/whitepaper).
 
 ## Repository Structure
 
