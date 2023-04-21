@@ -63,8 +63,8 @@ test-strategy = "0.2.0"
 tokio = { version = "1.25.0", features = ["full", "test-util"] }
 
 [[bin]]
-name = "client"
-path = "src/client.rs"
+name = "linera"
+path = "src/linera.rs"
 
 [[bin]]
 name = "server"

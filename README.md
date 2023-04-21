@@ -57,7 +57,7 @@ trap 'kill $(jobs -p)' EXIT
 # Create configuration files for 10 user chains.
 # * Private chain states are stored in one local wallet `wallet.json`.
 # * `genesis.json` will contain the initial balances of chains as well as the initial committee.
-./client --wallet wallet.json create_genesis_config 10 --genesis genesis.json --initial-funding 10 --committee committee.json
+./linera --wallet wallet.json create_genesis_config 10 --genesis genesis.json --initial-funding 10 --committee committee.json
 
 # Start servers and create initial chains in DB
 for I in 1 2 3 4
@@ -71,7 +71,7 @@ do
 done
 
 # Command line prefix for client calls
-CLIENT=(./client --storage rocksdb:client.db --wallet wallet.json --max-pending-messages 10000)
+CLIENT=(./linera --storage rocksdb:client.db --wallet wallet.json --max-pending-messages 10000)
 
 ${CLIENT[@]} query_validators
 

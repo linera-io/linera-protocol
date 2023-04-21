@@ -182,7 +182,7 @@ impl Client {
             .arg("benchmark")
             .arg("--manifest-path")
             .arg(env::current_dir().unwrap().join("Cargo.toml"))
-            .args(["--bin", "client"])
+            .args(["--bin", "linera"])
             .arg("--")
             .args(["--wallet", &self.wallet])
             .args(["--send-timeout-us", "10000000"])
