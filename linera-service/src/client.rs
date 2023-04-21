@@ -527,6 +527,10 @@ struct ClientOptions {
     /// Subcommand.
     #[structopt(subcommand)]
     command: ClientCommand,
+
+    /// The maximal number of entries in the cache.
+    #[structopt(long, default_value = "1000")]
+    cache_size: usize,
 }
 
 #[derive(StructOpt)]
@@ -1251,10 +1255,16 @@ async fn main() -> Result<(), anyhow::Error> {
                 let context = ClientContext::from_options(&options)?;
                 let genesis_config = context.wallet_state.genesis_config().clone();
                 let wasm_runtime = options.wasm_runtime.with_wasm_default();
+                let cache_size = options.cache_size;
 
                 options
                     .storage_config
-                    .run_with_storage(&genesis_config, wasm_runtime, Job(context, options.command))
+                    .run_with_storage(
+                        &genesis_config,
+                        wasm_runtime,
+                        cache_size,
+                        Job(context, options.command),
+                    )
                     .await?;
                 Ok(())
             }

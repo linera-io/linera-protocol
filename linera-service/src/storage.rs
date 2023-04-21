@@ -71,6 +71,7 @@ impl StorageConfig {
         &self,
         config: &GenesisConfig,
         wasm_runtime: Option<WasmRuntime>,
+        cache_size: usize,
         job: Job,
     ) -> Result<Output, anyhow::Error>
     where
@@ -85,12 +86,12 @@ impl StorageConfig {
             }
             Rocksdb { path } if path.is_dir() => {
                 tracing::warn!("Using existing database {:?}", path);
-                let client = RocksdbStoreClient::new(path.clone(), wasm_runtime);
+                let client = RocksdbStoreClient::new(path.clone(), wasm_runtime, cache_size);
                 job.run(client).await
             }
             Rocksdb { path } => {
                 std::fs::create_dir_all(path)?;
-                let mut client = RocksdbStoreClient::new(path.clone(), wasm_runtime);
+                let mut client = RocksdbStoreClient::new(path.clone(), wasm_runtime, cache_size);
                 config.initialize_store(&mut client).await?;
                 job.run(client).await
             }
@@ -101,9 +102,16 @@ impl StorageConfig {
             } => {
                 let (mut client, table_status) = match use_localstack {
                     true => {
-                        DynamoDbStoreClient::with_localstack(table.clone(), wasm_runtime).await?
+                        DynamoDbStoreClient::with_localstack(
+                            table.clone(),
+                            cache_size,
+                            wasm_runtime,
+                        )
+                        .await?
                     }
-                    false => DynamoDbStoreClient::new(table.clone(), wasm_runtime).await?,
+                    false => {
+                        DynamoDbStoreClient::new(table.clone(), cache_size, wasm_runtime).await?
+                    }
                 };
                 if table_status == TableStatus::New {
                     config.initialize_store(&mut client).await?;

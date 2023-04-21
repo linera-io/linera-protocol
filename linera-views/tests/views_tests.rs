@@ -12,7 +12,7 @@ use linera_views::{
     common::Context,
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
     log_view::LogView,
-    lru_caching::LruCachingMemoryContext,
+    lru_caching::{LruCachingMemoryContext, TEST_CACHE_SIZE},
     map_view::MapView,
     memory::{MemoryContext, MemoryStoreMap},
     queue_view::QueueView,
@@ -176,6 +176,7 @@ impl StateStore for DynamoDbTestStore {
         let (context, _) = DynamoDbContext::from_config(
             self.localstack.dynamo_db_config(),
             "test_table".parse().expect("Invalid table name"),
+            TEST_CACHE_SIZE,
             vec![0],
             id,
         )
@@ -630,7 +631,7 @@ async fn test_views_in_key_value_store_view_memory() {
 async fn test_views_in_rocksdb_param(config: &TestConfig) {
     tracing::warn!("Testing config {:?} with rocksdb", config);
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbClient::new(&dir);
+    let client = RocksdbClient::new(&dir, TEST_CACHE_SIZE);
 
     let mut store = RocksdbTestStore::new(client);
     let hash = test_store(&mut store, config).await;
@@ -711,7 +712,7 @@ async fn test_store_rollback() {
     test_store_rollback_kernel(&mut store).await;
 
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbClient::new(&dir);
+    let client = RocksdbClient::new(&dir, TEST_CACHE_SIZE);
 
     let mut store = RocksdbTestStore::new(client);
     test_store_rollback_kernel(&mut store).await;

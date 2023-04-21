@@ -21,19 +21,22 @@ pub type DynamoDbStoreClient = DbStoreClient<DynamoDbClient>;
 impl DynamoDbStoreClient {
     pub async fn new(
         table: TableName,
+        cache_size: usize,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_store(DynamoDbStore::new(table, wasm_runtime)).await
+        Self::with_store(DynamoDbStore::new(table, cache_size, wasm_runtime)).await
     }
 
     pub async fn from_config(
         config: impl Into<Config>,
         table: TableName,
+        cache_size: usize,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         Self::with_store(DynamoDbStore::from_config(
             config.into(),
             table,
+            cache_size,
             wasm_runtime,
         ))
         .await
@@ -41,9 +44,15 @@ impl DynamoDbStoreClient {
 
     pub async fn with_localstack(
         table: TableName,
+        cache_size: usize,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_store(DynamoDbStore::with_localstack(table, wasm_runtime)).await
+        Self::with_store(DynamoDbStore::with_localstack(
+            table,
+            cache_size,
+            wasm_runtime,
+        ))
+        .await
     }
 
     async fn with_store<E>(
@@ -60,24 +69,35 @@ impl DynamoDbStoreClient {
 impl DynamoDbStore {
     pub async fn new(
         table: TableName,
+        cache_size: usize,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_client(|| DynamoDbClient::new(table), wasm_runtime).await
+        Self::with_client(|| DynamoDbClient::new(table, cache_size), wasm_runtime).await
     }
 
     pub async fn from_config(
         config: Config,
         table: TableName,
+        cache_size: usize,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_client(|| DynamoDbClient::from_config(config, table), wasm_runtime).await
+        Self::with_client(
+            || DynamoDbClient::from_config(config, table, cache_size),
+            wasm_runtime,
+        )
+        .await
     }
 
     pub async fn with_localstack(
         table: TableName,
+        cache_size: usize,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_client(|| DynamoDbClient::with_localstack(table), wasm_runtime).await
+        Self::with_client(
+            || DynamoDbClient::with_localstack(table, cache_size),
+            wasm_runtime,
+        )
+        .await
     }
 
     async fn with_client<F, E>(
