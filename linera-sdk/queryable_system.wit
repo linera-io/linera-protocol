@@ -77,7 +77,7 @@ variant poll-find-key-values {
 resource try-query-application {
     static new: func(
         application: application-id,
-        argument: list<u8>,
+        query: list<u8>,
     ) -> try-query-application
 
     poll: func() -> poll-load
