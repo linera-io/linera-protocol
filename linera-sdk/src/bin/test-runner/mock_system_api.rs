@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use linera_base::identifiers::{ApplicationId, ChainId, EffectId};
 use linera_views::batch::WriteOperation;
 use std::any::Any;
 use wasmtime::{Caller, Extern, Func, Linker};
@@ -30,6 +31,13 @@ impl Resources {
             .downcast_ref()
             .expect("Incorrect handle type")
     }
+}
+
+/// A resource representing a query.
+#[derive(Clone)]
+struct Query {
+    application_id: ApplicationId,
+    query: Vec<u8>,
 }
 
 /// Retrieves a function exported from the guest WebAssembly module.
@@ -1142,6 +1150,185 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
             })
         },
     )?;
+    linker.func_wrap14_async(
+        "queryable_system",
+        "try-query-application::new: func(\
+            application: record { \
+                bytecode-id: record { \
+                    chain-id: record { part1: u64, part2: u64, part3: u64, part4: u64 }, \
+                    height: u64, \
+                    index: u32 \
+                }, \
+                creation: record { \
+                    chain-id: record { part1: u64, part2: u64, part3: u64, part4: u64 }, \
+                    height: u64, \
+                    index: u32 \
+                } \
+            }, \
+            query: list<u8>\
+        ) -> handle<try-query-application>",
+        move |mut caller: Caller<'_, Resources>,
+              application_bytecode_chain_id_part1: i64,
+              application_bytecode_chain_id_part2: i64,
+              application_bytecode_chain_id_part3: i64,
+              application_bytecode_chain_id_part4: i64,
+              application_bytecode_height: i64,
+              application_bytecode_index: i32,
+              application_creation_chain_id_part1: i64,
+              application_creation_chain_id_part2: i64,
+              application_creation_chain_id_part3: i64,
+              application_creation_chain_id_part4: i64,
+              application_creation_height: i64,
+              application_creation_index: i32,
+              query_address: i32,
+              query_length: i32| {
+            Box::new(async move {
+                let bytecode_chain_id = ChainId(
+                    [
+                        application_bytecode_chain_id_part1 as u64,
+                        application_bytecode_chain_id_part2 as u64,
+                        application_bytecode_chain_id_part3 as u64,
+                        application_bytecode_chain_id_part4 as u64,
+                    ]
+                    .into(),
+                );
+                let creation_chain_id = ChainId(
+                    [
+                        application_creation_chain_id_part1 as u64,
+                        application_creation_chain_id_part2 as u64,
+                        application_creation_chain_id_part3 as u64,
+                        application_creation_chain_id_part4 as u64,
+                    ]
+                    .into(),
+                );
+
+                let application_id = ApplicationId {
+                    bytecode_id: EffectId {
+                        chain_id: bytecode_chain_id,
+                        height: (application_bytecode_height as u64).into(),
+                        index: application_bytecode_index as u32,
+                    }
+                    .into(),
+                    creation: EffectId {
+                        chain_id: creation_chain_id,
+                        height: (application_creation_height as u64).into(),
+                        index: application_creation_index as u32,
+                    },
+                };
+                let query = load_bytes(&mut caller, query_address, query_length);
+
+                let resource = Query {
+                    application_id,
+                    query,
+                };
+
+                let resources = caller.data_mut();
+
+                resources.insert(resource)
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "queryable_system",
+        "try-query-application::poll: func(self: handle<try-query-application>) -> variant { \
+            pending(unit), \
+            ready(result<list<u8>, string>) \
+        }",
+        move |mut caller: Caller<'_, Resources>, handle: i32, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-try-query-application: func(\
+                        application: record { \
+                            bytecode-id: record { \
+                                chain-id: record { \
+                                    part1: u64, \
+                                    part2: u64, \
+                                    part3: u64, \
+                                    part4: u64 \
+                                }, \
+                                height: u64, \
+                                index: u32 \
+                            }, \
+                            creation: record { \
+                                chain-id: record { \
+                                    part1: u64, \
+                                    part2: u64, \
+                                    part3: u64, \
+                                    part4: u64 \
+                                }, \
+                                height: u64, \
+                                index: u32 \
+                            } \
+                        }, \
+                        query: list<u8>\
+                    ) -> result<list<u8>, string>",
+                )
+                .expect(
+                    "Missing `mocked-try-query-application` function in the module. \
+                    Please ensure `linera_sdk::test::mock_try_call_application` was called",
+                );
+
+                let (query_address, query_length) =
+                    store_bytes_from_resource(&mut caller, |resources| {
+                        let resource: &Query = resources.get(handle);
+                        &resource.query
+                    })
+                    .await;
+
+                let application_id = caller.data().get::<Query>(handle).application_id;
+
+                let application_id_bytecode_chain_id: [u64; 4] =
+                    application_id.bytecode_id.0.chain_id.0.into();
+
+                let application_id_creation_chain_id: [u64; 4] =
+                    application_id.creation.chain_id.0.into();
+
+                let (result_offset,) = function
+                    .typed::<(
+                        i64,
+                        i64,
+                        i64,
+                        i64,
+                        i64,
+                        i32,
+                        i64,
+                        i64,
+                        i64,
+                        i64,
+                        i64,
+                        i32,
+                        i32,
+                        i32,
+                    ), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-try-query-application` function signature")
+                    .call_async(
+                        &mut caller,
+                        (
+                            application_id_bytecode_chain_id[0] as i64,
+                            application_id_bytecode_chain_id[1] as i64,
+                            application_id_bytecode_chain_id[2] as i64,
+                            application_id_bytecode_chain_id[3] as i64,
+                            application_id.bytecode_id.0.height.0 as i64,
+                            application_id.bytecode_id.0.index as i32,
+                            application_id_creation_chain_id[0] as i64,
+                            application_id_creation_chain_id[1] as i64,
+                            application_id_creation_chain_id[2] as i64,
+                            application_id_creation_chain_id[3] as i64,
+                            application_id.creation.height.0 as i64,
+                            application_id.creation.index as i32,
+                            query_address,
+                            query_length,
+                        ),
+                    )
+                    .await
+                    .expect("Failed to call `mocked-try-query-application` function");
+
+                store_in_memory(&mut caller, return_offset, 1_i32);
+                copy_memory_slices(&mut caller, result_offset, return_offset + 4, 12);
+            })
+        },
+    )?;
 
     let resource_names = [
         "load",
@@ -1150,6 +1337,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         "find-keys",
         "find-key-values",
         "write-batch",
+        "try-query-application",
     ];
 
     for resource_name in resource_names {
