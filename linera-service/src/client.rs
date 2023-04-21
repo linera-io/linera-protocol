@@ -735,7 +735,7 @@ enum ClientCommand {
     Wallet(WalletCommand),
 }
 
-#[derive(StructOpt, Clone)]
+#[derive(StructOpt)]
 enum WalletCommand {
     /// Show the contents of the wallet.
     Show { chain_id: Option<ChainId> },
