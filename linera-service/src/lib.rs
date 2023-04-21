@@ -5,4 +5,5 @@
 pub mod config;
 pub mod grpc_proxy;
 pub mod node_service;
+pub mod project;
 pub mod storage;

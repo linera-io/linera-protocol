@@ -29,6 +29,7 @@ use linera_rpc::node_provider::NodeProvider;
 use linera_service::{
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     node_service::NodeService,
+    project::Project,
     storage::{Runnable, StorageConfig},
 };
 use linera_storage::Store;
@@ -737,6 +738,10 @@ enum ClientCommand {
     /// Show the contents of the wallet.
     #[structopt(name = "wallet")]
     Wallet(WalletCommand),
+
+    /// Manage Linera projects.
+    #[structopt(name = "project")]
+    Project(ProjectCommand),
 }
 
 #[derive(StructOpt)]
@@ -753,6 +758,12 @@ enum WalletCommand {
         #[structopt(long = "genesis")]
         genesis_config_path: PathBuf,
     },
+}
+
+#[derive(StructOpt)]
+enum ProjectCommand {
+    /// Create a new Linera project.
+    New { path: PathBuf },
 }
 
 struct Job(ClientContext, ClientCommand);
@@ -1208,7 +1219,7 @@ where
                 context.save_wallet();
             }
 
-            CreateGenesisConfig { .. } | KeyGen | Wallet(_) => unreachable!(),
+            CreateGenesisConfig { .. } | KeyGen | Wallet(_) | Project(_) => unreachable!(),
         }
         Ok(())
     }
@@ -1262,6 +1273,13 @@ async fn main() -> Result<(), anyhow::Error> {
             context.save_wallet();
             Ok(())
         }
+
+        ClientCommand::Project(project_command) => match project_command {
+            ProjectCommand::New { path } => {
+                Project::new(path.clone())?;
+                Ok(())
+            }
+        },
 
         command => match command {
             ClientCommand::KeyGen => {
