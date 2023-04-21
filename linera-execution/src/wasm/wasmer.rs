@@ -143,7 +143,8 @@ impl WasmApplication {
         &self,
         runtime: &'runtime dyn ServiceRuntime,
     ) -> Result<WasmRuntimeContext<'static, Service<'runtime>>, WasmExecutionError> {
-        let mut store = Store::default();
+        let compiler_config = Singlepass::default();
+        let mut store = Store::new(EngineBuilder::new(compiler_config));
         let module = Module::new(&store, &self.service_bytecode)
             .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
         let mut imports = imports! {};
