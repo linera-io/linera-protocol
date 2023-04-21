@@ -359,7 +359,7 @@ impl ApplicationOverview {
 /// Execute a GraphQL query and generate a response for our `Schema`.
 async fn index_handler<P, S>(
     client: Extension<Arc<NodeService<P, S>>>,
-    req: GraphQLRequest,
+    request: GraphQLRequest,
 ) -> GraphQLResponse
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
@@ -373,7 +373,7 @@ where
     )
     .finish();
 
-    schema.execute(req.into_inner()).await.into()
+    schema.execute(request.into_inner()).await.into()
 }
 
 /// Execute a GraphQL query against an application.
@@ -382,23 +382,25 @@ where
 async fn application_handler<P, S>(
     Path(application_id): Path<String>,
     service: Extension<Arc<NodeService<P, S>>>,
-    req: GraphQLRequest,
+    request: GraphQLRequest,
 ) -> Result<GraphQLResponse, NodeServiceError>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    let mut req = req.into_inner();
+    let mut request = request.into_inner();
 
-    let parsed_query = req.parsed_query()?;
+    let parsed_query = request.parsed_query()?;
     let operation_type = operation_type(parsed_query)?;
 
     let application_id: UserApplicationId = application_id.parse()?;
 
     let response = match operation_type {
-        OperationType::Query => user_application_query(application_id, service, &req).await?,
-        OperationType::Mutation => user_application_mutation(application_id, service, &req).await?,
+        OperationType::Query => user_application_query(application_id, service, &request).await?,
+        OperationType::Mutation => {
+            user_application_mutation(application_id, service, &request).await?
+        }
         OperationType::Subscription => return Err(NodeServiceError::UnsupportedQueryType),
     };
 
@@ -459,15 +461,15 @@ where
 async fn user_application_mutation<P, S>(
     application_id: UserApplicationId,
     service: Extension<Arc<NodeService<P, S>>>,
-    req: &Request,
+    request: &Request,
 ) -> Result<async_graphql::Response, NodeServiceError>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    let graphql_res = user_application_query(application_id, service.clone(), req).await?;
-    let bcs_bytes_list = bytes_from_res(graphql_res.data);
+    let graphql_response = user_application_query(application_id, service.clone(), request).await?;
+    let bcs_bytes_list = bytes_from_response(graphql_response.data);
     if bcs_bytes_list.is_empty() {
         return Err(NodeServiceError::MalformedApplicationResponse);
     }
@@ -488,7 +490,7 @@ where
 
 /// Extracts the underlying byte vector from a serialized GraphQL response
 /// from an application.
-fn bytes_from_res(data: async_graphql::Value) -> Vec<Vec<u8>> {
+fn bytes_from_response(data: async_graphql::Value) -> Vec<Vec<u8>> {
     if let async_graphql::Value::Object(map) = data {
         map.values()
             .filter_map(|value| {
@@ -625,9 +627,9 @@ where
         let serve_fut =
             Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
 
-        let (serve_res, sync_res) = futures::join!(serve_fut, sync_fut);
-        serve_res?;
-        sync_res?;
+        let (serve_response, sync_response) = futures::join!(serve_fut, sync_fut);
+        serve_response?;
+        sync_response?;
 
         Ok(())
     }
