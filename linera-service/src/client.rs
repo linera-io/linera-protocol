@@ -510,7 +510,7 @@ struct ClientOptions {
     #[structopt(subcommand)]
     command: ClientCommand,
 
-    /// The maximal size of the cache.
+    /// The maximal number of entries in the cache.
     #[structopt(long, default_value = "1000")]
     cache_size: usize,
 }
