@@ -1130,9 +1130,11 @@ async fn social_user_pub_sub() {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let response = query_application(&app1, query).await;
             if response == expected_response {
+                info!("Confirmed post");
                 break 'success;
             }
+            warn!("Waiting to confirm post");
         }
-        panic!("failed to confirm post");
+        panic!("Failed to confirm post");
     }
 }
