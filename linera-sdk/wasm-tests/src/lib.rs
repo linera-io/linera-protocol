@@ -405,3 +405,48 @@ fn mock_write_batch() {
     assert_eq!(loaded_view.three.get(), initial_view.three.get());
     assert!(loaded_keys.is_empty());
 }
+
+static mut INTERCEPTED_APPLICATION_ID: Option<ApplicationId> = None;
+static mut INTERCEPTED_ARGUMENT: Option<Vec<u8>> = None;
+
+/// Test mocking queries.
+#[webassembly_test]
+fn mock_query() {
+    let response = vec![0xff, 0xfe, 0xfd];
+    let expected_response = Ok(response.clone());
+
+    test::mock_try_query_application(move |application_id, query| {
+        unsafe {
+            INTERCEPTED_APPLICATION_ID = Some(application_id);
+            INTERCEPTED_ARGUMENT = Some(query);
+        }
+
+        Ok::<_, String>(response.clone())
+    });
+
+    let application_id = ApplicationId {
+        bytecode_id: BytecodeId(EffectId {
+            chain_id: ChainId([0, 1, 2, 3].into()),
+            height: BlockHeight::from(4),
+            index: 5,
+        }),
+        creation: EffectId {
+            chain_id: ChainId([6, 7, 8, 9].into()),
+            height: BlockHeight::from(10),
+            index: 11,
+        },
+    };
+    let query = vec![17, 23, 31, 37];
+
+    let response = service::system_api::query_application(application_id, &query)
+        .now_or_never()
+        .expect("Mock session call should return immediately");
+
+    assert_eq!(
+        unsafe { INTERCEPTED_APPLICATION_ID.take() },
+        Some(application_id)
+    );
+    assert_eq!(unsafe { INTERCEPTED_ARGUMENT.take() }, Some(query));
+
+    assert_eq!(response, expected_response);
+}
