@@ -39,7 +39,7 @@ EOF
 
 # Create configuration files for ${NUM_VALIDATORS} validators with ${NUM_SHARDS} shards each.
 # * Private server states are stored in `server*.json`.
-# * `committee.json` is the public description of the FastPay committee.
+# * `committee.json` is the public description of the Linera committee.
 VALIDATORS=($(validator_options))
 ./server generate --validators ${VALIDATORS[@]} --committee committee.json
 
