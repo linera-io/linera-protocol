@@ -347,7 +347,7 @@ impl ClientContext {
 
     async fn update_wallet_from_client<P, S>(&mut self, state: &mut ChainClient<P, S>)
     where
-        P: ValidatorNodeProvider + Send + 'static,
+        P: ValidatorNodeProvider + Sync + 'static,
         S: Store + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
@@ -440,7 +440,7 @@ impl ClientContext {
 
     async fn publish_bytecode<S>(
         &self,
-        chain_client: &mut ChainClient<impl ValidatorNodeProvider, S>,
+        chain_client: &mut ChainClient<impl ValidatorNodeProvider + Sync, S>,
         contract: PathBuf,
         service: PathBuf,
     ) -> Result<BytecodeId, anyhow::Error>
@@ -1163,7 +1163,7 @@ where
                     .and_then(|mut committees| committees.remove(&epoch)) else {
                     bail!("Invalid chain info response; missing latest committee");
                 };
-                let nodes = context.make_node_provider().make_nodes(committee).await?;
+                let nodes = context.make_node_provider().make_nodes(&committee).await?;
 
                 // Download the parent chain.
                 let target_height = effect_id.height.try_add_one()?;
