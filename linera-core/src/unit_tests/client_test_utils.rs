@@ -20,7 +20,9 @@ use linera_execution::{
     WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
-use linera_views::{lru_caching::TEST_CACHE_SIZE, views::ViewError};
+#[cfg(feature = "aws")]
+use linera_views::lru_caching::TEST_CACHE_SIZE;
+use linera_views::views::ViewError;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
