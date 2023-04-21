@@ -193,7 +193,7 @@ impl WalletState {
 
     pub async fn update_from_state<P, S>(&mut self, state: &mut ChainClient<P, S>)
     where
-        P: ValidatorNodeProvider + Send + 'static,
+        P: ValidatorNodeProvider + Sync + 'static,
         S: Store + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
