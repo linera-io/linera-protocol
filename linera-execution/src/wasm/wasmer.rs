@@ -37,6 +37,7 @@ use super::{
 
 use crate::{ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
 use linera_views::{batch::Batch, views::ViewError};
+use once_cell::sync::Lazy;
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
 use tokio::sync::Mutex;
 use wasmer::{
@@ -93,6 +94,9 @@ impl<'runtime> ApplicationRuntimeContext for Service<'runtime> {
     type Extra = RuntimeGuard<'runtime, &'static dyn ServiceRuntime>;
 }
 
+static WASMER_INSTANTIATE_LOCK: Lazy<std::sync::Mutex<()>> =
+    Lazy::new(|| std::sync::Mutex::new(()));
+
 impl WasmApplication {
     /// Prepare a runtime instance to call into the WASM contract.
     pub fn prepare_contract_runtime_with_wasmer<'runtime>(
@@ -117,8 +121,11 @@ impl WasmApplication {
             ContractSystemApi::new(waker_forwarder.clone(), runtime, queued_future_factory);
         let system_api_setup =
             writable_system::add_to_imports(&mut store, &mut imports, system_api);
-        let (contract, instance) =
-            contract::Contract::instantiate(&mut store, &module, &mut imports)?;
+        let (contract, instance) = {
+            // TODO(#633): remove when possible or find better workaround.
+            let _lock = WASMER_INSTANTIATE_LOCK.lock().unwrap();
+            contract::Contract::instantiate(&mut store, &module, &mut imports)?
+        };
         let application = Contract {
             contract,
             _lifetime: PhantomData,
@@ -153,7 +160,11 @@ impl WasmApplication {
         let (system_api, runtime_guard) = ServiceSystemApi::new(waker_forwarder.clone(), runtime);
         let system_api_setup =
             queryable_system::add_to_imports(&mut store, &mut imports, system_api);
-        let (service, instance) = service::Service::instantiate(&mut store, &module, &mut imports)?;
+        let (service, instance) = {
+            // TODO(#633): remove when possible or find better workaround.
+            let _lock = WASMER_INSTANTIATE_LOCK.lock().unwrap();
+            service::Service::instantiate(&mut store, &module, &mut imports)?
+        };
         let application = Service {
             service,
             _lifetime: PhantomData,
