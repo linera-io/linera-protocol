@@ -154,7 +154,7 @@ pub trait Contract: Sized {
     /// Handles a call into a [`Session`] created by this application.
     ///
     /// [`Session`]s are another way for applications to interact inside a micro-chain. Sessions
-    /// are very similar to cross-application calls (see [`Self::handle_application_call`], but
+    /// are very similar to cross-application calls (see [`Self::handle_application_call`]), but
     /// each one of them has a separate state, that's also separate from the application state.
     ///
     /// This allows moving out parts of the application's state out into sessions, which are sent
