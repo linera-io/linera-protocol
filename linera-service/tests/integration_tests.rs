@@ -775,13 +775,13 @@ async fn publish_bytecode(
     );
     let query = json!({ "query": query_string });
     let client = reqwest::Client::new();
-    let res = client
+    let response = client
         .post(format!("http://localhost:{}/", port.into().unwrap_or(8080)))
         .json(&query)
         .send()
         .await
         .unwrap();
-    let response_body: Value = res.json().await.unwrap();
+    let response_body: Value = response.json().await.unwrap();
     if let Some(errors) = response_body.get("errors") {
         let mut error_string = errors.to_string();
         if error_string.len() > 10000 {
@@ -815,13 +815,13 @@ async fn create_application(bytecode_id: &str, port: impl Into<Option<u16>>) -> 
     );
     let query = json!({ "query": query_string });
     let client = reqwest::Client::new();
-    let res = client
+    let response = client
         .post(format!("http://localhost:{}/", port.into().unwrap_or(8080)))
         .json(&query)
         .send()
         .await
         .unwrap();
-    let response_body: Value = res.json().await.unwrap();
+    let response_body: Value = response.json().await.unwrap();
     if let Some(errors) = response_body.get("errors") {
         panic!("create_application failed: {}", errors);
     }
@@ -850,20 +850,20 @@ async fn get_counter_value(application_uri: &str) -> u64 {
 async fn query_application(application_uri: &str, query_string: &str) -> Value {
     let query = json!({ "query": query_string });
     let client = reqwest::Client::new();
-    let res = client
+    let response = client
         .post(application_uri)
         .json(&query)
         .send()
         .await
         .unwrap();
-    if !res.status().is_success() {
+    if !response.status().is_success() {
         panic!(
             "Query \"{}\" failed: {}",
             query_string,
-            res.text().await.unwrap()
+            response.text().await.unwrap()
         );
     }
-    res.json().await.unwrap()
+    response.json().await.unwrap()
 }
 
 async fn increment_counter_value(application_uri: &str, increment: u64) {
