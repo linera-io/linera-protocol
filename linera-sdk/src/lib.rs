@@ -157,7 +157,7 @@ pub trait Contract: Sized {
     /// are very similar to cross-application calls (see [`Self::handle_application_call`]), but
     /// each one of them has a separate state, that's also separate from the application state.
     ///
-    /// This allows moving out parts of the application's state out into sessions, which are sent
+    /// This allows moving parts of the application's state out into sessions, which are sent
     /// to other applications. These sessions can be freely moved between other applications, and
     /// the application that created the session does not have to keep track of which application
     /// is the current owner of the session.
