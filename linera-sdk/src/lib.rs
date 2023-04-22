@@ -108,6 +108,19 @@ pub trait Contract: Sized {
     ) -> Result<ExecutionResult, Self::Error>;
 
     /// Applies an effect originating from a cross-chain message.
+    ///
+    /// Effects are messages sent across micro-chains. These messages are created and received by
+    /// the same application. Effects can be either single-sender and single-receiver, or
+    /// single-sender and multiple-receivers. The former allows sending cross-chain messages to the
+    /// application on some other specific micro-chain, while the later uses broadcast channels to
+    /// send a message to multiple other micro-chains where the application is subscribed to a
+    /// sender channel on this micro-chain.
+    ///
+    /// For an effect to be executed, a user must mark it to be received in a block of the receiver
+    /// micro-chain.
+    ///
+    /// Returns an [`ExecutionResult`], which can contains effects to be sent to this application
+    /// on another micro-chain and subscription or unsubscription requests to channels.
     async fn execute_effect(
         &mut self,
         context: &EffectContext,
