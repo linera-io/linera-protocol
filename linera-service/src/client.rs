@@ -1154,16 +1154,11 @@ where
                 // Take the latest committee we know of.
                 let admin_chain_id = context.wallet_state.genesis_admin_chain();
                 let query = ChainInfoQuery::new(admin_chain_id).with_committees();
-                let info = node_client.handle_chain_info_query(query).await?.info;
-                let Some(epoch) = info.epoch else {
-                    bail!("Invalid chain info response; missing epoch");
-                };
-                let Some(committee) = info
-                    .requested_committees
-                    .and_then(|mut committees| committees.remove(&epoch)) else {
+                let info = node_client.handle_chain_info_query(query).await?;
+                let Some(committee) = info.latest_committee() else {
                     bail!("Invalid chain info response; missing latest committee");
                 };
-                let nodes = context.make_node_provider().make_nodes(&committee).await?;
+                let nodes = context.make_node_provider().make_nodes(committee).await?;
 
                 // Download the parent chain.
                 let target_height = effect_id.height.try_add_one()?;

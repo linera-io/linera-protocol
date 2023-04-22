@@ -231,6 +231,12 @@ impl ChainInfoResponse {
             None => Err(NodeError::InvalidChainInfoResponse),
         }
     }
+
+    /// Returns the committee in the latest epoch.
+    pub fn latest_committee(&self) -> Option<&Committee> {
+        let committees = self.info.requested_committees.as_ref()?;
+        committees.get(&self.info.epoch?)
+    }
 }
 
 impl BcsSignable for ChainInfo {}
