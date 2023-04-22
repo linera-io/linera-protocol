@@ -575,7 +575,7 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        // TODO: Deduplicate with client.rs Synchronize handling.
+        // TODO(#646): Deduplicate with client.rs synchronize handling.
         let sync_fut =
             async move {
                 let mut notification_stream = service_sync
