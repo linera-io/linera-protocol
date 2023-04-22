@@ -154,7 +154,8 @@ pub enum NodeError {
     )]
     ProposedBlockWithLaggingBytecode { chain_id: ChainId, retries: usize },
 
-    // Networking and sharding. TODO: those probably belong to linera-service
+    // Networking and sharding.
+    // TODO(#258): Those probably belong to linera-service.
     #[error("Cannot deserialize")]
     InvalidDecoding,
     #[error("Unexpected message")]
