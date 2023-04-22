@@ -86,7 +86,7 @@ pub trait Contract: Sized {
     /// state if [`SimpleStateStorage`] is used, or the [`Default`] value of all sub-views in the
     /// state if the [`ViewStateStorage`] is used.
     ///
-    /// Returns an [`ExecutionResult`], which can contains subscription or unsubscription requests
+    /// Returns an [`ExecutionResult`], which can contain subscription or unsubscription requests
     /// to channels and effects to be sent to this application on another micro-chain.
     async fn initialize(
         &mut self,
@@ -99,7 +99,7 @@ pub trait Contract: Sized {
     /// Operations are created by users and added to blocks, serving as the starting point for an
     /// application's execution.
     ///
-    /// Returns an [`ExecutionResult`], which can contains subscription or unsubscription requests
+    /// Returns an [`ExecutionResult`], which can contain subscription or unsubscription requests
     /// to channels and effects to be sent to this application on another micro-chain.
     async fn execute_operation(
         &mut self,
@@ -119,7 +119,7 @@ pub trait Contract: Sized {
     /// For an effect to be executed, a user must mark it to be received in a block of the receiver
     /// micro-chain.
     ///
-    /// Returns an [`ExecutionResult`], which can contains effects to be sent to this application
+    /// Returns an [`ExecutionResult`], which can contain effects to be sent to this application
     /// on another micro-chain and subscription or unsubscription requests to channels.
     async fn execute_effect(
         &mut self,
