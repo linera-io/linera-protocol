@@ -143,6 +143,7 @@ impl StateStore for RocksdbTestStore {
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
+        // TODO(#643): Actually acquire a lock.
         tracing::trace!("Acquiring lock on {:?}", id);
         let context = RocksdbContext::new(self.db.clone(), bcs::to_bytes(&id)?, id);
         StateView::load(context).await
@@ -172,6 +173,7 @@ impl StateStore for DynamoDbTestStore {
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
+        // TODO(#643): Actually acquire a lock.
         tracing::trace!("Acquiring lock on {:?}", id);
         let (context, _) = DynamoDbContext::from_config(
             self.localstack.dynamo_db_config(),
