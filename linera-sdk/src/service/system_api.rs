@@ -18,7 +18,7 @@ use linera_views::{
 use serde::de::DeserializeOwned;
 use std::{fmt, future::Future, task::Poll};
 
-/// Load the application state, without locking it for writes.
+/// Loads the application state, without locking it for writes.
 pub async fn load<State>() -> State
 where
     State: Default + DeserializeOwned,
