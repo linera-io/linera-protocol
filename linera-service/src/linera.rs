@@ -17,6 +17,7 @@ use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
     data_types::ChainInfoQuery,
     node::{LocalNodeClient, ValidatorNode},
+    tracker::NotificationTracker,
     worker::{Reason, WorkerState},
 };
 use linera_execution::{
@@ -28,7 +29,6 @@ use linera_rpc::node_provider::NodeProvider;
 use linera_service::{
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     storage::{Runnable, StorageConfig},
-    tracker::NotificationTracker,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;

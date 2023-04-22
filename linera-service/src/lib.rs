@@ -6,4 +6,3 @@ pub mod config;
 pub mod grpc_proxy;
 pub mod node_service;
 pub mod storage;
-pub mod tracker;

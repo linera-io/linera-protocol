@@ -26,6 +26,7 @@ use linera_base::{
 use linera_chain::ChainStateView;
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
+    tracker::NotificationTracker,
     worker::{Notification, Reason},
 };
 use linera_execution::{
@@ -40,8 +41,6 @@ use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, warn};
-
-use crate::tracker::NotificationTracker;
 
 /// Our root GraphQL query type.
 struct QueryRoot<P, S>(Arc<NodeService<P, S>>);
