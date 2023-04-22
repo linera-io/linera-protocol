@@ -87,8 +87,6 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         quote! {}
     };
 
-    // See TODO(#599) for the problem that we have with respect to the use of
-    // true async code for loading.
     quote! {
         #[async_trait::async_trait]
         impl #generics linera_views::views::View<#first_generic> for #struct_name #generics
