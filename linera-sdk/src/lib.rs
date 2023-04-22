@@ -112,7 +112,7 @@ pub trait Contract: Sized {
     /// Effects are messages sent across micro-chains. These messages are created and received by
     /// the same application. Effects can be either single-sender and single-receiver, or
     /// single-sender and multiple-receivers. The former allows sending cross-chain messages to the
-    /// application on some other specific micro-chain, while the later uses broadcast channels to
+    /// application on some other specific micro-chain, while the latter uses broadcast channels to
     /// send a message to multiple other micro-chains where the application is subscribed to a
     /// sender channel on this micro-chain.
     ///
