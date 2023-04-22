@@ -18,7 +18,7 @@ use linera_views::{
 use serde::de::DeserializeOwned;
 use std::{fmt, future::Future, task::Poll};
 
-/// Load the contract state, without locking it for writes.
+/// Load the application state, without locking it for writes.
 pub async fn load<State>() -> State
 where
     State: Default + DeserializeOwned,
@@ -27,16 +27,16 @@ where
     load_using(future::poll_fn(|_context| future.poll().into())).await
 }
 
-/// Helper function to load the contract state or create a new one if it doesn't exist.
+/// Helper function to load the application state or create a new one if it doesn't exist.
 async fn load_using<State>(future: impl Future<Output = Result<Vec<u8>, String>>) -> State
 where
     State: Default + DeserializeOwned,
 {
-    let bytes = future.await.expect("Failed to load contract state");
+    let bytes = future.await.expect("Failed to load application state");
     if bytes.is_empty() {
         State::default()
     } else {
-        bcs::from_bytes(&bytes).expect("Invalid contract state")
+        bcs::from_bytes(&bytes).expect("Invalid application state")
     }
 }
 
@@ -113,7 +113,7 @@ pub async fn lock_and_load_view<State: View<ReadOnlyViewStorageContext>>() -> St
     let future = system::Lock::new();
     future::poll_fn(|_context| -> Poll<Result<(), ViewError>> { future.poll().into() })
         .await
-        .expect("Failed to lock contract state");
+        .expect("Failed to lock application state");
     load_view_using::<State>().await
 }
 
@@ -128,7 +128,7 @@ pub async fn load_view_using<State: View<ReadOnlyViewStorageContext>>() -> State
     let context = ReadOnlyViewStorageContext::default();
     State::load(context)
         .await
-        .expect("Failed to load contract state")
+        .expect("Failed to load application state")
 }
 
 /// Retrieve the current chain ID.

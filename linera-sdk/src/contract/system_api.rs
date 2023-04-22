@@ -18,7 +18,7 @@ use linera_views::{
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt;
 
-/// Loads the contract state, without locking it for writes.
+/// Loads the application state, without locking it for writes.
 pub fn load<State>() -> State
 where
     State: Default + DeserializeOwned,
@@ -27,7 +27,7 @@ where
     deserialize_state(state_bytes)
 }
 
-/// Loads the contract state and locks it for writes.
+/// Loads the application state and locks it for writes.
 pub fn load_and_lock<State>() -> Option<State>
 where
     State: Default + DeserializeOwned,
@@ -36,7 +36,7 @@ where
     Some(deserialize_state(state_bytes))
 }
 
-/// Deserializes the contract state or creates a new one if the `bytes` vector is empty.
+/// Deserializes the application state or creates a new one if the `bytes` vector is empty.
 fn deserialize_state<State>(bytes: Vec<u8>) -> State
 where
     State: Default + DeserializeOwned,
@@ -44,11 +44,11 @@ where
     if bytes.is_empty() {
         State::default()
     } else {
-        bcs::from_bytes(&bytes).expect("Invalid contract state")
+        bcs::from_bytes(&bytes).expect("Invalid application state")
     }
 }
 
-/// Save the contract state and unlock it.
+/// Save the application state and unlock it.
 pub async fn store_and_unlock<State>(state: State)
 where
     State: Serialize,
@@ -137,7 +137,7 @@ impl KeyValueStoreClient for KeyValueStore {
 /// allow views to store data in the storage layer provided to Linera applications.
 pub type ViewStorageContext = ContextFromDb<(), KeyValueStore>;
 
-/// Load the contract state and lock it for writes.
+/// Load the application state and lock it for writes.
 pub async fn load_and_lock_view<State: View<ViewStorageContext>>() -> Option<State> {
     let future = system::Lock::new();
     if future::poll_fn(|_context| future.poll().into()).await {
@@ -147,14 +147,14 @@ pub async fn load_and_lock_view<State: View<ViewStorageContext>>() -> Option<Sta
     }
 }
 
-/// Helper function to load the contract state or create a new one if it doesn't exist.
+/// Helper function to load the application state or create a new one if it doesn't exist.
 pub async fn load_view_using<State: View<ViewStorageContext>>() -> State {
     let context = ViewStorageContext::default();
     let r = State::load(context).await;
-    r.expect("Failed to load contract state")
+    r.expect("Failed to load application state")
 }
 
-/// Save the contract state and unlock it.
+/// Save the application state and unlock it.
 pub async fn store_and_unlock_view<State: RootView<ViewStorageContext>>(mut state: State) {
     state.save().await.expect("save operation failed");
 }
