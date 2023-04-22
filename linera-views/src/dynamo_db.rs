@@ -662,6 +662,7 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
         Ok(result.into_iter().collect::<Result<_, _>>()?)
     }
 
+    // TODO(#201): Large responses may be truncated.
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -676,6 +677,7 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
         })
     }
 
+    // TODO(#201): Large responses may be truncated.
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
