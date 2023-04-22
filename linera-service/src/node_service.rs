@@ -39,7 +39,7 @@ use linera_views::views::ViewError;
 use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
-use tracing::{error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::tracker::NotificationTracker;
 
@@ -575,54 +575,53 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        // TODO(#646): Deduplicate with client.rs synchronize handling.
-        let sync_fut =
-            async move {
-                let mut notification_stream = service_sync
-                    .client
-                    .lock()
-                    .await
-                    .subscribe_all(vec![chain_id])
-                    .await?;
-                let mut tracker = NotificationTracker::default();
-                while let Some(notification) = notification_stream.next().await {
-                    tracing::debug!("Received notification: {:?}", notification);
-                    let mut client = service_sync.client.lock().await;
-                    if tracker.insert(notification.clone()) {
-                        if let Err(e) = client.synchronize_and_recompute_balance().await {
-                            tracing::warn!(
+        // TODO(#646): Deduplicate with linera.rs synchronize handling.
+        let sync_fut = async move {
+            let mut notification_stream = service_sync
+                .client
+                .lock()
+                .await
+                .subscribe_all(vec![chain_id])
+                .await?;
+            let mut tracker = NotificationTracker::default();
+            while let Some(notification) = notification_stream.next().await {
+                debug!("Received notification: {:?}", notification);
+                let mut client = service_sync.client.lock().await;
+                if tracker.insert(notification.clone()) {
+                    if let Err(e) = client.synchronize_and_recompute_balance().await {
+                        warn!(
                             "Failed to synchronize and recompute balance for notification {:?} \
                             with error: {:?}",
-                            notification,
-                            e
+                            notification, e
                         );
-                            // If synchronization failed there is nothing to update validators
-                            // about.
-                            continue;
-                        }
-                        match &notification.reason {
-                            Reason::NewBlock { .. } => {
-                                if let Err(e) = client.update_validators_about_local_chain().await {
-                                    tracing::warn!(
-                                        "Failed to update validators about the local chain after \
-                                    receiving notification {:?} with error: {:?}",
-                                        notification,
-                                        e
-                                    );
-                                }
+                        // If synchronization failed there is nothing to update validators
+                        // about.
+                        continue;
+                    }
+                    match &notification.reason {
+                        Reason::NewBlock { .. } => {
+                            if let Err(e) = client.update_validators_about_local_chain().await {
+                                warn!(
+                                    "Failed to update validators about the local chain after \
+                                         receiving notification {:?} with error: {:?}",
+                                    notification, e
+                                );
                             }
-                            Reason::NewMessage { .. } => {
-                                if let Err(e) = client.process_inbox().await {
-                                    tracing::warn!(
+                        }
+                        Reason::NewMessage { .. } => {
+                            if let Err(e) = client.process_inbox().await {
+                                warn!(
                                     "Failed to process inbox after receiving new message: {:?} \
-                                    with error: {:?}", notification, e);
-                                }
+                                    with error: {:?}",
+                                    notification, e
+                                );
                             }
                         }
                     }
                 }
-                Ok::<(), anyhow::Error>(())
-            };
+            }
+            Ok::<(), anyhow::Error>(())
+        };
 
         let serve_fut =
             Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
