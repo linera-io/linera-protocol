@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Functions and types to interface with the system API available to application contracts.
+//! Functions and types to interface with the system API available to application services.
 
 use super::queryable_system as system;
 use async_trait::async_trait;
