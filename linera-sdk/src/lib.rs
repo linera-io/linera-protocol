@@ -95,6 +95,12 @@ pub trait Contract: Sized {
     ) -> Result<ExecutionResult, Self::Error>;
 
     /// Applies an operation from the current block.
+    ///
+    /// Operations are created by users and added to blocks, serving as the starting point for an
+    /// application's execution.
+    ///
+    /// Returns an [`ExecutionResult`], which can contains subscription or unsubscription requests
+    /// to channels and effects to be sent to this application on another micro-chain.
     async fn execute_operation(
         &mut self,
         context: &OperationContext,
