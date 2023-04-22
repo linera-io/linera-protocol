@@ -78,6 +78,16 @@ pub trait Contract: Sized {
     type Storage;
 
     /// Initializes the application on the chain that created it.
+    ///
+    /// This is only called once when the application is created and only on the micro-chain that
+    /// created the application.
+    ///
+    /// Deployment on other micro-chains will use the [`Default`] implementation of the application
+    /// state if [`SimpleStateStorage`] is used, or the [`Default`] value of all sub-views in the
+    /// state if the [`ViewStateStorage`] is used.
+    ///
+    /// Returns an [`ExecutionResult`], which can contains subscription or unsubscription requests
+    /// to channels and effects to be sent to this application on another micro-chain.
     async fn initialize(
         &mut self,
         context: &OperationContext,
