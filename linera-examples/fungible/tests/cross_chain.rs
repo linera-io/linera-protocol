@@ -8,11 +8,11 @@
 use fungible::{Account, AccountOwner, InitialStateBuilder, Operation};
 use linera_sdk::{base::Amount, test::TestValidator};
 
-/// Test transfering tokens across micro-chains.
+/// Test transfering tokens across microchains.
 ///
 /// Create the application on a `sender_chain`, initializing it with a single account with some
 /// tokens for that chain's owner. Transfer some of those tokens to a new `receiver_chain`, and
-/// check that the balances on each micro-chain is correct.
+/// check that the balances on each microchain is correct.
 #[tokio::test]
 async fn cross_chain_transfer() {
     let initial_amount = Amount::from(20);

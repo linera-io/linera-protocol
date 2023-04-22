@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! A reference to a single micro-chain inside a [`TestValidator`].
+//! A reference to a single microchain inside a [`TestValidator`].
 //!
-//! This allows manipulating a test micro-chain.
+//! This allows manipulating a test microchain.
 
 use super::{BlockBuilder, TestValidator};
 use crate::{FromBcsBytes, ToBcsBytes};
@@ -25,7 +25,7 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-/// A reference to a single micro-chain inside a [`TestValidator`].
+/// A reference to a single microchain inside a [`TestValidator`].
 pub struct ActiveChain {
     key_pair: KeyPair,
     description: ChainDescription,
@@ -45,11 +45,11 @@ impl Clone for ActiveChain {
 }
 
 impl ActiveChain {
-    /// Creates a new [`ActiveChain`] instance referencing a new empty micro-chain in the
+    /// Creates a new [`ActiveChain`] instance referencing a new empty microchain in the
     /// `validator`.
     ///
-    /// The micro-chain has a single owner that uses the `key_pair` to produce blocks. The
-    /// `description` is used as the identifier of the micro-chain.
+    /// The microchain has a single owner that uses the `key_pair` to produce blocks. The
+    /// `description` is used as the identifier of the microchain.
     pub fn new(key_pair: KeyPair, description: ChainDescription, validator: TestValidator) -> Self {
         ActiveChain {
             key_pair,
@@ -59,17 +59,17 @@ impl ActiveChain {
         }
     }
 
-    /// Returns the [`ChainId`] of this micro-chain.
+    /// Returns the [`ChainId`] of this microchain.
     pub fn id(&self) -> ChainId {
         self.description.into()
     }
 
-    /// Returns the [`PublicKey`] of the owner of this micro-chain.
+    /// Returns the [`PublicKey`] of the owner of this microchain.
     pub fn public_key(&self) -> PublicKey {
         self.key_pair.public()
     }
 
-    /// Adds a block to this micro-chain.
+    /// Adds a block to this microchain.
     ///
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
     /// to provide the block's contents.
@@ -96,9 +96,9 @@ impl ActiveChain {
         *tip = Some(certificate);
     }
 
-    /// Receive all queued messages in all inboxes of this micro-chain.
+    /// Receive all queued messages in all inboxes of this microchain.
     ///
-    /// Adds a block to this micro-chain that receives all queued messages in the micro-chains
+    /// Adds a block to this microchain that receives all queued messages in the microchains
     /// inboxes.
     pub async fn handle_received_effects(&self) {
         let chain_id = self.id();
@@ -117,7 +117,7 @@ impl ActiveChain {
         .await;
     }
 
-    /// Publishes the bytecodes in the crate calling this method to this micro-chain.
+    /// Publishes the bytecodes in the crate calling this method to this microchain.
     ///
     /// Searches the Cargo manifest for binaries that end with `contract` and `service`, builds
     /// them for WebAssembly and uses the generated binaries as the contract and service bytecodes
@@ -207,7 +207,7 @@ impl ActiveChain {
         )
     }
 
-    /// Returns the height of the tip of this micro-chain.
+    /// Returns the height of the tip of this microchain.
     async fn tip_height(&self) -> BlockHeight {
         self.tip
             .lock()
@@ -219,7 +219,7 @@ impl ActiveChain {
             .height
     }
 
-    /// Subscribes this micro-chain to the bytecodes published on the `publisher_id` micro-chain.
+    /// Subscribes this microchain to the bytecodes published on the `publisher_id` microchain.
     pub async fn subscribe_to_published_bytecodes_from(&mut self, publisher_id: ChainId) {
         let publisher = self.validator.get_chain(&publisher_id);
 
@@ -255,11 +255,11 @@ impl ActiveChain {
         .await;
     }
 
-    /// Creates an application on this micro-chain, using the bytecode referenced by `bytecode_id`.
+    /// Creates an application on this microchain, using the bytecode referenced by `bytecode_id`.
     ///
     /// Returns the [`ApplicationId`] of the created application.
     ///
-    /// If necessary, this micro-chain will subscribe to the micro-chain that published the
+    /// If necessary, this microchain will subscribe to the microchain that published the
     /// bytecode to use, and fetch it.
     ///
     /// The application is initialized using the initialization parameters, which consist of the
@@ -306,7 +306,7 @@ impl ActiveChain {
         }
     }
 
-    /// Checks if the `bytecode_id` is missing from this micro-chain.
+    /// Checks if the `bytecode_id` is missing from this microchain.
     async fn needs_bytecode_location(&self, bytecode_id: BytecodeId) -> bool {
         let applications = self
             .validator
@@ -358,7 +358,7 @@ impl ActiveChain {
         panic!("Bytecode not found in the chain it was supposed to be published on");
     }
 
-    /// Executes a `query` on an `application`'s state on this micro-chain.
+    /// Executes a `query` on an `application`'s state on this microchain.
     ///
     /// Returns the deserialized `Output` response from the `application`.
     pub async fn query<Output>(

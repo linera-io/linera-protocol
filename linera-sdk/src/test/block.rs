@@ -26,9 +26,9 @@ pub struct BlockBuilder {
 }
 
 impl BlockBuilder {
-    /// Creates a new [`BlockBuilder`], initializing the block so that it belongs to a micro-chain.
+    /// Creates a new [`BlockBuilder`], initializing the block so that it belongs to a microchain.
     ///
-    /// Initializes the block so that it belongs to the micro-chain identified by `chain_id` and
+    /// Initializes the block so that it belongs to the microchain identified by `chain_id` and
     /// owned by `owner`. It becomes the block after the specified `previous_block`, or the genesis
     /// block if [`None`] is specified.
     ///
@@ -98,7 +98,7 @@ impl BlockBuilder {
     /// Adds a message sent by the effect referenced by the [`EffectId`] to this block.
     ///
     /// The block that produces the effect must have already been executed by the test validator,
-    /// so that the message is already in the inbox of the micro-chain this block belongs to.
+    /// so that the message is already in the inbox of the microchain this block belongs to.
     pub fn with_incoming_message(&mut self, effect_id: EffectId) -> &mut Self {
         self.incoming_messages.push(effect_id);
         self
@@ -107,7 +107,7 @@ impl BlockBuilder {
     /// Adds the `messages` directly to this block.
     ///
     /// This is an internal method that bypasses the check to see if the messages are already
-    /// present in the inboxes of the micro-chain that owns this block.
+    /// present in the inboxes of the microchain that owns this block.
     pub(crate) fn with_raw_messages(
         &mut self,
         messages: impl IntoIterator<Item = Message>,
@@ -141,7 +141,7 @@ impl BlockBuilder {
 
     /// Collects and adds the previously requested messages to this block.
     ///
-    /// The requested messages must already all be in the inboxes of the micro-chain that owns this
+    /// The requested messages must already all be in the inboxes of the microchain that owns this
     /// block.
     async fn collect_incoming_messages(&mut self) {
         let chain_id = self.block.chain_id;

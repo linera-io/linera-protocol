@@ -4,7 +4,7 @@
 //! A minimal validator implementation suited for tests.
 //!
 //! The [`TestValidator`] is a minimal validator with a single shard. Micro-chains can be added to
-//! it, and blocks can be added to each micro-chain individually.
+//! it, and blocks can be added to each microchain individually.
 
 use super::ActiveChain;
 use dashmap::DashMap;
@@ -69,7 +69,7 @@ impl Clone for TestValidator {
 }
 
 impl TestValidator {
-    /// Creates a new [`TestValidator`] with a single micro-chain with the bytecode of the crate
+    /// Creates a new [`TestValidator`] with a single microchain with the bytecode of the crate
     /// calling this method published on it.
     ///
     /// Returns the new [`TestValidator`] and the [`BytecodeId`] of the published bytecode.
@@ -85,8 +85,8 @@ impl TestValidator {
     /// Creates a new [`TestValidator`] with the application of the crate calling this method
     /// created on a chain.
     ///
-    /// The bytecode is first published on one micro-chain, then the application is created on
-    /// another micro-chain.
+    /// The bytecode is first published on one microchain, then the application is created on
+    /// another microchain.
     ///
     /// Returns the new [`TestValidator`] and the [`ApplicationId`] of the created application.
     pub async fn with_current_application(
@@ -121,7 +121,7 @@ impl TestValidator {
         &self.committee
     }
 
-    /// Creates a new micro-chain and returns the [`ActiveChain`] that can be used to add blocks to
+    /// Creates a new microchain and returns the [`ActiveChain`] that can be used to add blocks to
     /// it.
     pub async fn new_chain(&self) -> ActiveChain {
         let key_pair = KeyPair::generate();
@@ -149,7 +149,7 @@ impl TestValidator {
         chain
     }
 
-    /// Returns the [`ActiveChain`] reference to the micro-chain identified by `chain_id`.
+    /// Returns the [`ActiveChain`] reference to the microchain identified by `chain_id`.
     pub fn get_chain(&self, chain_id: &ChainId) -> ActiveChain {
         self.chains.get(chain_id).expect("Chain not found").clone()
     }
