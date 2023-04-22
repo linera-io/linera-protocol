@@ -589,7 +589,7 @@ enum ClientCommand {
     /// Show the current set of validators for a chain.
     #[structopt(name = "query_validators")]
     QueryValidators {
-        /// Chain id (defaults to admin chain)
+        /// Chain id
         chain_id: Option<ChainId>,
     },
 
@@ -677,10 +677,10 @@ enum ClientCommand {
         chain_ids: Vec<ChainId>,
     },
 
-    /// Run Client as a service.
+    /// Run a GraphQL service on the local node of a given chain.
     #[structopt(name = "service")]
     Service {
-        /// Chain id (defaults to admin chain)
+        /// Chain id
         chain_id: Option<ChainId>,
 
         /// The port on which to run the server
