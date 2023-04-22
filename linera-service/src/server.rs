@@ -301,9 +301,9 @@ enum ServerCommand {
         #[structopt(long)]
         wasm_runtime: Option<WasmRuntime>,
 
-        /// The size of the cache
-        #[structopt(long)]
-        cache_size: Option<usize>,
+        /// The maximal number of entries in the storage cache.
+        #[structopt(long, default_value = "1000")]
+        cache_size: usize,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -359,7 +359,6 @@ async fn main() {
                 grace_period_micros: grace_period,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
-            let cache_size = cache_size.unwrap_or_default();
             storage_config
                 .run_with_storage(&genesis_config, wasm_runtime, cache_size, job)
                 .await

@@ -524,13 +524,13 @@ struct ClientOptions {
     #[structopt(long)]
     wasm_runtime: Option<WasmRuntime>,
 
-    /// Subcommand.
-    #[structopt(subcommand)]
-    command: ClientCommand,
-
     /// The maximal number of entries in the storage cache.
     #[structopt(long, default_value = "1000")]
     cache_size: usize,
+
+    /// Subcommand.
+    #[structopt(subcommand)]
+    command: ClientCommand,
 }
 
 #[derive(StructOpt)]
