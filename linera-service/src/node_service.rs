@@ -13,7 +13,6 @@ use axum::{
     http::{StatusCode, Uri},
     response,
     response::IntoResponse,
-    routing::get,
     Extension, Router, Server,
 };
 use futures::{lock::Mutex, StreamExt};
@@ -43,13 +42,20 @@ use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, warn};
 
 /// Our root GraphQL query type.
-struct QueryRoot<P, S>(Arc<NodeService<P, S>>);
+struct QueryRoot<P, S> {
+    client: Arc<Mutex<ChainClient<P, S>>>,
+    port: NonZeroU16,
+}
 
 /// Our root GraphQL subscription type.
-struct SubscriptionRoot<P, S>(Arc<NodeService<P, S>>);
+struct SubscriptionRoot<P, S> {
+    client: Arc<Mutex<ChainClient<P, S>>>,
+}
 
 /// Our root GraphQL mutation type.
-struct MutationRoot<P, S>(Arc<NodeService<P, S>>);
+struct MutationRoot<P, S> {
+    client: Arc<Mutex<ChainClient<P, S>>>,
+}
 
 #[derive(Debug, ThisError)]
 enum NodeServiceError {
@@ -115,7 +121,7 @@ where
         &self,
         chain_ids: Vec<ChainId>,
     ) -> Result<impl Stream<Item = Notification>, Error> {
-        Ok(self.0.client.lock().await.subscribe_all(chain_ids).await?)
+        Ok(self.client.lock().await.subscribe_all(chain_ids).await?)
     }
 }
 
@@ -130,7 +136,7 @@ where
         system_operation: SystemOperation,
     ) -> Result<CryptoHash, Error> {
         let operation = Operation::System(system_operation);
-        let mut client = self.0.client.lock().await;
+        let mut client = self.client.lock().await;
         client.process_inbox().await?;
         Ok(client.execute_operation(operation).await?.value.hash())
     }
@@ -152,7 +158,7 @@ where
         amount: Amount,
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        let mut client = self.0.client.lock().await;
+        let mut client = self.client.lock().await;
         let certificate = client
             .transfer(owner, amount, recipient, user_data.unwrap_or_default())
             .await?;
@@ -170,7 +176,7 @@ where
         amount: Amount,
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        let mut client = self.0.client.lock().await;
+        let mut client = self.client.lock().await;
         let certificate = client
             .claim(
                 owner,
@@ -186,14 +192,14 @@ where
     /// Creates (or activates) a new chain by installing the given authentication key.
     /// This will automatically subscribe to the future committees created by `admin_id`.
     async fn open_chain(&self, public_key: PublicKey) -> Result<ChainId, Error> {
-        let mut client = self.0.client.lock().await;
+        let mut client = self.client.lock().await;
         let (effect_id, _) = client.open_chain(public_key).await?;
         Ok(ChainId::child(effect_id))
     }
 
     /// Closes the chain.
     async fn close_chain(&self) -> Result<CryptoHash, Error> {
-        let mut client = self.0.client.lock().await;
+        let mut client = self.client.lock().await;
         let certificate = client.close_chain().await?;
         Ok(certificate.value.hash())
     }
@@ -264,7 +270,7 @@ where
         contract: Bytecode,
         service: Bytecode,
     ) -> Result<BytecodeId, Error> {
-        let mut client = self.0.client.lock().await;
+        let mut client = self.client.lock().await;
         let (bytecode_id, _) = client.publish_bytecode(contract, service).await?;
         Ok(bytecode_id)
     }
@@ -276,7 +282,7 @@ where
         initialization_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ApplicationId, Error> {
-        let mut client = self.0.client.lock().await;
+        let mut client = self.client.lock().await;
         let (application_id, _) = client
             .create_application(
                 bytecode_id,
@@ -300,13 +306,7 @@ where
         &self,
         chain_id: Option<ChainId>,
     ) -> Result<Arc<ChainStateView<S::Context>>, Error> {
-        Ok(self
-            .0
-            .client
-            .lock()
-            .await
-            .chain_state_view(chain_id)
-            .await?)
+        Ok(self.client.lock().await.chain_state_view(chain_id).await?)
     }
 
     async fn applications(
@@ -314,7 +314,6 @@ where
         chain_id: Option<ChainId>,
     ) -> Result<Vec<ApplicationOverview>, Error> {
         let applications = self
-            .0
             .client
             .lock()
             .await
@@ -326,7 +325,7 @@ where
 
         let overviews = applications
             .into_iter()
-            .map(|(id, description)| ApplicationOverview::new(id, description, self.0.port))
+            .map(|(id, description)| ApplicationOverview::new(id, description, self.port))
             .map(ApplicationOverview::from)
             .collect();
 
@@ -355,57 +354,6 @@ impl ApplicationOverview {
     }
 }
 
-/// Execute a GraphQL query and generate a response for our `Schema`.
-async fn index_handler<P, S>(
-    client: Extension<Arc<NodeService<P, S>>>,
-    request: GraphQLRequest,
-) -> GraphQLResponse
-where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Store + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
-{
-    let schema = Schema::build(
-        QueryRoot(client.0.clone()),
-        MutationRoot(client.0.clone()),
-        SubscriptionRoot(client.0.clone()),
-    )
-    .finish();
-
-    schema.execute(request.into_inner()).await.into()
-}
-
-/// Execute a GraphQL query against an application.
-/// Pattern matches on the `OperationType` of the query and routes the query
-/// accordingly.
-async fn application_handler<P, S>(
-    Path(application_id): Path<String>,
-    service: Extension<Arc<NodeService<P, S>>>,
-    request: GraphQLRequest,
-) -> Result<GraphQLResponse, NodeServiceError>
-where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Store + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
-{
-    let mut request = request.into_inner();
-
-    let parsed_query = request.parsed_query()?;
-    let operation_type = operation_type(parsed_query)?;
-
-    let application_id: UserApplicationId = application_id.parse()?;
-
-    let response = match operation_type {
-        OperationType::Query => user_application_query(application_id, service, &request).await?,
-        OperationType::Mutation => {
-            user_application_mutation(application_id, service, &request).await?
-        }
-        OperationType::Subscription => return Err(NodeServiceError::UnsupportedQueryType),
-    };
-
-    Ok(response.into())
-}
-
 /// Given a parsed GraphQL query (or `ExecutableDocument`), return the `OperationType`.
 ///
 /// Errors:
@@ -424,67 +372,6 @@ fn operation_type(document: &ExecutableDocument) -> Result<OperationType, NodeSe
                 .ok_or(NodeServiceError::HeterogeneousOperations)
         }
     }
-}
-
-/// Handles queries for user applications.
-async fn user_application_query<P, S>(
-    application_id: UserApplicationId,
-    service: Extension<Arc<NodeService<P, S>>>,
-    request: &Request,
-) -> Result<async_graphql::Response, NodeServiceError>
-where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Store + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
-{
-    let bytes = serde_json::to_vec(&request)?;
-    let query = Query::User {
-        application_id,
-        bytes,
-    };
-    let response = service
-        .0
-        .client
-        .lock()
-        .await
-        .query_application(&query)
-        .await?;
-    let user_response_bytes = match response {
-        Response::System(_) => unreachable!("cannot get a system response for a user query"),
-        Response::User(user) => user,
-    };
-    Ok(serde_json::from_slice(&user_response_bytes)?)
-}
-
-/// Handles mutations for user applications.
-async fn user_application_mutation<P, S>(
-    application_id: UserApplicationId,
-    service: Extension<Arc<NodeService<P, S>>>,
-    request: &Request,
-) -> Result<async_graphql::Response, NodeServiceError>
-where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Store + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
-{
-    let graphql_response = user_application_query(application_id, service.clone(), request).await?;
-    let bcs_bytes_list = bytes_from_response(graphql_response.data);
-    if bcs_bytes_list.is_empty() {
-        return Err(NodeServiceError::MalformedApplicationResponse);
-    }
-    let operations = bcs_bytes_list
-        .into_iter()
-        .map(|bytes| Operation::User {
-            application_id,
-            bytes,
-        })
-        .collect();
-
-    let mut client = service.0.client.lock().await;
-    client.process_inbox().await?;
-    let certificate = client.execute_operations(operations).await?;
-    let value = async_graphql::Value::from_json(serde_json::to_value(certificate)?)?;
-    Ok(async_graphql::Response::new(value))
 }
 
 /// Extracts the underlying byte vector from a serialized GraphQL response
@@ -530,8 +417,17 @@ async fn graphiql(uri: Uri) -> impl IntoResponse {
 /// The `NodeService` is a server that exposes a web-server to the client.
 /// The node service is primarily used to explore the state of a chain in GraphQL.
 pub struct NodeService<P, S> {
-    client: Mutex<ChainClient<P, S>>,
+    client: Arc<Mutex<ChainClient<P, S>>>,
     port: NonZeroU16,
+}
+
+impl<P, S> Clone for NodeService<P, S> {
+    fn clone(&self) -> Self {
+        Self {
+            client: self.client.clone(),
+            port: self.port,
+        }
+    }
 }
 
 impl<P, S> NodeService<P, S>
@@ -542,33 +438,40 @@ where
 {
     /// Create a new instance of the node service given a client chain and a port.
     pub fn new(client: ChainClient<P, S>, port: NonZeroU16) -> Self {
-        let client = Mutex::new(client);
+        let client = Arc::new(Mutex::new(client));
         Self { client, port }
     }
 
-    /// Run the node service.
-    pub async fn run(mut self) -> Result<(), anyhow::Error> {
-        let port = self.port.get();
-        let chain_id = self.client.get_mut().chain_id();
-        let service = Arc::new(self);
-        let service_sync = service.clone();
-
-        let index_handler = get(graphiql).post(index_handler::<P, S>);
-        let applications_handler = get(graphiql).post(application_handler::<P, S>);
-
-        let schema = Schema::build(
-            QueryRoot(service.clone()),
-            MutationRoot(service.clone()),
-            SubscriptionRoot(service.clone()),
+    fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S>, SubscriptionRoot<P, S>> {
+        Schema::build(
+            QueryRoot {
+                client: self.client.clone(),
+                port: self.port,
+            },
+            MutationRoot {
+                client: self.client.clone(),
+            },
+            SubscriptionRoot {
+                client: self.client.clone(),
+            },
         )
-        .finish();
+        .finish()
+    }
+
+    /// Run the node service.
+    pub async fn run(self) -> Result<(), anyhow::Error> {
+        let port = self.port.get();
+        let chain_id = self.client.lock().await.chain_id();
+
+        let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
+        let applications_handler = axum::routing::get(graphiql).post(Self::application_handler);
 
         let app = Router::new()
             .route("/", index_handler)
             .route("/applications/:id", applications_handler)
             .route("/ready", axum::routing::get(|| async { "ready!" }))
-            .route_service("/ws", GraphQLSubscription::new(schema.clone()))
-            .layer(Extension(service))
+            .route_service("/ws", GraphQLSubscription::new(self.schema()))
+            .layer(Extension(self.clone()))
             // TODO(#551): Provide application authentication.
             .layer(CorsLayer::permissive());
 
@@ -576,7 +479,7 @@ where
 
         // TODO(#646): Deduplicate with linera.rs synchronize handling.
         let sync_fut = async move {
-            let mut notification_stream = service_sync
+            let mut notification_stream = self
                 .client
                 .lock()
                 .await
@@ -585,7 +488,7 @@ where
             let mut tracker = NotificationTracker::default();
             while let Some(notification) = notification_stream.next().await {
                 debug!("Received notification: {:?}", notification);
-                let mut client = service_sync.client.lock().await;
+                let mut client = self.client.lock().await;
                 if tracker.insert(notification.clone()) {
                     if let Err(e) = client.synchronize_and_recompute_balance().await {
                         warn!(
@@ -630,5 +533,94 @@ where
         sync_response?;
 
         Ok(())
+    }
+
+    /// Handles queries for user applications.
+    async fn user_application_query(
+        &self,
+        application_id: UserApplicationId,
+        request: &Request,
+    ) -> Result<async_graphql::Response, NodeServiceError> {
+        let bytes = serde_json::to_vec(&request)?;
+        let query = Query::User {
+            application_id,
+            bytes,
+        };
+        let response = self.client.lock().await.query_application(&query).await?;
+        let user_response_bytes = match response {
+            Response::System(_) => unreachable!("cannot get a system response for a user query"),
+            Response::User(user) => user,
+        };
+        Ok(serde_json::from_slice(&user_response_bytes)?)
+    }
+
+    /// Handles mutations for user applications.
+    async fn user_application_mutation(
+        &self,
+        application_id: UserApplicationId,
+        request: &Request,
+    ) -> Result<async_graphql::Response, NodeServiceError> {
+        let graphql_response = self.user_application_query(application_id, request).await?;
+        let bcs_bytes_list = bytes_from_response(graphql_response.data);
+        if bcs_bytes_list.is_empty() {
+            return Err(NodeServiceError::MalformedApplicationResponse);
+        }
+        let operations = bcs_bytes_list
+            .into_iter()
+            .map(|bytes| Operation::User {
+                application_id,
+                bytes,
+            })
+            .collect();
+
+        let mut client = self.client.lock().await;
+        client.process_inbox().await?;
+        let certificate = client.execute_operations(operations).await?;
+        let value = async_graphql::Value::from_json(serde_json::to_value(certificate)?)?;
+        Ok(async_graphql::Response::new(value))
+    }
+
+    /// Executes a GraphQL query and generates a response for our `Schema`.
+    async fn index_handler(service: Extension<Self>, request: GraphQLRequest) -> GraphQLResponse {
+        service
+            .0
+            .schema()
+            .execute(request.into_inner())
+            .await
+            .into()
+    }
+
+    /// Executes a GraphQL query against an application.
+    /// Pattern matches on the `OperationType` of the query and routes the query
+    /// accordingly.
+    async fn application_handler(
+        Path(application_id): Path<String>,
+        service: Extension<Self>,
+        request: GraphQLRequest,
+    ) -> Result<GraphQLResponse, NodeServiceError> {
+        let mut request = request.into_inner();
+
+        let parsed_query = request.parsed_query()?;
+        let operation_type = operation_type(parsed_query)?;
+
+        let application_id: UserApplicationId = application_id.parse()?;
+
+        let response = match operation_type {
+            OperationType::Query => {
+                service
+                    .0
+                    .user_application_query(application_id, &request)
+                    .await?
+            }
+            OperationType::Mutation => {
+                service
+                    .0
+                    .user_application_mutation(application_id, &request)
+                    .await?
+            }
+            OperationType::Subscription => return Err(NodeServiceError::UnsupportedQueryType),
+        };
+
+        Ok(response.into())
     }
 }
