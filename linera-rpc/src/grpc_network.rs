@@ -135,6 +135,7 @@ where
                 internal_network.clone(),
                 cross_chain_config.max_retries,
                 Duration::from_millis(cross_chain_config.retry_delay_ms),
+                Duration::from_millis(cross_chain_config.sender_delay_ms),
                 shard_id,
                 cross_chain_receiver,
             )
@@ -240,6 +241,7 @@ where
         network: ValidatorInternalNetworkConfig,
         cross_chain_max_retries: u32,
         cross_chain_retry_delay: Duration,
+        cross_chain_sender_delay: Duration,
         this_shard: ShardId,
         mut receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
@@ -252,7 +254,7 @@ where
             // Send the cross-chain query and retry if needed.
             for i in 0..cross_chain_max_retries {
                 // Delay increases linearly with the attempt number.
-                tokio::time::sleep(cross_chain_retry_delay * i).await;
+                tokio::time::sleep(cross_chain_sender_delay + cross_chain_retry_delay * i).await;
 
                 let result = || async {
                     let cross_chain_request = cross_chain_request.clone().try_into()?;
