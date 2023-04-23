@@ -428,7 +428,10 @@ impl SimpleMassClient {
 
 #[async_trait]
 impl MassClient for SimpleMassClient {
-    async fn send(&self, requests: Vec<RpcMessage>) -> Result<Vec<RpcMessage>, MassClientError> {
+    async fn send(
+        &mut self,
+        requests: Vec<RpcMessage>,
+    ) -> Result<Vec<RpcMessage>, MassClientError> {
         let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
         let mut requests = requests.into_iter();

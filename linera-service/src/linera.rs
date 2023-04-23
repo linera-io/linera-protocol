@@ -54,7 +54,7 @@ use {
         Operation,
     },
     linera_rpc::{
-        config::NetworkProtocol, grpc_network::GrpcMassClient, mass::MassClient, simple_network,
+        config::NetworkProtocol, grpc_network::GrpcClient, mass::MassClient, simple_network,
         RpcMessage,
     },
     std::collections::{HashMap, HashSet},
@@ -153,7 +153,10 @@ impl ClientContext {
                         max_in_flight,
                     ))
                 }
-                NetworkProtocol::Grpc => Box::new(GrpcMassClient::new(config.network.clone())),
+                NetworkProtocol::Grpc => Box::new(
+                    GrpcClient::new(config.network.clone(), self.send_timeout, self.recv_timeout)
+                        .unwrap(),
+                ),
             };
 
             validator_clients.push(client);
@@ -309,7 +312,7 @@ impl ClientContext {
         let time_start = Instant::now();
         info!("Broadcasting {} {}", proposals.len(), phase);
         let mut handles = Vec::new();
-        for client in self.make_validator_mass_clients(max_in_flight) {
+        for mut client in self.make_validator_mass_clients(max_in_flight) {
             let proposals = proposals.clone();
             handles.push(tokio::spawn(async move {
                 info!("Sending {} requests", proposals.len());
@@ -1158,7 +1161,7 @@ where
                 let Some(committee) = info.latest_committee() else {
                     bail!("Invalid chain info response; missing latest committee");
                 };
-                let nodes = context.make_node_provider().make_nodes(committee).await?;
+                let nodes = context.make_node_provider().make_nodes(committee)?;
 
                 // Download the parent chain.
                 let target_height = effect_id.height.try_add_one()?;

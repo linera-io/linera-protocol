@@ -418,7 +418,7 @@ pub struct GrpcClient {
 }
 
 impl GrpcClient {
-    pub(crate) async fn new(
+    pub fn new(
         network: ValidatorPublicNetworkConfig,
         connect_timeout: Duration,
         timeout: Duration,
@@ -427,8 +427,7 @@ impl GrpcClient {
         let channel = Channel::from_shared(address.clone())?
             .connect_timeout(connect_timeout)
             .timeout(timeout)
-            .connect()
-            .await?;
+            .connect_lazy();
         let client = ValidatorNodeClient::new(channel);
         Ok(Self { address, client })
     }
@@ -557,19 +556,14 @@ impl ValidatorNode for GrpcClient {
     }
 }
 
-pub struct GrpcMassClient(ValidatorPublicNetworkConfig);
-
-impl GrpcMassClient {
-    pub fn new(network: ValidatorPublicNetworkConfig) -> Self {
-        Self(network)
-    }
-}
-
 #[async_trait]
-impl MassClient for GrpcMassClient {
+impl MassClient for GrpcClient {
     #[instrument(skip_all, err)]
-    async fn send(&self, requests: Vec<RpcMessage>) -> Result<Vec<RpcMessage>, MassClientError> {
-        let mut client = ValidatorNodeClient::connect(self.0.http_address()).await?;
+    async fn send(
+        &mut self,
+        requests: Vec<RpcMessage>,
+    ) -> Result<Vec<RpcMessage>, MassClientError> {
+        let client = &mut self.client;
         let mut responses = Vec::new();
 
         for request in requests {
