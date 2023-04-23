@@ -13,7 +13,7 @@ pub struct CrossChainConfig {
     pub(crate) queue_size: usize,
     /// Maximum number of retries for a cross-chain message.
     #[structopt(long = "cross_chain_max_retries", default_value = "10")]
-    pub(crate) max_retries: usize,
+    pub(crate) max_retries: u32,
     /// Delay before retrying of cross-chain message.
     #[structopt(long = "cross_chain_retry_delay_ms", default_value = "2000")]
     pub(crate) retry_delay_ms: u64,
