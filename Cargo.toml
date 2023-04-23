@@ -26,3 +26,16 @@ debug = true
 [workspace.metadata.cargo-all-features]
 skip_optional_dependencies = true
 max_combination_size = 1
+
+# Make sure to compile VMs with high optimization level
+[profile.dev.package.wasmer]
+opt-level = 3
+
+[profile.dev.package.wasmer-middlewares]
+opt-level = 3
+
+[profile.dev.package.wasmparser]
+opt-level = 3
+
+[profile.dev.package.wasmtime]
+opt-level = 3
