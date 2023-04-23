@@ -82,7 +82,7 @@ where
     async fn forward_cross_chain_queries(
         nickname: String,
         network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
-        cross_chain_max_retries: usize,
+        cross_chain_max_retries: u32,
         cross_chain_retry_delay: Duration,
         this_shard: ShardId,
         mut receiver: mpsc::Receiver<(RpcMessage, ShardId)>,
@@ -96,25 +96,23 @@ where
         while let Some((message, shard_id)) = receiver.next().await {
             let shard = network.shard(shard_id);
             let remote_address = format!("{}:{}", shard.host, shard.port);
-            let mut attempt = 0;
+
             // Send the cross-chain query and retry if needed.
-            loop {
+            for i in 0..cross_chain_max_retries {
+                // Delay increases linearly with the attempt number.
+                tokio::time::sleep(cross_chain_retry_delay * i).await;
+
                 let status = pool.send_message_to(message.clone(), &remote_address).await;
                 match status {
                     Err(error) => {
-                        error!(
+                        warn!(
                             nickname,
                             %error,
-                            attempt,
+                            i,
+                            from_shard = this_shard,
+                            to_shard = shard_id,
                             "Failed to send cross-chain query",
                         );
-                        if attempt < cross_chain_max_retries {
-                            tokio::time::sleep(cross_chain_retry_delay).await;
-                            attempt += 1;
-                            // retry
-                        } else {
-                            break;
-                        }
                     }
                     _ => {
                         debug!(
@@ -125,6 +123,12 @@ where
                         break;
                     }
                 }
+                error!(
+                    nickname,
+                    from_shard = this_shard,
+                    to_shard = shard_id,
+                    "Dropping cross-chain query",
+                );
             }
         }
     }
