@@ -192,7 +192,6 @@ where
 
 pub struct NodeProvider<S>(BTreeMap<ValidatorName, LocalValidatorClient<S>>);
 
-#[async_trait]
 impl<S> ValidatorNodeProvider for NodeProvider<S>
 where
     S: Store + Clone + Send + Sync + 'static,
@@ -200,7 +199,7 @@ where
 {
     type Node = LocalValidatorClient<S>;
 
-    async fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
+    fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
         let name = ValidatorName::from_str(address).unwrap();
         let node = self
             .0

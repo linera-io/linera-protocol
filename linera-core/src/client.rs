@@ -9,7 +9,6 @@ use crate::{
     worker::WorkerState,
 };
 use anyhow::{anyhow, bail, ensure, Result};
-use async_trait::async_trait;
 use futures::{
     future,
     stream::{select_all, FuturesUnordered, StreamExt},
@@ -87,23 +86,24 @@ pub struct ChainClient<ValidatorNodeProvider, StorageClient> {
 }
 
 /// Turn an address into a validator node (local node or client to a remote node).
-#[async_trait]
+#[allow(clippy::result_large_err)]
 pub trait ValidatorNodeProvider {
     type Node: ValidatorNode + Clone + Send + Sync + 'static;
 
-    async fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
+    fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
 
-    async fn make_nodes(
+    fn make_nodes(
         &self,
         committee: &Committee,
     ) -> Result<Vec<(ValidatorName, Self::Node)>, NodeError> {
-        futures::future::join_all(committee.validators.iter().map(|(name, validator)| async {
-            let node = self.make_node(&validator.network_address).await?;
-            Ok((*name, node))
-        }))
-        .await
-        .into_iter()
-        .collect()
+        committee
+            .validators
+            .iter()
+            .map(|(name, validator)| {
+                let node = self.make_node(&validator.network_address)?;
+                Ok((*name, node))
+            })
+            .collect()
     }
 }
 
@@ -294,7 +294,7 @@ where
     /// Obtain the validators trusted by the local chain.
     async fn validator_nodes(&mut self) -> Result<Vec<(ValidatorName, P::Node)>, NodeError> {
         match self.local_committee().await {
-            Ok(committee) => self.validator_node_provider.make_nodes(&committee).await,
+            Ok(committee) => self.validator_node_provider.make_nodes(&committee),
             Err(NodeError::InactiveChain(_)) | Err(NodeError::InactiveLocalChain(_)) => {
                 Ok(Vec::new())
             }
@@ -367,7 +367,7 @@ where
     pub async fn subscribe_all(&mut self, chain_ids: Vec<ChainId>) -> Result<NotificationStream> {
         let committee = self.local_committee().await?;
         let mut streams = Vec::new();
-        for (name, mut node) in self.validator_node_provider.make_nodes(&committee).await? {
+        for (name, mut node) in self.validator_node_provider.make_nodes(&committee)? {
             match node.subscribe(chain_ids.clone()).await {
                 Ok(notification_stream) => {
                     streams.push(notification_stream);
@@ -428,7 +428,7 @@ where
         let storage_client = self.node_client.storage_client().await;
         let cross_chain_delay = self.cross_chain_delay;
         let cross_chain_retries = self.cross_chain_retries;
-        let nodes = self.validator_node_provider.make_nodes(committee).await?;
+        let nodes = self.validator_node_provider.make_nodes(committee)?;
         let result = communicate_with_quorum(
             &nodes,
             committee,
@@ -534,10 +534,7 @@ where
         }
         // Recover history from the network. We assume that the committee that signed the
         // certificate is still active.
-        let nodes = self
-            .validator_node_provider
-            .make_nodes(remote_committee)
-            .await?;
+        let nodes = self.validator_node_provider.make_nodes(remote_committee)?;
         self.node_client
             .download_certificates(nodes.clone(), block.chain_id, block.height)
             .await?;
@@ -583,10 +580,7 @@ where
         // Use network information from the local chain.
         let chain_id = self.chain_id;
         let local_committee = self.local_committee().await?;
-        let nodes = self
-            .validator_node_provider
-            .make_nodes(&local_committee)
-            .await?;
+        let nodes = self.validator_node_provider.make_nodes(&local_committee)?;
         // Synchronize the state of the admin chain from the network.
         self.node_client
             .synchronize_chain_state(nodes.clone(), self.admin_id)
@@ -798,7 +792,7 @@ where
         self.pending_block = Some(block.clone());
         // Collect blobs required for execution.
         let committee = self.local_committee().await?;
-        let nodes = self.validator_node_provider.make_nodes(&committee).await?;
+        let nodes = self.validator_node_provider.make_nodes(&committee)?;
         let blobs = self
             .node_client
             .read_or_download_blobs(nodes, block.bytecode_locations())
