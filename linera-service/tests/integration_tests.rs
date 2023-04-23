@@ -35,6 +35,10 @@ static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 /// to `cargo` when starting client, server and proxy processes.
 const CARGO_ENV: &str = "INTEGRATION_TEST_CARGO_PARAMS";
 
+/// The name of the environment variable that allows specifying additional arguments to be passed
+/// to the binary when starting a server.
+const SERVER_ENV: &str = "INTEGRATION_TEST_SERVER_PARAMS";
+
 #[test_log::test(tokio::test)]
 async fn test_examples_in_readme_simple() -> std::io::Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -637,10 +641,12 @@ impl TestRunner {
     }
 
     async fn run_server(&self, i: usize, j: usize) -> Child {
-        let child = self
-            .cargo_run()
-            .args(["--bin", "server"])
-            .arg("run")
+        let mut command = self.cargo_run();
+        command.args(["--bin", "server"]).arg("run");
+        if let Ok(var) = env::var(SERVER_ENV) {
+            command.args(var.split_whitespace());
+        }
+        let child = command
             .args(["--storage", &format!("rocksdb:server_{}_{}.db", i, j)])
             .args(["--server", &format!("server_{}.json", i)])
             .args(["--shard", &j.to_string()])
