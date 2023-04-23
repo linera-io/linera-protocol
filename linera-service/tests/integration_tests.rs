@@ -8,10 +8,10 @@ use linera_execution::Bytecode;
 use linera_service::config::WalletState;
 #[cfg(feature = "aws")]
 use linera_views::test_utils::LocalStackTestContext;
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, OnceCell};
 use serde_json::{json, Value};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     env, fs,
     io::Write,
     ops::Range,
@@ -153,6 +153,54 @@ impl Network {
     }
 }
 
+async fn cargo_force_build_binary(name: &'static str) -> PathBuf {
+    let mut build_command = tokio::process::Command::new("cargo");
+    build_command.arg("build");
+    let is_release = if let Ok(var) = env::var(CARGO_ENV) {
+        let extra_args = var.split_whitespace();
+        build_command.args(extra_args.clone());
+        let extra_args: HashSet<_> = extra_args.into_iter().map(str::trim).collect();
+        extra_args.contains("-r") || extra_args.contains("--release")
+    } else {
+        false
+    };
+    build_command
+        .arg("--features")
+        .arg("benchmark")
+        .arg("--bin")
+        .arg(name);
+    info!("Running compiler: {:?}", build_command);
+    build_command.spawn().unwrap().wait().await.unwrap();
+    if is_release {
+        env::current_dir()
+            .unwrap()
+            .join("../target/release")
+            .join(name)
+            .canonicalize()
+            .unwrap()
+    } else {
+        env::current_dir()
+            .unwrap()
+            .join("../target/debug")
+            .join(name)
+            .canonicalize()
+            .unwrap()
+    }
+}
+
+async fn cargo_build_binary(name: &'static str) -> PathBuf {
+    static COMPILED_BINARIES: OnceCell<Mutex<HashMap<&'static str, PathBuf>>> = OnceCell::new();
+    let mut binaries = COMPILED_BINARIES.get_or_init(Default::default).lock().await;
+    match binaries.get(name) {
+        Some(path) => path.clone(),
+        None => {
+            let path = cargo_force_build_binary(name).await;
+            binaries.insert(name, path.clone());
+            path
+        }
+    }
+}
+
 struct Client {
     tmp_dir: Rc<TempDir>,
     storage: String,
@@ -172,30 +220,20 @@ impl Client {
         }
     }
 
-    fn client_run(&self) -> tokio::process::Command {
-        let mut command = tokio::process::Command::new("cargo");
+    async fn client_run(&self) -> tokio::process::Command {
+        let path = cargo_build_binary("linera").await;
+        let mut command = tokio::process::Command::new(path);
         command
             .current_dir(&self.tmp_dir.path().canonicalize().unwrap())
             .kill_on_drop(true)
-            .arg("run");
-        if let Ok(var) = env::var(CARGO_ENV) {
-            command.args(var.split_whitespace());
-        }
-        command
-            .arg("--features")
-            .arg("benchmark")
-            .arg("--manifest-path")
-            .arg(env::current_dir().unwrap().join("Cargo.toml"))
-            .args(["--bin", "linera"])
-            .arg("--")
             .args(["--wallet", &self.wallet])
             .args(["--send-timeout-us", "10000000"])
             .args(["--recv-timeout-us", "10000000"]);
         command
     }
 
-    fn client_run_with_storage(&self) -> tokio::process::Command {
-        let mut command = self.client_run();
+    async fn client_run_with_storage(&self) -> tokio::process::Command {
+        let mut command = self.client_run().await;
         command
             .args(["--storage", &self.storage.to_string()])
             .args([
@@ -207,6 +245,7 @@ impl Client {
 
     async fn create_genesis_config(&self) {
         self.client_run()
+            .await
             .args(["create_genesis_config", "10"])
             .args(["--initial-funding", "10"])
             .args(["--committee", "committee.json"])
@@ -220,6 +259,7 @@ impl Client {
 
     async fn init(&self) {
         self.client_run()
+            .await
             .args(["wallet", "init"])
             .args(["--genesis", "genesis.json"])
             .spawn()
@@ -257,6 +297,7 @@ impl Client {
     ) -> String {
         let stdout = Self::run_command(
             self.client_run_with_storage()
+                .await
                 .arg("publish_and_create")
                 .args([contract, service])
                 .arg(arg.to_string())
@@ -274,6 +315,7 @@ impl Client {
     ) -> String {
         let stdout = Self::run_command(
             self.client_run_with_storage()
+                .await
                 .arg("publish_bytecode")
                 .args([contract, service])
                 .args(publisher.into().iter().map(ChainId::to_string)),
@@ -290,6 +332,7 @@ impl Client {
     ) -> String {
         let stdout = Self::run_command(
             self.client_run_with_storage()
+                .await
                 .arg("create_application")
                 .args([bytecode_id, arg.to_string()])
                 .args(creator.into().iter().map(ChainId::to_string)),
@@ -306,6 +349,7 @@ impl Client {
         let port = port.into().unwrap_or(8080);
         let child = self
             .client_run_with_storage()
+            .await
             .arg("service")
             .args(chain_id.into().as_ref().map(ChainId::to_string))
             .args(["--port".to_string(), port.to_string()])
@@ -329,7 +373,7 @@ impl Client {
     }
 
     async fn query_validators(&self, chain_id: Option<ChainId>) {
-        let mut command = self.client_run_with_storage();
+        let mut command = self.client_run_with_storage().await;
         command.arg("query_validators");
         if let Some(chain_id) = chain_id {
             command.arg(&chain_id.to_string());
@@ -340,6 +384,7 @@ impl Client {
     async fn query_balance(&self, chain_id: ChainId) -> anyhow::Result<usize> {
         let stdout = Self::run_command(
             self.client_run_with_storage()
+                .await
                 .arg("query_balance")
                 .arg(&chain_id.to_string()),
         )
@@ -351,6 +396,7 @@ impl Client {
     async fn transfer(&self, amount: usize, from: ChainId, to: ChainId) {
         Self::run_command(
             self.client_run_with_storage()
+                .await
                 .arg("transfer")
                 .arg(&amount.to_string())
                 .args(["--from", &from.to_string()])
@@ -361,6 +407,7 @@ impl Client {
 
     async fn benchmark(&self, max_in_flight: usize) {
         self.client_run_with_storage()
+            .await
             .arg("benchmark")
             .args(["--max-in-flight", &max_in_flight.to_string()])
             .spawn()
@@ -375,7 +422,7 @@ impl Client {
         from: ChainId,
         to_owner: Option<Owner>,
     ) -> anyhow::Result<(EffectId, ChainId)> {
-        let mut command = self.client_run_with_storage();
+        let mut command = self.client_run_with_storage().await;
         command
             .arg("open_chain")
             .args(["--from", &from.to_string()]);
@@ -404,6 +451,7 @@ impl Client {
         let address = format!("{}:127.0.0.1:{}", self.network.external_short(), port);
         Self::run_command(
             self.client_run_with_storage()
+                .await
                 .arg("set_validator")
                 .args(["--name", name])
                 .args(["--address", &address])
@@ -415,6 +463,7 @@ impl Client {
     async fn remove_validator(&self, name: &str) {
         Self::run_command(
             self.client_run_with_storage()
+                .await
                 .arg("remove_validator")
                 .args(["--name", name]),
         )
@@ -422,13 +471,14 @@ impl Client {
     }
 
     async fn keygen(&self) -> anyhow::Result<Owner> {
-        let stdout = Self::run_command(self.client_run().arg("keygen")).await;
+        let stdout = Self::run_command(self.client_run().await.arg("keygen")).await;
         Ok(Owner::from_str(stdout.trim())?)
     }
 
     async fn assign(&self, owner: Owner, effect_id: EffectId) -> anyhow::Result<ChainId> {
         let stdout = Self::run_command(
             self.client_run_with_storage()
+                .await
                 .arg("assign")
                 .args(["--key", &owner.to_string()])
                 .args(["--effect-id", &effect_id.to_string()]),
@@ -443,6 +493,7 @@ impl Client {
     async fn synchronize_balance(&self, chain_id: ChainId) {
         Self::run_command(
             self.client_run_with_storage()
+                .await
                 .arg("sync_balance")
                 .arg(&chain_id.to_string()),
         )
@@ -489,20 +540,12 @@ impl TestRunner {
         self.tmp_dir.clone()
     }
 
-    fn cargo_run(&self) -> tokio::process::Command {
-        let mut command = tokio::process::Command::new("cargo");
+    async fn command_for_binary(&self, name: &'static str) -> tokio::process::Command {
+        let path = cargo_build_binary(name).await;
+        let mut command = tokio::process::Command::new(path);
         command
             .current_dir(&self.tmp_dir.path().canonicalize().unwrap())
-            .kill_on_drop(true)
-            .arg("run");
-        if let Ok(var) = env::var(CARGO_ENV) {
-            command.args(var.split_whitespace());
-        }
-        command
-            .arg("--manifest-path")
-            .arg(env::current_dir().unwrap().join("Cargo.toml"))
-            .arg("--features")
-            .arg("benchmark");
+            .kill_on_drop(true);
         command
     }
 
@@ -565,27 +608,22 @@ impl TestRunner {
     }
 
     async fn generate_initial_server_config(&self, n_validators: usize) {
-        let mut command = self.cargo_run();
-        command
-            .args(["--bin", "server"])
-            .arg("generate")
-            .arg("--validators");
+        let mut command = self.command_for_binary("server").await;
+        command.arg("generate").arg("--validators");
         for i in 1..n_validators + 1 {
             command.arg(&self.configuration_string(i));
         }
         command
             .args(["--committee", "committee.json"])
-            .spawn()
-            .unwrap()
-            .wait()
+            .status()
             .await
             .unwrap();
     }
 
     async fn generate_server_config(&self, server_number: usize) -> anyhow::Result<String> {
         let output = self
-            .cargo_run()
-            .args(["--bin", "server"])
+            .command_for_binary("server")
+            .await
             .arg("generate")
             .arg("--validators")
             .arg(&self.configuration_string(server_number))
@@ -601,9 +639,8 @@ impl TestRunner {
 
     async fn run_proxy(&self, i: usize) -> Child {
         let child = self
-            .cargo_run()
-            .args(["--bin", "proxy"])
-            .arg("--")
+            .command_for_binary("proxy")
+            .await
             .arg(format!("server_{}.json", i))
             .spawn()
             .unwrap();
@@ -641,8 +678,8 @@ impl TestRunner {
     }
 
     async fn run_server(&self, i: usize, j: usize) -> Child {
-        let mut command = self.cargo_run();
-        command.args(["--bin", "server"]).arg("run");
+        let mut command = self.command_for_binary("server").await;
+        command.arg("run");
         if let Ok(var) = env::var(SERVER_ENV) {
             command.args(var.split_whitespace());
         }
