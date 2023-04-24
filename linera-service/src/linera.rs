@@ -28,6 +28,7 @@ use linera_execution::{
 use linera_rpc::node_provider::NodeProvider;
 use linera_service::{
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
+    node_service::NodeService,
     storage::{Runnable, StorageConfig},
 };
 use linera_storage::Store;
@@ -1034,7 +1035,8 @@ where
                         info!("{:?}", notification);
                     }
                 }
-                warn!("Notification stream ended.")
+                warn!("Notification stream ended.");
+                // Not saving the wallet because `subscribe_all` has no effect on `chain_client`.
             }
 
             Synchronize { chain_ids } => {
@@ -1075,16 +1077,25 @@ where
                                 }
                             }
                         }
+                        context.update_wallet_from_client(&mut chain_client).await;
+                        context.save_wallet();
                     }
                 }
-                warn!("Notification stream ended.")
+                warn!("Notification stream ended.");
+                // Wallet states are saved above.
             }
 
             Service { chain_id, port } => {
                 let chain_client = context.make_chain_client(storage, chain_id);
-                let service = linera_service::node_service::NodeService::new(chain_client, port);
-
-                service.run().await?;
+                let service = NodeService::new(chain_client, port);
+                service
+                    .run(context, |context, client| {
+                        Box::pin(async {
+                            context.update_wallet_from_client(client).await;
+                            context.save_wallet();
+                        })
+                    })
+                    .await?;
             }
 
             PublishBytecode {
@@ -1099,6 +1110,8 @@ where
                     .await?;
                 println!("{}", bytecode_id);
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs());
+                context.update_wallet_from_client(&mut chain_client).await;
+                context.save_wallet();
             }
 
             CreateApplication {
@@ -1125,6 +1138,8 @@ where
                 info!("{}", "Application published successfully!".green().bold());
                 println!("{}", application_id);
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs());
+                context.update_wallet_from_client(&mut chain_client).await;
+                context.save_wallet();
             }
 
             PublishAndCreate {
@@ -1152,6 +1167,8 @@ where
                 info!("{}", "Application published successfully!".green().bold());
                 println!("{}", application_id);
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs());
+                context.update_wallet_from_client(&mut chain_client).await;
+                context.save_wallet();
             }
 
             Assign { key, effect_id } => {

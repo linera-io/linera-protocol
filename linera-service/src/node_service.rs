@@ -36,7 +36,7 @@ use linera_execution::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
-use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{net::SocketAddr, num::NonZeroU16, ops::DerefMut, sync::Arc};
 use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, warn};
@@ -459,7 +459,11 @@ where
     }
 
     /// Run the node service.
-    pub async fn run(self) -> Result<(), anyhow::Error> {
+    pub async fn run<C, F>(self, mut context: C, wallet_updater: F) -> Result<(), anyhow::Error>
+    where
+        for<'a> F:
+            (Fn(&'a mut C, &'a mut ChainClient<P, S>) -> futures::future::BoxFuture<'a, ()>) + Send,
+    {
         let port = self.port.get();
         let chain_id = self.client.lock().await.chain_id();
 
@@ -520,6 +524,7 @@ where
                             }
                         }
                     }
+                    wallet_updater(&mut context, client.deref_mut()).await;
                 }
             }
             Ok::<(), anyhow::Error>(())
