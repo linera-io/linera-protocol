@@ -137,6 +137,8 @@ impl CrowdFunding {
         // The campaign chain.
         let chain_id = system_api::current_application_id().creation.chain_id;
         // First, move the funds to the campaign chain (under the same owner).
+        // TODO(#589): Simplify this when the messaging system guarantees atomic delivery
+        // of all messages created in the same operation/effect.
         let destination = fungible::Destination::Account(Account { chain_id, owner });
         let call = fungible::ApplicationCall::Transfer {
             owner,
@@ -144,7 +146,7 @@ impl CrowdFunding {
             destination,
         };
         self.call_application(
-            true,
+            /* authenticated by owner */ true,
             self.parameters.unwrap().token,
             &bcs::to_bytes(&call).unwrap(),
             vec![],
@@ -154,7 +156,7 @@ impl CrowdFunding {
         let effect = Effect::PledgeWithAccount { owner, amount };
         result
             .effects
-            .push((chain_id.into(), true, bcs::to_bytes(&effect).unwrap()));
+            .push((chain_id.into(), /* authenticated by owner */ true, bcs::to_bytes(&effect).unwrap()));
         Ok(())
     }
 
