@@ -7,7 +7,8 @@ mod wasm;
 
 use crate::client::{
     client_test_utils::{
-        MakeMemoryStoreClient, MakeRocksdbStoreClient, StoreBuilder, TestBuilder, ROCKSDB_SEMAPHORE,
+        FaultType, MakeMemoryStoreClient, MakeRocksdbStoreClient, StoreBuilder, TestBuilder,
+        ROCKSDB_SEMAPHORE,
     },
     CommunicateAction,
 };
@@ -296,7 +297,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(store_builder, 4, 0).await?;
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Balance::from(4))
         .await?;
@@ -307,7 +308,7 @@ where
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 4)
             .await
             .unwrap()
             .value,
@@ -322,7 +323,7 @@ where
     sender
         .transfer_to_account(
             None,
-            Amount::from(3),
+            Amount::from(2),
             Account::chain(ChainId::root(2)),
             UserData::default(),
         )
@@ -343,9 +344,41 @@ where
     assert!(client.local_balance().await.is_err());
     assert_eq!(
         client.synchronize_and_recompute_balance().await.unwrap(),
-        Balance::from(1)
+        Balance::from(2)
     );
-    assert_eq!(client.local_balance().await.unwrap(), Balance::from(1));
+    assert_eq!(client.local_balance().await.unwrap(), Balance::from(2));
+
+    // We need at least three validators for making a transfer.
+    builder.set_fault_type(..2, FaultType::Offline).await;
+    assert!(client
+        .transfer_to_account(
+            None,
+            Amount::from(1),
+            Account::chain(ChainId::root(3)),
+            UserData::default(),
+        )
+        .await
+        .is_err());
+    builder.set_fault_type(..2, FaultType::Honest).await;
+    builder.set_fault_type(2.., FaultType::Offline).await;
+    assert!(sender
+        .transfer_to_account(
+            None,
+            Amount::from(1),
+            Account::chain(ChainId::root(3)),
+            UserData::default(),
+        )
+        .await
+        .is_err());
+
+    // Half the validators voted for one block, half for the other. We need to make a proposal in
+    // the next round to succeed.
+    builder.set_fault_type(.., FaultType::Honest).await;
+    assert_eq!(
+        client.synchronize_and_recompute_balance().await.unwrap(),
+        Balance::from(2)
+    );
+    client.clear_pending_block().await;
     client
         .transfer_to_account(
             None,
@@ -355,6 +388,29 @@ where
         )
         .await
         .unwrap();
+
+    // The other client doesn't know the new round number yet:
+    assert_eq!(
+        sender.synchronize_and_recompute_balance().await.unwrap(),
+        Balance::from(1)
+    );
+    sender.clear_pending_block().await;
+    sender
+        .transfer_to_account(
+            None,
+            Amount::from(1),
+            Account::chain(ChainId::root(2)),
+            UserData::default(),
+        )
+        .await
+        .unwrap();
+
+    // That's it, we spent all our money on this test!
+    assert_eq!(sender.local_balance().await.unwrap(), Balance::from(0));
+    assert_eq!(
+        client.synchronize_and_recompute_balance().await.unwrap(),
+        Balance::from(0)
+    );
     Ok(())
 }
 

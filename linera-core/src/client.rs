@@ -814,7 +814,7 @@ where
         // Send the query to validators.
         let final_certificate = match self.chain_info().await?.manager {
             ChainManagerInfo::Multi(_) => {
-                // Need two-round trips.
+                // Need two round-trips.
                 let certificate = self
                     .communicate_chain_updates(
                         &committee,
