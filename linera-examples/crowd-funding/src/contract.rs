@@ -75,7 +75,7 @@ impl Contract for CrowdFunding {
             bcs::from_bytes(effect).map_err(Error::InvalidEffect)?;
         ensure!(
             context.chain_id == system_api::current_application_id().creation.chain_id,
-            Error::AdminChainOnly
+            Error::CampaignChainOnly
         );
         self.execute_pledge_with_account(owner, amount).await?;
         Ok(ExecutionResult::default())
@@ -94,10 +94,10 @@ impl Contract for CrowdFunding {
 
         match call {
             ApplicationCall::PledgeWithSessions { source } => {
-                // Only sessions on the admin chain are supported.
+                // Only sessions on the campaign chain are supported.
                 ensure!(
                     context.chain_id == system_api::current_application_id().creation.chain_id,
-                    Error::AdminChainOnly
+                    Error::CampaignChainOnly
                 );
                 // In real-life applications, the source could be constrained so that a
                 // refund cannot be used as a transfer.
@@ -160,7 +160,7 @@ impl CrowdFunding {
         Ok(())
     }
 
-    /// Adds a pledge from a local account to the admin chain.
+    /// Adds a pledge from a local account to the campaign chain.
     async fn execute_pledge_with_account(
         &mut self,
         owner: AccountOwner,
@@ -367,7 +367,7 @@ impl CrowdFunding {
 pub enum Error {
     /// Action can only be executed on the chain that created the crowd-funding campaign
     #[error("Action can only be executed on the chain that created the crowd-funding campaign")]
-    AdminChainOnly,
+    CampaignChainOnly,
 
     /// Crowd-funding application doesn't support any cross-application sessions.
     #[error("Crowd-funding application doesn't support any cross-application sessions")]
