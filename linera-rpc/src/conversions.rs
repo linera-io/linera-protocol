@@ -3,7 +3,7 @@
 
 use crate::grpc_network::{
     grpc,
-    grpc::{ChainInfoResult, NameSignaturePair, NewBlock, NewMessage},
+    grpc::{ChainInfoResult, MessagesAreMarkedAsReceived, NameSignaturePair, NewBlock, NewMessage},
 };
 use ed25519::signature::Signature as edSignature;
 use linera_base::{
@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_chain::data_types::{
     BlockAndRound, BlockProposal, Certificate, CertificateWithDependencies, ChannelFullName,
-    HashedValue, LiteCertificate, LiteValue, Medium, Origin,
+    HashedValue, LiteCertificate, LiteValue, Medium, Origin, Target,
 };
 use linera_core::{
     data_types::{
@@ -130,6 +130,12 @@ impl From<Reason> for grpc::Reason {
                         height: Some(height.into()),
                     })
                 }
+                Reason::MessagesAreMarkedAsReceived { target, height } => {
+                    grpc::reason::Inner::ReceivedMessages(MessagesAreMarkedAsReceived {
+                        target: Some(target.into()),
+                        height: Some(height.into()),
+                    })
+                }
             }),
         }
     }
@@ -148,6 +154,12 @@ impl TryFrom<grpc::Reason> for Reason {
                     origin: try_proto_convert!(new_message.origin),
                     height: proto_convert!(new_message.height),
                 },
+                grpc::reason::Inner::ReceivedMessages(received_messages) => {
+                    Reason::MessagesAreMarkedAsReceived {
+                        target: try_proto_convert!(received_messages.target),
+                        height: proto_convert!(received_messages.height),
+                    }
+                }
             },
         )
     }
@@ -679,6 +691,26 @@ impl TryFrom<grpc::Origin> for Origin {
         Ok(Self {
             sender: try_proto_convert!(origin.sender),
             medium: try_proto_convert!(origin.medium),
+        })
+    }
+}
+
+impl From<Target> for grpc::Target {
+    fn from(target: Target) -> Self {
+        Self {
+            recipient: Some(target.recipient.into()),
+            medium: Some(target.medium.into()),
+        }
+    }
+}
+
+impl TryFrom<grpc::Target> for Target {
+    type Error = ProtoConversionError;
+
+    fn try_from(target: grpc::Target) -> Result<Self, Self::Error> {
+        Ok(Self {
+            recipient: try_proto_convert!(target.recipient),
+            medium: try_proto_convert!(target.medium),
         })
     }
 }

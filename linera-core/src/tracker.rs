@@ -3,14 +3,15 @@
 
 use crate::worker::{Notification, Reason};
 use linera_base::{data_types::BlockHeight, identifiers::ChainId};
-use linera_chain::data_types::Origin;
-use std::collections::HashMap;
+use linera_chain::data_types::{Origin, Target};
+use std::collections::{hash_map::Entry, HashMap};
 
 /// A structure which tracks the latest block heights seen for a given ChainId.
 #[derive(Default)]
 pub struct NotificationTracker {
     new_block: HashMap<ChainId, BlockHeight>,
     new_message: HashMap<(ChainId, Origin), BlockHeight>,
+    received_messages: HashMap<(ChainId, Target), BlockHeight>,
 }
 
 impl NotificationTracker {
@@ -20,45 +21,35 @@ impl NotificationTracker {
     /// we return true, otherwise we return false.
     pub fn insert(&mut self, notification: Notification) -> bool {
         match notification.reason {
-            Reason::NewBlock { height } => self.insert_new_block(notification.chain_id, height),
-            Reason::NewMessage { height, origin } => {
-                self.insert_new_message(notification.chain_id, origin, height)
+            Reason::NewBlock { height } => {
+                Self::insert_height(&mut self.new_block, notification.chain_id, height)
             }
+            Reason::NewMessage { height, origin } => Self::insert_height(
+                &mut self.new_message,
+                (notification.chain_id, origin),
+                height,
+            ),
+            Reason::MessagesAreMarkedAsReceived { height, target } => Self::insert_height(
+                &mut self.received_messages,
+                (notification.chain_id, target),
+                height,
+            ),
         }
     }
 
-    fn insert_new_block(&mut self, chain_id: ChainId, height: BlockHeight) -> bool {
-        match self.new_block.get(&chain_id) {
-            None => {
-                self.new_block.insert(chain_id, height);
-                true
-            }
-            Some(prev_height) => {
-                if height > *prev_height {
-                    self.new_block.insert(chain_id, height);
-                    true
-                } else {
-                    false
-                }
-            }
-        }
-    }
-
-    fn insert_new_message(
-        &mut self,
-        chain_id: ChainId,
-        origin: Origin,
+    fn insert_height<K: Eq + std::hash::Hash>(
+        map: &mut HashMap<K, BlockHeight>,
+        key: K,
         height: BlockHeight,
     ) -> bool {
-        let key = (chain_id, origin);
-        match self.new_message.get(&key) {
-            None => {
-                self.new_message.insert(key, height);
+        match map.entry(key) {
+            Entry::Vacant(entry) => {
+                entry.insert(height);
                 true
             }
-            Some(prev_height) => {
-                if height > *prev_height {
-                    self.new_message.insert(key, height);
+            Entry::Occupied(mut entry) => {
+                if height > *entry.get() {
+                    entry.insert(height);
                     true
                 } else {
                     false

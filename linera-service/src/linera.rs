@@ -1076,6 +1076,7 @@ where
                                     warn!("Failed to process inbox after receiving new message: {:?} with error: {:?}", notification, e);
                                 }
                             }
+                            _ => (),
                         }
                         context.update_wallet_from_client(&mut chain_client).await;
                         context.save_wallet();

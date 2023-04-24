@@ -122,6 +122,7 @@ doc_scalar!(
 pub enum Reason {
     NewBlock { height: BlockHeight },
     NewMessage { origin: Origin, height: BlockHeight },
+    MessagesAreMarkedAsReceived { target: Target, height: BlockHeight },
 }
 
 /// Error type for [`ValidatorWorker`].
@@ -1051,10 +1052,18 @@ where
             } => {
                 let mut chain = self.storage.load_chain(sender).await?;
                 let target = Target { recipient, medium };
-                if chain.mark_messages_as_received(target, height).await? {
+                let mut actions = NetworkActions::default();
+                if chain
+                    .mark_messages_as_received(target.clone(), height)
+                    .await?
+                {
+                    actions.notifications.push(Notification {
+                        chain_id: sender,
+                        reason: Reason::MessagesAreMarkedAsReceived { target, height },
+                    });
                     chain.save().await?;
                 }
-                Ok(NetworkActions::default())
+                Ok(actions)
             }
         }
     }

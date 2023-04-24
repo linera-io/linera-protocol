@@ -66,6 +66,7 @@ message Reason {
   oneof inner {
     NewBlock new_block = 1;
     NewMessage new_message = 2;
+    MessagesAreMarkedAsReceived received_messages = 3;
   }
 }
 
@@ -75,6 +76,11 @@ message NewBlock {
 
 message NewMessage {
   Origin origin = 1;
+  BlockHeight height = 2;
+}
+
+message MessagesAreMarkedAsReceived {
+  Target target = 1;
   BlockHeight height = 2;
 }
 
@@ -162,6 +168,15 @@ message Medium {
     // A channel message.
     ChannelFullName channel = 2;
   }
+}
+
+// The target of a message, relative to a particular application. Used to identify each outbox.
+message Target {
+  // The chain ID of the recipient.
+  ChainId recipient = 1;
+
+  // The medium
+  Medium medium = 2;
 }
 
 message ChannelFullName {

@@ -523,6 +523,7 @@ where
                                 );
                             }
                         }
+                        _ => (),
                     }
                     wallet_updater(&mut context, client.deref_mut()).await;
                 }
