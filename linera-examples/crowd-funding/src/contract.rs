@@ -6,7 +6,7 @@
 mod state;
 
 use async_trait::async_trait;
-use crowd_funding::{ApplicationCall, Operation};
+use crowd_funding::{ApplicationCall, Effect, Operation};
 use fungible::{Account, AccountOwner, Destination};
 use linera_sdk::{
     base::{Amount, SessionId},
@@ -42,54 +42,76 @@ impl Contract for CrowdFunding {
 
     async fn execute_operation(
         &mut self,
-        _context: &OperationContext,
+        context: &OperationContext,
         operation_bytes: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
         let operation: Operation =
             bcs::from_bytes(operation_bytes).map_err(Error::InvalidOperation)?;
 
+        let mut result = ExecutionResult::default();
+
         match operation {
             Operation::PledgeWithTransfer { owner, amount } => {
-                self.execute_pledge_with_transfer(owner, amount).await?
+                if context.chain_id == system_api::current_application_id().creation.chain_id {
+                    self.execute_pledge_with_account(owner, amount).await?;
+                } else {
+                    self.execute_pledge_with_transfer(&mut result, owner, amount)
+                        .await?;
+                }
             }
             Operation::Collect => self.collect_pledges().await?,
             Operation::Cancel => self.cancel_campaign().await?,
         }
 
-        Ok(ExecutionResult::default())
+        Ok(result)
     }
 
     async fn execute_effect(
         &mut self,
-        _context: &EffectContext,
-        _effect: &[u8],
+        context: &EffectContext,
+        effect: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        Err(Error::EffectsNotSupported)
+        let Effect::PledgeWithAccount { owner, amount } =
+            bcs::from_bytes(effect).map_err(Error::InvalidEffect)?;
+        ensure!(
+            context.chain_id == system_api::current_application_id().creation.chain_id,
+            Error::CampaignChainOnly
+        );
+        self.execute_pledge_with_account(owner, amount).await?;
+        Ok(ExecutionResult::default())
     }
 
     async fn handle_application_call(
         &mut self,
-        _context: &CalleeContext,
+        context: &CalleeContext,
         argument: &[u8],
         sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
         let call: ApplicationCall =
             bcs::from_bytes(argument).map_err(Error::InvalidCrossApplicationCall)?;
 
+        let mut result = ApplicationCallResult::default();
+
         match call {
             ApplicationCall::PledgeWithSessions { source } => {
+                // Only sessions on the campaign chain are supported.
+                ensure!(
+                    context.chain_id == system_api::current_application_id().creation.chain_id,
+                    Error::CampaignChainOnly
+                );
                 // In real-life applications, the source could be constrained so that a
                 // refund cannot be used as a transfer.
                 self.execute_pledge_with_sessions(source, sessions).await?
             }
             ApplicationCall::PledgeWithTransfer { owner, amount } => {
-                self.execute_pledge_with_transfer(owner, amount).await?
+                self.execute_pledge_with_transfer(&mut result.execution_result, owner, amount)
+                    .await?;
             }
             ApplicationCall::Collect => self.collect_pledges().await?,
             ApplicationCall::Cancel => self.cancel_campaign().await?,
         }
 
-        Ok(ApplicationCallResult::default())
+        Ok(result)
     }
 
     async fn handle_session_call(
@@ -104,8 +126,42 @@ impl Contract for CrowdFunding {
 }
 
 impl CrowdFunding {
-    /// Adds a pledge from a transfer.
+    /// Adds a pledge from a remote account.
     async fn execute_pledge_with_transfer(
+        &mut self,
+        result: &mut ExecutionResult,
+        owner: AccountOwner,
+        amount: Amount,
+    ) -> Result<(), Error> {
+        ensure!(amount > Amount::zero(), Error::EmptyPledge);
+        // The campaign chain.
+        let chain_id = system_api::current_application_id().creation.chain_id;
+        // First, move the funds to the campaign chain (under the same owner).
+        // TODO(#589): Simplify this when the messaging system guarantees atomic delivery
+        // of all messages created in the same operation/effect.
+        let destination = fungible::Destination::Account(Account { chain_id, owner });
+        let call = fungible::ApplicationCall::Transfer {
+            owner,
+            amount,
+            destination,
+        };
+        self.call_application(
+            /* authenticated by owner */ true,
+            self.parameters.unwrap().token,
+            &bcs::to_bytes(&call).unwrap(),
+            vec![],
+        )
+        .await;
+        // Second, schedule the attribution of the funds to the (remote) campaign.
+        let effect = Effect::PledgeWithAccount { owner, amount };
+        result
+            .effects
+            .push((chain_id.into(), /* authenticated by owner */ true, bcs::to_bytes(&effect).unwrap()));
+        Ok(())
+    }
+
+    /// Adds a pledge from a local account to the campaign chain.
+    async fn execute_pledge_with_account(
         &mut self,
         owner: AccountOwner,
         amount: Amount,
@@ -309,9 +365,9 @@ impl CrowdFunding {
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// Crowd-funding application doesn't support any cross-chain effects.
-    #[error("Crowd-funding application doesn't support any cross-chain effects")]
-    EffectsNotSupported,
+    /// Action can only be executed on the chain that created the crowd-funding campaign
+    #[error("Action can only be executed on the chain that created the crowd-funding campaign")]
+    CampaignChainOnly,
 
     /// Crowd-funding application doesn't support any cross-application sessions.
     #[error("Crowd-funding application doesn't support any cross-application sessions")]
@@ -324,6 +380,10 @@ pub enum Error {
     /// Crowd-funding campaigns can't start after its deadline.
     #[error("Crowd-funding campaign can not start after its deadline")]
     DeadlineInThePast,
+
+    /// Effect bytes does not deserialize into an [`Effect`].
+    #[error("Requested effect is invalid")]
+    InvalidEffect(bcs::Error),
 
     /// Operation bytes does not deserialize into an [`Operation`].
     #[error("Requested operation is invalid")]
