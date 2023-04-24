@@ -5,7 +5,6 @@
 use crate::ChainError;
 use async_graphql::SimpleObject;
 use linera_base::{
-    bcs_scalar,
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
     data_types::{BlockHeight, RoundNumber, Timestamp},
     doc_scalar, ensure,
@@ -617,7 +616,6 @@ impl BcsHashable for Value {}
 
 impl BcsSignable for LiteValue {}
 
-bcs_scalar!(Certificate, "A certified statement from the committee");
 doc_scalar!(
     ChannelFullName,
     "A channel name together with its application id"
