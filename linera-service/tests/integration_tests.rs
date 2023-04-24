@@ -860,11 +860,11 @@ impl NodeService {
     async fn create_application(&self, bytecode_id: &str) -> String {
         let query_string = format!(
             "mutation {{ createApplication(\
-            bytecodeId: \"{bytecode_id}\", \
-            parameters: [], \
-            initializationArgument: [], \
-            requiredApplicationIds: []) \
-        }}"
+                bytecodeId: \"{bytecode_id}\", \
+                parameters: [], \
+                initializationArgument: [], \
+                requiredApplicationIds: []) \
+            }}"
         );
         let query = json!({ "query": query_string });
         let client = reqwest::Client::new();
