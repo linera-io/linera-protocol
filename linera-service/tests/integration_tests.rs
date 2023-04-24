@@ -350,13 +350,14 @@ impl Client {
         &self,
         chain_id: impl Into<Option<ChainId>>,
         port: impl Into<Option<u16>>,
-    ) -> Child {
+    ) -> NodeService {
+        let chain_id = chain_id.into();
         let port = port.into().unwrap_or(8080);
         let child = self
             .run_with_storage()
             .await
             .arg("service")
-            .args(chain_id.into().as_ref().map(ChainId::to_string))
+            .args(chain_id.as_ref().map(ChainId::to_string))
             .args(["--port".to_string(), port.to_string()])
             .spawn()
             .unwrap();
@@ -369,7 +370,11 @@ impl Client {
                 .await;
             if request.is_ok() {
                 info!("Node service has started");
-                return child;
+                return NodeService {
+                    port,
+                    chain_id,
+                    _child: child,
+                };
             } else {
                 warn!("Waiting for node service to start");
             }
@@ -756,181 +761,174 @@ impl TestRunner {
     }
 }
 
-async fn get_application_uri(
-    application_id: &str,
-    chain_id: impl Into<Option<ChainId>>,
-    port: impl Into<Option<u16>>,
-) -> String {
-    let chain_id = chain_id.into();
-    let port = port.into();
-    for i in 0..10 {
-        tokio::time::sleep(Duration::from_secs(i)).await;
-        let values = try_get_applications_uri(chain_id, port).await;
-        if let Some(link) = values.get(application_id) {
-            return link.to_string();
-        }
-        warn!(
-            "Waiting for application {application_id:?} to be visible on chain {:?}",
-            chain_id
-        );
-    }
-    panic!("Could not find application URI");
-}
-
-async fn try_get_applications_uri(
+struct NodeService {
     chain_id: Option<ChainId>,
-    port: Option<u16>,
-) -> HashMap<String, String> {
-    let query_string = if let Some(chain_id) = chain_id {
-        format!(
-            "query {{ applications(chainId: \"{}\") {{ id link }}}}",
-            chain_id
-        )
-    } else {
-        "query { applications { id link }}".to_string()
-    };
-    let query = json!({ "query": query_string });
-    let client = reqwest::Client::new();
-    let response = client
-        .post(format!("http://localhost:{}/", port.unwrap_or(8080)))
-        .json(&query)
-        .send()
-        .await
-        .unwrap();
-    let body: Value = response.json().await.unwrap();
-    body.get("data")
-        .unwrap()
-        .get("applications")
-        .unwrap()
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|a| {
-            let id = a.get("id").unwrap().as_str().unwrap().to_string();
-            let link = a.get("link").unwrap().as_str().unwrap().to_string();
-            (id, link)
-        })
-        .collect()
+    port: u16,
+    _child: Child,
 }
 
-async fn publish_bytecode(
-    contract: PathBuf,
-    service: PathBuf,
-    port: impl Into<Option<u16>>,
-) -> String {
-    let contract_code = Bytecode::load_from_file(&contract).await.unwrap();
-    let service_code = Bytecode::load_from_file(&service).await.unwrap();
-    let query_string = format!(
-        "mutation {{ publishBytecode(contract: {}, service: {}) }}",
-        contract_code.to_value(),
-        service_code.to_value(),
-    );
-    let query = json!({ "query": query_string });
-    let client = reqwest::Client::new();
-    let response = client
-        .post(format!("http://localhost:{}/", port.into().unwrap_or(8080)))
-        .json(&query)
-        .send()
-        .await
-        .unwrap();
-    let response_body: Value = response.json().await.unwrap();
-    if let Some(errors) = response_body.get("errors") {
-        let mut error_string = errors.to_string();
-        if error_string.len() > 10000 {
-            error_string = format!(
-                "{}..{}",
-                &error_string[..5000],
-                &error_string[(error_string.len() - 5000)..]
+impl NodeService {
+    async fn make_application(&self, application_id: &str) -> Application {
+        for i in 0..10 {
+            tokio::time::sleep(Duration::from_secs(i)).await;
+            let values = self.try_get_applications_uri().await;
+            if let Some(link) = values.get(application_id) {
+                return Application {
+                    uri: link.to_string(),
+                };
+            }
+            warn!(
+                "Waiting for application {application_id:?} to be visible on chain {:?}",
+                self.chain_id
             );
         }
-        panic!("publish_and_create failed: {}", error_string);
+        panic!("Could not find application URI");
     }
-    serde_json::from_value(
-        response_body
-            .get("data")
-            .unwrap()
-            .get("publishBytecode")
-            .unwrap()
-            .clone(),
-    )
-    .unwrap()
-}
 
-async fn create_application(bytecode_id: &str, port: impl Into<Option<u16>>) -> String {
-    let query_string = format!(
-        "mutation {{ createApplication(\
+    async fn try_get_applications_uri(&self) -> HashMap<String, String> {
+        let query_string = if let Some(chain_id) = self.chain_id {
+            format!(
+                "query {{ applications(chainId: \"{}\") {{ id link }}}}",
+                chain_id
+            )
+        } else {
+            "query { applications { id link }}".to_string()
+        };
+        let query = json!({ "query": query_string });
+        let client = reqwest::Client::new();
+        let response = client
+            .post(format!("http://localhost:{}/", self.port))
+            .json(&query)
+            .send()
+            .await
+            .unwrap();
+        let body: Value = response.json().await.unwrap();
+        body.get("data")
+            .unwrap()
+            .get("applications")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| {
+                let id = a.get("id").unwrap().as_str().unwrap().to_string();
+                let link = a.get("link").unwrap().as_str().unwrap().to_string();
+                (id, link)
+            })
+            .collect()
+    }
+
+    async fn publish_bytecode(&self, contract: PathBuf, service: PathBuf) -> String {
+        let contract_code = Bytecode::load_from_file(&contract).await.unwrap();
+        let service_code = Bytecode::load_from_file(&service).await.unwrap();
+        let query_string = format!(
+            "mutation {{ publishBytecode(contract: {}, service: {}) }}",
+            contract_code.to_value(),
+            service_code.to_value(),
+        );
+        let query = json!({ "query": query_string });
+        let client = reqwest::Client::new();
+        let response = client
+            .post(format!("http://localhost:{}/", self.port))
+            .json(&query)
+            .send()
+            .await
+            .unwrap();
+        let response_body: Value = response.json().await.unwrap();
+        if let Some(errors) = response_body.get("errors") {
+            let mut error_string = errors.to_string();
+            if error_string.len() > 10000 {
+                error_string = format!(
+                    "{}..{}",
+                    &error_string[..5000],
+                    &error_string[(error_string.len() - 5000)..]
+                );
+            }
+            panic!("publish_and_create failed: {}", error_string);
+        }
+        serde_json::from_value(
+            response_body
+                .get("data")
+                .unwrap()
+                .get("publishBytecode")
+                .unwrap()
+                .clone(),
+        )
+        .unwrap()
+    }
+
+    async fn create_application(&self, bytecode_id: &str) -> String {
+        let query_string = format!(
+            "mutation {{ createApplication(\
             bytecodeId: \"{bytecode_id}\", \
             parameters: [], \
             initializationArgument: [], \
             requiredApplicationIds: []) \
         }}"
-    );
-    let query = json!({ "query": query_string });
-    let client = reqwest::Client::new();
-    let response = client
-        .post(format!("http://localhost:{}/", port.into().unwrap_or(8080)))
-        .json(&query)
-        .send()
-        .await
-        .unwrap();
-    let response_body: Value = response.json().await.unwrap();
-    if let Some(errors) = response_body.get("errors") {
-        panic!("create_application failed: {}", errors);
+        );
+        let query = json!({ "query": query_string });
+        let client = reqwest::Client::new();
+        let response = client
+            .post(format!("http://localhost:{}/", self.port))
+            .json(&query)
+            .send()
+            .await
+            .unwrap();
+        let response_body: Value = response.json().await.unwrap();
+        if let Some(errors) = response_body.get("errors") {
+            panic!("create_application failed: {}", errors);
+        }
+        serde_json::from_value(
+            response_body
+                .get("data")
+                .unwrap()
+                .get("createApplication")
+                .unwrap()
+                .clone(),
+        )
+        .unwrap()
     }
-    serde_json::from_value(
+}
+
+struct Application {
+    uri: String,
+}
+
+impl Application {
+    async fn get_counter_value(&self) -> u64 {
+        let response_body = self.query_application("query { value }").await;
         response_body
             .get("data")
             .unwrap()
-            .get("createApplication")
+            .get("value")
             .unwrap()
-            .clone(),
-    )
-    .unwrap()
-}
-
-async fn get_counter_value(application_uri: &str) -> u64 {
-    let response_body = query_application(application_uri, "query { value }").await;
-    response_body
-        .get("data")
-        .unwrap()
-        .get("value")
-        .unwrap()
-        .as_u64()
-        .unwrap()
-}
-
-async fn query_application(application_uri: &str, query_string: &str) -> Value {
-    let query = json!({ "query": query_string });
-    let client = reqwest::Client::new();
-    let response = client
-        .post(application_uri)
-        .json(&query)
-        .send()
-        .await
-        .unwrap();
-    if !response.status().is_success() {
-        panic!(
-            "Query \"{}\" failed: {}",
-            query_string,
-            response.text().await.unwrap()
-        );
+            .as_u64()
+            .unwrap()
     }
-    response.json().await.unwrap()
-}
 
-async fn increment_counter_value(application_uri: &str, increment: u64) {
-    let query_string = format!(
-        "mutation {{  executeOperation(operation: {{ increment: {} }})}}",
-        increment
-    );
-    let query = json!({ "query": query_string });
-    let client = reqwest::Client::new();
-    client
-        .post(application_uri)
-        .json(&query)
-        .send()
-        .await
-        .unwrap();
+    async fn query_application(&self, query_string: &str) -> Value {
+        let query = json!({ "query": query_string });
+        let client = reqwest::Client::new();
+        let response = client.post(&self.uri).json(&query).send().await.unwrap();
+        if !response.status().is_success() {
+            panic!(
+                "Query \"{}\" failed: {}",
+                query_string,
+                response.text().await.unwrap()
+            );
+        }
+        response.json().await.unwrap()
+    }
+
+    async fn increment_counter_value(&self, increment: u64) {
+        let query_string = format!(
+            "mutation {{  executeOperation(operation: {{ increment: {} }})}}",
+            increment
+        );
+        let query = json!({ "query": query_string });
+        let client = reqwest::Client::new();
+        client.post(&self.uri).json(&query).send().await.unwrap();
+    }
 }
 
 #[test_log::test(tokio::test)]
@@ -953,16 +951,16 @@ async fn test_end_to_end_counter() {
     let application_id = client
         .publish_and_create(contract, service, original_counter_value, None)
         .await;
-    let _node_service = client.run_node_service(None, None).await;
+    let node_service = client.run_node_service(None, None).await;
 
-    let application_uri = get_application_uri(&application_id, None, None).await;
+    let application = node_service.make_application(&application_id).await;
 
-    let counter_value = get_counter_value(&application_uri).await;
+    let counter_value = application.get_counter_value().await;
     assert_eq!(counter_value, original_counter_value);
 
-    increment_counter_value(&application_uri, increment).await;
+    application.increment_counter_value(increment).await;
 
-    let counter_value = get_counter_value(&application_uri).await;
+    let counter_value = application.get_counter_value().await;
     assert_eq!(counter_value, original_counter_value + increment);
 }
 
@@ -987,16 +985,16 @@ async fn test_end_to_end_counter_publish_create() {
     let application_id = client
         .create_application(bytecode_id, original_counter_value, None)
         .await;
-    let _node_service = client.run_node_service(None, None).await;
+    let node_service = client.run_node_service(None, None).await;
 
-    let application_uri = get_application_uri(&application_id, None, None).await;
+    let application = node_service.make_application(&application_id).await;
 
-    let counter_value = get_counter_value(&application_uri).await;
+    let counter_value = application.get_counter_value().await;
     assert_eq!(counter_value, original_counter_value);
 
-    increment_counter_value(&application_uri, increment).await;
+    application.increment_counter_value(increment).await;
 
-    let counter_value = get_counter_value(&application_uri).await;
+    let counter_value = application.get_counter_value().await;
     assert_eq!(counter_value, original_counter_value + increment);
 }
 
@@ -1159,19 +1157,19 @@ async fn test_end_to_end_social_user_pub_sub() {
     // Assign chain_2 to client_2_key.
     assert_eq!(chain2, client2.assign(client2key, effect_id).await.unwrap());
 
-    let _node_service1 = client1.run_node_service(chain1, 8080).await;
-    let _node_service2 = client2.run_node_service(chain2, 8081).await;
+    let node_service1 = client1.run_node_service(chain1, 8080).await;
+    let node_service2 = client2.run_node_service(chain2, 8081).await;
 
-    let bytecode_id = publish_bytecode(contract, service, 8080).await;
-    let application_id = create_application(&bytecode_id, 8080).await;
+    let bytecode_id = node_service1.publish_bytecode(contract, service).await;
+    let application_id = node_service1.create_application(&bytecode_id).await;
 
-    let app1 = get_application_uri(&application_id, chain1, 8080).await;
+    let app1 = node_service1.make_application(&application_id).await;
     let subscribe = format!("mutation {{ subscribe(chainId: \"{}\") }}", chain2);
-    query_application(&app1, &subscribe).await;
+    app1.query_application(&subscribe).await;
 
-    let app2 = get_application_uri(&application_id, chain2, 8081).await;
+    let app2 = node_service2.make_application(&application_id).await;
     let post = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
-    query_application(&app2, post).await;
+    app2.query_application(post).await;
 
     let query = "query { receivedPostsKeys(count: 5) { author, index } }";
     let expected_response = json!({"data": { "receivedPostsKeys": [
@@ -1180,7 +1178,7 @@ async fn test_end_to_end_social_user_pub_sub() {
     'success: {
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
-            let response = query_application(&app1, query).await;
+            let response = app1.query_application(query).await;
             if response == expected_response {
                 info!("Confirmed post");
                 break 'success;
