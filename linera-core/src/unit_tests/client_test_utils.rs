@@ -25,6 +25,7 @@ use linera_views::lru_caching::TEST_CACHE_SIZE;
 use linera_views::views::ViewError;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    slice::SliceIndex,
     str::FromStr,
     sync::Arc,
 };
@@ -33,6 +34,13 @@ use tokio::sync::{oneshot, Semaphore};
 #[cfg(feature = "aws")]
 use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum FaultType {
+    Honest,
+    Offline,
+    Malicious,
+}
+
 /// An validator used for testing. "Faulty" validators ignore block proposals (but not
 /// certificates or info queries) and have the wrong initial balance for all chains.
 ///
@@ -40,12 +48,16 @@ use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTe
 /// the validator's tasks to be canceled: In a real network, a validator also wouldn't cancel
 /// tasks if the client stopped waiting for the response.
 struct LocalValidator<S> {
-    is_faulty: bool,
+    fault_type: FaultType,
     state: WorkerState<S>,
 }
 
 #[derive(Clone)]
 pub struct LocalValidatorClient<S>(Arc<Mutex<LocalValidator<S>>>);
+type NameAndClient<B> = (
+    ValidatorName,
+    LocalValidatorClient<<B as StoreBuilder>::Store>,
+);
 
 #[async_trait]
 impl<S> ValidatorNode for LocalValidatorClient<S>
@@ -106,9 +118,20 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    fn new(is_faulty: bool, state: WorkerState<S>) -> Self {
-        let validator = LocalValidator { is_faulty, state };
+    fn new(state: WorkerState<S>) -> Self {
+        let validator = LocalValidator {
+            fault_type: FaultType::Honest,
+            state,
+        };
         Self(Arc::new(Mutex::new(validator)))
+    }
+
+    async fn set_fault_type(&self, fault_type: FaultType) {
+        self.0.lock().await.fault_type = fault_type;
+    }
+
+    async fn fault_type(&self) -> FaultType {
+        self.0.lock().await.fault_type
     }
 
     /// Executes the future produced by `f` in a new thread in a new Tokio runtime.
@@ -135,13 +158,19 @@ where
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.0.lock().await;
-        let result = if validator.is_faulty {
-            Err(ArithmeticError::Overflow.into())
-        } else {
-            validator.state.handle_block_proposal(proposal).await
+        let result = match validator.fault_type {
+            FaultType::Offline => Err(NodeError::ClientIoError {
+                error: "offline".to_string(),
+            }),
+            FaultType::Malicious => Err(ArithmeticError::Overflow.into()),
+            FaultType::Honest => validator
+                .state
+                .handle_block_proposal(proposal)
+                .await
+                .map_err(Into::into),
         };
         // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
-        sender.send(result.map_err(Into::into).map(|(info, _actions)| info))
+        sender.send(result.map(|(info, _actions)| info))
     }
 
     async fn do_handle_lite_certificate(
@@ -222,8 +251,7 @@ pub struct TestBuilder<B: StoreBuilder> {
     pub initial_committee: Committee,
     admin_id: ChainId,
     genesis_store_builder: GenesisStoreBuilder,
-    faulty_validators: HashSet<ValidatorName>,
-    validator_clients: Vec<(ValidatorName, LocalValidatorClient<B::Store>)>,
+    validator_clients: Vec<NameAndClient<B>>,
     validator_stores: HashMap<ValidatorName, B::Store>,
     chain_client_stores: Vec<B::Store>,
 }
@@ -305,12 +333,11 @@ where
             let state = WorkerState::new(format!("Node {}", i), Some(key_pair), store.clone())
                 .with_allow_inactive_chains(false)
                 .with_allow_messages_from_deprecated_epochs(false);
-            let validator = if i < with_faulty_validators {
+            let validator = LocalValidatorClient::new(state);
+            if i < with_faulty_validators {
                 faulty_validators.insert(name);
-                LocalValidatorClient::new(true, state)
-            } else {
-                LocalValidatorClient::new(false, state)
-            };
+                validator.set_fault_type(FaultType::Malicious).await;
+            }
             validator_clients.push((name, validator));
             validator_stores.insert(name, store);
         }
@@ -323,11 +350,26 @@ where
             initial_committee,
             admin_id: ChainId::root(0),
             genesis_store_builder: GenesisStoreBuilder::default(),
-            faulty_validators,
             validator_clients,
             validator_stores,
             chain_client_stores: Vec::new(),
         })
+    }
+
+    pub async fn set_fault_type<I>(&mut self, range: I, fault_type: FaultType)
+    where
+        I: SliceIndex<[NameAndClient<B>], Output = [NameAndClient<B>]>,
+    {
+        let mut faulty_validators = vec![];
+        for (name, validator) in &mut self.validator_clients[range] {
+            validator.set_fault_type(fault_type).await;
+            faulty_validators.push(*name);
+        }
+        tracing::info!(
+            "Making the following validators {:?}: {:?}",
+            fault_type,
+            faulty_validators
+        );
     }
 
     pub async fn add_initial_chain(
@@ -340,8 +382,9 @@ where
         // Remember what's in the genesis store for future clients to join.
         self.genesis_store_builder
             .add(description, public_key, balance);
-        for (name, store) in self.validator_stores.iter_mut() {
-            if self.faulty_validators.contains(name) {
+        for (name, validator) in &self.validator_clients {
+            let store = self.validator_stores.get_mut(name).unwrap();
+            if validator.fault_type().await == FaultType::Malicious {
                 store
                     .create_chain(
                         self.initial_committee.clone(),
