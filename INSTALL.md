@@ -7,9 +7,13 @@
     - See https://docs.brew.sh/Installation#untar-anywhere
 * `brew install rustup-init`
 * `rustup target add wasm32-unknown-unknown`
-* Protoc
+* Protoc (Intel Arch)
     - `curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.11/protoc-21.11-osx-x86_64.zip`
     - `unzip protoc-21.11-osx-x86_64.zip -d $HOME/.local`
+    - If `~/.local` is not in your path, add it: `export PATH="$PATH:$HOME/.local/bin"`
+* Protoc (Apple Arch (M1/M2))
+    - `curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.11/protoc-21.11-osx-aarch_64.zip`
+    - `unzip protoc-21.11-osx-aarch_64.zip -d $HOME/.local`
     - If `~/.local` is not in your path, add it: `export PATH="$PATH:$HOME/.local/bin"`
 ## Service
 
