@@ -43,7 +43,7 @@ const CARGO_ENV: &str = "INTEGRATION_TEST_CARGO_PARAMS";
 const SERVER_ENV: &str = "INTEGRATION_TEST_SERVER_PARAMS";
 
 #[test_log::test(tokio::test)]
-async fn test_examples_in_readme_simple() -> std::io::Result<()> {
+async fn test_examples_in_readme() -> std::io::Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let dir = tempdir().unwrap();
@@ -934,7 +934,7 @@ async fn increment_counter_value(application_uri: &str, increment: u64) {
 }
 
 #[test_log::test(tokio::test)]
-async fn test_counter_end_to_end() {
+async fn test_end_to_end_counter() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
@@ -967,7 +967,7 @@ async fn test_counter_end_to_end() {
 }
 
 #[test_log::test(tokio::test)]
-async fn test_counter_end_to_end_publish_create() {
+async fn test_end_to_end_counter_publish_create() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
@@ -1001,7 +1001,7 @@ async fn test_counter_end_to_end_publish_create() {
 }
 
 #[test_log::test(tokio::test)]
-async fn test_multiple_wallets() {
+async fn test_end_to_end_multiple_wallets() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
@@ -1055,13 +1055,13 @@ async fn test_multiple_wallets() {
 }
 
 #[test_log::test(tokio::test)]
-async fn reconfiguration_test_grpc() {
+async fn test_end_to_end_reconfiguration_grpc() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     test_reconfiguration(Network::Grpc).await;
 }
 
 #[test_log::test(tokio::test)]
-async fn reconfiguration_test_simple() {
+async fn test_end_to_end_reconfiguration_simple() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     test_reconfiguration(Network::Simple).await;
 }
@@ -1132,7 +1132,7 @@ async fn test_reconfiguration(network: Network) {
 }
 
 #[test_log::test(tokio::test)]
-async fn social_user_pub_sub() {
+async fn test_end_to_end_social_user_pub_sub() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
