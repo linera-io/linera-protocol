@@ -531,6 +531,7 @@ impl Validator {
 struct TestRunner {
     tmp_dir: Rc<TempDir>,
     network: Network,
+    next_client_id: usize,
 }
 
 impl TestRunner {
@@ -538,11 +539,14 @@ impl TestRunner {
         Self {
             tmp_dir: Rc::new(tempdir().unwrap()),
             network,
+            next_client_id: 0,
         }
     }
 
-    fn tmp_dir(&self) -> Rc<TempDir> {
-        self.tmp_dir.clone()
+    fn make_client(&mut self, network: Network) -> Client {
+        let client = Client::new(self.tmp_dir.clone(), network, self.next_client_id);
+        self.next_client_id += 1;
+        client
     }
 
     async fn command_for_binary(&self, name: &'static str) -> Command {
@@ -573,7 +577,7 @@ impl TestRunner {
     fn configuration_string(&self, server_number: usize) -> String {
         let n = server_number;
         let path = self
-            .tmp_dir()
+            .tmp_dir
             .path()
             .canonicalize()
             .unwrap()
@@ -934,8 +938,8 @@ async fn test_counter_end_to_end() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let runner = TestRunner::new(network);
-    let client = Client::new(runner.tmp_dir(), network, 1);
+    let mut runner = TestRunner::new(network);
+    let client = runner.make_client(network);
     let n_validators = 4;
 
     let original_counter_value = 35;
@@ -967,8 +971,8 @@ async fn test_counter_end_to_end_publish_create() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let runner = TestRunner::new(network);
-    let client = Client::new(runner.tmp_dir(), network, 1);
+    let mut runner = TestRunner::new(network);
+    let client = runner.make_client(network);
     let n_validators = 4;
 
     let original_counter_value = 35;
@@ -1001,9 +1005,9 @@ async fn test_multiple_wallets() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
-    let runner = TestRunner::new(Network::Grpc);
-    let client_1 = Client::new(runner.tmp_dir(), Network::Grpc, 1);
-    let client_2 = Client::new(runner.tmp_dir(), Network::Grpc, 2);
+    let mut runner = TestRunner::new(Network::Grpc);
+    let client_1 = runner.make_client(Network::Grpc);
+    let client_2 = runner.make_client(Network::Grpc);
     let n_validators = 4;
 
     // Create initial server and client config.
@@ -1063,8 +1067,8 @@ async fn reconfiguration_test_simple() {
 }
 
 async fn test_reconfiguration(network: Network) {
-    let runner = TestRunner::new(network);
-    let client = Client::new(runner.tmp_dir(), network, 1);
+    let mut runner = TestRunner::new(network);
+    let client = runner.make_client(network);
     let n_validators = 4;
 
     runner.generate_initial_server_config(n_validators).await;
@@ -1132,9 +1136,9 @@ async fn social_user_pub_sub() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let runner = TestRunner::new(network);
-    let client1 = Client::new(runner.tmp_dir(), network, 1);
-    let client2 = Client::new(runner.tmp_dir(), network, 2);
+    let mut runner = TestRunner::new(network);
+    let client1 = runner.make_client(network);
+    let client2 = runner.make_client(network);
     let n_validators = 4;
 
     // Create initial server and client config.
