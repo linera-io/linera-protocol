@@ -16,7 +16,7 @@ use std::{
     io::Write,
     ops::Range,
     path::PathBuf,
-    process::{Command, Stdio},
+    process::Stdio,
     rc::Rc,
     str::FromStr,
     time::Duration,
@@ -61,7 +61,8 @@ async fn test_examples_in_readme_simple() -> std::io::Result<()> {
         .arg("-e")
         .arg("-x")
         .arg(dir.path().join("test.sh"))
-        .status()?;
+        .status()
+        .await?;
     assert!(status.success());
     Ok(())
 }
@@ -224,7 +225,7 @@ impl Client {
         }
     }
 
-    async fn client_run(&self) -> Command {
+    async fn run(&self) -> Command {
         let path = cargo_build_binary("linera").await;
         let mut command = Command::new(path);
         command
@@ -236,8 +237,8 @@ impl Client {
         command
     }
 
-    async fn client_run_with_storage(&self) -> Command {
-        let mut command = self.client_run().await;
+    async fn run_with_storage(&self) -> Command {
+        let mut command = self.run().await;
         command
             .args(["--storage", &self.storage.to_string()])
             .args([
@@ -248,7 +249,7 @@ impl Client {
     }
 
     async fn create_genesis_config(&self) {
-        self.client_run()
+        self.run()
             .await
             .args(["create_genesis_config", "10"])
             .args(["--initial-funding", "10"])
@@ -262,7 +263,7 @@ impl Client {
     }
 
     async fn init(&self) {
-        self.client_run()
+        self.run()
             .await
             .args(["wallet", "init"])
             .args(["--genesis", "genesis.json"])
@@ -300,7 +301,7 @@ impl Client {
         publisher: impl Into<Option<ChainId>>,
     ) -> String {
         let stdout = Self::run_command(
-            self.client_run_with_storage()
+            self.run_with_storage()
                 .await
                 .arg("publish_and_create")
                 .args([contract, service])
@@ -318,7 +319,7 @@ impl Client {
         publisher: impl Into<Option<ChainId>>,
     ) -> String {
         let stdout = Self::run_command(
-            self.client_run_with_storage()
+            self.run_with_storage()
                 .await
                 .arg("publish_bytecode")
                 .args([contract, service])
@@ -335,7 +336,7 @@ impl Client {
         creator: impl Into<Option<ChainId>>,
     ) -> String {
         let stdout = Self::run_command(
-            self.client_run_with_storage()
+            self.run_with_storage()
                 .await
                 .arg("create_application")
                 .args([bytecode_id, arg.to_string()])
@@ -352,7 +353,7 @@ impl Client {
     ) -> Child {
         let port = port.into().unwrap_or(8080);
         let child = self
-            .client_run_with_storage()
+            .run_with_storage()
             .await
             .arg("service")
             .args(chain_id.into().as_ref().map(ChainId::to_string))
@@ -377,7 +378,7 @@ impl Client {
     }
 
     async fn query_validators(&self, chain_id: Option<ChainId>) {
-        let mut command = self.client_run_with_storage().await;
+        let mut command = self.run_with_storage().await;
         command.arg("query_validators");
         if let Some(chain_id) = chain_id {
             command.arg(&chain_id.to_string());
@@ -387,7 +388,7 @@ impl Client {
 
     async fn query_balance(&self, chain_id: ChainId) -> anyhow::Result<usize> {
         let stdout = Self::run_command(
-            self.client_run_with_storage()
+            self.run_with_storage()
                 .await
                 .arg("query_balance")
                 .arg(&chain_id.to_string()),
@@ -399,7 +400,7 @@ impl Client {
 
     async fn transfer(&self, amount: usize, from: ChainId, to: ChainId) {
         Self::run_command(
-            self.client_run_with_storage()
+            self.run_with_storage()
                 .await
                 .arg("transfer")
                 .arg(&amount.to_string())
@@ -410,7 +411,7 @@ impl Client {
     }
 
     async fn benchmark(&self, max_in_flight: usize) {
-        self.client_run_with_storage()
+        self.run_with_storage()
             .await
             .arg("benchmark")
             .args(["--max-in-flight", &max_in_flight.to_string()])
@@ -426,7 +427,7 @@ impl Client {
         from: ChainId,
         to_owner: Option<Owner>,
     ) -> anyhow::Result<(EffectId, ChainId)> {
-        let mut command = self.client_run_with_storage().await;
+        let mut command = self.run_with_storage().await;
         command
             .arg("open_chain")
             .args(["--from", &from.to_string()]);
@@ -454,7 +455,7 @@ impl Client {
     async fn set_validator(&self, name: &str, port: usize, votes: usize) {
         let address = format!("{}:127.0.0.1:{}", self.network.external_short(), port);
         Self::run_command(
-            self.client_run_with_storage()
+            self.run_with_storage()
                 .await
                 .arg("set_validator")
                 .args(["--name", name])
@@ -466,7 +467,7 @@ impl Client {
 
     async fn remove_validator(&self, name: &str) {
         Self::run_command(
-            self.client_run_with_storage()
+            self.run_with_storage()
                 .await
                 .arg("remove_validator")
                 .args(["--name", name]),
@@ -475,13 +476,13 @@ impl Client {
     }
 
     async fn keygen(&self) -> anyhow::Result<Owner> {
-        let stdout = Self::run_command(self.client_run().await.arg("keygen")).await;
+        let stdout = Self::run_command(self.run().await.arg("keygen")).await;
         Ok(Owner::from_str(stdout.trim())?)
     }
 
     async fn assign(&self, owner: Owner, effect_id: EffectId) -> anyhow::Result<ChainId> {
         let stdout = Self::run_command(
-            self.client_run_with_storage()
+            self.run_with_storage()
                 .await
                 .arg("assign")
                 .args(["--key", &owner.to_string()])
@@ -496,7 +497,7 @@ impl Client {
 
     async fn synchronize_balance(&self, chain_id: ChainId) {
         Self::run_command(
-            self.client_run_with_storage()
+            self.run_with_storage()
                 .await
                 .arg("sync_balance")
                 .arg(&chain_id.to_string()),
