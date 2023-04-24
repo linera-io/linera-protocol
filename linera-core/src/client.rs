@@ -6,7 +6,7 @@ use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery},
     node::{LocalNodeClient, NodeError, NotificationStream, ValidatorNode},
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
-    worker::WorkerState,
+    worker::{Reason, WorkerState},
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use futures::{
@@ -16,11 +16,11 @@ use futures::{
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Amount, Balance, BlockHeight, RoundNumber, Timestamp},
-    identifiers::{BytecodeId, ChainId, EffectId, Owner},
+    identifiers::{BytecodeId, ChainId, Destination, EffectId, Owner},
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, HashedValue, LiteVote, Message,
+        Block, BlockAndRound, BlockProposal, Certificate, HashedValue, LiteVote, Medium, Message,
     },
     ChainManagerInfo, ChainStateView,
 };
@@ -83,6 +83,9 @@ pub struct ChainClient<ValidatorNodeProvider, StorageClient> {
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
     node_client: LocalNodeClient<StorageClient>,
+
+    /// Whether to make commands blocking and wait for enough confirmations of cross-chain messages.
+    wait_for_message_confirmations: bool,
 }
 
 /// Turn an address into a validator node (local node or client to a remote node).
@@ -145,7 +148,13 @@ impl<P, S> ChainClient<P, S> {
             cross_chain_delay,
             cross_chain_retries,
             node_client,
+            wait_for_message_confirmations: false,
         }
+    }
+
+    pub fn with_wait_for_message_confirmations(&mut self, value: bool) -> &mut Self {
+        self.wait_for_message_confirmations = value;
+        self
     }
 
     pub fn chain_id(&self) -> ChainId {
@@ -772,7 +781,6 @@ where
     }
 
     /// Execute (or retry) a regular block proposal. Update local balance.
-    /// If `with_confirmation` is false, we stop short of executing the finalized block.
     async fn propose_block(&mut self, block: Block) -> Result<Certificate> {
         let next_round = self.next_round;
         ensure!(
@@ -789,6 +797,7 @@ where
             "Unexpected previous block hash"
         );
         // Remember what we are trying to do
+        let height = block.height;
         self.pending_block = Some(block.clone());
         // Collect blobs required for execution.
         let committee = self.local_committee().await?;
@@ -851,6 +860,14 @@ where
                 && *final_certificate.value.block() == proposal.content.block,
             "A different operation was executed in parallel (consider retrying the operation)"
         );
+
+        // Start tracking notifications if needed.
+        let notifications = if self.wait_for_message_confirmations {
+            Some(self.subscribe_all(vec![self.chain_id]).await?)
+        } else {
+            None
+        };
+
         // Since `handle_block_proposal` succeeded, we have the needed bytecode.
         // Leaving blobs empty.
         self.process_certificate(final_certificate.clone(), vec![])
@@ -875,7 +892,43 @@ where
                 .await?;
             }
         }
+
+        if let Some(stream) = notifications {
+            let recipients = final_certificate
+                .value
+                .effects()
+                .iter()
+                .filter_map(|effect| match &effect.destination {
+                    Destination::Recipient(recipient) => Some(*recipient),
+                    _ => None,
+                });
+            self.wait_for_confirmation(height, recipients, stream)
+                .await?;
+        }
         Ok(final_certificate)
+    }
+
+    async fn wait_for_confirmation(
+        &mut self,
+        block_height: BlockHeight,
+        recipients: impl Iterator<Item = ChainId>,
+        mut stream: NotificationStream,
+    ) -> Result<()> {
+        let mut recipients: std::collections::HashSet<_> = recipients.collect();
+        while let Some(notification) = stream.next().await {
+            if let Reason::MessagesAreMarkedAsReceived { target, height } = notification.reason {
+                if height >= block_height && recipients.contains(&target.recipient) {
+                    if let Medium::Direct = target.medium {
+                        recipients.remove(&target.recipient);
+                        if recipients.is_empty() {
+                            // FIXME: we should be counting the votes and implementing a quorum threshold.
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Execute a list of operations.

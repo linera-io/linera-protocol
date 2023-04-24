@@ -1057,10 +1057,13 @@ where
                     .mark_messages_as_received(target.clone(), height)
                     .await?
                 {
-                    actions.notifications.push(Notification {
-                        chain_id: sender,
-                        reason: Reason::MessagesAreMarkedAsReceived { target, height },
-                    });
+                    if let Medium::Direct = target.medium {
+                        // Channels are ignored for now.
+                        actions.notifications.push(Notification {
+                            chain_id: sender,
+                            reason: Reason::MessagesAreMarkedAsReceived { target, height },
+                        });
+                    }
                     chain.save().await?;
                 }
                 Ok(actions)
