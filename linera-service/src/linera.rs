@@ -209,10 +209,13 @@ impl ClientContext {
         ViewError: From<S::ContextError>,
     {
         for chain_id in self.wallet_state.chain_ids() {
-            let mut client = self.make_chain_client(storage.clone(), chain_id);
-            client.process_inbox().await.unwrap();
-            client.update_validators_about_local_chain().await.unwrap();
-            self.update_wallet_from_client(&mut client).await;
+            let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
+            chain_client.process_inbox().await.unwrap();
+            chain_client
+                .update_validators_about_local_chain()
+                .await
+                .unwrap();
+            self.update_wallet_from_client(&mut chain_client).await;
         }
     }
 
@@ -870,12 +873,12 @@ where
 
                 // Make sure genesis chains are subscribed to the admin chain.
                 let certificates = context.ensure_admin_subscription(&storage).await;
-                let mut admin_state = context
+                let mut chain_client = context
                     .make_chain_client(storage.clone(), context.wallet_state.genesis_admin_chain());
                 for cert in certificates {
-                    admin_state.receive_certificate(cert).await.unwrap();
+                    chain_client.receive_certificate(cert).await.unwrap();
                 }
-                let n = admin_state
+                let n = chain_client
                     .process_inbox()
                     .await
                     .unwrap()
@@ -885,7 +888,7 @@ where
                 info!("Subscribed {} chains to new committees", n);
 
                 // Create the new committee.
-                let committee = admin_state.local_committee().await.unwrap();
+                let committee = chain_client.local_committee().await.unwrap();
                 let mut validators = committee.validators;
                 match command {
                     SetValidator {
@@ -909,14 +912,14 @@ where
                     }
                     _ => unreachable!(),
                 }
-                let certificate = admin_state.stage_new_committee(validators).await.unwrap();
-                context.update_wallet_from_client(&mut admin_state).await;
+                let certificate = chain_client.stage_new_committee(validators).await.unwrap();
+                context.update_wallet_from_client(&mut chain_client).await;
                 info!("Staging committee:\n{:?}", certificate);
                 context.push_to_all_chains(&storage, &certificate).await;
 
                 // Remove the old committee.
-                let certificate = admin_state.finalize_committee().await.unwrap();
-                context.update_wallet_from_client(&mut admin_state).await;
+                let certificate = chain_client.finalize_committee().await.unwrap();
+                context.update_wallet_from_client(&mut chain_client).await;
                 info!("Finalizing committee:\n{:?}", certificate);
                 context.push_to_all_chains(&storage, &certificate).await;
 
@@ -924,6 +927,7 @@ where
                 info!("Operations confirmed after {} us", time_total);
                 context.save_wallet();
             }
+
             #[cfg(feature = "benchmark")]
             Benchmark {
                 max_in_flight,
@@ -1049,22 +1053,24 @@ where
                 let mut tracker = NotificationTracker::default();
                 while let Some(notification) = notification_stream.next().await {
                     debug!("Received notification: {:?}", notification);
-                    let mut client =
+                    let mut chain_client =
                         context.make_chain_client(storage.clone(), notification.chain_id);
                     if tracker.insert(notification.clone()) {
-                        if let Err(e) = client.synchronize_and_recompute_balance().await {
+                        if let Err(e) = chain_client.synchronize_and_recompute_balance().await {
                             warn!("Failed to synchronize and recompute balance for notification {:?} with error: {:?}", notification, e);
                             // If synchronization failed there is nothing to update validators about.
                             continue;
                         }
                         match &notification.reason {
                             Reason::NewBlock { .. } => {
-                                if let Err(e) = client.update_validators_about_local_chain().await {
+                                if let Err(e) =
+                                    chain_client.update_validators_about_local_chain().await
+                                {
                                     warn!("Failed to update validators about the local chain after receiving notification {:?} with error: {:?}", notification, e);
                                 }
                             }
                             Reason::NewMessage { .. } => {
-                                if let Err(e) = client.process_inbox().await {
+                                if let Err(e) = chain_client.process_inbox().await {
                                     warn!("Failed to process inbox after receiving new message: {:?} with error: {:?}", notification, e);
                                 }
                             }
