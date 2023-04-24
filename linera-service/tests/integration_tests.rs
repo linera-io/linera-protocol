@@ -22,7 +22,10 @@ use std::{
     time::Duration,
 };
 use tempfile::{tempdir, TempDir};
-use tokio::{process::Child, sync::Mutex};
+use tokio::{
+    process::{Child, Command},
+    sync::Mutex,
+};
 use tonic_health::proto::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
@@ -118,7 +121,8 @@ mod aws_test {
             .arg("-e")
             .arg("-x")
             .arg(dir.path().join("test.sh"))
-            .status()?;
+            .status()
+            .await?;
         assert!(status.success());
         Ok(())
     }
@@ -154,7 +158,7 @@ impl Network {
 }
 
 async fn cargo_force_build_binary(name: &'static str) -> PathBuf {
-    let mut build_command = tokio::process::Command::new("cargo");
+    let mut build_command = Command::new("cargo");
     build_command.arg("build");
     let is_release = if let Ok(var) = env::var(CARGO_ENV) {
         let extra_args = var.split_whitespace();
@@ -220,9 +224,9 @@ impl Client {
         }
     }
 
-    async fn client_run(&self) -> tokio::process::Command {
+    async fn client_run(&self) -> Command {
         let path = cargo_build_binary("linera").await;
-        let mut command = tokio::process::Command::new(path);
+        let mut command = Command::new(path);
         command
             .current_dir(&self.tmp_dir.path().canonicalize().unwrap())
             .kill_on_drop(true)
@@ -232,7 +236,7 @@ impl Client {
         command
     }
 
-    async fn client_run_with_storage(&self) -> tokio::process::Command {
+    async fn client_run_with_storage(&self) -> Command {
         let mut command = self.client_run().await;
         command
             .args(["--storage", &self.storage.to_string()])
@@ -269,7 +273,7 @@ impl Client {
             .unwrap();
     }
 
-    async fn run_command(command: &mut tokio::process::Command) -> String {
+    async fn run_command(command: &mut Command) -> String {
         let output = command
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -540,9 +544,9 @@ impl TestRunner {
         self.tmp_dir.clone()
     }
 
-    async fn command_for_binary(&self, name: &'static str) -> tokio::process::Command {
+    async fn command_for_binary(&self, name: &'static str) -> Command {
         let path = cargo_build_binary(name).await;
-        let mut command = tokio::process::Command::new(path);
+        let mut command = Command::new(path);
         command
             .current_dir(&self.tmp_dir.path().canonicalize().unwrap())
             .kill_on_drop(true);
@@ -725,7 +729,7 @@ impl TestRunner {
 
     async fn build_application(&self, name: &str) -> (PathBuf, PathBuf) {
         let examples_dir = env::current_dir().unwrap().join("../linera-examples/");
-        tokio::process::Command::new("cargo")
+        Command::new("cargo")
             .current_dir(self.tmp_dir.path().canonicalize().unwrap())
             .arg("build")
             .arg("--release")
