@@ -637,6 +637,18 @@ pub trait WithWasmDefault {
 }
 
 impl WasmRuntime {
+    #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+    pub fn default_with_sanitizer() -> Self {
+        #[cfg(feature = "wasmer")]
+        {
+            WasmRuntime::WasmerWithSanitizer
+        }
+        #[cfg(not(feature = "wasmer"))]
+        {
+            WasmRuntime::WasmtimeWithSanitizer
+        }
+    }
+
     pub fn needs_sanitizer(self) -> bool {
         match self {
             #[cfg(feature = "wasmer")]

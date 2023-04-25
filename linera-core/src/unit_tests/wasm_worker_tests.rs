@@ -46,8 +46,8 @@ enum StorageKind {
     View,
 }
 
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::Simple ; "wasmer_simple"))]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::View ; "wasmer_view"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, StorageKind::Simple ; "wasmer_simple"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, StorageKind::View ; "wasmer_view"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::Simple ; "wasmtime_simple"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::View ; "wasmtime_view"))]
 #[test_log::test(tokio::test)]
@@ -59,8 +59,8 @@ async fn test_memory_handle_certificates_to_create_application(
     run_test_handle_certificates_to_create_application(client, storage_kind).await
 }
 
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::Simple ; "wasmer_simple"))]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::View ; "wasmer_view"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, StorageKind::Simple ; "wasmer_simple"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, StorageKind::View ; "wasmer_view"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::Simple ; "wasmtime_simple"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::View ; "wasmtime_view"))]
 #[test_log::test(tokio::test)]
@@ -78,8 +78,8 @@ async fn test_rocksdb_handle_certificates_to_create_application(
 }
 
 #[cfg(feature = "aws")]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::Simple ; "wasmer_simple"))]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::View ; "wasmer_view"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, StorageKind::Simple ; "wasmer_simple"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, StorageKind::View ; "wasmer_view"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::Simple ; "wasmtime_simple"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::View ; "wasmtime_view"))]
 #[test_log::test(tokio::test)]
@@ -137,7 +137,7 @@ where
     let application = Arc::new(WasmApplication::new(
         contract_bytecode.clone(),
         service_bytecode.clone(),
-        WasmRuntime::default(),
+        WasmRuntime::default_with_sanitizer(),
     )?);
 
     // Publish some bytecode.
