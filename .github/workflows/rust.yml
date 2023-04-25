@@ -19,6 +19,7 @@ env:
   RUST_BACKTRACE: short
   RUSTFLAGS: "-D warnings"
   RUSTUP_MAX_RETRIES: 10
+  INTEGRATION_TEST_SERVER_PARAMS: "--cross-chain-sender-delay-ms=100"
 
 permissions:
   contents: read
