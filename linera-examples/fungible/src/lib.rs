@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_graphql::{scalar, InputObject};
 use linera_sdk::base::{Amount, ApplicationId, ChainId, Owner};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -51,6 +52,8 @@ pub enum SessionCall {
     },
 }
 
+scalar!(AccountOwner);
+
 /// An account owner.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub enum AccountOwner {
@@ -70,7 +73,9 @@ where
 }
 
 /// An account.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, InputObject,
+)]
 pub struct Account {
     pub chain_id: ChainId,
     pub owner: AccountOwner,

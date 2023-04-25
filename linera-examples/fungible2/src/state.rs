@@ -6,13 +6,13 @@ use linera_sdk::base::Amount;
 use linera_views::{
     common::Context,
     map_view::MapView,
-    views::{RootView, View},
+    views::{GraphQLView, RootView, View},
 };
 use std::collections::BTreeMap;
 use thiserror::Error;
 
 /// The application state.
-#[derive(RootView)]
+#[derive(RootView, GraphQLView)]
 pub struct FungibleToken<C> {
     accounts: MapView<C, AccountOwner, Amount>,
 }
