@@ -6,7 +6,7 @@ edition = "2021"
 
 [features]
 default = ["wasmer"]
-test = ["tokio/macros", "async-lock", "once_cell"]
+test = ["tokio/macros", "async-lock"]
 wasmer = ["dep:wasmer", "wasm-encoder", "wasmer-middlewares", "wasmparser", "wit-bindgen-host-wasmer-rust"]
 wasmtime = ["dep:wasmtime", "wasm-encoder", "wasmparser", "wit-bindgen-host-wasmtime-rust"]
 
@@ -23,7 +23,7 @@ futures = "0.3.24"
 linera-base = { path = "../linera-base" }
 linera-views = { path = "../linera-views", features = ["metrics"] }
 linera-views-derive = { path = "../linera-views-derive" }
-once_cell = { version = "1.17.1", optional = true }
+once_cell = "1.17.1"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_bytes = "0.11.8"
 thiserror = "1.0.31"
