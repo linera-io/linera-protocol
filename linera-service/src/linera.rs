@@ -23,7 +23,7 @@ use linera_core::{
 use linera_execution::{
     committee::{ValidatorName, ValidatorState},
     system::{Account, UserData},
-    Bytecode, WasmRuntime, WithWasmDefault,
+    Bytecode, UserApplicationId, WasmRuntime, WithWasmDefault,
 };
 use linera_rpc::node_provider::NodeProvider;
 use linera_service::{
@@ -709,6 +709,10 @@ enum ClientCommand {
         bytecode_id: BytecodeId,
         arguments: String,
         creator: Option<ChainId>,
+        #[structopt(long = "parameters")]
+        parameters: Option<String>,
+        #[structopt(long = "required-application-ids")]
+        required_application_ids: Option<Vec<UserApplicationId>>,
     },
 
     /// Create an application, and publish the required bytecode.
@@ -718,6 +722,10 @@ enum ClientCommand {
         service: PathBuf,
         arguments: String,
         publisher: Option<ChainId>,
+        #[structopt(long = "parameters")]
+        parameters: Option<String>,
+        #[structopt(long = "required-application-ids")]
+        required_application_ids: Option<Vec<UserApplicationId>>,
     },
 
     /// Create an unassigned key-pair.
@@ -1118,12 +1126,18 @@ where
                 bytecode_id,
                 arguments,
                 creator,
+                parameters,
+                required_application_ids,
             } => {
                 let start_time = Instant::now();
                 let mut chain_client = context.make_chain_client(storage, creator);
 
                 info!("Processing arguments...");
                 let arguments = hex::decode(&arguments)?;
+                let parameters = match parameters {
+                    None => vec![],
+                    Some(parameters) => hex::decode(parameters)?,
+                };
 
                 info!("Synchronizing...");
                 chain_client.synchronize_and_recompute_balance().await?;
@@ -1131,7 +1145,12 @@ where
 
                 info!("Creating application...");
                 let (application_id, _) = chain_client
-                    .create_application(bytecode_id, vec![], arguments, vec![])
+                    .create_application(
+                        bytecode_id,
+                        parameters,
+                        arguments,
+                        required_application_ids.unwrap_or_default(),
+                    )
                     .await
                     .context("failed to create application")?;
 
@@ -1147,12 +1166,18 @@ where
                 service,
                 arguments,
                 publisher,
+                parameters,
+                required_application_ids,
             } => {
                 let start_time = Instant::now();
                 let mut chain_client = context.make_chain_client(storage, publisher);
 
                 info!("Processing arguments...");
                 let arguments = hex::decode(&arguments)?;
+                let parameters = match parameters {
+                    None => vec![],
+                    Some(parameters) => hex::decode(parameters)?,
+                };
 
                 let bytecode_id = context
                     .publish_bytecode(&mut chain_client, contract, service)
@@ -1160,7 +1185,12 @@ where
 
                 info!("Creating application...");
                 let (application_id, _) = chain_client
-                    .create_application(bytecode_id, vec![], arguments, vec![])
+                    .create_application(
+                        bytecode_id,
+                        parameters,
+                        arguments,
+                        required_application_ids.unwrap_or_default(),
+                    )
                     .await
                     .context("failed to create application")?;
 
