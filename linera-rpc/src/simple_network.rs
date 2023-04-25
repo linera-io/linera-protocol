@@ -18,6 +18,7 @@ use linera_core::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
+use tokio::sync::oneshot;
 
 use crate::{
     codec,
@@ -158,6 +159,9 @@ where
         let state = RunningServerState {
             server: self,
             cross_chain_sender,
+            // Udp servers cannot process several requests (e.g. user requests and
+            // cross-chain requests) at the same time.
+            wait_for_outgoing_messages: protocol == TransportProtocol::Tcp,
         };
         // Launch server for the appropriate protocol.
         protocol.spawn_server(&address, state).await
@@ -168,6 +172,7 @@ where
 struct RunningServerState<S> {
     server: Server<S>,
     cross_chain_sender: mpsc::Sender<(RpcMessage, ShardId)>,
+    wait_for_outgoing_messages: bool,
 }
 
 #[async_trait]
@@ -194,15 +199,28 @@ where
                 }
             }
             RpcMessage::LiteCertificate(message) => {
+                let (sender, receiver) = oneshot::channel();
                 match self
                     .server
                     .state
-                    .handle_lite_certificate(*message, None)
+                    .handle_lite_certificate(
+                        *message,
+                        if self.wait_for_outgoing_messages {
+                            Some(sender)
+                        } else {
+                            None
+                        },
+                    )
                     .await
                 {
                     Ok((info, actions)) => {
                         // Cross-shard requests
                         self.handle_network_actions(actions);
+                        if self.wait_for_outgoing_messages {
+                            if let Err(e) = receiver.await {
+                                error!("Failed to wait for message delivery: {e}");
+                            }
+                        }
                         // Response
                         Ok(Some(info.into()))
                     }
@@ -217,15 +235,29 @@ where
                 }
             }
             RpcMessage::Certificate(message, blobs) => {
+                let (sender, receiver) = oneshot::channel();
                 match self
                     .server
                     .state
-                    .handle_certificate(*message, blobs, None)
+                    .handle_certificate(
+                        *message,
+                        blobs,
+                        if self.wait_for_outgoing_messages {
+                            Some(sender)
+                        } else {
+                            None
+                        },
+                    )
                     .await
                 {
                     Ok((info, actions)) => {
                         // Cross-shard requests
                         self.handle_network_actions(actions);
+                        if self.wait_for_outgoing_messages {
+                            if let Err(e) = receiver.await {
+                                error!("Failed to wait for message delivery: {e}");
+                            }
+                        }
                         // Response
                         Ok(Some(info.into()))
                     }
