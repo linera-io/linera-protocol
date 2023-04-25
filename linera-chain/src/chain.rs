@@ -144,7 +144,7 @@ where
         Ok(true)
     }
 
-    /// Returns true if there is no more outgoing messages in flight up to the given
+    /// Returns true if there are no more outgoing messages in flight up to the given
     /// block height.
     pub fn all_messages_delivered_up_to(&mut self, height: BlockHeight) -> bool {
         tracing::debug!(
@@ -211,7 +211,7 @@ where
         }
     }
 
-    /// Schedule operations to be executed as a recipient, unless this block was already
+    /// Schedules operations to be executed as a recipient, unless this block was already
     /// processed. Returns true if the call changed the chain state. Operations must be
     /// received by order of heights and indices.
     pub async fn receive_block(
@@ -437,12 +437,9 @@ where
         for result in results {
             match result {
                 ExecutionResult::System(result) => {
-                    Self::process_raw_execution_result(
+                    self.process_raw_execution_result(
                         ApplicationId::System,
                         Effect::System,
-                        &mut self.outboxes,
-                        self.outbox_counters.get_mut(),
-                        &mut self.channels,
                         effects,
                         height,
                         result,
@@ -450,15 +447,12 @@ where
                     .await?;
                 }
                 ExecutionResult::User(application_id, result) => {
-                    Self::process_raw_execution_result(
+                    self.process_raw_execution_result(
                         ApplicationId::User(application_id),
                         |bytes| Effect::User {
                             application_id,
                             bytes,
                         },
-                        &mut self.outboxes,
-                        self.outbox_counters.get_mut(),
-                        &mut self.channels,
                         effects,
                         height,
                         result,
@@ -470,13 +464,10 @@ where
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     async fn process_raw_execution_result<E, F>(
+        &mut self,
         application_id: ApplicationId,
         lift: F,
-        outboxes: &mut CollectionView<C, Target, OutboxStateView<C>>,
-        outbox_counters: &mut BTreeMap<BlockHeight, u32>,
-        channels: &mut CollectionView<C, ChannelFullName, ChannelStateView<C>>,
         effects: &mut Vec<OutgoingEffect>,
         height: BlockHeight,
         raw_result: RawExecutionResult<E>,
@@ -510,8 +501,10 @@ where
         }
 
         // Update the (regular) outboxes.
+        let outbox_counters = self.outbox_counters.get_mut();
         for recipient in recipients {
-            let outbox = outboxes.load_entry_mut(&Target::chain(recipient)).await?;
+            let target = Target::chain(recipient);
+            let outbox = self.outboxes.load_entry_mut(&target).await?;
             if outbox.schedule_message(height)? {
                 *outbox_counters.entry(height).or_default() += 1;
             }
@@ -523,7 +516,7 @@ where
                 application_id,
                 name,
             };
-            let channel = channels.load_entry_mut(&full_name).await?;
+            let channel = self.channels.load_entry_mut(&full_name).await?;
             // Remove subscriber. Do not remove the channel outbox yet.
             channel.subscribers.remove(&id)?;
         }
@@ -532,11 +525,10 @@ where
                 application_id,
                 name,
             };
-            let channel = channels.load_entry_mut(&full_name).await?;
+            let channel = self.channels.load_entry_mut(&full_name).await?;
             for recipient in channel.subscribers.indices().await? {
-                let outbox = outboxes
-                    .load_entry_mut(&Target::channel(recipient, full_name.clone()))
-                    .await?;
+                let target = Target::channel(recipient, full_name.clone());
+                let outbox = self.outboxes.load_entry_mut(&target).await?;
                 if outbox.schedule_message(height)? {
                     *outbox_counters.entry(height).or_default() += 1;
                 }
@@ -548,14 +540,13 @@ where
                 application_id,
                 name,
             };
-            let channel = channels.load_entry_mut(&full_name).await?;
+            let channel = self.channels.load_entry_mut(&full_name).await?;
             // Add subscriber.
             if !channel.subscribers.contains(&id).await? {
                 // Send the latest message if any.
                 if let Some(latest_height) = channel.block_height.get() {
-                    let outbox = outboxes
-                        .load_entry_mut(&Target::channel(id, full_name.clone()))
-                        .await?;
+                    let target = Target::channel(id, full_name.clone());
+                    let outbox = self.outboxes.load_entry_mut(&target).await?;
                     if outbox.schedule_message(*latest_height)? {
                         *outbox_counters.entry(*latest_height).or_default() += 1;
                     }

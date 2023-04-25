@@ -199,24 +199,20 @@ where
                 }
             }
             RpcMessage::LiteCertificate(message) => {
-                let (sender, receiver) = oneshot::channel();
+                let (sender, receiver) = self
+                    .wait_for_outgoing_messages
+                    .then(oneshot::channel)
+                    .unzip();
                 match self
                     .server
                     .state
-                    .handle_lite_certificate(
-                        *message,
-                        if self.wait_for_outgoing_messages {
-                            Some(sender)
-                        } else {
-                            None
-                        },
-                    )
+                    .handle_lite_certificate(*message, sender)
                     .await
                 {
                     Ok((info, actions)) => {
                         // Cross-shard requests
                         self.handle_network_actions(actions);
-                        if self.wait_for_outgoing_messages {
+                        if let Some(receiver) = receiver {
                             if let Err(e) = receiver.await {
                                 error!("Failed to wait for message delivery: {e}");
                             }
@@ -235,25 +231,20 @@ where
                 }
             }
             RpcMessage::Certificate(message, blobs) => {
-                let (sender, receiver) = oneshot::channel();
+                let (sender, receiver) = self
+                    .wait_for_outgoing_messages
+                    .then(oneshot::channel)
+                    .unzip();
                 match self
                     .server
                     .state
-                    .handle_certificate(
-                        *message,
-                        blobs,
-                        if self.wait_for_outgoing_messages {
-                            Some(sender)
-                        } else {
-                            None
-                        },
-                    )
+                    .handle_certificate(*message, blobs, sender)
                     .await
                 {
                     Ok((info, actions)) => {
                         // Cross-shard requests
                         self.handle_network_actions(actions);
-                        if self.wait_for_outgoing_messages {
+                        if let Some(receiver) = receiver {
                             if let Err(e) = receiver.await {
                                 error!("Failed to wait for message delivery: {e}");
                             }

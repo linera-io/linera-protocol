@@ -40,7 +40,7 @@ where
     C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
 {
-    /// Schedule a message at the given height if we haven't already.
+    /// Schedules a message at the given height if we haven't already.
     /// Return true if a change was made.
     pub(crate) fn schedule_message(
         &mut self,
