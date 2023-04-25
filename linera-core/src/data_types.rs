@@ -187,7 +187,7 @@ impl CrossChainRequest {
         }
     }
 
-    /// Returns true if the cross-requests has messages lower or equal than `height`.
+    /// Returns true if the cross-chain request has messages lower or equal than `height`.
     pub fn has_messages_lower_or_equal_than(&self, height: BlockHeight) -> bool {
         match self {
             CrossChainRequest::UpdateRecipient { height_map, .. } => height_map
