@@ -194,7 +194,12 @@ where
                 }
             }
             RpcMessage::LiteCertificate(message) => {
-                match self.server.state.handle_lite_certificate(*message).await {
+                match self
+                    .server
+                    .state
+                    .handle_lite_certificate(*message, None)
+                    .await
+                {
                     Ok((info, actions)) => {
                         // Cross-shard requests
                         self.handle_network_actions(actions);
@@ -212,7 +217,12 @@ where
                 }
             }
             RpcMessage::Certificate(message, blobs) => {
-                match self.server.state.handle_certificate(*message, blobs).await {
+                match self
+                    .server
+                    .state
+                    .handle_certificate(*message, blobs, None)
+                    .await
+                {
                     Ok((info, actions)) => {
                         // Cross-shard requests
                         self.handle_network_actions(actions);
