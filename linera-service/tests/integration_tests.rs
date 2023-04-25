@@ -139,7 +139,7 @@ impl Network {
     fn internal(&self) -> &'static str {
         match self {
             Network::Grpc => "\"Grpc\"",
-            Network::Simple => "{ Simple = \"Udp\" }",
+            Network::Simple => "{ Simple = \"Tcp\" }",
         }
     }
 

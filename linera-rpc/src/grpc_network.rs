@@ -46,7 +46,10 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
-use tokio::task::{JoinError, JoinHandle};
+use tokio::{
+    sync::oneshot,
+    task::{JoinError, JoinHandle},
+};
 use tonic::{
     transport::{Channel, Server},
     Request, Response, Status,
@@ -329,14 +332,18 @@ where
     ) -> Result<Response<ChainInfoResult>, Status> {
         let certificate = request.into_inner().try_into()?;
         debug!(?certificate, "Handling lite certificate");
+        let (sender, receiver) = oneshot::channel();
         match self
             .state
             .clone()
-            .handle_lite_certificate(certificate, None)
+            .handle_lite_certificate(certificate, Some(sender))
             .await
         {
             Ok((info, actions)) => {
                 self.handle_network_actions(actions);
+                if let Err(e) = receiver.await {
+                    error!("Failed to wait for message delivery: {e}");
+                }
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
@@ -358,14 +365,22 @@ where
         let cert_with_deps: data_types::CertificateWithDependencies =
             request.into_inner().try_into()?;
         debug!(certificate = ?cert_with_deps.certificate, "Handling certificate");
+        let (sender, receiver) = oneshot::channel();
         match self
             .state
             .clone()
-            .handle_certificate(cert_with_deps.certificate, cert_with_deps.blobs, None)
+            .handle_certificate(
+                cert_with_deps.certificate,
+                cert_with_deps.blobs,
+                Some(sender),
+            )
             .await
         {
             Ok((info, actions)) => {
                 self.handle_network_actions(actions);
+                if let Err(e) = receiver.await {
+                    error!("Failed to wait for message delivery: {e}");
+                }
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
