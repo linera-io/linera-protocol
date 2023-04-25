@@ -13,8 +13,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, ChannelFullName, HashedValue,
-        LiteCertificate, Medium, Message, Origin, OutgoingEffect, Target, ValueKind,
+        Block, BlockAndRound, BlockProposal, Certificate, HashedValue, LiteCertificate, Medium,
+        Message, Origin, OutgoingEffect, Target, ValueKind,
     },
     ChainManagerOutcome, ChainStateView,
 };
@@ -42,6 +42,7 @@ use tracing::{info, instrument, trace, warn};
 #[cfg(any(test, feature = "test"))]
 use {
     linera_base::identifiers::{Destination, EffectId},
+    linera_chain::data_types::ChannelFullName,
     linera_execution::ApplicationRegistryView,
 };
 
