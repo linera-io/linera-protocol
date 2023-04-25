@@ -31,7 +31,7 @@ use anyhow::{bail, Result};
 use std::process::ExitCode;
 use wasmtime::*;
 
-/// Load a test WASM module and run all test functions annotated by [`webassembly-test`].
+/// Loads a test WASM module and runs all test functions annotated by [`webassembly-test`].
 ///
 /// Prints out a summary of executed tests and their results.
 #[tokio::main]
@@ -56,14 +56,14 @@ async fn main() -> Result<ExitCode> {
     Ok(report.print())
 }
 
-/// Load the input test WASM module specified as a command line argument.
+/// Loads the input test WASM module specified as a command line argument.
 fn load_test_module(engine: &Engine) -> Result<Module> {
     let module_path = parse_args()?;
     let module = Module::from_file(engine, module_path)?;
     Ok(module)
 }
 
-/// Parse command line arguments to extract the path of the input test module.
+/// Parses command line arguments to extract the path of the input test module.
 fn parse_args() -> Result<String> {
     match std::env::args().nth(1) {
         Some(file_path) => Ok(file_path),
@@ -81,7 +81,7 @@ struct Test<'a> {
 }
 
 impl<'a> Test<'a> {
-    /// Collect test information from a function exported from the WASM module.
+    /// Collects test information from a function exported from the WASM module.
     pub fn new(export: ExportType<'a>) -> Option<Self> {
         let function = export.name();
         let test_name = function.strip_prefix("$webassembly-test$")?;
@@ -94,7 +94,7 @@ impl<'a> Test<'a> {
         })
     }
 
-    /// Run an test function exported from the WASM module and report its result.
+    /// Runs a test function exported from the WASM module and reports its result.
     ///
     /// The test is executed in a clean WASM environment.
     pub async fn run(
@@ -129,7 +129,7 @@ struct TestReport {
 }
 
 impl TestReport {
-    /// Report a test result.
+    /// Reports a test result.
     ///
     /// Reports that a test passed if `result` is `Ok` or that it failed otherwise.
     pub fn result<T>(&mut self, result: Result<T, Trap>) {
@@ -139,26 +139,26 @@ impl TestReport {
         }
     }
 
-    /// Report that a test passed.
+    /// Reports that a test passed.
     pub fn pass(&mut self) {
         self.passed += 1;
         eprintln!(" ok")
     }
 
-    /// Report that a test failed.
+    /// Reports that a test failed.
     pub fn fail(&mut self, trap: Trap) {
         self.failed += 1;
         eprintln!(" FAILED");
         eprintln!("{}", trap);
     }
 
-    /// Report that a test was ignored.
+    /// Reports that a test was ignored.
     pub fn ignore(&mut self) {
         self.ignored += 1;
         eprintln!(" ignored")
     }
 
-    /// Print the report of executed tests.
+    /// Prints the report of executed tests.
     pub fn print(self) -> ExitCode {
         let TestReport {
             passed,

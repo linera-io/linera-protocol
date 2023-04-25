@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::Error;
 
-/// Test if the table for the storage is created when needed.
+/// Tests if the table for the storage is created when needed.
 #[tokio::test]
 async fn table_is_created() -> Result<(), Error> {
     let localstack = LocalStackTestContext::new().await?;
@@ -34,7 +34,7 @@ async fn table_is_created() -> Result<(), Error> {
     Ok(())
 }
 
-/// Test if two independent tables for two separate storages are created.
+/// Tests if two independent tables for two separate storages are created.
 #[tokio::test]
 async fn separate_tables_are_created() -> Result<(), Error> {
     let localstack = LocalStackTestContext::new().await?;

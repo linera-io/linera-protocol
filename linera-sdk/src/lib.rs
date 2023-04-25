@@ -262,7 +262,7 @@ pub struct QueryContext {
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct ExecutionResult {
-    /// Send messages to the given destinations, possibly forwarding the authenticated
+    /// Sends messages to the given destinations, possibly forwarding the authenticated
     /// signer.
     pub effects: Vec<(Destination, bool, Vec<u8>)>,
     /// Subscribe chains to channels.
@@ -272,7 +272,7 @@ pub struct ExecutionResult {
 }
 
 impl ExecutionResult {
-    /// Add an effect to the execution result.
+    /// Adds an effect to the execution result.
     pub fn with_effect(
         mut self,
         destination: impl Into<Destination>,
@@ -283,7 +283,7 @@ impl ExecutionResult {
         self
     }
 
-    /// Add an authenticated effect to the execution result.
+    /// Adds an authenticated effect to the execution result.
     pub fn with_authenticated_effect(
         mut self,
         destination: impl Into<Destination>,

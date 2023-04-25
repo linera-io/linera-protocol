@@ -282,7 +282,7 @@ impl Display for SystemChannel {
 pub enum Recipient {
     /// This is mainly a placeholder for future extensions.
     Burn,
-    /// Transfer to the system balance of the given owner (or any owner) at the given
+    /// Transfers to the system balance of the given owner (or any owner) at the given
     /// chain.
     Account(Account),
 }
@@ -708,7 +708,7 @@ where
         Ok((result, new_application))
     }
 
-    /// Execute the recipient's side of an operation, aka a "remote effect".
+    /// Executes the recipient's side of an operation, aka a "remote effect".
     ///
     /// * Effects should not return an error unless it is a temporary failure (e.g.
     /// storage) or a global system failure. An error will fail the entire cross-chain
@@ -835,7 +835,7 @@ where
         Ok(result)
     }
 
-    /// Initialize the system application state on a newly opened chain.
+    /// Initializes the system application state on a newly opened chain.
     #[allow(clippy::too_many_arguments)]
     pub fn open_chain(
         &mut self,

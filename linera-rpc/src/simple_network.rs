@@ -395,7 +395,7 @@ impl SimpleClient {
 
 #[async_trait]
 impl ValidatorNode for SimpleClient {
-    /// Initiate a new block.
+    /// Initiates a new block.
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
@@ -403,7 +403,7 @@ impl ValidatorNode for SimpleClient {
         self.send_recv_info(proposal.into()).await
     }
 
-    /// Process a hash certificate.
+    /// Processes a hash certificate.
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate,
@@ -411,7 +411,7 @@ impl ValidatorNode for SimpleClient {
         self.send_recv_info(certificate.into()).await
     }
 
-    /// Process a certificate.
+    /// Processes a certificate.
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
@@ -420,7 +420,7 @@ impl ValidatorNode for SimpleClient {
         self.send_recv_info((certificate, blobs).into()).await
     }
 
-    /// Handle information queries for this chain.
+    /// Handles information queries for this chain.
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,

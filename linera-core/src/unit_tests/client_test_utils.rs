@@ -41,7 +41,7 @@ pub enum FaultType {
     Malicious,
 }
 
-/// An validator used for testing. "Faulty" validators ignore block proposals (but not
+/// A validator used for testing. "Faulty" validators ignore block proposals (but not
 /// certificates or info queries) and have the wrong initial balance for all chains.
 ///
 /// All methods are executed in spawned Tokio tasks, so that canceling a client task doesn't cause
@@ -474,7 +474,7 @@ where
         ))
     }
 
-    /// Try to find a (confirmation) certificate for the given chain_id and block height.
+    /// Tries to find a (confirmation) certificate for the given chain_id and block height.
     pub async fn check_that_validators_have_certificate(
         &self,
         chain_id: ChainId,

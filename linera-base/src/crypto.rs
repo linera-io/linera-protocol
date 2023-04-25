@@ -72,7 +72,7 @@ impl PublicKey {
 }
 
 impl KeyPair {
-    /// Generate a new key-pair.
+    /// Generates a new key-pair.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn generate() -> Self {
         let mut csprng = OsRng;
@@ -80,12 +80,15 @@ impl KeyPair {
         KeyPair(keypair)
     }
 
-    /// Obtain the public key of a key-pair.
+    /// Obtains the public key of a key-pair.
     pub fn public(&self) -> PublicKey {
         PublicKey(self.0.public.to_bytes())
     }
 
-    /// Avoid implementing `clone` on secret keys to prevent mistakes.
+    /// Copies the key-pair, **including the secret key**.
+    ///
+    /// The `Clone` and `Copy` traits are deliberately not implemented for `KeyPair` to prevent
+    /// accidental copies of secret keys.
     pub fn copy(&self) -> KeyPair {
         KeyPair(dalek::Keypair {
             secret: dalek::SecretKey::from_bytes(self.0.secret.as_bytes()).unwrap(),

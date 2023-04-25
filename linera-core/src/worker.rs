@@ -56,21 +56,21 @@ mod worker_tests;
 ///   to be communicated to other workers of the same validator.
 #[async_trait]
 pub trait ValidatorWorker {
-    /// Propose a new block. In case of success, the chain info contains a vote on the new
+    /// Proposes a new block. In case of success, the chain info contains a vote on the new
     /// block.
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
-    /// Process a certificate, e.g. to extend a chain with a confirmed block.
+    /// Processes a certificate, e.g. to extend a chain with a confirmed block.
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate,
         notify_message_delivery: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
-    /// Process a certificate, e.g. to extend a chain with a confirmed block.
+    /// Processes a certificate, e.g. to extend a chain with a confirmed block.
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
@@ -78,13 +78,13 @@ pub trait ValidatorWorker {
         notify_message_delivery: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
-    /// Handle information queries on chains.
+    /// Handles information queries on chains.
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
-    /// Handle a (trusted!) cross-chain request.
+    /// Handles a (trusted!) cross-chain request.
     async fn handle_cross_chain_request(
         &mut self,
         request: CrossChainRequest,
@@ -108,7 +108,7 @@ impl NetworkActions {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-/// Notify that a chain has a new certified block or a new message.
+/// Notification that a chain has a new certified block or a new message.
 pub struct Notification {
     pub chain_id: ChainId,
     pub reason: Reason,
@@ -327,7 +327,7 @@ where
         Ok(response)
     }
 
-    /// Try to execute a block proposal without any verification other than block execution.
+    /// Tries to execute a block proposal without any verification other than block execution.
     pub async fn stage_block_execution(
         &mut self,
         block: &Block,
@@ -392,7 +392,7 @@ where
         Ok(response)
     }
 
-    /// Get a reference to the [`KeyPair`], if available.
+    /// Gets a reference to the [`KeyPair`], if available.
     fn key_pair(&self) -> Option<&KeyPair> {
         self.key_pair.as_ref().map(Arc::as_ref)
     }
@@ -421,7 +421,7 @@ where
         })
     }
 
-    /// Load pending cross-chain requests.
+    /// Loads pending cross-chain requests.
     async fn create_network_actions(
         &mut self,
         chain: &mut ChainStateView<Client::Context>,
@@ -451,7 +451,7 @@ where
         Ok(actions)
     }
 
-    /// Process a confirmed block (aka a commit).
+    /// Processes a confirmed block (aka a commit).
     async fn process_confirmed_block(
         &mut self,
         certificate: Certificate,
@@ -609,7 +609,7 @@ where
         }
     }
 
-    /// Process a validated block issued from a multi-owner chain.
+    /// Processes a validated block issued from a multi-owner chain.
     async fn process_validated_block(
         &mut self,
         certificate: Certificate,
@@ -950,7 +950,7 @@ where
 
     // Other fields will be included in handle_certificate's span.
     #[instrument(skip_all, fields(hash = %certificate.value.value_hash))]
-    /// Process a certificate, e.g. to extend a chain with a confirmed block.
+    /// Processes a certificate, e.g. to extend a chain with a confirmed block.
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate,
@@ -968,7 +968,7 @@ where
             .await
     }
 
-    /// Process a certificate.
+    /// Processes a certificate.
     #[instrument(skip_all, fields(
         nick = self.nickname,
         chain_id = format!("{:.8}", certificate.value.block().chain_id),
@@ -1156,8 +1156,8 @@ struct CrossChainUpdateHelper<'a> {
 }
 
 impl<'a> CrossChainUpdateHelper<'a> {
-    /// Check basic invariants and deal with repeated heights and deprecated epochs.
-    /// * Return a range of certificates that are both new to us and not relying on an
+    /// Checks basic invariants and deals with repeated heights and deprecated epochs.
+    /// * Returns a range of certificates that are both new to us and not relying on an
     /// untrusted set of validators.
     /// * In the case of validators, if the epoch(s) of the highest certificates are not
     /// trusted, we only accept certificates that contain effects that were already

@@ -667,7 +667,7 @@ where
         self.collection.try_reset_entry_to_default(short_key).await
     }
 
-    /// Get the extra data.
+    /// Gets the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.collection.extra()
     }
@@ -954,7 +954,7 @@ where
         self.collection.try_reset_entry_to_default(short_key).await
     }
 
-    /// Get the extra data.
+    /// Gets the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.collection.extra()
     }

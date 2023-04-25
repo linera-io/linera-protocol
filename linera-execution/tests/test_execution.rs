@@ -119,7 +119,7 @@ impl UserApplication for TestApplication {
         Ok(RawExecutionResult::default())
     }
 
-    /// Attempt to call ourself while the state is locked.
+    /// Attempts to call ourself while the state is locked.
     async fn execute_effect(
         &self,
         context: &EffectContext,
@@ -138,7 +138,7 @@ impl UserApplication for TestApplication {
         Ok(RawExecutionResult::default())
     }
 
-    /// Create a session.
+    /// Creates a session.
     async fn handle_application_call(
         &self,
         context: &CalleeContext,
@@ -156,7 +156,7 @@ impl UserApplication for TestApplication {
         })
     }
 
-    /// Close the session.
+    /// Closes the session.
     async fn handle_session_call(
         &self,
         context: &CalleeContext,
@@ -173,7 +173,7 @@ impl UserApplication for TestApplication {
         })
     }
 
-    /// Return the application state.
+    /// Returns the application state.
     async fn query_application(
         &self,
         _context: &QueryContext,

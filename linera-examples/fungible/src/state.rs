@@ -15,17 +15,17 @@ pub struct FungibleToken {
 
 #[allow(dead_code)]
 impl FungibleToken {
-    /// Initialize the application state with some accounts with initial balances.
+    /// Initializes the application state with some accounts with initial balances.
     pub(crate) fn initialize_accounts(&mut self, accounts: BTreeMap<AccountOwner, Amount>) {
         self.accounts = accounts;
     }
 
-    /// Obtain the balance for an `account`.
+    /// Obtains the balance for an `account`.
     pub(crate) fn balance(&self, account: &AccountOwner) -> Amount {
         self.accounts.get(account).copied().unwrap_or_default()
     }
 
-    /// Credit an `account` with the provided `amount`.
+    /// Credits an `account` with the provided `amount`.
     pub(crate) fn credit(&mut self, account: AccountOwner, amount: Amount) {
         self.accounts
             .entry(account)
@@ -33,7 +33,7 @@ impl FungibleToken {
             .saturating_add_assign(amount)
     }
 
-    /// Try to debit the requested `amount` from an `account`.
+    /// Tries to debit the requested `amount` from an `account`.
     pub(crate) fn debit(
         &mut self,
         account: AccountOwner,
@@ -50,7 +50,7 @@ impl FungibleToken {
     }
 }
 
-/// Attempt to debit from an account with insufficient funds.
+/// Attempts to debit from an account with insufficient funds.
 #[derive(Clone, Copy, Debug, Error)]
 #[error("Insufficient balance for transfer")]
 pub struct InsufficientBalanceError;

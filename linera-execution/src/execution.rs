@@ -50,7 +50,7 @@ where
     ViewError:
         From<<MemoryContext<TestExecutionRuntimeContext> as linera_views::common::Context>::Error>,
 {
-    /// Create an in-memory view where the system state is set. This is used notably to
+    /// Creates an in-memory view where the system state is set. This is used notably to
     /// generate state hashes in tests.
     pub async fn from_system_state(state: SystemExecutionState) -> Self {
         // Destructure, to make sure we don't miss any fields.

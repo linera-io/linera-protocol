@@ -87,7 +87,7 @@ pub trait Contract: ApplicationRuntimeContext {
     /// The WIT type eqivalent for [`Poll<Result<SessionCallResult, String>>`].
     type PollCallSession;
 
-    /// Create a new future for the user application to initialize itself on the owner chain.
+    /// Creates a new future for the user application to initialize itself on the owner chain.
     fn initialize_new(
         &self,
         store: &mut Self::Store,
@@ -95,14 +95,14 @@ pub trait Contract: ApplicationRuntimeContext {
         argument: &[u8],
     ) -> Result<Self::Initialize, Self::Error>;
 
-    /// Poll a user contract future that's initializing the application.
+    /// Polls a user contract future that's initializing the application.
     fn initialize_poll(
         &self,
         store: &mut Self::Store,
         future: &Self::Initialize,
     ) -> Result<Self::PollExecutionResult, Self::Error>;
 
-    /// Create a new future for the user application to execute an operation.
+    /// Creates a new future for the user application to execute an operation.
     fn execute_operation_new(
         &self,
         store: &mut Self::Store,
@@ -110,14 +110,14 @@ pub trait Contract: ApplicationRuntimeContext {
         operation: &[u8],
     ) -> Result<Self::ExecuteOperation, Self::Error>;
 
-    /// Poll a user contract future that's executing an operation.
+    /// Polls a user contract future that's executing an operation.
     fn execute_operation_poll(
         &self,
         store: &mut Self::Store,
         future: &Self::ExecuteOperation,
     ) -> Result<Self::PollExecutionResult, Self::Error>;
 
-    /// Create a new future for the user contract to execute an effect.
+    /// Creates a new future for the user contract to execute an effect.
     fn execute_effect_new(
         &self,
         store: &mut Self::Store,
@@ -125,14 +125,14 @@ pub trait Contract: ApplicationRuntimeContext {
         effect: &[u8],
     ) -> Result<Self::ExecuteEffect, Self::Error>;
 
-    /// Poll a user contract future that's executing an effect.
+    /// Polls a user contract future that's executing an effect.
     fn execute_effect_poll(
         &self,
         store: &mut Self::Store,
         future: &Self::ExecuteEffect,
     ) -> Result<Self::PollExecutionResult, Self::Error>;
 
-    /// Create a new future for the user contract to handle a call from another contract.
+    /// Creates a new future for the user contract to handle a call from another contract.
     fn handle_application_call_new(
         &self,
         store: &mut Self::Store,
@@ -141,14 +141,14 @@ pub trait Contract: ApplicationRuntimeContext {
         forwarded_sessions: &[Self::SessionId],
     ) -> Result<Self::HandleApplicationCall, Self::Error>;
 
-    /// Poll a user contract future that's handling a call from another contract.
+    /// Polls a user contract future that's handling a call from another contract.
     fn handle_application_call_poll(
         &self,
         store: &mut Self::Store,
         future: &Self::HandleApplicationCall,
     ) -> Result<Self::PollCallApplication, Self::Error>;
 
-    /// Create a new future for the user contract to handle a session call from another
+    /// Creates a new future for the user contract to handle a session call from another
     /// contract.
     fn handle_session_call_new(
         &self,
@@ -159,7 +159,7 @@ pub trait Contract: ApplicationRuntimeContext {
         forwarded_sessions: &[Self::SessionId],
     ) -> Result<Self::HandleSessionCall, Self::Error>;
 
-    /// Poll a user contract future that's handling a session call from another contract.
+    /// Polls a user contract future that's handling a session call from another contract.
     fn handle_session_call_poll(
         &self,
         store: &mut Self::Store,
@@ -179,7 +179,7 @@ pub trait Service: ApplicationRuntimeContext {
     /// The WIT type eqivalent for [`Poll<Result<Vec<u8>, String>>`].
     type PollQuery;
 
-    /// Create a new future for the user application to handle a query.
+    /// Creates a new future for the user application to handle a query.
     fn query_application_new(
         &self,
         store: &mut Self::Store,
@@ -187,7 +187,7 @@ pub trait Service: ApplicationRuntimeContext {
         argument: &[u8],
     ) -> Result<Self::QueryApplication, Self::Error>;
 
-    /// Poll a user service future that's handling a query.
+    /// Polls a user service future that's handling a query.
     fn query_application_poll(
         &self,
         store: &mut Self::Store,
@@ -222,7 +222,7 @@ impl<'context, A> WasmRuntimeContext<'context, A>
 where
     A: Contract,
 {
-    /// Call the guest WASM module's implementation of
+    /// Calls the guest WASM module's implementation of
     /// [`UserApplication::initialize`][`linera_execution::UserApplication::initialize`].
     ///
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
@@ -246,7 +246,7 @@ where
         GuestFuture::new(future, self)
     }
 
-    /// Call the guest WASM module's implementation of
+    /// Calls the guest WASM module's implementation of
     /// [`UserApplication::execute_operation`][`linera_execution::UserApplication::execute_operation`].
     ///
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
@@ -270,7 +270,7 @@ where
         GuestFuture::new(future, self)
     }
 
-    /// Call the guest WASM module's implementation of
+    /// Calls the guest WASM module's implementation of
     /// [`UserApplication::execute_effect`][`linera_execution::UserApplication::execute_effect`].
     ///
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
@@ -294,7 +294,7 @@ where
         GuestFuture::new(future, self)
     }
 
-    /// Call the guest WASM module's implementation of
+    /// Calls the guest WASM module's implementation of
     /// [`UserApplication::handle_application_call`][`linera_execution::UserApplication::handle_application_call`].
     ///
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
@@ -328,7 +328,7 @@ where
         GuestFuture::new(future, self)
     }
 
-    /// Call the guest WASM module's implementation of
+    /// Calls the guest WASM module's implementation of
     /// [`UserApplication::handle_session_call`][`linera_execution::UserApplication::handle_session_call`].
     ///
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
@@ -386,7 +386,7 @@ impl<'context, A> WasmRuntimeContext<'context, A>
 where
     A: Service,
 {
-    /// Call the guest WASM module's implementation of
+    /// Calls the guest WASM module's implementation of
     /// [`UserApplication::query_application`][`linera_execution::UserApplication::query_application`].
     ///
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to

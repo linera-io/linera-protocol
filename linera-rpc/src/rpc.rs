@@ -30,7 +30,7 @@ pub enum RpcMessage {
 }
 
 impl RpcMessage {
-    /// Obtain the [`ChainId`] of the chain targeted by this message, if there is one.
+    /// Obtains the [`ChainId`] of the chain targeted by this message, if there is one.
     ///
     /// Only inbound messages have target chains.
     pub fn target_chain_id(&self) -> Option<ChainId> {

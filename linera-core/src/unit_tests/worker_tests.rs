@@ -60,7 +60,7 @@ async fn make_state_hash(state: SystemExecutionState, fuel: u64) -> CryptoHash {
 /// The test worker accepts blocks with a timestamp this far in the future.
 const TEST_GRACE_PERIOD_MICROS: u64 = 500_000;
 
-/// Instantiate the protocol with a single validator. Returns the corresponding committee
+/// Instantiates the protocol with a single validator. Returns the corresponding committee
 /// and the (non-sharded, in-memory) "worker" that we can interact with.
 fn init_worker<S>(client: S, is_client: bool) -> (Committee, WorkerState<S>)
 where

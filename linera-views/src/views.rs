@@ -20,13 +20,13 @@ mod tests;
 /// address in storage.
 #[async_trait]
 pub trait View<C>: Sized {
-    /// Obtain a mutable reference to the internal context.
+    /// Obtains a mutable reference to the internal context.
     fn context(&self) -> &C;
 
     /// Creates a view or a subview.
     async fn load(context: C) -> Result<Self, ViewError>;
 
-    /// Discard all pending changes. After that `flush` should have no effect to storage.
+    /// Discards all pending changes. After that `flush` should have no effect to storage.
     fn rollback(&mut self);
 
     /// Clears the view. That can be seen as resetting to default. In the case of a RegisterView
@@ -34,13 +34,13 @@ pub trait View<C>: Sized {
     /// the range data to be left in the database.
     fn clear(&mut self);
 
-    /// Persist changes to storage. This leaves the view still usable and is essentially neutral to the
+    /// Persists changes to storage. This leaves the view still usable and is essentially neutral to the
     /// program running. Crash-resistant storage implementations are expected to accumulate the desired
     /// changes in the `batch` variable first. If the view is dropped without calling `flush`, staged
     /// changes are simply lost.
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError>;
 
-    /// Instead of persisting changes, clear all the data that belong to this view and its
+    /// Instead of persisting changes, clears all the data that belong to this view and its
     /// subviews. Crash-resistant storage implementations are expected to accumulate the
     /// desired changes into the `batch` variable first.
     /// No data/metadata at all is left after delete. The view is consumed by delete
@@ -108,14 +108,14 @@ pub trait HashableView<C>: View<C> {
     /// How to compute hashes.
     type Hasher: Hasher;
 
-    /// Compute the hash of the values.
+    /// Computes the hash of the values.
     ///
     /// Implementations do not need to include a type tag. However, the usual precautions
     /// to enforce collision-resistance must be applied (e.g. including the length of a
     /// collection of values).
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
 
-    /// Compute the hash of the values.
+    /// Computes the hash of the values.
     ///
     /// Implementations do not need to include a type tag. However, the usual precautions
     /// to enforce collision-resistance must be applied (e.g. including the length of a

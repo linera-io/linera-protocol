@@ -14,7 +14,7 @@ use std::{
 };
 use tokio::{sync::Barrier, time::sleep};
 
-/// Test if a released chain guard does not stay in memory.
+/// Tests if a released chain guard does not stay in memory.
 #[tokio::test]
 async fn dropped_guard_does_not_leak() {
     let chain_id = ChainId::root(0);
@@ -27,7 +27,7 @@ async fn dropped_guard_does_not_leak() {
     assert_eq!(guards.active_guards(), 0);
 }
 
-/// Test if a chain guard can be obtained again after it has been dropped.
+/// Tests if a chain guard can be obtained again after it has been dropped.
 #[tokio::test]
 async fn guard_can_be_obtained_later_again() {
     let chain_id = ChainId::root(0);
@@ -38,7 +38,7 @@ async fn guard_can_be_obtained_later_again() {
     assert!(guards.guard(chain_id).now_or_never().is_some());
 }
 
-/// Test if two tasks obtaining a guard for the same chain obtain them sequentially.
+/// Tests if two tasks obtaining a guard for the same chain obtain them sequentially.
 #[tokio::test(start_paused = true)]
 async fn prevents_concurrent_access_to_the_same_chain() {
     let chain_id = ChainId::root(0);
@@ -50,7 +50,7 @@ async fn prevents_concurrent_access_to_the_same_chain() {
     assert_eq!(access, Access::Sequential);
 }
 
-/// Test if two tasks obtaining a guard for different chains obtain them concurrently.
+/// Tests if two tasks obtaining a guard for different chains obtain them concurrently.
 #[tokio::test(start_paused = true)]
 async fn allows_concurrent_access_to_different_chains() {
     let access = ConcurrentAccessTest::default()
@@ -60,7 +60,7 @@ async fn allows_concurrent_access_to_different_chains() {
     assert_eq!(access, Access::Concurrent);
 }
 
-/// Test helper for running two tasks to obtain chain guards.
+/// Tests helper for running two tasks to obtain chain guards.
 #[derive(Clone)]
 pub struct ConcurrentAccessTest {
     guards: ChainGuards,
@@ -87,7 +87,7 @@ impl Default for ConcurrentAccessTest {
 }
 
 impl ConcurrentAccessTest {
-    /// Spawn two tasks and check if they access `first_chain` and `second_chain` concurrently or
+    /// Spawns two tasks and check if they access `first_chain` and `second_chain` concurrently or
     /// sequentially.
     pub async fn spawn_two_tasks_to_obtain_guards_for(
         self,

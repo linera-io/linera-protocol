@@ -225,10 +225,10 @@ mod tests {
     };
     use tokio::time;
 
-    /// Test if futures that finish in a non-sequential order complete sequentially.
+    /// Tests if futures that finish in a non-sequential order complete sequentially.
     ///
-    /// Start some futures, with each one finishing in a different time without respecting the
-    /// creation order, and check that their respective [`HostFuture`]s complete in order.
+    /// Starts some futures, with each one finishing in a different time without respecting the
+    /// creation order, and checks that their respective [`HostFuture`]s complete in order.
     #[tokio::test]
     async fn futures_complete_in_order() {
         time::pause();

@@ -23,7 +23,7 @@ pub type MemoryClient = Arc<RwLock<MutexGuardArc<MemoryStoreMap>>>;
 pub type MemoryContext<E> = ContextFromDb<E, MemoryClient>;
 
 impl<E> MemoryContext<E> {
-    /// Create a [`MemoryContext`].
+    /// Creates a [`MemoryContext`].
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>, extra: E) -> Self {
         Self {
             db: Arc::new(RwLock::new(guard)),
@@ -33,7 +33,7 @@ impl<E> MemoryContext<E> {
     }
 }
 
-/// Provide a MemoryContext<()> that can be used for tests.
+/// Provides a `MemoryContext<()>` that can be used for tests.
 pub fn create_test_context() -> MemoryContext<()> {
     let state = Arc::new(Mutex::new(BTreeMap::new()));
     let guard = state

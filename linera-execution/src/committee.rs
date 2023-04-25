@@ -151,7 +151,7 @@ impl Committee {
         self.validity_threshold
     }
 
-    /// Find the highest value than is supported by a certain subset of validators.
+    /// Finds the highest value than is supported by a certain subset of validators.
     pub fn get_lower_bound<V>(&self, threshold: u64, mut values: Vec<(ValidatorName, V)>) -> V
     where
         V: Default + std::cmp::Ord,
@@ -168,7 +168,7 @@ impl Committee {
         V::default()
     }
 
-    /// Find the highest value than is supported by a quorum of validators.
+    /// Finds the highest value than is supported by a quorum of validators.
     pub fn get_strong_majority_lower_bound<V>(&self, values: Vec<(ValidatorName, V)>) -> V
     where
         V: Default + std::cmp::Ord,
@@ -176,7 +176,7 @@ impl Committee {
         self.get_lower_bound(self.quorum_threshold(), values)
     }
 
-    /// Find the highest value than is guaranteed to be supported by at least one honest validator.
+    /// Finds the highest value than is guaranteed to be supported by at least one honest validator.
     pub fn get_validity_lower_bound<V>(&self, values: Vec<(ValidatorName, V)>) -> V
     where
         V: Default + std::cmp::Ord,

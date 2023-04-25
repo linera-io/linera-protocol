@@ -269,7 +269,7 @@ impl LiteCertificate {
         Self { value, signatures }
     }
 
-    /// Verify the certificate.
+    /// Verifies the certificate.
     pub fn check(self, committee: &Committee) -> Result<LiteValue, ChainError> {
         check_signatures(&self.value, &self.signatures, committee)?;
         Ok(self.value)
@@ -475,7 +475,7 @@ impl BlockProposal {
 }
 
 impl LiteVote {
-    /// Use signing key to create a signed object.
+    /// Uses the signing key to create a signed object.
     pub fn new(value: LiteValue, key_pair: &KeyPair) -> Self {
         let signature = Signature::new(&value, key_pair);
         Self {
@@ -485,7 +485,7 @@ impl LiteVote {
         }
     }
 
-    /// Verify the signature in the vote.
+    /// Verifies the signature in the vote.
     pub fn check(&self) -> Result<(), ChainError> {
         Ok(self.signature.check(&self.value, self.validator.0)?)
     }
@@ -499,7 +499,7 @@ pub struct SignatureAggregator<'a> {
 }
 
 impl<'a> SignatureAggregator<'a> {
-    /// Start aggregating signatures for the given value into a certificate.
+    /// Starts aggregating signatures for the given value into a certificate.
     pub fn new(value: HashedValue, committee: &'a Committee) -> Self {
         Self {
             committee,
@@ -512,9 +512,9 @@ impl<'a> SignatureAggregator<'a> {
         }
     }
 
-    /// Try to append a signature to a (partial) certificate. Returns Some(certificate) if a quorum was reached.
-    /// The resulting final certificate is guaranteed to be valid in the sense of `check` below.
-    /// Returns an error if the signed value cannot be aggregated.
+    /// Tries to append a signature to a (partial) certificate. Returns Some(certificate) if a
+    /// quorum was reached. The resulting final certificate is guaranteed to be valid in the sense
+    /// of `check` below. Returns an error if the signed value cannot be aggregated.
     pub fn append(
         &mut self,
         validator: ValidatorName,
@@ -548,7 +548,7 @@ impl Certificate {
         Self { value, signatures }
     }
 
-    /// Verify the certificate.
+    /// Verifies the certificate.
     pub fn check<'a>(&'a self, committee: &Committee) -> Result<&'a HashedValue, ChainError> {
         check_signatures(&self.lite(), &self.signatures, committee)?;
         Ok(&self.value)

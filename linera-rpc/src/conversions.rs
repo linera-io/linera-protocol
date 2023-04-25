@@ -42,14 +42,14 @@ pub enum ProtoConversionError {
     InconsistentChainId,
 }
 
-/// Extract an optional field from a Proto type and map it.
+/// Extracts an optional field from a Proto type and maps it.
 macro_rules! proto_convert {
     ($expr:expr) => {
         $expr.ok_or(ProtoConversionError::MissingField)?.into()
     };
 }
 
-/// Extract an optional field from a Proto type and try to map it.
+/// Extracts an optional field from a Proto type and tries to map it.
 macro_rules! try_proto_convert {
     ($expr:expr) => {
         $expr
@@ -58,7 +58,7 @@ macro_rules! try_proto_convert {
     };
 }
 
-/// Try to map an iterable collection into a vector.
+/// Tries to map an iterable collection into a vector.
 macro_rules! try_proto_convert_vec {
     ($expr:expr, $ty:ty) => {
         $expr
@@ -68,14 +68,14 @@ macro_rules! try_proto_convert_vec {
     };
 }
 
-/// Map a type into another type.
+/// Maps a type into another type.
 macro_rules! map_into {
     ($expr:expr) => {
         $expr.map(|x| x.into())
     };
 }
 
-/// Cast a type to another type via a map.
+/// Casts a type to another type via a map.
 macro_rules! map_as {
     ($expr:expr, $ty:ty) => {
         $expr.map(|x| x as $ty)

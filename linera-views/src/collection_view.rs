@@ -310,7 +310,7 @@ where
         }
     }
 
-    /// Get the extra data.
+    /// Gets the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
     }
@@ -712,7 +712,7 @@ where
         Ok(())
     }
 
-    /// Get the extra data.
+    /// Gets the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.collection.extra()
     }
@@ -1024,7 +1024,7 @@ where
         Ok(())
     }
 
-    /// Get the extra data.
+    /// Gets the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.collection.extra()
     }

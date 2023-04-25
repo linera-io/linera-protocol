@@ -23,7 +23,7 @@ pub struct ExportedFuture<Output> {
 }
 
 impl<Output> ExportedFuture<Output> {
-    /// Create a new [`ExportedFuture`] by exporting the provided `future`.
+    /// Creates a new [`ExportedFuture`] by exporting the provided `future`.
     pub fn new(future: impl Future<Output = Output> + 'static) -> Self {
         ExportedFuture {
             future: RefCell::new(Box::pin(future)),
@@ -31,7 +31,7 @@ impl<Output> ExportedFuture<Output> {
         }
     }
 
-    /// Poll the future from the host.
+    /// Polls the future from the host.
     ///
     /// A fake task context is created so that it can capture any scheduled awakes, and poll again
     /// immediately in that case.
@@ -68,30 +68,30 @@ impl<Output> ExportedFuture<Output> {
 struct ShouldWake(Box<Arc<AtomicBool>>);
 
 impl ShouldWake {
-    /// Create a new [`ShouldWake`] instance using the reference to the `should_wake` flag.
+    /// Creates a new [`ShouldWake`] instance using the reference to the `should_wake` flag.
     pub fn new(should_wake: Arc<AtomicBool>) -> Self {
         ShouldWake(Box::new(should_wake))
     }
 
-    /// Create a [`Waker`] object from this [`ShouldWake`] instance.
+    /// Creates a [`Waker`] object from this [`ShouldWake`] instance.
     pub fn into_waker(self) -> Waker {
         let raw_waker = RawWaker::new(unsafe { self.stay_alive() }, &WAKER_VTABLE);
         unsafe { Waker::from_raw(raw_waker) }
     }
 
-    /// Restore this [`ShouldWake`] instance from a "cookie" pointer.
+    /// Restores this [`ShouldWake`] instance from a "cookie" pointer.
     unsafe fn unwrap_from(pointer: *const ()) -> Self {
         let payload = Box::from_raw(pointer as *mut _);
         ShouldWake(payload)
     }
 
-    /// Convert this [`ShouldWake`] instance into a "cookie" pointer, so that it can be used again
+    /// Converts this [`ShouldWake`] instance into a "cookie" pointer, so that it can be used again
     /// later.
     unsafe fn stay_alive(self) -> *const () {
         Box::leak(self.0) as *const _ as *const ()
     }
 
-    /// Flag that the [`ExportedFuture`] needs to be polled again.
+    /// Flags that the [`ExportedFuture`] needs to be polled again.
     fn wake(&self) {
         self.0.store(true, Ordering::Release);
     }
@@ -100,7 +100,7 @@ impl ShouldWake {
 /// A static function pointer table for the custom [`Waker`] type.
 const WAKER_VTABLE: RawWakerVTable = RawWakerVTable::new(clone, wake, wake_by_ref, drop);
 
-/// Clone the [`ShouldWake`] instance.
+/// Clones the [`ShouldWake`] instance.
 unsafe fn clone(internal_waker: *const ()) -> RawWaker {
     let should_wake = ShouldWake::unwrap_from(internal_waker);
     let new_internal_waker = should_wake.clone().stay_alive();
@@ -108,13 +108,13 @@ unsafe fn clone(internal_waker: *const ()) -> RawWaker {
     RawWaker::new(new_internal_waker, &WAKER_VTABLE)
 }
 
-/// Use the [`ShouldWake`] instance to flag that the future needs to be polled again.
+/// Uses the [`ShouldWake`] instance to flag that the future needs to be polled again.
 unsafe fn wake(internal_waker: *const ()) {
     let should_wake = ShouldWake::unwrap_from(internal_waker);
     should_wake.wake();
 }
 
-/// Use the [`ShouldWake`] instance to flag that the future needs to be polled again, without
+/// Uses the [`ShouldWake`] instance to flag that the future needs to be polled again, without
 /// consuming the waker so that it can be used again later.
 unsafe fn wake_by_ref(internal_waker: *const ()) {
     let should_wake = ShouldWake::unwrap_from(internal_waker);
@@ -122,7 +122,7 @@ unsafe fn wake_by_ref(internal_waker: *const ()) {
     should_wake.stay_alive();
 }
 
-/// Finalize a [`ShouldWake`] instance.
+/// Finalizes a [`ShouldWake`] instance.
 unsafe fn drop(internal_waker: *const ()) {
     let _ = ShouldWake::unwrap_from(internal_waker);
 }

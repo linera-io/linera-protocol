@@ -408,7 +408,7 @@ mod tests {
     use super::sanitize;
     use crate::Bytecode;
 
-    /// Test if an already sanitized bytecode isn't changed.
+    /// Tests if an already sanitized bytecode isn't changed.
     #[test]
     fn doesnt_change_already_sanitized_bytecode() {
         let wat = r#"
@@ -489,7 +489,7 @@ mod tests {
         assert_eq!(input, output);
     }
 
-    /// Test if a bytecode is properly sanitized.
+    /// Tests if a bytecode is properly sanitized.
     ///
     /// Checks if a function without a `return` instruction is changed to have that instruction at
     /// the end, and that the changed bytecode is still valid.

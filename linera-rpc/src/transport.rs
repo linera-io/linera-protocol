@@ -87,7 +87,7 @@ impl<T> Transport for T where
 }
 
 impl TransportProtocol {
-    /// Create a transport for this protocol.
+    /// Creates a transport for this protocol.
     pub async fn connect(self, address: String) -> Result<impl Transport, std::io::Error> {
         let mut addresses = address
             .to_socket_addrs()
@@ -115,7 +115,7 @@ impl TransportProtocol {
         Ok(stream)
     }
 
-    /// Create a [`ConnectionPool`] for this protocol.
+    /// Creates a [`ConnectionPool`] for this protocol.
     pub async fn make_outgoing_connection_pool(
         self,
     ) -> Result<Box<dyn ConnectionPool>, std::io::Error> {
@@ -126,7 +126,7 @@ impl TransportProtocol {
         Ok(pool)
     }
 
-    /// Run a server for this protocol and the given message handler.
+    /// Runs a server for this protocol and the given message handler.
     pub async fn spawn_server<S>(
         self,
         address: &str,

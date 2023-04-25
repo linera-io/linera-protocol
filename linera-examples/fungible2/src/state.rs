@@ -23,7 +23,7 @@ where
     C: Context + Send + Sync + Clone + 'static,
     linera_views::views::ViewError: From<C::Error>,
 {
-    /// Initialize the application state with some accounts with initial balances.
+    /// Initializes the application state with some accounts with initial balances.
     pub(crate) async fn initialize_accounts(&mut self, accounts: BTreeMap<AccountOwner, Amount>) {
         for (k, v) in accounts {
             self.accounts
@@ -32,7 +32,7 @@ where
         }
     }
 
-    /// Obtain the balance for an `account`.
+    /// Obtains the balance for an `account`.
     pub(crate) async fn balance(&self, account: &AccountOwner) -> Amount {
         self.accounts
             .get(account)
@@ -41,7 +41,7 @@ where
             .unwrap_or_default()
     }
 
-    /// Credit an `account` with the provided `amount`.
+    /// Credits an `account` with the provided `amount`.
     pub(crate) async fn credit(&mut self, account: AccountOwner, amount: Amount) {
         let mut value = self.balance(&account).await;
         value.saturating_add_assign(amount);
@@ -50,7 +50,7 @@ where
             .expect("Failed insert statement");
     }
 
-    /// Try to debit the requested `amount` from an `account`.
+    /// Tries to debit the requested `amount` from an `account`.
     pub(crate) async fn debit(
         &mut self,
         account: AccountOwner,
@@ -67,7 +67,7 @@ where
     }
 }
 
-/// Attempt to debit from an account with insufficient funds.
+/// Attempts to debit from an account with insufficient funds.
 #[derive(Clone, Copy, Debug, Error)]
 #[error("Insufficient balance for transfer")]
 pub struct InsufficientBalanceError;

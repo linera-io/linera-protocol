@@ -8,7 +8,7 @@ use linera_views::lru_caching::TEST_CACHE_SIZE;
 use std::mem;
 use tempfile::TempDir;
 
-/// Test if released guards don't use memory.
+/// Tests if released guards don't use memory.
 #[tokio::test]
 async fn guards_dont_leak() -> Result<(), anyhow::Error> {
     let directory = TempDir::new()?;
