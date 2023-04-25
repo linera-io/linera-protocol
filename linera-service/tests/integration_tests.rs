@@ -170,10 +170,8 @@ async fn cargo_force_build_binary(name: &'static str) -> PathBuf {
         false
     };
     build_command
-        .arg("--features")
-        .arg("benchmark")
-        .arg("--bin")
-        .arg(name);
+        .args(["--features", "benchmark"])
+        .args(["--bin", name]);
     info!("Running compiler: {:?}", build_command);
     build_command.spawn().unwrap().wait().await.unwrap();
     if is_release {
@@ -803,16 +801,13 @@ impl NodeService {
             .await
             .unwrap();
         let body: Value = response.json().await.unwrap();
-        body.get("data")
-            .unwrap()
-            .get("applications")
-            .unwrap()
+        body["data"]["applications"]
             .as_array()
             .unwrap()
             .iter()
             .map(|a| {
-                let id = a.get("id").unwrap().as_str().unwrap().to_string();
-                let link = a.get("link").unwrap().as_str().unwrap().to_string();
+                let id = a["id"].as_str().unwrap().to_string();
+                let link = a["link"].as_str().unwrap().to_string();
                 (id, link)
             })
             .collect()
@@ -826,15 +821,7 @@ impl NodeService {
             contract_code.to_value(),
             service_code.to_value(),
         );
-        let query = json!({ "query": query_string });
-        let client = reqwest::Client::new();
-        let response = client
-            .post(format!("http://localhost:{}/", self.port))
-            .json(&query)
-            .send()
-            .await
-            .unwrap();
-        let response_body: Value = response.json().await.unwrap();
+        let response_body = self.query(&query_string).await;
         if let Some(errors) = response_body.get("errors") {
             let mut error_string = errors.to_string();
             if error_string.len() > 10000 {
@@ -846,15 +833,15 @@ impl NodeService {
             }
             panic!("publish_and_create failed: {}", error_string);
         }
-        serde_json::from_value(
-            response_body
-                .get("data")
-                .unwrap()
-                .get("publishBytecode")
-                .unwrap()
-                .clone(),
-        )
-        .unwrap()
+        serde_json::from_value(response_body["data"]["publishBytecode"].clone()).unwrap()
+    }
+
+    async fn query(&self, query_string: &str) -> Value {
+        let query = json!({ "query": query_string });
+        let url = format!("http://localhost:{}/", self.port);
+        let client = reqwest::Client::new();
+        let response = client.post(url).json(&query).send().await.unwrap();
+        response.json().await.unwrap()
     }
 
     async fn create_application(&self, bytecode_id: &str) -> String {
@@ -878,15 +865,7 @@ impl NodeService {
         if let Some(errors) = response_body.get("errors") {
             panic!("create_application failed: {}", errors);
         }
-        serde_json::from_value(
-            response_body
-                .get("data")
-                .unwrap()
-                .get("createApplication")
-                .unwrap()
-                .clone(),
-        )
-        .unwrap()
+        serde_json::from_value(response_body["data"]["createApplication"].clone()).unwrap()
     }
 }
 
@@ -897,13 +876,7 @@ struct Application {
 impl Application {
     async fn get_counter_value(&self) -> u64 {
         let response_body = self.query_application("query { value }").await;
-        response_body
-            .get("data")
-            .unwrap()
-            .get("value")
-            .unwrap()
-            .as_u64()
-            .unwrap()
+        serde_json::from_value(response_body["data"]["value"].clone()).unwrap()
     }
 
     async fn query_application(&self, query_string: &str) -> Value {
@@ -1165,7 +1138,13 @@ async fn test_end_to_end_social_user_pub_sub() {
 
     let app1 = node_service1.make_application(&application_id).await;
     let subscribe = format!("mutation {{ subscribe(chainId: \"{}\") }}", chain2);
-    app1.query_application(&subscribe).await;
+    let response = app1.query_application(&subscribe).await;
+    let hash = &response["data"];
+
+    // The returned hash should now be the latest one.
+    let query = format!("query {{ chain(chainId: \"{chain1}\") {{ tipState {{ blockHash }} }} }}");
+    let response = node_service1.query(&query).await;
+    assert_eq!(*hash, response["data"]["chain"]["tipState"]["blockHash"]);
 
     let app2 = node_service2.make_application(&application_id).await;
     let post = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
