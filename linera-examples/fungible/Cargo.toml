@@ -5,6 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
+async-graphql = { version = "5.0.6", default-features = false }
 async-trait = "0.1.52"
 bcs = "0.1.3"
 linera-sdk = { path = "../../linera-sdk" }
