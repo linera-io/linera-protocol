@@ -1811,6 +1811,7 @@ dependencies = [
 name = "fungible"
 version = "0.1.0"
 dependencies = [
+ "async-graphql",
  "async-trait",
  "bcs",
  "linera-sdk",
