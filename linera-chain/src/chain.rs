@@ -56,6 +56,8 @@ pub struct ChainStateView<C> {
     pub inboxes: CollectionView<C, Origin, InboxStateView<C>>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: CollectionView<C, Target, OutboxStateView<C>>,
+    /// Number of outgoing messages in flight.
+    pub outbox_counter: RegisterView<C, u32>,
     /// Channels able to multicast messages to subscribers.
     pub channels: CollectionView<C, ChannelFullName, ChannelStateView<C>>,
 }
@@ -118,10 +120,20 @@ where
     ) -> Result<bool, ChainError> {
         let outbox = self.outboxes.load_entry_mut(&target).await?;
         let updated = outbox.mark_messages_as_received(height).await?;
-        if updated && outbox.queue.count() == 0 {
-            self.outboxes.remove_entry(&target)?;
+        if updated > 0 {
+            let count = self.outbox_counter.get_mut();
+            *count = count
+                .checked_sub(updated)
+                .expect("message counter should not underflow");
+            if outbox.queue.count() == 0 {
+                self.outboxes.remove_entry(&target)?;
+            }
         }
-        Ok(updated)
+        Ok(updated > 0)
+    }
+
+    pub fn all_messages_delivered(&mut self) -> bool {
+        self.outbox_counter.get() == &0
     }
 
     /// Invariant for the states of active chains.
@@ -406,6 +418,7 @@ where
                         ApplicationId::System,
                         Effect::System,
                         &mut self.outboxes,
+                        self.outbox_counter.get_mut(),
                         &mut self.channels,
                         effects,
                         height,
@@ -421,6 +434,7 @@ where
                             bytes,
                         },
                         &mut self.outboxes,
+                        self.outbox_counter.get_mut(),
                         &mut self.channels,
                         effects,
                         height,
@@ -433,10 +447,12 @@ where
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn process_raw_execution_result<E, F>(
         application_id: ApplicationId,
         lift: F,
         outboxes: &mut CollectionView<C, Target, OutboxStateView<C>>,
+        outbox_counter: &mut u32,
         channels: &mut CollectionView<C, ChannelFullName, ChannelStateView<C>>,
         effects: &mut Vec<OutgoingEffect>,
         height: BlockHeight,
@@ -473,7 +489,9 @@ where
         // Update the (regular) outboxes.
         for recipient in recipients {
             let outbox = outboxes.load_entry_mut(&Target::chain(recipient)).await?;
-            outbox.schedule_message(height)?;
+            if outbox.schedule_message(height)? {
+                *outbox_counter += 1;
+            }
         }
 
         // Update the channels.
@@ -496,7 +514,9 @@ where
                 let outbox = outboxes
                     .load_entry_mut(&Target::channel(recipient, full_name.clone()))
                     .await?;
-                outbox.schedule_message(height)?;
+                if outbox.schedule_message(height)? {
+                    *outbox_counter += 1;
+                }
             }
             channel.block_height.set(Some(height));
         }
@@ -513,7 +533,9 @@ where
                     let outbox = outboxes
                         .load_entry_mut(&Target::channel(id, full_name.clone()))
                         .await?;
-                    outbox.schedule_message(*latest_height)?;
+                    if outbox.schedule_message(*latest_height)? {
+                        *outbox_counter += 1;
+                    }
                 }
                 channel.subscribers.insert(&id)?;
             }

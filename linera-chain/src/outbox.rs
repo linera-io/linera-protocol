@@ -59,14 +59,14 @@ where
     pub(crate) async fn mark_messages_as_received(
         &mut self,
         height: BlockHeight,
-    ) -> Result<bool, ViewError> {
-        let mut updated = false;
+    ) -> Result<u32, ViewError> {
+        let mut updated = 0;
         while let Some(h) = self.queue.front().await? {
             if h > height {
                 break;
             }
             self.queue.delete_front();
-            updated = true;
+            updated += 1;
         }
         Ok(updated)
     }
