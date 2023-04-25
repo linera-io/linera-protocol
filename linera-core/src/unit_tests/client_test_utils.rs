@@ -53,11 +53,10 @@ struct LocalValidator<S> {
 }
 
 #[derive(Clone)]
-pub struct LocalValidatorClient<S>(Arc<Mutex<LocalValidator<S>>>);
-type NameAndClient<B> = (
-    ValidatorName,
-    LocalValidatorClient<<B as StoreBuilder>::Store>,
-);
+pub struct LocalValidatorClient<S> {
+    name: ValidatorName,
+    client: Arc<Mutex<LocalValidator<S>>>,
+}
 
 #[async_trait]
 impl<S> ValidatorNode for LocalValidatorClient<S>
@@ -118,20 +117,23 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    fn new(state: WorkerState<S>) -> Self {
-        let validator = LocalValidator {
+    fn new(name: ValidatorName, state: WorkerState<S>) -> Self {
+        let client = LocalValidator {
             fault_type: FaultType::Honest,
             state,
         };
-        Self(Arc::new(Mutex::new(validator)))
+        Self {
+            name,
+            client: Arc::new(Mutex::new(client)),
+        }
     }
 
     async fn set_fault_type(&self, fault_type: FaultType) {
-        self.0.lock().await.fault_type = fault_type;
+        self.client.lock().await.fault_type = fault_type;
     }
 
     async fn fault_type(&self) -> FaultType {
-        self.0.lock().await.fault_type
+        self.client.lock().await.fault_type
     }
 
     /// Executes the future produced by `f` in a new thread in a new Tokio runtime.
@@ -157,7 +159,7 @@ where
         proposal: BlockProposal,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
-        let mut validator = self.0.lock().await;
+        let mut validator = self.client.lock().await;
         let result = match validator.fault_type {
             FaultType::Offline => Err(NodeError::ClientIoError {
                 error: "offline".to_string(),
@@ -178,7 +180,7 @@ where
         certificate: LiteCertificate,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
-        let mut validator = self.0.lock().await;
+        let mut validator = self.client.lock().await;
         let result = match validator.state.recent_value(&certificate.value.value_hash) {
             None => Err(NodeError::MissingCertificateValue),
             Some(value) => match certificate.with_value(value.clone()) {
@@ -199,7 +201,7 @@ where
         blobs: Vec<HashedValue>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
-        let mut validator = self.0.lock().await;
+        let mut validator = self.client.lock().await;
         let result = validator
             .state
             .fully_handle_certificate(certificate, blobs)
@@ -212,14 +214,14 @@ where
         query: ChainInfoQuery,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
-        let mut validator = self.0.lock().await;
+        let mut validator = self.client.lock().await;
         let result = validator.state.handle_chain_info_query(query).await;
         // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
         sender.send(result.map_err(Into::into).map(|(info, _actions)| info))
     }
 }
 
-pub struct NodeProvider<S>(BTreeMap<ValidatorName, LocalValidatorClient<S>>);
+pub struct NodeProvider<S>(BTreeMap<ValidatorName, Arc<Mutex<LocalValidator<S>>>>);
 
 impl<S> ValidatorNodeProvider for NodeProvider<S>
 where
@@ -230,13 +232,24 @@ where
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
         let name = ValidatorName::from_str(address).unwrap();
-        let node = self
+        let client = self
             .0
             .get(&name)
             .ok_or_else(|| NodeError::CannotResolveValidatorAddress {
                 address: address.to_string(),
-            })?;
-        Ok(node.clone())
+            })?
+            .clone();
+        Ok(LocalValidatorClient { name, client })
+    }
+}
+
+impl<S> FromIterator<LocalValidatorClient<S>> for NodeProvider<S> {
+    fn from_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = LocalValidatorClient<S>>,
+    {
+        let destructure = |validator: LocalValidatorClient<S>| (validator.name, validator.client);
+        Self(iter.into_iter().map(destructure).collect())
     }
 }
 
@@ -251,7 +264,7 @@ pub struct TestBuilder<B: StoreBuilder> {
     pub initial_committee: Committee,
     admin_id: ChainId,
     genesis_store_builder: GenesisStoreBuilder,
-    validator_clients: Vec<NameAndClient<B>>,
+    validator_clients: Vec<LocalValidatorClient<B::Store>>,
     validator_stores: HashMap<ValidatorName, B::Store>,
     chain_client_stores: Vec<B::Store>,
 }
@@ -333,12 +346,12 @@ where
             let state = WorkerState::new(format!("Node {}", i), Some(key_pair), store.clone())
                 .with_allow_inactive_chains(false)
                 .with_allow_messages_from_deprecated_epochs(false);
-            let validator = LocalValidatorClient::new(state);
+            let validator = LocalValidatorClient::new(name, state);
             if i < with_faulty_validators {
                 faulty_validators.insert(name);
                 validator.set_fault_type(FaultType::Malicious).await;
             }
-            validator_clients.push((name, validator));
+            validator_clients.push(validator);
             validator_stores.insert(name, store);
         }
         tracing::info!(
@@ -358,12 +371,12 @@ where
 
     pub async fn set_fault_type<I>(&mut self, range: I, fault_type: FaultType)
     where
-        I: SliceIndex<[NameAndClient<B>], Output = [NameAndClient<B>]>,
+        I: SliceIndex<[LocalValidatorClient<B::Store>], Output = [LocalValidatorClient<B::Store>]>,
     {
         let mut faulty_validators = vec![];
-        for (name, validator) in &mut self.validator_clients[range] {
+        for validator in &mut self.validator_clients[range] {
             validator.set_fault_type(fault_type).await;
-            faulty_validators.push(*name);
+            faulty_validators.push(validator.name);
         }
         tracing::info!(
             "Making the following validators {:?}: {:?}",
@@ -382,8 +395,8 @@ where
         // Remember what's in the genesis store for future clients to join.
         self.genesis_store_builder
             .add(description, public_key, balance);
-        for (name, validator) in &self.validator_clients {
-            let store = self.validator_stores.get_mut(name).unwrap();
+        for validator in &self.validator_clients {
+            let store = self.validator_stores.get_mut(&validator.name).unwrap();
             if validator.fault_type().await == FaultType::Malicious {
                 store
                     .create_chain(
@@ -445,7 +458,7 @@ where
             )
             .await;
         self.chain_client_stores.push(store.clone());
-        let provider = NodeProvider(self.validator_clients.iter().cloned().collect());
+        let provider = self.validator_clients.iter().cloned().collect();
         Ok(ChainClient::new(
             chain_id,
             vec![key_pair],
@@ -475,9 +488,9 @@ where
             });
         let mut count = 0;
         let mut certificate = None;
-        for (name, mut client) in self.validator_clients.clone() {
-            if let Ok(response) = client.handle_chain_info_query(query.clone()).await {
-                if response.check(name).is_ok() {
+        for mut validator in self.validator_clients.clone() {
+            if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
+                if response.check(validator.name).is_ok() {
                     let ChainInfo {
                         mut requested_sent_certificates,
                         ..
