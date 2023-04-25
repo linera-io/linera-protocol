@@ -5,7 +5,7 @@ use async_graphql::{
     futures_util::Stream,
     http::GraphiQLSource,
     parser::types::{DocumentOperations, ExecutableDocument, OperationType},
-    Error, Object, Request, Schema, ServerError, SimpleObject, Subscription,
+    Error, Object, Request, ScalarType, Schema, ServerError, SimpleObject, Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{
@@ -354,11 +354,11 @@ impl ApplicationOverview {
     }
 }
 
-/// Given a parsed GraphQL query (or `ExecutableDocument`), return the `OperationType`.
+/// Given a parsed GraphQL query (or `ExecutableDocument`), returns the `OperationType`.
 ///
 /// Errors:
 ///
-/// If we have no `OperationTypes` or the `OperationTypes` heterogeneous, i.e. a query
+/// If we have no `OperationType`s or the `OperationTypes` are heterogeneous, i.e. a query
 /// was submitted with a `mutation` and `subscription`.
 fn operation_type(document: &ExecutableDocument) -> Result<OperationType, NodeServiceError> {
     match &document.operations {
@@ -436,7 +436,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    /// Create a new instance of the node service given a client chain and a port.
+    /// Creates a new instance of the node service given a client chain and a port.
     pub fn new(client: ChainClient<P, S>, port: NonZeroU16) -> Self {
         let client = Arc::new(Mutex::new(client));
         Self { client, port }
@@ -458,7 +458,7 @@ where
         .finish()
     }
 
-    /// Run the node service.
+    /// Runs the node service.
     pub async fn run<C, F>(self, mut context: C, wallet_updater: F) -> Result<(), anyhow::Error>
     where
         for<'a> F:
@@ -580,9 +580,8 @@ where
 
         let mut client = self.client.lock().await;
         client.process_inbox().await?;
-        let certificate = client.execute_operations(operations).await?;
-        let value = async_graphql::Value::from_json(serde_json::to_value(certificate)?)?;
-        Ok(async_graphql::Response::new(value))
+        let hash = client.execute_operations(operations).await?.value.hash();
+        Ok(async_graphql::Response::new(hash.to_value()))
     }
 
     /// Executes a GraphQL query and generates a response for our `Schema`.
