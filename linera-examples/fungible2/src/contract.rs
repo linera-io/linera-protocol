@@ -16,6 +16,7 @@ use linera_sdk::{
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
     OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
+use std::{collections::BTreeMap, str::FromStr};
 use thiserror::Error;
 
 linera_sdk::contract!(FungibleToken<ViewStorageContext>);
@@ -27,10 +28,18 @@ impl Contract for FungibleToken<ViewStorageContext> {
 
     async fn initialize(
         &mut self,
-        _context: &OperationContext,
+        context: &OperationContext,
         argument: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        let accounts = bcs::from_bytes(argument).map_err(Error::InvalidInitialState)?;
+        let mut accounts: BTreeMap<AccountOwner, Amount> =
+            bcs::from_bytes(argument).map_err(Error::InvalidInitialState)?;
+        // Creator gets 1M tokens to distribute.
+        if let Some(owner) = context.authenticated_signer {
+            accounts.insert(
+                AccountOwner::User(owner),
+                Amount::from_str("1000000").unwrap(),
+            );
+        }
         self.initialize_accounts(accounts).await;
         Ok(ExecutionResult::default())
     }
