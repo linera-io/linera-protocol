@@ -59,16 +59,16 @@ where
     pub(crate) async fn mark_messages_as_received(
         &mut self,
         height: BlockHeight,
-    ) -> Result<u32, ViewError> {
-        let mut updated = 0;
+    ) -> Result<Vec<BlockHeight>, ViewError> {
+        let mut updates = Vec::new();
         while let Some(h) = self.queue.front().await? {
             if h > height {
                 break;
             }
             self.queue.delete_front();
-            updated += 1;
+            updates.push(h);
         }
-        Ok(updated)
+        Ok(updates)
     }
 }
 

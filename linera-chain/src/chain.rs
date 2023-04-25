@@ -30,7 +30,7 @@ use linera_views::{
     views::{CryptoHashView, GraphQLView, RootView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 /// A view accessing the state of a chain.
 #[derive(Debug, RootView, GraphQLView)]
@@ -56,8 +56,9 @@ pub struct ChainStateView<C> {
     pub inboxes: CollectionView<C, Origin, InboxStateView<C>>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: CollectionView<C, Target, OutboxStateView<C>>,
-    /// Number of outgoing messages in flight.
-    pub outbox_counter: RegisterView<C, u32>,
+    /// Number of outgoing messages in flight for each block height.
+    /// We use a `RegisterView` to prioritize speed for small maps.
+    pub outbox_counters: RegisterView<C, BTreeMap<BlockHeight, u32>>,
     /// Channels able to multicast messages to subscribers.
     pub channels: CollectionView<C, ChannelFullName, ChannelStateView<C>>,
 }
@@ -119,21 +120,43 @@ where
         height: BlockHeight,
     ) -> Result<bool, ChainError> {
         let outbox = self.outboxes.load_entry_mut(&target).await?;
-        let updated = outbox.mark_messages_as_received(height).await?;
-        if updated > 0 {
-            let count = self.outbox_counter.get_mut();
-            *count = count
-                .checked_sub(updated)
+        let updates = outbox.mark_messages_as_received(height).await?;
+        if updates.is_empty() {
+            return Ok(false);
+        }
+        for update in updates {
+            let counter = self
+                .outbox_counters
+                .get_mut()
+                .get_mut(&update)
+                .expect("message counter should be present");
+            *counter = counter
+                .checked_sub(1)
                 .expect("message counter should not underflow");
-            if outbox.queue.count() == 0 {
-                self.outboxes.remove_entry(&target)?;
+            if *counter == 0 {
+                // Important for the test in `all_messages_delivered_up_to`.
+                self.outbox_counters.get_mut().remove(&update);
             }
         }
-        Ok(updated > 0)
+        if outbox.queue.count() == 0 {
+            self.outboxes.remove_entry(&target)?;
+        }
+        Ok(true)
     }
 
-    pub fn all_messages_delivered(&mut self) -> bool {
-        self.outbox_counter.get() == &0
+    /// Returns true if there is no more outgoing messages in flight up to the given
+    /// block height.
+    pub fn all_messages_delivered_up_to(&mut self, height: BlockHeight) -> bool {
+        tracing::debug!(
+            "Messages left in {:?}'s outbox: {:?}",
+            self.chain_id(),
+            self.outbox_counters.get()
+        );
+        if let Some((key, _)) = self.outbox_counters.get().first_key_value() {
+            key > &height
+        } else {
+            true
+        }
     }
 
     /// Invariant for the states of active chains.
@@ -418,7 +441,7 @@ where
                         ApplicationId::System,
                         Effect::System,
                         &mut self.outboxes,
-                        self.outbox_counter.get_mut(),
+                        self.outbox_counters.get_mut(),
                         &mut self.channels,
                         effects,
                         height,
@@ -434,7 +457,7 @@ where
                             bytes,
                         },
                         &mut self.outboxes,
-                        self.outbox_counter.get_mut(),
+                        self.outbox_counters.get_mut(),
                         &mut self.channels,
                         effects,
                         height,
@@ -452,7 +475,7 @@ where
         application_id: ApplicationId,
         lift: F,
         outboxes: &mut CollectionView<C, Target, OutboxStateView<C>>,
-        outbox_counter: &mut u32,
+        outbox_counters: &mut BTreeMap<BlockHeight, u32>,
         channels: &mut CollectionView<C, ChannelFullName, ChannelStateView<C>>,
         effects: &mut Vec<OutgoingEffect>,
         height: BlockHeight,
@@ -490,7 +513,7 @@ where
         for recipient in recipients {
             let outbox = outboxes.load_entry_mut(&Target::chain(recipient)).await?;
             if outbox.schedule_message(height)? {
-                *outbox_counter += 1;
+                *outbox_counters.entry(height).or_default() += 1;
             }
         }
 
@@ -515,7 +538,7 @@ where
                     .load_entry_mut(&Target::channel(recipient, full_name.clone()))
                     .await?;
                 if outbox.schedule_message(height)? {
-                    *outbox_counter += 1;
+                    *outbox_counters.entry(height).or_default() += 1;
                 }
             }
             channel.block_height.set(Some(height));
@@ -534,7 +557,7 @@ where
                         .load_entry_mut(&Target::channel(id, full_name.clone()))
                         .await?;
                     if outbox.schedule_message(*latest_height)? {
-                        *outbox_counter += 1;
+                        *outbox_counters.entry(*latest_height).or_default() += 1;
                     }
                 }
                 channel.subscribers.insert(&id)?;

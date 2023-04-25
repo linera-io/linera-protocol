@@ -1117,7 +1117,7 @@ where
                 let mut chain = self.storage.load_chain(sender).await?;
                 let target = Target { recipient, medium };
                 if chain.mark_messages_as_received(target, height).await? {
-                    if chain.all_messages_delivered() {
+                    if chain.all_messages_delivered_up_to(height) {
                         // Handle delivery notifiers for this chain, if any.
                         if let hash_map::Entry::Occupied(mut map) =
                             self.delivery_notifiers.lock().await.entry(sender)
@@ -1127,6 +1127,7 @@ where
                                     break;
                                 }
                                 let notifiers = entry.remove();
+                                trace!("Notifying {} callers", notifiers.len());
                                 for notifier in notifiers {
                                     if let Err(()) = notifier.send(()) {
                                         warn!("Failed to notify message delivery to caller");

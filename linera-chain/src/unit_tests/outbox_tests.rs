@@ -16,20 +16,20 @@ async fn test_outbox() {
         view.mark_messages_as_received(BlockHeight::from(3))
             .await
             .unwrap(),
-        2
+        vec![BlockHeight::from(0), BlockHeight::from(2)]
     );
     assert_eq!(
         view.mark_messages_as_received(BlockHeight::from(3))
             .await
             .unwrap(),
-        0
+        vec![]
     );
     assert_eq!(view.queue.count(), 1);
     assert_eq!(
         view.mark_messages_as_received(BlockHeight::from(4))
             .await
             .unwrap(),
-        1
+        vec![BlockHeight::from(4)]
     );
     assert_eq!(view.queue.count(), 0);
 }
