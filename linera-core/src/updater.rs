@@ -50,8 +50,8 @@ pub enum CommunicationError<E> {
     Sample(Vec<E>),
 }
 
-/// Execute a sequence of actions in parallel for all validators.
-/// Try to stop early when a quorum is reached.
+/// Executes a sequence of actions in parallel for all validators.
+/// Tries to stop early when a quorum is reached.
 pub async fn communicate_with_quorum<'a, A, V, K, F, G>(
     validator_clients: &'a [(ValidatorName, A)],
     committee: &Committee,

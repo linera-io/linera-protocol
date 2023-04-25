@@ -98,7 +98,7 @@ static WASMER_INSTANTIATE_LOCK: Lazy<std::sync::Mutex<()>> =
     Lazy::new(|| std::sync::Mutex::new(()));
 
 impl WasmApplication {
-    /// Prepare a runtime instance to call into the WASM contract.
+    /// Prepares a runtime instance to call into the WASM contract.
     pub fn prepare_contract_runtime_with_wasmer<'runtime>(
         &self,
         runtime: &'runtime dyn ContractRuntime,
@@ -145,7 +145,7 @@ impl WasmApplication {
         })
     }
 
-    /// Prepare a runtime instance to call into the WASM service.
+    /// Prepares a runtime instance to call into the WASM service.
     pub fn prepare_service_runtime_with_wasmer<'runtime>(
         &self,
         runtime: &'runtime dyn ServiceRuntime,

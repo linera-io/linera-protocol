@@ -872,7 +872,7 @@ where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
 {
-    /// Create a [`ViewContainer`].
+    /// Creates a [`ViewContainer`].
     pub async fn new(context: C) -> Result<Self, ViewError> {
         let view = KeyValueStoreView::load(context).await?;
         Ok(Self {
@@ -887,7 +887,7 @@ pub type KeyValueStoreMemoryContext<E> = ContextFromDb<E, ViewContainer<MemoryCo
 
 #[cfg(any(test, feature = "test"))]
 impl<E> KeyValueStoreMemoryContext<E> {
-    /// Create a [`KeyValueStoreMemoryContext`].
+    /// Creates a [`KeyValueStoreMemoryContext`].
     pub async fn new(
         guard: MutexGuardArc<MemoryStoreMap>,
         base_key: Vec<u8>,

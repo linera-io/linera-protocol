@@ -96,7 +96,7 @@ impl ActiveChain {
         *tip = Some(certificate);
     }
 
-    /// Receive all queued messages in all inboxes of this microchain.
+    /// Receives all queued messages in all inboxes of this microchain.
     ///
     /// Adds a block to this microchain that receives all queued messages in the microchains
     /// inboxes.

@@ -77,7 +77,7 @@ impl<'runtime> ApplicationRuntimeContext for Service<'runtime> {
 }
 
 impl WasmApplication {
-    /// Prepare a runtime instance to call into the WASM contract.
+    /// Prepares a runtime instance to call into the WASM contract.
     pub fn prepare_contract_runtime_with_wasmtime<'runtime>(
         &self,
         runtime: &'runtime dyn ContractRuntime,
@@ -114,7 +114,7 @@ impl WasmApplication {
         })
     }
 
-    /// Prepare a runtime instance to call into the WASM service.
+    /// Prepares a runtime instance to call into the WASM service.
     pub fn prepare_service_runtime_with_wasmtime<'runtime>(
         &self,
         runtime: &'runtime dyn ServiceRuntime,
@@ -158,7 +158,7 @@ pub struct ServiceState<'runtime> {
 }
 
 impl<'runtime> ContractState<'runtime> {
-    /// Create a new instance of [`ContractState`].
+    /// Creates a new instance of [`ContractState`].
     ///
     /// Uses `runtime` to export the system API, and the `waker` to be able to correctly handle
     /// asynchronous calls from the guest WASM module.
@@ -174,12 +174,12 @@ impl<'runtime> ContractState<'runtime> {
         }
     }
 
-    /// Obtain the runtime instance specific [`ContractData`].
+    /// Obtains the runtime instance specific [`ContractData`].
     pub fn data(&mut self) -> &mut ContractData {
         &mut self.data
     }
 
-    /// Obtain the data required by the runtime to export the system API.
+    /// Obtains the data required by the runtime to export the system API.
     pub fn system_api(
         &mut self,
     ) -> (
@@ -191,7 +191,7 @@ impl<'runtime> ContractState<'runtime> {
 }
 
 impl<'runtime> ServiceState<'runtime> {
-    /// Create a new instance of [`ServiceState`].
+    /// Creates a new instance of [`ServiceState`].
     ///
     /// Uses `runtime` to export the system API, and the `waker` to be able to correctly handle
     /// asynchronous calls from the guest WASM module.
@@ -203,12 +203,12 @@ impl<'runtime> ServiceState<'runtime> {
         }
     }
 
-    /// Obtain the runtime instance specific [`ServiceData`].
+    /// Obtains the runtime instance specific [`ServiceData`].
     pub fn data(&mut self) -> &mut ServiceData {
         &mut self.data
     }
 
-    /// Obtain the data required by the runtime to export the system API.
+    /// Obtains the data required by the runtime to export the system API.
     pub fn system_api(
         &mut self,
     ) -> (

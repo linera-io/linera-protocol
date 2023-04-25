@@ -202,7 +202,7 @@ impl<P> ValidatorInternalNetworkPreConfig<P> {
         &self.shards[shard_id]
     }
 
-    /// Get the [`ShardConfig`] of the shard assigned to the `chain_id`.
+    /// Gets the [`ShardConfig`] of the shard assigned to the `chain_id`.
     pub fn get_shard_for(&self, chain_id: ChainId) -> &ShardConfig {
         self.shard(self.get_shard_id(chain_id))
     }

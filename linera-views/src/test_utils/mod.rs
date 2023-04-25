@@ -76,21 +76,21 @@ impl LocalStackTestContext {
         Ok(Endpoint::immutable(endpoint_address))
     }
 
-    /// Create a new [`aws_sdk_s3::Config`] for tests, using a LocalStack instance.
+    /// Creates a new [`aws_sdk_s3::Config`] for tests, using a LocalStack instance.
     pub fn s3_config(&self) -> aws_sdk_s3::Config {
         aws_sdk_s3::config::Builder::from(&self.base_config)
             .endpoint_resolver(self.endpoint.clone())
             .build()
     }
 
-    /// Create a new [`aws_sdk_dynamodb::Config`] for tests, using a LocalStack instance.
+    /// Creates a new [`aws_sdk_dynamodb::Config`] for tests, using a LocalStack instance.
     pub fn dynamo_db_config(&self) -> aws_sdk_dynamodb::Config {
         aws_sdk_dynamodb::config::Builder::from(&self.base_config)
             .endpoint_resolver(self.endpoint.clone())
             .build()
     }
 
-    /// Remove all stored data from LocalStack storage.
+    /// Removes all stored data from LocalStack storage.
     async fn clear(&self) -> Result<(), Error> {
         self.remove_buckets().await?;
         self.remove_tables().await?;
@@ -98,7 +98,7 @@ impl LocalStackTestContext {
         Ok(())
     }
 
-    /// Remove all buckets from the LocalStack S3 storage.
+    /// Removes all buckets from the LocalStack S3 storage.
     async fn remove_buckets(&self) -> Result<(), Error> {
         let client = aws_sdk_s3::Client::from_conf(self.s3_config());
 
@@ -122,7 +122,7 @@ impl LocalStackTestContext {
         Ok(())
     }
 
-    /// Remove all tables from the LocalStack DynamoDB storage.
+    /// Removes all tables from the LocalStack DynamoDB storage.
     async fn remove_tables(&self) -> Result<(), Error> {
         let client = aws_sdk_dynamodb::Client::from_conf(self.dynamo_db_config());
 
@@ -159,7 +159,7 @@ pub async fn list_tables(client: &aws_sdk_dynamodb::Client) -> Result<Vec<String
         .expect("List of tables was not returned"))
 }
 
-/// Shuffle the values entries randomly
+/// Shuffles the values entries randomly
 pub fn random_shuffle<R: RngCore, T: Clone>(rng: &mut R, values: &mut Vec<T>) {
     let n = values.len();
     for _ in 0..4 * n {
@@ -174,7 +174,7 @@ pub fn random_shuffle<R: RngCore, T: Clone>(rng: &mut R, values: &mut Vec<T>) {
     }
 }
 
-/// Take a random number generator, a key_prefix and extend it by n random bytes.
+/// Takes a random number generator, a key_prefix and extends it by n random bytes.
 pub fn get_random_byte_vector<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
     let mut v = key_prefix.to_vec();
     for _ in 0..n {
@@ -184,7 +184,7 @@ pub fn get_random_byte_vector<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usi
     v
 }
 
-/// Build a random k element subset of n
+/// Builds a random k element subset of n
 pub fn get_random_kset<R: RngCore>(rng: &mut R, n: usize, k: usize) -> Vec<usize> {
     let mut values = Vec::new();
     for u in 0..n {
@@ -194,7 +194,7 @@ pub fn get_random_kset<R: RngCore>(rng: &mut R, n: usize, k: usize) -> Vec<usize
     values[..k].to_vec()
 }
 
-/// Take a random number generator, a key_prefix and generate
+/// Takes a random number generator, a key_prefix and generates
 /// pairs (key,value) with key obtained by appending 8 bytes at random to key_prefix
 /// and value obtained by appending 8 bytes to the trivial vector.
 /// We return n such (key,value) pairs which are all distinct
@@ -219,7 +219,7 @@ pub fn get_random_key_value_vec_prefix<R: RngCore>(
     }
 }
 
-/// Take a random number generator rng, a number n and return n random (key,value)
+/// Takes a random number generator rng, a number n and returns n random (key,value)
 /// which are all distinct with key and value are of length 8.
 pub fn get_random_key_value_vec<R: RngCore>(rng: &mut R, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     get_random_key_value_vec_prefix(rng, Vec::new(), n)

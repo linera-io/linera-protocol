@@ -38,32 +38,32 @@ pub type NotificationStream = Pin<Box<dyn Stream<Item = Notification> + Send>>;
 /// How to communicate with a validator or a local node.
 #[async_trait]
 pub trait ValidatorNode {
-    /// Propose a new block.
+    /// Proposes a new block.
     async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError>;
 
-    /// Process a certificate without a value.
+    /// Processes a certificate without a value.
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate,
     ) -> Result<ChainInfoResponse, NodeError>;
 
-    /// Process a certificate.
+    /// Processes a certificate.
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
     ) -> Result<ChainInfoResponse, NodeError>;
 
-    /// Handle information queries for this chain.
+    /// Handles information queries for this chain.
     async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
-    /// Subscribe to receiving notifications for a collection of chains.
+    /// Subscribes to receiving notifications for a collection of chains.
     async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError>;
 }
 

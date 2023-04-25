@@ -116,7 +116,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    /// Get a subscription to a stream of `Notification`s for a collection of `ChainId`s.
+    /// Gets a subscription to a stream of `Notification`s for a collection of `ChainId`s.
     async fn notifications(
         &self,
         chain_ids: Vec<ChainId>,

@@ -182,7 +182,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    /// Obtain a `ChainStateView` for a given `ChainId`.
+    /// Obtains a `ChainStateView` for a given `ChainId`.
     pub async fn chain_state_view(
         &self,
         chain_id: Option<ChainId>,
@@ -243,13 +243,13 @@ where
         Ok(pending_messages)
     }
 
-    /// Obtain the set of committees trusted by the local chain.
+    /// Obtains the set of committees trusted by the local chain.
     async fn committees(&mut self) -> Result<BTreeMap<Epoch, Committee>, NodeError> {
         let (_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         Ok(committees)
     }
 
-    /// Obtain the current epoch of the given chain as well as its set of trusted committees.
+    /// Obtains the current epoch of the given chain as well as its set of trusted committees.
     async fn epoch_and_committees(
         &mut self,
         chain_id: ChainId,
@@ -263,13 +263,13 @@ where
         Ok((epoch, committees))
     }
 
-    /// Obtain the epochs of the committees trusted by the local chain.
+    /// Obtains the epochs of the committees trusted by the local chain.
     pub async fn epochs(&mut self) -> Result<Vec<Epoch>, NodeError> {
         let committees = self.committees().await?;
         Ok(committees.into_keys().collect())
     }
 
-    /// Obtain the committee for the current epoch of the local chain.
+    /// Obtains the committee for the current epoch of the local chain.
     pub async fn local_committee(&mut self) -> Result<Committee, NodeError> {
         let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
         committees
@@ -281,7 +281,7 @@ where
             .ok_or(NodeError::InactiveLocalChain(self.chain_id))
     }
 
-    /// Obtain all the committees trusted by either the local chain or its admin chain. Also
+    /// Obtains all the committees trusted by either the local chain or its admin chain. Also
     /// return the latest trusted epoch.
     async fn known_committees(&mut self) -> Result<(BTreeMap<Epoch, Committee>, Epoch), NodeError> {
         let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
@@ -291,7 +291,7 @@ where
         Ok((committees, epoch))
     }
 
-    /// Obtain the validators trusted by the local chain.
+    /// Obtains the validators trusted by the local chain.
     async fn validator_nodes(&mut self) -> Result<Vec<(ValidatorName, P::Node)>, NodeError> {
         match self.local_committee().await {
             Ok(committee) => self.validator_node_provider.make_nodes(&committee),
@@ -302,7 +302,7 @@ where
         }
     }
 
-    /// Obtain the current epoch of the local chain.
+    /// Obtains the current epoch of the local chain.
     async fn epoch(&mut self) -> Result<Epoch, anyhow::Error> {
         Ok(self
             .chain_info()
@@ -311,7 +311,7 @@ where
             .ok_or(NodeError::InactiveLocalChain(self.chain_id))?)
     }
 
-    /// Obtain the identity of the current owner of the chain. HACK: In the case of a
+    /// Obtains the identity of the current owner of the chain. HACK: In the case of a
     /// multi-owner chain, we pick one identity for which we know the private key.
     pub async fn identity(&mut self) -> Result<Owner, anyhow::Error> {
         match self.chain_info().await?.manager {
@@ -349,7 +349,7 @@ where
         }
     }
 
-    /// Obtain the key pair associated to the current identity.
+    /// Obtains the key pair associated to the current identity.
     pub async fn key_pair(&mut self) -> Result<&KeyPair> {
         let id = self.identity().await?;
         Ok(self
@@ -358,12 +358,12 @@ where
             .expect("key should be known at this point"))
     }
 
-    /// Obtain the public key associated to the current identity.
+    /// Obtains the public key associated to the current identity.
     pub async fn public_key(&mut self) -> Result<PublicKey> {
         Ok(self.key_pair().await?.public())
     }
 
-    /// Subscribe to notifications for all validators.
+    /// Subscribes to notifications for all validators.
     pub async fn subscribe_all(&mut self, chain_ids: Vec<ChainId>) -> Result<NotificationStream> {
         let committee = self.local_committee().await?;
         let mut streams = Vec::new();
@@ -383,7 +383,7 @@ where
         Ok(Box::pin(select_all(streams)))
     }
 
-    /// Prepare the chain for the next operation.
+    /// Prepares the chain for the next operation.
     async fn prepare_chain(&mut self) -> Result<(), NodeError> {
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
@@ -417,7 +417,7 @@ where
         Ok(())
     }
 
-    /// Broadcast certified blocks and optionally one more block proposal.
+    /// Broadcasts certified blocks and optionally one more block proposal.
     /// The corresponding block heights should be consecutive and increasing.
     async fn communicate_chain_updates(
         &mut self,
@@ -568,7 +568,7 @@ where
         Ok(())
     }
 
-    /// Attempt to download new received certificates.
+    /// Attempts to download new received certificates.
     ///
     /// This is a best effort: it will only find certificates that have been confirmed
     /// amongst sufficiently many validators of the current committee of the target
@@ -699,7 +699,7 @@ where
         Ok(())
     }
 
-    /// Send money.
+    /// Sends money.
     pub async fn transfer(
         &mut self,
         owner: Option<Owner>,
@@ -721,7 +721,7 @@ where
         .await
     }
 
-    /// Claim money in a remote chain.
+    /// Claims money in a remote chain.
     pub async fn claim(
         &mut self,
         owner: Owner,
@@ -771,7 +771,7 @@ where
         }
     }
 
-    /// Execute (or retry) a regular block proposal. Update local balance.
+    /// Executes (or retries) a regular block proposal. Update local balance.
     /// If `with_confirmation` is false, we stop short of executing the finalized block.
     async fn propose_block(&mut self, block: Block) -> Result<Certificate> {
         let next_round = self.next_round;
@@ -878,19 +878,19 @@ where
         Ok(final_certificate)
     }
 
-    /// Execute a list of operations.
+    /// Executes a list of operations.
     pub async fn execute_operations(&mut self, operations: Vec<Operation>) -> Result<Certificate> {
         self.prepare_chain().await?;
         let messages = self.pending_messages().await?;
         self.execute_block(messages, operations).await
     }
 
-    /// Execute an operation.
+    /// Executes an operation.
     pub async fn execute_operation(&mut self, operation: Operation) -> Result<Certificate> {
         self.execute_operations(vec![operation]).await
     }
 
-    /// Execute a new block
+    /// Executes a new block
     async fn execute_block(
         &mut self,
         incoming_messages: Vec<Message>,
@@ -924,7 +924,7 @@ where
             .max(self.timestamp)
     }
 
-    /// Query an application.
+    /// Queries an application.
     pub async fn query_application(&mut self, query: &Query) -> Result<Response> {
         let response = self
             .node_client
@@ -954,7 +954,7 @@ where
         Ok(response.info.system_balance)
     }
 
-    /// Attempt to update all validators about the local chain.
+    /// Attempts to update all validators about the local chain.
     pub async fn update_validators_about_local_chain(&mut self) -> Result<()> {
         let mut committee = self.local_committee().await?;
         committee.quorum_threshold = committee.total_votes;
@@ -967,7 +967,7 @@ where
         Ok(())
     }
 
-    /// Send tokens to a chain.
+    /// Sends tokens to a chain.
     pub async fn transfer_to_account(
         &mut self,
         owner: Option<Owner>,
@@ -979,7 +979,7 @@ where
             .await
     }
 
-    /// Burn tokens.
+    /// Burns tokens.
     pub async fn burn(
         &mut self,
         owner: Option<Owner>,
@@ -990,14 +990,14 @@ where
             .await
     }
 
-    /// Attempt to synchronize with validators and re-compute our balance.
+    /// Attempts to synchronize with validators and re-compute our balance.
     pub async fn synchronize_and_recompute_balance(&mut self) -> Result<Balance> {
         self.find_received_certificates().await?;
         self.prepare_chain().await?;
         self.local_balance().await
     }
 
-    /// Retry the last pending block
+    /// Retries the last pending block
     pub async fn retry_pending_block(&mut self) -> Result<Option<Certificate>> {
         self.find_received_certificates().await?;
         self.prepare_chain().await?;
@@ -1012,25 +1012,25 @@ where
         }
     }
 
-    /// Clear the information on any operation that previously failed.
+    /// Clears the information on any operation that previously failed.
     pub async fn clear_pending_block(&mut self) {
         self.pending_block = None;
     }
 
-    /// Process confirmed operation for which this chain is a recipient.
+    /// Processes confirmed operation for which this chain is a recipient.
     pub async fn receive_certificate(&mut self, certificate: Certificate) -> Result<()> {
         self.receive_certificate_internal(certificate, ReceiveCertificateMode::NeedsCheck)
             .await
     }
 
-    /// Rotate the key of the chain.
+    /// Rotates the key of the chain.
     pub async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate> {
         let new_public_key = key_pair.public();
         self.known_key_pairs.insert(new_public_key.into(), key_pair);
         self.transfer_ownership(new_public_key).await
     }
 
-    /// Transfer ownership of the chain.
+    /// Transfers ownership of the chain.
     pub async fn transfer_ownership(&mut self, new_public_key: PublicKey) -> Result<Certificate> {
         self.execute_operation(Operation::System(SystemOperation::ChangeOwner {
             new_public_key,
@@ -1038,7 +1038,7 @@ where
         .await
     }
 
-    /// Add another owner to the chain.
+    /// Adds another owner to the chain.
     pub async fn share_ownership(&mut self, new_public_key: PublicKey) -> Result<Certificate> {
         self.prepare_chain().await?;
         let public_key = self.public_key().await?;
@@ -1052,7 +1052,7 @@ where
         .await
     }
 
-    /// Open a new chain with a derived UID.
+    /// Opens a new chain with a derived UID.
     pub async fn open_chain(&mut self, public_key: PublicKey) -> Result<(EffectId, Certificate)> {
         self.prepare_chain().await?;
         let effect_id = EffectId {
@@ -1080,13 +1080,13 @@ where
         Ok((effect_id, certificate))
     }
 
-    /// Close the chain (and lose everything in it!!).
+    /// Closes the chain (and loses everything in it!!).
     pub async fn close_chain(&mut self) -> Result<Certificate> {
         self.execute_operation(Operation::System(SystemOperation::CloseChain))
             .await
     }
 
-    /// Publish some bytecode.
+    /// Publishes some bytecode.
     pub async fn publish_bytecode(
         &mut self,
         contract: Bytecode,
@@ -1111,7 +1111,7 @@ where
         Ok((id, certificate))
     }
 
-    /// Create an application by instantiating some bytecode.
+    /// Creates an application by instantiating some bytecode.
     pub async fn create_application(
         &mut self,
         bytecode_id: BytecodeId,
@@ -1143,7 +1143,7 @@ where
         Ok((id, certificate))
     }
 
-    /// Create a new committee and start using it (admin chains only).
+    /// Creates a new committee and start using it (admin chains only).
     pub async fn stage_new_committee(
         &mut self,
         validators: BTreeMap<ValidatorName, ValidatorState>,
@@ -1163,7 +1163,7 @@ where
         .await
     }
 
-    /// Create an empty block to process all incoming messages. This may require several blocks.
+    /// Creates an empty block to process all incoming messages. This may require several blocks.
     pub async fn process_inbox(&mut self) -> Result<Vec<Certificate>> {
         self.prepare_chain().await?;
         let mut certificates = Vec::new();
@@ -1178,7 +1178,7 @@ where
         Ok(certificates)
     }
 
-    /// Start listening to the admin chain for new committees. (This is only useful for
+    /// Starts listening to the admin chain for new committees. (This is only useful for
     /// other genesis chains or for testing.)
     pub async fn subscribe_to_new_committees(&mut self) -> Result<Certificate> {
         self.execute_operation(Operation::System(SystemOperation::Subscribe {
@@ -1188,7 +1188,7 @@ where
         .await
     }
 
-    /// Stop listening to the admin chain for new committees. (This is only useful for
+    /// Stops listening to the admin chain for new committees. (This is only useful for
     /// testing.)
     pub async fn unsubscribe_from_new_committees(&mut self) -> Result<Certificate> {
         self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
@@ -1198,7 +1198,7 @@ where
         .await
     }
 
-    /// Start listening to the given chain for published bytecodes.
+    /// Starts listening to the given chain for published bytecodes.
     pub async fn subscribe_to_published_bytecodes(
         &mut self,
         chain_id: ChainId,
@@ -1210,7 +1210,7 @@ where
         .await
     }
 
-    /// Stop listening to the given chain for published bytecodes.
+    /// Stops listening to the given chain for published bytecodes.
     pub async fn unsubscribe_from_published_bytecodes(
         &mut self,
         chain_id: ChainId,
@@ -1222,7 +1222,7 @@ where
         .await
     }
 
-    /// Deprecate all the configurations of voting rights but the last one (admin chains
+    /// Deprecates all the configurations of voting rights but the last one (admin chains
     /// only). Currently, each individual chain is still entitled to wait before accepting
     /// this command. However, it is expected that deprecated validators stop functioning
     /// shortly after such command is issued.
@@ -1247,7 +1247,7 @@ where
         self.execute_block(messages, operations).await
     }
 
-    /// Send money to a chain.
+    /// Sends money to a chain.
     /// Do not check balance. (This may block the client)
     /// Do not confirm the transaction.
     pub async fn transfer_to_account_unsafe_unconfirmed(

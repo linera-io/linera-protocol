@@ -85,7 +85,7 @@ fn build_key(key: Vec<u8>) -> HashMap<String, AttributeValue> {
     .into()
 }
 
-/// Build the value attribute for storing a table item.
+/// Builds the value attribute for storing a table item.
 fn build_key_value(key: Vec<u8>, value: Vec<u8>) -> HashMap<String, AttributeValue> {
     [
         (

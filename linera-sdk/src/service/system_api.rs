@@ -108,7 +108,7 @@ impl KeyValueStoreClient for ReadOnlyKeyValueStore {
 /// allow views to read data from the storage layer provided to Linera applications.
 pub type ReadOnlyViewStorageContext = ContextFromDb<(), ReadOnlyKeyValueStore>;
 
-/// Load the service state, without locking it for writes.
+/// Loads the service state, without locking it for writes.
 pub async fn lock_and_load_view<State: View<ReadOnlyViewStorageContext>>() -> State {
     let future = system::Lock::new();
     future::poll_fn(|_context| -> Poll<Result<(), ViewError>> { future.poll().into() })
@@ -117,7 +117,7 @@ pub async fn lock_and_load_view<State: View<ReadOnlyViewStorageContext>>() -> St
     load_view_using::<State>().await
 }
 
-/// Load the service state, without locking it for writes.
+/// Loads the service state, without locking it for writes.
 pub async fn unlock_view() {
     let future = system::Unlock::new();
     future::poll_fn(|_context| future.poll().into()).await;
@@ -131,22 +131,22 @@ pub async fn load_view_using<State: View<ReadOnlyViewStorageContext>>() -> State
         .expect("Failed to load application state")
 }
 
-/// Retrieve the current chain ID.
+/// Retrieves the current chain ID.
 pub fn current_chain_id() -> ChainId {
     ChainId(system::chain_id().into())
 }
 
-/// Retrieve the current application ID.
+/// Retrieves the current application ID.
 pub fn current_application_id() -> ApplicationId {
     system::application_id().into()
 }
 
-/// Retrieve the current application parameters.
+/// Retrieves the current application parameters.
 pub fn current_application_parameters() -> Vec<u8> {
     system::application_parameters()
 }
 
-/// Retrieve the current system balance.
+/// Retrieves the current system balance.
 pub fn current_system_balance() -> Balance {
     system::read_system_balance().into()
 }

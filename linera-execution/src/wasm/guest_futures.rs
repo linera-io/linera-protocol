@@ -21,7 +21,7 @@ use super::{
 use crate::{ApplicationCallResult, RawExecutionResult, SessionCallResult};
 use std::task::Poll;
 
-/// Implement [`GuestFutureInterface`] for a `future` type implemented by a guest WASM module.
+/// Implements [`GuestFutureInterface`] for a `future` type implemented by a guest WASM module.
 ///
 /// The future is then polled by calling the guest `poll_func`. The return type of that function is
 /// a `poll_type` that must be convertible into the `output` type wrapped in a

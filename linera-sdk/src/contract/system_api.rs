@@ -48,7 +48,7 @@ where
     }
 }
 
-/// Save the application state and unlock it.
+/// Saves the application state and unlocks it.
 pub async fn store_and_unlock<State>(state: State)
 where
     State: Serialize,
@@ -137,7 +137,7 @@ impl KeyValueStoreClient for KeyValueStore {
 /// allow views to store data in the storage layer provided to Linera applications.
 pub type ViewStorageContext = ContextFromDb<(), KeyValueStore>;
 
-/// Load the application state and lock it for writes.
+/// Loads the application state and locks it for writes.
 pub async fn load_and_lock_view<State: View<ViewStorageContext>>() -> Option<State> {
     let future = system::Lock::new();
     if future::poll_fn(|_context| future.poll().into()).await {
@@ -154,27 +154,27 @@ pub async fn load_view_using<State: View<ViewStorageContext>>() -> State {
     r.expect("Failed to load application state")
 }
 
-/// Save the application state and unlock it.
+/// Saves the application state and unlocks it.
 pub async fn store_and_unlock_view<State: RootView<ViewStorageContext>>(mut state: State) {
     state.save().await.expect("save operation failed");
 }
 
-/// Retrieve the current chain ID.
+/// Retrieves the current chain ID.
 pub fn current_chain_id() -> ChainId {
     ChainId(system::chain_id().into())
 }
 
-/// Retrieve the current application ID.
+/// Retrieves the current application ID.
 pub fn current_application_id() -> ApplicationId {
     system::application_id().into()
 }
 
-/// Retrieve the current application parameters.
+/// Retrieves the current application parameters.
 pub fn current_application_parameters() -> Vec<u8> {
     system::application_parameters()
 }
 
-/// Retrieve the current system balance.
+/// Retrieves the current system balance.
 pub fn current_system_balance() -> Balance {
     system::read_system_balance().into()
 }

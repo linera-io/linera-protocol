@@ -221,7 +221,7 @@ impl ClientContext {
         }
     }
 
-    /// Make one block proposal per chain, up to `max_proposals` blocks.
+    /// Makes one block proposal per chain, up to `max_proposals` blocks.
     #[cfg(feature = "benchmark")]
     fn make_benchmark_block_proposals(&mut self, max_proposals: usize) -> Vec<RpcMessage> {
         let mut proposals = Vec::new();
@@ -264,7 +264,7 @@ impl ClientContext {
         proposals
     }
 
-    /// Try to aggregate votes into certificates.
+    /// Tries to aggregate votes into certificates.
     #[cfg(feature = "benchmark")]
     fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<Certificate> {
         let committee = self
@@ -306,7 +306,7 @@ impl ClientContext {
         certificates
     }
 
-    /// Broadcast a bulk of blocks to each validator.
+    /// Broadcasts a bulk of blocks to each validator.
     #[cfg(feature = "benchmark")]
     async fn mass_broadcast(
         &self,
@@ -362,7 +362,7 @@ impl ClientContext {
         self.wallet_state.update_from_state(state).await
     }
 
-    /// Remember the new private key (if any) in the wallet.
+    /// Remembers the new private key (if any) in the wallet.
     fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
@@ -708,6 +708,8 @@ enum ClientCommand {
     #[structopt(name = "create_application")]
     CreateApplication {
         bytecode_id: BytecodeId,
+        /// The initialization arguments, passed to the contract's `initialize` method on the chain
+        /// that creates the application. (But not on other chains, when it is registered there.)
         arguments: String,
         creator: Option<ChainId>,
         #[structopt(long = "parameters")]
@@ -721,6 +723,8 @@ enum ClientCommand {
     PublishAndCreate {
         contract: PathBuf,
         service: PathBuf,
+        /// The initialization arguments, passed to the contract's `initialize` method on the chain
+        /// that creates the application. (But not on other chains, when it is registered there.)
         arguments: String,
         publisher: Option<ChainId>,
         #[structopt(long = "parameters")]
@@ -1165,7 +1169,7 @@ where
                     .await
                     .context("failed to create application")?;
 
-                info!("{}", "Application published successfully!".green().bold());
+                info!("{}", "Application created successfully!".green().bold());
                 println!("{}", application_id);
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs());
                 context.update_wallet_from_client(&mut chain_client).await;

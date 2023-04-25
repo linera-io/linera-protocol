@@ -72,7 +72,7 @@ pub trait KeyIterable<Error> {
     where
         Self: 'a;
 
-    /// Iterate keys by reference.
+    /// Iterates keys by reference.
     fn iterator(&self) -> Self::Iterator<'_>;
 }
 
@@ -86,10 +86,10 @@ pub trait KeyValueIterable<Error> {
     /// The iterator returning key-value pairs by value.
     type IteratorOwned: Iterator<Item = Result<(Vec<u8>, Vec<u8>), Error>>;
 
-    /// Iterate keys and values by reference.
+    /// Iterates keys and values by reference.
     fn iterator(&self) -> Self::Iterator<'_>;
 
-    /// Iterate keys and values by value.
+    /// Iterates keys and values by value.
     fn into_iterator_owned(self) -> Self::IteratorOwned;
 }
 
@@ -99,10 +99,10 @@ pub trait KeyValueStoreClient {
     /// The error type.
     type Error: Debug;
 
-    /// Return type for key search operations.
+    /// Returns type for key search operations.
     type Keys: KeyIterable<Self::Error>;
 
-    /// Return type for key-value search operations.
+    /// Returns type for key-value search operations.
     type KeyValues: KeyValueIterable<Self::Error>;
 
     /// Retrieves a `Vec<u8>` from the database using the provided `key`.
@@ -234,10 +234,10 @@ pub trait Context {
     /// In practice, we always want `ViewError: From<Self::Error>` here.
     type Error: std::error::Error + Debug + Send + Sync + 'static + From<bcs::Error>;
 
-    /// Return type for key search operations.
+    /// Returns type for key search operations.
     type Keys: KeyIterable<Self::Error>;
 
-    /// Return type for key-value search operations.
+    /// Returns type for key-value search operations.
     type KeyValues: KeyValueIterable<Self::Error>;
 
     /// Retrieves a `Vec<u8>` from the database using the provided `key` prefixed by the current
@@ -250,10 +250,10 @@ pub trait Context {
         key: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
 
-    /// Find keys matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
+    /// Finds keys matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error>;
 
-    /// Find the `(key,value)` pairs matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
+    /// Finds the `(key,value)` pairs matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],

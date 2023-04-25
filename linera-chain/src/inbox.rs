@@ -134,7 +134,7 @@ where
     C: Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
 {
-    /// Convert the internal cursor for added events into an externally-visible block height.
+    /// Converts the internal cursor for added events into an externally-visible block height.
     /// This makes sense because the rest of the system always adds events one block at a time.
     pub fn next_block_height_to_receive(&self) -> Result<BlockHeight, ChainError> {
         let cursor = self.next_cursor_to_add.get();

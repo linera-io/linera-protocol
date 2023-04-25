@@ -39,7 +39,7 @@ pub struct ChainGuards {
 }
 
 impl ChainGuards {
-    /// Obtain a guard for a specified chain, waiting if there's already a live guard.
+    /// Obtains a guard for a specified chain, waiting if there's already a live guard.
     ///
     /// Only one guard can be active for a chain, so if there's already a guard for the requested
     /// chain, this method will wait until it is able to obtain the guard.
@@ -57,7 +57,7 @@ impl ChainGuards {
         }
     }
 
-    /// Obtain the lock used for guarding a chain.
+    /// Obtains the lock used for guarding a chain.
     ///
     /// When obtaining a lock, first a write lock to the map entry is obtained. If there is no
     /// entry, a new lock for that entry is created.
@@ -94,7 +94,7 @@ impl ChainGuards {
         (new_guard, weak_reference)
     }
 
-    /// Obtain the current number of active guards.
+    /// Obtains the current number of active guards.
     #[cfg(any(test))]
     pub(crate) fn active_guards(&self) -> usize {
         self.guards.len()
@@ -114,7 +114,7 @@ pub struct ChainGuard {
 }
 
 impl Drop for ChainGuard {
-    /// Release the lock and remove the entry from the map if possible.
+    /// Releases the lock and removes the entry from the map if possible.
     ///
     /// Before the releasing the lock, a weak reference to the lock is obtained. After releasing
     /// the lock, an attempt is made to upgrade the weak reference to a strong reference. If that

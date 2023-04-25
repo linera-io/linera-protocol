@@ -25,7 +25,7 @@ impl<N> Default for Notifier<N> {
 }
 
 impl<N: Clone> Notifier<N> {
-    /// Create a subscription given a collection of ChainIds and a sender to the client.
+    /// Creates a subscription given a collection of ChainIds and a sender to the client.
     pub fn subscribe(&self, chain_ids: Vec<ChainId>) -> UnboundedReceiver<N> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         for id in chain_ids {
@@ -35,7 +35,7 @@ impl<N: Clone> Notifier<N> {
         rx
     }
 
-    /// Notify all the clients waiting for a notification from a given chain.
+    /// Notifies all the clients waiting for a notification from a given chain.
     pub fn notify(&self, chain_id: &ChainId, notification: N) {
         let senders_is_empty = {
             let Some(mut senders) = self

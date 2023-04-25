@@ -36,14 +36,14 @@ impl<Output> Debug for HostFuture<'_, Output> {
 }
 
 impl<'future, Output> HostFuture<'future, Output> {
-    /// Wrap a given `future` so that it can be called from guest WASM modules.
+    /// Wraps a given `future` so that it can be called from guest WASM modules.
     pub fn new(future: impl Future<Output = Output> + Send + 'future) -> Self {
         HostFuture {
             future: Mutex::new(Box::pin(future)),
         }
     }
 
-    /// Poll a future from a WASM module.
+    /// Polls a future from a WASM module.
     ///
     /// Requires the task [`Waker`] to have been saved in the provided `waker`. If it hasn't, or if
     /// the waker for a task other than the task used to call the WASM module code is provided, the
@@ -99,7 +99,7 @@ impl<'context, Future, Application> GuestFuture<'context, Future, Application>
 where
     Application: ApplicationRuntimeContext,
 {
-    /// Create a [`GuestFuture`] instance with `creation_result` of a future resource type.
+    /// Creates a [`GuestFuture`] instance with `creation_result` of a future resource type.
     ///
     /// If the guest resource type could not be created by the WASM module, the error is stored so
     /// that it can be returned when the [`GuestFuture`] is polled.
@@ -155,7 +155,7 @@ where
     /// The output of the guest future.
     type Output;
 
-    /// Poll the guest future to attempt to progress it.
+    /// Polls the guest future to attempt to progress it.
     ///
     /// May return an [`ExecutionError`] if the guest WASM module panics, for example.
     fn poll(

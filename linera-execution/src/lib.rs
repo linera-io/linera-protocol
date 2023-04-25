@@ -262,22 +262,22 @@ pub trait BaseRuntime: Send + Sync {
     /// The current application parameters.
     fn application_parameters(&self) -> Vec<u8>;
 
-    /// Read the system balance.
+    /// Reads the system balance.
     fn read_system_balance(&self) -> Balance;
 
-    /// Read the system timestamp.
+    /// Reads the system timestamp.
     fn read_system_timestamp(&self) -> Timestamp;
 
-    /// Read the application state.
+    /// Reads the application state.
     async fn try_read_my_state(&self) -> Result<Vec<u8>, ExecutionError>;
 
-    /// Lock the view user state and prevent further reading/loading
+    /// Locks the view user state and prevents further reading/loading
     async fn lock_view_user_state(&self) -> Result<(), ExecutionError>;
 
-    /// Unlock the view user state and prevent further reading/loading
+    /// Unlocks the view user state and allows reading/loading again
     async fn unlock_view_user_state(&self) -> Result<(), ExecutionError>;
 
-    /// Read the key from the KV store
+    /// Reads the key from the KV store
     async fn read_key_bytes(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, ExecutionError>;
 
     /// Reads the data from the keys having a specific prefix.
@@ -295,7 +295,7 @@ pub trait BaseRuntime: Send + Sync {
 
 #[async_trait]
 pub trait ServiceRuntime: BaseRuntime {
-    /// Query another application.
+    /// Queries another application.
     async fn try_query_application(
         &self,
         queried_id: UserApplicationId,
@@ -319,19 +319,19 @@ pub trait ContractRuntime: BaseRuntime {
     /// Sets the amount of execution fuel remaining before execution is aborted.
     fn set_remaining_fuel(&self, remaining_fuel: u64);
 
-    /// Read the application state and prevent further reading/loading until the state is saved.
+    /// Reads the application state and prevents further reading/loading until the state is saved.
     async fn try_read_and_lock_my_state(&self) -> Result<Vec<u8>, ExecutionError>;
 
-    /// Save the application state and allow reading/loading the state again.
+    /// Saves the application state and allows reading/loading the state again.
     fn save_and_unlock_my_state(&self, state: Vec<u8>) -> Result<(), ExecutionError>;
 
-    /// Allow reading/loading the state again (without saving anything).
+    /// Allows reading/loading the state again (without saving anything).
     fn unlock_my_state(&self);
 
-    /// Write the batch and then unlock
+    /// Writes the batch and then unlock
     async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError>;
 
-    /// Call another application. Forwarded sessions will now be visible to
+    /// Calls another application. Forwarded sessions will now be visible to
     /// `callee_id` (but not to the caller any more).
     async fn try_call_application(
         &self,
@@ -341,7 +341,7 @@ pub trait ContractRuntime: BaseRuntime {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError>;
 
-    /// Call into a session that is in our scope. Forwarded sessions will be visible to
+    /// Calls into a session that is in our scope. Forwarded sessions will be visible to
     /// the application that runs `session_id`.
     async fn try_call_session(
         &self,
@@ -414,7 +414,7 @@ pub enum Response {
 pub struct RawExecutionResult<Effect> {
     /// The signer who created the effects.
     pub authenticated_signer: Option<Owner>,
-    /// Send messages to the given destinations, possibly forwarding the authenticated
+    /// Sends messages to the given destinations, possibly forwarding the authenticated
     /// signer.
     pub effects: Vec<(Destination, bool, Effect)>,
     /// Subscribe chains to channels.
@@ -675,7 +675,7 @@ impl FromStr for WasmRuntime {
     }
 }
 
-/// Attempt to create an invalid [`WasmRuntime`] instance from a string.
+/// Attempts to create an invalid [`WasmRuntime`] instance from a string.
 #[derive(Clone, Debug, Error)]
 #[error("{0:?} is not a valid WebAssembly runtime")]
 pub struct InvalidWasmRuntime(String);

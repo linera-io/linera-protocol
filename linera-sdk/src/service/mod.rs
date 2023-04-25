@@ -23,7 +23,7 @@ macro_rules! service {
         // Export the service interface.
         $crate::export_service!($application);
 
-        /// Mark the service type to be exported.
+        /// Marks the service type to be exported.
         impl $crate::service::wit_types::Service for $application {
             type QueryApplication = QueryApplication;
         }

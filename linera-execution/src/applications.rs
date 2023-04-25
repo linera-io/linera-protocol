@@ -122,7 +122,7 @@ where
         Ok(())
     }
 
-    /// Register a published bytecode so that it can be used by applications.
+    /// Registers a published bytecode so that it can be used by applications.
     ///
     /// Keeps track of the bytecode's location so that it can be loaded when needed.
     pub fn register_published_bytecode(
@@ -156,7 +156,7 @@ where
         Ok(locations)
     }
 
-    /// Register an existing application.
+    /// Registers an existing application.
     ///
     /// Keeps track of an existing application that the current chain is seeing for the first time.
     pub async fn register_application(
@@ -172,7 +172,7 @@ where
         Ok(id)
     }
 
-    /// Register a newly created application.
+    /// Registers a newly created application.
     pub async fn create_application(
         &mut self,
         application_id: UserApplicationId,
@@ -205,7 +205,7 @@ where
         Ok(())
     }
 
-    /// Retrieve an application's description.
+    /// Retrieves an application's description.
     pub async fn describe_application(
         &self,
         id: UserApplicationId,
@@ -216,7 +216,7 @@ where
             .ok_or_else(|| SystemExecutionError::UnknownApplicationId(Box::new(id)))
     }
 
-    /// Retrieve the recursive dependencies of applications and apply a topological sort.
+    /// Retrieves the recursive dependencies of applications and apply a topological sort.
     pub async fn find_dependencies(
         &self,
         mut stack: Vec<UserApplicationId>,
@@ -259,7 +259,7 @@ where
         Ok(result)
     }
 
-    /// Retrieve applications' descriptions preceded by their recursive dependencies.
+    /// Retrieves applications' descriptions preceded by their recursive dependencies.
     pub async fn describe_applications_with_dependencies(
         &self,
         ids: Vec<UserApplicationId>,

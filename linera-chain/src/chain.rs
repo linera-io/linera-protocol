@@ -173,7 +173,7 @@ where
         }
     }
 
-    /// Verify that this chain is up-to-date and all the messages executed ahead of time
+    /// Verifies that this chain is up-to-date and all the messages executed ahead of time
     /// have been properly received by now.
     pub async fn validate_incoming_messages(&mut self) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
@@ -365,7 +365,7 @@ where
         Ok(())
     }
 
-    /// Execute a new block: first the incoming messages, then the main operation.
+    /// Executes a new block: first the incoming messages, then the main operation.
     /// * Modifies the state of inboxes, outboxes, and channels, if needed.
     /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown away.
     /// * Returns the list of effects caused by the block being executed.

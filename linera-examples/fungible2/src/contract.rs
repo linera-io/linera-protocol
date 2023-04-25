@@ -171,7 +171,7 @@ impl FungibleToken<ViewStorageContext> {
         })
     }
 
-    /// Execute the final step of a transfer where the tokens are sent to the destination.
+    /// Executes the final step of a transfer where the tokens are sent to the destination.
     async fn finish_transfer_to_destination(
         &mut self,
         amount: Amount,
@@ -189,7 +189,7 @@ impl FungibleToken<ViewStorageContext> {
         result
     }
 
-    /// Execute the final step of a transfer where the tokens are sent to the destination.
+    /// Executes the final step of a transfer where the tokens are sent to the destination.
     async fn finish_transfer_to_account(
         &mut self,
         amount: Amount,

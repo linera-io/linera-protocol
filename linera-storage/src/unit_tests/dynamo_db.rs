@@ -7,7 +7,7 @@ use linera_base::identifiers::ChainId;
 use linera_views::{lru_caching::TEST_CACHE_SIZE, test_utils::LocalStackTestContext};
 use std::mem;
 
-/// Test if released guards don't use memory.
+/// Tests if released guards don't use memory.
 #[tokio::test]
 async fn guards_dont_leak() -> Result<(), anyhow::Error> {
     let localstack = LocalStackTestContext::new().await?;
