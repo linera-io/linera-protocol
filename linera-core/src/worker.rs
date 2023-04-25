@@ -30,12 +30,13 @@ use linera_views::{
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     num::NonZeroUsize,
     sync::Arc,
     time::Duration,
 };
 use thiserror::Error;
+use tokio::sync::{oneshot, Mutex};
 use tracing::{info, instrument, trace, warn};
 
 #[cfg(any(test, feature = "test"))]
@@ -66,6 +67,7 @@ pub trait ValidatorWorker {
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate,
+        notify_message_delivery: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
     /// Process a certificate, e.g. to extend a chain with a confirmed block.
@@ -73,6 +75,7 @@ pub trait ValidatorWorker {
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
+        notify_message_delivery: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
     /// Handle information queries on chains.
@@ -203,7 +206,12 @@ pub struct WorkerState<StorageClient> {
     grace_period_micros: u64,
     /// Cached values by hash.
     recent_values: LruCache<CryptoHash, HashedValue>,
+    /// One-shot channels to notify callers when messages of a particular chain have been
+    /// delivered.
+    delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
 }
+
+type DeliveryNotifiers = HashMap<ChainId, BTreeMap<BlockHeight, Vec<oneshot::Sender<()>>>>;
 
 impl<Client: Clone> Clone for WorkerState<Client> {
     fn clone(&self) -> Self {
@@ -219,6 +227,7 @@ impl<Client: Clone> Clone for WorkerState<Client> {
             allow_messages_from_deprecated_epochs: self.allow_messages_from_deprecated_epochs,
             grace_period_micros: self.grace_period_micros,
             recent_values,
+            delivery_notifiers: self.delivery_notifiers.clone(),
         }
     }
 }
@@ -233,6 +242,7 @@ impl<Client> WorkerState<Client> {
             allow_messages_from_deprecated_epochs: false,
             grace_period_micros: 0,
             recent_values: LruCache::new(NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap()),
+            delivery_notifiers: Arc::default(),
         }
     }
 
@@ -305,7 +315,7 @@ where
         blobs: Vec<HashedValue>,
         mut notifications: Option<&mut Vec<Notification>>,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let (response, actions) = self.handle_certificate(certificate, blobs).await?;
+        let (response, actions) = self.handle_certificate(certificate, blobs, None).await?;
         let mut requests = VecDeque::from(actions.cross_chain_requests);
         while let Some(request) = requests.pop_front() {
             let actions = self.handle_cross_chain_request(request).await?;
@@ -327,6 +337,38 @@ where
         let info = ChainInfoResponse::new(&chain, None);
         // Do not save the new state.
         Ok((effects, info))
+    }
+
+    // Schedule a notification when cross-chain messages are delivered up to the given height.
+    async fn register_delivery_notifier(
+        &mut self,
+        chain_id: ChainId,
+        height: BlockHeight,
+        actions: &NetworkActions,
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
+    ) {
+        if let Some(notifier) = notify_when_messages_are_delivered {
+            if actions
+                .cross_chain_requests
+                .iter()
+                .any(|request| request.has_messages_lower_or_equal_than(height))
+            {
+                self.delivery_notifiers
+                    .lock()
+                    .await
+                    .entry(chain_id)
+                    .or_default()
+                    .entry(height)
+                    .or_default()
+                    .push(notifier);
+            } else {
+                // No need to wait. Also, cross-chain requests may not trigger the
+                // notifier later if we register it.
+                if let Err(()) = notifier.send(()) {
+                    warn!("Failed to notify message delivery to caller");
+                }
+            }
+        }
     }
 
     /// Executes a [`Query`] for an application's state on a specific chain.
@@ -414,6 +456,7 @@ where
         &mut self,
         certificate: Certificate,
         blobs: &[HashedValue],
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         assert!(
             certificate.value.is_confirmed(),
@@ -432,6 +475,13 @@ where
             // Block was already confirmed.
             let info = ChainInfoResponse::new(&chain, self.key_pair());
             let actions = self.create_network_actions(&mut chain).await?;
+            self.register_delivery_notifier(
+                block.chain_id,
+                block.height,
+                &actions,
+                notify_when_messages_are_delivered,
+            )
+            .await;
             return Ok((info, actions));
         }
         // Verify the certificate.
@@ -496,6 +546,14 @@ where
         });
         // Persist chain.
         chain.save().await?;
+        // Notify the caller when cross-chain messages are delivered.
+        self.register_delivery_notifier(
+            block.chain_id,
+            block.height,
+            &actions,
+            notify_when_messages_are_delivered,
+        )
+        .await;
         Ok((info, actions))
     }
 
@@ -896,6 +954,7 @@ where
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate,
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let value = self
             .recent_values
@@ -905,7 +964,8 @@ where
         let full_cert = certificate
             .with_value(value)
             .ok_or(WorkerError::InvalidLiteCertificate)?;
-        self.handle_certificate(full_cert, vec![]).await
+        self.handle_certificate(full_cert, vec![], notify_when_messages_are_delivered)
+            .await
     }
 
     /// Process a certificate.
@@ -918,6 +978,7 @@ where
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
         ensure!(
@@ -935,8 +996,12 @@ where
             }
             ValueKind::ConfirmedBlock => {
                 // Execute the confirmed block.
-                self.process_confirmed_block(certificate.clone(), &blobs)
-                    .await?
+                self.process_confirmed_block(
+                    certificate.clone(),
+                    &blobs,
+                    notify_when_messages_are_delivered,
+                )
+                .await?
             }
         };
         self.cache_recent_value(certificate.value);
@@ -1052,6 +1117,28 @@ where
                 let mut chain = self.storage.load_chain(sender).await?;
                 let target = Target { recipient, medium };
                 if chain.mark_messages_as_received(target, height).await? {
+                    if chain.all_messages_delivered() {
+                        // Handle delivery notifiers for this chain, if any.
+                        if let hash_map::Entry::Occupied(mut map) =
+                            self.delivery_notifiers.lock().await.entry(sender)
+                        {
+                            while let Some(entry) = map.get_mut().first_entry() {
+                                if entry.key() > &height {
+                                    break;
+                                }
+                                let notifiers = entry.remove();
+                                for notifier in notifiers {
+                                    if let Err(()) = notifier.send(()) {
+                                        warn!("Failed to notify message delivery to caller");
+                                    }
+                                }
+                            }
+                            if map.get().is_empty() {
+                                map.remove();
+                            }
+                        }
+                    }
+                    // Save the chain state.
                     chain.save().await?;
                 }
                 Ok(NetworkActions::default())

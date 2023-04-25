@@ -332,7 +332,7 @@ where
         match self
             .state
             .clone()
-            .handle_lite_certificate(certificate)
+            .handle_lite_certificate(certificate, None)
             .await
         {
             Ok((info, actions)) => {
@@ -361,7 +361,7 @@ where
         match self
             .state
             .clone()
-            .handle_certificate(cert_with_deps.certificate, cert_with_deps.blobs)
+            .handle_certificate(cert_with_deps.certificate, cert_with_deps.blobs, None)
             .await
         {
             Ok((info, actions)) => {

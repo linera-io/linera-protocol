@@ -725,7 +725,7 @@ where
         .pending()
         .is_some());
     worker
-        .handle_certificate(certificate0, vec![])
+        .handle_certificate(certificate0, vec![], None)
         .await
         .unwrap();
     worker.handle_block_proposal(block_proposal1).await.unwrap();
@@ -905,7 +905,7 @@ where
     );
     // Missing earlier blocks
     assert!(worker
-        .handle_certificate(certificate1.clone(), vec![])
+        .handle_certificate(certificate1.clone(), vec![], None)
         .await
         .is_err());
 
@@ -1193,7 +1193,7 @@ where
             ),
         );
         worker
-            .handle_certificate(certificate.clone(), vec![])
+            .handle_certificate(certificate.clone(), vec![], None)
             .await
             .unwrap();
         // Then skip the second message and receive the last one.
