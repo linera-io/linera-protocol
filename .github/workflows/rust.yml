@@ -27,7 +27,7 @@ permissions:
 jobs:
 
   test:
-    runs-on: ubuntu-latest-8-cores
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
