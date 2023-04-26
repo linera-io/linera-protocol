@@ -502,6 +502,11 @@ impl Client {
         Some(public_key.into())
     }
 
+    fn get_fungible_account_owner(&self) -> fungible::AccountOwner {
+        let owner = self.get_owner().unwrap();
+        fungible::AccountOwner::User(owner)
+    }
+
     async fn is_chain_present_in_wallet(&self, chain: ChainId) -> bool {
         self.get_wallet().get(chain).is_some()
     }
@@ -965,13 +970,24 @@ impl NodeService {
         value["data"].clone()
     }
 
-    async fn create_application(&self, bytecode_id: &str) -> String {
+    async fn create_application(
+        &self,
+        bytecode_id: String,
+        parameters: String,
+        argument: String,
+        required_application_ids: Vec<String>,
+    ) -> String {
+        // TODO(#828): Avoid using the string replacement below
+        let json_required_applications_ids =
+            serde_json::to_string(&required_application_ids).unwrap();
+        let new_parameters = parameters.replace('\"', "\\\"");
+        let new_argument = argument.replace('\"', "\\\"");
         let query = format!(
             "mutation {{ createApplication(\
                 bytecodeId: \"{bytecode_id}\", \
-                parameters: \"null\", \
-                initializationArgument: \"null\", \
-                requiredApplicationIds: []) \
+                parameters: \"{new_parameters}\", \
+                initializationArgument: \"{new_argument}\", \
+                requiredApplicationIds: {json_required_applications_ids}) \
             }}"
         );
         let data = self.query_node(&query).await;
@@ -979,7 +995,8 @@ impl NodeService {
     }
 
     async fn request_application(&self, application_id: &str) -> String {
-        let query = format!("mutation {{ requestApplication(applicationId: {application_id}) }}");
+        let query =
+            format!("mutation {{ requestApplication(applicationId: \"{application_id}\") }}");
         let data = self.query_node(&query).await;
         serde_json::from_value(data["requestApplication"].clone()).unwrap()
     }
@@ -1001,6 +1018,18 @@ impl Application {
         );
         let response_body = self.query_application(&query).await;
         serde_json::from_value(response_body["accounts"].clone()).unwrap_or_default()
+    }
+
+    async fn get_matching_engine_account_info(
+        &self,
+        account_owner: &fungible::AccountOwner,
+    ) -> Vec<matching_engine::OrderId> {
+        let query = format!(
+            "query {{ accountInfo(accountOwner: {}) {{ orders }} }}",
+            account_owner.to_value()
+        );
+        let response_body = self.query_application(&query).await;
+        serde_json::from_value(response_body["accountInfo"]["orders"].clone()).unwrap()
     }
 
     async fn assert_fungible_account_balances(
@@ -1303,6 +1332,7 @@ async fn test_reconfiguration(network: Network) {
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_social_user_pub_sub() {
+    use social::SocialAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
@@ -1321,13 +1351,15 @@ async fn test_end_to_end_social_user_pub_sub() {
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await;
+    let bytecode_id = client1.publish_bytecode(contract, service, None).await;
+    let application_id = client1
+        .create_application::<SocialAbi>(bytecode_id, &(), None)
+        .await;
 
     let mut node_service1 = client1.run_node_service(chain1, 8080).await;
     let mut node_service2 = client2.run_node_service(chain2, 8081).await;
 
-    let bytecode_id = node_service1.publish_bytecode(contract, service).await;
     node_service1.process_inbox().await;
-    let application_id = node_service1.create_application(&bytecode_id).await;
 
     // Request the application so chain 2 has it, too.
     node_service2.request_application(&application_id).await;
@@ -1424,7 +1456,7 @@ async fn test_end_to_end_retry_notification_stream() {
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_fungible() {
-    use fungible::{Account, AccountOwner, FungibleTokenAbi, InitialState};
+    use fungible::{Account, FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -1445,10 +1477,8 @@ async fn test_end_to_end_fungible() {
     let chain2 = client1.open_and_assign(&client2).await;
 
     // The players
-    let owner1 = client1.get_owner().unwrap();
-    let account_owner1 = AccountOwner::User(owner1);
-    let owner2 = client2.get_owner().unwrap();
-    let account_owner2 = AccountOwner::User(owner2);
+    let account_owner1 = client1.get_fungible_account_owner();
+    let account_owner2 = client2.get_fungible_account_owner();
     // The initial accounts on chain1
     let accounts = BTreeMap::from([
         (account_owner1, Amount::from_tokens(5)),
@@ -1542,7 +1572,7 @@ async fn test_end_to_end_fungible() {
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_crowd_funding() {
     use crowd_funding::{CrowdFundingAbi, InitializationArgument};
-    use fungible::{Account, AccountOwner, FungibleTokenAbi, InitialState};
+    use fungible::{Account, FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -1563,10 +1593,9 @@ async fn test_end_to_end_crowd_funding() {
     let chain2 = client1.open_and_assign(&client2).await;
 
     // The players
-    let owner1 = client1.get_owner().unwrap();
-    let account_owner1 = AccountOwner::User(owner1);
-    let owner2 = client2.get_owner().unwrap();
-    let account_owner2 = AccountOwner::User(owner2);
+    let account_owner1 = client1.get_fungible_account_owner(); // operator
+    let account_owner2 = client2.get_fungible_account_owner(); // contributor
+
     // The initial accounts on chain1
     let accounts = BTreeMap::from([(account_owner1, Amount::from_tokens(6))]);
     let state_fungible = InitialState { accounts };
@@ -1659,6 +1688,248 @@ async fn test_end_to_end_crowd_funding() {
 
     node_service1.assert_is_running();
     node_service2.assert_is_running();
+}
+
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_matching_engine() {
+    use fungible::{FungibleTokenAbi, InitialState};
+    use matching_engine::{OrderNature, Parameters, Price};
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let network = Network::Grpc;
+    let mut runner = TestRunner::new(network, 4);
+    let client_admin = runner.make_client(network);
+    let client_a = runner.make_client(network);
+    let client_b = runner.make_client(network);
+
+    runner.generate_initial_validator_config().await;
+    client_admin.create_genesis_config().await;
+    client_a.wallet_init(&[]).await;
+    client_b.wallet_init(&[]).await;
+
+    // Create initial server and client config.
+    runner.run_local_net().await;
+    let (contract_fungible, service_fungible) = runner.build_example("fungible").await;
+    let (contract_matching, service_matching) = runner.build_example("matching-engine").await;
+
+    let chain_admin = client_admin.get_wallet().default_chain().unwrap();
+    let chain_a = client_admin.open_and_assign(&client_a).await;
+    let chain_b = client_admin.open_and_assign(&client_b).await;
+
+    // The players
+    let owner_admin = client_admin.get_fungible_account_owner();
+    let owner_a = client_a.get_fungible_account_owner();
+    let owner_b = client_b.get_fungible_account_owner();
+    // The initial accounts on chain_a and chain_b
+    let accounts0 = BTreeMap::from([(owner_a, Amount::from_tokens(10))]);
+    let state_fungible0 = InitialState {
+        accounts: accounts0,
+    };
+    let accounts1 = BTreeMap::from([(owner_b, Amount::from_tokens(9))]);
+    let state_fungible1 = InitialState {
+        accounts: accounts1,
+    };
+
+    // Setting up the application fungible on chain_a and chain_b
+    let application_id_fungible0 = client_a
+        .publish_and_create::<FungibleTokenAbi>(
+            contract_fungible.clone(),
+            service_fungible.clone(),
+            &(),
+            &state_fungible0,
+            vec![],
+            None,
+        )
+        .await;
+    let application_id_fungible1 = client_b
+        .publish_and_create::<FungibleTokenAbi>(
+            contract_fungible,
+            service_fungible,
+            &(),
+            &state_fungible1,
+            vec![],
+            None,
+        )
+        .await;
+
+    // Now creating the service and exporting the applications
+    let mut node_service_admin = client_admin.run_node_service(chain_admin, 8080).await;
+    let mut node_service_a = client_a.run_node_service(chain_a, 8081).await;
+    let mut node_service_b = client_b.run_node_service(chain_b, 8082).await;
+
+    let app_fungible0_a = node_service_a
+        .make_application(&application_id_fungible0)
+        .await;
+    let app_fungible1_b = node_service_b
+        .make_application(&application_id_fungible1)
+        .await;
+    app_fungible0_a
+        .assert_fungible_account_balances([
+            (owner_a, Amount::from_tokens(10)),
+            (owner_b, Amount::ZERO),
+            (owner_admin, Amount::ZERO),
+        ])
+        .await;
+    app_fungible1_b
+        .assert_fungible_account_balances([
+            (owner_a, Amount::ZERO),
+            (owner_b, Amount::from_tokens(9)),
+            (owner_admin, Amount::ZERO),
+        ])
+        .await;
+
+    node_service_admin
+        .request_application(&application_id_fungible0)
+        .await;
+    let app_fungible0_admin = node_service_admin
+        .make_application(&application_id_fungible0)
+        .await;
+    node_service_admin
+        .request_application(&application_id_fungible1)
+        .await;
+    let app_fungible1_admin = node_service_admin
+        .make_application(&application_id_fungible1)
+        .await;
+    app_fungible0_admin
+        .assert_fungible_account_balances([
+            (owner_a, Amount::ZERO),
+            (owner_b, Amount::ZERO),
+            (owner_admin, Amount::ZERO),
+        ])
+        .await;
+    app_fungible1_admin
+        .assert_fungible_account_balances([
+            (owner_a, Amount::ZERO),
+            (owner_b, Amount::ZERO),
+            (owner_admin, Amount::ZERO),
+        ])
+        .await;
+
+    // Setting up the application matching engine.
+    let token0 = application_id_fungible0
+        .parse::<ApplicationId>()
+        .unwrap()
+        .with_abi();
+    let token1 = application_id_fungible1
+        .parse::<ApplicationId>()
+        .unwrap()
+        .with_abi();
+    let parameter = Parameters {
+        tokens: [token0, token1],
+    };
+    let bytecode_id = node_service_admin
+        .publish_bytecode(contract_matching, service_matching)
+        .await;
+    let parameter_str = serde_json::to_string(&parameter).unwrap();
+    let argument_str = serde_json::to_string(&()).unwrap();
+    let application_id_matching = node_service_admin
+        .create_application(
+            bytecode_id,
+            parameter_str,
+            argument_str,
+            vec![
+                application_id_fungible0.clone(),
+                application_id_fungible1.clone(),
+            ],
+        )
+        .await;
+    let app_matching_admin = node_service_admin
+        .make_application(&application_id_matching)
+        .await;
+    node_service_a
+        .request_application(&application_id_matching)
+        .await;
+    let app_matching_a = node_service_a
+        .make_application(&application_id_matching)
+        .await;
+    node_service_b
+        .request_application(&application_id_matching)
+        .await;
+    let app_matching_b = node_service_b
+        .make_application(&application_id_matching)
+        .await;
+
+    // Now creating orders
+    for price in [1, 2] {
+        // 1 is expected not to match, but 2 is expected to match
+        let price = Price { price };
+        let insert2 = matching_engine::Order::Insert {
+            owner: owner_a,
+            amount: Amount::from_tokens(3),
+            nature: OrderNature::Bid,
+            price,
+        };
+        let query_string = format!("mutation {{ order(order: {}) }}", insert2.to_value());
+        app_matching_a.query_application(&query_string).await;
+    }
+    for price in [4, 2] {
+        // price 2 is expected to match, but not 4.
+        let price = Price { price };
+        let insert3 = matching_engine::Order::Insert {
+            owner: owner_b,
+            amount: Amount::from_tokens(4),
+            nature: OrderNature::Ask,
+            price,
+        };
+        let query_string = format!("mutation {{ order(order: {}) }}", insert3.to_value());
+        app_matching_b.query_application(&query_string).await;
+    }
+    node_service_admin.process_inbox().await;
+    node_service_a.process_inbox().await;
+    node_service_b.process_inbox().await;
+
+    // Now reading the order_ids
+    let order_ids_a = app_matching_admin
+        .get_matching_engine_account_info(&owner_a)
+        .await;
+    let order_ids_b = app_matching_admin
+        .get_matching_engine_account_info(&owner_b)
+        .await;
+    // The deal that occurred is that 6 token0 were exchanged for 3 token1.
+    assert_eq!(order_ids_a.len(), 1); // The order of price 2 is completely filled.
+    assert_eq!(order_ids_b.len(), 2); // The order of price 2 is partially filled.
+
+    // Now cancelling all the orders
+    for (owner, order_ids) in [(owner_a, order_ids_a), (owner_b, order_ids_b)] {
+        for order_id in order_ids {
+            let cancel = matching_engine::Order::Cancel { owner, order_id };
+            let query_string = format!("mutation {{ order(order: {}) }}", cancel.to_value());
+            app_matching_admin.query_application(&query_string).await;
+        }
+    }
+    node_service_admin.process_inbox().await;
+
+    // Check balances
+    app_fungible0_a
+        .assert_fungible_account_balances([
+            (owner_a, Amount::from_tokens(1)),
+            (owner_b, Amount::from_tokens(0)),
+        ])
+        .await;
+    app_fungible0_admin
+        .assert_fungible_account_balances([
+            (owner_a, Amount::from_tokens(3)),
+            (owner_b, Amount::from_tokens(6)),
+        ])
+        .await;
+    app_fungible1_b
+        .assert_fungible_account_balances([
+            (owner_a, Amount::from_tokens(0)),
+            (owner_b, Amount::from_tokens(1)),
+        ])
+        .await;
+    app_fungible1_admin
+        .assert_fungible_account_balances([
+            (owner_a, Amount::from_tokens(3)),
+            (owner_b, Amount::from_tokens(5)),
+        ])
+        .await;
+
+    node_service_admin.assert_is_running();
+    node_service_a.assert_is_running();
+    node_service_b.assert_is_running();
 }
 
 #[test_log::test(tokio::test)]

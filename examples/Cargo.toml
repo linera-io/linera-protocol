@@ -5,6 +5,7 @@ members = [
         "meta-counter",
         "crowd-funding",
         "fungible",
+        "matching-engine",
         "reentrant-counter",
         "social",
 ]
