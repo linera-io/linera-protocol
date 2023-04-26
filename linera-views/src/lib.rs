@@ -1,9 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module aims to help the mapping of complex data-structures onto a key-value
-//! store. The central notion is a [`views::View`] which can be loaded from storage, modified in
-//! memory, then committed (i.e. the changes are atomically persisted in storage).
+//! This module is used in the Linera protocol to map complex data-structures onto a
+//! key-value store. The central notion is a [`views::View`](crate::views::View) which can
+//! be loaded from storage, modified in memory, then committed (i.e. the changes are
+//! atomically persisted in storage).
 
 #![deny(missing_docs)]
 

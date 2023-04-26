@@ -1,7 +1,12 @@
 [package]
 name = "linera-core"
 version = "0.1.0"
+description = "The core Linera protocol, including client and server logic, node synchronization, etc."
 authors = ["Linera <contact@linera.io>"]
+readme = "README.md"
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.io"
+license = "Apache-2.0"
 edition = "2021"
 
 [features]
@@ -20,11 +25,11 @@ async-trait = "0.1.52"
 async-graphql = "5.0.5"
 dashmap = "5.4.0"
 futures = "0.3.17"
-linera-base = { path = "../linera-base" }
-linera-chain = { path = "../linera-chain" }
-linera-execution = { path = "../linera-execution", default-features = false }
-linera-storage = { path = "../linera-storage", default-features = false }
-linera-views = { path = "../linera-views" }
+linera-base = { version = "0.1.0", path = "../linera-base" }
+linera-chain = { version = "0.1.0", path = "../linera-chain" }
+linera-execution = { version = "0.1.0", path = "../linera-execution", default-features = false }
+linera-storage = { version = "0.1.0", path = "../linera-storage", default-features = false }
+linera-views = { version = "0.1.0", path = "../linera-views" }
 tracing = "0.1.37"
 lru = "0.9.0"
 proptest = { version = "1.0.0", optional = true }

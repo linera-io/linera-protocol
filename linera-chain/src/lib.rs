@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! This module manages the state of a Linera chain, including cross-chain communication.
+
 mod chain;
 pub mod data_types;
 mod inbox;

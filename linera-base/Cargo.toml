@@ -1,7 +1,12 @@
 [package]
 name = "linera-base"
 version = "0.1.0"
+description = "Base definitions, including cryptography, used by the Linera protocol."
 authors = ["Linera <contact@linera.io>"]
+readme = "README.md"
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.io"
+license = "Apache-2.0"
 edition = "2021"
 
 [features]
@@ -27,7 +32,7 @@ rand = { workspace = true }
 
 [dev-dependencies]
 custom_debug_derive = { workspace = true }
-linera-base = { workspace = true, features = ["test"] }
+linera-base = { path = ".", features = ["test"] }
 
 [package.metadata.cargo-machete]
 ignored = ["serde_bytes"]
