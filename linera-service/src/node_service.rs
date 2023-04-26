@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::chain_leader::ChainLeader;
 use async_graphql::{
     futures_util::Stream,
     http::GraphiQLSource,
@@ -15,7 +16,7 @@ use axum::{
     response::IntoResponse,
     Extension, Router, Server,
 };
-use futures::{lock::Mutex, StreamExt};
+use futures::lock::Mutex;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::Amount,
@@ -25,8 +26,7 @@ use linera_base::{
 use linera_chain::ChainStateView;
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
-    tracker::NotificationTracker,
-    worker::{Notification, Reason},
+    worker::Notification,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -36,10 +36,10 @@ use linera_execution::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
-use std::{net::SocketAddr, num::NonZeroU16, ops::DerefMut, sync::Arc};
+use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info};
 
 /// Our root GraphQL query type.
 struct QueryRoot<P, S> {
@@ -463,14 +463,12 @@ where
     }
 
     /// Runs the node service.
-    pub async fn run<C, F>(self, mut context: C, wallet_updater: F) -> Result<(), anyhow::Error>
+    pub async fn run<C, F>(self, context: C, wallet_updater: F) -> Result<(), anyhow::Error>
     where
         for<'a> F:
             (Fn(&'a mut C, &'a mut ChainClient<P, S>) -> futures::future::BoxFuture<'a, ()>) + Send,
     {
         let port = self.port.get();
-        let chain_id = self.client.lock().await.chain_id();
-
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
         let applications_handler = axum::routing::get(graphiql).post(Self::application_handler);
 
@@ -485,55 +483,7 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        // TODO(#646): Deduplicate with linera.rs synchronize handling.
-        let sync_fut = async move {
-            let mut notification_stream = self
-                .client
-                .lock()
-                .await
-                .subscribe_all(vec![chain_id])
-                .await?;
-            let mut tracker = NotificationTracker::default();
-            while let Some(notification) = notification_stream.next().await {
-                debug!("Received notification: {:?}", notification);
-                let mut client = self.client.lock().await;
-                if tracker.insert(notification.clone()) {
-                    if let Err(e) = client.synchronize_and_recompute_balance().await {
-                        warn!(
-                            "Failed to synchronize and recompute balance for notification {:?} \
-                            with error: {:?}",
-                            notification, e
-                        );
-                        // If synchronization failed there is nothing to update validators
-                        // about.
-                        continue;
-                    }
-                    match &notification.reason {
-                        Reason::NewBlock { .. } => {
-                            if let Err(e) = client.update_validators_about_local_chain().await {
-                                warn!(
-                                    "Failed to update validators about the local chain after \
-                                         receiving notification {:?} with error: {:?}",
-                                    notification, e
-                                );
-                            }
-                        }
-                        Reason::NewMessage { .. } => {
-                            if let Err(e) = client.process_inbox().await {
-                                warn!(
-                                    "Failed to process inbox after receiving new message: {:?} \
-                                    with error: {:?}",
-                                    notification, e
-                                );
-                            }
-                        }
-                    }
-                    wallet_updater(&mut context, client.deref_mut()).await;
-                }
-            }
-            Ok::<(), anyhow::Error>(())
-        };
-
+        let sync_fut = ChainLeader::new(self.client.clone()).run(context, wallet_updater);
         let serve_fut =
             Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
 
