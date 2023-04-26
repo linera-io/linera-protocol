@@ -18,7 +18,7 @@ use linera_core::{
     data_types::ChainInfoQuery,
     node::{LocalNodeClient, ValidatorNode},
     tracker::NotificationTracker,
-    worker::{Reason, WorkerState},
+    worker::WorkerState,
 };
 use linera_execution::{
     committee::{ValidatorName, ValidatorState},
@@ -659,18 +659,12 @@ enum ClientCommand {
 
     /// Watch the network for notifications.
     Watch {
-        /// The collection of Chain IDs to watch.
-        chain_ids: Vec<ChainId>,
+        /// The chain id to watch.
+        chain_id: Option<ChainId>,
 
         /// Show all notifications from all validators.
         #[structopt(long)]
         raw: bool,
-    },
-
-    /// Acts as a Synchronizer on the network.
-    Synchronize {
-        /// The collection of Chain IDs to synchronize for.
-        chain_ids: Vec<ChainId>,
     },
 
     /// Run a GraphQL service on the local node of a given chain.
@@ -1023,73 +1017,19 @@ where
                 context.save_wallet();
             }
 
-            Watch { chain_ids, raw } => {
-                debug!("Watching for notifications for chains: {:?}", &chain_ids);
-                let chain_id = match chain_ids.get(0) {
-                    None => {
-                        warn!("No chains specified, exiting...");
-                        return Ok(());
-                    }
-                    Some(chain_id) => chain_id,
-                };
-                let mut chain_client = context.make_chain_client(storage, *chain_id);
+            Watch { chain_id, raw } => {
+                let mut chain_client = context.make_chain_client(storage, chain_id);
+                let chain_id = chain_client.chain_id();
+                debug!("Watching for notifications for chain {:?}", chain_id);
                 let mut tracker = NotificationTracker::default();
-                let mut notification_stream = chain_client.subscribe_all(chain_ids).await?;
+                let mut notification_stream = chain_client.subscribe_all(vec![chain_id]).await?;
                 while let Some(notification) = notification_stream.next().await {
-                    if raw {
-                        info!("{:?}", notification);
-                    } else if tracker.insert(notification.clone()) {
-                        info!("{:?}", notification);
+                    if raw || tracker.insert(notification.clone()) {
+                        println!("{:?}", notification);
                     }
                 }
                 warn!("Notification stream ended.");
                 // Not saving the wallet because `subscribe_all` has no effect on `chain_client`.
-            }
-
-            Synchronize { chain_ids } => {
-                debug!("Synchronizing chains: {:#?}", &chain_ids);
-                let chain_id = match chain_ids.get(0) {
-                    None => {
-                        warn!("No chains specified, exiting...");
-                        return Ok(());
-                    }
-                    Some(chain_id) => chain_id,
-                };
-                let mut notification_stream = context
-                    .make_chain_client(storage.clone(), *chain_id)
-                    .subscribe_all(chain_ids)
-                    .await?;
-                let mut tracker = NotificationTracker::default();
-                while let Some(notification) = notification_stream.next().await {
-                    debug!("Received notification: {:?}", notification);
-                    let mut chain_client =
-                        context.make_chain_client(storage.clone(), notification.chain_id);
-                    if tracker.insert(notification.clone()) {
-                        if let Err(e) = chain_client.synchronize_and_recompute_balance().await {
-                            warn!("Failed to synchronize and recompute balance for notification {:?} with error: {:?}", notification, e);
-                            // If synchronization failed there is nothing to update validators about.
-                            continue;
-                        }
-                        match &notification.reason {
-                            Reason::NewBlock { .. } => {
-                                if let Err(e) =
-                                    chain_client.update_validators_about_local_chain().await
-                                {
-                                    warn!("Failed to update validators about the local chain after receiving notification {:?} with error: {:?}", notification, e);
-                                }
-                            }
-                            Reason::NewMessage { .. } => {
-                                if let Err(e) = chain_client.process_inbox().await {
-                                    warn!("Failed to process inbox after receiving new message: {:?} with error: {:?}", notification, e);
-                                }
-                            }
-                        }
-                        context.update_wallet_from_client(&mut chain_client).await;
-                        context.save_wallet();
-                    }
-                }
-                warn!("Notification stream ended.");
-                // Wallet states are saved above.
             }
 
             Service { chain_id, port } => {
