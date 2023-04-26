@@ -34,14 +34,7 @@ where
         for<'a> F:
             (Fn(&'a mut C, &'a mut ChainClient<P, S>) -> futures::future::BoxFuture<'a, ()>) + Send,
     {
-        let chain_id = self.client.lock().await.chain_id();
-
-        let mut notification_stream = self
-            .client
-            .lock()
-            .await
-            .subscribe_all(vec![chain_id])
-            .await?;
+        let mut notification_stream = self.client.lock().await.listen().await?;
         let mut tracker = NotificationTracker::default();
         while let Some(notification) = notification_stream.next().await {
             debug!("Received notification: {:?}", notification);

@@ -116,16 +116,9 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    /// Gets a subscription to a stream of `Notification`s for a collection of `ChainId`s.
-    /// An empty vector corresponds to the default chain.
-    async fn notifications(
-        &self,
-        chain_ids: Vec<ChainId>,
-    ) -> Result<impl Stream<Item = Notification>, Error> {
-        match chain_ids.len() {
-            0 => Ok(self.client.lock().await.subscribe_default().await?),
-            _ => Ok(self.client.lock().await.subscribe_all(chain_ids).await?),
-        }
+    /// Subscribes to notifications from the current chain.
+    async fn notifications(&self) -> Result<impl Stream<Item = Notification>, Error> {
+        Ok(self.client.lock().await.listen().await?)
     }
 }
 
