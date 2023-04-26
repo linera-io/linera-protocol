@@ -35,7 +35,7 @@ use linera_service::{
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{
-    fs,
+    env, fs,
     num::NonZeroU16,
     path::PathBuf,
     time::{Duration, Instant},
@@ -776,6 +776,10 @@ enum WalletCommand {
 enum ProjectCommand {
     /// Create a new Linera project.
     New { path: PathBuf },
+    /// Test a Linera project.
+    ///
+    /// Equivalent to running `cargo test` with the appropriate test runner.
+    Test { path: Option<PathBuf> },
 }
 
 struct Job(ClientContext, ClientCommand);
@@ -1312,6 +1316,11 @@ async fn main() -> Result<(), anyhow::Error> {
             ProjectCommand::New { path } => {
                 Project::new(path.clone())?;
                 Ok(())
+            }
+            ProjectCommand::Test { path } => {
+                let path = path.clone().unwrap_or_else(|| env::current_dir().unwrap());
+                let project = Project::from_existing_project(path)?;
+                Ok(project.test()?)
             }
         },
 

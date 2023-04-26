@@ -7,6 +7,7 @@ use std::{
     fs::File,
     io::Write,
     path::{Path, PathBuf},
+    process::Command,
 };
 use tracing::debug;
 
@@ -160,7 +161,7 @@ target = "wasm32-unknown-unknown"
 "#;
 
 pub struct Project {
-    _root: PathBuf,
+    root: PathBuf,
 }
 
 impl Project {
@@ -192,7 +193,65 @@ impl Project {
         debug!("creating cargo config");
         Self::create_cargo_config(&root)?;
 
-        Ok(Self { _root: root })
+        Ok(Self { root })
+    }
+
+    pub fn from_existing_project(root: PathBuf) -> Result<Self> {
+        if !root.exists() {
+            bail!("could not find project at {}", root.display());
+        }
+        Ok(Self { root })
+    }
+
+    pub fn test(&self) -> Result<()> {
+        if !Self::runner_is_installed()? {
+            debug!("Linera test runner not found");
+            Self::install_test_runner()?;
+        }
+        let cargo_test = Command::new("cargo")
+            .env(
+                "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER",
+                Self::runner_path()?.display().to_string().as_str(),
+            )
+            .arg("test")
+            .args(["--target", "wasm32-unknown-unknown"])
+            .current_dir(&self.root)
+            .spawn()?
+            .wait()?;
+        if !cargo_test.success() {
+            bail!("tests failed")
+        }
+        Ok(())
+    }
+
+    pub fn runner_is_installed() -> Result<bool> {
+        Ok(Self::runner_path()?.exists())
+    }
+
+    fn install_test_runner() -> Result<()> {
+        println!("installing test runner...");
+        let cargo_install = Command::new("cargo")
+            .args(["install", "linera-test-runner"])
+            .spawn()?
+            .wait()?;
+        if !cargo_install.success() {
+            bail!("failed to install linera-test-runner")
+        }
+        Ok(())
+    }
+
+    fn runner_path() -> Result<PathBuf> {
+        Self::cargo_home().map(|cargo_home| cargo_home.join("bin").join("linera-test-runner"))
+    }
+
+    fn cargo_home() -> Result<PathBuf> {
+        if let Ok(cargo_home) = std::env::var("CARGO_HOME") {
+            Ok(PathBuf::from(cargo_home))
+        } else if let Some(home) = dirs::home_dir() {
+            Ok(home.join(".cargo"))
+        } else {
+            bail!("could not find CARGO_HOME directory, please specify it explicitly")
+        }
     }
 
     fn create_source_directory(project_root: &Path) -> Result<PathBuf> {
