@@ -1022,14 +1022,14 @@ where
                 let chain_id = chain_client.chain_id();
                 debug!("Watching for notifications for chain {:?}", chain_id);
                 let mut tracker = NotificationTracker::default();
-                let mut notification_stream = chain_client.subscribe_all(vec![chain_id]).await?;
+                let mut notification_stream = chain_client.listen().await?;
                 while let Some(notification) = notification_stream.next().await {
                     if raw || tracker.insert(notification.clone()) {
                         println!("{:?}", notification);
                     }
                 }
                 warn!("Notification stream ended.");
-                // Not saving the wallet because `subscribe_all` has no effect on `chain_client`.
+                // Not saving the wallet because `connect()` has no effect on `chain_client`.
             }
 
             Service { chain_id, port } => {

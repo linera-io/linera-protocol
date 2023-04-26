@@ -363,17 +363,12 @@ where
         Ok(self.key_pair().await?.public())
     }
 
-    /// Subscribes to notifications for all validators.
-    pub async fn subscribe_default(&mut self) -> Result<NotificationStream> {
-        self.subscribe_all(vec![self.chain_id]).await
-    }
-
-    /// Subscribes to notifications for all validators.
-    pub async fn subscribe_all(&mut self, chain_ids: Vec<ChainId>) -> Result<NotificationStream> {
+    /// Listens to notifications about the current chain from all validators.
+    pub async fn listen(&mut self) -> Result<NotificationStream> {
         let committee = self.local_committee().await?;
         let mut streams = Vec::new();
         for (name, mut node) in self.validator_node_provider.make_nodes(&committee)? {
-            match node.subscribe(chain_ids.clone()).await {
+            match node.subscribe(vec![self.chain_id]).await {
                 Ok(notification_stream) => {
                     streams.push(notification_stream);
                 }
