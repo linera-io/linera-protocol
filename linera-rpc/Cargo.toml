@@ -1,7 +1,12 @@
 [package]
 name = "linera-rpc"
 version = "0.1.0"
+description = "RPC schemas and networking library for the Linera protocol."
 authors = ["Linera <contact@linera.io>"]
+readme = "README.md"
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.io"
+license = "Apache-2.0"
 edition = "2021"
 
 [features]
@@ -36,7 +41,7 @@ tonic = { workspace = true }
 tonic-health = { workspace = true }
 
 [dev-dependencies]
-linera-rpc = { workspace = true, features = ["test"] }
+linera-rpc = { path = ".", features = ["test"] }
 proptest = { workspace = true }
 serde-reflection = { workspace = true }
 serde_yaml = { workspace = true }

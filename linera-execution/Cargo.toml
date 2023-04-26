@@ -1,7 +1,12 @@
 [package]
 name = "linera-execution"
 version = "0.1.0"
+description = "Persistent data and the corresponding logics used by the Linera protocol for runtime and execution of smart contracts / applications."
 authors = ["Linera <contact@linera.io>"]
+readme = "README.md"
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.io"
+license = "Apache-2.0"
 edition = "2021"
 
 [features]
@@ -41,7 +46,7 @@ wit-bindgen-host-wasmtime-rust = { workspace = true, optional = true }
 anyhow = { workspace = true }
 bcs = { workspace = true }
 linera-base = { workspace = true, features = ["test"] }
-linera-execution = { workspace = true, features = ["test"] }
+linera-execution = { path = ".", features = ["test"] }
 test-case = { workspace = true }
 test-log = { workspace = true, features = ["trace"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }

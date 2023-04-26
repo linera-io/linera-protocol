@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! The procedural macros for the crate `linera-views`.
+
 pub(crate) mod util;
 
 extern crate proc_macro;

@@ -96,18 +96,18 @@ wasmer = { version = "=3.1.1", features = ["singlepass"] }
 wasmer-middlewares = "3.1.1"
 wasmparser = "0.101.1"
 wasmtime = "1.0"
-wit-bindgen-guest-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "b3f43500ec4a65379b65148e32941117c17bc2f1" }
-wit-bindgen-host-wasmer-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "b3f43500ec4a65379b65148e32941117c17bc2f1" }
-wit-bindgen-host-wasmtime-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "b3f43500ec4a65379b65148e32941117c17bc2f1" }
+wit-bindgen-guest-rust = { version = "0.2.0", package = "linera-wit-bindgen-guest-rust" }
+wit-bindgen-host-wasmer-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmer-rust" }
+wit-bindgen-host-wasmtime-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmtime-rust" }
 
-linera-base = { path = "./linera-base" }
-linera-chain = { path = "./linera-chain" }
-linera-core = { path = "./linera-core", default-features = false }
-linera-execution = { path = "./linera-execution", default-features = false }
-linera-rpc = { path = "./linera-rpc" }
-linera-storage = { path = "./linera-storage", default-features = false }
-linera-views = { path = "./linera-views" }
-linera-views-derive = { path = "./linera-views-derive" }
+linera-base = { version = "0.1.0", path = "./linera-base" }
+linera-chain = { version = "0.1.0", path = "./linera-chain" }
+linera-core = { version = "0.1.0", path = "./linera-core", default-features = false }
+linera-execution = { version = "0.1.0", path = "./linera-execution", default-features = false }
+linera-rpc = { version = "0.1.0", path = "./linera-rpc" }
+linera-storage = { version = "0.1.0", path = "./linera-storage", default-features = false }
+linera-views = { version = "0.1.0", path = "./linera-views" }
+linera-views-derive = { version = "0.1.0", path = "./linera-views-derive" }
 
 fungible = { path = "./linera-examples/fungible" }
 social = { path = "./linera-examples/social" }
