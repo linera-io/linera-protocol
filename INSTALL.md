@@ -22,6 +22,7 @@
 
 * `brew install gh`
 * `cargo install mdbook`
+* `cargo install cargo-rdme`
 
 # Installation for Linux
 

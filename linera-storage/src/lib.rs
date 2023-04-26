@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! This module defines the storage abstractions for individual chains and certificates.
+
 mod chain_guards;
 #[cfg(feature = "aws")]
 mod dynamo_db;

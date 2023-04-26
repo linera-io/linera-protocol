@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! This module manages the execution of the system application and the user applications in a Linera chain.
+
 mod applications;
 pub mod committee;
 mod execution;

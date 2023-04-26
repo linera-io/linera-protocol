@@ -1,7 +1,11 @@
 [package]
 name = "linera-views-derive"
+description = "The procedural macros for the crate `linera-views`"
 version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.io"
+license = "Apache-2.0"
 edition = "2021"
 
 [lib]

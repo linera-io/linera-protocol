@@ -1,7 +1,12 @@
 [package]
 name = "linera-storage"
 version = "0.1.0"
+description = "Storage abstractions for the Linera protocol."
 authors = ["Linera <contact@linera.io>"]
+readme = "README.md"
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.io"
+license = "Apache-2.0"
 edition = "2021"
 
 [features]
