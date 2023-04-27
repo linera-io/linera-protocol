@@ -61,7 +61,7 @@ impl MutationRoot {
 pub enum Error {
     /// Invalid query argument; could not deserialize GraphQL request.
     #[error(
-        "Invalid query argument; Counter application only supports JSON encoded GraphQL queries"
+        "Invalid query argument; Fungible application only supports JSON encoded GraphQL queries"
     )]
     InvalidQuery,
 }
