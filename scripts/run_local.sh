@@ -24,7 +24,7 @@ set -x
 # Create configuration files for 10 user chains.
 # * Private chain states are stored in one local wallet `wallet.json`.
 # * `genesis.json` will contain the initial balances of chains as well as the initial committee.
-./linera --wallet wallet.json create_genesis_config 10 --genesis genesis.json --initial-funding 10 --committee committee.json
+./linera --wallet wallet.json create-genesis-config 10 --genesis genesis.json --initial-funding 10 --committee committee.json
 
 # Initialise the second wallet.
 ./linera --wallet wallet_2.json wallet init --genesis genesis.json
@@ -43,7 +43,7 @@ done
 sleep 3;
 
 # Create second wallet with unassigned key.
-KEY=$(./linera --wallet wallet_2.json keygen)
+KEY=$(./linera --wallet wallet_2.json key-gen)
 
 # Open chain on behalf of wallet 2.
 EFFECT_AND_CHAIN=$(./linera --wallet wallet.json open_chain --to-public-key "$KEY")

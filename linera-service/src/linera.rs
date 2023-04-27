@@ -544,7 +544,6 @@ struct ClientOptions {
 #[derive(StructOpt)]
 enum ClientCommand {
     /// Transfer funds
-    #[structopt(name = "transfer")]
     Transfer {
         /// Sending chain id (must be one of our chains)
         #[structopt(long = "from")]
@@ -559,7 +558,6 @@ enum ClientCommand {
     },
 
     /// Open (i.e. activate) a new chain deriving the UID from an existing one.
-    #[structopt(name = "open_chain")]
     OpenChain {
         /// Sending chain id (must be one of our chains).
         #[structopt(long = "from")]
@@ -570,9 +568,8 @@ enum ClientCommand {
         public_key: Option<PublicKey>,
     },
 
-    /// Close (i.e. deactivate) an existing chain. (Consider `spend_and_transfer`
-    /// instead for real-life use cases.)
-    #[structopt(name = "close_chain")]
+    /// Close (i.e. deactivate) an existing chain.
+    // TODO: Consider `spend-and-transfer` instead for real-life use cases.
     CloseChain {
         /// Sending chain id (must be one of our chains)
         #[structopt(long = "from")]
@@ -580,7 +577,6 @@ enum ClientCommand {
     },
 
     /// Read the balance of the chain from the local state of the client.
-    #[structopt(name = "query_balance")]
     QueryBalance {
         /// Chain id
         chain_id: Option<ChainId>,
@@ -588,46 +584,41 @@ enum ClientCommand {
 
     /// Synchronize the local state of the chain (including a conservative estimation of the
     /// available balance) with a quorum validators.
-    #[structopt(name = "sync_balance")]
-    SynchronizeBalance {
+    SyncBalance {
         /// Chain id
         chain_id: Option<ChainId>,
     },
 
     /// Show the current set of validators for a chain.
-    #[structopt(name = "query_validators")]
     QueryValidators {
         /// Chain id
         chain_id: Option<ChainId>,
     },
 
     /// Add or modify a validator (admin only)
-    #[structopt(name = "set_validator")]
     SetValidator {
         /// The public key of the validator.
-        #[structopt(long = "name")]
+        #[structopt(long)]
         name: ValidatorName,
 
         /// Network address
-        #[structopt(long = "address")]
-        network_address: String,
+        #[structopt(long)]
+        address: String,
 
         /// Voting power
-        #[structopt(long = "votes", default_value = "1")]
+        #[structopt(long, default_value = "1")]
         votes: u64,
     },
 
     /// Remove a validator (admin only)
-    #[structopt(name = "remove_validator")]
     RemoveValidator {
         /// The public key of the validator.
-        #[structopt(long = "name")]
+        #[structopt(long)]
         name: ValidatorName,
     },
 
     /// Send one transfer per chain in bulk mode
     #[cfg(feature = "benchmark")]
-    #[structopt(name = "benchmark")]
     Benchmark {
         /// Maximum number of blocks in flight
         #[structopt(long, default_value = "200")]
@@ -641,7 +632,6 @@ enum ClientCommand {
     /// Create genesis configuration for a Linera deployment.
     /// Create initial user chains and print information to be used for initialization of validator setup.
     /// This will also create an initial wallet for the owner of the initial "root" chains.
-    #[structopt(name = "create_genesis_config")]
     CreateGenesisConfig {
         /// Sets the file describing the public configurations of all validators
         #[structopt(long = "committee")]
@@ -668,7 +658,6 @@ enum ClientCommand {
     },
 
     /// Watch the network for notifications.
-    #[structopt(name = "watch")]
     Watch {
         /// The collection of Chain IDs to watch.
         chain_ids: Vec<ChainId>,
@@ -679,14 +668,12 @@ enum ClientCommand {
     },
 
     /// Acts as a Synchronizer on the network.
-    #[structopt(name = "synchronize")]
     Synchronize {
         /// The collection of Chain IDs to synchronize for.
         chain_ids: Vec<ChainId>,
     },
 
     /// Run a GraphQL service on the local node of a given chain.
-    #[structopt(name = "service")]
     Service {
         /// Chain id
         chain_id: Option<ChainId>,
@@ -697,7 +684,6 @@ enum ClientCommand {
     },
 
     /// Publish bytecode.
-    #[structopt(name = "publish_bytecode")]
     PublishBytecode {
         contract: PathBuf,
         service: PathBuf,
@@ -705,21 +691,19 @@ enum ClientCommand {
     },
 
     /// Create an application.
-    #[structopt(name = "create_application")]
     CreateApplication {
         bytecode_id: BytecodeId,
         /// The initialization arguments, passed to the contract's `initialize` method on the chain
         /// that creates the application. (But not on other chains, when it is registered there.)
         arguments: String,
         creator: Option<ChainId>,
-        #[structopt(long = "parameters")]
+        #[structopt(long)]
         parameters: Option<String>,
-        #[structopt(long = "required-application-ids")]
+        #[structopt(long)]
         required_application_ids: Option<Vec<UserApplicationId>>,
     },
 
     /// Create an application, and publish the required bytecode.
-    #[structopt(name = "publish_and_create")]
     PublishAndCreate {
         contract: PathBuf,
         service: PathBuf,
@@ -734,11 +718,9 @@ enum ClientCommand {
     },
 
     /// Create an unassigned key-pair.
-    #[structopt(name = "keygen")]
     KeyGen,
 
     /// Assign a key to a chain given a certificate.
-    #[structopt(name = "assign")]
     Assign {
         #[structopt(long)]
         key: PublicKey,
@@ -748,11 +730,9 @@ enum ClientCommand {
     },
 
     /// Show the contents of the wallet.
-    #[structopt(name = "wallet")]
     Wallet(WalletCommand),
 
     /// Manage Linera projects.
-    #[structopt(name = "project")]
     Project(ProjectCommand),
 }
 
@@ -864,7 +844,7 @@ where
                 context.save_wallet();
             }
 
-            SynchronizeBalance { chain_id } => {
+            SyncBalance { chain_id } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Synchronize chain information");
                 let time_start = Instant::now();
@@ -917,13 +897,13 @@ where
                 match command {
                     SetValidator {
                         name,
-                        network_address,
+                        address,
                         votes,
                     } => {
                         validators.insert(
                             name,
                             ValidatorState {
-                                network_address,
+                                network_address: address,
                                 votes,
                             },
                         );

@@ -249,7 +249,7 @@ impl Client {
     async fn create_genesis_config(&self) {
         self.run()
             .await
-            .args(["create_genesis_config", "10"])
+            .args(["create-genesis-config", "10"])
             .args(["--initial-funding", "10"])
             .args(["--committee", "committee.json"])
             .args(["--genesis", "genesis.json"])
@@ -301,7 +301,7 @@ impl Client {
         let stdout = Self::run_command(
             self.run_with_storage()
                 .await
-                .arg("publish_and_create")
+                .arg("publish-and-create")
                 .args([contract, service])
                 .arg(arg.to_string())
                 .args(publisher.into().iter().map(ChainId::to_string)),
@@ -319,7 +319,7 @@ impl Client {
         let stdout = Self::run_command(
             self.run_with_storage()
                 .await
-                .arg("publish_bytecode")
+                .arg("publish-bytecode")
                 .args([contract, service])
                 .args(publisher.into().iter().map(ChainId::to_string)),
         )
@@ -336,7 +336,7 @@ impl Client {
         let stdout = Self::run_command(
             self.run_with_storage()
                 .await
-                .arg("create_application")
+                .arg("create-application")
                 .args([bytecode_id, arg.to_string()])
                 .args(creator.into().iter().map(ChainId::to_string)),
         )
@@ -382,7 +382,7 @@ impl Client {
 
     async fn query_validators(&self, chain_id: Option<ChainId>) {
         let mut command = self.run_with_storage().await;
-        command.arg("query_validators");
+        command.arg("query-validators");
         if let Some(chain_id) = chain_id {
             command.arg(&chain_id.to_string());
         }
@@ -393,7 +393,7 @@ impl Client {
         let stdout = Self::run_command(
             self.run_with_storage()
                 .await
-                .arg("query_balance")
+                .arg("query-balance")
                 .arg(&chain_id.to_string()),
         )
         .await;
@@ -432,7 +432,7 @@ impl Client {
     ) -> anyhow::Result<(EffectId, ChainId)> {
         let mut command = self.run_with_storage().await;
         command
-            .arg("open_chain")
+            .arg("open-chain")
             .args(["--from", &from.to_string()]);
 
         if let Some(owner) = to_owner {
@@ -460,7 +460,7 @@ impl Client {
         Self::run_command(
             self.run_with_storage()
                 .await
-                .arg("set_validator")
+                .arg("set-validator")
                 .args(["--name", name])
                 .args(["--address", &address])
                 .args(["--votes", &votes.to_string()]),
@@ -472,14 +472,14 @@ impl Client {
         Self::run_command(
             self.run_with_storage()
                 .await
-                .arg("remove_validator")
+                .arg("remove-validator")
                 .args(["--name", name]),
         )
         .await;
     }
 
-    async fn keygen(&self) -> anyhow::Result<Owner> {
-        let stdout = Self::run_command(self.run().await.arg("keygen")).await;
+    async fn key_gen(&self) -> anyhow::Result<Owner> {
+        let stdout = Self::run_command(self.run().await.arg("key-gen")).await;
         Ok(Owner::from_str(stdout.trim())?)
     }
 
@@ -502,7 +502,7 @@ impl Client {
         Self::run_command(
             self.run_with_storage()
                 .await
-                .arg("sync_balance")
+                .arg("sync-balance")
                 .arg(&chain_id.to_string()),
         )
         .await;
@@ -993,7 +993,7 @@ async fn test_end_to_end_multiple_wallets() {
     let chain_1 = *client_1.get_wallet().chain_ids().first().unwrap();
 
     // Generate a key for Client 2.
-    let client_2_key = client_2.keygen().await.unwrap();
+    let client_2_key = client_2.key_gen().await.unwrap();
 
     // Open chain on behalf of Client 2.
     let (effect_id, chain_2) = client_1
@@ -1122,7 +1122,7 @@ async fn test_end_to_end_social_user_pub_sub() {
     let (contract, service) = runner.build_application("social").await;
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
-    let client2key = client2.keygen().await.unwrap();
+    let client2key = client2.key_gen().await.unwrap();
 
     // Open chain on behalf of Client 2.
     let (effect_id, chain2) = client1.open_chain(chain1, Some(client2key)).await.unwrap();
