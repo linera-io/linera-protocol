@@ -5,16 +5,16 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
-async-trait = "0.1.52"
-bcs = "0.1.3"
-futures = "0.3.17"
-linera-sdk = { path = "../../linera-sdk" }
-linera-views = { path = "../../linera-views" }
-thiserror = "1.0.31"
+async-trait = { workspace = true }
+bcs = { workspace = true }
+futures = { workspace = true }
+linera-sdk = { workspace = true }
+linera-views = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
-linera-sdk = { path = "../../linera-sdk", features = ["test"] }
-webassembly-test = "0.1.0"
+linera-sdk = { workspace = true, features = ["test"] }
+webassembly-test = { workspace = true }
 
 [[bin]]
 name = "reentrant-counter2_contract"

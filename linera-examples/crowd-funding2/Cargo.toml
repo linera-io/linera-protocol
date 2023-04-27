@@ -5,14 +5,14 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
-async-trait = "0.1.52"
-bcs = "0.1.3"
-crowd-funding = { path = "../crowd-funding" }
-fungible = { path = "../fungible" }
-linera-sdk = { path = "../../linera-sdk" }
-linera-views = { path = "../../linera-views" }
-serde = { version = "1.0.130", features = ["derive"] }
-thiserror = "1.0.31"
+async-trait = { workspace = true }
+bcs = { workspace = true }
+crowd-funding = { workspace = true }
+fungible = { workspace = true }
+linera-sdk = { workspace = true }
+linera-views = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
 
 [[bin]]
 name = "crowd-funding2_contract"

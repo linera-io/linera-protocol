@@ -5,16 +5,16 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
-async-graphql = { version = "5.0.6", default-features = false }
-async-trait = "0.1.52"
-bcs = "0.1.3"
-linera-sdk = { path = "../../linera-sdk" }
-serde = { version = "1.0.130", features = ["derive"] }
-thiserror = "1.0.31"
+async-graphql = { workspace = true }
+async-trait = { workspace = true }
+bcs = { workspace = true }
+linera-sdk = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-linera-sdk = { path = "../../linera-sdk", features = ["test", "wasmer", "wasmtime"] }
-tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
+linera-sdk = { workspace = true, features = ["test", "wasmer", "wasmtime"] }
+tokio = { workspace = true }
 
 [[bin]]
 name = "fungible_contract"
