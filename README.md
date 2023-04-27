@@ -71,7 +71,7 @@ do
 done
 
 # Command line prefix for client calls
-CLIENT=(./linera --storage rocksdb:client.db --wallet wallet.json --max-pending-messages 10000)
+CLIENT=(./linera --storage rocksdb:linera.db --wallet wallet.json --max-pending-messages 10000)
 
 ${CLIENT[@]} query_validators
 
