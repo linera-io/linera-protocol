@@ -195,9 +195,8 @@ where
             let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
             keys.push(key);
         }
-        let values_opt = self.context.read_multi_key(keys).await?;
         let mut values = Vec::with_capacity(count);
-        for entry in values_opt {
+        for entry in self.context.read_multi_key(keys).await? {
             match entry {
                 None => {
                     return Err(ViewError::MissingEntries);
