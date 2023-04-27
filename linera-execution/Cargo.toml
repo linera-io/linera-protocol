@@ -11,41 +11,41 @@ wasmer = ["dep:wasmer", "wasm-encoder", "wasmer-middlewares", "wasmparser", "wit
 wasmtime = ["dep:wasmtime", "wasm-encoder", "wasmparser", "wit-bindgen-host-wasmtime-rust"]
 
 [dependencies]
-anyhow = "1.0.57"
-async-lock = { version = "2.6.0", optional = true }
-async-trait = "0.1.52"
-async-graphql = "5.0.5"
-bcs = "0.1.3"
-custom_debug_derive = "0.5.0"
-dashmap = "5.3.4"
-derive_more = "0.99.17"
-futures = "0.3.24"
-linera-base = { path = "../linera-base" }
-linera-views = { path = "../linera-views", features = ["metrics"] }
-linera-views-derive = { path = "../linera-views-derive" }
-once_cell = "1.17.1"
-serde = { version = "1.0.130", features = ["derive"] }
-serde_bytes = "0.11.8"
-thiserror = "1.0.31"
-tokio = { version = "1.25.0", features = ["fs"] }
-tracing = "0.1.37"
-wasm-encoder = { version = "0.24.1", optional = true }
-wasmer = { version = "3.0.0-rc.2", optional = true, features = ["singlepass"] }
-wasmer-middlewares = { version = "3.1.1", optional = true }
-wasmparser = { version = "0.101.1", optional = true }
-wasmtime = { version = "1.0", optional = true }
-wit-bindgen-host-wasmer-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "b3f43500ec4a65379b65148e32941117c17bc2f1", optional = true }
-wit-bindgen-host-wasmtime-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "b3f43500ec4a65379b65148e32941117c17bc2f1", optional = true }
+anyhow = { workspace = true }
+async-lock = { workspace = true, optional = true }
+async-trait = { workspace = true }
+async-graphql = { workspace = true }
+bcs = { workspace = true }
+custom_debug_derive = { workspace = true }
+dashmap = { workspace = true }
+derive_more = { workspace = true }
+futures = { workspace = true }
+linera-base = { workspace = true }
+linera-views = { workspace = true, features = ["metrics"] }
+linera-views-derive = { workspace = true }
+once_cell = { workspace = true }
+serde = { workspace = true }
+serde_bytes = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
+tracing = { workspace = true }
+wasm-encoder = { workspace = true, optional = true }
+wasmer = { workspace = true, optional = true }
+wasmer-middlewares = { workspace = true, optional = true }
+wasmparser = { workspace = true, optional = true }
+wasmtime = { workspace = true, optional = true }
+wit-bindgen-host-wasmer-rust = { workspace = true, optional = true }
+wit-bindgen-host-wasmtime-rust = { workspace = true, optional = true }
 
 [dev-dependencies]
-anyhow = "1.0.57"
-bcs = "0.1.3"
-linera-base = { path = "../linera-base", features = ["test"] }
-linera-execution = { path = ".", default-features = false, features = ["test"] }
-test-case = "3.0.0"
-test-log = { version = "0.2.11", default-features = false, features = ["trace"] }
-tracing-subscriber = { version = "0.3.16", default-features = false, features = ["env-filter", "fmt"] }
-tokio = { version = "1.25.0", features = ["full", "test-util"] }
+anyhow = { workspace = true }
+bcs = { workspace = true }
+linera-base = { workspace = true, features = ["test"] }
+linera-execution = { workspace = true, features = ["test"] }
+test-case = { workspace = true }
+test-log = { workspace = true, features = ["trace"] }
+tracing-subscriber = { workspace = true, features = ["fmt"] }
+tokio = { workspace = true, features = ["full", "test-util"] }
 
 [package.metadata.cargo-machete]
 ignored = ["serde_bytes"]

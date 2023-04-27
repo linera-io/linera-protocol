@@ -13,25 +13,25 @@ wasmtime = ["linera-core/wasmtime", "linera-execution/wasmtime", "linera-storage
 test = []
 
 [dependencies]
-async-trait = "0.1.52"
-bcs = "0.1.3"
-custom_debug_derive = "0.5.0"
-futures = "0.3.17"
-log = "0.4.14"
-serde = { version = "1.0.130", features = ["derive"] }
-linera-base = { path = "../linera-base" }
-linera-views = { path = "../linera-views" }
-wit-bindgen-guest-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "b3f43500ec4a65379b65148e32941117c17bc2f1" }
+async-trait = { workspace = true }
+bcs = { workspace = true }
+custom_debug_derive = { workspace = true }
+futures = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+linera-base = { workspace = true }
+linera-views = { workspace = true }
+wit-bindgen-guest-rust = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-anyhow = "1.0.57"
-cargo_toml = "0.15.2"
-dashmap = "5.4.0"
-linera-base = { path = "../linera-base" }
-linera-chain = { path = "../linera-chain" }
-linera-core = { path = "../linera-core", default-features = false, features = ["test"] }
-linera-execution = { path = "../linera-execution", default-features = false }
-linera-storage = { path = "../linera-storage", default-features = false }
-tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
-wasmtime = "1.0"
-wit-bindgen-host-wasmtime-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "b3f43500ec4a65379b65148e32941117c17bc2f1" }
+anyhow = { workspace = true }
+cargo_toml = { workspace = true }
+dashmap = { workspace = true }
+linera-base = { workspace = true }
+linera-chain = { workspace = true }
+linera-core = { workspace = true, features = ["test"] }
+linera-execution = { workspace = true }
+linera-storage = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+wasmtime = { workspace = true }
+wit-bindgen-host-wasmtime-rust = { workspace = true }

@@ -8,19 +8,19 @@ edition = "2021"
 test = ["tokio/macros", "async-lock", "linera-base/test", "linera-execution/test"]
 
 [dependencies]
-async-trait = "0.1.52"
+async-trait = { workspace = true }
 async-lock = { version = "2.6.0", optional = true }
-async-graphql = "5.0.5"
-linera-base = { path = "../linera-base" }
-linera-execution = { path = "../linera-execution", default-features = false }
-linera-views = { path = "../linera-views", features = ["metrics"] }
-tracing = "0.1.37"
-serde = { version = "1.0.130", features = ["derive"] }
-thiserror = "1.0.31"
-tokio = "1.25.0"
+async-graphql = { workspace = true }
+linera-base = { workspace = true }
+linera-execution = { workspace = true }
+linera-views = { workspace = true, features = ["metrics"] }
+tracing = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
-linera-chain = { path = ".", features = ["test"] }
+linera-chain = { workspace = true, features = ["test"] }
 
 [package.metadata.cargo-machete]
 ignored = ["async-trait"]

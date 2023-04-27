@@ -8,44 +8,44 @@ edition = "2021"
 test = ["linera-base/test", "linera-chain/test", "linera-core/test", "linera-execution/test", "linera-storage/test"]
 
 [dependencies]
-anyhow = "1.0.57"
-async-trait = "0.1.52"
-bcs = "0.1.3"
-bincode = "1.3.3"
-bytes = "1.2.1"
-dashmap = "5.4.0"
-ed25519 = "1.2.0"
-ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
-futures = "0.3.17"
-http = "0.2"
-linera-base = { path = "../linera-base" }
-linera-chain = { path = "../linera-chain" }
-linera-core = { path = "../linera-core", default-features = false }
-linera-execution = { path = "../linera-execution", default-features = false }
-linera-storage = { path = "../linera-storage", default-features = false }
-linera-views = { path = "../linera-views" }
-tracing = "0.1.37"
-proptest = { version = "1.0.0", optional = true }
-prost = "0.11"
-serde = { version = "1.0.130", features = ["derive"] }
-structopt = "0.3.23"
-thiserror = "1.0.31"
-tokio = "1.25.0"
-tokio-util = { version = "0.6.9", features = ["codec", "net"] }
-tonic = "0.8"
-tonic-health = "0.8"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+bcs = { workspace = true }
+bincode = { workspace = true }
+bytes = { workspace = true }
+dashmap = { workspace = true }
+ed25519 = { workspace = true }
+ed25519-dalek = { workspace = true }
+futures = { workspace = true }
+http = { workspace = true }
+linera-base = { workspace = true }
+linera-chain = { workspace = true }
+linera-core = { workspace = true }
+linera-execution = { workspace = true }
+linera-storage = { workspace = true }
+linera-views = { workspace = true }
+tracing = { workspace = true }
+proptest = { workspace = true, optional = true }
+prost = { workspace = true }
+serde = { workspace = true }
+structopt = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true, features = ["codec", "net"] }
+tonic = { workspace = true }
+tonic-health = { workspace = true }
 
 [dev-dependencies]
-linera-rpc = { path = ".", features = ["test"] }
-proptest = "1.0.0"
-serde-reflection = "0.3.5"
-serde_yaml = "0.8.21"
-similar-asserts = "1.1.0"
-structopt = "0.3.23"
-test-strategy = "0.2.0"
+linera-rpc = { workspace = true, features = ["test"] }
+proptest = { workspace = true }
+serde-reflection = { workspace = true }
+serde_yaml = { workspace = true }
+similar-asserts = { workspace = true }
+structopt = { workspace = true }
+test-strategy = { workspace = true }
 
 [build-dependencies]
-tonic-build = "0.8"
+tonic-build = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["proptest", "prost"]

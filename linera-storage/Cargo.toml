@@ -12,22 +12,22 @@ wasmtime = ["linera-execution/wasmtime"]
 aws = ["linera-views/aws"]
 
 [dependencies]
-async-lock = "2.6.0"
-async-trait = "0.1.52"
-bcs = "0.1.3"
-dashmap = "5.3.4"
-futures = "0.3.17"
-linera-base = { path = "../linera-base" }
-linera-chain = { path = "../linera-chain" }
-linera-execution = { path = "../linera-execution", default-features = false }
-linera-views = { path = "../linera-views", features = ["metrics"] }
-metrics = "0.20.1"
-tracing = "0.1.37"
-rocksdb = "0.19.0"
-serde = { version = "1.0.130", features = ["derive"] }
-tokio = { version = "1.25.0", features = ["macros"] }
+async-lock = { workspace = true }
+async-trait = { workspace = true }
+bcs = { workspace = true }
+dashmap = { workspace = true }
+futures = { workspace = true }
+linera-base = { workspace = true }
+linera-chain = { workspace = true }
+linera-execution = { workspace = true }
+linera-views = { workspace = true, features = ["metrics"] }
+metrics = { workspace = true }
+tracing = { workspace = true }
+rocksdb = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
 
 [dev-dependencies]
-anyhow = "1.0.57"
-linera-storage = { path = ".", default-features = false, features = ["test"] }
-tempfile = "3.2.0"
+anyhow = { workspace = true }
+linera-storage = { workspace = true, features = ["test"] }
+tempfile = { workspace = true }

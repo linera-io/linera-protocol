@@ -17,6 +17,101 @@ exclude = [
 ]
 resolver = "2"
 
+[workspace.dependencies]
+anyhow = "1.0.57"
+async-graphql = "5.0.5"
+async-graphql-axum = "5.0.5"
+async-lock = "2.6.0"
+async-trait = "0.1.52"
+aws-config = "0.14.0"
+aws-sdk-dynamodb = "0.14.0"
+aws-sdk-s3 = "0.14.0"
+aws-smithy-http = "0.44.0"
+aws-types = "0.14.0"
+axum = "0.6.2"
+bcs = "0.1.3"
+bincode = "1.3.3"
+bytes = "1.2.1"
+cargo_toml = "0.15.2"
+chrono = "0.4.23"
+colored = "2.0.0"
+comfy-table = "6.1.4"
+convert_case = "0.6.0"
+criterion = "0.4.0"
+custom_debug_derive = "0.5.1"
+dashmap = "5.4.0"
+derive_more = "0.99.17"
+dirs = "5.0.0"
+ed25519 = "1.2.0"
+ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
+futures = "0.3.24"
+generic-array = { version = "0.14.4", features = ["serde"] }
+hex = "0.4.3"
+http = "0.2.7"
+log = "0.4.14"
+lru = "0.9.0"
+metrics = "0.20.1"
+metrics-exporter-tcp = "0.7.0"
+metrics-util = "0.14.0"
+linked-hash-map = "0.5.3"
+once_cell = "1.17.1"
+parse_duration = "2.1.1"
+portable-atomic = "0.3.19"
+proc-macro2 = "1.0"
+proptest = "1.0.0"
+prost = "0.11"
+quote = "1.0"
+rand = "0.7.3"
+reqwest = "0.11.14"
+rocksdb = "0.19.0"
+serde = { version = "1.0.152", features = ["derive"] }
+serde_bytes = "0.11.8"
+serde_json = "1.0.93"
+serde_yaml = "0.8.21"
+serde-name = "0.2.0"
+serde-reflection = "0.3.5"
+sha3 = "0.10.6"
+similar-asserts = "1.1.0"
+static_assertions = "1.1.0"
+structopt = "0.3.23"
+syn = "1.0.107"
+tempfile = "3.2.0"
+test-case = "3.0.0"
+test-log = { version = "0.2.11", default-features = false, features = ["trace"] }
+test-strategy = "0.2.0"
+thiserror = "1.0.38"
+tonic = "0.8"
+tonic-build = "0.8"
+tonic-health = "0.8"
+tokio = "1.25.0"
+tokio-stream = "0.1.11"
+tokio-test = "0.4.2"
+tokio-util = "0.6.9"
+toml = "0.7.3"
+tower-http = "0.4.0"
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.16", default-features = false, features = ["env-filter"] }
+wasm-encoder = "0.24.1"
+wasmer = { version = "3.1.1", features = ["singlepass"] }
+wasmer-middlewares = "3.1.1"
+wasmparser = "0.101.1"
+wasmtime = "1.0"
+wit-bindgen-guest-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "b3f43500ec4a65379b65148e32941117c17bc2f1" }
+wit-bindgen-host-wasmer-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "b3f43500ec4a65379b65148e32941117c17bc2f1" }
+wit-bindgen-host-wasmtime-rust = { git = "https://github.com/jvff/wit-bindgen", rev = "b3f43500ec4a65379b65148e32941117c17bc2f1" }
+
+linera-base = { path = "./linera-base" }
+linera-chain = { path = "./linera-chain" }
+linera-core = { path = "./linera-core", default-features = false }
+linera-execution = { path = "./linera-execution", default-features = false }
+linera-rpc = { path = "./linera-rpc" }
+linera-storage = { path = "./linera-storage", default-features = false }
+linera-views = { path = "./linera-views" }
+linera-views-derive = { path = "./linera-views-derive" }
+
+fungible = { path = "./linera-examples/fungible" }
+social = { path = "./linera-examples/social" }
+
 [profile.release]
 debug = true
 
