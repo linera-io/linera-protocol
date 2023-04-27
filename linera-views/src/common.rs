@@ -262,7 +262,7 @@ pub trait Context {
     /// context.
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
-    /// Retrieves a `Vec<u8>` from the database using the provided `key`.
+    /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
     async fn read_multi_key_bytes(
         &self,
         keys: Vec<Vec<u8>>,
