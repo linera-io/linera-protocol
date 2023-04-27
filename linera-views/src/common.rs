@@ -145,7 +145,10 @@ pub trait KeyValueStoreClient {
     }
 
     /// Reads a single `key` and deserialize the result if present.
-    async fn read_multi_key<V: DeserializeOwned + Send>(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<V>>, Self::Error>
+    async fn read_multi_key<V: DeserializeOwned + Send>(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<V>>, Self::Error>
     where
         Self::Error: From<bcs::Error>,
     {
@@ -351,7 +354,10 @@ pub trait Context {
     }
 
     /// Reads a single `key` and deserialize the result if present.
-    async fn read_multi_key<V: DeserializeOwned + Send>(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<V>>, Self::Error>
+    async fn read_multi_key<V: DeserializeOwned + Send>(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<V>>, Self::Error>
     where
         Self::Error: From<bcs::Error>,
     {

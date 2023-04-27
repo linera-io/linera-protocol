@@ -266,7 +266,7 @@ where
             match entry {
                 None => {
                     return Err(ViewError::MissingEntries);
-                },
+                }
                 Some(value) => values.push(value),
             }
         }
