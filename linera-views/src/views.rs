@@ -93,6 +93,10 @@ pub enum ViewError {
     /// The database is corrupt: Entries don't have the expected hash.
     #[error("Inconsistent database entries")]
     InconsistentEntries,
+
+    /// The database is corrupt: Some entries are missing
+    #[error("Missing database entries")]
+    MissingEntries,
 }
 
 impl ViewError {

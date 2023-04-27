@@ -186,12 +186,11 @@ where
     /// # })
     /// ```
     pub async fn back(&self) -> Result<Option<T>, ViewError> {
-        let value = match self.new_back_values.back() {
+        Ok(match self.new_back_values.back() {
             Some(value) => Some(value.clone()),
             None if self.stored_count() > 0 => self.get(self.stored_indices.end - 1).await?,
             _ => None,
-        };
-        Ok(value)
+        })
     }
 
     /// Deletes the front value, if any.
@@ -256,11 +255,18 @@ where
     }
 
     async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
-        let mut values = Vec::with_capacity(range.len());
+        let count = range.len();
+        let mut keys = Vec::with_capacity(count);
         for index in range {
             let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
-            match self.context.read_key(&key).await? {
-                None => return Ok(values),
+            keys.push(key)
+        }
+        let mut values = Vec::with_capacity(count);
+        for entry in self.context.read_multi_key(keys).await? {
+            match entry {
+                None => {
+                    return Err(ViewError::MissingEntries);
+                }
                 Some(value) => values.push(value),
             }
         }

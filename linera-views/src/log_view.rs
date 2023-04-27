@@ -162,7 +162,7 @@ impl<C, T> LogView<C, T>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    T: Clone + DeserializeOwned + Serialize,
+    T: Clone + DeserializeOwned + Serialize + Send,
 {
     /// Reads the logged value with the given index (including staged ones).
     /// ```rust
@@ -189,13 +189,20 @@ where
     }
 
     async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
-        let mut values = Vec::with_capacity(range.len());
+        let count = range.len();
+        let mut keys = Vec::with_capacity(count);
         for index in range {
             let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
-            match self.context.read_key(&key).await? {
-                None => return Ok(values),
+            keys.push(key);
+        }
+        let mut values = Vec::with_capacity(count);
+        for entry in self.context.read_multi_key(keys).await? {
+            match entry {
+                None => {
+                    return Err(ViewError::MissingEntries);
+                }
                 Some(value) => values.push(value),
-            };
+            }
         }
         Ok(values)
     }
