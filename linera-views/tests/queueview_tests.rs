@@ -26,14 +26,14 @@ async fn queue_view_mutability_check() {
         let elements = view.queue.elements().await.unwrap();
         assert_eq!(elements, vector);
         //
-        let count_oper = rng.gen_range(0..25);
+        let count_oper = rng.gen_range(0, 25);
         let mut new_vector = vector.clone();
         for _ in 0..count_oper {
-            let thr = rng.gen_range(0..5);
+            let thr = rng.gen_range(0, 5);
             let count = view.queue.count();
             if thr == 0 {
                 // inserting random stuff
-                let n_ins = rng.gen_range(0..10);
+                let n_ins = rng.gen_range(0, 10);
                 for _ in 0..n_ins {
                     let val = rng.gen::<u8>();
                     view.queue.push_back(val);
@@ -43,7 +43,7 @@ async fn queue_view_mutability_check() {
             if thr == 1 {
                 // deleting some entries
                 if count > 0 {
-                    let n_remove = rng.gen_range(0..count);
+                    let n_remove = rng.gen_range(0, count);
                     for _ in 0..n_remove {
                         view.queue.delete_front();
                         // slow but we do not care for tests.
@@ -53,7 +53,7 @@ async fn queue_view_mutability_check() {
             }
             if thr == 2 && count > 0 {
                 // changing some random entries
-                let pos = rng.gen_range(0..count);
+                let pos = rng.gen_range(0, count);
                 let val = rng.gen::<u8>();
                 let mut iter = view.queue.iter_mut().await.unwrap();
                 (for _ in 0..pos {

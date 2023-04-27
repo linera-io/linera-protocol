@@ -2694,7 +2694,7 @@ dependencies = [
  "linera-views-derive",
  "linked-hash-map",
  "metrics",
- "rand 0.8.5",
+ "rand 0.7.3",
  "rocksdb",
  "serde",
  "sha3",
