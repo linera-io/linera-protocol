@@ -6,17 +6,17 @@
 // Export the system interface used by a user contract.
 wit_bindgen_host_wasmtime_rust::export!({
     custom_error: true,
-    paths: ["../linera-sdk/writable_system.wit"],
+    paths: ["writable_system.wit"],
 });
 
 // Export the system interface used by a user service.
-wit_bindgen_host_wasmtime_rust::export!("../linera-sdk/queryable_system.wit");
+wit_bindgen_host_wasmtime_rust::export!("queryable_system.wit");
 
 // Import the interface implemented by a user contract.
-wit_bindgen_host_wasmtime_rust::import!("../linera-sdk/contract.wit");
+wit_bindgen_host_wasmtime_rust::import!("contract.wit");
 
 // Import the interface implemented by a user service.
-wit_bindgen_host_wasmtime_rust::import!("../linera-sdk/service.wit");
+wit_bindgen_host_wasmtime_rust::import!("service.wit");
 
 #[path = "conversions_from_wit.rs"]
 mod conversions_from_wit;
