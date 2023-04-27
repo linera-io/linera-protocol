@@ -74,7 +74,7 @@ jobs:
         cargo test -p linera-execution --features wasmtime
 
   lint:
-    runs-on: ubuntu-latest-4-cores
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
