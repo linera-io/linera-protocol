@@ -46,12 +46,11 @@ sleep 3;
 KEY=$(./client --wallet wallet_2.json keygen)
 
 # Open chain on behalf of wallet 2.
-CHAIN_AND_CERT=$(./client --wallet wallet.json open_chain --to-public-key "$KEY")
-CHAIN=$(echo "$CHAIN_AND_CERT" | sed -n '1 p')
-CERT=$(echo "$CHAIN_AND_CERT" | sed -n '2 p')
+EFFECT_AND_CHAIN=$(./client --wallet wallet.json open_chain --to-public-key "$KEY")
+EFFECT=$(echo "$EFFECT_AND_CHAIN" | sed -n '1 p')
 
 # Assign newly created chain to unassigned key.
-./linera --wallet wallet_2.json --storage rocksdb:client_2.db assign --key "$KEY" --chain "$CHAIN" --certificate "$CERT"
+./linera --wallet wallet_2.json --storage rocksdb:client_2.db assign --key "$KEY" --effect-id "$EFFECT"
 
 read
 
