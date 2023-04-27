@@ -14,7 +14,7 @@ const GET_BALANCE = gql`
 `;
 
 const MAKE_PAYMENT = gql`
-  mutation ExecuteOperation($owner: AccountOwner, $amount: Amount, $targetAccount: Account) {
+  mutation Transfer($owner: AccountOwner, $amount: Amount, $targetAccount: Account) {
     transfer(owner: $owner, amount: $amount, targetAccount: $targetAccount)
   }
 `;
@@ -129,7 +129,7 @@ function App({ owner }) {
           <p>Loading...</p>
         )}
         {balanceError && (
-          <ErrorMessage>Failed to pull balance.. Re-trying...</ErrorMessage>
+          <ErrorMessage>Failed to pull balance. Re-trying...</ErrorMessage>
         )}
       </Card>
 

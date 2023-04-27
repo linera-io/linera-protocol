@@ -8,7 +8,7 @@ on port 8080.
 To access the fungible app there are three parameters:
 
 1. application-id: the ApplicationId for your app
-2. owner: see `./client wallet show`
+2. owner: see `./linera wallet show`
 3. port: optionally specify a port, if not, it will default to 8080.
 
 ```
@@ -34,7 +34,7 @@ Formats the project using `prettier`.
 ### `npm run build`
 
 Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+It bundles React in production mode and optimizes the build for the best performance.
 
 The build is minified and the filenames include the hashes.\
 Your app is ready to be deployed!

@@ -368,7 +368,7 @@ where
         self.subscribe_all(vec![self.chain_id]).await
     }
 
-    /// Subscribe to notifications for all validators.
+    /// Subscribes to notifications for all validators.
     pub async fn subscribe_all(&mut self, chain_ids: Vec<ChainId>) -> Result<NotificationStream> {
         let committee = self.local_committee().await?;
         let mut streams = Vec::new();
