@@ -43,10 +43,10 @@ done
 sleep 3;
 
 # Create second wallet with unassigned key.
-KEY=$(./client --wallet wallet_2.json keygen)
+KEY=$(./linera --wallet wallet_2.json keygen)
 
 # Open chain on behalf of wallet 2.
-EFFECT_AND_CHAIN=$(./client --wallet wallet.json open_chain --to-public-key "$KEY")
+EFFECT_AND_CHAIN=$(./linera --wallet wallet.json open_chain --to-public-key "$KEY")
 EFFECT=$(echo "$EFFECT_AND_CHAIN" | sed -n '1 p')
 
 # Assign newly created chain to unassigned key.

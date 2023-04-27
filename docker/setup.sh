@@ -46,10 +46,10 @@ VALIDATORS=($(validator_options))
 # Create configuration files for 1000 user chains.
 # * Private chain states are stored in one local wallet `wallet.json`.
 # * `genesis.json` will contain the initial balances of chains as well as the initial committee.
-./client \
+./linera \
     --wallet wallet.json \
-    --genesis genesis.json \
     create_genesis_config 1000 \
+    --genesis genesis.json \
     --initial-funding 100 \
     --committee committee.json
 
