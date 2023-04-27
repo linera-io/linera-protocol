@@ -128,7 +128,7 @@ where
     // Load some bytecode.
     let name_counter = match storage_kind {
         StorageKind::Simple => "counter",
-        StorageKind::View => "counter2",
+        StorageKind::View => "counter-views",
     };
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths(name_counter)?;

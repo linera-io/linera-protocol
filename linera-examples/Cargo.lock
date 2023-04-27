@@ -514,7 +514,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "counter2"
+name = "counter-views"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -773,7 +773,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "crowd-funding2"
+name = "crowd-funding-views"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -1176,7 +1176,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "fungible2"
+name = "fungible-views"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
@@ -2488,7 +2488,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "reentrant-counter2"
+name = "reentrant-counter-views"
 version = "0.1.0"
 dependencies = [
  "async-trait",

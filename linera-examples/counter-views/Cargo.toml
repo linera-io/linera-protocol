@@ -1,5 +1,5 @@
 [package]
-name = "counter2"
+name = "counter-views"
 version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
@@ -17,9 +17,9 @@ linera-sdk = { path = "../../linera-sdk", features = ["test"] }
 webassembly-test = "0.1.0"
 
 [[bin]]
-name = "counter2_contract"
+name = "counter_views_contract"
 path = "src/contract.rs"
 
 [[bin]]
-name = "counter2_service"
+name = "counter_views_service"
 path = "src/service.rs"

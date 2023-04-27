@@ -1,5 +1,5 @@
 [package]
-name = "fungible2"
+name = "fungible-views"
 version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
@@ -15,9 +15,9 @@ thiserror = "1.0.31"
 serde_json = "1.0.93"
 
 [[bin]]
-name = "fungible2_contract"
+name = "fungible_views_contract"
 path = "src/contract.rs"
 
 [[bin]]
-name = "fungible2_service"
+name = "fungible_views_service"
 path = "src/service.rs"

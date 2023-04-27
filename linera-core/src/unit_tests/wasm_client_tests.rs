@@ -336,7 +336,7 @@ where
     let (bytecode_id, certificate) = {
         let bytecode_name = match storage_kind {
             StorageKind::Simple => "reentrant-counter",
-            StorageKind::View => "reentrant-counter2",
+            StorageKind::View => "reentrant-counter-views",
         };
         let (contract_path, service_path) =
             linera_execution::wasm_test::get_example_bytecode_paths(bytecode_name)?;
@@ -455,7 +455,7 @@ where
     let (bytecode_id, pub_cert) = {
         let bytecode_name = match storage_kind {
             StorageKind::Simple => "fungible",
-            StorageKind::View => "fungible2",
+            StorageKind::View => "fungible-views",
         };
         let (contract_path, service_path) =
             linera_execution::wasm_test::get_example_bytecode_paths(bytecode_name)?;

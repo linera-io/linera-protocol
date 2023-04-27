@@ -2,16 +2,16 @@
 resolver = "2"
 members = [
         "counter",
-        "counter2",
+        "counter-views",
         "counter-graphql",
         "crowd-funding",
         "fungible",
         "meta-counter",
-        "counter2",
-        "crowd-funding2",
-        "fungible2",
+        "counter-views",
+        "crowd-funding-views",
+        "fungible-views",
         "reentrant-counter",
-        "reentrant-counter2",
+        "reentrant-counter-views",
         "social",
 ]
 
