@@ -57,7 +57,7 @@ trap 'kill $(jobs -p)' EXIT
 # Create configuration files for 10 user chains.
 # * Private chain states are stored in one local wallet `wallet.json`.
 # * `genesis.json` will contain the initial balances of chains as well as the initial committee.
-./linera --wallet wallet.json create_genesis_config 10 --genesis genesis.json --initial-funding 10 --committee committee.json
+./linera --wallet wallet.json create-genesis-config 10 --genesis genesis.json --initial-funding 10 --committee committee.json
 
 # Start servers and create initial chains in DB
 for I in 1 2 3 4
@@ -73,7 +73,7 @@ done
 # Command line prefix for client calls
 CLIENT=(./linera --storage rocksdb:linera.db --wallet wallet.json --max-pending-messages 10000)
 
-${CLIENT[@]} query_validators
+${CLIENT[@]} query-validators
 
 # Give some time for server startup
 sleep 1
@@ -81,16 +81,16 @@ sleep 1
 # Query balance for first and last user chain, root chains 0 and 9
 CHAIN1="e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
 CHAIN2="256e1dbc00482ddd619c293cc0df94d366afe7980022bb22d99e33036fd465dd"
-${CLIENT[@]} query_balance "$CHAIN1"
-${CLIENT[@]} query_balance "$CHAIN2"
+${CLIENT[@]} query-balance "$CHAIN1"
+${CLIENT[@]} query-balance "$CHAIN2"
 
 # Transfer 10 units then 5 back
 ${CLIENT[@]} transfer 10 --from "$CHAIN1" --to "$CHAIN2"
 ${CLIENT[@]} transfer 5 --from "$CHAIN2" --to "$CHAIN1"
 
 # Query balances again
-${CLIENT[@]} query_balance "$CHAIN1"
-${CLIENT[@]} query_balance "$CHAIN2"
+${CLIENT[@]} query-balance "$CHAIN1"
+${CLIENT[@]} query-balance "$CHAIN2"
 
 cd ../..
 ```
