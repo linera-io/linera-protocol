@@ -111,7 +111,7 @@ pub trait KeyValueStoreClient {
     /// Retrieves a `Vec<u8>` from the database using the provided `key`.
     async fn read_multi_key_bytes(
         &self,
-        key: Vec<Vec<u8>>,
+        keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
 
     /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
@@ -125,6 +125,10 @@ pub trait KeyValueStoreClient {
 
     /// Writes the `batch` in the database with `base_key` the base key of the entries for the journal.
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error>;
+
+    /// Clears any journal entry that may remain.
+    /// The journal is located at the `base_key`.
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error>;
 
     /// Reads a single `key` and deserialize the result if present.
     async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
@@ -140,9 +144,20 @@ pub trait KeyValueStoreClient {
         }
     }
 
-    /// Clears any journal entry that may remain.
-    /// The journal is located at the `base_key`.
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error>;
+    /// Reads a single `key` and deserialize the result if present.
+    async fn read_multi_key<V: DeserializeOwned + Send>(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<V>>, Self::Error>
+    where
+        Self::Error: From<bcs::Error>,
+    {
+        let mut values = Vec::with_capacity(keys.len());
+        for entry in self.read_multi_key_bytes(keys).await? {
+            values.push(match entry {
+                None => None,
+                Some(bytes) => Some(bcs::from_bytes(&bytes)?),
+            });
+        }
+        Ok(values)
+    }
 }
 
 #[doc(hidden)]
@@ -247,7 +262,7 @@ pub trait Context {
     /// Retrieves a `Vec<u8>` from the database using the provided `key`.
     async fn read_multi_key_bytes(
         &self,
-        key: Vec<Vec<u8>>,
+        keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
 
     /// Finds keys matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
@@ -333,6 +348,21 @@ pub trait Context {
             }
             None => Ok(None),
         }
+    }
+
+    /// Reads a single `key` and deserialize the result if present.
+    async fn read_multi_key<V: DeserializeOwned + Send>(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<V>>, Self::Error>
+    where
+        Self::Error: From<bcs::Error>,
+    {
+        let mut values = Vec::with_capacity(keys.len());
+        for entry in self.read_multi_key_bytes(keys).await? {
+            values.push(match entry {
+                None => None,
+                Some(bytes) => Some(bcs::from_bytes(&bytes)?),
+            });
+        }
+        Ok(values)
     }
 }
 
