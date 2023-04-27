@@ -718,7 +718,7 @@ enum ClientCommand {
     },
 
     /// Create an unassigned key-pair.
-    KeyGen,
+    Keygen,
 
     /// Assign a key to a chain given a certificate.
     Assign {
@@ -1237,7 +1237,7 @@ where
                 context.save_wallet();
             }
 
-            CreateGenesisConfig { .. } | KeyGen | Wallet(_) | Project(_) => unreachable!(),
+            CreateGenesisConfig { .. } | Keygen | Wallet(_) | Project(_) => unreachable!(),
         }
         Ok(())
     }
@@ -1305,7 +1305,7 @@ async fn main() -> Result<(), anyhow::Error> {
         },
 
         command => match command {
-            ClientCommand::KeyGen => {
+            ClientCommand::Keygen => {
                 let mut context = ClientContext::from_options(&options)?;
                 let key_pair = KeyPair::generate();
                 let public = key_pair.public();
