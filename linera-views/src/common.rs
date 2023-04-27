@@ -144,7 +144,7 @@ pub trait KeyValueStoreClient {
         }
     }
 
-    /// Reads a single `key` and deserialize the result if present.
+    /// Reads multiple `keys` and deserializes the results if present.
     async fn read_multi_key<V: DeserializeOwned + Send>(
         &self,
         keys: Vec<Vec<u8>>,
