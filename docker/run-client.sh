@@ -6,7 +6,7 @@
 sleep 30
 
 # Command line prefix for client calls
-CLIENT=(./client --storage rocksdb:client.db --wallet wallet.json --genesis genesis.json)
+CLIENT=(./client --storage rocksdb:linera.db --wallet wallet.json --genesis genesis.json)
 
 # Query balance for first and last user chain, root chains 0 and 999
 CHAIN1="e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
