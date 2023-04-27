@@ -478,8 +478,8 @@ impl Client {
         .await;
     }
 
-    async fn key_gen(&self) -> anyhow::Result<Owner> {
-        let stdout = Self::run_command(self.run().await.arg("key-gen")).await;
+    async fn keygen(&self) -> anyhow::Result<Owner> {
+        let stdout = Self::run_command(self.run().await.arg("keygen")).await;
         Ok(Owner::from_str(stdout.trim())?)
     }
 
@@ -831,7 +831,7 @@ impl NodeService {
                     &error_string[(error_string.len() - 5000)..]
                 );
             }
-            panic!("publish_and_create failed: {}", error_string);
+            panic!("publishBytecode failed: {}", error_string);
         }
         serde_json::from_value(response_body["data"]["publishBytecode"].clone()).unwrap()
     }
@@ -863,7 +863,7 @@ impl NodeService {
             .unwrap();
         let response_body: Value = response.json().await.unwrap();
         if let Some(errors) = response_body.get("errors") {
-            panic!("create_application failed: {}", errors);
+            panic!("createApplication failed: {}", errors);
         }
         serde_json::from_value(response_body["data"]["createApplication"].clone()).unwrap()
     }
@@ -993,7 +993,7 @@ async fn test_end_to_end_multiple_wallets() {
     let chain_1 = *client_1.get_wallet().chain_ids().first().unwrap();
 
     // Generate a key for Client 2.
-    let client_2_key = client_2.key_gen().await.unwrap();
+    let client_2_key = client_2.keygen().await.unwrap();
 
     // Open chain on behalf of Client 2.
     let (effect_id, chain_2) = client_1
@@ -1122,7 +1122,7 @@ async fn test_end_to_end_social_user_pub_sub() {
     let (contract, service) = runner.build_application("social").await;
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
-    let client2key = client2.key_gen().await.unwrap();
+    let client2key = client2.keygen().await.unwrap();
 
     // Open chain on behalf of Client 2.
     let (effect_id, chain2) = client1.open_chain(chain1, Some(client2key)).await.unwrap();

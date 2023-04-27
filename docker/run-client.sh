@@ -22,7 +22,7 @@ ${CLIENT[@]} transfer 5 --from "$CHAIN2" --to "$CHAIN1"
 ${CLIENT[@]} benchmark --max-in-flight 50
 
 # Create derived chain
-CHAIN3="`${CLIENT[@]} open_chain --from "$CHAIN1"`"
+CHAIN3="`${CLIENT[@]} open-chain --from "$CHAIN1"`"
 
 # Inspect state of derived chain
 fgrep '"chain_id":"'$CHAIN3'"' wallet.json
