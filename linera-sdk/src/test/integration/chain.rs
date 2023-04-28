@@ -19,11 +19,8 @@ use linera_execution::{
     system::{SystemChannel, SystemEffect, SystemOperation},
     Bytecode, Effect, Query, Response,
 };
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-use tokio::sync::Mutex;
+use std::{path::PathBuf, sync::Arc};
+use tokio::{fs, sync::Mutex};
 
 /// A reference to a single microchain inside a [`TestValidator`].
 pub struct ActiveChain {
@@ -166,12 +163,11 @@ impl ActiveChain {
     ///
     /// Returns a tuple with the loaded contract and service [`Bytecode`]s.
     async fn find_current_bytecodes(&self) -> (Bytecode, Bytecode) {
-        let mut cargo_manifest =
-            Manifest::from_path("Cargo.toml").expect("Failed to load Cargo.toml manifest");
-
-        cargo_manifest
-            .complete_from_path(Path::new("."))
-            .expect("Failed to populate manifest with information inferred from the repository");
+        let manifest_path = fs::canonicalize("Cargo.toml")
+            .await
+            .expect("Failed to get absolute path of Cargo manifest");
+        let cargo_manifest =
+            Manifest::from_path(manifest_path).expect("Failed to load Cargo.toml manifest");
 
         let binaries: Vec<_> = cargo_manifest
             .bin
