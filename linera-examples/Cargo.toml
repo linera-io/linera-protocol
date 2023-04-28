@@ -19,7 +19,7 @@ members = [
 async-graphql = { version = "5.0.7", default-features = false }
 async-trait = "0.1.52"
 bcs = "0.1.3"
-futures = "0.3.17"
+futures = "0.3.24"
 futures-util = "0.3.26"
 hex = "0.4.3"
 linera-sdk = { path = "../linera-sdk" }
@@ -27,7 +27,7 @@ linera-views = { path = "../linera-views" }
 log = "0.4.17"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.93"
-thiserror = "1.0.31"
+thiserror = "1.0.38"
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 webassembly-test = "0.1.0"
 
