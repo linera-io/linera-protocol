@@ -26,15 +26,14 @@ linera_sdk::contract!(CrowdFunding<ViewStorageContext>);
 impl Contract for CrowdFunding<ViewStorageContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
+    type InitializationArguments = InitializationArguments;
 
     async fn initialize(
         &mut self,
         _context: &OperationContext,
-        argument: &[u8],
+        argument: InitializationArguments,
     ) -> Result<ExecutionResult, Self::Error> {
-        self.initialization_arguments.set(Some(
-            serde_json::from_slice(argument).map_err(Error::InvalidInitializationArguments)?,
-        ));
+        self.initialization_arguments.set(Some(argument));
 
         ensure!(
             self.get_initialization_arguments().deadline > system_api::current_system_time(),
@@ -420,7 +419,7 @@ pub enum Error {
 
     /// Failure to deserialize the initialization arguments.
     #[error("Crowd-funding campaign arguments are invalid")]
-    InvalidInitializationArguments(serde_json::Error),
+    InvalidInitializationArguments(#[from] serde_json::Error),
 
     /// Failure to deserialize the parameters.
     #[error("Crowd-funding parameters are invalid")]

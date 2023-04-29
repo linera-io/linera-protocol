@@ -2079,6 +2079,7 @@ dependencies = [
  "linera-sdk",
  "log",
  "serde",
+ "serde_json",
  "thiserror",
  "webassembly-test",
 ]

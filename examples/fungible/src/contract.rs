@@ -27,14 +27,13 @@ linera_sdk::contract!(FungibleToken<ViewStorageContext>);
 impl Contract for FungibleToken<ViewStorageContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
+    type InitializationArguments = InitialState;
 
     async fn initialize(
         &mut self,
         context: &OperationContext,
-        argument: &[u8],
+        mut state: InitialState,
     ) -> Result<ExecutionResult, Self::Error> {
-        let mut state: InitialState =
-            serde_json::from_slice(argument).map_err(Error::InvalidInitialState)?;
         // If initial accounts are empty, creator gets 1M tokens to act like a faucet.
         if state.accounts.is_empty() {
             if let Some(owner) = context.authenticated_signer {
@@ -304,7 +303,7 @@ impl FungibleToken<ViewStorageContext> {
 pub enum Error {
     /// Invalid serialized initial state.
     #[error("Serialized initial state is invalid")]
-    InvalidInitialState(#[source] serde_json::Error),
+    InvalidInitialState(#[from] serde_json::Error),
 
     /// Invalid serialized [`SignedTransfer`].
     #[error("Operation is not a valid serialized signed transfer")]

@@ -19,13 +19,14 @@ linera_sdk::contract!(Counter);
 impl Contract for Counter {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
+    type InitializationArguments = u64;
 
     async fn initialize(
         &mut self,
         _context: &OperationContext,
-        argument: &[u8],
+        argument: u64,
     ) -> Result<ExecutionResult, Self::Error> {
-        self.value = serde_json::from_slice(argument)?;
+        self.value = argument;
         Ok(ExecutionResult::default())
     }
 

@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use linera_sdk::{
     base::{ApplicationId, ChainId, SessionId},
     contract::system_api,
-    ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
     OperationContext, Session, SessionCallResult, SimpleStateStorage,
 };
 use thiserror::Error;
@@ -28,13 +28,13 @@ impl MetaCounter {
 impl Contract for MetaCounter {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
+    type InitializationArguments = ();
 
     async fn initialize(
         &mut self,
         _context: &OperationContext,
-        argument: &[u8],
+        _argument: (),
     ) -> Result<ExecutionResult, Self::Error> {
-        ensure!(argument.is_empty(), Error::Initialization);
         Self::counter_id()?;
         Ok(ExecutionResult::default())
     }
@@ -94,7 +94,7 @@ pub enum Error {
     SessionsNotSupported,
 
     #[error("Error during the initialization")]
-    Initialization,
+    Initialization(#[from] serde_json::Error),
 
     #[error("Invalid application parameters")]
     Parameters,

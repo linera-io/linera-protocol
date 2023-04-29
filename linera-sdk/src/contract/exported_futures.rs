@@ -150,7 +150,12 @@ where
         Initialize {
             future: ExportedFuture::new(Application::Storage::execute_with_state(
                 move |application| {
-                    async move { application.initialize(&context.into(), &argument).await }.boxed()
+                    async move {
+                        let init_args: Application::InitializationArguments =
+                            serde_json::from_slice(&argument)?;
+                        application.initialize(&context.into(), init_args).await
+                    }
+                    .boxed()
                 },
             )),
             _application: PhantomData,

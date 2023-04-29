@@ -20,13 +20,14 @@ linera_sdk::contract!(ReentrantCounter<ViewStorageContext>);
 impl Contract for ReentrantCounter<ViewStorageContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
+    type InitializationArguments = u128;
 
     async fn initialize(
         &mut self,
         _context: &OperationContext,
-        argument: &[u8],
+        argument: u128,
     ) -> Result<ExecutionResult, Self::Error> {
-        self.value.set(serde_json::from_slice(argument)?);
+        self.value.set(argument);
         Ok(ExecutionResult::default())
     }
 

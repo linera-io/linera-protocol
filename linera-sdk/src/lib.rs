@@ -55,7 +55,7 @@ use linera_base::{
     data_types::BlockHeight,
     identifiers::{ApplicationId, ChainId, ChannelName, Destination, EffectId, Owner, SessionId},
 };
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{error::Error, sync::Arc};
 
 pub use self::{
@@ -80,9 +80,11 @@ pub struct ViewStateStorage<A>(std::marker::PhantomData<A>);
 #[async_trait]
 pub trait Contract: Sized {
     /// Message reports for application execution errors.
-    type Error: Error;
+    type Error: Error + From<serde_json::Error>;
     /// The desired storage backend to use to store the application's state.
     type Storage;
+    /// Initialization Arguments.
+    type InitializationArguments: DeserializeOwned + Send;
 
     /// Initializes the application on the chain that created it.
     ///
@@ -98,7 +100,7 @@ pub trait Contract: Sized {
     async fn initialize(
         &mut self,
         context: &OperationContext,
-        argument: &[u8],
+        argument: Self::InitializationArguments,
     ) -> Result<ExecutionResult, Self::Error>;
 
     /// Applies an operation from the current block.

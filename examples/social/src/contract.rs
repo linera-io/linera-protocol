@@ -33,11 +33,12 @@ where
 {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
+    type InitializationArguments = ();
 
     async fn initialize(
         &mut self,
         _context: &OperationContext,
-        _argument: &[u8],
+        _argument: (),
     ) -> Result<ExecutionResult, Self::Error> {
         Ok(ExecutionResult::default())
     }
@@ -159,6 +160,10 @@ pub enum Error {
     /// View error.
     #[error(transparent)]
     View(#[from] ViewError),
+
+    /// Invalid serialized initialization argument.
+    #[error("Invalid initialization argument")]
+    InvalidInitializationArgument(#[from] serde_json::Error),
 }
 
 #[cfg(test)]
