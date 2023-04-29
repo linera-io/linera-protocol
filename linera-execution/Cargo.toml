@@ -6,6 +6,7 @@ authors = ["Linera <contact@linera.io>"]
 readme = "README.md"
 repository = "https://github.com/linera-io/linera-protocol"
 homepage = "https://linera.io"
+documentation = "https://docs.rs/linera-execution/latest/linera_execution/"
 license = "Apache-2.0"
 edition = "2021"
 
