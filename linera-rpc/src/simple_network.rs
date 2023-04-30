@@ -2,24 +2,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{io, time::Duration};
-
-use async_trait::async_trait;
-use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
-use tokio::time;
-use tracing::{debug, error, info, instrument, warn};
-
-use linera_base::identifiers::ChainId;
-use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
-use linera_core::{
-    data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{NodeError, NotificationStream, ValidatorNode},
-    worker::{NetworkActions, ValidatorWorker, WorkerError, WorkerState},
-};
-use linera_storage::Store;
-use linera_views::views::ViewError;
-use tokio::sync::oneshot;
-
 use crate::{
     codec,
     config::{
@@ -30,6 +12,21 @@ use crate::{
     transport::{MessageHandler, ServerHandle, TransportProtocol},
     RpcMessage,
 };
+use async_trait::async_trait;
+use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
+use linera_base::identifiers::ChainId;
+use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
+use linera_core::{
+    data_types::{ChainInfoQuery, ChainInfoResponse},
+    node::{NodeError, NotificationStream, ValidatorNode},
+    worker::{NetworkActions, ValidatorWorker, WorkerError, WorkerState},
+};
+use linera_storage::Store;
+use linera_views::views::ViewError;
+use rand::Rng;
+use std::{io, time::Duration};
+use tokio::{sync::oneshot, time};
+use tracing::{debug, error, info, instrument, warn};
 
 #[derive(Clone)]
 pub struct Server<S> {
@@ -80,12 +77,14 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    #[allow(clippy::too_many_arguments)]
     async fn forward_cross_chain_queries(
         nickname: String,
         network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
         cross_chain_max_retries: u32,
         cross_chain_retry_delay: Duration,
         cross_chain_sender_delay: Duration,
+        cross_chain_sender_failure_rate: f32,
         this_shard: ShardId,
         mut receiver: mpsc::Receiver<(RpcMessage, ShardId)>,
     ) {
@@ -96,6 +95,11 @@ where
             .expect("Initialization should not fail");
 
         while let Some((message, shard_id)) = receiver.next().await {
+            if rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate {
+                warn!("Dropped 1 cross-message intentionally.");
+                continue;
+            }
+
             let shard = network.shard(shard_id);
             let remote_address = format!("{}:{}", shard.host, shard.port);
 
@@ -151,6 +155,7 @@ where
             self.cross_chain_config.max_retries,
             Duration::from_millis(self.cross_chain_config.retry_delay_ms),
             Duration::from_millis(self.cross_chain_config.sender_delay_ms),
+            self.cross_chain_config.sender_failure_rate,
             self.shard_id,
             cross_chain_receiver,
         ));
