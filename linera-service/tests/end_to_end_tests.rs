@@ -382,7 +382,7 @@ impl Client {
                 return NodeService {
                     port,
                     chain_id,
-                    _child: child,
+                    child,
                 };
             } else {
                 warn!("Waiting for node service to start");
@@ -523,14 +523,14 @@ impl Client {
 }
 
 struct Validator {
-    _proxy: Child,
+    proxy: Child,
     servers: Vec<Child>,
 }
 
 impl Validator {
     fn new(proxy: Child) -> Self {
         Self {
-            _proxy: proxy,
+            proxy,
             servers: vec![],
         }
     }
@@ -542,6 +542,17 @@ impl Validator {
     fn kill_server(&mut self, index: usize) {
         self.servers.remove(index);
     }
+
+    fn assert_is_running(&mut self) {
+        if let Some(status) = self.proxy.try_wait().unwrap() {
+            assert!(status.success());
+        }
+        for child in &mut self.servers {
+            if let Some(status) = child.try_wait().unwrap() {
+                assert!(status.success());
+            }
+        }
+    }
 }
 
 struct TestRunner {
@@ -550,6 +561,14 @@ struct TestRunner {
     next_client_id: usize,
     num_initial_validators: usize,
     local_net: BTreeMap<usize, Validator>,
+}
+
+impl Drop for TestRunner {
+    fn drop(&mut self) {
+        for validator in self.local_net.values_mut() {
+            validator.assert_is_running();
+        }
+    }
 }
 
 impl TestRunner {
@@ -792,10 +811,16 @@ impl TestRunner {
 struct NodeService {
     chain_id: Option<ChainId>,
     port: u16,
-    _child: Child,
+    child: Child,
 }
 
 impl NodeService {
+    fn assert_is_running(&mut self) {
+        if let Some(status) = self.child.try_wait().unwrap() {
+            assert!(status.success());
+        }
+    }
+
     async fn make_application(&self, application_id: &str) -> Application {
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
@@ -953,7 +978,7 @@ async fn test_end_to_end_counter() {
     let application_id = client
         .publish_and_create(contract, service, original_counter_value, None)
         .await;
-    let node_service = client.run_node_service(None, None).await;
+    let mut node_service = client.run_node_service(None, None).await;
 
     let application = node_service.make_application(&application_id).await;
 
@@ -964,6 +989,8 @@ async fn test_end_to_end_counter() {
 
     let counter_value = application.get_counter_value().await;
     assert_eq!(counter_value, original_counter_value + increment);
+
+    node_service.assert_is_running();
 }
 
 #[test_log::test(tokio::test)]
@@ -986,7 +1013,7 @@ async fn test_end_to_end_counter_publish_create() {
     let application_id = client
         .create_application(bytecode_id, original_counter_value, None)
         .await;
-    let node_service = client.run_node_service(None, None).await;
+    let mut node_service = client.run_node_service(None, None).await;
 
     let application = node_service.make_application(&application_id).await;
 
@@ -997,6 +1024,8 @@ async fn test_end_to_end_counter_publish_create() {
 
     let counter_value = application.get_counter_value().await;
     assert_eq!(counter_value, original_counter_value + increment);
+
+    node_service.assert_is_running();
 }
 
 #[test_log::test(tokio::test)]
@@ -1154,8 +1183,8 @@ async fn test_end_to_end_social_user_pub_sub() {
     // Assign chain_2 to client_2_key.
     assert_eq!(chain2, client2.assign(client2key, effect_id).await.unwrap());
 
-    let node_service1 = client1.run_node_service(chain1, 8080).await;
-    let node_service2 = client2.run_node_service(chain2, 8081).await;
+    let mut node_service1 = client1.run_node_service(chain1, 8080).await;
+    let mut node_service2 = client2.run_node_service(chain2, 8081).await;
 
     let bytecode_id = node_service1.publish_bytecode(contract, service).await;
     let application_id = node_service1.create_application(&bytecode_id).await;
@@ -1190,4 +1219,7 @@ async fn test_end_to_end_social_user_pub_sub() {
         }
         panic!("Failed to confirm post");
     }
+
+    node_service1.assert_is_running();
+    node_service2.assert_is_running();
 }
