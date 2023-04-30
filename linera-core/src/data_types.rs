@@ -190,9 +190,12 @@ impl CrossChainRequest {
     /// Returns true if the cross-chain request has messages lower or equal than `height`.
     pub fn has_messages_lower_or_equal_than(&self, height: BlockHeight) -> bool {
         match self {
-            CrossChainRequest::UpdateRecipient { height_map, .. } => height_map
-                .iter()
-                .any(|(_, heights)| matches!(heights.get(0), Some(h) if *h <= height)),
+            CrossChainRequest::UpdateRecipient { height_map, .. } => {
+                height_map.iter().any(|(_, heights)| {
+                    debug_assert!(heights.windows(2).all(|w| w[0] <= w[1]));
+                    matches!(heights.get(0), Some(h) if *h <= height)
+                })
+            }
             _ => false,
         }
     }
