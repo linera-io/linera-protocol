@@ -52,12 +52,12 @@ jobs:
         cargo build --locked --bin test-runner
     - name: Run WASM application tests
       run: |
-        cd linera-examples
+        cd examples
         CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=../target/debug/test-runner cargo test --target wasm32-unknown-unknown
         cargo test --target x86_64-unknown-linux-gnu
     - name: Build example applications
       run: |
-        cd linera-examples
+        cd examples
         cargo build --release --target wasm32-unknown-unknown
     - name: Compile the workspace with the default features (test)
       run: |
@@ -111,7 +111,7 @@ jobs:
         cargo machete
     - name: Run WASM application lints
       run: |
-        cd linera-examples
+        cd examples
         cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
         cargo clippy --all-targets --all-features --target wasm32-unknown-unknown --locked
     - name: Run clippy

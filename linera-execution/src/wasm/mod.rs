@@ -263,7 +263,7 @@ pub mod test {
     fn build_applications() -> Result<(), std::io::Error> {
         tracing::info!("Building example applications with cargo");
         let output = std::process::Command::new("cargo")
-            .current_dir("../linera-examples")
+            .current_dir("../examples")
             .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
             .output()?;
         if !output.status.success() {
@@ -282,10 +282,8 @@ pub mod test {
         static INSTANCE: OnceCell<()> = OnceCell::new();
         INSTANCE.get_or_try_init(build_applications)?;
         Ok((
-            format!(
-                "../linera-examples/target/wasm32-unknown-unknown/release/{name}_contract.wasm"
-            ),
-            format!("../linera-examples/target/wasm32-unknown-unknown/release/{name}_service.wasm"),
+            format!("../examples/target/wasm32-unknown-unknown/release/{name}_contract.wasm"),
+            format!("../examples/target/wasm32-unknown-unknown/release/{name}_service.wasm"),
         ))
     }
 

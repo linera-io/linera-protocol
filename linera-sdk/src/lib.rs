@@ -32,7 +32,7 @@
 //!
 //! # Examples
 //!
-//! The [`linera-examples`](https://github.com/linera-io/linera-protocol/tree/main/linera-examples)
+//! The [`examples`](https://github.com/linera-io/linera-protocol/tree/main/examples)
 //! directory contains some example applications.
 
 #![deny(missing_docs)]

@@ -31,7 +31,7 @@ The Linera protocol repository is broken down into the following crates and subd
 
 9. [`linera-sdk`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_sdk/index.html) The library to develop Linera applications written in Rust for the WASM virtual machine.
 
-10. [`linera-examples`](./linera-examples) Examples of Linera applications written in Rust.
+10. [`examples`](./examples) Examples of Linera applications written in Rust.
 
 ## Quickstart with the Linera service CLI
 
