@@ -364,7 +364,7 @@ where
                     .push(notifier);
             } else {
                 // No need to wait. Also, cross-chain requests may not trigger the
-                // notifier later if we register it.
+                // notifier later, even if we register it.
                 if let Err(()) = notifier.send(()) {
                     warn!("Failed to notify message delivery to caller");
                 }
