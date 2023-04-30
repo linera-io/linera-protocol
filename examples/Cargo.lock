@@ -931,6 +931,7 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "bcs",
+ "hex",
  "linera-sdk",
  "linera-views",
  "serde",

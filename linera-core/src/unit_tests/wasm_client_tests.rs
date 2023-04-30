@@ -414,7 +414,8 @@ where
         fungible::AccountOwner::User(Owner::from(receiver.key_pair().await?.public()));
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from(1_000_000))]);
-    let initial_value_bytes = bcs::to_bytes(&accounts)?;
+    let state = fungible::InitialState { accounts };
+    let initial_value_bytes = bcs::to_bytes(&state)?;
     let (application_id, _cert) = sender
         .create_application(bytecode_id, vec![], initial_value_bytes, vec![])
         .await?;

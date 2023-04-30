@@ -8,7 +8,8 @@ mod state;
 use self::state::FungibleToken;
 use async_trait::async_trait;
 use fungible::{
-    Account, AccountOwner, ApplicationCall, Destination, Effect, Operation, SessionCall,
+    Account, AccountOwner, ApplicationCall, Destination, Effect, InitialState, Operation,
+    SessionCall,
 };
 use linera_sdk::{
     base::{Amount, ApplicationId, Owner, SessionId},
@@ -16,7 +17,7 @@ use linera_sdk::{
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
     OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
-use std::{collections::BTreeMap, str::FromStr};
+use std::str::FromStr;
 use thiserror::Error;
 
 linera_sdk::contract!(FungibleToken<ViewStorageContext>);
@@ -31,18 +32,18 @@ impl Contract for FungibleToken<ViewStorageContext> {
         context: &OperationContext,
         argument: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        let mut accounts: BTreeMap<AccountOwner, Amount> =
+        let mut state: InitialState =
             bcs::from_bytes(argument).map_err(Error::InvalidInitialState)?;
         // If initial accounts are empty, creator gets 1M tokens to act like a faucet.
-        if accounts.is_empty() {
+        if state.accounts.is_empty() {
             if let Some(owner) = context.authenticated_signer {
-                accounts.insert(
+                state.accounts.insert(
                     AccountOwner::User(owner),
                     Amount::from_str("1000000").unwrap(),
                 );
             }
         }
-        self.initialize_accounts(accounts).await;
+        self.initialize_accounts(state).await;
         Ok(ExecutionResult::default())
     }
 

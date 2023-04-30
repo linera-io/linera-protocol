@@ -3,7 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::InputType;
-use linera_base::identifiers::{ChainId, EffectId, Owner};
+use fungible::AccountOwner;
+use linera_base::{
+    data_types::Amount,
+    identifiers::{ChainId, EffectId, Owner},
+};
 use linera_execution::Bytecode;
 use linera_service::config::WalletState;
 use once_cell::sync::{Lazy, OnceCell};
@@ -378,6 +382,13 @@ impl Client {
         WalletState::read(self.tmp_dir.path().join(&self.wallet).as_path()).unwrap()
     }
 
+    fn get_owner(&self) -> Option<Owner> {
+        let wallet = self.get_wallet();
+        let chain_id = wallet.default_chain()?;
+        let public_key = wallet.get(chain_id)?.key_pair.as_ref()?.public();
+        Some(public_key.into())
+    }
+
     async fn check_for_chain_in_wallet(&self, chain: ChainId) -> bool {
         self.get_wallet().get(chain).is_some()
     }
@@ -749,7 +760,7 @@ impl NodeService {
                 self.chain_id
             );
         }
-        panic!("Could not find application URI");
+        panic!("Could not find application URI: {application_id}");
     }
 
     async fn try_get_applications_uri(&self) -> HashMap<String, String> {
@@ -828,6 +839,15 @@ struct Application {
 }
 
 impl Application {
+    async fn get_fungible_account_owner_amount(&self, account_owner: &AccountOwner) -> Amount {
+        let query = format!(
+            "query {{ accounts(accountOwner: {} ) }}",
+            account_owner.to_value()
+        );
+        let response_body = self.query_application(&query).await;
+        serde_json::from_value(response_body["accounts"].clone()).unwrap_or_default()
+    }
+
     async fn get_counter_value(&self) -> u64 {
         let data = self.query_application("query { value }").await;
         serde_json::from_value(data["value"].clone()).unwrap()
@@ -856,7 +876,7 @@ impl Application {
     }
 
     async fn increment_counter_value(&self, increment: u64) {
-        let query_string = format!("mutation {{  executeOperation(operation: {})}}", increment);
+        let query_string = format!("mutation {{ executeOperation(operation: {}) }}", increment);
         self.query_application(&query_string).await;
     }
 }
@@ -1088,7 +1108,7 @@ async fn test_end_to_end_social_user_pub_sub() {
     let chain1 = client1.get_wallet().default_chain().unwrap();
     let client2key = client2.keygen().await.unwrap();
 
-    // Open chain on behalf of Client 2.
+    // Create chain2 using client1.
     let (effect_id, chain2) = client1.open_chain(chain1, Some(client2key)).await.unwrap();
 
     // Assign chain_2 to client_2_key.
@@ -1129,6 +1149,145 @@ async fn test_end_to_end_social_user_pub_sub() {
         }
         panic!("Failed to confirm post");
     }
+
+    node_service1.assert_is_running();
+    node_service2.assert_is_running();
+}
+
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_fungible() {
+    use fungible::{AccountOwner, InitialState};
+    use linera_base::data_types::Amount;
+    use std::collections::BTreeMap;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let network = Network::Grpc;
+    let mut runner = TestRunner::new(network, 4);
+    let client1 = runner.make_client(network);
+    let client2 = runner.make_client(network);
+
+    runner.generate_initial_validator_config().await;
+    client1.create_genesis_config().await;
+    client2.init().await;
+
+    // Create initial server and client config.
+    runner.run_local_net().await;
+    let (contract, service) = runner.build_application("fungible").await;
+
+    let chain1 = client1.get_wallet().default_chain().unwrap();
+    let client2key = client2.keygen().await.unwrap();
+
+    // Create chain2 using client1.
+    let (effect_id, chain2) = client1.open_chain(chain1, Some(client2key)).await.unwrap();
+
+    // Assign chain2 to client2key.
+    assert_eq!(chain2, client2.assign(client2key, effect_id).await.unwrap());
+
+    // The players
+    let owner1 = client1.get_owner().expect("Failed to get the owner");
+    let account_owner1 = AccountOwner::User(owner1);
+    let owner2 = client2.get_owner().expect("Failed to get the owner");
+    let account_owner2 = AccountOwner::User(owner2);
+    // The initial accounts on chain1
+    let mut accounts = BTreeMap::new();
+    let amount1 = Amount::from(5);
+    let amount2 = Amount::from(2);
+    accounts.insert(account_owner1, amount1);
+    accounts.insert(account_owner2, amount2);
+    let state = InitialState { accounts };
+
+    // Setting up the application and verifying
+    let application_id = client1
+        .publish_and_create(contract, service, state, None)
+        .await;
+
+    let mut node_service1 = client1.run_node_service(chain1, 8080).await;
+    let mut node_service2 = client2.run_node_service(chain2, 8081).await;
+
+    let app1 = node_service1.make_application(&application_id).await;
+
+    let value = app1
+        .get_fungible_account_owner_amount(&account_owner1)
+        .await;
+    assert_eq!(value, amount1);
+
+    // Transferring
+    let destination2 = format!(
+        "{{ chainId: \"{}\", owner: {} }}",
+        chain2,
+        account_owner2.to_value()
+    );
+
+    let amount_transfer = Amount::from(1);
+    let query_string = format!(
+        "mutation {{ transfer(owner: {}, amount: {}, targetAccount: {}) }}",
+        account_owner1.to_value(),
+        amount_transfer,
+        destination2
+    );
+    app1.query_application(&query_string).await;
+
+    // Checking the final values on chain1 and chain2.
+    let value = app1
+        .get_fungible_account_owner_amount(&account_owner1)
+        .await;
+    assert_eq!(value, Amount::from(4));
+
+    let value = app1
+        .get_fungible_account_owner_amount(&account_owner2)
+        .await;
+    assert_eq!(value, Amount::from(2));
+
+    // Fungible didn't exist on chain2 initially but now it does and we can talk to it.
+    let app2 = node_service2.make_application(&application_id).await;
+
+    let value = app2
+        .get_fungible_account_owner_amount(&account_owner1)
+        .await;
+    assert_eq!(value, Amount::from(0));
+
+    let value = app2
+        .get_fungible_account_owner_amount(&account_owner2)
+        .await;
+    assert_eq!(value, Amount::from(1));
+
+    // Moving the money back to chain1 (but same owner -- it will be stuck there until we
+    // add "claim" operation to fungible).
+    let destination2 = format!(
+        "{{chainId: \"{}\", owner: {}}}",
+        chain1,
+        account_owner2.to_value()
+    );
+
+    let amount_transfer = Amount::from(1);
+    let query_string = format!(
+        "mutation {{ transfer(owner: {}, amount: {}, targetAccount: {}) }}",
+        account_owner2.to_value(),
+        amount_transfer,
+        destination2
+    );
+    app2.query_application(&query_string).await;
+
+    // Checking the final value
+    let value = app1
+        .get_fungible_account_owner_amount(&account_owner1)
+        .await;
+    assert_eq!(value, Amount::from(4));
+
+    let value = app1
+        .get_fungible_account_owner_amount(&account_owner2)
+        .await;
+    assert_eq!(value, Amount::from(3));
+
+    let value = app2
+        .get_fungible_account_owner_amount(&account_owner1)
+        .await;
+    assert_eq!(value, Amount::from(0));
+
+    let value = app2
+        .get_fungible_account_owner_amount(&account_owner2)
+        .await;
+    assert_eq!(value, Amount::from(0));
 
     node_service1.assert_is_running();
     node_service2.assert_is_running();
