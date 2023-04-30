@@ -751,7 +751,7 @@ impl TestRunner {
     }
 
     async fn build_application(&self, name: &str) -> (PathBuf, PathBuf) {
-        let examples_dir = env::current_dir().unwrap().join("../linera-examples/");
+        let examples_dir = env::current_dir().unwrap().join("../examples/");
         Command::new("cargo")
             .current_dir(self.tmp_dir.path().canonicalize().unwrap())
             .arg("build")

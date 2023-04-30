@@ -121,7 +121,7 @@ cargo build --release --bin test-runner
 After that, the WASM tests can be executed with:
 
 ```
-cd linera-examples
+cd examples
 cargo test --target wasm32-unknown-unknown
 ```
 
@@ -132,10 +132,10 @@ runner = "/path/to/repository/target/release/test-runner"
 ```
 (See the [documentation of Cargo](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure) for more context.)
 
-Some tests require the application examples from `linera-examples` to be compiled. If needed, this
+Some tests require the application examples from `examples` to be compiled. If needed, this
 can be done manually with
 ```
-cd linera-examples
+cd examples
 cargo build --release --target wasm32-unknown-unknown
 ```
 The Rust flags are suggested to reduce the size of the WASM bytecodes.

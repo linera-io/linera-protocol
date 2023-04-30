@@ -13,7 +13,7 @@ members = [
         "linera-views-derive",
 ]
 exclude = [
-        "linera-examples",
+        "examples",
 ]
 resolver = "2"
 
@@ -109,8 +109,8 @@ linera-storage = { version = "0.1.0", path = "./linera-storage", default-feature
 linera-views = { version = "0.1.0", path = "./linera-views" }
 linera-views-derive = { version = "0.1.0", path = "./linera-views-derive" }
 
-fungible = { path = "./linera-examples/fungible" }
-social = { path = "./linera-examples/social" }
+fungible = { path = "./examples/fungible" }
+social = { path = "./examples/social" }
 
 [profile.release]
 debug = true
