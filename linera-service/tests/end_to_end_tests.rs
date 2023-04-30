@@ -103,6 +103,8 @@ mod aws_test {
 
     #[test_log::test(tokio::test)]
     async fn test_examples_in_readme_with_dynamo_db() -> anyhow::Result<()> {
+        let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
         let _localstack_guard = LocalStackTestContext::new().await?;
         let dir = tempdir().unwrap();
         let file = std::io::BufReader::new(std::fs::File::open("../README.md")?);
@@ -173,7 +175,13 @@ async fn cargo_force_build_binary(name: &'static str) -> PathBuf {
         .args(["--features", "benchmark"])
         .args(["--bin", name]);
     info!("Running compiler: {:?}", build_command);
-    build_command.spawn().unwrap().wait().await.unwrap();
+    assert!(build_command
+        .spawn()
+        .unwrap()
+        .wait()
+        .await
+        .unwrap()
+        .success());
     if is_release {
         env::current_dir()
             .unwrap()
@@ -247,7 +255,8 @@ impl Client {
     }
 
     async fn create_genesis_config(&self) {
-        self.run()
+        assert!(self
+            .run()
             .await
             .args(["create-genesis-config", "10"])
             .args(["--initial-funding", "10"])
@@ -257,11 +266,13 @@ impl Client {
             .unwrap()
             .wait()
             .await
-            .unwrap();
+            .unwrap()
+            .success());
     }
 
     async fn init(&self) {
-        self.run()
+        assert!(self
+            .run()
             .await
             .args(["wallet", "init"])
             .args(["--genesis", "genesis.json"])
@@ -269,7 +280,8 @@ impl Client {
             .unwrap()
             .wait()
             .await
-            .unwrap();
+            .unwrap()
+            .success());
     }
 
     async fn run_command(command: &mut Command) -> String {
@@ -281,9 +293,8 @@ impl Client {
             .wait_with_output()
             .await
             .unwrap();
-        assert_eq!(
-            output.status.code(),
-            Some(0),
+        assert!(
+            output.status.success(),
             "Command {:?} failed; stderr:\n{}\n(end stderr)",
             command,
             String::from_utf8_lossy(&output.stderr),
@@ -414,7 +425,8 @@ impl Client {
     }
 
     async fn benchmark(&self, max_in_flight: usize) {
-        self.run_with_storage()
+        assert!(self
+            .run_with_storage()
             .await
             .arg("benchmark")
             .args(["--max-in-flight", &max_in_flight.to_string()])
@@ -422,7 +434,8 @@ impl Client {
             .unwrap()
             .wait()
             .await
-            .unwrap();
+            .unwrap()
+            .success());
     }
 
     async fn open_chain(
@@ -647,6 +660,7 @@ impl TestRunner {
             .spawn()?
             .wait_with_output()
             .await?;
+        assert!(output.status.success());
         Ok(String::from_utf8_lossy(output.stdout.as_slice())
             .to_string()
             .trim()
@@ -752,7 +766,7 @@ impl TestRunner {
 
     async fn build_application(&self, name: &str) -> (PathBuf, PathBuf) {
         let examples_dir = env::current_dir().unwrap().join("../examples/");
-        Command::new("cargo")
+        assert!(Command::new("cargo")
             .current_dir(self.tmp_dir.path().canonicalize().unwrap())
             .arg("build")
             .arg("--release")
@@ -764,7 +778,8 @@ impl TestRunner {
             .unwrap()
             .wait()
             .await
-            .unwrap();
+            .unwrap()
+            .success());
 
         let release_dir = examples_dir.join("target/wasm32-unknown-unknown/release");
         let contract = release_dir.join(format!("{}_contract.wasm", name.replace('-', "_")));
