@@ -99,6 +99,9 @@ jobs:
     - name: Install cargo-all-features
       run: |
         cargo install --git https://github.com/ma2bd/cargo-all-features --branch workspace_metadata
+    - name: Install cargo-rdme
+      run: |
+        cargo install cargo-rdme
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
       with:
@@ -109,6 +112,9 @@ jobs:
     - name: Check for unused dependencies
       run: |
         cargo machete
+    - name: Check for outdated README.md
+      run: |
+        (set -e; for I in linera-*; do echo $I; cargo rdme --check --no-fail-on-warnings -w $I; done)
     - name: Run WASM application lints
       run: |
         cd examples
