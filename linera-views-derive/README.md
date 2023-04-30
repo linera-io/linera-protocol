@@ -1,6 +1,6 @@
 <!-- cargo-rdme start -->
 
-This module defines the storage abstractions for individual chains and certificates.
+The procedural macros for the crate `linera-views`.
 
 <!-- cargo-rdme end -->
 
