@@ -2554,6 +2554,7 @@ dependencies = [
  "linera-views",
  "proptest",
  "prost 0.11.9",
+ "rand 0.7.3",
  "serde",
  "serde-reflection",
  "serde_yaml",

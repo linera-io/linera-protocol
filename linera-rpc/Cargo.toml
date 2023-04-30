@@ -33,6 +33,7 @@ linera-views = { workspace = true }
 tracing = { workspace = true }
 proptest = { workspace = true, optional = true }
 prost = { workspace = true }
+rand = { workspace = true }
 serde = { workspace = true }
 structopt = { workspace = true }
 thiserror = { workspace = true }

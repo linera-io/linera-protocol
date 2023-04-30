@@ -39,6 +39,7 @@ use linera_core::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
+use rand::Rng;
 use std::{
     fmt::Debug,
     net::{AddrParseError, SocketAddr},
@@ -139,6 +140,7 @@ where
                 cross_chain_config.max_retries,
                 Duration::from_millis(cross_chain_config.retry_delay_ms),
                 Duration::from_millis(cross_chain_config.sender_delay_ms),
+                cross_chain_config.sender_failure_rate,
                 shard_id,
                 cross_chain_receiver,
             )
@@ -239,18 +241,25 @@ where
     }
 
     #[instrument(skip_all, fields(nickname, %this_shard))]
+    #[allow(clippy::too_many_arguments)]
     async fn forward_cross_chain_queries(
         nickname: String,
         network: ValidatorInternalNetworkConfig,
         cross_chain_max_retries: u32,
         cross_chain_retry_delay: Duration,
         cross_chain_sender_delay: Duration,
+        cross_chain_sender_failure_rate: f32,
         this_shard: ShardId,
         mut receiver: mpsc::Receiver<(linera_core::data_types::CrossChainRequest, ShardId)>,
     ) {
         let pool = ConnectionPool::default();
 
         while let Some((cross_chain_request, shard_id)) = receiver.next().await {
+            if rand::thread_rng().gen::<f32>() < cross_chain_sender_failure_rate {
+                warn!("Dropped 1 cross-message intentionally.");
+                continue;
+            }
+
             let shard = network.shard(shard_id);
             let remote_address = format!("http://{}", shard.address());
 

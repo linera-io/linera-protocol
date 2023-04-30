@@ -23,6 +23,10 @@ pub struct CrossChainConfig {
     /// Introduce a delay before sending every cross-chain message (e.g. for testing purpose).
     #[structopt(long = "cross-chain-sender-delay-ms", default_value = "0")]
     pub(crate) sender_delay_ms: u64,
+
+    /// Drop cross-chain messages randomly at the given rate (0 <= rate < 1) (meant for testing).
+    #[structopt(long = "cross-chain-sender-failure-rate", default_value = "0.0")]
+    pub(crate) sender_failure_rate: f32,
 }
 
 #[derive(Clone, Debug, StructOpt)]
