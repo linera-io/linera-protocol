@@ -1,8 +1,8 @@
 #!/bin/bash
 
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+ROOT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )
 
-if cat <<EOF > $SCRIPT_DIR/.git/hooks/pre-push
+if cat <<EOF > $ROOT_DIR/.git/hooks/pre-push
 #!/bin/sh
 #
 # This pre-push hook runs a cargo-clippy and cargo +nightly fmt before pushing code to remote.
@@ -15,7 +15,7 @@ cargo +nightly fmt -- --check --config unstable_features=true --config imports_g
 cargo +nightly udeps --all-targets || { echo "Error: dependency check failed - aborting push." ; exit 1 ; }
 EOF
 then
-	chmod +x $SCRIPT_DIR/.git/hooks/pre-push
+	chmod +x $ROOT_DIR/.git/hooks/pre-push
 else
 	echo "Failed to write pre-push hook"
 	exit 1
