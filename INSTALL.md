@@ -1,4 +1,4 @@
-# Installation for Mac OS X
+# Installation for Mac OS (Intel / M1 / M2)
 
 ## Basics
 
@@ -8,9 +8,7 @@
 * `brew install rustup-init`
 * `rustup target add wasm32-unknown-unknown`
 * Protoc
-    - `curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.11/protoc-21.11-osx-x86_64.zip`
-    - `unzip protoc-21.11-osx-x86_64.zip -d $HOME/.local`
-    - If `~/.local` is not in your path, add it: `export PATH="$PATH:$HOME/.local/bin"`
+    - `brew install protobuf`
 ## Service
 
 * `brew install python3`
