@@ -91,7 +91,7 @@ where
     publisher.receive_certificate(cert).await.unwrap();
     publisher.process_inbox().await.unwrap();
 
-    creator.synchronize_and_recompute_balance().await.unwrap();
+    creator.synchronize_from_validators().await.unwrap();
     creator.process_inbox().await.unwrap();
 
     let initial_value = 10_u128;
@@ -215,7 +215,7 @@ where
     publisher.process_inbox().await.unwrap();
 
     // Creator receives the bytecodes then creates the app.
-    creator.synchronize_and_recompute_balance().await.unwrap();
+    creator.synchronize_from_validators().await.unwrap();
     creator.process_inbox().await.unwrap();
     let initial_value = 10_u128;
     let (application_id1, _) = creator
@@ -353,7 +353,7 @@ where
     publisher.process_inbox().await.unwrap();
 
     // Creator receives the bytecodes then creates the app.
-    creator.synchronize_and_recompute_balance().await.unwrap();
+    creator.synchronize_from_validators().await.unwrap();
     creator.process_inbox().await.unwrap();
     let initial_value = 100_u128;
     let (application_id, _) = creator
@@ -508,7 +508,7 @@ where
                 if matches!(applications[0], UserApplicationDescription{ bytecode_id: b_id, .. } if b_id == bytecode_id)
             ) && *destination == Destination::Recipient(receiver.chain_id())
         }));
-    receiver.synchronize_and_recompute_balance().await.unwrap();
+    receiver.synchronize_from_validators().await.unwrap();
     receiver.receive_certificate(cert).await.unwrap();
     let certs = receiver.process_inbox().await.unwrap();
     assert_eq!(certs.len(), 1);
@@ -663,7 +663,7 @@ where
         .await?;
 
     // Subscribe the receiver. This also registers the application.
-    sender.synchronize_and_recompute_balance().await.unwrap();
+    sender.synchronize_from_validators().await.unwrap();
     sender.receive_certificate(cert).await.unwrap();
     let _certs = sender.process_inbox().await.unwrap();
 
@@ -715,7 +715,7 @@ where
         .await?;
 
     // Unsubscribe the receiver.
-    sender.synchronize_and_recompute_balance().await.unwrap();
+    sender.synchronize_from_validators().await.unwrap();
     sender.receive_certificate(cert).await.unwrap();
     let _certs = sender.process_inbox().await.unwrap();
 

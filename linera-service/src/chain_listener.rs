@@ -56,7 +56,7 @@ where
             }
             let mut client = self.client.lock().await;
             if tracker.insert(notification.clone()) {
-                if let Err(e) = client.synchronize_and_recompute_balance().await {
+                if let Err(e) = client.synchronize_from_validators().await {
                     warn!(
                         "Failed to synchronize and recompute balance for notification {:?} \
                             with error: {:?}",
