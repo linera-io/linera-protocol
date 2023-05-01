@@ -955,7 +955,7 @@ where
     }
 
     /// Attempts to update all validators about the local chain.
-    pub async fn update_validators_about_local_chain(&mut self) -> Result<()> {
+    pub async fn update_validators(&mut self) -> Result<()> {
         let mut committee = self.local_committee().await?;
         committee.quorum_threshold = committee.total_votes;
         self.communicate_chain_updates(

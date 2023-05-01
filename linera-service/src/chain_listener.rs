@@ -68,7 +68,7 @@ where
                 }
                 match &notification.reason {
                     Reason::NewBlock { .. } => {
-                        if let Err(e) = client.update_validators_about_local_chain().await {
+                        if let Err(e) = client.update_validators().await {
                             warn!(
                                 "Failed to update validators about the local chain after \
                                          receiving notification {:?} with error: {:?}",
