@@ -27,6 +27,7 @@ use linera_execution::{
 };
 use linera_rpc::node_provider::NodeProvider;
 use linera_service::{
+    chain_listener::ChainListenerConfig,
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     node_service::NodeService,
     project::Project,
@@ -672,6 +673,9 @@ enum ClientCommand {
         /// Chain id
         chain_id: Option<ChainId>,
 
+        #[structopt(flatten)]
+        config: ChainListenerConfig,
+
         /// The port on which to run the server
         #[structopt(long = "port", default_value = "8080")]
         port: NonZeroU16,
@@ -1032,9 +1036,13 @@ where
                 // Not saving the wallet because `connect()` has no effect on `chain_client`.
             }
 
-            Service { chain_id, port } => {
+            Service {
+                chain_id,
+                config,
+                port,
+            } => {
                 let chain_client = context.make_chain_client(storage, chain_id);
-                let service = NodeService::new(chain_client, port);
+                let service = NodeService::new(chain_client, config, port);
                 service
                     .run(context, |context, client| {
                         Box::pin(async {

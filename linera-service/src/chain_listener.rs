@@ -9,11 +9,24 @@ use linera_core::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
-use std::{ops::DerefMut, sync::Arc};
+use std::{ops::DerefMut, sync::Arc, time::Duration};
+use structopt::StructOpt;
 use tracing::{debug, warn};
+
+#[derive(Debug, Clone, StructOpt)]
+pub struct ChainListenerConfig {
+    /// Wait before processing any notification (useful for testing).
+    #[structopt(long = "listener-delay-before-ms", default_value = "0")]
+    pub(crate) delay_before_ms: u64,
+
+    /// Wait after processing any notification (useful for rate limiting).
+    #[structopt(long = "listener-delay-after-ms", default_value = "0")]
+    pub(crate) delay_after_ms: u64,
+}
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts appropriately.
 pub struct ChainListener<P, S> {
+    config: ChainListenerConfig,
     client: Arc<Mutex<ChainClient<P, S>>>,
 }
 
@@ -24,8 +37,8 @@ where
     ViewError: From<S::ContextError>,
 {
     /// Creates a new instance of the node service given a client chain.
-    pub fn new(client: Arc<Mutex<ChainClient<P, S>>>) -> Self {
-        Self { client }
+    pub fn new(config: ChainListenerConfig, client: Arc<Mutex<ChainClient<P, S>>>) -> Self {
+        Self { config, client }
     }
 
     /// Runs the chain leader.
@@ -38,6 +51,9 @@ where
         let mut tracker = NotificationTracker::default();
         while let Some(notification) = notification_stream.next().await {
             debug!("Received notification: {:?}", notification);
+            if self.config.delay_before_ms > 0 {
+                tokio::time::sleep(Duration::from_millis(self.config.delay_before_ms)).await;
+            }
             let mut client = self.client.lock().await;
             if tracker.insert(notification.clone()) {
                 if let Err(e) = client.synchronize_and_recompute_balance().await {
@@ -71,6 +87,10 @@ where
                     }
                 }
                 wallet_updater(&mut context, client.deref_mut()).await;
+
+                if self.config.delay_after_ms > 0 {
+                    tokio::time::sleep(Duration::from_millis(self.config.delay_after_ms)).await;
+                }
             }
         }
 
