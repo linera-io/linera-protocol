@@ -16,7 +16,7 @@ use axum::{
     response::IntoResponse,
     Extension, Router, Server,
 };
-use futures::lock::Mutex;
+use futures::{future, lock::Mutex};
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::Amount,
@@ -476,13 +476,20 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        let sync_fut = ChainLeader::new(self.client.clone()).run(context, wallet_updater);
+        let sync_fut = Box::pin(ChainLeader::new(self.client.clone()).run(context, wallet_updater));
         let serve_fut =
             Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
 
-        let (serve_response, sync_response) = futures::join!(serve_fut, sync_fut);
-        serve_response?;
-        sync_response?;
+        match future::select(sync_fut, serve_fut).await {
+            future::Either::Left((value, _)) => {
+                value?;
+                error!("Chain listener was terminated.");
+            }
+            future::Either::Right((value, _)) => {
+                value?;
+                error!("Node service was terminated.");
+            }
+        }
 
         Ok(())
     }
