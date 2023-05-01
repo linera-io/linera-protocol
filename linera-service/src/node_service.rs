@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::chain_listener::ChainListener;
+use crate::chain_listener::{ChainListener, ChainListenerConfig};
 use async_graphql::{
     futures_util::Stream,
     http::GraphiQLSource,
@@ -415,6 +415,7 @@ async fn graphiql(uri: Uri) -> impl IntoResponse {
 /// The node service is primarily used to explore the state of a chain in GraphQL.
 pub struct NodeService<P, S> {
     client: Arc<Mutex<ChainClient<P, S>>>,
+    config: ChainListenerConfig,
     port: NonZeroU16,
 }
 
@@ -422,6 +423,7 @@ impl<P, S> Clone for NodeService<P, S> {
     fn clone(&self) -> Self {
         Self {
             client: self.client.clone(),
+            config: self.config.clone(),
             port: self.port,
         }
     }
@@ -434,9 +436,13 @@ where
     ViewError: From<S::ContextError>,
 {
     /// Creates a new instance of the node service given a client chain and a port.
-    pub fn new(client: ChainClient<P, S>, port: NonZeroU16) -> Self {
+    pub fn new(client: ChainClient<P, S>, config: ChainListenerConfig, port: NonZeroU16) -> Self {
         let client = Arc::new(Mutex::new(client));
-        Self { client, port }
+        Self {
+            client,
+            config,
+            port,
+        }
     }
 
     fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S>, SubscriptionRoot<P, S>> {
@@ -476,8 +482,9 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        let sync_fut =
-            Box::pin(ChainListener::new(self.client.clone()).run(context, wallet_updater));
+        let sync_fut = Box::pin(
+            ChainListener::new(self.config, self.client.clone()).run(context, wallet_updater),
+        );
         let serve_fut =
             Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
 

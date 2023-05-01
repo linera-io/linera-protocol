@@ -39,6 +39,10 @@ const CARGO_ENV: &str = "INTEGRATION_TEST_CARGO_PARAMS";
 /// to the binary when starting a server.
 const SERVER_ENV: &str = "INTEGRATION_TEST_SERVER_PARAMS";
 
+/// The name of the environment variable that allows specifying additional arguments to be passed
+/// to the node-service command of the client.
+const CLIENT_SERVICE_ENV: &str = "INTEGRATION_TEST_CLIENT_SERVICE_PARAMS";
+
 #[derive(Copy, Clone)]
 enum Network {
     Grpc,
@@ -270,10 +274,12 @@ impl Client {
     ) -> NodeService {
         let chain_id = chain_id.into();
         let port = port.into().unwrap_or(8080);
-        let child = self
-            .run_with_storage()
-            .await
-            .arg("service")
+        let mut command = self.run_with_storage().await;
+        command.arg("service");
+        if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {
+            command.args(var.split_whitespace());
+        }
+        let child = command
             .args(chain_id.as_ref().map(ChainId::to_string))
             .args(["--port".to_string(), port.to_string()])
             .spawn()
