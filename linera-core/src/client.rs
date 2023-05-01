@@ -991,7 +991,7 @@ where
     }
 
     /// Attempts to synchronize with validators and re-compute our balance.
-    pub async fn synchronize_and_recompute_balance(&mut self) -> Result<Balance> {
+    pub async fn synchronize_from_validators(&mut self) -> Result<Balance> {
         self.find_received_certificates().await?;
         self.prepare_chain().await?;
         self.local_balance().await

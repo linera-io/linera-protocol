@@ -476,7 +476,7 @@ impl ClientContext {
         info!("{}", "Bytecode published successfully!".green().bold());
 
         info!("Synchronizing...");
-        chain_client.synchronize_and_recompute_balance().await?;
+        chain_client.synchronize_from_validators().await?;
         chain_client.process_inbox().await?;
         Ok(bytecode_id)
     }
@@ -850,10 +850,7 @@ where
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Synchronize chain information");
                 let time_start = Instant::now();
-                let balance = chain_client
-                    .synchronize_and_recompute_balance()
-                    .await
-                    .unwrap();
+                let balance = chain_client.synchronize_from_validators().await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Chain balance synchronized after {} us", time_total);
                 println!("{}", balance);
@@ -1087,7 +1084,7 @@ where
                 };
 
                 info!("Synchronizing...");
-                chain_client.synchronize_and_recompute_balance().await?;
+                chain_client.synchronize_from_validators().await?;
                 chain_client.process_inbox().await?;
 
                 info!("Creating application...");
