@@ -12,12 +12,12 @@ use linera_views::views::ViewError;
 use std::{ops::DerefMut, sync::Arc};
 use tracing::{debug, warn};
 
-/// A `ChainLeader` is a process that listens to notifications from validators and reacts appropriately.
-pub struct ChainLeader<P, S> {
+/// A `ChainListener` is a process that listens to notifications from validators and reacts appropriately.
+pub struct ChainListener<P, S> {
     client: Arc<Mutex<ChainClient<P, S>>>,
 }
 
-impl<P, S> ChainLeader<P, S>
+impl<P, S> ChainListener<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Store + Clone + Send + Sync + 'static,

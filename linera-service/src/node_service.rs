@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::chain_leader::ChainLeader;
+use crate::chain_listener::ChainListener;
 use async_graphql::{
     futures_util::Stream,
     http::GraphiQLSource,
@@ -476,7 +476,8 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        let sync_fut = Box::pin(ChainLeader::new(self.client.clone()).run(context, wallet_updater));
+        let sync_fut =
+            Box::pin(ChainListener::new(self.client.clone()).run(context, wallet_updater));
         let serve_fut =
             Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
 
