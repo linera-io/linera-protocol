@@ -214,10 +214,7 @@ impl ClientContext {
         for chain_id in self.wallet_state.chain_ids() {
             let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
             chain_client.process_inbox().await.unwrap();
-            chain_client
-                .update_validators_about_local_chain()
-                .await
-                .unwrap();
+            chain_client.update_validators().await.unwrap();
             self.update_wallet_from_client(&mut chain_client).await;
         }
     }
