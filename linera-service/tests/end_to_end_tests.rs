@@ -761,16 +761,11 @@ impl NodeService {
         } else {
             "query { applications { id link }}".to_string()
         };
-        let query = json!({ "query": query_string });
-        let client = reqwest::Client::new();
-        let response = client
-            .post(format!("http://localhost:{}/", self.port))
-            .json(&query)
-            .send()
-            .await
-            .unwrap();
-        let body: Value = response.json().await.unwrap();
-        body["data"]["applications"]
+        let response = self.query(&query_string).await;
+        if let Some(errors) = response.get("errors") {
+            panic!("query application failed: {}", errors);
+        }
+        response["data"]["applications"]
             .as_array()
             .unwrap()
             .iter()
@@ -790,8 +785,8 @@ impl NodeService {
             contract_code.to_value(),
             service_code.to_value(),
         );
-        let response_body = self.query(&query_string).await;
-        if let Some(errors) = response_body.get("errors") {
+        let response = self.query(&query_string).await;
+        if let Some(errors) = response.get("errors") {
             let mut error_string = errors.to_string();
             if error_string.len() > 10000 {
                 error_string = format!(
@@ -802,7 +797,7 @@ impl NodeService {
             }
             panic!("publishBytecode failed: {}", error_string);
         }
-        serde_json::from_value(response_body["data"]["publishBytecode"].clone()).unwrap()
+        serde_json::from_value(response["data"]["publishBytecode"].clone()).unwrap()
     }
 
     async fn query(&self, query_string: &str) -> Value {
@@ -810,6 +805,13 @@ impl NodeService {
         let url = format!("http://localhost:{}/", self.port);
         let client = reqwest::Client::new();
         let response = client.post(url).json(&query).send().await.unwrap();
+        if !response.status().is_success() {
+            panic!(
+                "Query \"{}\" failed: {}",
+                query_string.get(..200).unwrap_or(query_string),
+                response.text().await.unwrap()
+            );
+        }
         response.json().await.unwrap()
     }
 
@@ -822,19 +824,11 @@ impl NodeService {
                 requiredApplicationIds: []) \
             }}"
         );
-        let query = json!({ "query": query_string });
-        let client = reqwest::Client::new();
-        let response = client
-            .post(format!("http://localhost:{}/", self.port))
-            .json(&query)
-            .send()
-            .await
-            .unwrap();
-        let response_body: Value = response.json().await.unwrap();
-        if let Some(errors) = response_body.get("errors") {
+        let response = self.query(&query_string).await;
+        if let Some(errors) = response.get("errors") {
             panic!("createApplication failed: {}", errors);
         }
-        serde_json::from_value(response_body["data"]["createApplication"].clone()).unwrap()
+        serde_json::from_value(response["data"]["createApplication"].clone()).unwrap()
     }
 }
 
@@ -844,8 +838,11 @@ struct Application {
 
 impl Application {
     async fn get_counter_value(&self) -> u64 {
-        let response_body = self.query_application("query { value }").await;
-        serde_json::from_value(response_body["data"]["value"].clone()).unwrap()
+        let response = self.query_application("query { value }").await;
+        if let Some(errors) = response.get("errors") {
+            panic!("query value failed: {}", errors);
+        }
+        serde_json::from_value(response["data"]["value"].clone()).unwrap()
     }
 
     async fn query_application(&self, query_string: &str) -> Value {
@@ -855,7 +852,7 @@ impl Application {
         if !response.status().is_success() {
             panic!(
                 "Query \"{}\" failed: {}",
-                query_string,
+                query_string.get(..200).unwrap_or(query_string),
                 response.text().await.unwrap()
             );
         }
@@ -867,9 +864,10 @@ impl Application {
             "mutation {{  executeOperation(operation: {{ increment: {} }})}}",
             increment
         );
-        let query = json!({ "query": query_string });
-        let client = reqwest::Client::new();
-        client.post(&self.uri).json(&query).send().await.unwrap();
+        let response = self.query_application(&query_string).await;
+        if let Some(errors) = response.get("errors") {
+            panic!("query failed: {}", errors);
+        }
     }
 }
 
@@ -1106,16 +1104,19 @@ async fn test_end_to_end_social_user_pub_sub() {
     let app1 = node_service1.make_application(&application_id).await;
     let subscribe = format!("mutation {{ subscribe(chainId: \"{}\") }}", chain2);
     let response = app1.query_application(&subscribe).await;
+    assert_eq!(response.get("errors"), None);
     let hash = &response["data"];
 
     // The returned hash should now be the latest one.
     let query = format!("query {{ chain(chainId: \"{chain1}\") {{ tipState {{ blockHash }} }} }}");
     let response = node_service1.query(&query).await;
+    assert_eq!(response.get("errors"), None);
     assert_eq!(*hash, response["data"]["chain"]["tipState"]["blockHash"]);
 
     let app2 = node_service2.make_application(&application_id).await;
     let post = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
-    app2.query_application(post).await;
+    let response = app2.query_application(post).await;
+    assert_eq!(response.get("errors"), None);
 
     let query = "query { receivedPostsKeys(count: 5) { author, index } }";
     let expected_response = json!({"data": { "receivedPostsKeys": [
@@ -1125,6 +1126,7 @@ async fn test_end_to_end_social_user_pub_sub() {
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let response = app1.query_application(query).await;
+            assert_eq!(response.get("errors"), None);
             if response == expected_response {
                 info!("Confirmed post");
                 break 'success;
