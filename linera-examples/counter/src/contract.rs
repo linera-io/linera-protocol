@@ -12,6 +12,7 @@ use linera_sdk::{
     ExecutionResult, OperationContext, Session, SessionCallResult, SimpleStateStorage,
 };
 use thiserror::Error;
+use crate::state::CounterOperation;
 
 linera_sdk::contract!(Counter);
 
@@ -34,8 +35,8 @@ impl Contract for Counter {
         _context: &OperationContext,
         operation: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        let increment: u128 = bcs::from_bytes(operation)?;
-        self.value += increment;
+        let counter_operation: CounterOperation = bcs::from_bytes(operation)?;
+        self.value += counter_operation.increment;
         Ok(ExecutionResult::default())
     }
 
@@ -54,9 +55,9 @@ impl Contract for Counter {
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
         log::error!("received {:?}", argument);
-        let increment: u128 = bcs::from_bytes(argument)?;
-        log::error!("incrementing by {:?}", increment);
-        self.value += increment;
+        let counter_operation: CounterOperation = bcs::from_bytes(argument)?;
+        log::error!("incrementing by {:?}", counter_operation);
+        self.value += counter_operation.increment;
         Ok(ApplicationCallResult {
             value: bcs::to_bytes(&self.value).expect("Serialization should not fail"),
             ..ApplicationCallResult::default()
@@ -103,10 +104,10 @@ mod tests {
 
     #[webassembly_test]
     fn operation() {
-        let initial_value = 72_u128;
+        let initial_value = 72_u64;
         let mut counter = create_and_initialize_counter(initial_value);
 
-        let increment = 42_308_u128;
+        let increment = 42_308_u64;
         let operation = bcs::to_bytes(&increment).expect("Increment value is not serializable");
 
         let result = counter
@@ -121,7 +122,7 @@ mod tests {
 
     #[webassembly_test]
     fn effect() {
-        let initial_value = 72_u128;
+        let initial_value = 72_u64;
         let mut counter = create_and_initialize_counter(initial_value);
 
         let result = counter
@@ -135,10 +136,10 @@ mod tests {
 
     #[webassembly_test]
     fn cross_application_call() {
-        let initial_value = 2_845_u128;
+        let initial_value = 2_845_u64;
         let mut counter = create_and_initialize_counter(initial_value);
 
-        let increment = 8_u128;
+        let increment = 8_u64;
         let argument = bcs::to_bytes(&increment).expect("Increment value is not serializable");
 
         let result = counter
@@ -160,7 +161,7 @@ mod tests {
 
     #[webassembly_test]
     fn sessions() {
-        let initial_value = 72_u128;
+        let initial_value = 72_u64;
         let mut counter = create_and_initialize_counter(initial_value);
 
         let result = counter
@@ -172,7 +173,7 @@ mod tests {
         assert_eq!(counter.value, initial_value);
     }
 
-    fn create_and_initialize_counter(initial_value: u128) -> Counter {
+    fn create_and_initialize_counter(initial_value: u64) -> Counter {
         let mut counter = Counter::default();
         let initial_argument =
             bcs::to_bytes(&initial_value).expect("Initial value is not serializable");

@@ -421,27 +421,12 @@ checksum = "5827cebf4670468b8772dd191856768aedcb1b0278a04f989f7766351917b9dc"
 name = "counter"
 version = "0.1.0"
 dependencies = [
+ "async-graphql",
  "async-trait",
  "bcs",
  "futures",
  "linera-sdk",
  "log",
- "serde",
- "thiserror",
- "webassembly-test",
-]
-
-[[package]]
-name = "counter-graphql"
-version = "0.1.0"
-dependencies = [
- "async-graphql",
- "async-trait",
- "bcs",
- "futures",
- "hex",
- "linera-sdk",
- "linera-views",
  "serde",
  "serde_json",
  "thiserror",
@@ -2324,9 +2309,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.93"
+version = "1.0.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cad406b69c91885b5107daf2c29572f6c8cdb3c66826821e286c533490c0bc76"
+checksum = "057d394a50403bcac12672b2b18fb387ab6d289d957dab67dd201875391e52f1"
 dependencies = [
  "itoa",
  "ryu",
