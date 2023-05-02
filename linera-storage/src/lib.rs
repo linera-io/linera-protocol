@@ -73,13 +73,13 @@ pub trait Store: Sized {
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError>;
 
     /// Writes the given value.
-    async fn write_value(&self, value: HashedValue) -> Result<(), ViewError>;
+    async fn write_value(&self, value: &HashedValue) -> Result<(), ViewError>;
 
     /// Reads the certificate with the given hash.
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError>;
 
     /// Writes the given certificate.
-    async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError>;
+    async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
     async fn load_active_chain(
@@ -272,12 +272,12 @@ where
         Ok(value.with_hash_unchecked(hash))
     }
 
-    async fn write_value(&self, value: HashedValue) -> Result<(), ViewError> {
+    async fn write_value(&self, value: &HashedValue) -> Result<(), ViewError> {
         let id = value.block().chain_id.to_string();
         increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         let mut batch = Batch::new();
-        batch.put_key_value(value_key.to_vec(), &value)?;
+        batch.put_key_value(value_key.to_vec(), value)?;
         self.client.client.write_batch(batch, &[]).await?;
         Ok(())
     }
@@ -305,16 +305,15 @@ where
             .ok_or(ViewError::InconsistentEntries)?)
     }
 
-    async fn write_certificate(&self, certificate: Certificate) -> Result<(), ViewError> {
+    async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError> {
         let id = certificate.value.block().chain_id.to_string();
         increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id)]);
         let hash = certificate.value.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
-        let (cert, value) = certificate.split();
         let mut batch = Batch::new();
-        batch.put_key_value(cert_key.to_vec(), &cert)?;
-        batch.put_key_value(value_key.to_vec(), &value)?;
+        batch.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
+        batch.put_key_value(value_key.to_vec(), &certificate.value)?;
         self.client.client.write_batch(batch, &[]).await?;
         Ok(())
     }

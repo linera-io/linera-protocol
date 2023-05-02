@@ -539,7 +539,7 @@ where
             if let Some(blob) =
                 Self::try_download_blob_from(name, &mut client, chain_id, location).await
             {
-                storage.write_value(blob.clone()).await?;
+                storage.write_value(&blob).await?;
                 return Ok(Some(blob));
             }
         }
