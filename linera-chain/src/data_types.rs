@@ -550,33 +550,30 @@ impl Certificate {
 
     /// Verifies the certificate.
     pub fn check<'a>(&'a self, committee: &Committee) -> Result<&'a HashedValue, ChainError> {
-        check_signatures(&self.lite(), &self.signatures, committee)?;
+        check_signatures(&self.lite_value(), &self.signatures, committee)?;
         Ok(&self.value)
     }
 
     /// Returns the certificate without the full value.
     pub fn without_value(&self) -> LiteCertificate {
         LiteCertificate {
-            value: self.lite(),
+            value: self.lite_value(),
             signatures: self.signatures.clone(),
         }
     }
 
-    pub fn lite(&self) -> LiteValue {
+    pub fn lite_value(&self) -> LiteValue {
         LiteValue {
             value_hash: self.value.hash(),
             chain_id: self.value.chain_id(),
         }
     }
 
-    pub fn split(self) -> (LiteCertificate, HashedValue) {
-        (
-            LiteCertificate {
-                value: self.lite(),
-                signatures: self.signatures,
-            },
-            self.value,
-        )
+    pub fn lite_certificate(&self) -> LiteCertificate {
+        LiteCertificate {
+            value: self.lite_value(),
+            signatures: self.signatures.clone(),
+        }
     }
 }
 

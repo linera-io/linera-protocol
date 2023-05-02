@@ -517,9 +517,9 @@ where
         // Persist certificate and blobs.
         for value in blobs {
             self.cache_recent_value(value.clone());
-            self.storage.write_value(value.clone()).await?;
+            self.storage.write_value(value).await?;
         }
-        self.storage.write_certificate(certificate.clone()).await?;
+        self.storage.write_certificate(&certificate).await?;
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
         let verified_effects = chain.execute_block(block).await?;
@@ -702,7 +702,7 @@ where
                 )
                 .await?;
             last_updated_height = Some(block.height);
-            self.storage.write_certificate(certificate).await?;
+            self.storage.write_certificate(&certificate).await?;
         }
         // Be ready to confirm the highest processed block so far. It could be from a previous update.
         let cross_chain_requests =
@@ -913,7 +913,7 @@ where
         self.check_no_missing_bytecode(block, blobs).await?;
         // Write the values so that the bytecode is available during execution.
         for value in blobs {
-            self.storage.write_value(value.clone()).await?;
+            self.storage.write_value(value).await?;
         }
         let time_till_block = block.timestamp.saturating_diff_micros(Timestamp::now());
         ensure!(

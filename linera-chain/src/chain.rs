@@ -285,8 +285,10 @@ where
         ensure!(
             !events.is_empty(),
             ChainError::InternalError(format!(
-                "The block received by {:?} from {:?} at height {:?} was entirely ignored. This should not happen",
-                chain_id, origin, height))
+                "The block received by {:?} from {:?} at height {:?} was entirely ignored. \
+                This should not happen",
+                chain_id, origin, height
+            ))
         );
         // Process the inbox events and update the inbox state.
         let inbox = self.inboxes.load_entry_mut(origin).await?;
