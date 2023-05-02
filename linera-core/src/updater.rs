@@ -128,7 +128,7 @@ where
         loop {
             let mut result = match self
                 .client
-                .handle_lite_certificate(certificate.without_value())
+                .handle_lite_certificate(certificate.lite_certificate())
                 .await
             {
                 Ok(response) => Ok(response),

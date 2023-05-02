@@ -555,7 +555,7 @@ impl Certificate {
     }
 
     /// Returns the certificate without the full value.
-    pub fn without_value(&self) -> LiteCertificate {
+    pub fn lite_certificate(&self) -> LiteCertificate {
         LiteCertificate {
             value: self.lite_value(),
             signatures: self.signatures.clone(),
@@ -566,13 +566,6 @@ impl Certificate {
         LiteValue {
             value_hash: self.value.hash(),
             chain_id: self.value.chain_id(),
-        }
-    }
-
-    pub fn lite_certificate(&self) -> LiteCertificate {
-        LiteCertificate {
-            value: self.lite_value(),
-            signatures: self.signatures.clone(),
         }
     }
 }
