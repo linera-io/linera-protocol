@@ -718,6 +718,36 @@ where
         Ok(())
     }
 
+    /// Attempts to download new received certificates from a particular validator.
+    ///
+    /// This is similar to `find_received_certificates` but for only one validator.
+    /// We also don't try to synchronize the admin chain.
+    pub async fn find_received_certificates_from_validator<A>(
+        &mut self,
+        name: ValidatorName,
+        client: A,
+    ) -> Result<(), NodeError>
+    where
+        A: ValidatorNode + Send + Sync + 'static + Clone,
+    {
+        let (committees, max_epoch) = self.known_committees().await?;
+        // Proceed to downloading received certificates.
+        let current_tracker = self.received_certificate_trackers.get(&name).unwrap_or(&0);
+        let (name, tracker, certificates) = Self::synchronize_received_certificates_from_validator(
+            self.chain_id,
+            name,
+            *current_tracker,
+            committees,
+            max_epoch,
+            client,
+        )
+        .await?;
+        // Process received certificates.
+        self.receive_certificates_from_validator(name, tracker, certificates)
+            .await;
+        Ok(())
+    }
+
     /// Sends money.
     pub async fn transfer(
         &mut self,
