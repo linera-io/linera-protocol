@@ -36,7 +36,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    /// Creates a new instance of the node service given a client chain.
+    /// Creates a new chain listener given a client chain.
     pub fn new(config: ChainListenerConfig, client: Arc<Mutex<ChainClient<P, S>>>) -> Self {
         Self { config, client }
     }
