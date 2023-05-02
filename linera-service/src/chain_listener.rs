@@ -11,7 +11,7 @@ use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{ops::DerefMut, sync::Arc, time::Duration};
 use structopt::StructOpt;
-use tracing::{debug, warn};
+use tracing::{info, warn};
 
 #[derive(Debug, Clone, StructOpt)]
 pub struct ChainListenerConfig {
@@ -50,43 +50,45 @@ where
         let mut notification_stream = self.client.lock().await.listen().await?;
         let mut tracker = NotificationTracker::default();
         while let Some(notification) = notification_stream.next().await {
-            debug!("Received notification: {:?}", notification);
-            if self.config.delay_before_ms > 0 {
-                tokio::time::sleep(Duration::from_millis(self.config.delay_before_ms)).await;
-            }
-            let mut client = self.client.lock().await;
             if tracker.insert(notification.clone()) {
-                if let Err(e) = client.synchronize_from_validators().await {
-                    warn!(
-                        "Failed to synchronize and recompute balance for notification {:?} \
+                info!("Received new notification: {:?}", notification);
+                if self.config.delay_before_ms > 0 {
+                    tokio::time::sleep(Duration::from_millis(self.config.delay_before_ms)).await;
+                }
+                {
+                    let mut client = self.client.lock().await;
+                    if let Err(e) = client.synchronize_from_validators().await {
+                        warn!(
+                            "Failed to synchronize and recompute balance for notification {:?} \
                             with error: {:?}",
-                        notification, e
-                    );
-                    // If synchronization failed there is nothing to update validators
-                    // about.
-                    continue;
-                }
-                match &notification.reason {
-                    Reason::NewBlock { .. } => {
-                        if let Err(e) = client.update_validators().await {
-                            warn!(
-                                "Failed to update validators about the local chain after \
+                            notification, e
+                        );
+                        // If synchronization failed there is nothing to update validators
+                        // about.
+                        continue;
+                    }
+                    match &notification.reason {
+                        Reason::NewBlock { .. } => {
+                            if let Err(e) = client.update_validators().await {
+                                warn!(
+                                    "Failed to update validators about the local chain after \
                                          receiving notification {:?} with error: {:?}",
-                                notification, e
-                            );
+                                    notification, e
+                                );
+                            }
                         }
-                    }
-                    Reason::NewMessage { .. } => {
-                        if let Err(e) = client.process_inbox().await {
-                            warn!(
-                                "Failed to process inbox after receiving new message: {:?} \
+                        Reason::NewMessage { .. } => {
+                            if let Err(e) = client.process_inbox().await {
+                                warn!(
+                                    "Failed to process inbox after receiving new message: {:?} \
                                     with error: {:?}",
-                                notification, e
-                            );
+                                    notification, e
+                                );
+                            }
                         }
                     }
+                    wallet_updater(&mut context, client.deref_mut()).await;
                 }
-                wallet_updater(&mut context, client.deref_mut()).await;
 
                 if self.config.delay_after_ms > 0 {
                     tokio::time::sleep(Duration::from_millis(self.config.delay_after_ms)).await;
