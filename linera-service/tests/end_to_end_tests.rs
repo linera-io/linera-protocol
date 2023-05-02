@@ -761,11 +761,8 @@ impl NodeService {
         } else {
             "query { applications { id link }}".to_string()
         };
-        let response = self.query(&query_string).await;
-        if let Some(errors) = response.get("errors") {
-            panic!("query application failed: {}", errors);
-        }
-        response["data"]["applications"]
+        let data = self.query(&query_string).await;
+        data["applications"]
             .as_array()
             .unwrap()
             .iter()
@@ -785,19 +782,8 @@ impl NodeService {
             contract_code.to_value(),
             service_code.to_value(),
         );
-        let response = self.query(&query_string).await;
-        if let Some(errors) = response.get("errors") {
-            let mut error_string = errors.to_string();
-            if error_string.len() > 10000 {
-                error_string = format!(
-                    "{}..{}",
-                    &error_string[..5000],
-                    &error_string[(error_string.len() - 5000)..]
-                );
-            }
-            panic!("publishBytecode failed: {}", error_string);
-        }
-        serde_json::from_value(response["data"]["publishBytecode"].clone()).unwrap()
+        let data = self.query(&query_string).await;
+        serde_json::from_value(data["publishBytecode"].clone()).unwrap()
     }
 
     async fn query(&self, query_string: &str) -> Value {
@@ -812,7 +798,15 @@ impl NodeService {
                 response.text().await.unwrap()
             );
         }
-        response.json().await.unwrap()
+        let value: Value = response.json().await.unwrap();
+        if let Some(errors) = value.get("errors") {
+            panic!(
+                "Query \"{}\" failed: {}",
+                query_string.get(..200).unwrap_or(query_string),
+                errors
+            );
+        }
+        value["data"].clone()
     }
 
     async fn create_application(&self, bytecode_id: &str) -> String {
@@ -824,11 +818,8 @@ impl NodeService {
                 requiredApplicationIds: []) \
             }}"
         );
-        let response = self.query(&query_string).await;
-        if let Some(errors) = response.get("errors") {
-            panic!("createApplication failed: {}", errors);
-        }
-        serde_json::from_value(response["data"]["createApplication"].clone()).unwrap()
+        let data = self.query(&query_string).await;
+        serde_json::from_value(data["createApplication"].clone()).unwrap()
     }
 }
 
@@ -838,11 +829,8 @@ struct Application {
 
 impl Application {
     async fn get_counter_value(&self) -> u64 {
-        let response = self.query_application("query { value }").await;
-        if let Some(errors) = response.get("errors") {
-            panic!("query value failed: {}", errors);
-        }
-        serde_json::from_value(response["data"]["value"].clone()).unwrap()
+        let data = self.query_application("query { value }").await;
+        serde_json::from_value(data["value"].clone()).unwrap()
     }
 
     async fn query_application(&self, query_string: &str) -> Value {
@@ -856,7 +844,15 @@ impl Application {
                 response.text().await.unwrap()
             );
         }
-        response.json().await.unwrap()
+        let value: Value = response.json().await.unwrap();
+        if let Some(errors) = value.get("errors") {
+            panic!(
+                "Query \"{}\" failed: {}",
+                query_string.get(..200).unwrap_or(query_string),
+                errors
+            );
+        }
+        value["data"].clone()
     }
 
     async fn increment_counter_value(&self, increment: u64) {
@@ -864,10 +860,7 @@ impl Application {
             "mutation {{  executeOperation(operation: {{ increment: {} }})}}",
             increment
         );
-        let response = self.query_application(&query_string).await;
-        if let Some(errors) = response.get("errors") {
-            panic!("query failed: {}", errors);
-        }
+        self.query_application(&query_string).await;
     }
 }
 
@@ -1103,35 +1096,30 @@ async fn test_end_to_end_social_user_pub_sub() {
 
     let app1 = node_service1.make_application(&application_id).await;
     let subscribe = format!("mutation {{ subscribe(chainId: \"{}\") }}", chain2);
-    let response = app1.query_application(&subscribe).await;
-    assert_eq!(response.get("errors"), None);
-    let hash = &response["data"];
+    let hash = app1.query_application(&subscribe).await;
 
     // The returned hash should now be the latest one.
     let query = format!("query {{ chain(chainId: \"{chain1}\") {{ tipState {{ blockHash }} }} }}");
     let response = node_service1.query(&query).await;
-    assert_eq!(response.get("errors"), None);
-    assert_eq!(*hash, response["data"]["chain"]["tipState"]["blockHash"]);
+    assert_eq!(hash, response["chain"]["tipState"]["blockHash"]);
 
     let app2 = node_service2.make_application(&application_id).await;
     let post = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
-    let response = app2.query_application(post).await;
-    assert_eq!(response.get("errors"), None);
+    app2.query_application(post).await;
 
     let query = "query { receivedPostsKeys(count: 5) { author, index } }";
-    let expected_response = json!({"data": { "receivedPostsKeys": [
+    let expected_response = json!({ "receivedPostsKeys": [
         { "author": chain2, "index": 0 }
-    ]}});
+    ]});
     'success: {
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let response = app1.query_application(query).await;
-            assert_eq!(response.get("errors"), None);
             if response == expected_response {
                 info!("Confirmed post");
                 break 'success;
             }
-            warn!("Waiting to confirm post");
+            warn!("Waiting to confirm post: {}", response);
         }
         panic!("Failed to confirm post");
     }
