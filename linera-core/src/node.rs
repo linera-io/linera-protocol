@@ -410,7 +410,10 @@ where
         info
     }
 
-    async fn local_chain_info(&mut self, chain_id: ChainId) -> Result<ChainInfo, NodeError> {
+    pub(crate) async fn local_chain_info(
+        &mut self,
+        chain_id: ChainId,
+    ) -> Result<ChainInfo, NodeError> {
         let query = ChainInfoQuery::new(chain_id);
         Ok(self.handle_chain_info_query(query).await?.info)
     }

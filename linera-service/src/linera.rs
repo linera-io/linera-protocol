@@ -6,7 +6,7 @@ use anyhow::{anyhow, bail, Context};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
-use futures::StreamExt;
+use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{Amount, Balance, BlockHeight, Timestamp},
@@ -39,6 +39,7 @@ use std::{
     env, fs,
     num::NonZeroU16,
     path::PathBuf,
+    sync::Arc,
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
@@ -1016,18 +1017,19 @@ where
             }
 
             Watch { chain_id, raw } => {
-                let mut chain_client = context.make_chain_client(storage, chain_id);
+                let chain_client = context.make_chain_client(storage, chain_id);
                 let chain_id = chain_client.chain_id();
                 debug!("Watching for notifications for chain {:?}", chain_id);
                 let mut tracker = NotificationTracker::default();
-                let mut notification_stream = chain_client.listen().await?;
+                let mut notification_stream =
+                    ChainClient::listen(Arc::new(Mutex::new(chain_client))).await?;
                 while let Some(notification) = notification_stream.next().await {
                     if raw || tracker.insert(notification.clone()) {
                         println!("{:?}", notification);
                     }
                 }
                 warn!("Notification stream ended.");
-                // Not saving the wallet because `connect()` has no effect on `chain_client`.
+                // Not saving the wallet because `listen()` does not create blocks.
             }
 
             Service {

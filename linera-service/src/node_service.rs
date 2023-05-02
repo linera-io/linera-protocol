@@ -118,7 +118,7 @@ where
 {
     /// Subscribes to notifications from the current chain.
     async fn notifications(&self) -> Result<impl Stream<Item = Notification>, Error> {
-        Ok(self.client.lock().await.listen().await?)
+        Ok(ChainClient::listen(self.client.clone()).await?)
     }
 }
 
