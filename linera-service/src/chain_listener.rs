@@ -47,7 +47,7 @@ where
         for<'a> F:
             (Fn(&'a mut C, &'a mut ChainClient<P, S>) -> futures::future::BoxFuture<'a, ()>) + Send,
     {
-        let mut notification_stream = self.client.lock().await.listen().await?;
+        let mut notification_stream = ChainClient::listen(self.client.clone()).await?;
         let mut tracker = NotificationTracker::default();
         while let Some(notification) = notification_stream.next().await {
             if tracker.insert(notification.clone()) {
@@ -57,16 +57,6 @@ where
                 }
                 {
                     let mut client = self.client.lock().await;
-                    if let Err(e) = client.synchronize_from_validators().await {
-                        warn!(
-                            "Failed to synchronize and recompute balance for notification {:?} \
-                            with error: {:?}",
-                            notification, e
-                        );
-                        // If synchronization failed there is nothing to update validators
-                        // about.
-                        continue;
-                    }
                     match &notification.reason {
                         Reason::NewBlock { .. } => {
                             if let Err(e) = client.update_validators().await {

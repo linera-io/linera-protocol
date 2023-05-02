@@ -6,11 +6,12 @@ use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery},
     node::{LocalNodeClient, NodeError, NotificationStream, ValidatorNode},
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
-    worker::WorkerState,
+    worker::{Notification, Reason, WorkerState},
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use futures::{
     future,
+    lock::Mutex,
     stream::{select_all, FuturesUnordered, StreamExt},
 };
 use linera_base::{
@@ -36,7 +37,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tracing::info;
+use tracing::{debug, error, info};
 
 #[cfg(any(test, feature = "test"))]
 #[path = "unit_tests/client_test_utils.rs"]
@@ -363,21 +364,125 @@ where
         Ok(self.key_pair().await?.public())
     }
 
-    /// Listens to notifications about the current chain from all validators.
-    // TODO(#687): This is we should synchronize from the validator that sent the notification.
-    pub async fn listen(&mut self) -> Result<NotificationStream> {
-        let committee = self.local_committee().await?;
-        let mut streams = Vec::new();
-        for (name, mut node) in self.validator_node_provider.make_nodes(&committee)? {
-            match node.subscribe(vec![self.chain_id]).await {
-                Ok(notification_stream) => {
-                    streams.push(notification_stream);
+    async fn get_local_next_block_height(
+        this: Arc<Mutex<Self>>,
+        chain_id: ChainId,
+        local_node: &mut LocalNodeClient<S>,
+    ) -> Option<BlockHeight> {
+        let mut guard = this.lock().await;
+        let Ok(info) = local_node.local_chain_info(chain_id).await else {
+            error!("Fail to read local chain info for {chain_id}");
+            return None;
+        };
+        // Useful in case `chain_id` is the same as the local chain.
+        guard.update_from_info(&info);
+        Some(info.next_block_height)
+    }
+
+    async fn process_notification<A>(
+        this: Arc<Mutex<Self>>,
+        chain_id: ChainId,
+        name: ValidatorName,
+        node: A,
+        mut local_node: LocalNodeClient<S>,
+        notification: Notification,
+    ) -> bool
+    where
+        A: ValidatorNode + Send + Sync + 'static + Clone,
+    {
+        match &notification.reason {
+            Reason::NewMessage { origin, height } => {
+                if Self::get_local_next_block_height(this.clone(), origin.sender, &mut local_node)
+                    .await
+                    > Some(*height)
+                {
+                    debug!("Accepting redundant notification for new message");
+                    return true;
                 }
+                if let Err(e) = this
+                    .lock()
+                    .await
+                    .find_received_certificates_from_validator(name, node)
+                    .await
+                {
+                    error!("Fail to process notification: {e}");
+                    return false;
+                }
+                if Self::get_local_next_block_height(this.clone(), origin.sender, &mut local_node)
+                    .await
+                    <= Some(*height)
+                {
+                    error!("Fail to synchronize new message after notification");
+                    return false;
+                }
+            }
+            Reason::NewBlock { height } => {
+                if Self::get_local_next_block_height(this.clone(), chain_id, &mut local_node).await
+                    > Some(*height)
+                {
+                    debug!("Accepting redundant notification for new block");
+                    return true;
+                }
+                match local_node
+                    .try_synchronize_chain_state_from(name, node, chain_id)
+                    .await
+                {
+                    Ok(()) => {
+                        if Self::get_local_next_block_height(
+                            this.clone(),
+                            chain_id,
+                            &mut local_node,
+                        )
+                        .await
+                            <= Some(*height)
+                        {
+                            error!("Fail to synchronize new block after notification");
+                            return false;
+                        }
+                    }
+                    Err(e) => {
+                        error!("Fail to process notification: {e}");
+                        return false;
+                    }
+                }
+            }
+        }
+        // Accept the notification.
+        true
+    }
+
+    /// Listens to notifications about the current chain from all validators.
+    // TODO(#687): handle reconfigurations, loss of connection, etc.
+    pub async fn listen(this: Arc<Mutex<Self>>) -> Result<NotificationStream>
+    where
+        P: Send + 'static,
+    {
+        let (chain_id, nodes, local_node) = {
+            let mut guard = this.lock().await;
+            let committee = guard.local_committee().await?;
+            let nodes = guard.validator_node_provider.make_nodes(&committee)?;
+            (guard.chain_id, nodes, guard.node_client.clone())
+        };
+        let mut streams = Vec::new();
+        for (name, mut node) in nodes {
+            let this = this.clone();
+            let local_node = local_node.clone();
+            match node.subscribe(vec![chain_id]).await {
                 Err(e) => {
-                    info!(
-                        "Could not connect to validator {} with error: {:?}",
-                        name, e
-                    );
+                    info!("Could not connect to validator {name}: {e:?}");
+                }
+                Ok(stream) => {
+                    let stream = stream.filter(move |notification| {
+                        Box::pin(Self::process_notification(
+                            this.clone(),
+                            chain_id,
+                            name,
+                            node.clone(),
+                            local_node.clone(),
+                            notification.clone(),
+                        ))
+                    });
+                    streams.push(stream);
                 }
             }
         }
