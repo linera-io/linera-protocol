@@ -364,6 +364,7 @@ where
     }
 
     /// Listens to notifications about the current chain from all validators.
+    // TODO(#687): This is we should synchronize from the validator that sent the notification.
     pub async fn listen(&mut self) -> Result<NotificationStream> {
         let committee = self.local_committee().await?;
         let mut streams = Vec::new();
@@ -568,6 +569,73 @@ where
         Ok(())
     }
 
+    async fn synchronize_received_certificates_from_validator<A>(
+        chain_id: ChainId,
+        name: ValidatorName,
+        tracker: usize,
+        committees: BTreeMap<Epoch, Committee>,
+        max_epoch: Epoch,
+        mut client: A,
+    ) -> Result<(ValidatorName, usize, Vec<Certificate>), NodeError>
+    where
+        A: ValidatorNode + Send + Sync + 'static + Clone,
+    {
+        // Retrieve newly received certificates from this validator.
+        let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_nth(tracker);
+        let response = client.handle_chain_info_query(query).await?;
+        // Responses are authenticated for accountability.
+        response.check(name)?;
+        let mut certificates = Vec::new();
+        let mut new_tracker = tracker;
+        for entry in response.info.requested_received_log {
+            let query = ChainInfoQuery::new(entry.chain_id)
+                .with_sent_certificates_in_range(BlockHeightRange::single(entry.height));
+
+            let mut response = client.handle_chain_info_query(query).await?;
+            let Some(certificate) = response.info
+                            .requested_sent_certificates.pop() else {
+                            break;
+                        };
+            if !certificate.value.is_confirmed() {
+                return Err(NodeError::InvalidChainInfoResponse);
+            };
+            let block = certificate.value.block();
+            // Check that certificates are valid w.r.t one of our trusted committees.
+            if block.epoch > max_epoch {
+                // We don't accept a certificate from a committee in the future.
+                tracing::warn!(
+                    "Postponing received certificate from future epoch {:?}",
+                    block.epoch
+                );
+                // Stop the synchronization here. Do not increment the tracker further so
+                // that this certificate can still be downloaded later, once our committee
+                // is updated.
+                break;
+            }
+            match committees.get(&block.epoch) {
+                Some(committee) => {
+                    // This epoch is recognized by our chain. Let's verify the
+                    // certificate.
+                    certificate.check(committee)?;
+                    certificates.push(certificate);
+                    new_tracker += 1;
+                }
+                None => {
+                    // This epoch is not recognized any more. Let's skip the certificate.
+                    // If a higher block with a recognized epoch comes up later from the
+                    // same chain, the call to `receive_certificate` below will download
+                    // the skipped certificate again.
+                    tracing::warn!(
+                        "Skipping received certificate from past epoch {:?}",
+                        block.epoch
+                    );
+                    new_tracker += 1;
+                }
+            }
+        }
+        Ok((name, new_tracker, certificates))
+    }
+
     /// Attempts to download new received certificates.
     ///
     /// This is a best effort: it will only find certificates that have been confirmed
@@ -593,69 +661,12 @@ where
             &nodes,
             &local_committee,
             |_| (),
-            |name, mut client| {
+            |name, client| {
                 let tracker = *trackers.get(&name).unwrap_or(&0);
                 let committees = committees.clone();
-                Box::pin(async move {
-                    // Retrieve newly received certificates from this validator.
-                    let query = ChainInfoQuery::new(chain_id)
-                        .with_received_log_excluding_first_nth(tracker);
-                    let response = client.handle_chain_info_query(query).await?;
-                    // Responses are authenticated for accountability.
-                    response.check(name)?;
-                    let mut certificates = Vec::new();
-                    let mut new_tracker = tracker;
-                    for cah in response.info.requested_received_log {
-                        let query = ChainInfoQuery::new(cah.chain_id)
-                            .with_sent_certificates_in_range(BlockHeightRange::single(cah.height));
-
-                        let mut response = client.handle_chain_info_query(query).await?;
-                        let Some(certificate) = response.info
-                            .requested_sent_certificates.pop() else {
-                            break;
-                        };
-                        if !certificate.value.is_confirmed() {
-                            return Err(NodeError::InvalidChainInfoResponse);
-                        };
-                        let block = certificate.value.block();
-                        // Check that certificates are valid w.r.t one of our trusted
-                        // committees.
-                        if block.epoch > max_epoch {
-                            // We don't accept a certificate from a committee in the
-                            // future.
-                            tracing::warn!(
-                                "Postponing received certificate from future epoch {:?}",
-                                block.epoch
-                            );
-                            // Stop the synchronization here. Do not increment the tracker
-                            // further so that this certificate can still be downloaded
-                            // later, once our committee is updated.
-                            break;
-                        }
-                        match committees.get(&block.epoch) {
-                            Some(committee) => {
-                                // This epoch is recognized by our chain. Let's verify the
-                                // certificate.
-                                certificate.check(committee)?;
-                                certificates.push(certificate);
-                                new_tracker += 1;
-                            }
-                            None => {
-                                // This epoch is not recognized any more. Let's skip the
-                                // certificate. If a higher block with a recognized epoch
-                                // comes up later from the same chain, the call to
-                                // `receive_certificate` below will download the skipped
-                                // certificate again.
-                                tracing::warn!(
-                                    "Skipping received certificate from past epoch {:?}",
-                                    block.epoch
-                                );
-                                new_tracker += 1;
-                            }
-                        }
-                    }
-                    Ok((name, new_tracker, certificates))
-                })
+                Box::pin(Self::synchronize_received_certificates_from_validator(
+                    chain_id, name, tracker, committees, max_epoch, client,
+                ))
             },
         )
         .await;
