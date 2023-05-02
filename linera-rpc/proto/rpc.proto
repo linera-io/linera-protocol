@@ -111,11 +111,16 @@ message UpdateRecipientEntry {
   repeated BlockHeight heights = 2;
 }
 
-// Acknowledge the height of the highest confirmed block communicated with `UpdateRecipient`.
+// Acknowledge the height of the highest confirmed blocks communicated with `UpdateRecipient`.
 message ConfirmUpdatedRecipient {
-  Origin origin = 1;
+  ChainId sender = 1;
   ChainId recipient = 2;
-  BlockHeight height = 3;
+  repeated ConfirmUpdatedRecipientEntry latest_heights = 3;
+}
+
+message ConfirmUpdatedRecipientEntry {
+  Medium medium = 1;
+  BlockHeight height = 2;
 }
 
 // Message to obtain information on a chain.

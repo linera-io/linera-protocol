@@ -251,14 +251,20 @@ impl TryFrom<grpc::CrossChainRequest> for CrossChainRequest {
                 }
             }
             Inner::ConfirmUpdatedRecipient(grpc::ConfirmUpdatedRecipient {
-                origin,
+                sender,
                 recipient,
-                height,
-            }) => ConfirmUpdatedRecipient {
-                origin: try_proto_convert!(origin),
-                recipient: try_proto_convert!(recipient),
-                height: proto_convert!(height),
-            },
+                latest_heights: grpc_latest_heights,
+            }) => {
+                let mut latest_heights = Vec::new();
+                for grpc::ConfirmUpdatedRecipientEntry { medium, height } in grpc_latest_heights {
+                    latest_heights.push((try_proto_convert!(medium), proto_convert!(height)));
+                }
+                ConfirmUpdatedRecipient {
+                    sender: try_proto_convert!(sender),
+                    recipient: try_proto_convert!(recipient),
+                    latest_heights,
+                }
+            }
         };
         Ok(ccr)
     }
@@ -289,13 +295,19 @@ impl TryFrom<CrossChainRequest> for grpc::CrossChainRequest {
                 certificates: try_proto_convert_vec!(certificates, grpc::Certificate),
             }),
             ConfirmUpdatedRecipient {
-                origin,
+                sender,
                 recipient,
-                height,
+                latest_heights,
             } => Inner::ConfirmUpdatedRecipient(grpc::ConfirmUpdatedRecipient {
-                origin: Some(origin.into()),
+                sender: Some(sender.into()),
                 recipient: Some(recipient.into()),
-                height: Some(height.into()),
+                latest_heights: latest_heights
+                    .into_iter()
+                    .map(|(medium, height)| grpc::ConfirmUpdatedRecipientEntry {
+                        medium: Some(medium.into()),
+                        height: Some(height.into()),
+                    })
+                    .collect(),
             }),
         };
         Ok(Self { inner: Some(inner) })
@@ -1010,9 +1022,9 @@ pub mod tests {
         round_trip_check::<_, grpc::CrossChainRequest>(cross_chain_request_update_recipient);
 
         let cross_chain_request_confirm_updated_recipient = ConfirmUpdatedRecipient {
-            origin: Origin::chain(ChainId::root(0)),
+            sender: ChainId::root(0),
             recipient: ChainId::root(0),
-            height: Default::default(),
+            latest_heights: vec![(Medium::Direct, Default::default())],
         };
         round_trip_check::<_, grpc::CrossChainRequest>(
             cross_chain_request_confirm_updated_recipient,
