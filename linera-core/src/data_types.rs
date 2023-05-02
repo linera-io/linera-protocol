@@ -9,7 +9,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId},
 };
 use linera_chain::{
-    data_types::{Certificate, ChainAndHeight, HashedValue, Medium, Message, Origin},
+    data_types::{Certificate, ChainAndHeight, HashedValue, Medium, Message},
     ChainManagerInfo, ChainStateView,
 };
 use linera_execution::{
@@ -169,11 +169,11 @@ pub enum CrossChainRequest {
         recipient: ChainId,
         certificates: Vec<Certificate>,
     },
-    /// Acknowledge the height of the highest confirmed block communicated with `UpdateRecipient`.
+    /// Acknowledge the height of the highest confirmed blocks communicated with `UpdateRecipient`.
     ConfirmUpdatedRecipient {
-        origin: Origin,
+        sender: ChainId,
         recipient: ChainId,
-        height: BlockHeight,
+        latest_heights: Vec<(Medium, BlockHeight)>,
     },
 }
 
@@ -183,7 +183,7 @@ impl CrossChainRequest {
         use CrossChainRequest::*;
         match self {
             UpdateRecipient { recipient, .. } => *recipient,
-            ConfirmUpdatedRecipient { origin, .. } => origin.sender,
+            ConfirmUpdatedRecipient { sender, .. } => *sender,
         }
     }
 

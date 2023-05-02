@@ -101,13 +101,6 @@ pub struct NetworkActions {
     pub notifications: Vec<Notification>,
 }
 
-impl NetworkActions {
-    fn merge(&mut self, other: NetworkActions) {
-        self.cross_chain_requests.extend(other.cross_chain_requests);
-        self.notifications.extend(other.notifications);
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 /// Notification that a chain has a new certified block or a new message.
 pub struct Notification {
@@ -668,7 +661,7 @@ where
         origin: Origin,
         recipient: ChainId,
         certificates: Vec<Certificate>,
-    ) -> Result<NetworkActions, WorkerError> {
+    ) -> Result<Option<BlockHeight>, WorkerError> {
         let mut chain = self.storage.load_chain(recipient).await?;
         // Only process certificates with relevant heights and epochs.
         let next_height_to_receive = chain.next_block_height_to_receive(origin.clone()).await?;
@@ -687,8 +680,11 @@ where
             last_anticipated_block_height,
             certificates,
         )?;
+        let Some(last_updated_height) =
+            certificates.last().map(|cert| cert.value.block().height) else {
+            return Ok(None);
+        };
         // Process the received messages in certificates.
-        let mut last_updated_height = None;
         for certificate in certificates {
             let block = certificate.value.block();
             // Update the staged chain state with the received block.
@@ -701,49 +697,22 @@ where
                     certificate.value.hash(),
                 )
                 .await?;
-            last_updated_height = Some(block.height);
             self.storage.write_certificate(&certificate).await?;
         }
-        // Be ready to confirm the highest processed block so far. It could be from a previous update.
-        let cross_chain_requests =
-            match last_updated_height.or_else(|| next_height_to_receive.try_sub_one().ok()) {
-                Some(height) => vec![CrossChainRequest::ConfirmUpdatedRecipient {
-                    origin: origin.clone(),
-                    recipient,
-                    height,
-                }],
-                None => vec![],
-            };
-        // If needed, save the state and return network actions.
-        if let Some(height) = last_updated_height {
-            if !self.allow_inactive_chains && !chain.is_active() {
-                // Refuse to create a chain state if the chain is still inactive by
-                // now. Accordingly, do not send a confirmation, so that the
-                // cross-chain update is retried later.
-                warn!(
-                    "[{}] Refusing to deliver messages to {recipient:?} from {origin:?} \
-                     at height {height} because the recipient is still inactive",
-                    self.nickname
-                );
-                return Ok(NetworkActions::default());
-            }
-            // Save the chain.
-            chain.save().await?;
-            // Notify subscribers and send a confirmation.
-            Ok(NetworkActions {
-                cross_chain_requests,
-                notifications: vec![Notification {
-                    chain_id: recipient,
-                    reason: Reason::NewMessage { origin, height },
-                }],
-            })
-        } else {
-            // Send a confirmation but do not notify subscribers.
-            Ok(NetworkActions {
-                cross_chain_requests,
-                notifications: vec![],
-            })
+        if !self.allow_inactive_chains && !chain.is_active() {
+            // Refuse to create a chain state if the chain is still inactive by
+            // now. Accordingly, do not send a confirmation, so that the
+            // cross-chain update is retried later.
+            warn!(
+                "[{}] Refusing to deliver messages to {recipient:?} from {origin:?} \
+                at height {last_updated_height} because the recipient is still inactive",
+                self.nickname
+            );
+            return Ok(None);
         }
+        // Save the chain.
+        chain.save().await?;
+        Ok(Some(last_updated_height))
     }
 
     pub fn get_recent_value(&mut self, hash: &CryptoHash) -> Option<&HashedValue> {
@@ -1091,34 +1060,59 @@ where
                 recipient,
                 certificates,
             } => {
-                let mut actions = NetworkActions::default();
+                let mut latest_heights = Vec::<(Medium, BlockHeight)>::new();
                 for (medium, heights) in height_map {
-                    let origin = Origin { sender, medium };
+                    let origin = Origin {
+                        sender,
+                        medium: medium.clone(),
+                    };
                     let app_certificates = certificates
                         .iter()
                         .filter(|cert| heights.binary_search(&cert.value.block().height).is_ok())
                         .cloned()
                         .collect();
-                    actions.merge(
-                        self.process_cross_chain_update(
-                            origin.clone(),
-                            recipient,
-                            app_certificates,
-                        )
-                        .await?,
-                    );
+                    if let Some(height) = self
+                        .process_cross_chain_update(origin.clone(), recipient, app_certificates)
+                        .await?
+                    {
+                        latest_heights.push((medium, height));
+                    }
                 }
-                Ok(actions)
+                if latest_heights.is_empty() {
+                    return Ok(NetworkActions::default());
+                }
+                let notifications = latest_heights
+                    .iter()
+                    .cloned()
+                    .map(|(medium, height)| {
+                        let origin = Origin { sender, medium };
+                        Notification {
+                            chain_id: recipient,
+                            reason: Reason::NewMessage { origin, height },
+                        }
+                    })
+                    .collect();
+                let cross_chain_requests = vec![CrossChainRequest::ConfirmUpdatedRecipient {
+                    sender,
+                    recipient,
+                    latest_heights,
+                }];
+                Ok(NetworkActions {
+                    cross_chain_requests,
+                    notifications,
+                })
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
-                origin: Origin { sender, medium },
+                sender,
                 recipient,
-                height,
+                latest_heights,
             } => {
                 let mut chain = self.storage.load_chain(sender).await?;
-                let target = Target { recipient, medium };
-                if chain.mark_messages_as_received(target, height).await? {
-                    if chain.all_messages_delivered_up_to(height) {
+                for (medium, height) in latest_heights {
+                    let target = Target { recipient, medium };
+                    if chain.mark_messages_as_received(target, height).await?
+                        && chain.all_messages_delivered_up_to(height)
+                    {
                         // Handle delivery notifiers for this chain, if any.
                         if let hash_map::Entry::Occupied(mut map) =
                             self.delivery_notifiers.lock().await.entry(sender)

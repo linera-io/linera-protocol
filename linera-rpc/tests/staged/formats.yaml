@@ -230,12 +230,15 @@ CrossChainRequest:
     1:
       ConfirmUpdatedRecipient:
         STRUCT:
-          - origin:
-              TYPENAME: Origin
+          - sender:
+              TYPENAME: ChainId
           - recipient:
               TYPENAME: ChainId
-          - height:
-              TYPENAME: BlockHeight
+          - latest_heights:
+              SEQ:
+                TUPLE:
+                  - TYPENAME: Medium
+                  - TYPENAME: BlockHeight
 CryptoHash:
   NEWTYPESTRUCT:
     TUPLEARRAY:
