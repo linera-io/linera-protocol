@@ -3,7 +3,7 @@
 
 use crate::{
     batch::Batch,
-    common::{Context, HasherOutput, MIN_VIEW_TAG},
+    common::{from_bytes_opt, Context, HasherOutput, MIN_VIEW_TAG},
     views::{HashableView, Hasher, View, ViewError},
 };
 use async_lock::Mutex;
@@ -48,10 +48,12 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let key = context.base_tag(KeyTag::Store as u8);
-        let stored_count = context.read_key(&key).await?.unwrap_or_default();
-        let key = context.base_tag(KeyTag::Hash as u8);
-        let hash = context.read_key(&key).await?;
+        let key1 = context.base_tag(KeyTag::Store as u8);
+        let key2 = context.base_tag(KeyTag::Hash as u8);
+        let keys = vec![key1, key2];
+        let values_bytes = context.read_multi_key_bytes(keys).await?;
+        let stored_count = from_bytes_opt(values_bytes[0].clone())?.unwrap_or_default();
+        let hash = from_bytes_opt(values_bytes[1].clone())?;
         Ok(Self {
             context,
             was_cleared: false,
