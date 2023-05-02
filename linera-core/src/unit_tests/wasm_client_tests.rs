@@ -258,48 +258,32 @@ where
     Ok(())
 }
 
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::Simple ; "wasmer_simple"))]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::View ; "wasmer_view"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::Simple ; "wasmtime_simple"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::View ; "wasmtime_view"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer_view"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime_view"))]
 #[test_log::test(tokio::test)]
 async fn test_memory_run_reentrant_application(
     wasm_runtime: WasmRuntime,
-    storage_kind: StorageKind,
 ) -> Result<(), anyhow::Error> {
-    run_test_run_reentrant_application(
-        MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime),
-        storage_kind,
-    )
-    .await
+    run_test_run_reentrant_application(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::Simple ; "wasmer_simple"))]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::View ; "wasmer_view"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::Simple ; "wasmtime_simple"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::View ; "wasmtime_view"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer_view"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime_view"))]
 #[test_log::test(tokio::test)]
 async fn test_rocksdb_run_reentrant_application(
     wasm_runtime: WasmRuntime,
-    storage_kind: StorageKind,
 ) -> Result<(), anyhow::Error> {
     let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_run_reentrant_application(
-        MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime),
-        storage_kind,
-    )
-    .await
+    run_test_run_reentrant_application(MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime))
+        .await
 }
 
 #[cfg(feature = "aws")]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::Simple ; "wasmer_simple"))]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, StorageKind::View ; "wasmer_view"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::Simple ; "wasmtime_simple"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::View ; "wasmtime_view"))]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_run_reentrant_application(
     wasm_runtime: WasmRuntime,
-    storage_kind: StorageKind,
 ) -> Result<(), anyhow::Error> {
     run_test_run_reentrant_application(
         MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime),
@@ -308,10 +292,7 @@ async fn test_dynamo_db_run_reentrant_application(
     .await
 }
 
-async fn run_test_run_reentrant_application<B>(
-    store_builder: B,
-    storage_kind: StorageKind,
-) -> Result<(), anyhow::Error>
+async fn run_test_run_reentrant_application<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
@@ -334,10 +315,7 @@ where
     publisher.process_inbox().await.unwrap();
 
     let (bytecode_id, certificate) = {
-        let bytecode_name = match storage_kind {
-            StorageKind::Simple => "reentrant-counter",
-            StorageKind::View => "reentrant-counter-views",
-        };
+        let bytecode_name = "reentrant-counter";
         let (contract_path, service_path) =
             linera_execution::wasm_test::get_example_bytecode_paths(bytecode_name)?;
         publisher
@@ -455,7 +433,7 @@ where
     let (bytecode_id, pub_cert) = {
         let bytecode_name = match storage_kind {
             StorageKind::Simple => "fungible",
-            StorageKind::View => "fungible-views",
+            StorageKind::View => "fungible",
         };
         let (contract_path, service_path) =
             linera_execution::wasm_test::get_example_bytecode_paths(bytecode_name)?;
