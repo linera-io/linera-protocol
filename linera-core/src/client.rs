@@ -636,6 +636,29 @@ where
         Ok((name, new_tracker, certificates))
     }
 
+    /// Process the result of [`synchronize_received_certificates_from_validator`].
+    async fn receive_certificates_from_validator(
+        &mut self,
+        name: ValidatorName,
+        tracker: usize,
+        certificates: Vec<Certificate>,
+    ) {
+        for certificate in certificates {
+            let hash = certificate.value.hash();
+            if let Err(e) = self
+                .receive_certificate_internal(certificate, ReceiveCertificateMode::AlreadyChecked)
+                .await
+            {
+                tracing::warn!("Received invalid certificate {hash} from {name}: {e}");
+                // Do not update the validator's tracker in case of error.
+                // Move on to the next validator.
+                return;
+            }
+        }
+        // Update tracker.
+        self.received_certificate_trackers.insert(name, tracker);
+    }
+
     /// Attempts to download new received certificates.
     ///
     /// This is a best effort: it will only find certificates that have been confirmed
@@ -687,25 +710,10 @@ where
                 )
             }
         };
-        'outer: for (name, tracker, certificates) in responses {
+        for (name, tracker, certificates) in responses {
             // Process received certificates.
-            for certificate in certificates {
-                let hash = certificate.value.hash();
-                if let Err(e) = self
-                    .receive_certificate_internal(
-                        certificate,
-                        ReceiveCertificateMode::AlreadyChecked,
-                    )
-                    .await
-                {
-                    tracing::warn!("Received invalid certificate {hash} from {name}: {e}");
-                    // Do not update the validator's tracker in case of error.
-                    // Move on to the next validator.
-                    continue 'outer;
-                }
-            }
-            // Update tracker.
-            self.received_certificate_trackers.insert(name, tracker);
+            self.receive_certificates_from_validator(name, tracker, certificates)
+                .await;
         }
         Ok(())
     }
