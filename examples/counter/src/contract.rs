@@ -35,8 +35,7 @@ impl Contract for Counter {
         _context: &OperationContext,
         operation: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        let counter_operation: CounterOperation = bcs::from_bytes(operation)?;
-        self.value += counter_operation.increment;
+        self.value += bcs::from_bytes::<u64>(operation)?;
         Ok(ExecutionResult::default())
     }
 
@@ -55,9 +54,9 @@ impl Contract for Counter {
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
         log::error!("received {:?}", argument);
-        let counter_operation: CounterOperation = bcs::from_bytes(argument)?;
-        log::error!("incrementing by {:?}", counter_operation);
-        self.value += counter_operation.increment;
+        let increment: u64 = bcs::from_bytes(argument)?;
+        log::error!("incrementing by {:?}", increment);
+        self.value += increment;
         Ok(ApplicationCallResult {
             value: bcs::to_bytes(&self.value).expect("Serialization should not fail"),
             ..ApplicationCallResult::default()

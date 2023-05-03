@@ -25,11 +25,16 @@ impl Service for Counter {
         _context: &QueryContext,
         argument: &[u8],
     ) -> Result<Vec<u8>, Self::Error> {
-        let graphql_request: async_graphql::Request =
-            serde_json::from_slice(argument).map_err(|_| Error::InvalidQuery)?;
-        let schema = Schema::build(QueryRoot { value: self.value }, MutationRoot {}, EmptySubscription).finish();
-        let res = schema.execute(graphql_request).await;
-        Ok(serde_json::to_vec(&res).unwrap())
+        match argument {
+            &[] => Ok(bcs::to_bytes(&self.value).expect("Serialization should not fail")),
+            bytes => {
+                let graphql_request: async_graphql::Request =
+                    serde_json::from_slice(bytes).map_err(|_| Error::InvalidQuery)?;
+                let schema = Schema::build(QueryRoot { value: self.value }, MutationRoot {}, EmptySubscription).finish();
+                let res = schema.execute(graphql_request).await;
+                Ok(serde_json::to_vec(&res).unwrap())
+            },
+        }
     }
 }
 
@@ -38,7 +43,7 @@ struct MutationRoot;
 #[Object]
 impl MutationRoot {
     #[allow(unused)]
-    async fn execute_operation(&self, operation: CounterOperation) -> Vec<u8> {
+    async fn execute_operation(&self, operation: u64) -> Vec<u8> {
         bcs::to_bytes(&operation).unwrap()
     }
 }

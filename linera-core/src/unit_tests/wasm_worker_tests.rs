@@ -346,7 +346,7 @@ where
     assert!(info.manager.pending().is_none());
 
     // Create an application.
-    let initial_value = 10_u128;
+    let initial_value = 10_u64;
     let initial_value_bytes = bcs::to_bytes(&initial_value)?;
     let create_operation = SystemOperation::CreateApplication {
         bytecode_id,
@@ -428,7 +428,7 @@ where
     assert!(info.manager.pending().is_none());
 
     // Execute an application operation
-    let increment = 5_u128;
+    let increment = 5_u64;
     let user_operation = bcs::to_bytes(&increment)?;
     let run_block = make_block(
         Epoch::from(0),

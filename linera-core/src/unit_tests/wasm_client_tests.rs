@@ -88,14 +88,14 @@ where
     creator.synchronize_from_validators().await.unwrap();
     creator.process_inbox().await.unwrap();
 
-    let initial_value = 10_u128;
+    let initial_value = 10_u64;
     let initial_value_bytes = bcs::to_bytes(&initial_value)?;
     let (application_id, _) = creator
         .create_application(bytecode_id, vec![], initial_value_bytes, vec![])
         .await
         .unwrap();
 
-    let increment = 5_u128;
+    let increment = 5_u64;
     let bytes = bcs::to_bytes(&increment)?;
     creator
         .execute_operation(Operation::User {
@@ -112,7 +112,7 @@ where
         .await
         .unwrap();
 
-    let expected = 15_u128;
+    let expected = 15_u64;
     let expected_bytes = bcs::to_bytes(&expected)?;
     assert!(matches!(response, Response::User(bytes) if bytes == expected_bytes));
     Ok(())
@@ -211,7 +211,7 @@ where
     // Creator receives the bytecodes then creates the app.
     creator.synchronize_from_validators().await.unwrap();
     creator.process_inbox().await.unwrap();
-    let initial_value = 10_u128;
+    let initial_value = 10_u64;
     let (application_id1, _) = creator
         .create_application(bytecode_id1, vec![], bcs::to_bytes(&initial_value)?, vec![])
         .await
@@ -226,7 +226,7 @@ where
         .await
         .unwrap();
 
-    let increment = 5_u128;
+    let increment = 5_u64;
     let bytes = bcs::to_bytes(&(receiver_id, increment))?;
     let cert = creator
         .execute_operation(Operation::User {
@@ -246,7 +246,7 @@ where
         .await
         .unwrap();
 
-    let expected = 5_u128;
+    let expected = 5_u64;
     let expected_bytes = bcs::to_bytes(&expected)?;
     assert!(matches!(response, Response::User(bytes) if bytes == expected_bytes));
     Ok(())
