@@ -658,15 +658,14 @@ where
 
     async fn process_cross_chain_update(
         &mut self,
-        origin: Origin,
+        origin: &Origin,
         recipient: ChainId,
         certificates: Vec<Certificate>,
     ) -> Result<Option<BlockHeight>, WorkerError> {
         let mut chain = self.storage.load_chain(recipient).await?;
         // Only process certificates with relevant heights and epochs.
-        let next_height_to_receive = chain.next_block_height_to_receive(origin.clone()).await?;
-        let last_anticipated_block_height =
-            chain.last_anticipated_block_height(origin.clone()).await?;
+        let next_height_to_receive = chain.next_block_height_to_receive(origin).await?;
+        let last_anticipated_block_height = chain.last_anticipated_block_height(origin).await?;
         let helper = CrossChainUpdateHelper {
             nickname: &self.nickname,
             allow_messages_from_deprecated_epochs: self.allow_messages_from_deprecated_epochs,
@@ -674,7 +673,7 @@ where
             committees: chain.execution_state.system.committees.get(),
         };
         let certificates = helper.select_certificates(
-            &origin,
+            origin,
             recipient,
             next_height_to_receive,
             last_anticipated_block_height,
@@ -690,7 +689,7 @@ where
             // Update the staged chain state with the received block.
             chain
                 .receive_block(
-                    &origin,
+                    origin,
                     block.height,
                     block.timestamp,
                     certificate.value.effects().clone(),
@@ -1060,38 +1059,33 @@ where
                 recipient,
                 certificates,
             } => {
-                let mut latest_heights = Vec::<(Medium, BlockHeight)>::new();
+                let mut height_by_origin = Vec::new();
                 for (medium, heights) in height_map {
-                    let origin = Origin {
-                        sender,
-                        medium: medium.clone(),
-                    };
+                    let origin = Origin { sender, medium };
                     let app_certificates = certificates
                         .iter()
                         .filter(|cert| heights.binary_search(&cert.value.block().height).is_ok())
                         .cloned()
                         .collect();
                     if let Some(height) = self
-                        .process_cross_chain_update(origin.clone(), recipient, app_certificates)
+                        .process_cross_chain_update(&origin, recipient, app_certificates)
                         .await?
                     {
-                        latest_heights.push((medium, height));
+                        height_by_origin.push((origin, height));
                     }
                 }
-                if latest_heights.is_empty() {
+                if height_by_origin.is_empty() {
                     return Ok(NetworkActions::default());
                 }
-                let notifications = latest_heights
-                    .iter()
-                    .cloned()
-                    .map(|(medium, height)| {
-                        let origin = Origin { sender, medium };
-                        Notification {
-                            chain_id: recipient,
-                            reason: Reason::NewMessage { origin, height },
-                        }
-                    })
-                    .collect();
+                let mut notifications = Vec::new();
+                let mut latest_heights = Vec::new();
+                for (origin, height) in height_by_origin {
+                    latest_heights.push((origin.medium.clone(), height));
+                    notifications.push(Notification {
+                        chain_id: recipient,
+                        reason: Reason::NewMessage { origin, height },
+                    });
+                }
                 let cross_chain_requests = vec![CrossChainRequest::ConfirmUpdatedRecipient {
                     sender,
                     recipient,

@@ -194,17 +194,17 @@ where
 
     pub async fn next_block_height_to_receive(
         &mut self,
-        origin: Origin,
+        origin: &Origin,
     ) -> Result<BlockHeight, ChainError> {
-        let inbox = self.inboxes.load_entry(&origin).await?;
+        let inbox = self.inboxes.load_entry(origin).await?;
         inbox.next_block_height_to_receive()
     }
 
     pub async fn last_anticipated_block_height(
         &mut self,
-        origin: Origin,
+        origin: &Origin,
     ) -> Result<Option<BlockHeight>, ChainError> {
-        let inbox = self.inboxes.load_entry(&origin).await?;
+        let inbox = self.inboxes.load_entry(origin).await?;
         match inbox.removed_events.back().await? {
             Some(event) => Ok(Some(event.height)),
             None => Ok(None),
@@ -224,7 +224,7 @@ where
     ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         ensure!(
-            height >= self.next_block_height_to_receive(origin.clone()).await?,
+            height >= self.next_block_height_to_receive(origin).await?,
             ChainError::InternalError("Trying to receive blocks in the wrong order".to_string())
         );
         tracing::trace!(

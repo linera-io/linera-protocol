@@ -2796,7 +2796,7 @@ where
         matches!(
             user_chain
                 .inboxes
-                .load_entry_mut(&admin_channel_origin.clone())
+                .load_entry_mut(&admin_channel_origin)
                 .await
                 .unwrap()
                 .added_events
