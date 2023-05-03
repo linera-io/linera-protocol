@@ -57,7 +57,7 @@ pub struct ChainInfoQuery {
     /// Query a range of certificates sent from the chain.
     pub request_sent_certificates_in_range: Option<BlockHeightRange>,
     /// Query new certificate sender chain IDs and block heights received from the chain.
-    pub request_received_log_excluding_first_nth: Option<usize>,
+    pub request_received_log_excluding_first_nth: Option<u64>,
     /// Query values from the chain manager, not just votes.
     pub request_manager_values: bool,
     /// Query a value that contains a binary blob (e.g. bytecode) required by this chain.
@@ -98,7 +98,7 @@ impl ChainInfoQuery {
         self
     }
 
-    pub fn with_received_log_excluding_first_nth(mut self, n: usize) -> Self {
+    pub fn with_received_log_excluding_first_nth(mut self, n: u64) -> Self {
         self.request_received_log_excluding_first_nth = Some(n);
         self
     }

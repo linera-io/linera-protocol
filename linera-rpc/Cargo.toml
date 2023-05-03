@@ -16,7 +16,6 @@ test = ["linera-base/test", "linera-chain/test", "linera-core/test", "linera-exe
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-bcs = { workspace = true }
 bincode = { workspace = true }
 bytes = { workspace = true }
 dashmap = { workspace = true }

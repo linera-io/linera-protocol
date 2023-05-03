@@ -1028,6 +1028,7 @@ where
             info.requested_sent_certificates = certs;
         }
         if let Some(start) = query.request_received_log_excluding_first_nth {
+            let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
             info.requested_received_log = chain.received_log.read(start..).await?;
         }
         if let Some(hash) = query.request_blob {
