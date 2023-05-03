@@ -6,10 +6,10 @@
 mod state;
 
 use self::state::Counter;
+use async_graphql::{EmptySubscription, Object, Schema};
 use async_trait::async_trait;
 use linera_sdk::{QueryContext, Service, SimpleStateStorage};
 use std::sync::Arc;
-use async_graphql::{EmptySubscription, Schema, Object};
 use thiserror::Error;
 
 linera_sdk::service!(Counter);
@@ -29,10 +29,15 @@ impl Service for Counter {
             bytes => {
                 let graphql_request: async_graphql::Request =
                     serde_json::from_slice(bytes).map_err(|_| Error::InvalidQuery)?;
-                let schema = Schema::build(QueryRoot { value: self.value }, MutationRoot {}, EmptySubscription).finish();
+                let schema = Schema::build(
+                    QueryRoot { value: self.value },
+                    MutationRoot {},
+                    EmptySubscription,
+                )
+                .finish();
                 let res = schema.execute(graphql_request).await;
                 Ok(serde_json::to_vec(&res).unwrap())
-            },
+            }
         }
     }
 }
@@ -54,7 +59,9 @@ struct QueryRoot {
 #[Object]
 impl QueryRoot {
     #[allow(unused)]
-    async fn value(&self) -> &u64 { &self.value }
+    async fn value(&self) -> &u64 {
+        &self.value
+    }
 }
 
 /// An error that can occur during the contract execution.

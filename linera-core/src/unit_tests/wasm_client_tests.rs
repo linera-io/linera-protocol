@@ -29,12 +29,6 @@ use test_case::test_case;
 #[cfg(feature = "aws")]
 use crate::client::client_tests::MakeDynamoDbStoreClient;
 
-#[derive(Copy, Clone, Debug)]
-enum StorageKind {
-    Simple,
-    View,
-}
-
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -264,10 +258,7 @@ where
 async fn test_memory_run_reentrant_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    run_test_run_reentrant_application(
-        MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime),
-    )
-    .await
+    run_test_run_reentrant_application(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
@@ -277,10 +268,8 @@ async fn test_rocksdb_run_reentrant_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
     let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_run_reentrant_application(
-        MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime),
-    )
-    .await
+    run_test_run_reentrant_application(MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime))
+        .await
 }
 
 #[cfg(feature = "aws")]
@@ -290,15 +279,11 @@ async fn test_rocksdb_run_reentrant_application(
 async fn test_dynamo_db_run_reentrant_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    run_test_run_reentrant_application(
-        MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime),
-    )
-    .await
+    run_test_run_reentrant_application(MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime))
+        .await
 }
 
-async fn run_test_run_reentrant_application<B>(
-    store_builder: B,
-) -> Result<(), anyhow::Error>
+async fn run_test_run_reentrant_application<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
@@ -373,26 +358,16 @@ where
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
-async fn test_memory_cross_chain_message(
-    wasm_runtime: WasmRuntime,
-) -> Result<(), anyhow::Error> {
-    run_test_cross_chain_message(
-        MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime),
-    )
-    .await
+async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
+    run_test_cross_chain_message(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
-async fn test_rocksdb_cross_chain_message(
-    wasm_runtime: WasmRuntime,
-) -> Result<(), anyhow::Error> {
+async fn test_rocksdb_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
     let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_cross_chain_message(
-        MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime),
-    )
-    .await
+    run_test_cross_chain_message(MakeRocksdbStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg(feature = "aws")]
@@ -402,15 +377,10 @@ async fn test_rocksdb_cross_chain_message(
 async fn test_dynamo_db_cross_chain_message(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    run_test_cross_chain_message(
-        MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime),
-    )
-    .await
+    run_test_cross_chain_message(MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
-async fn run_test_cross_chain_message<B>(
-    store_builder: B,
-) -> Result<(), anyhow::Error>
+async fn run_test_cross_chain_message<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
