@@ -7,17 +7,20 @@ mod state;
 
 use async_trait::async_trait;
 use crowd_funding::Query;
-use linera_sdk::{base::Amount, QueryContext, Service, SimpleStateStorage};
+use linera_sdk::{
+    base::Amount, service::system_api::ReadOnlyViewStorageContext, QueryContext, Service,
+    ViewStateStorage,
+};
 use state::CrowdFunding;
 use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(CrowdFunding);
+linera_sdk::service!(CrowdFunding<ReadOnlyViewStorageContext>);
 
 #[async_trait]
-impl Service for CrowdFunding {
+impl Service for CrowdFunding<ReadOnlyViewStorageContext> {
     type Error = Error;
-    type Storage = SimpleStateStorage<Self>;
+    type Storage = ViewStateStorage<Self>;
 
     async fn query_application(
         self: Arc<Self>,
@@ -27,8 +30,8 @@ impl Service for CrowdFunding {
         let query = bcs::from_bytes(argument)?;
 
         let response = match query {
-            Query::Status => bcs::to_bytes(&self.status),
-            Query::Pledged => bcs::to_bytes(&self.pledged()),
+            Query::Status => bcs::to_bytes(&self.status.get()),
+            Query::Pledged => bcs::to_bytes(&self.pledged().await),
             Query::Target => bcs::to_bytes(&self.parameters().target),
             Query::Deadline => bcs::to_bytes(&self.parameters().deadline),
             Query::Owner => bcs::to_bytes(&self.parameters().owner),
@@ -38,10 +41,18 @@ impl Service for CrowdFunding {
     }
 }
 
-impl CrowdFunding {
+impl CrowdFunding<ReadOnlyViewStorageContext> {
     /// Returns the total amount of tokens pledged to this campaign.
-    fn pledged(&self) -> Amount {
-        self.pledges.values().sum()
+    pub async fn pledged(&self) -> Amount {
+        let mut total = Amount::zero();
+        self.pledges
+            .for_each_index_value(|_, value| {
+                total.saturating_add_assign(value);
+                Ok(())
+            })
+            .await
+            .expect("view iteration should not fail");
+        total
     }
 }
 

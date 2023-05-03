@@ -12,26 +12,37 @@ use fungible::{
 };
 use linera_sdk::{
     base::{Amount, ApplicationId, Owner, SessionId},
-    contract::system_api,
+    contract::{system_api, system_api::ViewStorageContext},
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
-    OperationContext, Session, SessionCallResult, SimpleStateStorage,
+    OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
+use std::{collections::BTreeMap, str::FromStr};
 use thiserror::Error;
 
-linera_sdk::contract!(FungibleToken);
+linera_sdk::contract!(FungibleToken<ViewStorageContext>);
 
 #[async_trait]
-impl Contract for FungibleToken {
+impl Contract for FungibleToken<ViewStorageContext> {
     type Error = Error;
-    type Storage = SimpleStateStorage<Self>;
+    type Storage = ViewStateStorage<Self>;
 
     async fn initialize(
         &mut self,
-        _context: &OperationContext,
+        context: &OperationContext,
         argument: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        let accounts = bcs::from_bytes(argument).map_err(Error::InvalidInitialState)?;
-        self.initialize_accounts(accounts);
+        let mut accounts: BTreeMap<AccountOwner, Amount> =
+            bcs::from_bytes(argument).map_err(Error::InvalidInitialState)?;
+        // If initial accounts are empty, creator gets 1M tokens to act like a faucet.
+        if accounts.is_empty() {
+            if let Some(owner) = context.authenticated_signer {
+                accounts.insert(
+                    AccountOwner::User(owner),
+                    Amount::from_str("1000000").unwrap(),
+                );
+            }
+        }
+        self.initialize_accounts(accounts).await;
         Ok(ExecutionResult::default())
     }
 
@@ -47,8 +58,10 @@ impl Contract for FungibleToken {
             target_account,
         } = operation;
         Self::check_account_authentication(None, context.authenticated_signer, owner)?;
-        self.debit(owner, amount)?;
-        Ok(self.finish_transfer_to_account(amount, target_account))
+        self.debit(owner, amount).await?;
+        Ok(self
+            .finish_transfer_to_account(amount, target_account)
+            .await)
     }
 
     async fn execute_effect(
@@ -58,7 +71,7 @@ impl Contract for FungibleToken {
     ) -> Result<ExecutionResult, Self::Error> {
         let effect = Effect::from_bcs_bytes(effect).map_err(Error::InvalidEffect)?;
         let Effect::Credit { owner, amount } = effect;
-        self.credit(owner, amount);
+        self.credit(owner, amount).await;
         Ok(ExecutionResult::default())
     }
 
@@ -73,7 +86,7 @@ impl Contract for FungibleToken {
         match request {
             ApplicationCall::Balance { owner } => {
                 let mut result = ApplicationCallResult::default();
-                let balance = self.balance(&owner);
+                let balance = self.balance(&owner).await;
                 result.value =
                     bcs::to_bytes(&balance).expect("Serializing amounts should not fail");
                 Ok(result)
@@ -88,8 +101,10 @@ impl Contract for FungibleToken {
                     context.authenticated_signer,
                     owner,
                 )?;
-                self.debit(owner, amount)?;
-                Ok(self.finish_transfer_to_destination(amount, destination))
+                self.debit(owner, amount).await?;
+                Ok(self
+                    .finish_transfer_to_destination(amount, destination)
+                    .await)
             }
         }
     }
@@ -107,12 +122,15 @@ impl Contract for FungibleToken {
             SessionCall::Transfer {
                 amount,
                 destination,
-            } => self.handle_session_transfer(session.data, amount, destination),
+            } => {
+                self.handle_session_transfer(session.data, amount, destination)
+                    .await
+            }
         }
     }
 }
 
-impl FungibleToken {
+impl FungibleToken<ViewStorageContext> {
     /// Verifies that a transfer is authenticated for this local account.
     fn check_account_authentication(
         authenticated_application_id: Option<ApplicationId>,
@@ -141,7 +159,7 @@ impl FungibleToken {
     }
 
     /// Handles a transfer from a session.
-    fn handle_session_transfer(
+    async fn handle_session_transfer(
         &mut self,
         session_data: Vec<u8>,
         amount: Amount,
@@ -157,13 +175,15 @@ impl FungibleToken {
             .then(|| bcs::to_bytes(&balance).expect("Serializing amounts should not fail"));
 
         Ok(SessionCallResult {
-            inner: self.finish_transfer_to_destination(amount, destination),
+            inner: self
+                .finish_transfer_to_destination(amount, destination)
+                .await,
             data: updated_session,
         })
     }
 
     /// Executes the final step of a transfer where the tokens are sent to the destination.
-    fn finish_transfer_to_destination(
+    async fn finish_transfer_to_destination(
         &mut self,
         amount: Amount,
         destination: Destination,
@@ -171,7 +191,7 @@ impl FungibleToken {
         let mut result = ApplicationCallResult::default();
         match destination {
             Destination::Account(account) => {
-                result.execution_result = self.finish_transfer_to_account(amount, account);
+                result.execution_result = self.finish_transfer_to_account(amount, account).await;
             }
             Destination::NewSession => {
                 result.create_sessions.push(Self::new_session(amount));
@@ -181,9 +201,13 @@ impl FungibleToken {
     }
 
     /// Executes the final step of a transfer where the tokens are sent to the destination.
-    fn finish_transfer_to_account(&mut self, amount: Amount, account: Account) -> ExecutionResult {
+    async fn finish_transfer_to_account(
+        &mut self,
+        amount: Amount,
+        account: Account,
+    ) -> ExecutionResult {
         if account.chain_id == system_api::current_chain_id() {
-            self.credit(account.owner, amount);
+            self.credit(account.owner, amount).await;
             ExecutionResult::default()
         } else {
             let effect = Effect::Credit {
