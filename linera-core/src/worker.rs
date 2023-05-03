@@ -1108,11 +1108,14 @@ where
                 latest_heights,
             } => {
                 let mut chain = self.storage.load_chain(sender).await?;
+                let mut chain_state_changed = false;
                 for (medium, height) in latest_heights {
                     let target = Target { recipient, medium };
-                    if chain.mark_messages_as_received(target, height).await?
-                        && chain.all_messages_delivered_up_to(height)
-                    {
+                    if !chain.mark_messages_as_received(target, height).await? {
+                        continue;
+                    }
+                    chain_state_changed = true;
+                    if chain.all_messages_delivered_up_to(height) {
                         // Handle delivery notifiers for this chain, if any.
                         if let hash_map::Entry::Occupied(mut map) =
                             self.delivery_notifiers.lock().await.entry(sender)
@@ -1134,6 +1137,8 @@ where
                             }
                         }
                     }
+                }
+                if chain_state_changed {
                     // Save the chain state.
                     chain.save().await?;
                 }
