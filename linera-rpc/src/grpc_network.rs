@@ -201,7 +201,14 @@ where
         let mut client = NotifierServiceClient::new(channel);
 
         while let Some(notification) = receiver.next().await {
-            let request = Request::new(notification.clone().into());
+            let notification: grpc::Notification = match notification.clone().try_into() {
+                Ok(notification) => notification,
+                Err(error) => {
+                    warn!(%error, nickname, "could not deserialize notification");
+                    continue;
+                }
+            };
+            let request = Request::new(notification.clone());
             if let Err(error) = client.notify(request).await {
                 error!(
                     %error,
@@ -484,13 +491,13 @@ macro_rules! client_delegate {
                 error: "missing body from response".to_string(),
             })? {
             Inner::ChainInfoResponse(response) => {
-                Ok(response.try_into().map_err(|_| NodeError::GrpcError {
-                    error: "failed to marshal response".to_string(),
+                Ok(response.try_into().map_err(|err| NodeError::GrpcError {
+                    error: format!("failed to marshal response: {}", err),
                 })?)
             }
             Inner::Error(error) => {
-                Err(bcs::from_bytes(&error).map_err(|_| NodeError::GrpcError {
-                    error: "failed to marshal error message".to_string(),
+                Err(bincode::deserialize(&error).map_err(|err| NodeError::GrpcError {
+                    error: format!("failed to marshal error message: {}", err),
                 })?)
             }
         }
@@ -511,11 +518,9 @@ macro_rules! mass_client_delegate {
                 )));
             }
             Inner::Error(error) => {
-                error!(
-                    error = ?bcs::from_bytes::<NodeError>(&error)
-                        .map_err(|e| ProtoConversionError::BcsError(e))?,
-                    "received error response",
-                )
+                let error = bincode::deserialize::<NodeError>(&error)
+                    .map_err(ProtoConversionError::BincodeError)?;
+                error!(?error, "received error response")
             }
         }
     }};
@@ -629,7 +634,7 @@ impl Proxyable for LiteCertificate {
 
 impl Proxyable for CertificateWithDependencies {
     fn chain_id(&self) -> Option<ChainId> {
-        self.chain_id.clone()?.try_into().ok()
+        self.certificate.as_ref()?.chain_id.clone()?.try_into().ok()
     }
 }
 

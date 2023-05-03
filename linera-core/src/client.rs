@@ -76,7 +76,7 @@ pub struct ChainClient<ValidatorNodeProvider, StorageClient> {
     /// Maximum number of pending messages processed at a time in a block.
     max_pending_messages: usize,
     /// Support synchronization of received certificates.
-    received_certificate_trackers: HashMap<ValidatorName, usize>,
+    received_certificate_trackers: HashMap<ValidatorName, u64>,
     /// How much time to wait between attempts when we wait for a cross-chain update.
     cross_chain_delay: Duration,
     /// How many times we are willing to retry a block that depends on cross-chain updates.
@@ -674,11 +674,11 @@ where
     async fn synchronize_received_certificates_from_validator<A>(
         chain_id: ChainId,
         name: ValidatorName,
-        tracker: usize,
+        tracker: u64,
         committees: BTreeMap<Epoch, Committee>,
         max_epoch: Epoch,
         mut client: A,
-    ) -> Result<(ValidatorName, usize, Vec<Certificate>), NodeError>
+    ) -> Result<(ValidatorName, u64, Vec<Certificate>), NodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
@@ -742,7 +742,7 @@ where
     async fn receive_certificates_from_validator(
         &mut self,
         name: ValidatorName,
-        tracker: usize,
+        tracker: u64,
         certificates: Vec<Certificate>,
     ) {
         for certificate in certificates {

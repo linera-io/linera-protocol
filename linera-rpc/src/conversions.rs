@@ -1,37 +1,31 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::grpc_network::{
-    grpc,
-    grpc::{ChainInfoResult, NameSignaturePair, NewBlock, NewMessage},
-};
+use crate::grpc_network::{grpc, grpc::ChainInfoResult};
 use ed25519::signature::Signature as edSignature;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
     data_types::BlockHeight,
     ensure,
-    identifiers::{BytecodeId, ChainId, EffectId, Owner},
+    identifiers::{ChainId, Owner},
 };
 use linera_chain::data_types::{
-    BlockAndRound, BlockProposal, Certificate, CertificateWithDependencies, ChannelFullName,
-    HashedValue, LiteCertificate, LiteValue, Medium, Origin,
+    BlockAndRound, BlockProposal, Certificate, CertificateWithDependencies, HashedValue,
+    LiteCertificate, LiteValue,
 };
 use linera_core::{
-    data_types::{
-        BlockHeightRange, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
-        CrossChainRequest::{ConfirmUpdatedRecipient, UpdateRecipient},
-    },
+    data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     node::NodeError,
-    worker::{Notification, Reason},
+    worker::Notification,
 };
-use linera_execution::{committee::ValidatorName, ApplicationId, UserApplicationId};
+use linera_execution::committee::ValidatorName;
 use thiserror::Error;
 use tonic::{Code, Status};
 
 #[derive(Error, Debug)]
 pub enum ProtoConversionError {
-    #[error("BCS serialization / deserialization error.")]
-    BcsError(#[from] bcs::Error),
+    #[error(transparent)]
+    BincodeError(#[from] bincode::Error),
     #[error("Conversion failed due to missing field")]
     MissingField,
     #[error("Signature error: {0}")]
@@ -42,53 +36,12 @@ pub enum ProtoConversionError {
     InconsistentChainId,
 }
 
-/// Extracts an optional field from a Proto type and maps it.
-macro_rules! proto_convert {
-    ($expr:expr) => {
-        $expr.ok_or(ProtoConversionError::MissingField)?.into()
-    };
-}
-
 /// Extracts an optional field from a Proto type and tries to map it.
-macro_rules! try_proto_convert {
-    ($expr:expr) => {
-        $expr
-            .ok_or(ProtoConversionError::MissingField)?
-            .try_into()?
-    };
-}
-
-/// Tries to map an iterable collection into a vector.
-macro_rules! try_proto_convert_vec {
-    ($expr:expr, $ty:ty) => {
-        $expr
-            .into_iter()
-            .map(|c| c.try_into())
-            .collect::<Result<Vec<$ty>, ProtoConversionError>>()?
-    };
-}
-
-/// Maps a type into another type.
-macro_rules! map_into {
-    ($expr:expr) => {
-        $expr.map(|x| x.into())
-    };
-}
-
-/// Casts a type to another type via a map.
-macro_rules! map_as {
-    ($expr:expr, $ty:ty) => {
-        $expr.map(|x| x as $ty)
-    };
-}
-
-/// Maps from Result<Option<T>,E> to Option<Result<T,E>>.
-macro_rules! map_invert {
-    ($expr:expr) => {
-        $expr
-            .map(|x| x.try_into())
-            .map_or(Ok(None), |v| v.map(Some))?
-    };
+fn try_proto_convert<S, T>(t: Option<T>) -> Result<S, ProtoConversionError>
+where
+    T: TryInto<S, Error = ProtoConversionError>,
+{
+    t.ok_or(ProtoConversionError::MissingField)?.try_into()
 }
 
 impl From<ProtoConversionError> for Status {
@@ -97,12 +50,14 @@ impl From<ProtoConversionError> for Status {
     }
 }
 
-impl From<Notification> for grpc::Notification {
-    fn from(notification: Notification) -> Self {
-        Self {
+impl TryFrom<Notification> for grpc::Notification {
+    type Error = ProtoConversionError;
+
+    fn try_from(notification: Notification) -> Result<Self, Self::Error> {
+        Ok(Self {
             chain_id: Some(notification.chain_id.into()),
-            reason: Some(notification.reason.into()),
-        }
+            reason: bincode::serialize(&notification.reason)?,
+        })
     }
 }
 
@@ -111,45 +66,9 @@ impl TryFrom<grpc::Notification> for Notification {
 
     fn try_from(notification: grpc::Notification) -> Result<Self, Self::Error> {
         Ok(Self {
-            chain_id: try_proto_convert!(notification.chain_id),
-            reason: try_proto_convert!(notification.reason),
+            chain_id: try_proto_convert(notification.chain_id)?,
+            reason: bincode::deserialize(&notification.reason)?,
         })
-    }
-}
-
-impl From<Reason> for grpc::Reason {
-    fn from(reason: Reason) -> Self {
-        Self {
-            inner: Some(match reason {
-                Reason::NewBlock { height } => grpc::reason::Inner::NewBlock(NewBlock {
-                    height: Some(height.into()),
-                }),
-                Reason::NewMessage { origin, height } => {
-                    grpc::reason::Inner::NewMessage(NewMessage {
-                        origin: Some(origin.into()),
-                        height: Some(height.into()),
-                    })
-                }
-            }),
-        }
-    }
-}
-
-impl TryFrom<grpc::Reason> for Reason {
-    type Error = ProtoConversionError;
-
-    fn try_from(reason: grpc::Reason) -> Result<Self, Self::Error> {
-        Ok(
-            match reason.inner.ok_or(ProtoConversionError::MissingField)? {
-                grpc::reason::Inner::NewBlock(new_block) => Reason::NewBlock {
-                    height: proto_convert!(new_block.height),
-                },
-                grpc::reason::Inner::NewMessage(new_message) => Reason::NewMessage {
-                    origin: try_proto_convert!(new_message.origin),
-                    height: proto_convert!(new_message.height),
-                },
-            },
-        )
     }
 }
 
@@ -157,10 +76,9 @@ impl TryFrom<ChainInfoResponse> for ChainInfoResult {
     type Error = ProtoConversionError;
 
     fn try_from(chain_info_response: ChainInfoResponse) -> Result<Self, Self::Error> {
+        let response = chain_info_response.try_into()?;
         Ok(ChainInfoResult {
-            inner: Some(grpc::chain_info_result::Inner::ChainInfoResponse(
-                chain_info_response.try_into()?,
-            )),
+            inner: Some(grpc::chain_info_result::Inner::ChainInfoResponse(response)),
         })
     }
 }
@@ -169,10 +87,9 @@ impl TryFrom<NodeError> for ChainInfoResult {
     type Error = ProtoConversionError;
 
     fn try_from(node_error: NodeError) -> Result<Self, Self::Error> {
+        let error = bincode::serialize(&node_error)?;
         Ok(ChainInfoResult {
-            inner: Some(grpc::chain_info_result::Inner::Error(
-                bcs::to_bytes(&node_error).expect("bcs::MAX_CONTAINER_DEPTH is never exceeded"),
-            )),
+            inner: Some(grpc::chain_info_result::Inner::Error(error)),
         })
     }
 }
@@ -181,17 +98,12 @@ impl TryFrom<BlockProposal> for grpc::BlockProposal {
     type Error = ProtoConversionError;
 
     fn try_from(block_proposal: BlockProposal) -> Result<Self, Self::Error> {
-        let blobs = block_proposal
-            .blobs
-            .iter()
-            .map(bcs::to_bytes)
-            .collect::<Result<_, bcs::Error>>()?;
         Ok(Self {
             chain_id: Some(block_proposal.content.block.chain_id.into()),
-            content: bcs::to_bytes(&block_proposal.content)?,
+            content: bincode::serialize(&block_proposal.content)?,
             owner: Some(block_proposal.owner.into()),
             signature: Some(block_proposal.signature.into()),
-            blobs,
+            blobs: bincode::serialize(&block_proposal.blobs)?,
         })
     }
 }
@@ -200,22 +112,16 @@ impl TryFrom<grpc::BlockProposal> for BlockProposal {
     type Error = ProtoConversionError;
 
     fn try_from(block_proposal: grpc::BlockProposal) -> Result<Self, Self::Error> {
-        let content: BlockAndRound = bcs::from_bytes(&block_proposal.content)?;
-        let inner_chain_id = content.block.chain_id;
+        let content: BlockAndRound = bincode::deserialize(&block_proposal.content)?;
         ensure!(
-            Some(inner_chain_id.into()) == block_proposal.chain_id,
+            Some(content.block.chain_id.into()) == block_proposal.chain_id,
             ProtoConversionError::InconsistentChainId
         );
-        let blobs = block_proposal
-            .blobs
-            .iter()
-            .map(|bytes| bcs::from_bytes(bytes))
-            .collect::<Result<_, bcs::Error>>()?;
         Ok(Self {
             content,
-            owner: try_proto_convert!(block_proposal.owner),
-            signature: try_proto_convert!(block_proposal.signature),
-            blobs,
+            owner: try_proto_convert(block_proposal.owner)?,
+            signature: try_proto_convert(block_proposal.signature)?,
+            blobs: bincode::deserialize(&block_proposal.blobs)?,
         })
     }
 }
@@ -231,40 +137,25 @@ impl TryFrom<grpc::CrossChainRequest> for CrossChainRequest {
             .ok_or(ProtoConversionError::MissingField)?
         {
             Inner::UpdateRecipient(grpc::UpdateRecipient {
-                height_map: grpc_height_map,
+                height_map,
                 sender,
                 recipient,
                 certificates,
-            }) => {
-                let mut height_map = Vec::new();
-                for grpc::UpdateRecipientEntry { medium, heights } in grpc_height_map {
-                    height_map.push((
-                        try_proto_convert!(medium),
-                        heights.into_iter().map(BlockHeight::from).collect(),
-                    ));
-                }
-                UpdateRecipient {
-                    height_map,
-                    sender: try_proto_convert!(sender),
-                    recipient: try_proto_convert!(recipient),
-                    certificates: try_proto_convert_vec!(certificates, Certificate),
-                }
-            }
+            }) => CrossChainRequest::UpdateRecipient {
+                height_map: bincode::deserialize(&height_map)?,
+                sender: try_proto_convert(sender)?,
+                recipient: try_proto_convert(recipient)?,
+                certificates: bincode::deserialize(&certificates)?,
+            },
             Inner::ConfirmUpdatedRecipient(grpc::ConfirmUpdatedRecipient {
                 sender,
                 recipient,
-                latest_heights: grpc_latest_heights,
-            }) => {
-                let mut latest_heights = Vec::new();
-                for grpc::ConfirmUpdatedRecipientEntry { medium, height } in grpc_latest_heights {
-                    latest_heights.push((try_proto_convert!(medium), proto_convert!(height)));
-                }
-                ConfirmUpdatedRecipient {
-                    sender: try_proto_convert!(sender),
-                    recipient: try_proto_convert!(recipient),
-                    latest_heights,
-                }
-            }
+                latest_heights,
+            }) => CrossChainRequest::ConfirmUpdatedRecipient {
+                sender: try_proto_convert(sender)?,
+                recipient: try_proto_convert(recipient)?,
+                latest_heights: bincode::deserialize(&latest_heights)?,
+            },
         };
         Ok(ccr)
     }
@@ -277,37 +168,25 @@ impl TryFrom<CrossChainRequest> for grpc::CrossChainRequest {
         use grpc::cross_chain_request::Inner;
 
         let inner = match cross_chain_request {
-            UpdateRecipient {
+            CrossChainRequest::UpdateRecipient {
                 height_map,
                 sender,
                 recipient,
                 certificates,
             } => Inner::UpdateRecipient(grpc::UpdateRecipient {
-                height_map: height_map
-                    .into_iter()
-                    .map(|(medium, heights)| grpc::UpdateRecipientEntry {
-                        medium: Some(medium.into()),
-                        heights: heights.into_iter().map(|height| height.into()).collect(),
-                    })
-                    .collect(),
+                height_map: bincode::serialize(&height_map)?,
                 sender: Some(sender.into()),
                 recipient: Some(recipient.into()),
-                certificates: try_proto_convert_vec!(certificates, grpc::Certificate),
+                certificates: bincode::serialize(&certificates)?,
             }),
-            ConfirmUpdatedRecipient {
+            CrossChainRequest::ConfirmUpdatedRecipient {
                 sender,
                 recipient,
                 latest_heights,
             } => Inner::ConfirmUpdatedRecipient(grpc::ConfirmUpdatedRecipient {
                 sender: Some(sender.into()),
                 recipient: Some(recipient.into()),
-                latest_heights: latest_heights
-                    .into_iter()
-                    .map(|(medium, height)| grpc::ConfirmUpdatedRecipientEntry {
-                        medium: Some(medium.into()),
-                        height: Some(height.into()),
-                    })
-                    .collect(),
+                latest_heights: bincode::serialize(&latest_heights)?,
             }),
         };
         Ok(Self { inner: Some(inner) })
@@ -318,23 +197,12 @@ impl TryFrom<grpc::LiteCertificate> for LiteCertificate {
     type Error = ProtoConversionError;
 
     fn try_from(certificate: grpc::LiteCertificate) -> Result<Self, Self::Error> {
-        let mut signatures = Vec::with_capacity(certificate.signatures.len());
-
-        for name_signature_pair in certificate.signatures {
-            let validator_name: ValidatorName =
-                try_proto_convert!(name_signature_pair.validator_name);
-            let signature: Signature = try_proto_convert!(name_signature_pair.signature);
-            signatures.push((validator_name, signature));
-        }
-
-        let chain_id = try_proto_convert!(certificate.chain_id);
-        Ok(LiteCertificate::new(
-            LiteValue {
-                value_hash: CryptoHash::try_from(certificate.hash.as_slice())?,
-                chain_id,
-            },
-            signatures,
-        ))
+        let value = LiteValue {
+            value_hash: CryptoHash::try_from(certificate.hash.as_slice())?,
+            chain_id: try_proto_convert(certificate.chain_id)?,
+        };
+        let signatures = bincode::deserialize(&certificate.signatures)?;
+        Ok(LiteCertificate::new(value, signatures))
     }
 }
 
@@ -342,19 +210,10 @@ impl TryFrom<LiteCertificate> for grpc::LiteCertificate {
     type Error = ProtoConversionError;
 
     fn try_from(certificate: LiteCertificate) -> Result<Self, Self::Error> {
-        let signatures = certificate
-            .signatures
-            .into_iter()
-            .map(|(validator_name, signature)| NameSignaturePair {
-                validator_name: Some(validator_name.into()),
-                signature: Some(signature.into()),
-            })
-            .collect();
-
         Ok(Self {
             hash: certificate.value.value_hash.as_bytes().to_vec(),
             chain_id: Some(certificate.value.chain_id.into()),
-            signatures,
+            signatures: bincode::serialize(&certificate.signatures)?,
         })
     }
 }
@@ -363,21 +222,12 @@ impl TryFrom<grpc::Certificate> for Certificate {
     type Error = ProtoConversionError;
 
     fn try_from(certificate: grpc::Certificate) -> Result<Self, Self::Error> {
-        let value: HashedValue = bcs::from_bytes(certificate.value.as_slice())?;
-        let inner_chain_id = value.chain_id();
+        let value: HashedValue = bincode::deserialize(&certificate.value)?;
         ensure!(
-            Some(inner_chain_id.into()) == certificate.chain_id,
+            Some(value.chain_id().into()) == certificate.chain_id,
             ProtoConversionError::InconsistentChainId
         );
-
-        let mut signatures = Vec::with_capacity(certificate.signatures.len());
-        for name_signature_pair in certificate.signatures {
-            let validator_name: ValidatorName =
-                try_proto_convert!(name_signature_pair.validator_name);
-            let signature: Signature = try_proto_convert!(name_signature_pair.signature);
-            signatures.push((validator_name, signature));
-        }
-
+        let signatures = bincode::deserialize(&certificate.signatures)?;
         Ok(Certificate::new(value, signatures))
     }
 }
@@ -386,19 +236,10 @@ impl TryFrom<Certificate> for grpc::Certificate {
     type Error = ProtoConversionError;
 
     fn try_from(certificate: Certificate) -> Result<Self, Self::Error> {
-        let signatures = certificate
-            .signatures
-            .into_iter()
-            .map(|(validator_name, signature)| NameSignaturePair {
-                validator_name: Some(validator_name.into()),
-                signature: Some(signature.into()),
-            })
-            .collect();
-
         Ok(Self {
             chain_id: Some(certificate.value.chain_id().into()),
-            value: bcs::to_bytes(&certificate.value)?,
-            signatures,
+            value: bincode::serialize(&certificate.value)?,
+            signatures: bincode::serialize(&certificate.signatures)?,
         })
     }
 }
@@ -407,17 +248,8 @@ impl TryFrom<grpc::CertificateWithDependencies> for CertificateWithDependencies 
     type Error = ProtoConversionError;
 
     fn try_from(cert_with_deps: grpc::CertificateWithDependencies) -> Result<Self, Self::Error> {
-        let blobs = cert_with_deps
-            .blobs
-            .into_iter()
-            .map(|value| bcs::from_bytes(value.as_slice()))
-            .collect::<Result<_, bcs::Error>>()?;
-        let certificate: Certificate = try_proto_convert!(cert_with_deps.certificate);
-        let inner_chain_id = certificate.value.chain_id();
-        ensure!(
-            Some(inner_chain_id.into()) == cert_with_deps.chain_id,
-            ProtoConversionError::InconsistentChainId
-        );
+        let blobs = bincode::deserialize(&cert_with_deps.blobs)?;
+        let certificate: Certificate = try_proto_convert(cert_with_deps.certificate)?;
         Ok(CertificateWithDependencies { certificate, blobs })
     }
 }
@@ -426,18 +258,9 @@ impl TryFrom<CertificateWithDependencies> for grpc::CertificateWithDependencies 
     type Error = ProtoConversionError;
 
     fn try_from(cert_with_deps: CertificateWithDependencies) -> Result<Self, Self::Error> {
-        let blobs = cert_with_deps
-            .blobs
-            .into_iter()
-            .map(|value| bcs::to_bytes(&value))
-            .collect::<Result<_, _>>()?;
-        let chain_id = Some(cert_with_deps.certificate.value.chain_id().into());
+        let blobs = bincode::serialize(&cert_with_deps.blobs)?;
         let certificate = Some(cert_with_deps.certificate.try_into()?);
-        Ok(Self {
-            chain_id,
-            certificate,
-            blobs,
-        })
+        Ok(Self { certificate, blobs })
     }
 }
 
@@ -445,23 +268,25 @@ impl TryFrom<grpc::ChainInfoQuery> for ChainInfoQuery {
     type Error = ProtoConversionError;
 
     fn try_from(chain_info_query: grpc::ChainInfoQuery) -> Result<Self, Self::Error> {
+        let request_sent_certificates_in_range = chain_info_query
+            .request_sent_certificates_in_range
+            .map(|range| bincode::deserialize(&range))
+            .transpose()?;
+        let request_blob = chain_info_query
+            .request_blob
+            .map(|bytes| bincode::deserialize(&bytes))
+            .transpose()?;
+
         Ok(Self {
             request_committees: chain_info_query.request_committees,
             request_pending_messages: chain_info_query.request_pending_messages,
-            chain_id: try_proto_convert!(chain_info_query.chain_id),
-            request_sent_certificates_in_range: map_invert!(
-                chain_info_query.request_sent_certificates_in_range
-            ),
-            request_received_log_excluding_first_nth: map_as!(
-                chain_info_query.request_received_log_excluding_first_nth,
-                usize
-            ),
-            test_next_block_height: map_into!(chain_info_query.test_next_block_height),
+            chain_id: try_proto_convert(chain_info_query.chain_id)?,
+            request_sent_certificates_in_range,
+            request_received_log_excluding_first_nth: chain_info_query
+                .request_received_log_excluding_first_nth,
+            test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
             request_manager_values: chain_info_query.request_manager_values,
-            request_blob: chain_info_query
-                .request_blob
-                .map(|bytes| bcs::from_bytes(&bytes))
-                .transpose()?,
+            request_blob,
         })
     }
 }
@@ -470,175 +295,25 @@ impl TryFrom<ChainInfoQuery> for grpc::ChainInfoQuery {
     type Error = ProtoConversionError;
 
     fn try_from(chain_info_query: ChainInfoQuery) -> Result<Self, Self::Error> {
-        let test_next_block_height = map_into!(chain_info_query.test_next_block_height);
-
-        let request_sent_certificates_in_range =
-            map_into!(chain_info_query.request_sent_certificates_in_range);
-
-        let request_received_log_excluding_first_nth = map_as!(
-            chain_info_query.request_received_log_excluding_first_nth,
-            u64
-        );
+        let request_sent_certificates_in_range = chain_info_query
+            .request_sent_certificates_in_range
+            .map(|range| bincode::serialize(&range))
+            .transpose()?;
+        let request_blob = chain_info_query
+            .request_blob
+            .map(|hash| bincode::serialize(&hash))
+            .transpose()?;
 
         Ok(Self {
             chain_id: Some(chain_info_query.chain_id.into()),
             request_committees: chain_info_query.request_committees,
             request_pending_messages: chain_info_query.request_pending_messages,
-            test_next_block_height,
+            test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
             request_sent_certificates_in_range,
-            request_received_log_excluding_first_nth,
+            request_received_log_excluding_first_nth: chain_info_query
+                .request_received_log_excluding_first_nth,
             request_manager_values: chain_info_query.request_manager_values,
-            request_blob: chain_info_query
-                .request_blob
-                .map(|hash| bcs::to_bytes(&hash))
-                .transpose()?,
-        })
-    }
-}
-
-impl From<ChannelFullName> for grpc::ChannelFullName {
-    fn from(full_name: ChannelFullName) -> Self {
-        Self {
-            application_id: Some(full_name.application_id.into()),
-            name: full_name.name.as_ref().to_owned(),
-        }
-    }
-}
-
-impl TryFrom<grpc::ChannelFullName> for ChannelFullName {
-    type Error = ProtoConversionError;
-
-    fn try_from(full_name: grpc::ChannelFullName) -> Result<Self, Self::Error> {
-        Ok(Self {
-            application_id: try_proto_convert!(full_name.application_id),
-            name: full_name.name.into(),
-        })
-    }
-}
-
-impl From<BlockHeightRange> for grpc::BlockHeightRange {
-    fn from(block_height_range: BlockHeightRange) -> Self {
-        Self {
-            start: Some(block_height_range.start.into()),
-            limit: map_as!(block_height_range.limit, u64),
-        }
-    }
-}
-
-impl TryFrom<grpc::BlockHeightRange> for BlockHeightRange {
-    type Error = ProtoConversionError;
-
-    fn try_from(block_height_range: grpc::BlockHeightRange) -> Result<Self, Self::Error> {
-        Ok(Self {
-            start: proto_convert!(block_height_range.start),
-            limit: block_height_range.limit,
-        })
-    }
-}
-
-impl From<ApplicationId> for grpc::ApplicationId {
-    fn from(application_id: ApplicationId) -> Self {
-        match application_id {
-            ApplicationId::System => grpc::ApplicationId {
-                inner: Some(grpc::application_id::Inner::System(())),
-            },
-            ApplicationId::User(UserApplicationId {
-                bytecode_id,
-                creation,
-            }) => grpc::ApplicationId {
-                inner: Some(grpc::application_id::Inner::User(grpc::UserApplicationId {
-                    bytecode_id: Some(bytecode_id.into()),
-                    creation: Some(creation.into()),
-                })),
-            },
-        }
-    }
-}
-
-impl TryFrom<grpc::ApplicationId> for ApplicationId {
-    type Error = ProtoConversionError;
-
-    fn try_from(application_id: grpc::ApplicationId) -> Result<Self, Self::Error> {
-        Ok(
-            match application_id
-                .inner
-                .ok_or(ProtoConversionError::MissingField)?
-            {
-                grpc::application_id::Inner::System(_) => ApplicationId::System,
-                grpc::application_id::Inner::User(user_application_id) => {
-                    ApplicationId::User(UserApplicationId {
-                        bytecode_id: try_proto_convert!(user_application_id.bytecode_id),
-                        creation: try_proto_convert!(user_application_id.creation),
-                    })
-                }
-            },
-        )
-    }
-}
-
-impl From<Medium> for grpc::Medium {
-    fn from(medium: Medium) -> Self {
-        match medium {
-            Medium::Direct => grpc::Medium {
-                inner: Some(grpc::medium::Inner::Direct(())),
-            },
-            Medium::Channel(full_name) => grpc::Medium {
-                inner: Some(grpc::medium::Inner::Channel(full_name.into())),
-            },
-        }
-    }
-}
-
-impl TryFrom<grpc::Medium> for Medium {
-    type Error = ProtoConversionError;
-
-    fn try_from(medium: grpc::Medium) -> Result<Self, Self::Error> {
-        Ok(
-            match medium.inner.ok_or(ProtoConversionError::MissingField)? {
-                grpc::medium::Inner::Direct(_) => Medium::Direct,
-                grpc::medium::Inner::Channel(full_name) => Medium::Channel(ChannelFullName {
-                    application_id: try_proto_convert!(full_name.application_id),
-                    name: full_name.name.into(),
-                }),
-            },
-        )
-    }
-}
-
-impl From<BytecodeId> for grpc::BytecodeId {
-    fn from(bytecode_id: BytecodeId) -> Self {
-        Self {
-            publish_effect: Some(bytecode_id.0.into()),
-        }
-    }
-}
-
-impl TryFrom<grpc::BytecodeId> for BytecodeId {
-    type Error = ProtoConversionError;
-
-    fn try_from(bytecode_id: grpc::BytecodeId) -> Result<Self, Self::Error> {
-        Ok(Self(try_proto_convert!(bytecode_id.publish_effect)))
-    }
-}
-
-impl From<EffectId> for grpc::EffectId {
-    fn from(effect_id: EffectId) -> Self {
-        Self {
-            chain_id: Some(effect_id.chain_id.into()),
-            height: Some(effect_id.height.into()),
-            index: effect_id.index,
-        }
-    }
-}
-
-impl TryFrom<grpc::EffectId> for EffectId {
-    type Error = ProtoConversionError;
-
-    fn try_from(effect_id: grpc::EffectId) -> Result<Self, Self::Error> {
-        Ok(Self {
-            chain_id: try_proto_convert!(effect_id.chain_id),
-            height: proto_convert!(effect_id.height),
-            index: effect_id.index,
+            request_blob,
         })
     }
 }
@@ -672,26 +347,6 @@ impl TryFrom<grpc::PublicKey> for PublicKey {
 
     fn try_from(public_key: grpc::PublicKey) -> Result<Self, Self::Error> {
         Ok(PublicKey::try_from(public_key.bytes.as_slice())?)
-    }
-}
-
-impl From<Origin> for grpc::Origin {
-    fn from(origin: Origin) -> Self {
-        Self {
-            sender: Some(origin.sender.into()),
-            medium: Some(origin.medium.into()),
-        }
-    }
-}
-
-impl TryFrom<grpc::Origin> for Origin {
-    type Error = ProtoConversionError;
-
-    fn try_from(origin: grpc::Origin) -> Result<Self, Self::Error> {
-        Ok(Self {
-            sender: try_proto_convert!(origin.sender),
-            medium: try_proto_convert!(origin.medium),
-        })
     }
 }
 
@@ -734,8 +389,8 @@ impl TryFrom<ChainInfoResponse> for grpc::ChainInfoResponse {
 
     fn try_from(chain_info_response: ChainInfoResponse) -> Result<Self, Self::Error> {
         Ok(Self {
-            chain_info: bcs::to_bytes(&chain_info_response.info)?,
-            signature: map_into!(chain_info_response.signature),
+            chain_info: bincode::serialize(&chain_info_response.info)?,
+            signature: chain_info_response.signature.map(Into::into),
         })
     }
 }
@@ -744,10 +399,12 @@ impl TryFrom<grpc::ChainInfoResponse> for ChainInfoResponse {
     type Error = ProtoConversionError;
 
     fn try_from(chain_info_response: grpc::ChainInfoResponse) -> Result<Self, Self::Error> {
-        Ok(Self {
-            info: bcs::from_bytes(chain_info_response.chain_info.as_slice())?,
-            signature: map_invert!(chain_info_response.signature),
-        })
+        let signature = chain_info_response
+            .signature
+            .map(TryInto::try_into)
+            .transpose()?;
+        let info = bincode::deserialize(chain_info_response.chain_info.as_slice())?;
+        Ok(Self { info, signature })
     }
 }
 
@@ -828,31 +485,6 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_origin() {
-        let origin_direct = Origin::chain(ChainId::root(0));
-        round_trip_check::<_, grpc::Origin>(origin_direct);
-
-        let effect_id = EffectId {
-            chain_id: ChainId::root(0),
-            height: BlockHeight(10),
-            index: 20,
-        };
-
-        let application_id = ApplicationId::User(UserApplicationId {
-            bytecode_id: BytecodeId(effect_id),
-            creation: effect_id,
-        });
-
-        let full_name = ChannelFullName {
-            application_id,
-            name: vec![].into(),
-        };
-
-        let origin_medium = Origin::channel(ChainId::root(0), full_name);
-        round_trip_check::<_, grpc::Origin>(origin_medium);
-    }
-
-    #[test]
     pub fn test_signature() {
         let key_pair = KeyPair::generate();
         let signature = Signature::new(&Foo("test".into()), &key_pair);
@@ -887,39 +519,6 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_application_id() {
-        round_trip_check::<_, grpc::ApplicationId>(ApplicationId::System);
-
-        let effect_id = EffectId {
-            chain_id: ChainId::root(0),
-            height: BlockHeight(10),
-            index: 20,
-        };
-
-        let application_id_user = ApplicationId::User(UserApplicationId {
-            bytecode_id: BytecodeId(effect_id),
-            creation: effect_id,
-        });
-
-        round_trip_check::<_, grpc::ApplicationId>(application_id_user);
-    }
-
-    #[test]
-    pub fn test_block_height_range() {
-        let block_height_range_none = BlockHeightRange {
-            start: BlockHeight::from(10),
-            limit: None,
-        };
-        round_trip_check::<_, grpc::BlockHeightRange>(block_height_range_none);
-
-        let block_height_range_some = BlockHeightRange {
-            start: BlockHeight::from(10),
-            limit: Some(20),
-        };
-        round_trip_check::<_, grpc::BlockHeightRange>(block_height_range_some);
-    }
-
-    #[test]
     pub fn test_chain_info_response() {
         let chain_info = ChainInfo {
             chain_id: ChainId::root(0),
@@ -940,14 +539,14 @@ pub mod tests {
         };
 
         let chain_info_response_none = ChainInfoResponse {
-            // `info` is bcs so no need to test conversions extensively
+            // `info` is bincode so no need to test conversions extensively
             info: chain_info.clone(),
             signature: None,
         };
         round_trip_check::<_, grpc::ChainInfoResponse>(chain_info_response_none);
 
         let chain_info_response_some = ChainInfoResponse {
-            // `info` is bcs so no need to test conversions extensively
+            // `info` is bincode so no need to test conversions extensively
             info: chain_info,
             signature: Some(Signature::new(&Foo("test".into()), &KeyPair::generate())),
         };
@@ -964,7 +563,7 @@ pub mod tests {
             test_next_block_height: Some(BlockHeight::from(10)),
             request_committees: false,
             request_pending_messages: false,
-            request_sent_certificates_in_range: Some(BlockHeightRange {
+            request_sent_certificates_in_range: Some(linera_core::data_types::BlockHeightRange {
                 start: BlockHeight::from(3),
                 limit: Some(5),
             }),
@@ -1013,19 +612,23 @@ pub mod tests {
 
     #[test]
     pub fn test_cross_chain_request() {
-        let cross_chain_request_update_recipient = UpdateRecipient {
-            height_map: vec![(Medium::Direct, vec![])],
+        let cross_chain_request_update_recipient = CrossChainRequest::UpdateRecipient {
+            height_map: vec![(linera_chain::data_types::Medium::Direct, vec![])],
             sender: ChainId::root(0),
             recipient: ChainId::root(0),
             certificates: vec![],
         };
         round_trip_check::<_, grpc::CrossChainRequest>(cross_chain_request_update_recipient);
 
-        let cross_chain_request_confirm_updated_recipient = ConfirmUpdatedRecipient {
-            sender: ChainId::root(0),
-            recipient: ChainId::root(0),
-            latest_heights: vec![(Medium::Direct, Default::default())],
-        };
+        let cross_chain_request_confirm_updated_recipient =
+            CrossChainRequest::ConfirmUpdatedRecipient {
+                sender: ChainId::root(0),
+                recipient: ChainId::root(0),
+                latest_heights: vec![(
+                    linera_chain::data_types::Medium::Direct,
+                    Default::default(),
+                )],
+            };
         round_trip_check::<_, grpc::CrossChainRequest>(
             cross_chain_request_confirm_updated_recipient,
         );
@@ -1054,24 +657,10 @@ pub mod tests {
     pub fn test_notification() {
         let notification = Notification {
             chain_id: ChainId::root(0),
-            reason: Reason::NewBlock {
+            reason: linera_core::worker::Reason::NewBlock {
                 height: BlockHeight(0),
             },
         };
         round_trip_check::<_, grpc::Notification>(notification);
-    }
-
-    #[test]
-    pub fn test_reason() {
-        let reason_new_block = Reason::NewBlock {
-            height: BlockHeight(0),
-        };
-        round_trip_check::<_, grpc::Reason>(reason_new_block);
-
-        let reason_new_message = Reason::NewMessage {
-            origin: Origin::chain(ChainId::root(0)),
-            height: BlockHeight(0),
-        };
-        round_trip_check::<_, grpc::Reason>(reason_new_message);
     }
 }

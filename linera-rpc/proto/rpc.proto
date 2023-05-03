@@ -58,31 +58,14 @@ message SubscriptionRequest {
 // Notify that a chain has a new certified block or a new message.
 message Notification {
   ChainId chain_id = 1;
-  Reason reason = 2;
-}
-
-// Reason for the notification.
-message Reason {
-  oneof inner {
-    NewBlock new_block = 1;
-    NewMessage new_message = 2;
-  }
-}
-
-message NewBlock {
-  BlockHeight height = 1;
-}
-
-message NewMessage {
-  Origin origin = 1;
-  BlockHeight height = 2;
+  bytes reason = 2;
 }
 
 // A wrapper around ChainInfoResponse which contains a serialized error variant
 message ChainInfoResult {
   oneof inner {
     ChainInfoResponse chain_info_response = 1;
-    // a bcs wrapper around `NodeError`
+    // a bincode wrapper around `NodeError`
     bytes error = 2;
   }
 }
@@ -98,29 +81,17 @@ message CrossChainRequest {
 // Communicate a number of confirmed blocks from the sender to the recipient.
 // Blocks must be given by increasing heights.
 message UpdateRecipient {
-  repeated UpdateRecipientEntry height_map = 1;
+  bytes height_map = 1;
   ChainId sender = 2;
   ChainId recipient = 3;
-  repeated Certificate certificates = 4;
-}
-
-// An entry of UpdateRecipient, specifying which blocks are relevant for which application
-// and medium.
-message UpdateRecipientEntry {
-  Medium medium = 1;
-  repeated BlockHeight heights = 2;
+  bytes certificates = 4;
 }
 
 // Acknowledge the height of the highest confirmed blocks communicated with `UpdateRecipient`.
 message ConfirmUpdatedRecipient {
   ChainId sender = 1;
   ChainId recipient = 2;
-  repeated ConfirmUpdatedRecipientEntry latest_heights = 3;
-}
-
-message ConfirmUpdatedRecipientEntry {
-  Medium medium = 1;
-  BlockHeight height = 2;
+  bytes latest_heights = 3;
 }
 
 // Message to obtain information on a chain.
@@ -138,7 +109,7 @@ message ChainInfoQuery {
   bool request_pending_messages = 4;
 
   // Query a range of certificates sent from the chain.
-  optional BlockHeightRange request_sent_certificates_in_range = 5;
+  optional bytes request_sent_certificates_in_range = 5;
 
   // Query new certificate removed from the chain.
   optional uint64 request_received_log_excluding_first_nth = 6;
@@ -150,36 +121,12 @@ message ChainInfoQuery {
   optional bytes request_blob = 8;
 }
 
-// The origin of a message, relative to a particular application. Used to identify each inbox.
-message Origin {
-  // The chain ID of the sender.
-  ChainId sender = 1;
-
-  // The medium
-  Medium medium = 2;
-}
-
-// The origin of a message coming from a particular chain. Used to identify each inbox.
-message Medium {
-  oneof inner {
-    // A direct message.
-    google.protobuf.Empty direct = 1;
-    // A channel message.
-    ChannelFullName channel = 2;
-  }
-}
-
-message ChannelFullName {
-  ApplicationId application_id = 1;
-  bytes name = 2;
-}
-
 // An authenticated proposal for a new block.
 message BlockProposal {
   // The ID of the chain (used for routing).
   ChainId chain_id = 10;
 
-  // BCS signable
+  // bincode-encoded content
   bytes content = 1;
 
   // Byte-encoded public key
@@ -189,7 +136,7 @@ message BlockProposal {
   Signature signature = 3;
 
   // Required bytecode
-  repeated bytes blobs = 4;
+  bytes blobs = 4;
 }
 
 // A certified statement from the committee, without the value.
@@ -201,7 +148,7 @@ message LiteCertificate {
   ChainId chain_id = 2;
 
   // Signatures on the value
-  repeated NameSignaturePair signatures = 3;
+  bytes signatures = 3;
 }
 
 // A certified statement from the committee.
@@ -209,71 +156,21 @@ message Certificate {
   // The ID of the chain (used for routing).
   ChainId chain_id = 10;
 
-  // The certified value (bcs signable)
+  // The certified value (BCS signable)
   bytes value = 1;
 
   // Signatures on the value
-  repeated NameSignaturePair signatures = 2;
+  bytes signatures = 2;
 }
 
 // A certified statement from the committee, together with other certificates
 // required for execution.
 message CertificateWithDependencies {
-  // The ID of the chain (used for routing).
-  ChainId chain_id = 10;
-
   // The certificate
   Certificate certificate = 1;
 
   // Other certificates containing bytecode required by the first one
-  repeated bytes blobs = 2;
-}
-
-// A range of block heights as used in ChainInfoQuery.
-message BlockHeightRange {
-  // Starting point
-  BlockHeight start = 1;
-
-  // Optional limit on the number of elements.
-  optional uint64 limit = 2;
-}
-
-message NameSignaturePair {
-  PublicKey validator_name = 1;
-  Signature signature = 2;
-}
-
-// A unique identifier for an application.
-message ApplicationId {
-  oneof inner {
-    // The system application.
-    google.protobuf.Empty system = 1;
-    // A user application.
-    UserApplicationId user = 2;
-  }
-}
-
-// A user application Id.
-message UserApplicationId {
-  // The bytecode to use for the application.
-  BytecodeId bytecode_id = 1;
-
-  // The unique ID of the application's creation.
-  EffectId creation = 2;
-}
-
-// A unique identifier for an application bytecode.
-message BytecodeId {
-  EffectId publish_effect = 1;
-}
-
-// The index of an effect in a chain.
-message EffectId {
-  ChainId chain_id = 1;
-
-  BlockHeight height = 2;
-
-  uint32 index = 3;
+  bytes blobs = 2;
 }
 
 message ChainId {
@@ -294,7 +191,7 @@ message Signature {
 
 // Response to `ChainInfoQuery`
 message ChainInfoResponse {
-  // bcs signable
+  // bincode-encoded chain info
   bytes chain_info = 1;
 
   // Optional signature for the response.
