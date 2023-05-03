@@ -8,25 +8,26 @@ mod state;
 use self::state::ReentrantCounter;
 use async_trait::async_trait;
 use linera_sdk::{
-    base::SessionId, contract::system_api, ApplicationCallResult, CalleeContext, Contract,
-    EffectContext, ExecutionResult, OperationContext, Session, SessionCallResult,
-    SimpleStateStorage,
+    base::SessionId,
+    contract::system_api::{self, ViewStorageContext},
+    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
 use thiserror::Error;
 
-linera_sdk::contract!(ReentrantCounter);
+linera_sdk::contract!(ReentrantCounter<ViewStorageContext>);
 
 #[async_trait]
-impl Contract for ReentrantCounter {
+impl Contract for ReentrantCounter<ViewStorageContext> {
     type Error = Error;
-    type Storage = SimpleStateStorage<Self>;
+    type Storage = ViewStateStorage<Self>;
 
     async fn initialize(
         &mut self,
         _context: &OperationContext,
         argument: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        self.value = bcs::from_bytes(argument)?;
+        self.value.set(bcs::from_bytes(argument)?);
         Ok(ExecutionResult::default())
     }
 
@@ -41,7 +42,8 @@ impl Contract for ReentrantCounter {
         let second_half = increment - first_half;
         let second_half_as_bytes = bcs::to_bytes(&second_half).expect("Failed to serialize `u128`");
 
-        self.value += first_half;
+        let value = self.value.get_mut();
+        *value += first_half;
 
         self.call_application(
             false,
@@ -69,9 +71,11 @@ impl Contract for ReentrantCounter {
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
         let increment: u128 = bcs::from_bytes(argument)?;
-        self.value += increment;
+        let mut value = *self.value.get();
+        value += increment;
+        self.value.set(value);
         Ok(ApplicationCallResult {
-            value: bcs::to_bytes(&self.value).expect("Serialization should not fail"),
+            value: bcs::to_bytes(&value).expect("Serialization should not fail"),
             ..ApplicationCallResult::default()
         })
     }

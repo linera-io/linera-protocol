@@ -1793,7 +1793,9 @@ dependencies = [
  "async-trait",
  "bcs",
  "linera-sdk",
+ "linera-views",
  "serde",
+ "serde_json",
  "thiserror",
 ]
 

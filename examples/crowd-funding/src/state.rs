@@ -3,8 +3,13 @@
 
 use fungible::AccountOwner;
 use linera_sdk::base::{Amount, ApplicationId, Timestamp};
+use linera_views::{
+    common::Context,
+    map_view::MapView,
+    register_view::RegisterView,
+    views::{RootView, View},
+};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 /// The parameters required to create a crowd-funding campaign.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -32,14 +37,14 @@ pub enum Status {
 }
 
 /// The crowd-funding campaign's state.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct CrowdFunding {
+#[derive(RootView)]
+pub struct CrowdFunding<C> {
     /// The status of the campaign.
-    pub status: Status,
+    pub status: RegisterView<C, Status>,
     /// The map of pledges that will be collected if the campaign succeeds.
-    pub pledges: BTreeMap<AccountOwner, Amount>,
+    pub pledges: MapView<C, AccountOwner, Amount>,
     /// The parameters that determine the details the campaign.
-    pub parameters: Option<Parameters>,
+    pub parameters: RegisterView<C, Option<Parameters>>,
 }
 
 #[allow(dead_code)]
@@ -50,10 +55,15 @@ impl Status {
     }
 }
 
-impl CrowdFunding {
+impl<C> CrowdFunding<C>
+where
+    C: Context + Send + Sync + Clone + 'static,
+    linera_views::views::ViewError: From<C::Error>,
+{
     /// Retrieves the campaign [`Parameters`] stored in the application's state.
     pub fn parameters(&self) -> &Parameters {
         self.parameters
+            .get()
             .as_ref()
             .expect("Application was not initialized")
     }

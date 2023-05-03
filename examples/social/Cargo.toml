@@ -5,18 +5,18 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
-async-graphql = { workspace = true }
-async-trait = { workspace = true }
-bcs = { workspace = true }
-linera-sdk = { workspace = true }
-linera-views = { workspace = true }
-thiserror = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
+async-graphql = { version = "5.0.7", default-features = false }
+async-trait = "0.1.52"
+bcs = "0.1.3"
+linera-sdk = { path = "../../linera-sdk" }
+linera-views = { path = "../../linera-views" }
+thiserror = "1.0.31"
+serde = { version = "1.0.152", features = ["derive"] }
+serde_json = "1.0.93"
 
 [dev-dependencies]
-linera-sdk = { workspace = true, features = ["test"] }
-webassembly-test = { workspace = true }
+linera-sdk = { path = "../../linera-sdk", features = ["test"] }
+webassembly-test = "0.1.0"
 
 [[bin]]
 name = "social_contract"
