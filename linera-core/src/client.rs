@@ -399,11 +399,8 @@ where
                     debug!("Accepting redundant notification for new message");
                     return true;
                 }
-                if let Err(e) = this
-                    .lock()
-                    .await
-                    .find_received_certificates_from_validator(name, node)
-                    .await
+                if let Err(e) =
+                    Self::find_received_certificates_from_validator(this.clone(), name, node).await
                 {
                     error!("Fail to process notification: {e}");
                     return false;
@@ -698,9 +695,9 @@ where
 
             let mut response = client.handle_chain_info_query(query).await?;
             let Some(certificate) = response.info
-                            .requested_sent_certificates.pop() else {
-                            break;
-                        };
+                .requested_sent_certificates.pop() else {
+                break;
+            };
             if !certificate.value.is_confirmed() {
                 return Err(NodeError::InvalidChainInfoResponse);
             };
@@ -761,7 +758,16 @@ where
             }
         }
         // Update tracker.
-        self.received_certificate_trackers.insert(name, tracker);
+        self.received_certificate_trackers
+            .entry(name)
+            .and_modify(|t| {
+                // Because several synchronizations could happen in parallel, we need to make
+                // sure to never go backward.
+                if tracker > *t {
+                    *t = tracker;
+                }
+            })
+            .or_insert(tracker);
     }
 
     /// Attempts to download new received certificates.
@@ -828,27 +834,36 @@ where
     /// This is similar to `find_received_certificates` but for only one validator.
     /// We also don't try to synchronize the admin chain.
     pub async fn find_received_certificates_from_validator<A>(
-        &mut self,
+        this: Arc<Mutex<Self>>,
         name: ValidatorName,
         client: A,
     ) -> Result<(), NodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
-        let (committees, max_epoch) = self.known_committees().await?;
+        let ((committees, max_epoch), chain_id, current_tracker) = {
+            let mut guard = this.lock().await;
+            (
+                guard.known_committees().await?,
+                guard.chain_id(),
+                *guard.received_certificate_trackers.get(&name).unwrap_or(&0),
+            )
+        };
         // Proceed to downloading received certificates.
-        let current_tracker = self.received_certificate_trackers.get(&name).unwrap_or(&0);
         let (name, tracker, certificates) = Self::synchronize_received_certificates_from_validator(
-            self.chain_id,
+            chain_id,
             name,
-            *current_tracker,
+            current_tracker,
             committees,
             max_epoch,
             client,
         )
         .await?;
-        // Process received certificates.
-        self.receive_certificates_from_validator(name, tracker, certificates)
+        // Process received certificates. If the client state has changed during the
+        // network calls, we should still be fine.
+        this.lock()
+            .await
+            .receive_certificates_from_validator(name, tracker, certificates)
             .await;
         Ok(())
     }
