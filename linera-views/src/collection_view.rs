@@ -351,6 +351,95 @@ where
     }
 }
 
+impl<'a, C, W> ByteCollectionView<C, W>
+where
+    C: Context + Send + Clone + 'static,
+    ViewError: From<C::Error>,
+    W: View<C> + Send + 'static,
+{
+    /// Pre load the list of entries into the database in order to have direct access to the views.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::ByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
+    ///   coll.pre_load_multi_entry(vec![vec![0,1],vec![2,3]]).await.unwrap();
+    ///   let value = view.get_mut();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
+    pub async fn pre_load_multi_entry(&'a mut self, vector_short_key: Vec<Vec<u8>>) -> Result<(), ViewError> {
+        let mut vector_part_short_key = Vec::new();
+        let updates = self.updates.get_mut();
+        for short_key in vector_short_key {
+            match updates.entry(short_key.clone()) {
+                btree_map::Entry::Occupied(entry) => {
+                    let entry = entry.into_mut();
+                    if let Update::Removed = entry {
+                        vector_part_short_key.push(short_key);
+                    }
+                },
+                btree_map::Entry::Vacant(_entry) => {
+                    vector_part_short_key.push(short_key)
+                }
+            }
+        }
+        let mut handles = Vec::<tokio::task::JoinHandle<Result<W, ViewError>>>::new();
+        for short_key in vector_part_short_key.clone() {
+            let context = self.context.clone();
+            handles.push(tokio::spawn(async move {
+                let key = context
+                    .base_tag_index(KeyTag::Subview as u8, &short_key);
+                let context = context.clone_with_base_key(key);
+                W::load(context).await
+            }));
+        }
+        let response = futures::future::join_all(handles).await;
+        for (i, view) in response.into_iter().enumerate() {
+            let short_key = vector_part_short_key[i].clone();
+            updates.insert(short_key.clone(), Update::Set(view??));
+        }
+        Ok(())
+    }
+
+    /// Pre load the list of entries into the database in order to have direct access to the views.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::collection_view::ByteCollectionView;
+    /// # use linera_views::register_view::RegisterView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
+    ///   coll.pre_load_multi_entry(vec![vec![0,1],vec![2,3]]).await.unwrap();
+    ///   let value = coll.direct_load_entry_mut(vec![0,1]).unwrap();
+    ///   assert_eq!(*value, String::default());
+    ///   let value = coll.direct_load_entry_mut(vec![2,3]).unwrap();
+    ///   assert_eq!(*value, String::default());
+    /// # })
+    /// ```
+    pub fn direct_load_entry_mut(&mut self, short_key: Vec<u8>) -> Result<&mut W, ViewError> {
+        match self.updates.get_mut().entry(short_key.clone()) {
+            btree_map::Entry::Occupied(entry) => {
+                let entry = entry.into_mut();
+                match entry {
+                    Update::Set(view) => Ok(view),
+                    Update::Removed => {
+                        return Err(ViewError::MissingInUpdates);
+                    },
+                }
+            }
+            btree_map::Entry::Vacant(_) => {
+                return Err(ViewError::MissingInUpdates);
+            }
+        }
+    }
+}
+
+
 impl<C, W> ByteCollectionView<C, W>
 where
     C: Context + Send,

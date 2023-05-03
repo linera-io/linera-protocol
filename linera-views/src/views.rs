@@ -97,6 +97,10 @@ pub enum ViewError {
     /// The database is corrupt: Some entries are missing
     #[error("Missing database entries")]
     MissingEntries,
+
+    /// The entry is missing in updates
+    #[error("Missing entry in updates")]
+    MissingInUpdates,
 }
 
 impl ViewError {
