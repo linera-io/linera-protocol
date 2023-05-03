@@ -21,6 +21,7 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
     type InitializationArguments = u128;
+    type ApplicationCallArguments = u128;
 
     async fn initialize(
         &mut self,
@@ -67,10 +68,9 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
     async fn handle_application_call(
         &mut self,
         _context: &CalleeContext,
-        argument: &[u8],
+        increment: u128,
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
-        let increment: u128 = bcs::from_bytes(argument)?;
         let value = self.value.get_mut();
         *value += increment;
         Ok(ApplicationCallResult {

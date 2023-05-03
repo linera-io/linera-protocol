@@ -27,6 +27,7 @@ impl Contract for CrowdFunding<ViewStorageContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
     type InitializationArguments = InitializationArguments;
+    type ApplicationCallArguments = ApplicationCall;
 
     async fn initialize(
         &mut self,
@@ -89,12 +90,9 @@ impl Contract for CrowdFunding<ViewStorageContext> {
     async fn handle_application_call(
         &mut self,
         context: &CalleeContext,
-        argument: &[u8],
+        call: ApplicationCall,
         sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
-        let call: ApplicationCall =
-            bcs::from_bytes(argument).map_err(Error::InvalidCrossApplicationCall)?;
-
         let mut result = ApplicationCallResult::default();
 
         match call {
@@ -492,4 +490,8 @@ pub enum Error {
     /// Can't pledge to or collect pledges from a cancelled campaign.
     #[error("Crowd-funding campaign has been cancelled")]
     Cancelled,
+
+    /// Failed to deserialize BCS bytes
+    #[error("Failed to deserialize BCS bytes")]
+    BcsError(#[from] bcs::Error),
 }

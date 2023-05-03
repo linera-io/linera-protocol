@@ -28,6 +28,7 @@ impl Contract for FungibleToken<ViewStorageContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
     type InitializationArguments = InitialState;
+    type ApplicationCallArguments = ApplicationCall;
 
     async fn initialize(
         &mut self,
@@ -109,12 +110,10 @@ impl Contract for FungibleToken<ViewStorageContext> {
     async fn handle_application_call(
         &mut self,
         context: &CalleeContext,
-        argument: &[u8],
+        call: ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
-        let request =
-            ApplicationCall::from_bcs_bytes(argument).map_err(Error::InvalidApplicationCall)?;
-        match request {
+        match call {
             ApplicationCall::Balance { owner } => {
                 let mut result = ApplicationCallResult::default();
                 let balance = self.balance(&owner).await;
@@ -332,4 +331,8 @@ pub enum Error {
     /// Requested transfer does not have permission on this account.
     #[error("The requested transfer is not correctly authenticated.")]
     IncorrectAuthentication,
+
+    /// Failed to deserialize BCS bytes
+    #[error("Failed to deserialize BCS bytes")]
+    BcsError(#[from] bcs::Error),
 }

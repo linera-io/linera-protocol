@@ -80,11 +80,13 @@ pub struct ViewStateStorage<A>(std::marker::PhantomData<A>);
 #[async_trait]
 pub trait Contract: Sized {
     /// Message reports for application execution errors.
-    type Error: Error + From<serde_json::Error>;
+    type Error: Error + From<serde_json::Error> + From<bcs::Error>;
     /// The desired storage backend to use to store the application's state.
     type Storage;
     /// Initialization Arguments.
     type InitializationArguments: DeserializeOwned + Send;
+    /// Application Call Arguments.
+    type ApplicationCallArguments: DeserializeOwned + Serialize + Send;
 
     /// Initializes the application on the chain that created it.
     ///
@@ -156,7 +158,7 @@ pub trait Contract: Sized {
     async fn handle_application_call(
         &mut self,
         context: &CalleeContext,
-        argument: &[u8],
+        argument: Self::ApplicationCallArguments,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error>;
 

@@ -20,6 +20,7 @@ impl Contract for Counter {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
     type InitializationArguments = u64;
+    type ApplicationCallArguments = u64;
 
     async fn initialize(
         &mut self,
@@ -50,11 +51,9 @@ impl Contract for Counter {
     async fn handle_application_call(
         &mut self,
         _context: &CalleeContext,
-        argument: &[u8],
+        increment: u64,
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
-        log::error!("received {:?}", argument);
-        let increment: u64 = bcs::from_bytes(argument)?;
         log::error!("incrementing by {:?}", increment);
         self.value += increment;
         Ok(ApplicationCallResult {

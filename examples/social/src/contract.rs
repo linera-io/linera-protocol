@@ -34,6 +34,7 @@ where
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
     type InitializationArguments = ();
+    type ApplicationCallArguments = ();
 
     async fn initialize(
         &mut self,
@@ -82,7 +83,7 @@ where
     async fn handle_application_call(
         &mut self,
         _context: &CalleeContext,
-        _argument: &[u8],
+        _argument: (),
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
         Err(Error::ApplicationCallsNotSupported)
@@ -164,6 +165,10 @@ pub enum Error {
     /// Invalid serialized initialization argument.
     #[error("Invalid initialization argument")]
     InvalidInitializationArgument(#[from] serde_json::Error),
+
+    /// Failed to deserialize BCS bytes
+    #[error("Failed to deserialize BCS bytes")]
+    BcsError(#[from] bcs::Error),
 }
 
 #[cfg(test)]

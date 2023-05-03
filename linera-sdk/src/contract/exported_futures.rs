@@ -283,13 +283,19 @@ where
             future: ExportedFuture::new(Application::Storage::execute_with_state(
                 move |application| {
                     async move {
+                        let application_call_args: Application::ApplicationCallArguments =
+                            bcs::from_bytes(&argument)?;
                         let forwarded_sessions = forwarded_sessions
                             .into_iter()
                             .map(SessionId::from)
                             .collect();
 
                         application
-                            .handle_application_call(&context.into(), &argument, forwarded_sessions)
+                            .handle_application_call(
+                                &context.into(),
+                                application_call_args,
+                                forwarded_sessions,
+                            )
                             .await
                     }
                     .boxed()

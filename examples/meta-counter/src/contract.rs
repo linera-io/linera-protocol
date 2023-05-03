@@ -29,6 +29,7 @@ impl Contract for MetaCounter {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
     type InitializationArguments = ();
+    type ApplicationCallArguments = ();
 
     async fn initialize(
         &mut self,
@@ -64,7 +65,7 @@ impl Contract for MetaCounter {
     async fn handle_application_call(
         &mut self,
         _context: &CalleeContext,
-        _argument: &[u8],
+        _argument: (),
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
         Err(Error::CallsNotSupported)
@@ -95,6 +96,9 @@ pub enum Error {
 
     #[error("Error during the initialization")]
     Initialization(#[from] serde_json::Error),
+
+    #[error("Error while deserializing BCS bytes")]
+    BcsError(#[from] bcs::Error),
 
     #[error("Invalid application parameters")]
     Parameters,
