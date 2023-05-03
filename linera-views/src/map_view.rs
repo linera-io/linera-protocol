@@ -229,7 +229,7 @@ where
     /// ```
     pub async fn get_mut(&mut self, short_key: Vec<u8>) -> Result<Option<&mut V>, ViewError> {
         self.load_value(&short_key).await?;
-        if let Some(update) = self.updates.get_mut(&short_key.clone()) {
+        if let Some(update) = self.updates.get_mut(&short_key) {
             let value = match update {
                 Update::Removed => None,
                 Update::Set(value) => Some(value),
