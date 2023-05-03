@@ -65,9 +65,9 @@ pub trait ValidatorWorker {
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
     /// Processes a certificate, e.g. to extend a chain with a confirmed block.
-    async fn handle_lite_certificate(
+    async fn handle_lite_certificate<'a>(
         &mut self,
-        certificate: LiteCertificate,
+        certificate: LiteCertificate<'a>,
         notify_message_delivery: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
@@ -920,9 +920,9 @@ where
     // Other fields will be included in handle_certificate's span.
     #[instrument(skip_all, fields(hash = %certificate.value.value_hash))]
     /// Processes a certificate, e.g. to extend a chain with a confirmed block.
-    async fn handle_lite_certificate(
+    async fn handle_lite_certificate<'a>(
         &mut self,
-        certificate: LiteCertificate,
+        certificate: LiteCertificate<'a>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let value = self

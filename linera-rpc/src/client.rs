@@ -42,9 +42,9 @@ impl ValidatorNode for Client {
         }
     }
 
-    async fn handle_lite_certificate(
+    async fn handle_lite_certificate<'a>(
         &mut self,
-        certificate: LiteCertificate,
+        certificate: LiteCertificate<'a>,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
             Client::Grpc(grpc_client) => grpc_client.handle_lite_certificate(certificate).await,

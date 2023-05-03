@@ -15,7 +15,10 @@ use linera_execution::{
     ApplicationId, BytecodeLocation, Effect, Operation,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+};
 
 #[cfg(test)]
 #[path = "unit_tests/data_types_tests.rs"]
@@ -257,15 +260,16 @@ impl LiteVote {
 /// A certified statement from the committee, without the value.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct LiteCertificate {
+pub struct LiteCertificate<'a> {
     /// Hash and chain ID of the certified value (used as key for storage).
     pub value: LiteValue,
     /// Signatures on the value.
-    pub signatures: Vec<(ValidatorName, Signature)>,
+    pub signatures: Cow<'a, [(ValidatorName, Signature)]>,
 }
 
-impl LiteCertificate {
+impl<'a> LiteCertificate<'a> {
     pub fn new(value: LiteValue, signatures: Vec<(ValidatorName, Signature)>) -> Self {
+        let signatures = Cow::Owned(signatures);
         Self { value, signatures }
     }
 
@@ -282,8 +286,16 @@ impl LiteCertificate {
         }
         Some(Certificate {
             value,
-            signatures: self.signatures,
+            signatures: self.signatures.into_owned(),
         })
+    }
+
+    /// Returns a `LiteCertificate` that owns the list of signatures.
+    pub fn cloned(&self) -> LiteCertificate<'static> {
+        LiteCertificate {
+            value: self.value.clone(),
+            signatures: Cow::Owned(self.signatures.clone().into_owned()),
+        }
     }
 }
 
@@ -575,7 +587,7 @@ impl Certificate {
     pub fn lite_certificate(&self) -> LiteCertificate {
         LiteCertificate {
             value: self.lite_value(),
-            signatures: self.signatures.clone(),
+            signatures: Cow::Borrowed(&self.signatures),
         }
     }
 

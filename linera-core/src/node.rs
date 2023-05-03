@@ -45,9 +45,9 @@ pub trait ValidatorNode {
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a certificate without a value.
-    async fn handle_lite_certificate(
+    async fn handle_lite_certificate<'a>(
         &mut self,
-        certificate: LiteCertificate,
+        certificate: LiteCertificate<'a>,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a certificate.
@@ -256,9 +256,9 @@ where
         Ok(response)
     }
 
-    async fn handle_lite_certificate(
+    async fn handle_lite_certificate<'a>(
         &mut self,
-        certificate: LiteCertificate,
+        certificate: LiteCertificate<'a>,
     ) -> Result<ChainInfoResponse, NodeError> {
         let mut node = self.node.lock().await;
         let mut notifications = Vec::new();

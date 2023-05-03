@@ -19,7 +19,7 @@ pub enum RpcMessage {
     // Inbound
     BlockProposal(Box<BlockProposal>),
     Certificate(Box<Certificate>, Vec<HashedValue>),
-    LiteCertificate(Box<LiteCertificate>),
+    LiteCertificate(Box<LiteCertificate<'static>>),
     ChainInfoQuery(Box<ChainInfoQuery>),
     // Outbound
     Vote(Box<LiteVote>),
@@ -54,8 +54,8 @@ impl From<BlockProposal> for RpcMessage {
     }
 }
 
-impl From<LiteCertificate> for RpcMessage {
-    fn from(certificate: LiteCertificate) -> Self {
+impl From<LiteCertificate<'static>> for RpcMessage {
+    fn from(certificate: LiteCertificate<'static>) -> Self {
         RpcMessage::LiteCertificate(Box::new(certificate))
     }
 }

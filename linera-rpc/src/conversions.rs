@@ -193,7 +193,7 @@ impl TryFrom<CrossChainRequest> for grpc::CrossChainRequest {
     }
 }
 
-impl TryFrom<grpc::LiteCertificate> for LiteCertificate {
+impl<'a> TryFrom<grpc::LiteCertificate> for LiteCertificate<'a> {
     type Error = ProtoConversionError;
 
     fn try_from(certificate: grpc::LiteCertificate) -> Result<Self, Self::Error> {
@@ -206,10 +206,10 @@ impl TryFrom<grpc::LiteCertificate> for LiteCertificate {
     }
 }
 
-impl TryFrom<LiteCertificate> for grpc::LiteCertificate {
+impl<'a> TryFrom<LiteCertificate<'a>> for grpc::LiteCertificate {
     type Error = ProtoConversionError;
 
-    fn try_from(certificate: LiteCertificate) -> Result<Self, Self::Error> {
+    fn try_from(certificate: LiteCertificate<'a>) -> Result<Self, Self::Error> {
         Ok(Self {
             hash: certificate.value.value_hash.as_bytes().to_vec(),
             chain_id: Some(certificate.value.chain_id.into()),
@@ -445,7 +445,7 @@ pub mod tests {
     use linera_chain::data_types::{Block, BlockAndRound, HashedValue};
     use linera_core::data_types::ChainInfo;
     use serde::{Deserialize, Serialize};
-    use std::fmt::Debug;
+    use std::{borrow::Cow, fmt::Debug};
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Foo(String);
@@ -582,10 +582,10 @@ pub mod tests {
                 value_hash: CryptoHash::new(&Foo("value".into())),
                 chain_id: ChainId::root(0),
             },
-            signatures: vec![(
+            signatures: Cow::Owned(vec![(
                 ValidatorName::from(key_pair.public()),
                 Signature::new(&Foo("test".into()), &key_pair),
-            )],
+            )]),
         };
 
         round_trip_check::<_, grpc::LiteCertificate>(certificate_validated);

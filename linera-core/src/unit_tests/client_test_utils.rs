@@ -74,10 +74,11 @@ where
         .await
     }
 
-    async fn handle_lite_certificate(
+    async fn handle_lite_certificate<'a>(
         &mut self,
-        certificate: LiteCertificate,
+        certificate: LiteCertificate<'a>,
     ) -> Result<ChainInfoResponse, NodeError> {
+        let certificate = certificate.cloned();
         self.spawn_and_receive(move |validator, sender| {
             validator.do_handle_lite_certificate(certificate, sender)
         })
@@ -177,7 +178,7 @@ where
 
     async fn do_handle_lite_certificate(
         self,
-        certificate: LiteCertificate,
+        certificate: LiteCertificate<'_>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.client.lock().await;
