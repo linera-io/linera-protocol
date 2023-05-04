@@ -89,6 +89,8 @@ pub trait Contract: Sized {
     type Operation: DeserializeOwned + Send;
     /// Application Call Arguments.
     type ApplicationCallArguments: DeserializeOwned + Serialize + Send;
+    /// The Application Effect.
+    type Effect: DeserializeOwned + Send;
 
     /// Initializes the application on the chain that created it.
     ///
@@ -137,7 +139,7 @@ pub trait Contract: Sized {
     async fn execute_effect(
         &mut self,
         context: &EffectContext,
-        effect: &[u8],
+        effect: Self::Effect,
     ) -> Result<ExecutionResult, Self::Error>;
 
     /// Handles a call from another application.

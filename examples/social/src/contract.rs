@@ -10,7 +10,7 @@ use linera_sdk::{
     base::{ChannelName, Destination, SessionId},
     contract::system_api,
     views::ViewStorageContext,
-    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
+    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
     OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
 use linera_views::{common::Context, views::ViewError};
@@ -36,6 +36,7 @@ where
     type InitializationArguments = ();
     type Operation = Operation;
     type ApplicationCallArguments = ();
+    type Effect = Effect;
 
     async fn initialize(
         &mut self,
@@ -64,10 +65,10 @@ where
     async fn execute_effect(
         &mut self,
         context: &EffectContext,
-        effect: &[u8],
+        effect: Effect,
     ) -> Result<ExecutionResult, Self::Error> {
         let mut result = ExecutionResult::default();
-        match Effect::from_bcs_bytes(effect).map_err(Error::InvalidEffect)? {
+        match effect {
             Effect::RequestSubscribe => result.subscribe.push((
                 ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
                 context.effect_id.chain_id,

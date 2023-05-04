@@ -29,6 +29,7 @@ impl Contract for CrowdFunding<ViewStorageContext> {
     type InitializationArguments = InitializationArguments;
     type Operation = Operation;
     type ApplicationCallArguments = ApplicationCall;
+    type Effect = Effect;
 
     async fn initialize(
         &mut self,
@@ -71,9 +72,9 @@ impl Contract for CrowdFunding<ViewStorageContext> {
     async fn execute_effect(
         &mut self,
         context: &EffectContext,
-        effect: &[u8],
+        effect: Effect,
     ) -> Result<ExecutionResult, Self::Error> {
-        match bcs::from_bytes(effect).map_err(Error::InvalidEffect)? {
+        match effect {
             Effect::PledgeWithAccount { owner, amount } => {
                 ensure!(
                     context.chain_id == system_api::current_application_id().creation.chain_id,

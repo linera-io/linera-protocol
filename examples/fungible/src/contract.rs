@@ -30,6 +30,7 @@ impl Contract for FungibleToken<ViewStorageContext> {
     type InitializationArguments = InitialState;
     type ApplicationCallArguments = ApplicationCall;
     type Operation = Operation;
+    type Effect = Effect;
 
     async fn initialize(
         &mut self,
@@ -85,9 +86,8 @@ impl Contract for FungibleToken<ViewStorageContext> {
     async fn execute_effect(
         &mut self,
         context: &EffectContext,
-        effect: &[u8],
+        effect: Effect,
     ) -> Result<ExecutionResult, Self::Error> {
-        let effect = Effect::from_bcs_bytes(effect).map_err(Error::InvalidEffect)?;
         match effect {
             Effect::Credit { owner, amount } => {
                 self.credit(owner, amount).await;

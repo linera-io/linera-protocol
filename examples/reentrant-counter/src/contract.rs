@@ -23,6 +23,7 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
     type InitializationArguments = u128;
     type Operation = u128;
     type ApplicationCallArguments = u128;
+    type Effect = ();
 
     async fn initialize(
         &mut self,
@@ -59,7 +60,7 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
     async fn execute_effect(
         &mut self,
         _context: &EffectContext,
-        _effect: &[u8],
+        _effect: (),
     ) -> Result<ExecutionResult, Self::Error> {
         Err(Error::EffectsNotSupported)
     }

@@ -239,8 +239,11 @@ where
         ExecuteEffect {
             future: ExportedFuture::new(Application::Storage::execute_with_state(
                 move |application| {
-                    async move { application.execute_effect(&context.into(), &effect).await }
-                        .boxed()
+                    async move {
+                        let effect: Application::Effect = bcs::from_bytes(&effect)?;
+                        application.execute_effect(&context.into(), effect).await
+                    }
+                    .boxed()
                 },
             )),
             _application: PhantomData,

@@ -31,6 +31,7 @@ impl Contract for MetaCounter {
     type InitializationArguments = ();
     type Operation = (ChainId, u64);
     type ApplicationCallArguments = ();
+    type Effect = u64;
 
     async fn initialize(
         &mut self,
@@ -53,10 +54,11 @@ impl Contract for MetaCounter {
     async fn execute_effect(
         &mut self,
         _context: &EffectContext,
-        effect: &[u8],
+        effect: u64,
     ) -> Result<ExecutionResult, Self::Error> {
         log::trace!("executing {:?} via {:?}", effect, Self::counter_id()?);
-        self.call_application(true, Self::counter_id()?, effect, vec![])
+        let as_bytes = bcs::to_bytes(&effect)?;
+        self.call_application(true, Self::counter_id()?, &as_bytes, vec![])
             .await;
         Ok(ExecutionResult::default())
     }

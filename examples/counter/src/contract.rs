@@ -22,6 +22,7 @@ impl Contract for Counter {
     type InitializationArguments = u64;
     type Operation = u64;
     type ApplicationCallArguments = u64;
+    type Effect = ();
 
     async fn initialize(
         &mut self,
@@ -44,7 +45,7 @@ impl Contract for Counter {
     async fn execute_effect(
         &mut self,
         _context: &EffectContext,
-        _effect: &[u8],
+        _effect: (),
     ) -> Result<ExecutionResult, Self::Error> {
         Err(Error::EffectsNotSupported)
     }
