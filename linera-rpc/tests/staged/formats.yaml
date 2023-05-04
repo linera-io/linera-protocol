@@ -614,6 +614,8 @@ SystemEffect:
         STRUCT:
           - operation_index: U32
     7:
+      ApplicationCreated: UNIT
+    8:
       BytecodeLocations:
         STRUCT:
           - locations:
@@ -621,13 +623,13 @@ SystemEffect:
                 TUPLE:
                   - TYPENAME: BytecodeId
                   - TYPENAME: BytecodeLocation
-    8:
+    9:
       RegisterApplications:
         STRUCT:
           - applications:
               SEQ:
                 TYPENAME: UserApplicationDescription
-    9:
+    10:
       Notify:
         STRUCT:
           - id:
