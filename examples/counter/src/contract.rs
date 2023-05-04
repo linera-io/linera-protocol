@@ -23,6 +23,7 @@ impl Contract for Counter {
     type Operation = u64;
     type ApplicationCallArguments = u64;
     type Effect = ();
+    type SessionCall = ();
 
     async fn initialize(
         &mut self,
@@ -68,7 +69,7 @@ impl Contract for Counter {
         &mut self,
         _context: &CalleeContext,
         _session: Session,
-        _argument: &[u8],
+        _argument: (),
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error> {
         Err(Error::SessionsNotSupported)

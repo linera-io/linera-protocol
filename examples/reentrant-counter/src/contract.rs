@@ -24,6 +24,7 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
     type Operation = u128;
     type ApplicationCallArguments = u128;
     type Effect = ();
+    type SessionCall = ();
 
     async fn initialize(
         &mut self,
@@ -83,7 +84,7 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
         &mut self,
         _context: &CalleeContext,
         _session: Session,
-        _argument: &[u8],
+        _argument: (),
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error> {
         Err(Error::SessionsNotSupported)

@@ -347,6 +347,7 @@ where
             future: ExportedFuture::new(Application::Storage::execute_with_state(
                 move |application| {
                     async move {
+                        let argument: Application::SessionCall = bcs::from_bytes(&argument)?;
                         let forwarded_sessions = forwarded_sessions
                             .into_iter()
                             .map(SessionId::from)
@@ -356,7 +357,7 @@ where
                             .handle_session_call(
                                 &context.into(),
                                 session.into(),
-                                &argument,
+                                argument,
                                 forwarded_sessions,
                             )
                             .await

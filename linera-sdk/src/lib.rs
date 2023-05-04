@@ -91,6 +91,8 @@ pub trait Contract: Sized {
     type ApplicationCallArguments: DeserializeOwned + Serialize + Send;
     /// The Application Effect.
     type Effect: DeserializeOwned + Send;
+    /// A Session Call.
+    type SessionCall: DeserializeOwned + Send;
 
     /// Initializes the application on the chain that created it.
     ///
@@ -202,7 +204,7 @@ pub trait Contract: Sized {
         &mut self,
         context: &CalleeContext,
         session: Session,
-        argument: &[u8],
+        argument: Self::SessionCall,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error>;
 }

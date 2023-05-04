@@ -31,6 +31,7 @@ impl Contract for FungibleToken<ViewStorageContext> {
     type ApplicationCallArguments = ApplicationCall;
     type Operation = Operation;
     type Effect = Effect;
+    type SessionCall = SessionCall;
 
     async fn initialize(
         &mut self,
@@ -161,10 +162,9 @@ impl Contract for FungibleToken<ViewStorageContext> {
         &mut self,
         _context: &CalleeContext,
         session: Session,
-        argument: &[u8],
+        request: SessionCall,
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error> {
-        let request = SessionCall::from_bcs_bytes(argument).map_err(Error::InvalidSessionCall)?;
         match request {
             SessionCall::Balance => self.handle_session_balance(session.data),
             SessionCall::Transfer {

@@ -37,6 +37,7 @@ where
     type Operation = Operation;
     type ApplicationCallArguments = ();
     type Effect = Effect;
+    type SessionCall = ();
 
     async fn initialize(
         &mut self,
@@ -95,7 +96,7 @@ where
         &mut self,
         _context: &CalleeContext,
         _session: Session,
-        _argument: &[u8],
+        _argument: (),
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error> {
         Err(Error::SessionsNotSupported)
