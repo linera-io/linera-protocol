@@ -405,7 +405,7 @@ where
         Ok(())
     }
 
-    /// Pre load the list of entries into the database in order to have direct access to the views.
+    /// Load the entry that has been pre-loaded. If missing, then an exception is raised.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
