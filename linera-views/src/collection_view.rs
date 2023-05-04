@@ -351,6 +351,7 @@ where
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl<'a, C, W> ByteCollectionView<C, W>
 where
     C: Context + Send + Clone + 'static,
@@ -372,7 +373,10 @@ where
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn pre_load_multi_entry(&'a mut self, vector_short_key: Vec<Vec<u8>>) -> Result<(), ViewError> {
+    pub async fn pre_load_multi_entry(
+        &'a mut self,
+        vector_short_key: Vec<Vec<u8>>,
+    ) -> Result<(), ViewError> {
         let mut vector_part_short_key = Vec::new();
         let updates = self.updates.get_mut();
         for short_key in vector_short_key {
@@ -382,18 +386,15 @@ where
                     if let Update::Removed = entry {
                         vector_part_short_key.push(short_key);
                     }
-                },
-                btree_map::Entry::Vacant(_entry) => {
-                    vector_part_short_key.push(short_key)
                 }
+                btree_map::Entry::Vacant(_entry) => vector_part_short_key.push(short_key),
             }
         }
         let mut handles = Vec::<tokio::task::JoinHandle<Result<W, ViewError>>>::new();
         for short_key in vector_part_short_key.clone() {
             let context = self.context.clone();
             handles.push(tokio::spawn(async move {
-                let key = context
-                    .base_tag_index(KeyTag::Subview as u8, &short_key);
+                let key = context.base_tag_index(KeyTag::Subview as u8, &short_key);
                 let context = context.clone_with_base_key(key);
                 W::load(context).await
             }));
@@ -432,7 +433,7 @@ where
                     Update::Set(view) => Ok(view),
                     Update::Removed => {
                         return Err(ViewError::MissingInUpdates);
-                    },
+                    }
                 }
             }
             btree_map::Entry::Vacant(_) => {
@@ -441,7 +442,6 @@ where
         }
     }
 }
-
 
 impl<C, W> ByteCollectionView<C, W>
 where
