@@ -56,10 +56,17 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-    - uses: actions/checkout@v3
-      with:
-        repository: rust-lang/docs.rs
-        path: ${{ runner.temp }}/docsrs
+    - name: Checkout docs.rs tool repository
+      run: |
+        cd ${{ runner.temp }}
+        git clone https://github.com/rust-lang/docs.rs docsrs
+        cd docsrs
+        git submodule update --init
     - run: |
         cd ${{ runner.temp }}/docsrs
+        cp .env.sample .env
+        mkdir -p ignored/cratesfyi-prefix/crates.io-index
+        . ./.env
+        docker-compose up -d db s3
+        cargo run -- database migrate
         cargo run -- build crate --local ${{ github.workspace }}
