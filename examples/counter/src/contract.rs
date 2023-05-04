@@ -20,6 +20,7 @@ impl Contract for Counter {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
     type InitializationArguments = u64;
+    type Operation = u64;
     type ApplicationCallArguments = u64;
 
     async fn initialize(
@@ -34,9 +35,9 @@ impl Contract for Counter {
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
-        operation: &[u8],
+        operation: u64,
     ) -> Result<ExecutionResult, Self::Error> {
-        self.value += bcs::from_bytes::<u64>(operation)?;
+        self.value += operation;
         Ok(ExecutionResult::default())
     }
 

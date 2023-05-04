@@ -85,6 +85,8 @@ pub trait Contract: Sized {
     type Storage;
     /// Initialization Arguments.
     type InitializationArguments: DeserializeOwned + Send;
+    /// Execute Operation Arguments.
+    type Operation: DeserializeOwned + Send;
     /// Application Call Arguments.
     type ApplicationCallArguments: DeserializeOwned + Serialize + Send;
 
@@ -115,7 +117,7 @@ pub trait Contract: Sized {
     async fn execute_operation(
         &mut self,
         context: &OperationContext,
-        operation: &[u8],
+        operation: Self::Operation,
     ) -> Result<ExecutionResult, Self::Error>;
 
     /// Applies an effect originating from a cross-chain message.

@@ -34,6 +34,7 @@ where
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
     type InitializationArguments = ();
+    type Operation = Operation;
     type ApplicationCallArguments = ();
 
     async fn initialize(
@@ -47,9 +48,9 @@ where
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
-        operation: &[u8],
+        operation: Operation,
     ) -> Result<ExecutionResult, Self::Error> {
-        match Operation::from_bcs_bytes(operation).map_err(Error::InvalidOperation)? {
+        match operation {
             Operation::RequestSubscribe(chain_id) => {
                 Ok(ExecutionResult::default().with_effect(chain_id, &Effect::RequestSubscribe))
             }

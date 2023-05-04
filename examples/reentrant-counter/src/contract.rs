@@ -21,6 +21,7 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
     type InitializationArguments = u128;
+    type Operation = u128;
     type ApplicationCallArguments = u128;
 
     async fn initialize(
@@ -35,10 +36,8 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
-        operation: &[u8],
+        increment: u128,
     ) -> Result<ExecutionResult, Self::Error> {
-        let increment: u128 = bcs::from_bytes(operation)?;
-
         let first_half = increment / 2;
         let second_half = increment - first_half;
         let second_half_as_bytes = bcs::to_bytes(&second_half).expect("Failed to serialize `u128`");

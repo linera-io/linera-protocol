@@ -27,6 +27,7 @@ impl Contract for CrowdFunding<ViewStorageContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
     type InitializationArguments = InitializationArguments;
+    type Operation = Operation;
     type ApplicationCallArguments = ApplicationCall;
 
     async fn initialize(
@@ -47,11 +48,8 @@ impl Contract for CrowdFunding<ViewStorageContext> {
     async fn execute_operation(
         &mut self,
         context: &OperationContext,
-        operation_bytes: &[u8],
+        operation: Operation,
     ) -> Result<ExecutionResult, Self::Error> {
-        let operation: Operation =
-            bcs::from_bytes(operation_bytes).map_err(Error::InvalidOperation)?;
-
         let mut result = ExecutionResult::default();
 
         match operation {

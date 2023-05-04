@@ -29,6 +29,7 @@ impl Contract for MetaCounter {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
     type InitializationArguments = ();
+    type Operation = (ChainId, u64);
     type ApplicationCallArguments = ();
 
     async fn initialize(
@@ -43,10 +44,8 @@ impl Contract for MetaCounter {
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
-        operation: &[u8],
+        (recipient_id, operation): (ChainId, u64),
     ) -> Result<ExecutionResult, Self::Error> {
-        let (recipient_id, operation) =
-            bcs::from_bytes::<(ChainId, u64)>(operation).map_err(|_| Error::Operation)?;
         log::trace!("effect: {:?}", operation);
         Ok(ExecutionResult::default().with_effect(recipient_id, &operation))
     }

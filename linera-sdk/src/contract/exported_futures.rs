@@ -195,8 +195,9 @@ where
             future: ExportedFuture::new(Application::Storage::execute_with_state(
                 move |application| {
                     async move {
+                        let operation: Application::Operation = bcs::from_bytes(&operation)?;
                         application
-                            .execute_operation(&context.into(), &operation)
+                            .execute_operation(&context.into(), operation)
                             .await
                     }
                     .boxed()

@@ -29,6 +29,7 @@ impl Contract for FungibleToken<ViewStorageContext> {
     type Storage = ViewStateStorage<Self>;
     type InitializationArguments = InitialState;
     type ApplicationCallArguments = ApplicationCall;
+    type Operation = Operation;
 
     async fn initialize(
         &mut self,
@@ -51,9 +52,8 @@ impl Contract for FungibleToken<ViewStorageContext> {
     async fn execute_operation(
         &mut self,
         context: &OperationContext,
-        operation: &[u8],
+        operation: Self::Operation,
     ) -> Result<ExecutionResult, Self::Error> {
-        let operation = Operation::from_bcs_bytes(operation).map_err(Error::InvalidOperation)?;
         match operation {
             Operation::Transfer {
                 owner,
