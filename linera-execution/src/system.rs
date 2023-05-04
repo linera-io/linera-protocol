@@ -193,6 +193,8 @@ pub enum SystemEffect {
     },
     /// Notifies that a new application bytecode was published.
     BytecodePublished { operation_index: u32 },
+    /// Notifies that a new application was created.
+    ApplicationCreated,
     /// Shares the locations of published bytecodes.
     BytecodeLocations {
         locations: Vec<(BytecodeId, BytecodeLocation)>,
@@ -232,6 +234,7 @@ impl SystemEffect {
             | SystemEffect::SetCommittees { .. }
             | SystemEffect::Subscribe { .. }
             | SystemEffect::Unsubscribe { .. }
+            | SystemEffect::ApplicationCreated { .. }
             | SystemEffect::Notify { .. } => Box::new(iter::empty()),
         }
     }
@@ -443,7 +446,7 @@ where
                 admin_id,
                 epoch,
             } => {
-                let child_id = ChainId::child((*context).into());
+                let child_id = ChainId::child(context.next_effect_id());
                 ensure!(
                     self.admin_id.get().as_ref() == Some(admin_id),
                     SystemExecutionError::InvalidNewChainAdminId(child_id)
@@ -696,11 +699,17 @@ where
             } => {
                 let id = UserApplicationId {
                     bytecode_id: *bytecode_id,
-                    creation: (*context).into(),
+                    creation: context.next_effect_id(),
                 };
                 self.registry
                     .create_application(id, parameters.clone(), required_application_ids.clone())
                     .await?;
+                // Send an effect to ourself to increment the effect ID.
+                result.effects.push((
+                    Destination::Recipient(context.chain_id),
+                    false,
+                    SystemEffect::ApplicationCreated,
+                ));
                 new_application = Some((id, initialization_argument.clone()));
             }
         }
@@ -815,7 +824,7 @@ where
                     self.registry.register_published_bytecode(*id, *location)?;
                 }
             }
-            Notify { .. } => (),
+            ApplicationCreated { .. } | Notify { .. } => (),
             OpenChain { .. } => {
                 // This special effect is executed immediately when cross-chain requests are received.
             }

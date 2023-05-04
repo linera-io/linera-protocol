@@ -411,8 +411,15 @@ where
             initial_value_bytes.clone(),
         )
         .await?;
-    let create_block_proposal =
-        HashedValue::new_confirmed(create_block, vec![], creator_state.crypto_hash().await?);
+    let create_block_proposal = HashedValue::new_confirmed(
+        create_block,
+        vec![OutgoingEffect {
+            destination: Destination::Recipient(creator_chain.into()),
+            authenticated_signer: None,
+            effect: Effect::System(SystemEffect::ApplicationCreated),
+        }],
+        creator_state.crypto_hash().await?,
+    );
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
     let info = worker
@@ -447,6 +454,7 @@ where
         authenticated_signer: None,
         height: run_block.height,
         index: 0,
+        next_effect_index: 0,
     };
     creator_state.add_fuel(10_000_000);
     creator_state

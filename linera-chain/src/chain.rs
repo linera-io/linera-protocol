@@ -407,11 +407,14 @@ where
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
+            let next_effect_index =
+                u32::try_from(effects.len()).map_err(|_| ArithmeticError::Overflow)?;
             let context = OperationContext {
                 chain_id,
                 height: block.height,
                 index,
                 authenticated_signer: block.authenticated_signer,
+                next_effect_index,
             };
             let results = self
                 .execution_state

@@ -36,6 +36,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         height: BlockHeight(0),
         index: 0,
         authenticated_signer: None,
+        next_effect_index: 0,
     };
     let results = view
         .execute_operation(&context, &Operation::System(operation))

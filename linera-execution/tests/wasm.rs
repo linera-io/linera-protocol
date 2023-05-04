@@ -63,6 +63,7 @@ async fn test_fuel_for_counter_wasm_application(
         height: BlockHeight(0),
         index: 0,
         authenticated_signer: None,
+        next_effect_index: 0,
     };
     let increments = [2_u128, 9, 7, 1000];
     for increment in &increments {

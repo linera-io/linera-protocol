@@ -119,6 +119,7 @@ where
             authenticated_signer: None,
             height: application_description.creation.height,
             index: application_description.creation.index,
+            next_effect_index: 0,
         };
 
         let action = UserAction::Initialize(&context, initialization_argument);

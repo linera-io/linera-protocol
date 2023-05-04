@@ -42,6 +42,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         height: BlockHeight(0),
         index: 0,
         authenticated_signer: None,
+        next_effect_index: 0,
     };
 
     let result = view
@@ -213,6 +214,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         height: BlockHeight(0),
         index: 0,
         authenticated_signer: Some(owner),
+        next_effect_index: 0,
     };
     let result = view
         .execute_operation(
@@ -281,6 +283,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
         height: BlockHeight(0),
         index: 0,
         authenticated_signer: Some(owner),
+        next_effect_index: 0,
     };
 
     let result = view

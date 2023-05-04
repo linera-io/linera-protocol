@@ -219,6 +219,8 @@ pub struct OperationContext {
     pub height: BlockHeight,
     /// The current index of the operation.
     pub index: u32,
+    /// The index of the next effect to be created.
+    pub next_effect_index: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -472,12 +474,12 @@ impl<Effect> Default for RawExecutionResult<Effect> {
     }
 }
 
-impl From<OperationContext> for EffectId {
-    fn from(context: OperationContext) -> Self {
-        Self {
-            chain_id: context.chain_id,
-            height: context.height,
-            index: context.index,
+impl OperationContext {
+    fn next_effect_id(&self) -> EffectId {
+        EffectId {
+            chain_id: self.chain_id,
+            height: self.height,
+            index: self.next_effect_index,
         }
     }
 }
