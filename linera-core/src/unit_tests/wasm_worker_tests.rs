@@ -110,9 +110,8 @@ where
     .await;
 
     // Load some bytecode.
-    let name_counter = "counter";
     let (contract_path, service_path) =
-        linera_execution::wasm_test::get_example_bytecode_paths(name_counter)?;
+        linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
     let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
     let service_bytecode = Bytecode::load_from_file(service_path).await?;
     let application = Arc::new(WasmApplication::new(

@@ -43,10 +43,10 @@ where
 
     /// Credits an `account` with the provided `amount`.
     pub(crate) async fn credit(&mut self, account: AccountOwner, amount: Amount) {
-        let mut value = self.balance(&account).await;
-        value.saturating_add_assign(amount);
+        let mut balance = self.balance(&account).await;
+        balance.saturating_add_assign(amount);
         self.accounts
-            .insert(&account, value)
+            .insert(&account, balance)
             .expect("Failed insert statement");
     }
 
