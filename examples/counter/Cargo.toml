@@ -9,9 +9,7 @@ async-graphql = { workspace = true }
 async-trait = { workspace = true }
 bcs = { workspace = true }
 futures = { workspace = true }
-hex = { workspace = true }
 linera-sdk = { workspace = true }
-linera-views = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
