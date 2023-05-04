@@ -1224,17 +1224,12 @@ where
     /// Opens a new chain with a derived UID.
     pub async fn open_chain(&mut self, public_key: PublicKey) -> Result<(EffectId, Certificate)> {
         self.prepare_chain().await?;
-        let effect_id = EffectId {
-            chain_id: self.chain_id,
-            height: self.next_block_height,
-            index: 0,
-        };
         let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         let epoch = epoch.ok_or(NodeError::InactiveLocalChain(self.chain_id))?;
+        let messages = self.pending_messages().await?;
         let certificate = self
             .execute_block(
-                // Cannot add incoming messages to preserve the effect id.
-                vec![],
+                messages,
                 vec![Operation::System(SystemOperation::OpenChain {
                     public_key,
                     committees,
@@ -1243,9 +1238,11 @@ where
                 })],
             )
             .await?;
-        if !certificate.value.has_effect(&effect_id) {
-            bail!("Failed to open a new chain");
-        }
+        // The second last effect created the new chain.
+        let effect_id = certificate
+            .value
+            .nth_last_effect_id(2)
+            .ok_or_else(|| anyhow!("Failed to open a new chain"))?;
         Ok((effect_id, certificate))
     }
 
@@ -1262,21 +1259,22 @@ where
         service: Bytecode,
     ) -> Result<(BytecodeId, Certificate)> {
         self.prepare_chain().await?;
-        let id = BytecodeId(EffectId {
-            chain_id: self.chain_id,
-            height: self.next_block_height,
-            index: 0,
-        });
+        let messages = self.pending_messages().await?;
         let certificate = self
             .execute_block(
-                // Cannot add incoming messages to preserve the effect id.
-                vec![],
+                messages,
                 vec![Operation::System(SystemOperation::PublishBytecode {
                     contract,
                     service,
                 })],
             )
             .await?;
+        // The last effect published the bytecode.
+        let effect_id = certificate
+            .value
+            .nth_last_effect_id(1)
+            .ok_or_else(|| anyhow!("Failed to publish bytecode"))?;
+        let id = BytecodeId(effect_id);
         Ok((id, certificate))
     }
 
@@ -1289,18 +1287,10 @@ where
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<(UserApplicationId, Certificate)> {
         self.prepare_chain().await?;
-        let id = UserApplicationId {
-            bytecode_id,
-            creation: EffectId {
-                chain_id: self.chain_id,
-                height: self.next_block_height,
-                index: 0,
-            },
-        };
+        let messages = self.pending_messages().await?;
         let certificate = self
             .execute_block(
-                // Cannot add incoming messages to preserve the effect id.
-                vec![],
+                messages,
                 vec![Operation::System(SystemOperation::CreateApplication {
                     bytecode_id,
                     parameters,
@@ -1309,6 +1299,15 @@ where
                 })],
             )
             .await?;
+        // The last effect created the application.
+        let creation = certificate
+            .value
+            .nth_last_effect_id(1)
+            .ok_or_else(|| anyhow!("Failed to create application"))?;
+        let id = UserApplicationId {
+            bytecode_id,
+            creation,
+        };
         Ok((id, certificate))
     }
 
