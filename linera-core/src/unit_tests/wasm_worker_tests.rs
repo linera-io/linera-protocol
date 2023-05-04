@@ -40,18 +40,18 @@ use test_case::test_case;
 #[cfg(feature = "aws")]
 use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
 
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer ; "wasmtime"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_memory_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
     let client = MemoryStoreClient::new(Some(wasm_runtime));
-    run_test_handle_certificates_to_create_application(client).await
+    run_test_handle_certificates_to_create_application(client, wasm_runtime).await
 }
 
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer ; "wasmtime"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_rocksdb_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
@@ -62,12 +62,12 @@ async fn test_rocksdb_handle_certificates_to_create_application(
         Some(wasm_runtime),
         TEST_CACHE_SIZE,
     );
-    run_test_handle_certificates_to_create_application(client).await
+    run_test_handle_certificates_to_create_application(client, wasm_runtime).await
 }
 
 #[cfg(feature = "aws")]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer ; "wasmtime"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
@@ -81,11 +81,12 @@ async fn test_dynamo_db_handle_certificates_to_create_application(
         Some(wasm_runtime),
     )
     .await?;
-    run_test_handle_certificates_to_create_application(client).await
+    run_test_handle_certificates_to_create_application(client, wasm_runtime).await
 }
 
 async fn run_test_handle_certificates_to_create_application<S>(
     client: S,
+    wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error>
 where
     S: Store + Clone + Send + Sync + 'static,
@@ -117,7 +118,7 @@ where
     let application = Arc::new(WasmApplication::new(
         contract_bytecode.clone(),
         service_bytecode.clone(),
-        WasmRuntime::default_with_sanitizer(),
+        wasm_runtime,
     )?);
 
     // Publish some bytecode.
