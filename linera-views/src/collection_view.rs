@@ -367,6 +367,7 @@ where
     /// # let context = create_test_context();
     ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   coll.pre_load_multi_entry(vec![vec![0,1],vec![2,3]]).await.unwrap();
+    ///   let view = coll.load_entry_mut(vec![0,1]).await.unwrap();
     ///   let value = view.get_mut();
     ///   assert_eq!(*value, String::default());
     /// # })
@@ -415,9 +416,11 @@ where
     /// # let context = create_test_context();
     ///   let mut coll : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   coll.pre_load_multi_entry(vec![vec![0,1],vec![2,3]]).await.unwrap();
-    ///   let value = coll.direct_load_entry_mut(vec![0,1]).unwrap();
+    ///   let view = coll.direct_load_entry_mut(vec![0,1]).unwrap();
+    ///   let value = view.get_mut();
     ///   assert_eq!(*value, String::default());
-    ///   let value = coll.direct_load_entry_mut(vec![2,3]).unwrap();
+    ///   let view = coll.direct_load_entry_mut(vec![2,3]).unwrap();
+    ///   let value = view.get_mut();
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
