@@ -71,9 +71,8 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, Self::Error> {
         let increment: u128 = bcs::from_bytes(argument)?;
-        let mut value = *self.value.get();
-        value += increment;
-        self.value.set(value);
+        let value = self.value.get_mut();
+        *value += increment;
         Ok(ApplicationCallResult {
             value: bcs::to_bytes(&value).expect("Serialization should not fail"),
             ..ApplicationCallResult::default()
