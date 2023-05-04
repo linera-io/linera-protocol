@@ -24,7 +24,8 @@ pub struct ChainListenerConfig {
     pub(crate) delay_after_ms: u64,
 }
 
-/// A `ChainListener` is a process that listens to notifications from validators and reacts appropriately.
+/// A `ChainListener` is a process that listens to notifications from validators and reacts
+/// appropriately.
 pub struct ChainListener<P, S> {
     config: ChainListenerConfig,
     client: Arc<Mutex<ChainClient<P, S>>>,
@@ -41,7 +42,7 @@ where
         Self { config, client }
     }
 
-    /// Runs the chain leader.
+    /// Runs the chain listener.
     pub async fn run<C, F>(self, mut context: C, wallet_updater: F) -> Result<(), anyhow::Error>
     where
         for<'a> F:
@@ -62,7 +63,7 @@ where
                             if let Err(e) = client.update_validators().await {
                                 warn!(
                                     "Failed to update validators about the local chain after \
-                                         receiving notification {:?} with error: {:?}",
+                                    receiving notification {:?} with error: {:?}",
                                     notification, e
                                 );
                             }

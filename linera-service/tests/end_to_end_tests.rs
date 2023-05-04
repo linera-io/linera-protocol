@@ -186,18 +186,16 @@ impl Client {
             .success());
     }
 
-    async fn init(&self) {
-        assert!(self
-            .run()
-            .await
+    async fn init(&self, chain_ids: &[ChainId]) {
+        let mut command = self.run().await;
+        command
             .args(["wallet", "init"])
-            .args(["--genesis", "genesis.json"])
-            .spawn()
-            .unwrap()
-            .wait()
-            .await
-            .unwrap()
-            .success());
+            .args(["--genesis", "genesis.json"]);
+        if !chain_ids.is_empty() {
+            let ids = chain_ids.iter().map(ChainId::to_string);
+            command.arg("--chain-ids").args(ids);
+        }
+        assert!(command.spawn().unwrap().wait().await.unwrap().success());
     }
 
     async fn run_command(command: &mut Command) -> String {
@@ -580,17 +578,21 @@ impl TestRunner {
         path.into_os_string().into_string().unwrap()
     }
 
-    async fn generate_initial_validator_config(&self) {
+    async fn generate_initial_validator_config(&self) -> anyhow::Result<Vec<String>> {
         let mut command = self.command_for_binary("server").await;
         command.arg("generate").arg("--validators");
         for i in 1..=self.num_initial_validators {
             command.arg(&self.configuration_string(i));
         }
-        command
+        let output = command
             .args(["--committee", "committee.json"])
-            .status()
-            .await
-            .unwrap();
+            .stdout(Stdio::piped())
+            .spawn()?
+            .wait_with_output()
+            .await?;
+        assert!(output.status.success());
+        let output_str = String::from_utf8_lossy(output.stdout.as_slice());
+        Ok(output_str.split_whitespace().map(str::to_string).collect())
     }
 
     async fn generate_validator_config(&self, i: usize) -> anyhow::Result<String> {
@@ -892,7 +894,7 @@ async fn test_end_to_end_counter() {
     let original_counter_value = 35;
     let increment = 5;
 
-    runner.generate_initial_validator_config().await;
+    runner.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await;
     runner.run_local_net().await;
     let (contract, service) = runner.build_application("counter").await;
@@ -931,7 +933,7 @@ async fn test_end_to_end_counter_publish_create() {
     let original_counter_value = 35;
     let increment = 5;
 
-    runner.generate_initial_validator_config().await;
+    runner.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await;
     runner.run_local_net().await;
     let (contract, service) = runner.build_application("counter").await;
@@ -969,9 +971,9 @@ async fn test_end_to_end_multiple_wallets() {
     let client_2 = runner.make_client(Network::Grpc);
 
     // Create initial server and client config.
-    runner.generate_initial_validator_config().await;
+    runner.generate_initial_validator_config().await.unwrap();
     client_1.create_genesis_config().await;
-    client_2.init().await;
+    client_2.init(&[]).await;
 
     // Start local network.
     runner.run_local_net().await;
@@ -1027,16 +1029,22 @@ async fn test_end_to_end_reconfiguration_simple() {
 async fn test_reconfiguration(network: Network) {
     let mut runner = TestRunner::new(network, 4);
     let client = runner.make_client(network);
+    let client_2 = runner.make_client(network);
+    let chain_1 = ChainId::root(0);
+    let chain_2 = ChainId::root(9);
 
-    runner.generate_initial_validator_config().await;
+    let servers = runner.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await;
+    client_2.init(&[chain_2]).await;
     runner.run_local_net().await;
+    let node_service_2 = match network {
+        Network::Grpc => Some(client_2.run_node_service(chain_2, 8081).await),
+        Network::Simple => None,
+    };
 
     client.query_validators(None).await;
 
     // Query balance for first and last user chain
-    let chain_1 = ChainId::root(0);
-    let chain_2 = ChainId::root(9);
     assert_eq!(client.query_balance(chain_1).await.unwrap(), 10);
     assert_eq!(client.query_balance(chain_2).await.unwrap(), 10);
 
@@ -1080,11 +1088,31 @@ async fn test_reconfiguration(network: Network) {
 
     // Remove validator 5
     client.remove_validator(&server_5).await;
-    runner.remove_validator(4);
+    runner.remove_validator(5);
 
     assert_eq!(client.query_balance(chain_1).await.unwrap(), 5);
     client.query_validators(None).await;
     client.query_validators(Some(chain_1)).await;
+
+    // Remove validators 1, 2, 3 and 4, so only 6 remains.
+    for (i, server) in servers.into_iter().enumerate() {
+        client.remove_validator(&server).await;
+        runner.remove_validator(i + 1);
+    }
+
+    client.transfer(5, chain_1, chain_2).await;
+    assert_eq!(client.query_balance(chain_2).await.unwrap(), 20);
+
+    if let Some(node_service_2) = node_service_2 {
+        // TODO(#701): Query the balance instead and check that it's 20.
+        let response = node_service_2
+            .query("query { chain { tipState { nextBlockHeight } } }")
+            .await;
+        assert_eq!(
+            response["chain"]["tipState"]["nextBlockHeight"].as_u64(),
+            Some(17)
+        );
+    }
 }
 
 #[test_log::test(tokio::test)]
@@ -1097,9 +1125,9 @@ async fn test_end_to_end_social_user_pub_sub() {
     let client2 = runner.make_client(network);
 
     // Create initial server and client config.
-    runner.generate_initial_validator_config().await;
+    runner.generate_initial_validator_config().await.unwrap();
     client1.create_genesis_config().await;
-    client2.init().await;
+    client2.init(&[]).await;
 
     // Start local network.
     runner.run_local_net().await;

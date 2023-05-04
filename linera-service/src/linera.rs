@@ -745,6 +745,10 @@ enum WalletCommand {
         /// The path to the genesis configuration for a Linera deployment.
         #[structopt(long = "genesis")]
         genesis_config_path: PathBuf,
+
+        // The root chains to initialize.
+        #[structopt(long)]
+        chain_ids: Vec<ChainId>,
     },
 }
 
@@ -1275,9 +1279,20 @@ async fn main() -> Result<(), anyhow::Error> {
 
                 WalletCommand::Init {
                     genesis_config_path,
+                    chain_ids,
                 } => {
                     let genesis_config = GenesisConfig::read(genesis_config_path)?;
-                    let context = ClientContext::create(&options, genesis_config, vec![])?;
+                    let chains = chain_ids
+                        .iter()
+                        .filter_map(|chain_id| {
+                            let (description, _, _, timestamp) = genesis_config
+                                .chains
+                                .iter()
+                                .find(|(desc, _, _, _)| ChainId::from(*desc) == *chain_id)?;
+                            Some(UserChain::make_initial(*description, *timestamp))
+                        })
+                        .collect();
+                    let context = ClientContext::create(&options, genesis_config, chains)?;
                     context.save_wallet();
                     Ok(())
                 }
