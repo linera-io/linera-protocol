@@ -40,8 +40,8 @@ use test_case::test_case;
 #[cfg(feature = "aws")]
 use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
 
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_memory_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
@@ -50,8 +50,8 @@ async fn test_memory_handle_certificates_to_create_application(
     run_test_handle_certificates_to_create_application(client).await
 }
 
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_rocksdb_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
@@ -66,8 +66,8 @@ async fn test_rocksdb_handle_certificates_to_create_application(
 }
 
 #[cfg(feature = "aws")]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
