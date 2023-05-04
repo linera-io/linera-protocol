@@ -10,27 +10,29 @@ use crowd_funding::{ApplicationCall, Operation};
 use fungible::{Account, AccountOwner, Destination};
 use linera_sdk::{
     base::{Amount, SessionId},
-    contract::system_api,
+    contract::{system_api, system_api::ViewStorageContext},
     ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-    FromBcsBytes, OperationContext, Session, SessionCallResult, SimpleStateStorage,
+    FromBcsBytes, OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
+use linera_views::views::View;
 use state::{CrowdFunding, Status};
-use std::mem;
 use thiserror::Error;
 
-linera_sdk::contract!(CrowdFunding);
+linera_sdk::contract!(CrowdFunding<ViewStorageContext>);
 
 #[async_trait]
-impl Contract for CrowdFunding {
+impl Contract for CrowdFunding<ViewStorageContext> {
     type Error = Error;
-    type Storage = SimpleStateStorage<Self>;
+    type Storage = ViewStateStorage<Self>;
 
     async fn initialize(
         &mut self,
         _context: &OperationContext,
         argument: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        self.parameters = Some(bcs::from_bytes(argument).map_err(Error::InvalidParameters)?);
+        self.parameters.set(Some(
+            bcs::from_bytes(argument).map_err(Error::InvalidParameters)?,
+        ));
 
         ensure!(
             self.parameters().deadline > system_api::current_system_time(),
@@ -103,7 +105,7 @@ impl Contract for CrowdFunding {
     }
 }
 
-impl CrowdFunding {
+impl CrowdFunding<ViewStorageContext> {
     /// Adds a pledge from a transfer.
     async fn execute_pledge_with_transfer(
         &mut self,
@@ -181,11 +183,12 @@ impl CrowdFunding {
     /// Marks a pledge in the application state, so that it can be returned if the campaign is
     /// cancelled.
     async fn finish_pledge(&mut self, source: AccountOwner, amount: Amount) -> Result<(), Error> {
-        match self.status {
+        match self.status.get() {
             Status::Active => {
                 self.pledges
-                    .entry(source)
-                    .or_default()
+                    .get_mut_or_default(&source)
+                    .await
+                    .expect("view access should not fail")
                     .saturating_add_assign(amount);
                 Ok(())
             }
@@ -198,7 +201,7 @@ impl CrowdFunding {
     async fn collect_pledges(&mut self) -> Result<(), Error> {
         let total = self.balance().await?;
 
-        match self.status {
+        match self.status.get() {
             Status::Active => {
                 ensure!(total >= self.parameters().target, Error::TargetNotReached);
             }
@@ -208,27 +211,35 @@ impl CrowdFunding {
 
         self.send_to(total, self.parameters().owner).await?;
         self.pledges.clear();
-        self.status = Status::Complete;
+        self.status.set(Status::Complete);
 
         Ok(())
     }
 
     /// Cancels the campaign if the deadline has passed, refunding all pledges.
     async fn cancel_campaign(&mut self) -> Result<(), Error> {
-        ensure!(!self.status.is_complete(), Error::Completed);
+        ensure!(!self.status.get().is_complete(), Error::Completed);
 
         ensure!(
             system_api::current_system_time() >= self.parameters().deadline,
             Error::DeadlineNotReached
         );
 
-        for (pledger, amount) in mem::take(&mut self.pledges) {
+        let mut pledges = Vec::new();
+        self.pledges
+            .for_each_index_value(|pledger, amount| {
+                pledges.push((pledger, amount));
+                Ok(())
+            })
+            .await
+            .expect("view iteration should not fail");
+        for (pledger, amount) in pledges {
             self.send_to(amount, pledger).await?;
         }
 
         let balance = self.balance().await?;
         self.send_to(balance, self.parameters().owner).await?;
-        self.status = Status::Cancelled;
+        self.status.set(Status::Cancelled);
 
         Ok(())
     }
@@ -321,7 +332,7 @@ pub enum Error {
     #[error("Crowd-funding campaign parameters are invalid")]
     InvalidParameters(bcs::Error),
 
-    /// Crowd-funding campaigns can't start after its deadline.
+    /// Crowd-funding campaign can't start after its deadline.
     #[error("Crowd-funding campaign can not start after its deadline")]
     DeadlineInThePast,
 

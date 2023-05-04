@@ -6,6 +6,7 @@
 mod state;
 
 use self::state::Counter;
+use async_graphql::{EmptySubscription, Object, Schema};
 use async_trait::async_trait;
 use linera_sdk::{QueryContext, Service, SimpleStateStorage};
 use std::sync::Arc;
@@ -25,8 +26,41 @@ impl Service for Counter {
     ) -> Result<Vec<u8>, Self::Error> {
         match argument {
             &[] => Ok(bcs::to_bytes(&self.value).expect("Serialization should not fail")),
-            _ => Err(Error::InvalidQuery),
+            bytes => {
+                let graphql_request: async_graphql::Request =
+                    serde_json::from_slice(bytes).map_err(|_| Error::InvalidQuery)?;
+                let schema = Schema::build(
+                    QueryRoot { value: self.value },
+                    MutationRoot {},
+                    EmptySubscription,
+                )
+                .finish();
+                let res = schema.execute(graphql_request).await;
+                Ok(serde_json::to_vec(&res).unwrap())
+            }
         }
+    }
+}
+
+struct MutationRoot;
+
+#[Object]
+impl MutationRoot {
+    #[allow(unused)]
+    async fn execute_operation(&self, operation: u64) -> Vec<u8> {
+        bcs::to_bytes(&operation).unwrap()
+    }
+}
+
+struct QueryRoot {
+    value: u64,
+}
+
+#[Object]
+impl QueryRoot {
+    #[allow(unused)]
+    async fn value(&self) -> &u64 {
+        &self.value
     }
 }
 
@@ -48,7 +82,7 @@ mod tests {
 
     #[webassembly_test]
     fn query() {
-        let value = 61_098_721_u128;
+        let value = 61_098_721_u64;
         let counter = Arc::new(Counter { value });
 
         let result = counter
@@ -64,7 +98,7 @@ mod tests {
 
     #[webassembly_test]
     fn invalid_query() {
-        let value = 4_u128;
+        let value = 4_u64;
         let counter = Arc::new(Counter { value });
 
         let dummy_argument = [2];

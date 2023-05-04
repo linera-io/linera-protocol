@@ -40,33 +40,21 @@ use test_case::test_case;
 #[cfg(feature = "aws")]
 use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
 
-#[derive(Copy, Clone, Debug)]
-enum StorageKind {
-    Simple,
-    View,
-}
-
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, StorageKind::Simple ; "wasmer_simple"))]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, StorageKind::View ; "wasmer_view"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::Simple ; "wasmtime_simple"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::View ; "wasmtime_view"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_memory_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
-    storage_kind: StorageKind,
 ) -> Result<(), anyhow::Error> {
     let client = MemoryStoreClient::new(Some(wasm_runtime));
-    run_test_handle_certificates_to_create_application(client, storage_kind).await
+    run_test_handle_certificates_to_create_application(client).await
 }
 
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, StorageKind::Simple ; "wasmer_simple"))]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, StorageKind::View ; "wasmer_view"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::Simple ; "wasmtime_simple"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::View ; "wasmtime_view"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_rocksdb_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
-    storage_kind: StorageKind,
 ) -> Result<(), anyhow::Error> {
     let dir = tempfile::TempDir::new().unwrap();
     let client = RocksdbStoreClient::new(
@@ -74,18 +62,15 @@ async fn test_rocksdb_handle_certificates_to_create_application(
         Some(wasm_runtime),
         TEST_CACHE_SIZE,
     );
-    run_test_handle_certificates_to_create_application(client, storage_kind).await
+    run_test_handle_certificates_to_create_application(client).await
 }
 
 #[cfg(feature = "aws")]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, StorageKind::Simple ; "wasmer_simple"))]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, StorageKind::View ; "wasmer_view"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::Simple ; "wasmtime_simple"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, StorageKind::View ; "wasmtime_view"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
-    storage_kind: StorageKind,
 ) -> Result<(), anyhow::Error> {
     let table = "linera".parse().expect("Invalid table name");
     let localstack = LocalStackTestContext::new().await?;
@@ -96,12 +81,11 @@ async fn test_dynamo_db_handle_certificates_to_create_application(
         Some(wasm_runtime),
     )
     .await?;
-    run_test_handle_certificates_to_create_application(client, storage_kind).await
+    run_test_handle_certificates_to_create_application(client).await
 }
 
 async fn run_test_handle_certificates_to_create_application<S>(
     client: S,
-    storage_kind: StorageKind,
 ) -> Result<(), anyhow::Error>
 where
     S: Store + Clone + Send + Sync + 'static,
@@ -126,12 +110,8 @@ where
     .await;
 
     // Load some bytecode.
-    let name_counter = match storage_kind {
-        StorageKind::Simple => "counter",
-        StorageKind::View => "counter2",
-    };
     let (contract_path, service_path) =
-        linera_execution::wasm_test::get_example_bytecode_paths(name_counter)?;
+        linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
     let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
     let service_bytecode = Bytecode::load_from_file(service_path).await?;
     let application = Arc::new(WasmApplication::new(
@@ -365,7 +345,7 @@ where
     assert!(info.manager.pending().is_none());
 
     // Create an application.
-    let initial_value = 10_u128;
+    let initial_value = 10_u64;
     let initial_value_bytes = bcs::to_bytes(&initial_value)?;
     let create_operation = SystemOperation::CreateApplication {
         bytecode_id,
@@ -447,7 +427,7 @@ where
     assert!(info.manager.pending().is_none());
 
     // Execute an application operation
-    let increment = 5_u128;
+    let increment = 5_u64;
     let user_operation = bcs::to_bytes(&increment)?;
     let run_block = make_block(
         Epoch::from(0),

@@ -279,6 +279,7 @@ pub mod test {
     }
 
     pub fn get_example_bytecode_paths(name: &str) -> Result<(String, String), std::io::Error> {
+        let name = name.replace('-', "_");
         static INSTANCE: OnceCell<()> = OnceCell::new();
         INSTANCE.get_or_try_init(build_applications)?;
         Ok((

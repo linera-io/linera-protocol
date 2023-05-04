@@ -856,10 +856,7 @@ impl Application {
     }
 
     async fn increment_counter_value(&self, increment: u64) {
-        let query_string = format!(
-            "mutation {{  executeOperation(operation: {{ increment: {} }})}}",
-            increment
-        );
+        let query_string = format!("mutation {{  executeOperation(operation: {})}}", increment);
         self.query_application(&query_string).await;
     }
 }
@@ -878,10 +875,15 @@ async fn test_end_to_end_counter() {
     runner.generate_initial_validator_config().await;
     client.create_genesis_config().await;
     runner.run_local_net().await;
-    let (contract, service) = runner.build_application("counter-graphql").await;
+    let (contract, service) = runner.build_application("counter").await;
 
     let application_id = client
-        .publish_and_create(contract, service, original_counter_value, None)
+        .publish_and_create(
+            contract,
+            service,
+            hex::encode(bcs::to_bytes(&original_counter_value).unwrap()),
+            None,
+        )
         .await;
     let mut node_service = client.run_node_service(None, None).await;
 
@@ -912,11 +914,15 @@ async fn test_end_to_end_counter_publish_create() {
     runner.generate_initial_validator_config().await;
     client.create_genesis_config().await;
     runner.run_local_net().await;
-    let (contract, service) = runner.build_application("counter-graphql").await;
+    let (contract, service) = runner.build_application("counter").await;
 
     let bytecode_id = client.publish_bytecode(contract, service, None).await;
     let application_id = client
-        .create_application(bytecode_id, original_counter_value, None)
+        .create_application(
+            bytecode_id,
+            hex::encode(bcs::to_bytes(&original_counter_value).unwrap()),
+            None,
+        )
         .await;
     let mut node_service = client.run_node_service(None, None).await;
 

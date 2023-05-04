@@ -3,50 +3,67 @@
 
 use fungible::AccountOwner;
 use linera_sdk::base::Amount;
-use serde::{Deserialize, Serialize};
+use linera_views::{
+    common::Context,
+    map_view::MapView,
+    views::{GraphQLView, RootView, View},
+};
 use std::collections::BTreeMap;
 use thiserror::Error;
 
 /// The application state.
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub struct FungibleToken {
-    accounts: BTreeMap<AccountOwner, Amount>,
+#[derive(RootView, GraphQLView)]
+pub struct FungibleToken<C> {
+    accounts: MapView<C, AccountOwner, Amount>,
 }
 
 #[allow(dead_code)]
-impl FungibleToken {
+impl<C> FungibleToken<C>
+where
+    C: Context + Send + Sync + Clone + 'static,
+    linera_views::views::ViewError: From<C::Error>,
+{
     /// Initializes the application state with some accounts with initial balances.
-    pub(crate) fn initialize_accounts(&mut self, accounts: BTreeMap<AccountOwner, Amount>) {
-        self.accounts = accounts;
+    pub(crate) async fn initialize_accounts(&mut self, accounts: BTreeMap<AccountOwner, Amount>) {
+        for (k, v) in accounts {
+            self.accounts
+                .insert(&k, v)
+                .expect("Error in insert statement");
+        }
     }
 
     /// Obtains the balance for an `account`.
-    pub(crate) fn balance(&self, account: &AccountOwner) -> Amount {
-        self.accounts.get(account).copied().unwrap_or_default()
+    pub(crate) async fn balance(&self, account: &AccountOwner) -> Amount {
+        self.accounts
+            .get(account)
+            .await
+            .expect("Failure in the retrieval")
+            .unwrap_or_default()
     }
 
     /// Credits an `account` with the provided `amount`.
-    pub(crate) fn credit(&mut self, account: AccountOwner, amount: Amount) {
+    pub(crate) async fn credit(&mut self, account: AccountOwner, amount: Amount) {
+        let mut balance = self.balance(&account).await;
+        balance.saturating_add_assign(amount);
         self.accounts
-            .entry(account)
-            .or_default()
-            .saturating_add_assign(amount)
+            .insert(&account, balance)
+            .expect("Failed insert statement");
     }
 
     /// Tries to debit the requested `amount` from an `account`.
-    pub(crate) fn debit(
+    pub(crate) async fn debit(
         &mut self,
         account: AccountOwner,
         amount: Amount,
     ) -> Result<(), InsufficientBalanceError> {
-        let balance = self
-            .accounts
-            .get_mut(&account)
-            .ok_or(InsufficientBalanceError)?;
-
+        let mut balance = self.balance(&account).await;
         balance
             .try_sub_assign(amount)
-            .map_err(|_| InsufficientBalanceError)
+            .map_err(|_| InsufficientBalanceError)?;
+        self.accounts
+            .insert(&account, balance)
+            .expect("Failed insertion operation");
+        Ok(())
     }
 }
 

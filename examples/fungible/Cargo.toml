@@ -9,12 +9,10 @@ async-graphql = { workspace = true }
 async-trait = { workspace = true }
 bcs = { workspace = true }
 linera-sdk = { workspace = true }
+linera-views = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-linera-sdk = { workspace = true, features = ["test", "wasmer", "wasmtime"] }
-tokio = { workspace = true }
 
 [[bin]]
 name = "fungible_contract"

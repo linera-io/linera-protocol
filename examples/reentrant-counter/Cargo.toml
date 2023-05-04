@@ -9,7 +9,7 @@ async-trait = { workspace = true }
 bcs = { workspace = true }
 futures = { workspace = true }
 linera-sdk = { workspace = true }
-serde = { workspace = true }
+linera-views = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
@@ -17,9 +17,9 @@ linera-sdk = { workspace = true, features = ["test"] }
 webassembly-test = { workspace = true }
 
 [[bin]]
-name = "reentrant-counter_contract"
+name = "reentrant_counter_contract"
 path = "src/contract.rs"
 
 [[bin]]
-name = "reentrant-counter_service"
+name = "reentrant_counter_service"
 path = "src/service.rs"

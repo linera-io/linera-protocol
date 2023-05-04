@@ -9,13 +9,14 @@ async-trait = { workspace = true }
 bcs = { workspace = true }
 fungible = { workspace = true }
 linera-sdk = { workspace = true }
+linera-views = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 
 [[bin]]
-name = "crowd-funding_contract"
+name = "crowd_funding_contract"
 path = "src/contract.rs"
 
 [[bin]]
-name = "crowd-funding_service"
+name = "crowd_funding_service"
 path = "src/service.rs"

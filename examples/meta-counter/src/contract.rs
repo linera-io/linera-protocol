@@ -45,7 +45,7 @@ impl Contract for MetaCounter {
         operation: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
         let (recipient_id, operation) =
-            bcs::from_bytes::<(ChainId, u128)>(operation).map_err(|_| Error::Operation)?;
+            bcs::from_bytes::<(ChainId, u64)>(operation).map_err(|_| Error::Operation)?;
         log::trace!("effect: {:?}", operation);
         Ok(ExecutionResult::default().with_effect(recipient_id, &operation))
     }
