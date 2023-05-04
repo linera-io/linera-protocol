@@ -452,7 +452,7 @@ where
         P: Send + 'static,
     {
         let mut streams = HashMap::new();
-        if let Err(err) = Self::update_committee(&this, &mut streams).await {
+        if let Err(err) = Self::update_streams(&this, &mut streams).await {
             error!("Failed to update committee: {}", err);
         }
         let stream = stream! {
@@ -460,7 +460,7 @@ where
                 future::select_all(streams.values_mut().map(StreamExt::next)).await
             {
                 if matches!(notification.reason, Reason::NewBlock { .. }) {
-                    if let Err(err) = Self::update_committee(&this, &mut streams).await {
+                    if let Err(err) = Self::update_streams(&this, &mut streams).await {
                         error!("Failed to update committee: {}", err);
                     }
                 }
@@ -470,7 +470,7 @@ where
         Ok(Box::pin(stream))
     }
 
-    async fn update_committee(
+    async fn update_streams(
         this: &Arc<Mutex<Self>>,
         streams: &mut HashMap<ValidatorName, Pin<Box<dyn Stream<Item = Notification> + Send>>>,
     ) -> Result<(), NodeError>

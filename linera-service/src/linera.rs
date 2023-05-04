@@ -746,9 +746,9 @@ enum WalletCommand {
         #[structopt(long = "genesis")]
         genesis_config_path: PathBuf,
 
-        // The root chains to initialize.
+        // Other chains to follow.
         #[structopt(long)]
-        chain_ids: Vec<ChainId>,
+        with_other_chains: Vec<ChainId>,
     },
 }
 
@@ -1279,10 +1279,10 @@ async fn main() -> Result<(), anyhow::Error> {
 
                 WalletCommand::Init {
                     genesis_config_path,
-                    chain_ids,
+                    with_other_chains,
                 } => {
                     let genesis_config = GenesisConfig::read(genesis_config_path)?;
-                    let chains = chain_ids
+                    let chains = with_other_chains
                         .iter()
                         .filter_map(|chain_id| {
                             let (description, _, _, timestamp) = genesis_config

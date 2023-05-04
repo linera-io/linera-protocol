@@ -189,7 +189,7 @@ impl Client {
             .args(["--genesis", "genesis.json"]);
         if !chain_ids.is_empty() {
             let ids = chain_ids.iter().map(ChainId::to_string);
-            command.arg("--chain-ids").args(ids);
+            command.arg("--with-other-chains").args(ids);
         }
         assert!(command.spawn().unwrap().wait().await.unwrap().success());
     }
