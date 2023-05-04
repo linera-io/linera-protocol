@@ -10,6 +10,10 @@ documentation = "https://docs.rs/linera-views/latest/linera_views/"
 license = "Apache-2.0"
 edition = "2021"
 
+[package.metadata.docs.rs]
+features = ["aws", "test"]
+targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
+
 [features]
 test = ["anyhow", "tokio/macros", "tokio/parking_lot"]
 aws = ["aws-config", "aws-sdk-dynamodb", "aws-sdk-s3", "aws-smithy-http", "aws-types"]
