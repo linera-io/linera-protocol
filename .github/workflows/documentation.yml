@@ -17,6 +17,8 @@ env:
   RUST_BACKTRACE: short
   RUSTFLAGS: "-D warnings"
   RUSTUP_MAX_RETRIES: 10
+  LINERA_CRATES: base chain core execution rpc sdk service storage views views-derive
+  VERSION: 0.1.0
 
 permissions:
   contents: read
@@ -47,3 +49,41 @@ jobs:
         publish_branch: gh-pages
         publish_dir: ./target/doc
         destination_dir: 364a04086bc8f2bf91ec3406a2aac5f7e4e675b9
+
+  docsrs:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+    - name: Checkout docs.rs tool repository
+      run: |
+        cd ${{ runner.temp }}
+        git clone https://github.com/rust-lang/docs.rs docsrs
+        cd docsrs
+        git submodule update --init
+    - name: Generate standalone packages
+      run: |
+        for crate in $LINERA_CRATES; do
+            cargo publish -p "linera-${crate}" --dry-run --target-dir "${{ runner.temp }}/crates/linera-${crate}" --no-verify
+        done
+    - name: Extract packaged crates
+      run: |
+        for crate in $LINERA_CRATES; do
+            pushd "${{ runner.temp }}/crates/linera-${crate}/package"
+            tar -xzvf "linera-${crate}-${VERSION}.crate"
+            popd
+        done
+    - name: Build documentation using docs.rs
+      run: |
+        cd ${{ runner.temp }}/docsrs
+        cp .env.sample .env
+        mkdir -p ignored/cratesfyi-prefix/crates.io-index
+        . ./.env
+        docker-compose up -d db s3
+        cargo run -- database migrate
+        for crate in $LINERA_CRATES; do
+            cargo run -- build crate --local "${{ runner.temp }}/crates/linera-${crate}/package/linera-${crate}-${VERSION}"
+        done
