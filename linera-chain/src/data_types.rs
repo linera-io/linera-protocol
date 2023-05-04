@@ -382,6 +382,18 @@ impl Value {
             && self.block.chain_id == effect_id.chain_id
             && self.effects.len() > usize::try_from(effect_id.index).unwrap_or(usize::MAX)
     }
+
+    /// Skip `n-1` effects from the end of the block and return the effect ID, if any.
+    pub fn nth_last_effect_id(&self, n: u32) -> Option<EffectId> {
+        if n == 0 {
+            return None;
+        }
+        Some(EffectId {
+            chain_id: self.block.chain_id,
+            height: self.block.height,
+            index: u32::try_from(self.effects.len()).ok()?.checked_sub(n)?,
+        })
+    }
 }
 
 impl HashedValue {
@@ -459,6 +471,11 @@ impl HashedValue {
     /// Returns whether this value contains the effect with the specified ID.
     pub fn has_effect(&self, effect_id: &EffectId) -> bool {
         self.value.has_effect(effect_id)
+    }
+
+    /// Skip `n-1` effects from the end of the block and return the effect ID, if any.
+    pub fn nth_last_effect_id(&self, n: u32) -> Option<EffectId> {
+        self.value.nth_last_effect_id(n)
     }
 }
 
