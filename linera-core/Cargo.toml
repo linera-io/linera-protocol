@@ -24,6 +24,7 @@ aws = ["linera-views/aws", "linera-storage/aws"]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 async-graphql = { workspace = true }
+async-stream = { workspace = true }
 dashmap = { workspace = true }
 futures = { workspace = true }
 linera-base = { workspace = true }

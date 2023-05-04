@@ -9,10 +9,11 @@ use crate::{
     worker::{Notification, Reason, WorkerState},
 };
 use anyhow::{anyhow, bail, ensure, Result};
+use async_stream::stream;
 use futures::{
     future,
     lock::Mutex,
-    stream::{select_all, FuturesUnordered, StreamExt},
+    stream::{FuturesUnordered, StreamExt},
 };
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
@@ -33,10 +34,12 @@ use linera_execution::{
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{hash_map, BTreeMap, HashMap},
+    pin::Pin,
     sync::Arc,
     time::Duration,
 };
+use tokio_stream::Stream;
 use tracing::{debug, error, info};
 
 #[cfg(any(test, feature = "test"))]
@@ -93,10 +96,10 @@ pub trait ValidatorNodeProvider {
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
 
-    fn make_nodes(
-        &self,
-        committee: &Committee,
-    ) -> Result<Vec<(ValidatorName, Self::Node)>, NodeError> {
+    fn make_nodes<I>(&self, committee: &Committee) -> Result<I, NodeError>
+    where
+        I: FromIterator<(ValidatorName, Self::Node)>,
+    {
         committee
             .validators
             .iter()
@@ -381,7 +384,6 @@ where
 
     async fn process_notification<A>(
         this: Arc<Mutex<Self>>,
-        chain_id: ChainId,
         name: ValidatorName,
         node: A,
         mut local_node: LocalNodeClient<S>,
@@ -390,11 +392,11 @@ where
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
-        match &notification.reason {
+        match notification.reason {
             Reason::NewMessage { origin, height } => {
                 if Self::get_local_next_block_height(this.clone(), origin.sender, &mut local_node)
                     .await
-                    > Some(*height)
+                    > Some(height)
                 {
                     debug!("Accepting redundant notification for new message");
                     return true;
@@ -405,17 +407,17 @@ where
                     error!("Fail to process notification: {e}");
                     return false;
                 }
-                if Self::get_local_next_block_height(this.clone(), origin.sender, &mut local_node)
-                    .await
-                    <= Some(*height)
+                if Self::get_local_next_block_height(this, origin.sender, &mut local_node).await
+                    <= Some(height)
                 {
                     error!("Fail to synchronize new message after notification");
                     return false;
                 }
             }
             Reason::NewBlock { height } => {
+                let chain_id = notification.chain_id;
                 if Self::get_local_next_block_height(this.clone(), chain_id, &mut local_node).await
-                    > Some(*height)
+                    > Some(height)
                 {
                     debug!("Accepting redundant notification for new block");
                     return true;
@@ -425,13 +427,8 @@ where
                     .await
                 {
                     Ok(()) => {
-                        if Self::get_local_next_block_height(
-                            this.clone(),
-                            chain_id,
-                            &mut local_node,
-                        )
-                        .await
-                            <= Some(*height)
+                        if Self::get_local_next_block_height(this, chain_id, &mut local_node).await
+                            <= Some(height)
                         {
                             error!("Fail to synchronize new block after notification");
                             return false;
@@ -449,41 +446,71 @@ where
     }
 
     /// Listens to notifications about the current chain from all validators.
-    // TODO(#687): handle reconfigurations, loss of connection, etc.
+    // TODO(#687): handle loss of connection, etc.
     pub async fn listen(this: Arc<Mutex<Self>>) -> Result<NotificationStream>
+    where
+        P: Send + 'static,
+    {
+        let mut streams = HashMap::new();
+        if let Err(err) = Self::update_committee(&this, &mut streams).await {
+            error!("Failed to update committee: {}", err);
+        }
+        let stream = stream! {
+            while let (Some(notification), _, _) =
+                future::select_all(streams.values_mut().map(StreamExt::next)).await
+            {
+                if matches!(notification.reason, Reason::NewBlock { .. }) {
+                    if let Err(err) = Self::update_committee(&this, &mut streams).await {
+                        error!("Failed to update committee: {}", err);
+                    }
+                }
+                yield notification;
+            }
+        };
+        Ok(Box::pin(stream))
+    }
+
+    async fn update_committee(
+        this: &Arc<Mutex<Self>>,
+        streams: &mut HashMap<ValidatorName, Pin<Box<dyn Stream<Item = Notification> + Send>>>,
+    ) -> Result<(), NodeError>
     where
         P: Send + 'static,
     {
         let (chain_id, nodes, local_node) = {
             let mut guard = this.lock().await;
             let committee = guard.local_committee().await?;
-            let nodes = guard.validator_node_provider.make_nodes(&committee)?;
+            let nodes: HashMap<_, _> = guard.validator_node_provider.make_nodes(&committee)?;
             (guard.chain_id, nodes, guard.node_client.clone())
         };
-        let mut streams = Vec::new();
+        // Drop notification streams from removed validators.
+        streams.retain(|name, _| nodes.contains_key(name));
+        // Add notification streams from added validators.
         for (name, mut node) in nodes {
-            let this = this.clone();
-            let local_node = local_node.clone();
-            match node.subscribe(vec![chain_id]).await {
+            let hash_map::Entry::Vacant(entry) = streams.entry(name) else {
+                            continue;
+                        };
+            let stream = match node.subscribe(vec![chain_id]).await {
                 Err(e) => {
                     info!("Could not connect to validator {name}: {e:?}");
+                    continue;
                 }
-                Ok(stream) => {
-                    let stream = stream.filter(move |notification| {
-                        Box::pin(Self::process_notification(
-                            this.clone(),
-                            chain_id,
-                            name,
-                            node.clone(),
-                            local_node.clone(),
-                            notification.clone(),
-                        ))
-                    });
-                    streams.push(stream);
-                }
-            }
+                Ok(stream) => stream,
+            };
+            let this = this.clone();
+            let local_node = local_node.clone();
+            let stream = stream.filter(move |notification| {
+                Box::pin(Self::process_notification(
+                    this.clone(),
+                    name,
+                    node.clone(),
+                    local_node.clone(),
+                    notification.clone(),
+                ))
+            });
+            entry.insert(Box::pin(stream));
         }
-        Ok(Box::pin(select_all(streams)))
+        Ok(())
     }
 
     /// Prepares the chain for the next operation.
@@ -531,7 +558,7 @@ where
         let storage_client = self.node_client.storage_client().await;
         let cross_chain_delay = self.cross_chain_delay;
         let cross_chain_retries = self.cross_chain_retries;
-        let nodes = self.validator_node_provider.make_nodes(committee)?;
+        let nodes: Vec<_> = self.validator_node_provider.make_nodes(committee)?;
         let result = communicate_with_quorum(
             &nodes,
             committee,
@@ -637,7 +664,7 @@ where
         }
         // Recover history from the network. We assume that the committee that signed the
         // certificate is still active.
-        let nodes = self.validator_node_provider.make_nodes(remote_committee)?;
+        let nodes: Vec<_> = self.validator_node_provider.make_nodes(remote_committee)?;
         self.node_client
             .download_certificates(nodes.clone(), block.chain_id, block.height)
             .await?;
@@ -782,7 +809,7 @@ where
         // Use network information from the local chain.
         let chain_id = self.chain_id;
         let local_committee = self.local_committee().await?;
-        let nodes = self.validator_node_provider.make_nodes(&local_committee)?;
+        let nodes: Vec<_> = self.validator_node_provider.make_nodes(&local_committee)?;
         // Synchronize the state of the admin chain from the network.
         self.node_client
             .synchronize_chain_state(nodes.clone(), self.admin_id)
