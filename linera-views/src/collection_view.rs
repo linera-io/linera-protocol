@@ -426,19 +426,15 @@ where
     /// # })
     /// ```
     pub fn direct_load_entry_mut(&mut self, short_key: Vec<u8>) -> Result<&mut W, ViewError> {
-        match self.updates.get_mut().entry(short_key.clone()) {
+        match self.updates.get_mut().entry(short_key) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
                 match entry {
                     Update::Set(view) => Ok(view),
-                    Update::Removed => {
-                        return Err(ViewError::MissingInUpdates);
-                    }
+                    Update::Removed => Err(ViewError::MissingInUpdates),
                 }
             }
-            btree_map::Entry::Vacant(_) => {
-                return Err(ViewError::MissingInUpdates);
-            }
+            btree_map::Entry::Vacant(_) => Err(ViewError::MissingInUpdates),
         }
     }
 }
