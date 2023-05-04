@@ -58,9 +58,8 @@ impl Contract for MetaCounter {
         effect: u64,
     ) -> Result<ExecutionResult, Self::Error> {
         log::trace!("executing {:?} via {:?}", effect, Self::counter_id()?);
-        let as_bytes = bcs::to_bytes(&effect)?;
-        self.call_application(true, Self::counter_id()?, &as_bytes, vec![])
-            .await;
+        self.call_application(true, Self::counter_id()?, &effect, vec![])
+            .await?;
         Ok(ExecutionResult::default())
     }
 

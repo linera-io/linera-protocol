@@ -53,7 +53,7 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
             &second_half_as_bytes,
             vec![],
         )
-        .await;
+        .await?;
 
         Ok(ExecutionResult::default())
     }

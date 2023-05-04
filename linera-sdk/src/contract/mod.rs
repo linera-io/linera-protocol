@@ -41,23 +41,25 @@ macro_rules! contract {
                 &mut self,
                 authenticated: bool,
                 application: $crate::base::ApplicationId,
-                argument: &[u8],
+                argument: &impl serde::Serialize,
                 forwarded_sessions: Vec<$crate::base::SessionId>,
-            ) -> (Vec<u8>, Vec<$crate::base::SessionId>) {
+            ) -> Result<(Vec<u8>, Vec<$crate::base::SessionId>), <Self as Contract>::Error> {
                 use $crate::contract::exported_futures::ContractStateStorage as Storage;
-
-                <Self as $crate::Contract>::Storage::execute_with_released_state(
-                    self,
-                    move || async move {
-                        $crate::contract::system_api::call_application_without_persisting_state(
-                            authenticated,
-                            application,
-                            argument,
-                            forwarded_sessions,
-                        )
-                    },
+                let argument = bcs::to_bytes(argument)?;
+                Ok(
+                    <Self as $crate::Contract>::Storage::execute_with_released_state(
+                        self,
+                        move || async move {
+                            $crate::contract::system_api::call_application_without_persisting_state(
+                                authenticated,
+                                application,
+                                argument.as_ref(),
+                                forwarded_sessions,
+                            )
+                        },
+                    )
+                    .await,
                 )
-                .await
             }
 
             /// Calls a `session` from another application.

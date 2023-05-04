@@ -159,10 +159,10 @@ impl CrowdFunding<ViewStorageContext> {
         self.call_application(
             /* authenticated by owner */ true,
             Self::fungible_id()?,
-            &bcs::to_bytes(&call).unwrap(),
+            &call,
             vec![],
         )
-        .await;
+        .await?;
         // Second, schedule the attribution of the funds to the (remote) campaign.
         let effect = Effect::PledgeWithAccount { owner, amount };
         result.effects.push((
@@ -325,11 +325,14 @@ impl CrowdFunding<ViewStorageContext> {
     /// Queries the token application to determine the total amount of tokens in custody.
     async fn balance(&mut self) -> Result<Amount, Error> {
         let owner = AccountOwner::Application(system_api::current_application_id());
-        let query_bytes = bcs::to_bytes(&fungible::ApplicationCall::Balance { owner })
-            .map_err(Error::InvalidBalanceQuery)?;
         let (response, _sessions) = self
-            .call_application(true, Self::fungible_id()?, &query_bytes, vec![])
-            .await;
+            .call_application(
+                true,
+                Self::fungible_id()?,
+                &fungible::ApplicationCall::Balance { owner },
+                vec![],
+            )
+            .await?;
 
         bcs::from_bytes(&response).map_err(Error::InvalidBalance)
     }
@@ -348,7 +351,7 @@ impl CrowdFunding<ViewStorageContext> {
         };
         let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
         self.call_application(true, Self::fungible_id()?, &transfer_bytes, vec![])
-            .await;
+            .await?;
         Ok(())
     }
 
@@ -370,7 +373,7 @@ impl CrowdFunding<ViewStorageContext> {
         };
         let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
         self.call_application(true, Self::fungible_id()?, &transfer_bytes, vec![])
-            .await;
+            .await?;
         Ok(())
     }
 
