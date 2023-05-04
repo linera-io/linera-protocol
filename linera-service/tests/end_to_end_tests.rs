@@ -567,7 +567,7 @@ impl TestRunner {
         path.into_os_string().into_string().unwrap()
     }
 
-    async fn generate_initial_validator_config(&self) -> anyhow::Result<Vec<String>> {
+    async fn generate_initial_validator_config(&self) -> Vec<String> {
         let mut command = self.command_for_binary("server").await;
         command.arg("generate").arg("--validators");
         for i in 1..=self.num_initial_validators {
@@ -576,15 +576,17 @@ impl TestRunner {
         let output = command
             .args(["--committee", "committee.json"])
             .stdout(Stdio::piped())
-            .spawn()?
+            .spawn()
+            .unwrap()
             .wait_with_output()
-            .await?;
+            .await
+            .unwrap();
         assert!(output.status.success());
         let output_str = String::from_utf8_lossy(output.stdout.as_slice());
-        Ok(output_str.split_whitespace().map(str::to_string).collect())
+        output_str.split_whitespace().map(str::to_string).collect()
     }
 
-    async fn generate_validator_config(&self, i: usize) -> anyhow::Result<String> {
+    async fn generate_validator_config(&self, i: usize) -> String {
         let output = self
             .command_for_binary("server")
             .await
@@ -592,14 +594,15 @@ impl TestRunner {
             .arg("--validators")
             .arg(&self.configuration_string(i))
             .stdout(Stdio::piped())
-            .spawn()?
+            .spawn()
+            .unwrap()
             .wait_with_output()
-            .await?;
+            .await
+            .unwrap();
         assert!(output.status.success());
-        Ok(String::from_utf8_lossy(output.stdout.as_slice())
-            .to_string()
+        String::from_utf8_lossy(output.stdout.as_slice())
             .trim()
-            .to_string())
+            .to_string()
     }
 
     async fn run_proxy(&self, i: usize) -> Child {
@@ -874,7 +877,7 @@ async fn test_end_to_end_counter() {
     let original_counter_value = 35;
     let increment = 5;
 
-    runner.generate_initial_validator_config().await.unwrap();
+    runner.generate_initial_validator_config().await;
     client.create_genesis_config().await;
     runner.run_local_net().await;
     let (contract, service) = runner.build_application("counter").await;
@@ -913,7 +916,7 @@ async fn test_end_to_end_counter_publish_create() {
     let original_counter_value = 35;
     let increment = 5;
 
-    runner.generate_initial_validator_config().await.unwrap();
+    runner.generate_initial_validator_config().await;
     client.create_genesis_config().await;
     runner.run_local_net().await;
     let (contract, service) = runner.build_application("counter").await;
@@ -951,7 +954,7 @@ async fn test_end_to_end_multiple_wallets() {
     let client_2 = runner.make_client(Network::Grpc);
 
     // Create initial server and client config.
-    runner.generate_initial_validator_config().await.unwrap();
+    runner.generate_initial_validator_config().await;
     client_1.create_genesis_config().await;
     client_2.init(&[]).await;
 
@@ -1013,7 +1016,7 @@ async fn test_reconfiguration(network: Network) {
     let chain_1 = ChainId::root(0);
     let chain_2 = ChainId::root(9);
 
-    let servers = runner.generate_initial_validator_config().await.unwrap();
+    let servers = runner.generate_initial_validator_config().await;
     client.create_genesis_config().await;
     client_2.init(&[chain_2]).await;
     runner.run_local_net().await;
@@ -1050,8 +1053,8 @@ async fn test_reconfiguration(network: Network) {
     assert!(client.check_for_chain_in_wallet(chain_3).await);
 
     // Create configurations for two more validators
-    let server_5 = runner.generate_validator_config(5).await.unwrap();
-    let server_6 = runner.generate_validator_config(6).await.unwrap();
+    let server_5 = runner.generate_validator_config(5).await;
+    let server_6 = runner.generate_validator_config(6).await;
 
     // Start the validators
     runner.start_validators(5..=6).await;
@@ -1105,7 +1108,7 @@ async fn test_end_to_end_social_user_pub_sub() {
     let client2 = runner.make_client(network);
 
     // Create initial server and client config.
-    runner.generate_initial_validator_config().await.unwrap();
+    runner.generate_initial_validator_config().await;
     client1.create_genesis_config().await;
     client2.init(&[]).await;
 
