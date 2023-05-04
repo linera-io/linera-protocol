@@ -47,3 +47,19 @@ jobs:
         publish_branch: gh-pages
         publish_dir: ./target/doc
         destination_dir: 364a04086bc8f2bf91ec3406a2aac5f7e4e675b9
+
+  docsrs:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+    - uses: actions/checkout@v3
+      with:
+        repository: rust-lang/docs.rs
+        path: ${{ runner.temp }}/docsrs
+    - run: |
+        cd ${{ runner.temp }}/docsrs
+        cargo run -- build crate --local ${{ github.workspace }}
