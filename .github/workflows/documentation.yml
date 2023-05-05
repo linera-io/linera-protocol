@@ -69,4 +69,5 @@ jobs:
         . ./.env
         docker-compose up -d db s3
         cargo run -- database migrate
-        cargo run -- build crate --local ${{ github.workspace }}/examples
+        cp -a ${{ github.workspace }}/examples/dummy ${{ runner.temp }}/
+        cargo run -- build crate --local ${{ runner.temp }}/dummy
