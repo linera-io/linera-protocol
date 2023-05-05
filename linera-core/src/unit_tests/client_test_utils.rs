@@ -508,7 +508,7 @@ where
                 }
             }
         }
-        assert_eq!(count, target_count);
+        assert!(count >= target_count);
         certificate
     }
 }

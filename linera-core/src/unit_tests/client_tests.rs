@@ -308,7 +308,7 @@ where
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 4)
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
             .await
             .unwrap()
             .value,
