@@ -6,7 +6,8 @@ use async_graphql::{
     futures_util::Stream,
     http::GraphiQLSource,
     parser::types::{DocumentOperations, ExecutableDocument, OperationType},
-    Error, Object, Request, ScalarType, Schema, ServerError, SimpleObject, Subscription,
+    Error, MergedObject, Object, Request, ScalarType, Schema, ServerError, SimpleObject,
+    Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{
@@ -315,8 +316,9 @@ where
     async fn chain(
         &self,
         chain_id: Option<ChainId>,
-    ) -> Result<Arc<ChainStateView<S::Context>>, Error> {
-        Ok(self.client.lock().await.chain_state_view(chain_id).await?)
+    ) -> Result<ChainStateExtendedView<S::Context>, Error> {
+        let view = self.client.lock().await.chain_state_view(chain_id).await?;
+        Ok(ChainStateExtendedView::new(view))
     }
 
     async fn applications(
@@ -340,6 +342,36 @@ where
             .collect();
 
         Ok(overviews)
+    }
+}
+
+// What follows is a hack to add a chain_id field to `ChainStateView` based on
+// https://async-graphql.github.io/async-graphql/en/merging_objects.html
+
+struct ChainStateViewExtension(ChainId);
+
+#[Object]
+impl ChainStateViewExtension {
+    async fn chain_id(&self) -> ChainId {
+        self.0
+    }
+}
+
+#[derive(MergedObject)]
+struct ChainStateExtendedView<C>(ChainStateViewExtension, Arc<ChainStateView<C>>)
+where
+    C: linera_views::common::Context + Clone + Send + Sync + 'static,
+    ViewError: From<C::Error>,
+    C::Extra: linera_execution::ExecutionRuntimeContext;
+
+impl<C> ChainStateExtendedView<C>
+where
+    C: linera_views::common::Context + Clone + Send + Sync + 'static,
+    ViewError: From<C::Error>,
+    C::Extra: linera_execution::ExecutionRuntimeContext,
+{
+    fn new(view: Arc<ChainStateView<C>>) -> Self {
+        Self(ChainStateViewExtension(view.chain_id()), view)
     }
 }
 
