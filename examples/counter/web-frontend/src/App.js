@@ -15,7 +15,7 @@ const GET_COUNTER_VALUE = gql`
 
 const INCREMENT_COUNTER = gql`
   mutation {
-    executeOperation(operation: { increment: 1 })
+    increment(value: 1)
   }
 `;
 

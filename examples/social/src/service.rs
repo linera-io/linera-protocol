@@ -41,17 +41,14 @@ struct MutationRoot;
 
 #[Object]
 impl MutationRoot {
-    #[allow(unused)]
     async fn subscribe(&self, chain_id: ChainId) -> Vec<u8> {
         bcs::to_bytes(&Operation::RequestSubscribe(chain_id)).unwrap()
     }
 
-    #[allow(unused)]
     async fn unsubscribe(&self, chain_id: ChainId) -> Vec<u8> {
         bcs::to_bytes(&Operation::RequestUnsubscribe(chain_id)).unwrap()
     }
 
-    #[allow(unused)]
     async fn post(&self, text: String) -> Vec<u8> {
         bcs::to_bytes(&Operation::Post(text)).unwrap()
     }
