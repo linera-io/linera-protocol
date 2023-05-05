@@ -881,7 +881,7 @@ impl Application {
     }
 
     async fn increment_counter_value(&self, increment: u64) {
-        let query_string = format!("mutation {{ executeOperation(operation: {}) }}", increment);
+        let query_string = format!("mutation {{ increment(value: {})}}", increment);
         self.query_application(&query_string).await;
     }
 }

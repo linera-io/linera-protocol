@@ -46,9 +46,8 @@ struct MutationRoot;
 
 #[Object]
 impl MutationRoot {
-    #[allow(unused)]
-    async fn execute_operation(&self, operation: u64) -> Vec<u8> {
-        bcs::to_bytes(&operation).unwrap()
+    async fn increment(&self, value: u64) -> Vec<u8> {
+        bcs::to_bytes(&value).unwrap()
     }
 }
 
@@ -58,7 +57,6 @@ struct QueryRoot {
 
 #[Object]
 impl QueryRoot {
-    #[allow(unused)]
     async fn value(&self) -> &u64 {
         &self.value
     }
