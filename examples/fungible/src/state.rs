@@ -1,14 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fungible::AccountOwner;
+use fungible::{AccountOwner, InitialState};
 use linera_sdk::base::Amount;
 use linera_views::{
     common::Context,
     map_view::MapView,
     views::{GraphQLView, RootView, View},
 };
-use std::collections::BTreeMap;
 use thiserror::Error;
 
 /// The application state.
@@ -24,8 +23,9 @@ where
     linera_views::views::ViewError: From<C::Error>,
 {
     /// Initializes the application state with some accounts with initial balances.
-    pub(crate) async fn initialize_accounts(&mut self, accounts: BTreeMap<AccountOwner, Amount>) {
-        for (k, v) in accounts {
+
+    pub(crate) async fn initialize_accounts(&mut self, state: InitialState) {
+        for (k, v) in state.accounts {
             self.accounts
                 .insert(&k, v)
                 .expect("Error in insert statement");

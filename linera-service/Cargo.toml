@@ -67,6 +67,7 @@ tempfile = { workspace = true }
 test-log = { workspace = true, features = ["trace"] }
 test-strategy = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
+fungible = { workspace = true }
 
 [[bin]]
 name = "linera"

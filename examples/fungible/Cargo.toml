@@ -8,6 +8,7 @@ edition = "2021"
 async-graphql = { workspace = true }
 async-trait = { workspace = true }
 bcs = { workspace = true }
+hex = { workspace = true }
 linera-sdk = { workspace = true }
 linera-views = { workspace = true }
 serde = { workspace = true }

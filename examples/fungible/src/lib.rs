@@ -27,7 +27,6 @@ pub enum Effect {
 
 /// A cross-application call.
 #[derive(Deserialize, Serialize)]
-#[allow(clippy::large_enum_variant)]
 pub enum ApplicationCall {
     /// A request for an account balance.
     Balance { owner: AccountOwner },
@@ -41,7 +40,6 @@ pub enum ApplicationCall {
 
 /// A cross-application call into a session.
 #[derive(Deserialize, Serialize)]
-#[allow(clippy::large_enum_variant)]
 pub enum SessionCall {
     /// A request for the session's balance.
     Balance,
@@ -72,6 +70,18 @@ where
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct InitialState {
+    pub accounts: BTreeMap<AccountOwner, Amount>,
+}
+
+impl std::fmt::Display for InitialState {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let bytes = bcs::to_bytes(self).expect("Serialization failed");
+        write!(f, "{}", hex::encode(bytes))
+    }
+}
+
 /// An account.
 #[derive(
     Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, InputObject,
@@ -82,11 +92,12 @@ pub struct Account {
 }
 
 #[derive(Deserialize, Serialize)]
-#[allow(clippy::large_enum_variant)]
 pub enum Destination {
     Account(Account),
     NewSession,
 }
+
+scalar!(Destination);
 
 /// A builder type for constructing the initial state of the application.
 #[derive(Debug, Default)]
