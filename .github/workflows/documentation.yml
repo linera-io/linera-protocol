@@ -69,12 +69,11 @@ jobs:
         for crate in $LINERA_CRATES; do
             cargo publish -p "linera-${crate}" --dry-run --target-dir "${{ runner.temp }}/crates/linera-${crate}" --no-verify
         done
-    - name: Use local dependencies within Linera crates
+    - name: Extract packaged crates
       run: |
         for crate in $LINERA_CRATES; do
             pushd "${{ runner.temp }}/crates/linera-${crate}/package"
             tar -xzvf "linera-${crate}-${VERSION}.crate"
-            sed -i -e 's|dependencies\.\(linera-[^]]*\)]|&\npath = "${{ runner.temp }}/crates/\1"|' "linera-${crate}-${VERSION}/Cargo.toml"
             popd
         done
     - name: Build documentation using docs.rs
