@@ -1282,20 +1282,22 @@ async fn test_end_to_end_fungible() {
         .await;
     assert_eq!(value, Amount::from(1));
 
-    // Moving the money back to chain1 (but same owner -- it will be stuck there until we
-    // add "claim" operation to fungible).
-    let destination2 = format!(
+    // Claiming more money from chain1 to chain2.
+    let source = format!(
         "{{chainId: \"{}\", owner: {}}}",
         chain1,
         account_owner2.to_value()
     );
+    let destination = format!(
+        "{{chainId: \"{}\", owner: {}}}",
+        chain2,
+        account_owner2.to_value()
+    );
 
-    let amount_transfer = Amount::from(1);
+    let amount_transfer = Amount::from(2);
     let query_string = format!(
-        "mutation {{ transfer(owner: {}, amount: {}, targetAccount: {}) }}",
-        account_owner2.to_value(),
-        amount_transfer,
-        destination2
+        "mutation {{ claim(sourceAccount: {}, amount: {}, targetAccount: {}) }}",
+        source, amount_transfer, destination
     );
     app2.query_application(&query_string).await;
 
@@ -1308,7 +1310,7 @@ async fn test_end_to_end_fungible() {
     let value = app1
         .get_fungible_account_owner_amount(&account_owner2)
         .await;
-    assert_eq!(value, Amount::from(3));
+    assert_eq!(value, Amount::from(0));
 
     let value = app2
         .get_fungible_account_owner_amount(&account_owner1)
@@ -1318,7 +1320,7 @@ async fn test_end_to_end_fungible() {
     let value = app2
         .get_fungible_account_owner_amount(&account_owner2)
         .await;
-    assert_eq!(value, Amount::from(0));
+    assert_eq!(value, Amount::from(3));
 
     node_service1.assert_is_running();
     node_service2.assert_is_running();
