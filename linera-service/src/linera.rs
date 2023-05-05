@@ -1198,9 +1198,12 @@ where
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    let env_filter = tracing_subscriber::EnvFilter::builder()
+        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+        .from_env_lossy();
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_env_filter(env_filter)
         .init();
     let options = ClientOptions::from_args();
 
