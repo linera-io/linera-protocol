@@ -18,6 +18,7 @@ env:
   RUSTFLAGS: "-D warnings"
   RUSTUP_MAX_RETRIES: 10
   LINERA_CRATES: base chain core execution rpc sdk service storage views views-derive
+  VERSION: 0.1.0
 
 permissions:
   contents: read
@@ -66,12 +67,15 @@ jobs:
     - name: Generate standalone packages
       run: |
         for crate in $LINERA_CRATES; do
-            cargo publish -p "linera-${crate}" --dry-run --target-dir "${{ runner.temp }}/crates/linera-${crate}"
+            cargo publish -p "linera-${crate}" --dry-run --target-dir "${{ runner.temp }}/crates/linera-${crate}" --no-verify
         done
     - name: Use local dependencies within Linera crates
       run: |
         for crate in $LINERA_CRATES; do
-            sed -i -e 's|dependencies\.\(linera-[^]]*\)]|&\npath = "${{ runner.temp }}/crates/\1"|' "${{ runner.temp }}/crates/linera-${crate}/package/linera-${crate}-0.1.0/Cargo.toml"
+            pushd "${{ runner.temp }}/crates/linera-${crate}/package"
+            tar -xzvf "linera-${crate}-${VERSION}.crate"
+            sed -i -e 's|dependencies\.\(linera-[^]]*\)]|&\npath = "${{ runner.temp }}/crates/\1"|' "linera-${crate}-${VERSION}/Cargo.toml"
+            popd
         done
     - name: Build documentation using docs.rs
       run: |
@@ -82,5 +86,5 @@ jobs:
         docker-compose up -d db s3
         cargo run -- database migrate
         for crate in $LINERA_CRATES; do
-            cargo run -- build crate --local "${{ runner.temp }}/crates/linera-${crate}/package/linera-${crate}-0.1.0"
+            cargo run -- build crate --local "${{ runner.temp }}/crates/linera-${crate}/package/linera-${crate}-${VERSION}"
         done
