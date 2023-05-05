@@ -1199,7 +1199,7 @@ async fn test_end_to_end_fungible() {
 
     runner.generate_initial_validator_config().await;
     client1.create_genesis_config().await;
-    client2.init().await;
+    client2.init(&[]).await;
 
     // Create initial server and client config.
     runner.run_local_net().await;
