@@ -1037,7 +1037,8 @@ where
                 config,
                 port,
             } => {
-                let chain_client = context.make_chain_client(storage, chain_id);
+                let mut chain_client = context.make_chain_client(storage, chain_id);
+                chain_client.synchronize_from_validators().await?;
                 let service = NodeService::new(chain_client, config, port);
                 service
                     .run(context, |context, client| {
