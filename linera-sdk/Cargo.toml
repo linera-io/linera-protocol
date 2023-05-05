@@ -13,10 +13,6 @@ edition = "2021"
 [package.metadata.cargo-udeps.ignore]
 development = ["linera-sdk"]
 
-[package.metadata.docs.rs]
-features = ["test", "wasmer"]
-targets = ["wasm32-unknown-unknown", "x86_64-unknown-linux-gnu"]
-
 [features]
 wasmer = ["linera-core/wasmer", "linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-core/wasmtime", "linera-execution/wasmtime", "linera-storage/wasmtime"]
