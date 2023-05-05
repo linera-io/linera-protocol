@@ -21,7 +21,7 @@ pub enum Operation {
 }
 
 /// An effect of the application on one chain, to be handled on another chain.
-#[derive(PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum Effect {
     /// The origin chain wants to subscribe to the target chain.
     RequestSubscribe,

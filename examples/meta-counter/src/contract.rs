@@ -38,7 +38,7 @@ impl Contract for MetaCounter {
         &mut self,
         _context: &OperationContext,
         _argument: (),
-    ) -> Result<ExecutionResult, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         Self::counter_id()?;
         Ok(ExecutionResult::default())
     }
@@ -47,16 +47,16 @@ impl Contract for MetaCounter {
         &mut self,
         _context: &OperationContext,
         (recipient_id, operation): (ChainId, u64),
-    ) -> Result<ExecutionResult, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         log::trace!("effect: {:?}", operation);
-        Ok(ExecutionResult::default().with_effect(recipient_id, &operation))
+        Ok(ExecutionResult::default().with_effect(recipient_id, operation))
     }
 
     async fn execute_effect(
         &mut self,
         _context: &EffectContext,
         effect: u64,
-    ) -> Result<ExecutionResult, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         log::trace!("executing {:?} via {:?}", effect, Self::counter_id()?);
         self.call_application(true, Self::counter_id()?, &effect, vec![])
             .await?;
@@ -68,7 +68,7 @@ impl Contract for MetaCounter {
         _context: &CalleeContext,
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, Self::Error> {
+    ) -> Result<ApplicationCallResult<Self::Effect>, Self::Error> {
         Err(Error::CallsNotSupported)
     }
 
@@ -78,7 +78,7 @@ impl Contract for MetaCounter {
         _session: Session,
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect>, Self::Error> {
         Err(Error::SessionsNotSupported)
     }
 }

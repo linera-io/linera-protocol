@@ -43,7 +43,7 @@ where
         &mut self,
         _context: &OperationContext,
         _argument: (),
-    ) -> Result<ExecutionResult, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         Ok(ExecutionResult::default())
     }
 
@@ -51,13 +51,13 @@ where
         &mut self,
         _context: &OperationContext,
         operation: Operation,
-    ) -> Result<ExecutionResult, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         match operation {
             Operation::RequestSubscribe(chain_id) => {
-                Ok(ExecutionResult::default().with_effect(chain_id, &Effect::RequestSubscribe))
+                Ok(ExecutionResult::default().with_effect(chain_id, Effect::RequestSubscribe))
             }
             Operation::RequestUnsubscribe(chain_id) => {
-                Ok(ExecutionResult::default().with_effect(chain_id, &Effect::RequestUnsubscribe))
+                Ok(ExecutionResult::default().with_effect(chain_id, Effect::RequestUnsubscribe))
             }
             Operation::Post(text) => self.execute_post_operation(text).await,
         }
@@ -67,7 +67,7 @@ where
         &mut self,
         context: &EffectContext,
         effect: Effect,
-    ) -> Result<ExecutionResult, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         let mut result = ExecutionResult::default();
         match effect {
             Effect::RequestSubscribe => result.subscribe.push((
@@ -88,7 +88,7 @@ where
         _context: &CalleeContext,
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, Self::Error> {
+    ) -> Result<ApplicationCallResult<Self::Effect>, Self::Error> {
         Err(Error::ApplicationCallsNotSupported)
     }
 
@@ -98,7 +98,7 @@ where
         _session: Session,
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect>, Self::Error> {
         Err(Error::SessionsNotSupported)
     }
 }
@@ -108,7 +108,10 @@ where
     C: Context + Send + Sync + Clone + 'static,
     ViewError: From<<C as Context>::Error>,
 {
-    async fn execute_post_operation(&mut self, text: String) -> Result<ExecutionResult, Error> {
+    async fn execute_post_operation(
+        &mut self,
+        text: String,
+    ) -> Result<ExecutionResult<Effect>, Error> {
         let timestamp = system_api::current_system_time();
         self.own_posts.push(OwnPost { timestamp, text });
         let count = self.own_posts.count();
@@ -121,7 +124,7 @@ where
         }
         let count = count as u64;
         let dest = Destination::Subscribers(ChannelName::from(POSTS_CHANNEL_NAME.to_vec()));
-        Ok(ExecutionResult::default().with_effect(dest, &Effect::Posts { count, posts }))
+        Ok(ExecutionResult::default().with_effect(dest, Effect::Posts { count, posts }))
     }
 
     fn execute_posts_effect(

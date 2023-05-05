@@ -10,7 +10,8 @@ use linera_base::{
     crypto::CryptoHash,
     identifiers::{ApplicationId, ChannelName, Destination, EffectId, SessionId},
 };
-use std::task::Poll;
+use serde::{de::DeserializeOwned, Serialize};
+use std::{fmt::Debug, task::Poll};
 
 impl From<CryptoHash> for wit_system_api::CryptoHash {
     fn from(hash_value: CryptoHash) -> Self {
@@ -79,8 +80,12 @@ impl From<log::Level> for wit_system_api::LogLevel {
     }
 }
 
-impl From<ApplicationCallResult> for wit_types::ApplicationCallResult {
-    fn from(result: ApplicationCallResult) -> Self {
+impl<Effect: Serialize + DeserializeOwned + Debug> From<ApplicationCallResult<Effect>>
+    for wit_types::ApplicationCallResult
+where
+    Effect: Serialize,
+{
+    fn from(result: ApplicationCallResult<Effect>) -> Self {
         let create_sessions = result
             .create_sessions
             .into_iter()
@@ -104,8 +109,10 @@ impl From<Session> for wit_types::Session {
     }
 }
 
-impl From<SessionCallResult> for wit_types::SessionCallResult {
-    fn from(result: SessionCallResult) -> Self {
+impl<Effect: Serialize + DeserializeOwned + Debug> From<SessionCallResult<Effect>>
+    for wit_types::SessionCallResult
+{
+    fn from(result: SessionCallResult<Effect>) -> Self {
         wit_types::SessionCallResult {
             inner: result.inner.into(),
             data: result.data,
@@ -113,12 +120,20 @@ impl From<SessionCallResult> for wit_types::SessionCallResult {
     }
 }
 
-impl From<ExecutionResult> for wit_types::ExecutionResult {
-    fn from(result: ExecutionResult) -> Self {
+impl<Effect: Debug + Serialize + DeserializeOwned> From<ExecutionResult<Effect>>
+    for wit_types::ExecutionResult
+{
+    fn from(result: ExecutionResult<Effect>) -> Self {
         let effects = result
             .effects
             .into_iter()
-            .map(|(destination, authenticated, effect)| (destination.into(), authenticated, effect))
+            .map(|(destination, authenticated, effect)| {
+                (
+                    destination.into(),
+                    authenticated,
+                    bcs::to_bytes(&effect).expect("TODO"),
+                )
+            })
             .collect();
 
         let subscribe = result
@@ -162,8 +177,10 @@ impl From<ChannelName> for wit_types::ChannelName {
     }
 }
 
-impl From<Poll<Result<ExecutionResult, String>>> for wit_types::PollExecutionResult {
-    fn from(poll: Poll<Result<ExecutionResult, String>>) -> Self {
+impl<Effect: DeserializeOwned + Serialize + Debug>
+    From<Poll<Result<ExecutionResult<Effect>, String>>> for wit_types::PollExecutionResult
+{
+    fn from(poll: Poll<Result<ExecutionResult<Effect>, String>>) -> Self {
         use wit_types::PollExecutionResult;
         match poll {
             Poll::Pending => PollExecutionResult::Pending,
@@ -173,8 +190,10 @@ impl From<Poll<Result<ExecutionResult, String>>> for wit_types::PollExecutionRes
     }
 }
 
-impl From<Poll<Result<ApplicationCallResult, String>>> for wit_types::PollCallApplication {
-    fn from(poll: Poll<Result<ApplicationCallResult, String>>) -> Self {
+impl<Effect: Debug + Serialize + DeserializeOwned>
+    From<Poll<Result<ApplicationCallResult<Effect>, String>>> for wit_types::PollCallApplication
+{
+    fn from(poll: Poll<Result<ApplicationCallResult<Effect>, String>>) -> Self {
         use wit_types::PollCallApplication;
         match poll {
             Poll::Pending => PollCallApplication::Pending,
@@ -184,8 +203,10 @@ impl From<Poll<Result<ApplicationCallResult, String>>> for wit_types::PollCallAp
     }
 }
 
-impl From<Poll<Result<SessionCallResult, String>>> for wit_types::PollCallSession {
-    fn from(poll: Poll<Result<SessionCallResult, String>>) -> Self {
+impl<Effect: Debug + Serialize + DeserializeOwned>
+    From<Poll<Result<SessionCallResult<Effect>, String>>> for wit_types::PollCallSession
+{
+    fn from(poll: Poll<Result<SessionCallResult<Effect>, String>>) -> Self {
         use wit_types::PollCallSession;
         match poll {
             Poll::Pending => PollCallSession::Pending,

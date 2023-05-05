@@ -90,7 +90,7 @@ pub trait Contract: Sized {
     /// Application Call Arguments.
     type ApplicationCallArguments: DeserializeOwned + Serialize + Send;
     /// The Application Effect.
-    type Effect: DeserializeOwned + Send;
+    type Effect: DeserializeOwned + Serialize + Send + std::fmt::Debug;
     /// A Session Call.
     type SessionCall: DeserializeOwned + Send;
 
@@ -109,7 +109,7 @@ pub trait Contract: Sized {
         &mut self,
         context: &OperationContext,
         argument: Self::InitializationArguments,
-    ) -> Result<ExecutionResult, Self::Error>;
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error>;
 
     /// Applies an operation from the current block.
     ///
@@ -122,7 +122,7 @@ pub trait Contract: Sized {
         &mut self,
         context: &OperationContext,
         operation: Self::Operation,
-    ) -> Result<ExecutionResult, Self::Error>;
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error>;
 
     /// Applies an effect originating from a cross-chain message.
     ///
@@ -142,7 +142,7 @@ pub trait Contract: Sized {
         &mut self,
         context: &EffectContext,
         effect: Self::Effect,
-    ) -> Result<ExecutionResult, Self::Error>;
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error>;
 
     /// Handles a call from another application.
     ///
@@ -166,7 +166,7 @@ pub trait Contract: Sized {
         context: &CalleeContext,
         argument: Self::ApplicationCallArguments,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, Self::Error>;
+    ) -> Result<ApplicationCallResult<Self::Effect>, Self::Error>;
 
     /// Handles a call into a [`Session`] created by this application.
     ///
@@ -206,7 +206,7 @@ pub trait Contract: Sized {
         session: Session,
         argument: Self::SessionCall,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, Self::Error>;
+    ) -> Result<SessionCallResult<Self::Effect>, Self::Error>;
 }
 
 /// The public entry points provided by an application's service.
@@ -276,27 +276,32 @@ pub struct QueryContext {
 
 /// Externally visible results of an execution. These results are meant in the context of
 /// the application that created them.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct ExecutionResult {
+pub struct ExecutionResult<Effect> {
     /// Sends messages to the given destinations, possibly forwarding the authenticated
     /// signer.
-    pub effects: Vec<(Destination, bool, Vec<u8>)>,
+    pub effects: Vec<(Destination, bool, Effect)>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(ChannelName, ChainId)>,
     /// Unsubscribe chains to channels.
     pub unsubscribe: Vec<(ChannelName, ChainId)>,
 }
 
-impl ExecutionResult {
+impl<Effect> Default for ExecutionResult<Effect> {
+    fn default() -> Self {
+        Self {
+            effects: vec![],
+            subscribe: vec![],
+            unsubscribe: vec![],
+        }
+    }
+}
+
+impl<Effect: Serialize + std::fmt::Debug + DeserializeOwned> ExecutionResult<Effect> {
     /// Adds an effect to the execution result.
-    pub fn with_effect(
-        mut self,
-        destination: impl Into<Destination>,
-        effect: &impl Serialize,
-    ) -> Self {
-        let effect_bytes = bcs::to_bytes(effect).expect("Effect should be serializable");
-        self.effects.push((destination.into(), false, effect_bytes));
+    pub fn with_effect(mut self, destination: impl Into<Destination>, effect: Effect) -> Self {
+        self.effects.push((destination.into(), false, effect));
         self
     }
 
@@ -304,25 +309,34 @@ impl ExecutionResult {
     pub fn with_authenticated_effect(
         mut self,
         destination: impl Into<Destination>,
-        effect: &impl Serialize,
+        effect: Effect,
     ) -> Self {
-        let effect_bytes = bcs::to_bytes(effect).expect("Effect should be serializable");
-        self.effects.push((destination.into(), true, effect_bytes));
+        self.effects.push((destination.into(), true, effect));
         self
     }
 }
 
 /// The result of calling into a user application.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct ApplicationCallResult {
+pub struct ApplicationCallResult<Effect> {
     /// The return value.
     #[debug(with = "linera_base::hex_debug")]
     pub value: Vec<u8>,
     /// The externally-visible result.
-    pub execution_result: ExecutionResult,
+    pub execution_result: ExecutionResult<Effect>,
     /// The new sessions that were just created by the callee for us.
     pub create_sessions: Vec<Session>,
+}
+
+impl<Effect> Default for ApplicationCallResult<Effect> {
+    fn default() -> Self {
+        Self {
+            value: vec![],
+            execution_result: Default::default(),
+            create_sessions: vec![],
+        }
+    }
 }
 
 /// Syscall to request creating a new session.
@@ -338,9 +352,9 @@ pub struct Session {
 
 /// The result of calling into a session.
 #[derive(Default, Deserialize, Serialize)]
-pub struct SessionCallResult {
+pub struct SessionCallResult<Effect> {
     /// The application result.
-    pub inner: ApplicationCallResult,
+    pub inner: ApplicationCallResult<Effect>,
     /// If `call_session` was called, this tells the system to clean up the session.
     pub data: Option<Vec<u8>>,
 }

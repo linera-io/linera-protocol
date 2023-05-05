@@ -26,7 +26,7 @@ pub enum Operation {
 }
 
 /// An effect.
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub enum Effect {
     /// Credit the given account.
     Credit { owner: AccountOwner, amount: Amount },

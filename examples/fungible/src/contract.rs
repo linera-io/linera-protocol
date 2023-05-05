@@ -36,8 +36,8 @@ impl Contract for FungibleToken<ViewStorageContext> {
     async fn initialize(
         &mut self,
         context: &OperationContext,
-        mut state: InitialState,
-    ) -> Result<ExecutionResult, Self::Error> {
+        mut state: Self::InitializationArguments,
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         // If initial accounts are empty, creator gets 1M tokens to act like a faucet.
         if state.accounts.is_empty() {
             if let Some(owner) = context.authenticated_signer {
@@ -55,7 +55,7 @@ impl Contract for FungibleToken<ViewStorageContext> {
         &mut self,
         context: &OperationContext,
         operation: Self::Operation,
-    ) -> Result<ExecutionResult, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         match operation {
             Operation::Transfer {
                 owner,
@@ -88,7 +88,7 @@ impl Contract for FungibleToken<ViewStorageContext> {
         &mut self,
         context: &EffectContext,
         effect: Effect,
-    ) -> Result<ExecutionResult, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         match effect {
             Effect::Credit { owner, amount } => {
                 self.credit(owner, amount).await;
@@ -113,7 +113,7 @@ impl Contract for FungibleToken<ViewStorageContext> {
         context: &CalleeContext,
         call: ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, Self::Error> {
+    ) -> Result<ApplicationCallResult<Self::Effect>, Self::Error> {
         match call {
             ApplicationCall::Balance { owner } => {
                 let mut result = ApplicationCallResult::default();
@@ -164,7 +164,7 @@ impl Contract for FungibleToken<ViewStorageContext> {
         session: Session,
         request: SessionCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect>, Self::Error> {
         match request {
             SessionCall::Balance => self.handle_session_balance(session.data),
             SessionCall::Transfer {
@@ -193,11 +193,15 @@ impl FungibleToken<ViewStorageContext> {
     }
 
     /// Handles a session balance request sent by an application.
-    fn handle_session_balance(&self, session_data: Vec<u8>) -> Result<SessionCallResult, Error> {
+    fn handle_session_balance(
+        &self,
+        session_data: Vec<u8>,
+    ) -> Result<SessionCallResult<Effect>, Error> {
         let balance_bytes = session_data.clone();
         let application_call_result = ApplicationCallResult {
             value: balance_bytes,
-            ..Default::default()
+            execution_result: ExecutionResult::default(),
+            create_sessions: vec![],
         };
         let session_call_result = SessionCallResult {
             inner: application_call_result,
@@ -212,7 +216,7 @@ impl FungibleToken<ViewStorageContext> {
         session_data: Vec<u8>,
         amount: Amount,
         destination: Destination,
-    ) -> Result<SessionCallResult, Error> {
+    ) -> Result<SessionCallResult<Effect>, Error> {
         let mut balance =
             Amount::from_bcs_bytes(&session_data).expect("Session contains corrupt data");
         balance
@@ -235,7 +239,7 @@ impl FungibleToken<ViewStorageContext> {
         source_account: Account,
         amount: Amount,
         target_account: Account,
-    ) -> Result<ExecutionResult, Error> {
+    ) -> Result<ExecutionResult<Effect>, Error> {
         if source_account.chain_id == system_api::current_chain_id() {
             self.debit(source_account.owner, amount).await?;
             Ok(self
@@ -248,7 +252,7 @@ impl FungibleToken<ViewStorageContext> {
                 target_account,
             };
             Ok(ExecutionResult::default()
-                .with_authenticated_effect(source_account.chain_id, &effect))
+                .with_authenticated_effect(source_account.chain_id, effect))
         }
     }
 
@@ -257,7 +261,7 @@ impl FungibleToken<ViewStorageContext> {
         &mut self,
         amount: Amount,
         destination: Destination,
-    ) -> ApplicationCallResult {
+    ) -> ApplicationCallResult<Effect> {
         let mut result = ApplicationCallResult::default();
         match destination {
             Destination::Account(account) => {
@@ -275,7 +279,7 @@ impl FungibleToken<ViewStorageContext> {
         &mut self,
         amount: Amount,
         account: Account,
-    ) -> ExecutionResult {
+    ) -> ExecutionResult<Effect> {
         if account.chain_id == system_api::current_chain_id() {
             self.credit(account.owner, amount).await;
             ExecutionResult::default()
@@ -284,7 +288,7 @@ impl FungibleToken<ViewStorageContext> {
                 owner: account.owner,
                 amount,
             };
-            ExecutionResult::default().with_effect(account.chain_id, &effect)
+            ExecutionResult::default().with_effect(account.chain_id, effect)
         }
     }
 

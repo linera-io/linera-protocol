@@ -29,7 +29,7 @@ impl Contract for Counter {
         &mut self,
         _context: &OperationContext,
         argument: u64,
-    ) -> Result<ExecutionResult, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         self.value = argument;
         Ok(ExecutionResult::default())
     }
@@ -38,7 +38,7 @@ impl Contract for Counter {
         &mut self,
         _context: &OperationContext,
         operation: u64,
-    ) -> Result<ExecutionResult, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         self.value += operation;
         Ok(ExecutionResult::default())
     }
@@ -47,7 +47,7 @@ impl Contract for Counter {
         &mut self,
         _context: &EffectContext,
         _effect: (),
-    ) -> Result<ExecutionResult, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         Err(Error::EffectsNotSupported)
     }
 
@@ -56,7 +56,7 @@ impl Contract for Counter {
         _context: &CalleeContext,
         increment: u64,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, Self::Error> {
+    ) -> Result<ApplicationCallResult<Self::Effect>, Self::Error> {
         log::error!("incrementing by {:?}", increment);
         self.value += increment;
         Ok(ApplicationCallResult {
@@ -71,7 +71,7 @@ impl Contract for Counter {
         _session: Session,
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect>, Self::Error> {
         Err(Error::SessionsNotSupported)
     }
 }

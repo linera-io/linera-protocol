@@ -40,7 +40,7 @@ pub enum Operation {
 }
 
 /// Effects that can be processed by the application.
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum Effect {
     /// Pledge some tokens to the campaign (from an account on the receiver chain).

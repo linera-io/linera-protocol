@@ -36,7 +36,7 @@ impl Contract for CrowdFunding<ViewStorageContext> {
         &mut self,
         _context: &OperationContext,
         argument: InitializationArguments,
-    ) -> Result<ExecutionResult, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         self.initialization_arguments.set(Some(argument));
 
         ensure!(
@@ -51,7 +51,7 @@ impl Contract for CrowdFunding<ViewStorageContext> {
         &mut self,
         context: &OperationContext,
         operation: Operation,
-    ) -> Result<ExecutionResult, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         let mut result = ExecutionResult::default();
 
         match operation {
@@ -74,7 +74,7 @@ impl Contract for CrowdFunding<ViewStorageContext> {
         &mut self,
         context: &EffectContext,
         effect: Effect,
-    ) -> Result<ExecutionResult, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         match effect {
             Effect::PledgeWithAccount { owner, amount } => {
                 ensure!(
@@ -92,9 +92,8 @@ impl Contract for CrowdFunding<ViewStorageContext> {
         context: &CalleeContext,
         call: ApplicationCall,
         sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, Self::Error> {
+    ) -> Result<ApplicationCallResult<Self::Effect>, Self::Error> {
         let mut result = ApplicationCallResult::default();
-
         match call {
             ApplicationCall::PledgeWithSessions { source } => {
                 // Only sessions on the campaign chain are supported.
@@ -123,7 +122,7 @@ impl Contract for CrowdFunding<ViewStorageContext> {
         _session: Session,
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect>, Self::Error> {
         Err(Error::SessionsNotSupported)
     }
 }
@@ -140,7 +139,7 @@ impl CrowdFunding<ViewStorageContext> {
     /// Adds a pledge from a local account to the remote campaign chain.
     async fn execute_pledge_with_transfer(
         &mut self,
-        result: &mut ExecutionResult,
+        result: &mut ExecutionResult<Effect>,
         owner: AccountOwner,
         amount: Amount,
     ) -> Result<(), Error> {
@@ -168,7 +167,7 @@ impl CrowdFunding<ViewStorageContext> {
         result.effects.push((
             chain_id.into(),
             /* authenticated by owner */ true,
-            bcs::to_bytes(&effect).unwrap(),
+            effect,
         ));
         Ok(())
     }
