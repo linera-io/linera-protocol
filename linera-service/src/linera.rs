@@ -42,6 +42,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use serde_json::Value;
 use structopt::StructOpt;
 use tracing::{debug, info, warn};
 
@@ -728,9 +729,10 @@ enum ClientCommand {
     PublishAndCreate {
         contract: PathBuf,
         service: PathBuf,
-        /// The initialization arguments, passed to the contract's `initialize` method on the chain
-        /// that creates the application. (But not on other chains, when it is registered there.)
-        arguments: String,
+        /// Points to a JSON file containting the initialization arguments, passed to the contract's
+        /// `initialize` method on the chain that creates the application. (But not on other chains,
+        /// when it is registered there.)
+        arguments: PathBuf,
         publisher: Option<ChainId>,
         #[structopt(long)]
         parameters: Option<String>,
@@ -1119,7 +1121,9 @@ where
                 let mut chain_client = context.make_chain_client(storage, creator);
 
                 info!("Processing arguments...");
-                let arguments = hex::decode(&arguments)?;
+                let arguments = fs::read_to_string(arguments)?;
+                let arg_as_value: Value = serde_json::from_str(&arguments).context("contents of JSON file are not a valid JSON value")?;
+                let arg_as_bytes = serde_json::to_vec(&arg_as_value)?;
                 let parameters = match parameters {
                     None => vec![],
                     Some(parameters) => hex::decode(parameters)?,
@@ -1134,7 +1138,7 @@ where
                     .create_application(
                         bytecode_id,
                         parameters,
-                        arguments,
+                        arg_as_bytes,
                         required_application_ids.unwrap_or_default(),
                     )
                     .await
@@ -1159,7 +1163,9 @@ where
                 let mut chain_client = context.make_chain_client(storage, publisher);
 
                 info!("Processing arguments...");
-                let arguments = hex::decode(&arguments)?;
+                let arguments = fs::read_to_string(arguments)?;
+                let arg_as_value: Value = serde_json::from_str(&arguments).context("contents of JSON file are not a valid JSON value")?;
+                let arg_as_bytes = serde_json::to_vec(&arg_as_value)?;
                 let parameters = match parameters {
                     None => vec![],
                     Some(parameters) => hex::decode(parameters)?,
@@ -1178,7 +1184,7 @@ where
                     .create_application(
                         bytecode_id,
                         parameters,
-                        arguments,
+                        arg_as_bytes,
                         required_application_ids.unwrap_or_default(),
                     )
                     .await
