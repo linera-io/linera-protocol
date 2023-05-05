@@ -21,7 +21,7 @@ const MAKE_PAYMENT = gql`
 
 const NOTIFICATION_SUBSCRIPTION = gql`
   subscription {
-    notifications(chainIds: [])
+    notifications
   }
 `;
 
