@@ -15,14 +15,28 @@ pub enum Operation {
         amount: Amount,
         target_account: Account,
     },
-    // Meant to be extended here
+    /// Same as transfer but the source account may be remote. Depending on its
+    /// configuration (see also #464), the target chain may take time or refuse to process
+    /// the message.
+    Claim {
+        source_account: Account,
+        amount: Amount,
+        target_account: Account,
+    },
 }
 
 /// An effect.
 #[derive(Deserialize, Serialize)]
 pub enum Effect {
+    /// Credit the given account.
     Credit { owner: AccountOwner, amount: Amount },
-    // Meant to be extended here
+
+    /// Withdraw from the given account and starts a transfer to the target account.
+    Withdraw {
+        owner: AccountOwner,
+        amount: Amount,
+        target_account: Account,
+    },
 }
 
 /// A cross-application call.
@@ -35,6 +49,12 @@ pub enum ApplicationCall {
         owner: AccountOwner,
         amount: Amount,
         destination: Destination,
+    },
+    /// Same as transfer but the source account may be remote.
+    Claim {
+        source_account: Account,
+        amount: Amount,
+        target_account: Account,
     },
 }
 

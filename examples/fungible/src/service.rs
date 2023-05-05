@@ -40,7 +40,6 @@ struct MutationRoot;
 
 #[Object]
 impl MutationRoot {
-    #[allow(unused)]
     async fn transfer(
         &self,
         owner: AccountOwner,
@@ -49,6 +48,20 @@ impl MutationRoot {
     ) -> Vec<u8> {
         bcs::to_bytes(&Operation::Transfer {
             owner,
+            amount,
+            target_account,
+        })
+        .unwrap()
+    }
+
+    async fn claim(
+        &self,
+        source_account: Account,
+        amount: Amount,
+        target_account: Account,
+    ) -> Vec<u8> {
+        bcs::to_bytes(&Operation::Claim {
+            source_account,
             amount,
             target_account,
         })

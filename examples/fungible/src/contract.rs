@@ -53,27 +53,57 @@ impl Contract for FungibleToken<ViewStorageContext> {
         operation: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
         let operation = Operation::from_bcs_bytes(operation).map_err(Error::InvalidOperation)?;
-        let Operation::Transfer {
-            owner,
-            amount,
-            target_account,
-        } = operation;
-        Self::check_account_authentication(None, context.authenticated_signer, owner)?;
-        self.debit(owner, amount).await?;
-        Ok(self
-            .finish_transfer_to_account(amount, target_account)
-            .await)
+        match operation {
+            Operation::Transfer {
+                owner,
+                amount,
+                target_account,
+            } => {
+                Self::check_account_authentication(None, context.authenticated_signer, owner)?;
+                self.debit(owner, amount).await?;
+                Ok(self
+                    .finish_transfer_to_account(amount, target_account)
+                    .await)
+            }
+
+            Operation::Claim {
+                source_account,
+                amount,
+                target_account,
+            } => {
+                Self::check_account_authentication(
+                    None,
+                    context.authenticated_signer,
+                    source_account.owner,
+                )?;
+                self.claim(source_account, amount, target_account).await
+            }
+        }
     }
 
     async fn execute_effect(
         &mut self,
-        _context: &EffectContext,
+        context: &EffectContext,
         effect: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
         let effect = Effect::from_bcs_bytes(effect).map_err(Error::InvalidEffect)?;
-        let Effect::Credit { owner, amount } = effect;
-        self.credit(owner, amount).await;
-        Ok(ExecutionResult::default())
+        match effect {
+            Effect::Credit { owner, amount } => {
+                self.credit(owner, amount).await;
+                Ok(ExecutionResult::default())
+            }
+            Effect::Withdraw {
+                owner,
+                amount,
+                target_account,
+            } => {
+                Self::check_account_authentication(None, context.authenticated_signer, owner)?;
+                self.debit(owner, amount).await?;
+                Ok(self
+                    .finish_transfer_to_account(amount, target_account)
+                    .await)
+            }
+        }
     }
 
     async fn handle_application_call(
@@ -92,6 +122,7 @@ impl Contract for FungibleToken<ViewStorageContext> {
                     bcs::to_bytes(&balance).expect("Serializing amounts should not fail");
                 Ok(result)
             }
+
             ApplicationCall::Transfer {
                 owner,
                 amount,
@@ -106,6 +137,23 @@ impl Contract for FungibleToken<ViewStorageContext> {
                 Ok(self
                     .finish_transfer_to_destination(amount, destination)
                     .await)
+            }
+
+            ApplicationCall::Claim {
+                source_account,
+                amount,
+                target_account,
+            } => {
+                Self::check_account_authentication(
+                    None,
+                    context.authenticated_signer,
+                    source_account.owner,
+                )?;
+                let execution_result = self.claim(source_account, amount, target_account).await?;
+                Ok(ApplicationCallResult {
+                    execution_result,
+                    ..Default::default()
+                })
             }
         }
     }
@@ -181,6 +229,28 @@ impl FungibleToken<ViewStorageContext> {
                 .await,
             data: updated_session,
         })
+    }
+
+    async fn claim(
+        &mut self,
+        source_account: Account,
+        amount: Amount,
+        target_account: Account,
+    ) -> Result<ExecutionResult, Error> {
+        if source_account.chain_id == system_api::current_chain_id() {
+            self.debit(source_account.owner, amount).await?;
+            Ok(self
+                .finish_transfer_to_account(amount, target_account)
+                .await)
+        } else {
+            let effect = Effect::Withdraw {
+                owner: source_account.owner,
+                amount,
+                target_account,
+            };
+            Ok(ExecutionResult::default()
+                .with_authenticated_effect(source_account.chain_id, &effect))
+        }
     }
 
     /// Executes the final step of a transfer where the tokens are sent to the destination.
