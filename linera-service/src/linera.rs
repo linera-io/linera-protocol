@@ -1131,6 +1131,10 @@ where
                     .publish_bytecode(&mut chain_client, contract, service)
                     .await?;
 
+                // Saving wallet state in case the next step fails.
+                context.update_wallet_from_client(&mut chain_client).await;
+                context.save_wallet();
+
                 info!("Creating application...");
                 let (application_id, _) = chain_client
                     .create_application(
