@@ -21,7 +21,7 @@ const INCREMENT_COUNTER = gql`
 
 const NOTIFICATION_SUBSCRIPTION = gql`
   subscription {
-    notifications()
+    notifications
   }
 `;
 
