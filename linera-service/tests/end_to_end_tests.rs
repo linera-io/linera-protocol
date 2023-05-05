@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::InputType;
-use fungible::AccountOwner;
+use fungible::{Account, AccountOwner};
 use linera_base::{
     data_types::Amount,
     identifiers::{ChainId, EffectId, Owner},
@@ -1243,18 +1243,16 @@ async fn test_end_to_end_fungible() {
     assert_eq!(value, amount1);
 
     // Transferring
-    let destination2 = format!(
-        "{{ chainId: \"{}\", owner: {} }}",
-        chain2,
-        account_owner2.to_value()
-    );
-
+    let destination = Account {
+        chain_id: chain2,
+        owner: account_owner2,
+    };
     let amount_transfer = Amount::from(1);
     let query_string = format!(
         "mutation {{ transfer(owner: {}, amount: {}, targetAccount: {}) }}",
         account_owner1.to_value(),
         amount_transfer,
-        destination2
+        destination.to_value(),
     );
     app1.query_application(&query_string).await;
 
@@ -1283,21 +1281,20 @@ async fn test_end_to_end_fungible() {
     assert_eq!(value, Amount::from(1));
 
     // Claiming more money from chain1 to chain2.
-    let source = format!(
-        "{{chainId: \"{}\", owner: {}}}",
-        chain1,
-        account_owner2.to_value()
-    );
-    let destination = format!(
-        "{{chainId: \"{}\", owner: {}}}",
-        chain2,
-        account_owner2.to_value()
-    );
-
+    let source = Account {
+        chain_id: chain1,
+        owner: account_owner2,
+    };
+    let destination = Account {
+        chain_id: chain2,
+        owner: account_owner2,
+    };
     let amount_transfer = Amount::from(2);
     let query_string = format!(
         "mutation {{ claim(sourceAccount: {}, amount: {}, targetAccount: {}) }}",
-        source, amount_transfer, destination
+        source.to_value(),
+        amount_transfer,
+        destination.to_value()
     );
     app2.query_application(&query_string).await;
 
