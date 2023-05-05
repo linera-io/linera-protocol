@@ -24,6 +24,7 @@ impl Contract for Counter {
     type ApplicationCallArguments = u64;
     type Effect = ();
     type SessionCall = ();
+    type Response = u64;
 
     async fn initialize(
         &mut self,
@@ -56,11 +57,11 @@ impl Contract for Counter {
         _context: &CalleeContext,
         increment: u64,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Effect>, Self::Error> {
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response>, Self::Error> {
         log::error!("incrementing by {:?}", increment);
         self.value += increment;
         Ok(ApplicationCallResult {
-            value: bcs::to_bytes(&self.value).expect("Serialization should not fail"),
+            value: Some(self.value),
             ..ApplicationCallResult::default()
         })
     }
@@ -71,7 +72,7 @@ impl Contract for Counter {
         _session: Session,
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Effect>, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect, Self::Response>, Self::Error> {
         Err(Error::SessionsNotSupported)
     }
 }

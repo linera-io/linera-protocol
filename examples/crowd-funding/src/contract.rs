@@ -31,6 +31,7 @@ impl Contract for CrowdFunding<ViewStorageContext> {
     type ApplicationCallArguments = ApplicationCall;
     type Effect = Effect;
     type SessionCall = ();
+    type Response = ();
 
     async fn initialize(
         &mut self,
@@ -92,7 +93,7 @@ impl Contract for CrowdFunding<ViewStorageContext> {
         context: &CalleeContext,
         call: ApplicationCall,
         sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Effect>, Self::Error> {
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response>, Self::Error> {
         let mut result = ApplicationCallResult::default();
         match call {
             ApplicationCall::PledgeWithSessions { source } => {
@@ -122,7 +123,7 @@ impl Contract for CrowdFunding<ViewStorageContext> {
         _session: Session,
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Effect>, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect, Self::Response>, Self::Error> {
         Err(Error::SessionsNotSupported)
     }
 }

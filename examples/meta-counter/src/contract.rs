@@ -33,6 +33,7 @@ impl Contract for MetaCounter {
     type ApplicationCallArguments = ();
     type Effect = u64;
     type SessionCall = ();
+    type Response = ();
 
     async fn initialize(
         &mut self,
@@ -68,7 +69,7 @@ impl Contract for MetaCounter {
         _context: &CalleeContext,
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Effect>, Self::Error> {
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response>, Self::Error> {
         Err(Error::CallsNotSupported)
     }
 
@@ -78,7 +79,7 @@ impl Contract for MetaCounter {
         _session: Session,
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Effect>, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect, Self::Response>, Self::Error> {
         Err(Error::SessionsNotSupported)
     }
 }

@@ -25,6 +25,7 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
     type ApplicationCallArguments = u128;
     type Effect = ();
     type SessionCall = ();
+    type Response = u128;
 
     async fn initialize(
         &mut self,
@@ -71,11 +72,11 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
         _context: &CalleeContext,
         increment: u128,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Effect>, Self::Error> {
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response>, Self::Error> {
         let value = self.value.get_mut();
         *value += increment;
         Ok(ApplicationCallResult {
-            value: bcs::to_bytes(&value).expect("Serialization should not fail"),
+            value: Some(*value),
             ..ApplicationCallResult::default()
         })
     }
@@ -86,7 +87,7 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
         _session: Session,
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Effect>, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect, Self::Response>, Self::Error> {
         Err(Error::SessionsNotSupported)
     }
 }

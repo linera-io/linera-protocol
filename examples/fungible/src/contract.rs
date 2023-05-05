@@ -32,6 +32,7 @@ impl Contract for FungibleToken<ViewStorageContext> {
     type Operation = Operation;
     type Effect = Effect;
     type SessionCall = SessionCall;
+    type Response = Amount;
 
     async fn initialize(
         &mut self,
@@ -113,13 +114,12 @@ impl Contract for FungibleToken<ViewStorageContext> {
         context: &CalleeContext,
         call: ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Effect>, Self::Error> {
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response>, Self::Error> {
         match call {
             ApplicationCall::Balance { owner } => {
                 let mut result = ApplicationCallResult::default();
                 let balance = self.balance(&owner).await;
-                result.value =
-                    bcs::to_bytes(&balance).expect("Serializing amounts should not fail");
+                result.value = Some(balance);
                 Ok(result)
             }
 
@@ -164,7 +164,7 @@ impl Contract for FungibleToken<ViewStorageContext> {
         session: Session,
         request: SessionCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Effect>, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect, Amount>, Self::Error> {
         match request {
             SessionCall::Balance => self.handle_session_balance(session.data),
             SessionCall::Transfer {
@@ -196,10 +196,9 @@ impl FungibleToken<ViewStorageContext> {
     fn handle_session_balance(
         &self,
         session_data: Vec<u8>,
-    ) -> Result<SessionCallResult<Effect>, Error> {
-        let balance_bytes = session_data.clone();
+    ) -> Result<SessionCallResult<Effect, Amount>, Error> {
         let application_call_result = ApplicationCallResult {
-            value: balance_bytes,
+            value: Some(bcs::from_bytes(&session_data)?),
             execution_result: ExecutionResult::default(),
             create_sessions: vec![],
         };
@@ -216,7 +215,7 @@ impl FungibleToken<ViewStorageContext> {
         session_data: Vec<u8>,
         amount: Amount,
         destination: Destination,
-    ) -> Result<SessionCallResult<Effect>, Error> {
+    ) -> Result<SessionCallResult<Effect, Amount>, Error> {
         let mut balance =
             Amount::from_bcs_bytes(&session_data).expect("Session contains corrupt data");
         balance
@@ -261,7 +260,7 @@ impl FungibleToken<ViewStorageContext> {
         &mut self,
         amount: Amount,
         destination: Destination,
-    ) -> ApplicationCallResult<Effect> {
+    ) -> ApplicationCallResult<Effect, Amount> {
         let mut result = ApplicationCallResult::default();
         match destination {
             Destination::Account(account) => {
