@@ -595,12 +595,14 @@ dependencies = [
 name = "crowd-funding"
 version = "0.1.0"
 dependencies = [
+ "async-graphql",
  "async-trait",
  "bcs",
  "fungible",
  "linera-sdk",
  "linera-views",
  "serde",
+ "serde_json",
  "thiserror",
 ]
 

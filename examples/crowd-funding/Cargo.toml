@@ -5,12 +5,14 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
+async-graphql = { workspace = true }
 async-trait = { workspace = true }
 bcs = { workspace = true }
 fungible = { workspace = true }
 linera-sdk = { workspace = true }
 linera-views = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 [[bin]]

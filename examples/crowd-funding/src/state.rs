@@ -7,12 +7,13 @@ use linera_views::{
     common::Context,
     map_view::MapView,
     register_view::RegisterView,
-    views::{RootView, View},
+    views::{GraphQLView, RootView, View},
 };
+use async_graphql::{scalar, SimpleObject};
 use serde::{Deserialize, Serialize};
 
 /// The parameters required to create a crowd-funding campaign.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, SimpleObject)]
 pub struct Parameters {
     /// The receiver of the pledges of a successful campaign.
     pub owner: AccountOwner,
@@ -22,6 +23,11 @@ pub struct Parameters {
     pub deadline: Timestamp,
     /// The funding target of the campaign.
     pub target: Amount,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, SimpleObject)]
+pub struct OptionParameters {
+    parameters: Option<Parameters>,
 }
 
 /// The status of a crowd-funding campaign.
@@ -36,8 +42,10 @@ pub enum Status {
     Cancelled,
 }
 
+scalar!(Status);
+
 /// The crowd-funding campaign's state.
-#[derive(RootView)]
+#[derive(RootView, GraphQLView)]
 pub struct CrowdFunding<C> {
     /// The status of the campaign.
     pub status: RegisterView<C, Status>,
@@ -61,7 +69,7 @@ where
     linera_views::views::ViewError: From<C::Error>,
 {
     /// Retrieves the campaign [`Parameters`] stored in the application's state.
-    pub fn parameters(&self) -> &Parameters {
+    pub fn get_parameters(&self) -> &Parameters {
         self.parameters
             .get()
             .as_ref()

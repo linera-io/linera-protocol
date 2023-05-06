@@ -32,9 +32,9 @@ impl Service for CrowdFunding<ReadOnlyViewStorageContext> {
         let response = match query {
             Query::Status => bcs::to_bytes(&self.status.get()),
             Query::Pledged => bcs::to_bytes(&self.pledged().await),
-            Query::Target => bcs::to_bytes(&self.parameters().target),
-            Query::Deadline => bcs::to_bytes(&self.parameters().deadline),
-            Query::Owner => bcs::to_bytes(&self.parameters().owner),
+            Query::Target => bcs::to_bytes(&self.get_parameters().target),
+            Query::Deadline => bcs::to_bytes(&self.get_parameters().deadline),
+            Query::Owner => bcs::to_bytes(&self.get_parameters().owner),
         }?;
 
         Ok(response)

@@ -35,7 +35,7 @@ impl Contract for CrowdFunding<ViewStorageContext> {
         ));
 
         ensure!(
-            self.parameters().deadline > system_api::current_system_time(),
+            self.get_parameters().deadline > system_api::current_system_time(),
             Error::DeadlineInThePast
         );
 
@@ -141,7 +141,7 @@ impl CrowdFunding<ViewStorageContext> {
         ensure!(
             sessions
                 .iter()
-                .all(|session_id| session_id.application_id == self.parameters().token),
+                .all(|session_id| session_id.application_id == self.get_parameters().token),
             Error::IncorrectToken
         );
 
@@ -192,7 +192,7 @@ impl CrowdFunding<ViewStorageContext> {
                     .saturating_add_assign(amount);
                 Ok(())
             }
-            Status::Complete => self.send_to(amount, self.parameters().owner).await,
+            Status::Complete => self.send_to(amount, self.get_parameters().owner).await,
             Status::Cancelled => Err(Error::Cancelled),
         }
     }
@@ -203,13 +203,13 @@ impl CrowdFunding<ViewStorageContext> {
 
         match self.status.get() {
             Status::Active => {
-                ensure!(total >= self.parameters().target, Error::TargetNotReached);
+                ensure!(total >= self.get_parameters().target, Error::TargetNotReached);
             }
             Status::Complete => (),
             Status::Cancelled => return Err(Error::Cancelled),
         }
 
-        self.send_to(total, self.parameters().owner).await?;
+        self.send_to(total, self.get_parameters().owner).await?;
         self.pledges.clear();
         self.status.set(Status::Complete);
 
@@ -221,7 +221,7 @@ impl CrowdFunding<ViewStorageContext> {
         ensure!(!self.status.get().is_complete(), Error::Completed);
 
         ensure!(
-            system_api::current_system_time() >= self.parameters().deadline,
+            system_api::current_system_time() >= self.get_parameters().deadline,
             Error::DeadlineNotReached
         );
 
@@ -238,7 +238,7 @@ impl CrowdFunding<ViewStorageContext> {
         }
 
         let balance = self.balance().await?;
-        self.send_to(balance, self.parameters().owner).await?;
+        self.send_to(balance, self.get_parameters().owner).await?;
         self.status.set(Status::Cancelled);
 
         Ok(())
@@ -249,7 +249,7 @@ impl CrowdFunding<ViewStorageContext> {
         let query_bytes =
             bcs::to_bytes(&fungible::SessionCall::Balance).map_err(Error::InvalidBalanceQuery)?;
         let (response, _sessions) = self
-            .call_application(true, self.parameters().token, &query_bytes, vec![])
+            .call_application(true, self.get_parameters().token, &query_bytes, vec![])
             .await;
 
         bcs::from_bytes(&response).map_err(Error::InvalidBalance)
@@ -268,7 +268,7 @@ impl CrowdFunding<ViewStorageContext> {
             destination,
         };
         let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
-        self.call_application(true, self.parameters().token, &transfer_bytes, vec![])
+        self.call_application(true, self.get_parameters().token, &transfer_bytes, vec![])
             .await;
         Ok(())
     }
@@ -290,7 +290,7 @@ impl CrowdFunding<ViewStorageContext> {
             destination,
         };
         let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
-        self.call_application(true, self.parameters().token, &transfer_bytes, vec![])
+        self.call_application(true, self.get_parameters().token, &transfer_bytes, vec![])
             .await;
         Ok(())
     }
