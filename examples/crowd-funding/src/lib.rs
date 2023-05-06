@@ -26,18 +26,3 @@ pub enum Operation {
     /// Cancel the campaign and refund all pledges after the campaign has reached its deadline.
     Cancel,
 }
-
-/// Queries that can be made to the [`CrowdFunding`] application service.
-#[derive(Clone, Copy, Debug, Deserialize)]
-pub enum Query {
-    /// The current [`Status`] of the crowd-funding campaign.
-    Status,
-    /// The total amount pledged to the crowd-funding campaign.
-    Pledged,
-    /// The crowd-funding campaign's target.
-    Target,
-    /// The crowd-funding campaign's deadline.
-    Deadline,
-    /// The recipient of the pledged amount.
-    Owner,
-}

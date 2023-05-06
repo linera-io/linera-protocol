@@ -6,7 +6,8 @@
 mod state;
 
 use async_trait::async_trait;
-use crowd_funding::Query;
+use async_graphql::{Object, Schema, EmptySubscription};
+use crowd_funding::Operation;
 use linera_sdk::{
     base::Amount, service::system_api::ReadOnlyViewStorageContext, QueryContext, Service,
     ViewStateStorage,
@@ -14,6 +15,7 @@ use linera_sdk::{
 use state::CrowdFunding;
 use std::sync::Arc;
 use thiserror::Error;
+use fungible::AccountOwner;
 
 linera_sdk::service!(CrowdFunding<ReadOnlyViewStorageContext>);
 
@@ -61,28 +63,14 @@ impl MutationRoot {
     ) -> Vec<u8> {
         bcs::to_bytes(&Operation::Cancel { }).unwrap()
     }
- }
-
-
-impl CrowdFunding<ReadOnlyViewStorageContext> {
-    /// Returns the total amount of tokens pledged to this campaign.
-    pub async fn pledged(&self) -> Amount {
-        let mut total = Amount::zero();
-        self.pledges
-            .for_each_index_value(|_, value| {
-                total.saturating_add_assign(value);
-                Ok(())
-            })
-            .await
-            .expect("view iteration should not fail");
-        total
-    }
 }
 
 /// An error that can occur during the service execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// Invalid account query.
-    #[error("Invalid account specified in query parameter")]
-    InvalidQuery(#[from] bcs::Error),
+    /// Invalid query argument; could not deserialize GraphQL request.
+    #[error(
+        "Invalid query argument; Fungible application only supports JSON encoded GraphQL queries"
+    )]
+    InvalidQuery,
 }
