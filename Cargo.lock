@@ -1337,6 +1337,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "crowd-funding"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-trait",
+ "bcs",
+ "fungible",
+ "linera-sdk",
+ "linera-views",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "crypto-common"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2659,6 +2674,7 @@ dependencies = [
  "chrono",
  "colored",
  "comfy-table",
+ "crowd-funding",
  "dirs",
  "fungible",
  "futures",

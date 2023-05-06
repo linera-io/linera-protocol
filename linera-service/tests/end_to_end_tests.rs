@@ -1295,13 +1295,12 @@ async fn test_end_to_end_fungible() {
 }
 
 
-/*
-
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_crowd_funding() {
     use fungible::{AccountOwner, InitialState};
-    use crowd_funding::Parameters;
+    use crowd_funding::*;
     use linera_base::data_types::Amount;
+    use linera_base::data_types::Timestamp;
     use std::collections::BTreeMap;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -1332,110 +1331,47 @@ async fn test_end_to_end_crowd_funding() {
     let owner2 = client2.get_owner().expect("Failed to get the owner");
     let account_owner2 = AccountOwner::User(owner2);
     // The initial accounts on chain1
-    let mut accounts = BTreeMap::new();
-    let amount1 = Amount::from(5);
-    let amount2 = Amount::from(2);
-    accounts.insert(account_owner1, amount1);
-    accounts.insert(account_owner2, amount2);
+    let accounts = BTreeMap::from([(account_owner1.clone(), Amount::from(5)), (account_owner2.clone(), Amount::from(2))]);
     let state_fungible = InitialState { accounts };
 
     let mut node_service1 = client1.run_node_service(chain1, 8080).await;
     let mut node_service2 = client2.run_node_service(chain2, 8081).await;
 
-    // Setting up the application fungible and verifying
+    // Setting up the application fungible
     let (contract_fungible, service_fungible) = runner.build_application("fungible").await;
     let application_id_fungible = client1
-        .publish_and_create(contract_fungible, service_fungible, state, None)
+        .publish_and_create(contract_fungible, service_fungible, state_fungible, None)
         .await;
+    let app_fungible1 = node_service1.make_application(&application_id_fungible).await;
+    let app_fungible2 = node_service2.make_application(&application_id_fungible).await;
+
+    // Setting up the application crowd funding
     let deadline = Timestamp::from(0);
-    let target = Amount::from(5);
-    let state = Parameters { owner: account_owner1, token: application_id_fungible, deadline, target };
-
-    let app1 = node_service1.make_application(&application_id).await;
-
-    let value = app1
-        .get_fungible_account_owner_amount(&account_owner1)
+    let target = Amount::from(1);
+    let state_crowd = Parameters { owner: account_owner1, token: application_id_fungible, deadline, target };
+    let (contract_crowd, service_crowd) = runner.build_application("crowd_funding").await;
+    let application_id_crowd = client1
+        .publish_and_create(contract_crowd, service_crowd, state_crowd, None)
         .await;
-    assert_eq!(value, amount1);
+    let app_crowd1 = node_service1.make_application(&application_id_crowd).await;
+    let app_crowd2 = node_service2.make_application(&application_id_crowd).await;
 
     // Transferring
-    let destination = Account {
-        chain_id: chain2,
-        owner: account_owner2,
-    };
     let amount_transfer = Amount::from(1);
     let query_string = format!(
-        "mutation {{ transfer(owner: {}, amount: {}, targetAccount: {}) }}",
-        account_owner1.to_value(),
+        "mutation {{ pledge_with_transfer(owner: {}, amount: {}) }}",
+        account_owner2.to_value(),
         amount_transfer,
-        destination.to_value(),
     );
-    app1.query_application(&query_string).await;
+    app_crowd1.query_application(&query_string).await;
 
-    // Checking the final values on chain1 and chain2.
-    let value = app1
-        .get_fungible_account_owner_amount(&account_owner1)
-        .await;
-    assert_eq!(value, Amount::from(4));
+    let query_string = "mutation {{ collect() }}";
+    app_crowd1.query_application(query_string).await;
 
-    let value = app1
-        .get_fungible_account_owner_amount(&account_owner2)
-        .await;
-    assert_eq!(value, Amount::from(2));
-
-    // Fungible didn't exist on chain2 initially but now it does and we can talk to it.
-    let app2 = node_service2.make_application(&application_id).await;
-
-    let value = app2
-        .get_fungible_account_owner_amount(&account_owner1)
-        .await;
-    assert_eq!(value, Amount::from(0));
-
-    let value = app2
-        .get_fungible_account_owner_amount(&account_owner2)
-        .await;
-    assert_eq!(value, Amount::from(1));
-
-    // Claiming more money from chain1 to chain2.
-    let source = Account {
-        chain_id: chain1,
-        owner: account_owner2,
-    };
-    let destination = Account {
-        chain_id: chain2,
-        owner: account_owner2,
-    };
-    let amount_transfer = Amount::from(2);
-    let query_string = format!(
-        "mutation {{ claim(sourceAccount: {}, amount: {}, targetAccount: {}) }}",
-        source.to_value(),
-        amount_transfer,
-        destination.to_value()
-    );
-    app2.query_application(&query_string).await;
-
-    // Checking the final value
-    let value = app1
-        .get_fungible_account_owner_amount(&account_owner1)
-        .await;
-    assert_eq!(value, Amount::from(4));
-
-    let value = app1
-        .get_fungible_account_owner_amount(&account_owner2)
-        .await;
-    assert_eq!(value, Amount::from(0));
-
-    let value = app2
-        .get_fungible_account_owner_amount(&account_owner1)
-        .await;
-    assert_eq!(value, Amount::from(0));
-
-    let value = app2
-        .get_fungible_account_owner_amount(&account_owner2)
-        .await;
-    assert_eq!(value, Amount::from(3));
+    // Rich gets richer
+    let accounts = BTreeMap::from([(account_owner1.clone(), Amount::from(6)), (account_owner2.clone(), Amount::from(1))]);
+    app_fungible1.check_accounts(accounts).await;
 
     node_service1.assert_is_running();
     node_service2.assert_is_running();
 }
- */

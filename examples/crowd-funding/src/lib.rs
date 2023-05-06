@@ -4,6 +4,22 @@
 use fungible::AccountOwner;
 use linera_sdk::base::Amount;
 use serde::{Deserialize, Serialize};
+use linera_sdk::base::ApplicationId;
+use async_graphql::SimpleObject;
+use linera_sdk::base::Timestamp;
+
+/// The parameters required to create a crowd-funding campaign.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, SimpleObject)]
+pub struct Parameters {
+    /// The receiver of the pledges of a successful campaign.
+    pub owner: AccountOwner,
+    /// The token to use for pledges.
+    pub token: ApplicationId,
+    /// The deadline of the campaign, after which it can be cancelled if it hasn't met its target.
+    pub deadline: Timestamp,
+    /// The funding target of the campaign.
+    pub target: Amount,
+}
 
 /// A cross-application call.
 #[derive(Deserialize, Serialize)]
