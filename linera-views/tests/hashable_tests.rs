@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    common::{Context, HasherOutput},
+    common::HasherOutput,
     hashable_wrapper::WrappedHashableContainerView,
     memory::create_test_context,
     register_view::RegisterView,

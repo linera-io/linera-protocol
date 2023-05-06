@@ -93,7 +93,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         #[async_trait::async_trait]
         impl #generics linera_views::views::View<#first_generic> for #struct_name #generics
         where
-            #first_generic: Context + Send + Sync + Clone + 'static,
+            #first_generic: linera_views::common::Context + Send + Sync + Clone + 'static,
             linera_views::views::ViewError: From<#first_generic::Error>,
         {
             fn context(&self) -> &#first_generic {
@@ -150,7 +150,7 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
         #[async_trait::async_trait]
         impl #generics linera_views::views::RootView<#first_generic> for #struct_name #generics
         where
-            #first_generic: Context + Send + Sync + Clone + 'static,
+            #first_generic: linera_views::common::Context + Send + Sync + Clone + 'static,
             linera_views::views::ViewError: From<#first_generic::Error>,
         {
             async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
@@ -202,7 +202,7 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
         #[async_trait::async_trait]
         impl #generics linera_views::views::HashableView<#first_generic> for #struct_name #generics
         where
-            #first_generic: Context + Send + Sync + Clone + 'static,
+            #first_generic: linera_views::common::Context + Send + Sync + Clone + 'static,
             linera_views::views::ViewError: From<#first_generic::Error>,
         {
             type Hasher = linera_views::sha3::Sha3_256;
@@ -239,7 +239,7 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
         #[async_trait::async_trait]
         impl #generics linera_views::views::CryptoHashView<#first_generic> for #struct_name #generics
         where
-            #first_generic: Context + Send + Sync + Clone + 'static,
+            #first_generic: linera_views::common::Context + Send + Sync + Clone + 'static,
             linera_views::views::ViewError: From<#first_generic::Error>,
         {
             async fn crypto_hash(&self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
@@ -606,7 +606,7 @@ pub mod tests {
             #[async_trait::async_trait]
             impl<C> linera_views::views::View<C> for TestView<C>
             where
-                C: Context + Send + Sync + Clone + 'static,
+                C: linera_views::common::Context + Send + Sync + Clone + 'static,
                 linera_views::views::ViewError: From<C::Error>,
             {
                 fn context(&self) -> &C {
@@ -676,7 +676,7 @@ pub mod tests {
             #[async_trait::async_trait]
             impl<C> linera_views::views::HashableView<C> for TestView<C>
             where
-                C: Context + Send + Sync + Clone + 'static,
+                C: linera_views::common::Context + Send + Sync + Clone + 'static,
                 linera_views::views::ViewError: From<C::Error>,
             {
                 type Hasher = linera_views::sha3::Sha3_256;
@@ -725,7 +725,7 @@ pub mod tests {
             #[async_trait::async_trait]
             impl<C> linera_views::views::RootView<C> for TestView<C>
             where
-                C: Context + Send + Sync + Clone + 'static,
+                C: linera_views::common::Context + Send + Sync + Clone + 'static,
                 linera_views::views::ViewError: From<C::Error>,
             {
                 async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
@@ -776,7 +776,7 @@ pub mod tests {
             #[async_trait::async_trait]
             impl<C> linera_views::views::CryptoHashView<C> for TestView<C>
             where
-                C: Context + Send + Sync + Clone + 'static,
+                C: linera_views::common::Context + Send + Sync + Clone + 'static,
                 linera_views::views::ViewError: From<C::Error>,
             {
                 async fn crypto_hash(
