@@ -27,19 +27,42 @@ impl Service for CrowdFunding<ReadOnlyViewStorageContext> {
         _context: &QueryContext,
         argument: &[u8],
     ) -> Result<Vec<u8>, Self::Error> {
-        let query = bcs::from_bytes(argument)?;
-
-        let response = match query {
-            Query::Status => bcs::to_bytes(&self.status.get()),
-            Query::Pledged => bcs::to_bytes(&self.pledged().await),
-            Query::Target => bcs::to_bytes(&self.get_parameters().target),
-            Query::Deadline => bcs::to_bytes(&self.get_parameters().deadline),
-            Query::Owner => bcs::to_bytes(&self.get_parameters().owner),
-        }?;
-
-        Ok(response)
+        let graphql_request: async_graphql::Request =
+            serde_json::from_slice(argument).map_err(|_| Error::InvalidQuery)?;
+        let schema = Schema::build(self.clone(), MutationRoot {}, EmptySubscription).finish();
+        let res = schema.execute(graphql_request).await;
+        Ok(serde_json::to_vec(&res).unwrap())
     }
 }
+
+struct MutationRoot;
+
+#[Object]
+impl MutationRoot {
+    async fn pledge_with_transfer(
+        &self,
+        owner: AccountOwner,
+        amount: Amount,
+    ) -> Vec<u8> {
+        bcs::to_bytes(&Operation::PledgeWithTransfer {
+            owner,
+            amount,
+        })
+        .unwrap()
+    }
+    async fn collect(
+        &self,
+    ) -> Vec<u8> {
+        bcs::to_bytes(&Operation::Collect { }).unwrap()
+    }
+
+    async fn cancel(
+        &self,
+    ) -> Vec<u8> {
+        bcs::to_bytes(&Operation::Cancel { }).unwrap()
+    }
+ }
+
 
 impl CrowdFunding<ReadOnlyViewStorageContext> {
     /// Returns the total amount of tokens pledged to this campaign.
