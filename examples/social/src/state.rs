@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    common::Context,
     log_view::LogView,
     map_view::CustomMapView,
     views::{GraphQLView, RootView, View},
