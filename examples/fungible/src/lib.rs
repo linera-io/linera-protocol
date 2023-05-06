@@ -9,6 +9,8 @@ use std::collections::BTreeMap;
 /// An operation.
 #[derive(Deserialize, Serialize)]
 pub enum Operation {
+    /// Obtain the total balance of the accounts
+    TotalBalance { },
     /// A transfer from a (locally owned) account to a (possibly remote) account.
     Transfer {
         owner: AccountOwner,

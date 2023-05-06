@@ -41,6 +41,15 @@ where
             .unwrap_or_default()
     }
 
+    pub(crate) async fn total_balance(&self) -> Amount {
+        let mut total_balance = Amount::default();
+        self.accounts.for_each_index_value(|_key, value| {
+            total_balance.try_add_assign(value).expect("Arithmetic error");
+            Ok(())
+	}).await.expect("Failure to retrieve the total_balance");
+        total_balance
+    }
+
     /// Credits an `account` with the provided `amount`.
     pub(crate) async fn credit(&mut self, account: AccountOwner, amount: Amount) {
         let mut balance = self.balance(&account).await;

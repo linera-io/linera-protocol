@@ -54,6 +54,14 @@ impl Contract for FungibleToken<ViewStorageContext> {
     ) -> Result<ExecutionResult, Self::Error> {
         let operation = Operation::from_bcs_bytes(operation).map_err(Error::InvalidOperation)?;
         match operation {
+            Operation::TotalBalance { } => {
+                let _total_balance = self.total_balance().await;
+                let result = ExecutionResult::default();
+//                result.value =
+//                    bcs::to_bytes(&total_balance).expect("Serializing amounts should not fail");
+                Ok(result)
+            }
+
             Operation::Transfer {
                 owner,
                 amount,
