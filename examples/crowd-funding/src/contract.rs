@@ -34,7 +34,7 @@ impl Contract for CrowdFunding<ViewStorageContext> {
             bcs::from_bytes(argument).map_err(Error::InvalidParameters)?,
         ));
 
-        #[cfg(not(test))]
+        #[cfg(not(any(test, feature = "test")))]
         ensure!(
             self.get_parameters().deadline > system_api::current_system_time(),
             Error::DeadlineInThePast
@@ -221,7 +221,7 @@ impl CrowdFunding<ViewStorageContext> {
     async fn cancel_campaign(&mut self) -> Result<(), Error> {
         ensure!(!self.status.get().is_complete(), Error::Completed);
 
-        #[cfg(not(test))]
+        #[cfg(not(any(test, feature = "test")))]
         ensure!(
             system_api::current_system_time() >= self.get_parameters().deadline,
             Error::DeadlineNotReached
@@ -334,7 +334,7 @@ pub enum Error {
     #[error("Crowd-funding campaign parameters are invalid")]
     InvalidParameters(bcs::Error),
 
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test")))]
     /// Crowd-funding campaign can't start after its deadline.
     #[error("Crowd-funding campaign can not start after its deadline")]
     DeadlineInThePast,
