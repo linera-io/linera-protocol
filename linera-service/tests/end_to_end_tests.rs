@@ -1230,13 +1230,13 @@ async fn test_end_to_end_fungible() {
     let accounts = BTreeMap::from([(account_owner1.clone(), Amount::from(5)), (account_owner2.clone(), Amount::from(2))]);
     let state = InitialState { accounts };
 
-    let mut node_service1 = client1.run_node_service(chain1, 8080).await;
-    let mut node_service2 = client2.run_node_service(chain2, 8081).await;
-
     // Setting up the application and verifying
     let application_id = client1
         .publish_and_create(contract, service, state, None)
         .await;
+
+    let mut node_service1 = client1.run_node_service(chain1, 8080).await;
+    let mut node_service2 = client2.run_node_service(chain2, 8081).await;
 
     let app1 = node_service1.make_application(&application_id).await;
     app1.check_accounts(BTreeMap::from([(account_owner1.clone(), Amount::from(5)), (account_owner2.clone(), Amount::from(2))])).await;
@@ -1329,23 +1329,24 @@ async fn test_end_to_end_crowd_funding() {
     let accounts = BTreeMap::from([(account_owner1.clone(), Amount::from(5)), (account_owner2.clone(), Amount::from(2))]);
     let state_fungible = InitialState { accounts };
 
-    let mut node_service1 = client1.run_node_service(chain1, 8080).await;
-    let mut node_service2 = client2.run_node_service(chain2, 8081).await;
-
     // Setting up the application fungible
     let application_id_fungible = client1
         .publish_and_create(contract_fungible, service_fungible, state_fungible, None)
         .await;
+
+    let mut node_service1 = client1.run_node_service(chain1, 8080).await;
+    let mut node_service2 = client2.run_node_service(chain2, 8081).await;
+
     let app_fungible1 = node_service1.make_application(&application_id_fungible).await;
-/*
-    let app_fungible2 = node_service2.make_application(&application_id_fungible).await;
+//    let app_fungible2 = node_service2.make_application(&application_id_fungible).await;
 
     // Setting up the application crowd funding
     let deadline = Timestamp::from(0);
     let target = Amount::from(1);
     let token = bcs::from_bytes(&hex::decode(application_id_fungible).expect("failed to decode")).expect("failed to parse");
     let state_crowd = Parameters { owner: account_owner1.clone(), token, deadline, target };
-    let (contract_crowd, service_crowd) = runner.build_application("crowd_funding").await;
+    let (contract_crowd, service_crowd) = runner.build_application("crowd-funding").await;
+/*
     let application_id_crowd = client1
         .publish_and_create(contract_crowd, service_crowd, state_crowd, None)
         .await;
