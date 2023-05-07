@@ -1348,7 +1348,8 @@ async fn test_end_to_end_crowd_funding() {
     // Setting up the application crowd funding
     let deadline = Timestamp::from(0);
     let target = Amount::from(1);
-    let state_crowd = Parameters { owner: account_owner1, token: application_id_fungible, deadline, target };
+    let token = bcs::from_bytes(&hex::decode(application_id_fungible).expect("failed to decode")).expect("failed to parse");
+    let state_crowd = Parameters { owner: account_owner1.clone(), token, deadline, target };
     let (contract_crowd, service_crowd) = runner.build_application("crowd_funding").await;
     let application_id_crowd = client1
         .publish_and_create(contract_crowd, service_crowd, state_crowd, None)

@@ -21,6 +21,13 @@ pub struct Parameters {
     pub target: Amount,
 }
 
+impl std::fmt::Display for Parameters {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let bytes = bcs::to_bytes(self).expect("Serialization failed");
+        write!(f, "{}", hex::encode(bytes))
+    }
+}
+
 /// A cross-application call.
 #[derive(Deserialize, Serialize)]
 #[allow(clippy::large_enum_variant)]
