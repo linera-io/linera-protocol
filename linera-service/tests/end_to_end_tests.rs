@@ -1371,7 +1371,7 @@ async fn test_end_to_end_crowd_funding() {
     let deadline = Timestamp::from(0);
     let target = Amount::from(1);
     let token = bcs::from_bytes(&hex::decode(application_id_fungible).expect("failed to decode"))
-        .expect("failed to parse");
+        .expect("failed to deserialize");
     let state_crowd = Parameters {
         owner: account_owner1.clone(),
         token,
@@ -1380,7 +1380,7 @@ async fn test_end_to_end_crowd_funding() {
     };
     let (contract_crowd, service_crowd) = runner.build_application("crowd-funding").await;
     /*
-    let application_id_crowd = client1
+    let application_id_crowd = client2
         .publish_and_create(contract_crowd, service_crowd, state_crowd, None)
         .await;
     let app_crowd1 = node_service1.make_application(&application_id_crowd).await;
