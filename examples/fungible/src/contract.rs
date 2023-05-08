@@ -33,7 +33,7 @@ impl Contract for FungibleToken<ViewStorageContext> {
         argument: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
         let mut state: InitialState =
-            bcs::from_bytes(argument).map_err(Error::InvalidInitialState)?;
+            serde_json::from_slice(argument).map_err(Error::InvalidInitialState)?;
         // If initial accounts are empty, creator gets 1M tokens to act like a faucet.
         if state.accounts.is_empty() {
             if let Some(owner) = context.authenticated_signer {
@@ -303,7 +303,7 @@ impl FungibleToken<ViewStorageContext> {
 pub enum Error {
     /// Invalid serialized initial state.
     #[error("Serialized initial state is invalid")]
-    InvalidInitialState(#[source] bcs::Error),
+    InvalidInitialState(#[source] serde_json::Error),
 
     /// Invalid serialized [`SignedTransfer`].
     #[error("Operation is not a valid serialized signed transfer")]

@@ -2605,6 +2605,7 @@ dependencies = [
  "futures",
  "linera-sdk",
  "linera-views",
+ "serde_json",
  "thiserror",
  "webassembly-test",
 ]
