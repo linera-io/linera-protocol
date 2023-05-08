@@ -6,7 +6,7 @@
 mod state;
 
 use async_trait::async_trait;
-use crowd_funding::{ApplicationCall, Operation};
+use crowd_funding::{ApplicationCall, Operation, Parameters};
 use fungible::{Account, AccountOwner, Destination};
 use linera_sdk::{
     base::{Amount, SessionId},
@@ -316,6 +316,13 @@ impl CrowdFunding<ViewStorageContext> {
         self.call_session(false, session, &transfer_bytes, vec![])
             .await;
         Ok(())
+    }
+
+    fn get_parameters(&self) -> &Parameters {
+        self.parameters
+            .get()
+            .as_ref()
+            .expect("Application was not initialized")
     }
 }
 

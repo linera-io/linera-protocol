@@ -1379,10 +1379,10 @@ async fn test_end_to_end_crowd_funding() {
         target,
     };
     let (contract_crowd, service_crowd) = runner.build_application("crowd-funding").await;
-    /*
-    let application_id_crowd = client2
+    let application_id_crowd = client1
         .publish_and_create(contract_crowd, service_crowd, state_crowd, None)
         .await;
+    /*
     let app_crowd1 = node_service1.make_application(&application_id_crowd).await;
     let app_crowd2 = node_service2.make_application(&application_id_crowd).await;
 
