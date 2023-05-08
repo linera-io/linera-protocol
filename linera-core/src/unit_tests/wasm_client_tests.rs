@@ -89,7 +89,7 @@ where
     creator.process_inbox().await.unwrap();
 
     let initial_value = 10_u64;
-    let initial_value_bytes = bcs::to_bytes(&initial_value)?;
+    let initial_value_bytes = serde_json::to_vec(&initial_value)?;
     let (application_id, _) = creator
         .create_application(bytecode_id, vec![], initial_value_bytes, vec![])
         .await
@@ -213,7 +213,12 @@ where
     creator.process_inbox().await.unwrap();
     let initial_value = 10_u64;
     let (application_id1, _) = creator
-        .create_application(bytecode_id1, vec![], bcs::to_bytes(&initial_value)?, vec![])
+        .create_application(
+            bytecode_id1,
+            vec![],
+            serde_json::to_vec(&initial_value)?,
+            vec![],
+        )
         .await
         .unwrap();
     let (application_id2, _) = creator
@@ -326,7 +331,12 @@ where
     creator.process_inbox().await.unwrap();
     let initial_value = 100_u128;
     let (application_id, _) = creator
-        .create_application(bytecode_id, vec![], bcs::to_bytes(&initial_value)?, vec![])
+        .create_application(
+            bytecode_id,
+            vec![],
+            serde_json::to_vec(&initial_value)?,
+            vec![],
+        )
         .await
         .unwrap();
 
@@ -415,7 +425,7 @@ where
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from(1_000_000))]);
     let state = fungible::InitialState { accounts };
-    let initial_value_bytes = bcs::to_bytes(&state)?;
+    let initial_value_bytes = serde_json::to_vec(&state)?;
     let (application_id, _cert) = sender
         .create_application(bytecode_id, vec![], initial_value_bytes, vec![])
         .await?;
