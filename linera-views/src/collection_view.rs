@@ -386,7 +386,7 @@ where
                     let entry = entry.into_mut();
                     if let Update::Removed = entry {
                         vector_part_short_key.push(short_key);
-                        vector_to_clear.push(false);
+                        vector_to_clear.push(true);
                     }
                 }
                 btree_map::Entry::Vacant(_entry) => {
