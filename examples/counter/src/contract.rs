@@ -25,7 +25,7 @@ impl Contract for Counter {
         _context: &OperationContext,
         argument: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        self.value = bcs::from_bytes(argument)?;
+        self.value = serde_json::from_slice(argument)?;
         Ok(ExecutionResult::default())
     }
 
@@ -87,6 +87,10 @@ pub enum Error {
     /// Invalid serialized increment value.
     #[error("Invalid serialized increment value")]
     InvalidIncrement(#[from] bcs::Error),
+
+    /// Invalid serialized initialization value.
+    #[error("Invalid serialized increment value")]
+    InvalidInitializationArgument(#[from] serde_json::Error),
 }
 
 #[cfg(test)]
@@ -174,7 +178,7 @@ mod tests {
     fn create_and_initialize_counter(initial_value: u64) -> Counter {
         let mut counter = Counter::default();
         let initial_argument =
-            bcs::to_bytes(&initial_value).expect("Initial value is not serializable");
+            serde_json::to_vec(&initial_value).expect("Initial value is not serializable");
 
         let result = counter
             .initialize(&dummy_operation_context(), &initial_argument)

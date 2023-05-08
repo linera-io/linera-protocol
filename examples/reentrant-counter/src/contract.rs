@@ -27,7 +27,7 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
         _context: &OperationContext,
         argument: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
-        self.value.set(bcs::from_bytes(argument)?);
+        self.value.set(serde_json::from_slice(argument)?);
         Ok(ExecutionResult::default())
     }
 
@@ -104,4 +104,8 @@ pub enum Error {
     /// Invalid serialized increment value.
     #[error("Invalid serialized increment value")]
     InvalidIncrement(#[from] bcs::Error),
+
+    /// Invalid serialized initialization value.
+    #[error("Invalid serialized initialization value")]
+    InvalidInitializationArguments(#[from] serde_json::Error),
 }

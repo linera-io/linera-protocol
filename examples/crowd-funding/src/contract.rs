@@ -31,7 +31,7 @@ impl Contract for CrowdFunding<ViewStorageContext> {
         argument: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
         self.initialization_arguments.set(Some(
-            bcs::from_bytes(argument).map_err(Error::InvalidInitializationArguments)?,
+            serde_json::from_slice(argument).map_err(Error::InvalidInitializationArguments)?,
         ));
 
         ensure!(
@@ -418,7 +418,7 @@ pub enum Error {
 
     /// Failure to deserialize the initialization arguments.
     #[error("Crowd-funding campaign arguments are invalid")]
-    InvalidInitializationArguments(bcs::Error),
+    InvalidInitializationArguments(serde_json::Error),
 
     /// Failure to deserialize the parameters.
     #[error("Crowd-funding parameters are invalid")]
