@@ -6,7 +6,6 @@
 //! This allows manipulating a test microchain.
 
 use super::{BlockBuilder, TestValidator};
-use crate::{FromBcsBytes, ToBcsBytes};
 use cargo_toml::Manifest;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
@@ -19,6 +18,8 @@ use linera_execution::{
     system::{SystemChannel, SystemEffect, SystemOperation},
     Bytecode, Effect, Query, Response,
 };
+use serde::de::DeserializeOwned;
+use serde_json::json;
 use std::{path::PathBuf, sync::Arc};
 use tokio::{fs, sync::Mutex};
 
@@ -360,11 +361,14 @@ impl ActiveChain {
     pub async fn query<Output>(
         &self,
         application_id: ApplicationId,
-        query: impl ToBcsBytes,
+        query: impl AsRef<str>,
     ) -> Output
     where
-        Output: FromBcsBytes,
+        Output: DeserializeOwned,
     {
+        let query_bytes = serde_json::to_vec(&json!({ "query": query.as_ref() }))
+            .expect("Failed to serialize query");
+
         let response = self
             .validator
             .worker()
@@ -373,7 +377,7 @@ impl ActiveChain {
                 self.id(),
                 &Query::User {
                     application_id,
-                    bytes: query.to_bcs_bytes().expect("Failed to serialize query"),
+                    bytes: query_bytes,
                 },
             )
             .await
@@ -381,7 +385,7 @@ impl ActiveChain {
 
         match response {
             Response::User(bytes) => {
-                Output::from_bcs_bytes(&bytes).expect("Failed to deserialize query response")
+                serde_json::from_slice(&bytes).expect("Failed to deserialize query response")
             }
             Response::System(_) => unreachable!("User query returned a system response"),
         }
