@@ -2629,6 +2629,7 @@ dependencies = [
  "linera-wit-bindgen-host-wasmtime-rust",
  "log",
  "serde",
+ "serde_json",
  "tokio",
  "wasmtime",
 ]

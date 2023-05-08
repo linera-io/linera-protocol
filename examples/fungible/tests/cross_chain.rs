@@ -5,8 +5,12 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
+use async_graphql::InputType;
 use fungible::{Account, AccountOwner, InitialStateBuilder, Operation};
-use linera_sdk::{base::Amount, test::TestValidator};
+use linera_sdk::{
+    base::{Amount, ApplicationId},
+    test::{ActiveChain, TestValidator},
+};
 
 /// Test transfering tokens across microchains.
 ///
@@ -47,18 +51,41 @@ async fn cross_chain_transfer() {
         .await;
 
     assert_eq!(
-        sender_chain
-            .query::<Amount>(application_id, sender_account)
-            .await,
-        initial_amount.saturating_sub(transfer_amount),
+        query_account(application_id, sender_chain, sender_account).await,
+        Some(initial_amount.saturating_sub(transfer_amount)),
     );
 
     receiver_chain.handle_received_effects().await;
 
     assert_eq!(
-        receiver_chain
-            .query::<Amount>(application_id, receiver_account)
-            .await,
-        transfer_amount
+        query_account(application_id, receiver_chain, receiver_account).await,
+        Some(transfer_amount),
     );
+}
+
+/// Query the balance of an account owned by `account_owner` on a specific `chain`.
+async fn query_account(
+    application_id: ApplicationId,
+    chain: ActiveChain,
+    account_owner: AccountOwner,
+) -> Option<Amount> {
+    let query = format!(
+        "query {{ accounts(accountOwner: {} ) }}",
+        account_owner.to_value()
+    );
+
+    let value: serde_json::Value = chain.query(application_id, query).await;
+
+    let balance = value
+        .as_object()?
+        .get("data")?
+        .as_object()?
+        .get("accounts")?
+        .as_i64()?;
+
+    Some(
+        u64::try_from(balance)
+            .expect("Account balance should be non-negative")
+            .into(),
+    )
 }
