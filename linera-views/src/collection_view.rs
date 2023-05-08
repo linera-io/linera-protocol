@@ -378,6 +378,7 @@ where
         vector_short_key: Vec<Vec<u8>>,
     ) -> Result<(), ViewError> {
         let mut vector_part_short_key = Vec::new();
+        let mut vector_to_clear = Vec::new();
         let updates = self.updates.get_mut();
         for short_key in vector_short_key {
             match updates.entry(short_key.clone()) {
@@ -385,9 +386,13 @@ where
                     let entry = entry.into_mut();
                     if let Update::Removed = entry {
                         vector_part_short_key.push(short_key);
+                        vector_to_clear.push(false);
                     }
                 }
-                btree_map::Entry::Vacant(_entry) => vector_part_short_key.push(short_key),
+                btree_map::Entry::Vacant(_entry) => {
+                    vector_part_short_key.push(short_key);
+                    vector_to_clear.push(self.was_cleared);
+                }
             }
         }
         let mut handles = Vec::<tokio::task::JoinHandle<Result<W, ViewError>>>::new();
@@ -402,7 +407,11 @@ where
         let response = futures::future::join_all(handles).await;
         for (i, view) in response.into_iter().enumerate() {
             let short_key = vector_part_short_key[i].clone();
-            updates.insert(short_key.clone(), Update::Set(view??));
+            let mut view = view??;
+            if vector_to_clear[i] {
+                view.clear();
+            }
+            updates.insert(short_key.clone(), Update::Set(view));
         }
         Ok(())
     }
