@@ -347,7 +347,7 @@ where
 
     // Create an application.
     let initial_value = 10_u64;
-    let initial_value_bytes = bcs::to_bytes(&initial_value)?;
+    let initial_value_bytes = serde_json::to_vec(&initial_value)?;
     let create_operation = SystemOperation::CreateApplication {
         bytecode_id,
         parameters: vec![],
