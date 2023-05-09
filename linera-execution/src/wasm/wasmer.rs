@@ -115,10 +115,11 @@ impl WasmApplication {
         let mut imports = imports! {};
         let waker_forwarder = WakerForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
-        let (system_api, runtime_guard) =
-            ContractSystemApi::new(waker_forwarder.clone(), runtime, queued_future_factory);
+        let (system_api, runtime_guard): (SystemApi<&'static dyn ContractRuntime>, _) =
+            SystemApi::new(waker_forwarder.clone(), runtime);
+        let contract_system_api = ContractSystemApi::new(system_api, queued_future_factory);
         let system_api_setup =
-            writable_system::add_to_imports(&mut store, &mut imports, system_api);
+            writable_system::add_to_imports(&mut store, &mut imports, contract_system_api);
         let (contract, instance) = {
             // TODO(#633): remove when possible or find better workaround.
             let _lock = WASMER_INSTANTIATE_LOCK.lock().unwrap();
@@ -155,9 +156,10 @@ impl WasmApplication {
         let mut imports = imports! {};
         let waker_forwarder = WakerForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
-        let (system_api, runtime_guard) = ServiceSystemApi::new(waker_forwarder.clone(), runtime);
+        let (system_api, runtime_guard) = SystemApi::new(waker_forwarder.clone(), runtime);
+        let service_system_api = ServiceSystemApi::new(system_api);
         let system_api_setup =
-            queryable_system::add_to_imports(&mut store, &mut imports, system_api);
+            queryable_system::add_to_imports(&mut store, &mut imports, service_system_api);
         let (service, instance) = {
             // TODO(#633): remove when possible or find better workaround.
             let _lock = WASMER_INSTANTIATE_LOCK.lock().unwrap();
@@ -339,9 +341,71 @@ impl<'runtime> common::Service for Service<'runtime> {
 
 /// Helper type with common functionality across the contract and service system API
 /// implementations.
-struct SystemApi<S> {
+pub struct SystemApi<S> {
     waker: WakerForwarder,
     runtime: Arc<Mutex<Option<S>>>,
+}
+
+impl<Runtime> SystemApi<Runtime> {
+    /// Creates a new [`SystemApi`] instance, ensuring that the lifetime of the borrowed `runtime`
+    /// reference is respected.
+    ///
+    /// # Safety
+    ///
+    /// This method uses a [`mem::transmute`] call to erase the lifetime of the `runtime` reference.
+    /// However, this is safe because the lifetime is transfered to the returned [`RuntimeGuard`],
+    /// which removes the unsafe reference from memory when it is dropped, ensuring the lifetime is
+    /// respected.
+    ///
+    /// The [`RuntimeGuard`] instance must be kept alive while the `runtime` reference is still
+    /// expected to be alive and usable by the WASM application.
+    pub fn new<'runtime>(
+        waker: WakerForwarder,
+        runtime: impl RemoveLifetime<WithoutLifetime = Runtime> + 'runtime,
+    ) -> (Self, RuntimeGuard<'runtime, Runtime>) {
+        let runtime = Arc::new(Mutex::new(Some(unsafe { runtime.remove_lifetime() })));
+
+        let guard = RuntimeGuard {
+            runtime: runtime.clone(),
+            _lifetime: PhantomData,
+        };
+
+        (SystemApi { waker, runtime }, guard)
+    }
+}
+
+/// Unsafe trait to artificially transmute a type in order to extend its lifetime.
+///
+/// # Safety
+///
+/// It is the caller's responsibility to ensure that the resulting [`WithoutLifetime`] type is not
+/// in use after the original lifetime expires.
+pub unsafe trait RemoveLifetime {
+    type WithoutLifetime: 'static;
+
+    /// Removes the lifetime artificially.
+    ///
+    /// # Safety
+    ///
+    /// It is the caller's responsibility to ensure that the resulting [`WithoutLifetime`] type is not
+    /// in use after the original lifetime expires.
+    unsafe fn remove_lifetime(self) -> Self::WithoutLifetime;
+}
+
+unsafe impl<'runtime> RemoveLifetime for &'runtime dyn ContractRuntime {
+    type WithoutLifetime = &'static dyn ContractRuntime;
+
+    unsafe fn remove_lifetime(self) -> Self::WithoutLifetime {
+        unsafe { mem::transmute(self) }
+    }
+}
+
+unsafe impl<'runtime> RemoveLifetime for &'runtime dyn ServiceRuntime {
+    type WithoutLifetime = &'static dyn ServiceRuntime;
+
+    unsafe fn remove_lifetime(self) -> Self::WithoutLifetime {
+        unsafe { mem::transmute(self) }
+    }
 }
 
 /// Implementation to forward contract system calls from the guest WASM module to the host
@@ -352,38 +416,15 @@ pub struct ContractSystemApi {
 }
 
 impl ContractSystemApi {
-    /// Creates a new [`ContractSystemApi`] instance, ensuring that the lifetime of the
-    /// [`ContractRuntime`] trait object is respected.
-    ///
-    /// # Safety
-    ///
-    /// This method uses a [`mem::transmute`] call to erase the lifetime of the `runtime` trait
-    /// object reference. However, this is safe because the lifetime is transfered to the returned
-    /// [`RuntimeGuard`], which removes the unsafe reference from memory when it is dropped,
-    /// ensuring the lifetime is respected.
-    ///
-    /// The [`RuntimeGuard`] instance must be kept alive while the trait object is still expected to
-    /// be alive and usable by the WASM application.
-    pub fn new<'runtime>(
-        waker: WakerForwarder,
-        runtime: &'runtime dyn ContractRuntime,
+    /// Creates a new [`ContractSystemApi`] instance.
+    pub fn new(
+        shared: SystemApi<&'static dyn ContractRuntime>,
         queued_future_factory: QueuedHostFutureFactory<'static>,
-    ) -> (Self, RuntimeGuard<'runtime, &'static dyn ContractRuntime>) {
-        let runtime_without_lifetime = unsafe { mem::transmute(runtime) };
-        let runtime = Arc::new(Mutex::new(Some(runtime_without_lifetime)));
-
-        let guard = RuntimeGuard {
-            runtime: runtime.clone(),
-            _lifetime: PhantomData,
-        };
-
-        (
-            ContractSystemApi {
-                shared: SystemApi { waker, runtime },
-                queued_future_factory,
-            },
-            guard,
-        )
+    ) -> Self {
+        ContractSystemApi {
+            shared,
+            queued_future_factory,
+        }
     }
 
     /// Safely obtains the [`ContractRuntime`] trait object instance to handle a system call.
@@ -419,36 +460,9 @@ pub struct ServiceSystemApi {
 }
 
 impl ServiceSystemApi {
-    /// Creates a new [`ServiceSystemApi`] instance, ensuring that the lifetime of the
-    /// [`ServiceRuntime`] trait object is respected.
-    ///
-    /// # Safety
-    ///
-    /// This method uses a [`mem::transmute`] call to erase the lifetime of the `runtime` trait
-    /// object reference. However, this is safe because the lifetime is transfered to the returned
-    /// [`RuntimeGuard`], which removes the unsafe reference from memory when it is dropped,
-    /// ensuring the lifetime is respected.
-    ///
-    /// The [`RuntimeGuard`] instance must be kept alive while the trait object is still expected to
-    /// be alive and usable by the WASM application.
-    pub fn new<'runtime>(
-        waker: WakerForwarder,
-        runtime: &'runtime dyn ServiceRuntime,
-    ) -> (Self, RuntimeGuard<'runtime, &'static dyn ServiceRuntime>) {
-        let runtime_without_lifetime = unsafe { mem::transmute(runtime) };
-        let runtime = Arc::new(Mutex::new(Some(runtime_without_lifetime)));
-
-        let guard = RuntimeGuard {
-            runtime: runtime.clone(),
-            _lifetime: PhantomData,
-        };
-
-        (
-            ServiceSystemApi {
-                shared: SystemApi { waker, runtime },
-            },
-            guard,
-        )
+    /// Creates a new [`ServiceSystemApi`] instance.
+    pub fn new(shared: SystemApi<&'static dyn ServiceRuntime>) -> Self {
+        ServiceSystemApi { shared }
     }
 
     /// Safely obtains the [`ServiceRuntime`] trait object instance to handle a system call.
