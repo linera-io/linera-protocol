@@ -20,7 +20,7 @@ use crate::{
 use async_trait::async_trait;
 use futures::{
     channel::{mpsc, mpsc::Receiver, oneshot::Sender},
-    FutureExt, StreamExt,
+    future, stream, FutureExt, StreamExt,
 };
 use grpc::{
     chain_info_result::Inner,
@@ -42,6 +42,7 @@ use linera_views::views::ViewError;
 use rand::Rng;
 use std::{
     fmt::Debug,
+    iter,
     net::{AddrParseError, SocketAddr},
     str::FromStr,
     time::Duration,
@@ -53,7 +54,7 @@ use tokio::{
 };
 use tonic::{
     transport::{Channel, Server},
-    Request, Response, Status,
+    Code, Request, Response, Status,
 };
 use tracing::{debug, error, info, instrument, warn};
 
@@ -559,29 +560,85 @@ impl ValidatorNode for GrpcClient {
         &mut self,
         query: linera_core::data_types::ChainInfoQuery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
-        debug!(query = ?query);
+        debug!(?query);
         client_delegate!(self, handle_chain_info_query, query)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+        const MIN_DELAY: u64 = 1;
+        const MAX_DELAY: u64 = 10;
+        const DELAY_INCREMENT: u64 = 1;
+
+        let mut delay = MIN_DELAY;
         let subscription_request = SubscriptionRequest {
             chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
         };
-        let notification_stream = self
-            .client
-            .subscribe(Request::new(subscription_request))
-            .await
-            .map_err(|e| NodeError::GrpcError {
-                error: format!("remote request [subscribe] failed with status: {:?}", e),
-            })?
-            .into_inner();
+        let client = self.client.clone();
 
-        Ok(Box::pin(
-            notification_stream
-                .filter_map(|n| async { n.ok() })
-                .filter_map(|n| async { Notification::try_from(n).ok() }),
-        ))
+        // A stream of `Result<grpc::Notification, tonic::Status>` that keeps calling
+        // `client.subscribe(request)` endlessly and without delay.
+        let endlessly_retrying_notification_stream = stream::unfold((), move |()| {
+            let mut client = client.clone();
+            let subscription_request = subscription_request.clone();
+            async move {
+                let stream = match client.subscribe(subscription_request.clone()).await {
+                    Err(err) => future::Either::Left(stream::iter(iter::once(Err(err)))),
+                    Ok(response) => future::Either::Right(response.into_inner()),
+                };
+                Some((stream, ()))
+            }
+        })
+        .flatten();
+
+        // The stream of `Notification`s that inserts increasing delays after retriable errors, and
+        // terminates after unexpected or fatal errors.
+        let notification_stream = endlessly_retrying_notification_stream
+            .map(|result| {
+                Notification::try_from(result?).map_err(|err| {
+                    let message = format!("Could not deserialize notification: {}", err);
+                    tonic::Status::new(Code::Internal, message)
+                })
+            })
+            .take_while(move |result| {
+                let Err(status) = result else {
+                    delay = MIN_DELAY;
+                    return future::Either::Left(future::ready(true));
+                };
+                match status.code() {
+                    Code::DeadlineExceeded | Code::Aborted | Code::Unavailable => {}
+                    Code::Unknown
+                    | Code::Ok
+                    | Code::Cancelled
+                    | Code::NotFound
+                    | Code::AlreadyExists
+                    | Code::ResourceExhausted => {
+                        warn!("Unexpected gRPC status: {}; retrying", status);
+                    }
+                    Code::InvalidArgument
+                    | Code::PermissionDenied
+                    | Code::FailedPrecondition
+                    | Code::OutOfRange
+                    | Code::Unimplemented
+                    | Code::Internal
+                    | Code::DataLoss
+                    | Code::Unauthenticated => {
+                        warn!("Unexpected gRPC status: {}", status);
+                        return future::Either::Left(future::ready(false));
+                    }
+                }
+                if delay >= MAX_DELAY {
+                    return future::Either::Left(future::ready(false));
+                }
+                delay = delay.saturating_add(DELAY_INCREMENT).min(MAX_DELAY);
+                future::Either::Right(async move {
+                    tokio::time::sleep(Duration::from_secs(delay)).await;
+                    true
+                })
+            })
+            .filter_map(|result| future::ready(result.ok()));
+
+        Ok(Box::pin(notification_stream))
     }
 }
 
