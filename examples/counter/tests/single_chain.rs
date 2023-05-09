@@ -5,7 +5,7 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use linera_sdk::{test::TestValidator};
+use linera_sdk::test::TestValidator;
 
 /// Test setting a counter and testing its coherency across microchains.
 ///
@@ -16,20 +16,16 @@ async fn single_chain_test() {
     let (validator, bytecode_id) = TestValidator::with_current_bytecode().await;
     let mut chain = validator.new_chain().await;
 
-
     let initial_state: u64 = 42;
     let initial_state_u8 = bcs::to_bytes(&initial_state).unwrap();
     let application_id = chain
         .create_application(bytecode_id, vec![], initial_state_u8, vec![])
         .await;
 
-    let increment : u64 = 15;
+    let increment: u64 = 15;
     chain
         .add_block(|block| {
-            block.with_operation(
-                application_id,
-                increment,
-            );
+            block.with_operation(application_id, increment);
         })
         .await;
 
@@ -38,11 +34,15 @@ async fn single_chain_test() {
 
     let value: serde_json::Value = chain.query(application_id, query_string).await;
     let state_value = value
-        .as_object().expect("Failed to obtain the first object")
-        .get("data").expect("Failed to obtain \"data\"")
-        .as_object().expect("Failed to obtain the second object")
-        .get("value").expect("Failed to obtain \"value\"")
-        .as_u64().expect("Failed to get the u64");
+        .as_object()
+        .expect("Failed to obtain the first object")
+        .get("data")
+        .expect("Failed to obtain \"data\"")
+        .as_object()
+        .expect("Failed to obtain the second object")
+        .get("value")
+        .expect("Failed to obtain \"value\"")
+        .as_u64()
+        .expect("Failed to get the u64");
     assert_eq!(state_value, final_value);
-
 }
