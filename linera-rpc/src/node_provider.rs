@@ -19,8 +19,18 @@ pub struct NodeProvider {
 }
 
 impl NodeProvider {
-    pub fn new(send_timeout: Duration, recv_timeout: Duration) -> Self {
-        let grpc = GrpcNodeProvider::new(send_timeout, recv_timeout);
+    pub fn new(
+        send_timeout: Duration,
+        recv_timeout: Duration,
+        notification_retry_delay: Duration,
+        notification_retries: u32,
+    ) -> Self {
+        let grpc = GrpcNodeProvider::new(
+            send_timeout,
+            recv_timeout,
+            notification_retry_delay,
+            notification_retries,
+        );
         let simple = SimpleNodeProvider::new(send_timeout, recv_timeout);
         Self { grpc, simple }
     }
@@ -50,13 +60,22 @@ impl ValidatorNodeProvider for NodeProvider {
 pub struct GrpcNodeProvider {
     send_timeout: Duration,
     recv_timeout: Duration,
+    notification_retry_delay: Duration,
+    notification_retries: u32,
 }
 
 impl GrpcNodeProvider {
-    pub fn new(send_timeout: Duration, recv_timeout: Duration) -> Self {
+    pub fn new(
+        send_timeout: Duration,
+        recv_timeout: Duration,
+        notification_retry_delay: Duration,
+        notification_retries: u32,
+    ) -> Self {
         Self {
             send_timeout,
             recv_timeout,
+            notification_retry_delay,
+            notification_retries,
         }
     }
 }
@@ -71,15 +90,19 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
             }
         })?;
 
-        let client =
-            GrpcClient::new(network, self.send_timeout, self.recv_timeout).map_err(|e| {
-                NodeError::GrpcError {
-                    error: format!(
-                        "could not initialize gRPC client for address {} : {}",
-                        address, e
-                    ),
-                }
-            })?;
+        let client = GrpcClient::new(
+            network,
+            self.send_timeout,
+            self.recv_timeout,
+            self.notification_retry_delay,
+            self.notification_retries,
+        )
+        .map_err(|e| NodeError::GrpcError {
+            error: format!(
+                "could not initialize gRPC client for address {} : {}",
+                address, e
+            ),
+        })?;
         Ok(client)
     }
 }
