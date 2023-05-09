@@ -51,6 +51,7 @@ tower-http = { workspace = true, features = ["cors"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 comfy-table = { workspace = true }
 dirs = { workspace = true }
+file-lock = "2.1.9"
 
 [dev-dependencies]
 linera-base = { workspace = true, features = ["test"] }

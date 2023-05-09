@@ -377,7 +377,7 @@ impl Client {
     }
 
     fn get_wallet(&self) -> WalletState {
-        WalletState::read(self.tmp_dir.path().join(&self.wallet).as_path()).unwrap()
+        WalletState::from_file(self.tmp_dir.path().join(&self.wallet).as_path()).unwrap()
     }
 
     fn get_owner(&self) -> Option<Owner> {
