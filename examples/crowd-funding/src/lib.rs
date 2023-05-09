@@ -2,21 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fungible::AccountOwner;
-use linera_sdk::base::{Amount, ApplicationId, Timestamp};
+use linera_sdk::base::{Amount, Timestamp};
 use serde::{Deserialize, Serialize};
 
-/// The initialization parameters of a crowd-funding campaign. As usual, these are meant
-/// to be BCS-serialized and passed when instantiating the bytecode.
+/// The initialization arguments required to create a crowd-funding campaign.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct Parameters {
-    /// The receiver of the pledges of a successful campaign (same chain as the campaign).
+pub struct InitializationArguments {
+    /// The receiver of the pledges of a successful campaign.
     pub owner: AccountOwner,
-    /// The token to use for pledges.
-    pub token: ApplicationId,
     /// The deadline of the campaign, after which it can be cancelled if it hasn't met its target.
     pub deadline: Timestamp,
     /// The funding target of the campaign.
     pub target: Amount,
+}
+
+impl std::fmt::Display for InitializationArguments {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let bytes = bcs::to_bytes(self).expect("Serialization failed");
+        write!(f, "{}", hex::encode(bytes))
+    }
 }
 
 /// Operations that can be sent to the application.
