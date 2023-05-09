@@ -447,6 +447,8 @@ where
 pub struct GrpcClient {
     address: String,
     client: ValidatorNodeClient<Channel>,
+    notification_retry_delay: Duration,
+    notification_retries: u32,
 }
 
 impl GrpcClient {
@@ -454,6 +456,8 @@ impl GrpcClient {
         network: ValidatorPublicNetworkConfig,
         connect_timeout: Duration,
         timeout: Duration,
+        notification_retry_delay: Duration,
+        notification_retries: u32,
     ) -> Result<Self, GrpcError> {
         let address = network.http_address();
         let channel = Channel::from_shared(address.clone())?
@@ -461,7 +465,12 @@ impl GrpcClient {
             .timeout(timeout)
             .connect_lazy();
         let client = ValidatorNodeClient::new(channel);
-        Ok(Self { address, client })
+        Ok(Self {
+            address,
+            client,
+            notification_retry_delay,
+            notification_retries,
+        })
     }
 }
 
@@ -566,11 +575,9 @@ impl ValidatorNode for GrpcClient {
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
-        const MIN_DELAY: u64 = 1;
-        const MAX_DELAY: u64 = 10;
-        const DELAY_INCREMENT: u64 = 1;
-
-        let mut delay = MIN_DELAY;
+        let notification_retry_delay = self.notification_retry_delay;
+        let notification_retries = self.notification_retries;
+        let mut delay = Duration::ZERO;
         let subscription_request = SubscriptionRequest {
             chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
         };
@@ -602,7 +609,7 @@ impl ValidatorNode for GrpcClient {
             })
             .take_while(move |result| {
                 let Err(status) = result else {
-                    delay = MIN_DELAY;
+                    delay = Duration::ZERO;
                     return future::Either::Left(future::ready(true));
                 };
                 match status.code() {
@@ -627,12 +634,12 @@ impl ValidatorNode for GrpcClient {
                         return future::Either::Left(future::ready(false));
                     }
                 }
-                if delay >= MAX_DELAY {
+                if delay >= notification_retry_delay.saturating_mul(notification_retries) {
                     return future::Either::Left(future::ready(false));
                 }
-                delay = delay.saturating_add(DELAY_INCREMENT).min(MAX_DELAY);
+                delay = delay.saturating_add(notification_retry_delay);
                 future::Either::Right(async move {
-                    tokio::time::sleep(Duration::from_secs(delay)).await;
+                    tokio::time::sleep(delay).await;
                     true
                 })
             })

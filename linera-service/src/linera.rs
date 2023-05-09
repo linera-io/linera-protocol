@@ -73,6 +73,8 @@ struct ClientContext {
     recv_timeout: Duration,
     cross_chain_delay: Duration,
     cross_chain_retries: usize,
+    notification_retry_delay: Duration,
+    notification_retries: u32,
 }
 
 impl ClientContext {
@@ -117,6 +119,8 @@ impl ClientContext {
         let send_timeout = Duration::from_micros(options.send_timeout_us);
         let recv_timeout = Duration::from_micros(options.recv_timeout_us);
         let cross_chain_delay = Duration::from_micros(options.cross_chain_delay_ms);
+        let notification_retry_delay = Duration::from_micros(options.notification_retry_delay_us);
+        let notification_retries = options.notification_retries;
 
         ClientContext {
             wallet_state_path,
@@ -126,6 +130,8 @@ impl ClientContext {
             recv_timeout,
             cross_chain_delay,
             cross_chain_retries: options.cross_chain_retries,
+            notification_retry_delay,
+            notification_retries,
         }
     }
 
@@ -158,8 +164,14 @@ impl ClientContext {
                     ))
                 }
                 NetworkProtocol::Grpc => Box::new(
-                    GrpcClient::new(config.network.clone(), self.send_timeout, self.recv_timeout)
-                        .unwrap(),
+                    GrpcClient::new(
+                        config.network.clone(),
+                        self.send_timeout,
+                        self.recv_timeout,
+                        self.notification_retry_delay,
+                        self.notification_retries,
+                    )
+                    .unwrap(),
                 ),
             };
 
@@ -203,7 +215,12 @@ impl ClientContext {
     }
 
     fn make_node_provider(&self) -> NodeProvider {
-        NodeProvider::new(self.send_timeout, self.recv_timeout)
+        NodeProvider::new(
+            self.send_timeout,
+            self.recv_timeout,
+            self.notification_retry_delay,
+            self.notification_retries,
+        )
     }
 
     #[cfg(feature = "benchmark")]
@@ -538,6 +555,14 @@ struct ClientOptions {
     /// Subcommand.
     #[structopt(subcommand)]
     command: ClientCommand,
+
+    /// Delay increment for retrying to connect to a validator for notifications.
+    #[structopt(long, default_value = "1000000")]
+    notification_retry_delay_us: u64,
+
+    /// Number of times to retry connecting to a validator for notifications.
+    #[structopt(long, default_value = "10")]
+    notification_retries: u32,
 }
 
 #[derive(StructOpt)]
