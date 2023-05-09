@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crowd_funding::Parameters;
+use crowd_funding::InitializationArguments;
 use fungible::AccountOwner;
 use linera_sdk::base::Amount;
 use linera_views::{
@@ -31,8 +31,8 @@ pub struct CrowdFunding<C> {
     pub status: RegisterView<C, Status>,
     /// The map of pledges that will be collected if the campaign succeeds.
     pub pledges: MapView<C, AccountOwner, Amount>,
-    /// The parameters that determine the details the campaign.
-    pub parameters: RegisterView<C, Option<Parameters>>,
+    /// The initialization arguments that determine the details the campaign.
+    pub initialization_arguments: RegisterView<C, Option<InitializationArguments>>,
 }
 
 #[allow(dead_code)]
@@ -48,9 +48,9 @@ where
     C: Context + Send + Sync + Clone + 'static,
     linera_views::views::ViewError: From<C::Error>,
 {
-    /// Retrieves the campaign [`Parameters`] stored in the application's state.
-    pub fn parameters(&self) -> &Parameters {
-        self.parameters
+    /// Retrieves the campaign [`InitializationArguments`] stored in the application's state.
+    pub fn initialization_arguments(&self) -> &InitializationArguments {
+        self.initialization_arguments
             .get()
             .as_ref()
             .expect("Application was not initialized")
