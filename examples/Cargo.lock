@@ -2957,7 +2957,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "tokio",
  "webassembly-test",
 ]
 
