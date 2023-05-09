@@ -148,6 +148,18 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    /// Processes the inbox and returns the lists of certificate hashes that were created, if any.
+    async fn process_inbox(&self) -> Result<Vec<CryptoHash>, Error> {
+        let mut client = self.client.lock().await;
+        client.synchronize_from_validators().await?;
+        let certificates = client.process_inbox().await?;
+        let hashes = certificates
+            .into_iter()
+            .map(|cert| cert.value.hash())
+            .collect();
+        Ok(hashes)
+    }
+
     /// Transfers `amount` units of value from the given owner's account to the recipient.
     /// If no owner is given, try to take the units out of the unattributed account.
     async fn transfer(
