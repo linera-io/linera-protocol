@@ -1715,7 +1715,6 @@ dependencies = [
  "linera-views",
  "linera-views-derive",
  "linera-wit-bindgen-host-wasmer-rust",
- "linera-wit-bindgen-host-wasmtime-rust",
  "once_cell",
  "serde",
  "serde_bytes",
@@ -1726,7 +1725,6 @@ dependencies = [
  "wasmer",
  "wasmer-middlewares",
  "wasmparser 0.101.1",
- "wasmtime",
 ]
 
 [[package]]
