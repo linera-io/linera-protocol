@@ -9,11 +9,10 @@ use crate::{
     worker::{Notification, Reason, WorkerState},
 };
 use anyhow::{anyhow, bail, ensure, Result};
-use async_stream::stream;
 use futures::{
     future,
     lock::Mutex,
-    stream::{FuturesUnordered, StreamExt},
+    stream::{self, FuturesUnordered, StreamExt},
 };
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
@@ -446,7 +445,6 @@ where
     }
 
     /// Listens to notifications about the current chain from all validators.
-    // TODO(#687): handle loss of connection, etc.
     pub async fn listen(this: Arc<Mutex<Self>>) -> Result<NotificationStream>
     where
         P: Send + 'static,
@@ -455,18 +453,19 @@ where
         if let Err(err) = Self::update_streams(&this, &mut streams).await {
             error!("Failed to update committee: {}", err);
         }
-        let stream = stream! {
-            while let (Some(notification), _, _) =
-                future::select_all(streams.values_mut().map(StreamExt::next)).await
-            {
+        let stream = stream::unfold(streams, move |mut streams| {
+            let this = this.clone();
+            async move {
+                let nexts = streams.values_mut().map(StreamExt::next);
+                let notification = future::select_all(nexts).await.0?;
                 if matches!(notification.reason, Reason::NewBlock { .. }) {
                     if let Err(err) = Self::update_streams(&this, &mut streams).await {
                         error!("Failed to update committee: {}", err);
                     }
                 }
-                yield notification;
+                Some((notification, streams))
             }
-        };
+        });
         Ok(Box::pin(stream))
     }
 
@@ -488,8 +487,8 @@ where
         // Add notification streams from added validators.
         for (name, mut node) in nodes {
             let hash_map::Entry::Vacant(entry) = streams.entry(name) else {
-                            continue;
-                        };
+                continue;
+            };
             let stream = match node.subscribe(vec![chain_id]).await {
                 Err(e) => {
                     info!("Could not connect to validator {name}: {e:?}");
