@@ -229,7 +229,7 @@ impl Client {
         command
             .arg("publish-and-create")
             .args([contract, service])
-            .arg(init_args)
+            .args(["--json-args", &init_args])
             .args(publisher.into().iter().map(ChainId::to_string));
         if let Some(parameters) = parameters {
             command.args(["--parameters", &parameters]);
@@ -269,7 +269,8 @@ impl Client {
             self.run_with_storage()
                 .await
                 .arg("create-application")
-                .args([bytecode_id, arg.to_string()])
+                .arg(bytecode_id)
+                .args(["--json-args", &arg.to_string()])
                 .args(creator.into().iter().map(ChainId::to_string)),
         )
         .await;
@@ -942,7 +943,7 @@ async fn test_end_to_end_counter() {
         .publish_and_create(
             contract,
             service,
-            hex::encode(bcs::to_bytes(&original_counter_value).unwrap()),
+            serde_json::to_string(&original_counter_value).unwrap(),
             None,
             vec![],
             None,
@@ -983,7 +984,7 @@ async fn test_end_to_end_counter_publish_create() {
     let application_id = client
         .create_application(
             bytecode_id,
-            hex::encode(bcs::to_bytes(&original_counter_value).unwrap()),
+            serde_json::to_string(&original_counter_value).unwrap(),
             None,
         )
         .await;
@@ -1307,10 +1308,10 @@ async fn test_end_to_end_fungible() {
         (account_owner2, Amount::from(2)),
     ]);
     let state = InitialState { accounts };
-
+    let state_as_json = serde_json::to_string(&state).unwrap();
     // Setting up the application and verifying
     let application_id = client1
-        .publish_and_create(contract, service, state.to_string(), None, vec![], None)
+        .publish_and_create(contract, service, state_as_json, None, vec![], None)
         .await;
 
     let mut node_service1 = client1.run_node_service(chain1, 8080).await;
