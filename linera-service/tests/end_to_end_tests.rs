@@ -751,6 +751,10 @@ impl NodeService {
         }
     }
 
+    async fn process_inbox(&self) {
+        self.query("mutation { processInbox }").await;
+    }
+
     async fn make_application(&self, application_id: &str) -> Application {
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
@@ -1164,6 +1168,8 @@ async fn test_end_to_end_social_user_pub_sub() {
     let post = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
     app2.query_application(post).await;
 
+    // Instead of retrying, we could call `node_service1.process_inbox().await` here.
+    // However, we prefer to test the notification system for a change.
     let query = "query { receivedPostsKeys(count: 5) { author, index } }";
     let expected_response = json!({ "receivedPostsKeys": [
         { "author": chain2, "index": 0 }
@@ -1297,6 +1303,10 @@ async fn test_end_to_end_fungible() {
         destination.to_value()
     );
     app2.query_application(&query_string).await;
+
+    // Make sure that the cross-chain communication happens fast enough.
+    node_service1.process_inbox().await;
+    node_service2.process_inbox().await;
 
     // Checking the final value
     let value = app1
