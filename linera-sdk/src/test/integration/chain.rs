@@ -21,7 +21,10 @@ use linera_execution::{
 };
 use serde::de::DeserializeOwned;
 use serde_json::json;
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use tokio::{fs, sync::Mutex};
 
 /// A reference to a single microchain inside a [`TestValidator`].
@@ -122,8 +125,20 @@ impl ActiveChain {
     /// them for WebAssembly and uses the generated binaries as the contract and service bytecodes
     /// to be published on this chain. Returns the bytecode ID to reference the published bytecode.
     pub async fn publish_current_bytecode(&self) -> BytecodeId {
-        Self::build_bytecodes();
-        let (contract, service) = self.find_current_bytecodes().await;
+        self.publish_bytecodes_in(".").await
+    }
+
+    /// Publishes the bytecodes in the crate at `repository_path`.
+    ///
+    /// Searches the Cargo manifest for binaries that end with `contract` and `service`, builds
+    /// them for WebAssembly and uses the generated binaries as the contract and service bytecodes
+    /// to be published on this chain. Returns the bytecode ID to reference the published bytecode.
+    pub async fn publish_bytecodes_in(&self, repository_path: impl AsRef<Path>) -> BytecodeId {
+        let repository_path = fs::canonicalize(repository_path)
+            .await
+            .expect("Failed to obtain absolute application repository path");
+        Self::build_bytecodes_in(&repository_path).await;
+        let (contract, service) = self.find_bytecodes_in(&repository_path).await;
 
         self.add_block(|block| {
             block.with_system_operation(SystemOperation::PublishBytecode { contract, service });
@@ -144,10 +159,11 @@ impl ActiveChain {
         BytecodeId::new(publish_effect_id)
     }
 
-    /// Compiles the crate calling this method to generate the WebAssembly binaries.
-    fn build_bytecodes() {
+    /// Compiles the crate in the `repository` path.
+    async fn build_bytecodes_in(repository: &Path) {
         let output = std::process::Command::new("cargo")
             .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
+            .current_dir(repository)
             .output()
             .expect("Failed to build WASM binaries");
 
@@ -164,10 +180,8 @@ impl ActiveChain {
     /// contract and service bytecodes.
     ///
     /// Returns a tuple with the loaded contract and service [`Bytecode`]s.
-    async fn find_current_bytecodes(&self) -> (Bytecode, Bytecode) {
-        let manifest_path = fs::canonicalize("Cargo.toml")
-            .await
-            .expect("Failed to get absolute path of Cargo manifest");
+    async fn find_bytecodes_in(&self, repository: &Path) -> (Bytecode, Bytecode) {
+        let manifest_path = repository.join("Cargo.toml");
         let cargo_manifest =
             Manifest::from_path(manifest_path).expect("Failed to load Cargo.toml manifest");
 
