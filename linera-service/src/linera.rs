@@ -67,7 +67,6 @@ use {
 };
 
 struct ClientContext {
-    wallet_state_path: PathBuf,
     wallet_state: WalletState,
     max_pending_messages: usize,
     send_timeout: Duration,
@@ -99,7 +98,7 @@ impl ClientContext {
         chains
             .into_iter()
             .for_each(|chain| wallet_state.insert(chain));
-        Ok(Self::configure(options, wallet_state_path, wallet_state))
+        Ok(Self::configure(options, wallet_state))
     }
 
     fn from_options(options: &ClientOptions) -> Result<Self, anyhow::Error> {
@@ -107,16 +106,16 @@ impl ClientContext {
             Some(path) => path.clone(),
             None => Self::create_default_wallet_path()?,
         };
-        let wallet_state = WalletState::read(&wallet_state_path)
-            .with_context(|| format!("Unable to read wallet at {:?}:", &wallet_state_path))?;
-        Ok(Self::configure(options, wallet_state_path, wallet_state))
+        let wallet_state = WalletState::from_file(&wallet_state_path).with_context(|| {
+            format!(
+                "Unable to read wallet at {:?}:",
+                &wallet_state_path.canonicalize().unwrap()
+            )
+        })?;
+        Ok(Self::configure(options, wallet_state))
     }
 
-    fn configure(
-        options: &ClientOptions,
-        wallet_state_path: PathBuf,
-        wallet_state: WalletState,
-    ) -> Self {
+    fn configure(options: &ClientOptions, wallet_state: WalletState) -> Self {
         let send_timeout = Duration::from_micros(options.send_timeout_us);
         let recv_timeout = Duration::from_micros(options.recv_timeout_us);
         let cross_chain_delay = Duration::from_micros(options.cross_chain_delay_ms);
@@ -124,7 +123,6 @@ impl ClientContext {
         let notification_retries = options.notification_retries;
 
         ClientContext {
-            wallet_state_path,
             wallet_state,
             max_pending_messages: options.max_pending_messages,
             send_timeout,
@@ -363,9 +361,9 @@ impl ClientContext {
         responses
     }
 
-    fn save_wallet(&self) {
+    fn save_wallet(&mut self) {
         self.wallet_state
-            .write(&self.wallet_state_path)
+            .write()
             .expect("Unable to write user chains");
         info!("Saved user chain states");
     }
@@ -1329,7 +1327,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 // Private keys.
                 chains.push(chain);
             }
-            let context = ClientContext::create(&options, genesis_config.clone(), chains)?;
+            let mut context = ClientContext::create(&options, genesis_config.clone(), chains)?;
             genesis_config.write(genesis_config_path)?;
             context.save_wallet();
             Ok(())
@@ -1386,7 +1384,7 @@ async fn main() -> Result<(), anyhow::Error> {
                             Some(UserChain::make_initial(*description, *timestamp))
                         })
                         .collect();
-                    let context = ClientContext::create(&options, genesis_config, chains)?;
+                    let mut context = ClientContext::create(&options, genesis_config, chains)?;
                     context.save_wallet();
                     Ok(())
                 }

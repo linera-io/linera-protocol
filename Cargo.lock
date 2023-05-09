@@ -1790,6 +1790,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "file-lock"
+version = "2.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f59be9010c5418713a48aac4c1b897d85dafd958055683dc31bdae553536647b"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
 name = "file-per-thread-logger"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2675,6 +2685,7 @@ dependencies = [
  "comfy-table",
  "crowd-funding",
  "dirs",
+ "file-lock",
  "fungible",
  "futures",
  "hex",

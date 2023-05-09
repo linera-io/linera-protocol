@@ -7,6 +7,7 @@ use comfy_table::{
     modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color, ContentArrangement,
     Table,
 };
+use file_lock::{FileLock, FileOptions};
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Balance, BlockHeight, Timestamp},
@@ -21,7 +22,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
     fs::{self, OpenOptions},
-    io::{BufRead, BufReader, BufWriter, Write},
+    io::{BufRead, BufReader, BufWriter, Seek, SeekFrom, Write},
     path::Path,
 };
 
@@ -113,8 +114,15 @@ impl UserChain {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+/// A wrapper around `InnerWalletState` which owns a [`FileLock`] to prevent
+/// two processes accessing it at the same time.
 pub struct WalletState {
+    inner: InnerWallet,
+    _lock: FileLock,
+}
+
+#[derive(Serialize, Deserialize)]
+struct InnerWallet {
     chains: BTreeMap<ChainId, UserChain>,
     unassigned_key_pairs: HashMap<PublicKey, KeyPair>,
     default: Option<ChainId>,
@@ -123,42 +131,45 @@ pub struct WalletState {
 
 impl WalletState {
     pub fn get(&self, chain_id: ChainId) -> Option<&UserChain> {
-        self.chains.get(&chain_id)
+        self.inner.chains.get(&chain_id)
     }
 
     pub fn insert(&mut self, chain: UserChain) {
-        if self.chains.is_empty() {
-            self.default = Some(chain.chain_id);
+        if self.inner.chains.is_empty() {
+            self.inner.default = Some(chain.chain_id);
         }
-        self.chains.insert(chain.chain_id, chain);
+        self.inner.chains.insert(chain.chain_id, chain);
     }
 
     pub fn default_chain(&self) -> Option<ChainId> {
-        self.default
+        self.inner.default
     }
 
     pub fn chain_ids(&self) -> Vec<ChainId> {
-        self.chains.keys().copied().collect()
+        self.inner.chains.keys().copied().collect()
     }
 
     pub fn num_chains(&self) -> usize {
-        self.chains.len()
+        self.inner.chains.len()
     }
 
     pub fn last_chain(&mut self) -> Option<&UserChain> {
-        self.chains.values().last()
+        self.inner.chains.values().last()
     }
 
     pub fn chains_mut(&mut self) -> impl Iterator<Item = &mut UserChain> {
-        self.chains.values_mut()
+        self.inner.chains.values_mut()
     }
 
     pub fn add_unassigned_key_pair(&mut self, keypair: KeyPair) {
-        self.unassigned_key_pairs.insert(keypair.public(), keypair);
+        self.inner
+            .unassigned_key_pairs
+            .insert(keypair.public(), keypair);
     }
 
     pub fn key_pair_for_pk(&self, key: &PublicKey) -> Option<KeyPair> {
-        self.unassigned_key_pairs
+        self.inner
+            .unassigned_key_pairs
             .get(key)
             .map(|key_pair| key_pair.copy())
     }
@@ -169,9 +180,13 @@ impl WalletState {
         chain_id: ChainId,
         timestamp: Timestamp,
     ) -> Result<(), anyhow::Error> {
-        let key_pair = self.unassigned_key_pairs.remove(&key).ok_or_else(|| {
-            anyhow!("could not assign chain to key as unassigned key was not found")
-        })?;
+        let key_pair = self
+            .inner
+            .unassigned_key_pairs
+            .remove(&key)
+            .ok_or_else(|| {
+                anyhow!("could not assign chain to key as unassigned key was not found")
+            })?;
         let user_chain = UserChain {
             chain_id,
             key_pair: Some(key_pair),
@@ -184,10 +199,10 @@ impl WalletState {
     }
 
     pub fn set_default_chain(&mut self, chain_id: ChainId) -> Result<(), anyhow::Error> {
-        if !self.chains.contains_key(&chain_id) {
+        if !self.inner.chains.contains_key(&chain_id) {
             bail!("Chain {} cannot be assigned as the default chain since it does not exist in the wallet.", &chain_id);
         }
-        self.default = Some(chain_id);
+        self.inner.default = Some(chain_id);
         Ok(())
     }
 
@@ -197,7 +212,7 @@ impl WalletState {
         S: Store + Clone + Send + Sync + 'static,
         ViewError: From<S::ContextError>,
     {
-        self.chains.insert(
+        self.inner.chains.insert(
             state.chain_id(),
             UserChain {
                 chain_id: state.chain_id(),
@@ -210,40 +225,60 @@ impl WalletState {
     }
 
     pub fn genesis_admin_chain(&self) -> ChainId {
-        self.genesis_config.admin_id
+        self.inner.genesis_config.admin_id
     }
 
     pub fn genesis_config(&self) -> &GenesisConfig {
-        &self.genesis_config
+        &self.inner.genesis_config
     }
 
-    pub fn read(path: &Path) -> Result<Self, anyhow::Error> {
-        let file = OpenOptions::new().read(true).open(path)?;
-        Ok(serde_json::from_reader(BufReader::new(file))?)
+    pub fn from_file(path: &Path) -> Result<Self, anyhow::Error> {
+        let file = FileOptions::new().read(true).write(true);
+        let block = false;
+        let file_lock = match FileLock::lock(path, block, file) {
+            Ok(lock) => lock,
+            Err(err) => bail!("Error getting write lock to wallet: {}", err),
+        };
+        let inner = serde_json::from_reader(BufReader::new(&file_lock.file))?;
+        Ok(Self {
+            inner,
+            _lock: file_lock,
+        })
     }
 
     pub fn create(path: &Path, genesis_config: GenesisConfig) -> Result<Self, anyhow::Error> {
-        let file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .read(true)
-            .open(path)?;
-        let mut reader = BufReader::new(file);
+        let file = FileOptions::new().create(true).write(true).read(true);
+        let block = false;
+        let file_lock = match FileLock::lock(path, block, file) {
+            Ok(lock) => lock,
+            Err(err) => bail!("Error getting write lock to wallet: {}", err),
+        };
+        let mut reader = BufReader::new(&file_lock.file);
         if reader.fill_buf()?.is_empty() {
-            return Ok(Self {
+            let inner = InnerWallet {
                 chains: Default::default(),
                 unassigned_key_pairs: Default::default(),
                 default: None,
                 genesis_config,
-            });
+            };
+            Ok(Self {
+                inner,
+                _lock: file_lock,
+            })
+        } else {
+            let inner = serde_json::from_reader(reader)?;
+            Ok(Self {
+                inner,
+                _lock: file_lock,
+            })
         }
-        Ok(serde_json::from_reader(reader)?)
     }
 
-    pub fn write(&self, path: &Path) -> Result<(), std::io::Error> {
-        let file = OpenOptions::new().write(true).open(path)?;
-        let mut writer = BufWriter::new(file);
-        serde_json::to_writer_pretty(&mut writer, &self)?;
+    pub fn write(&mut self) -> Result<(), std::io::Error> {
+        self._lock.file.set_len(0)?;
+        self._lock.file.seek(SeekFrom::Start(0))?;
+        let mut writer = BufWriter::new(&self._lock.file);
+        serde_json::to_writer_pretty(&mut writer, &self.inner)?;
         writer.flush()?;
         Ok(())
     }
@@ -259,20 +294,20 @@ impl WalletState {
                 Cell::new("Latest Block").add_attribute(Attribute::Bold),
             ]);
         if let Some(chain_id) = chain_id {
-            let user_chain = self.chains.get(&chain_id).unwrap();
+            let user_chain = self.inner.chains.get(&chain_id).unwrap();
             Self::update_table_with_chain(
                 &mut table,
                 chain_id,
                 user_chain,
-                Some(chain_id) == self.default,
+                Some(chain_id) == self.inner.default,
             );
         } else {
-            for (chain_id, user_chain) in &self.chains {
+            for (chain_id, user_chain) in &self.inner.chains {
                 Self::update_table_with_chain(
                     &mut table,
                     *chain_id,
                     user_chain,
-                    Some(chain_id) == self.default.as_ref(),
+                    Some(chain_id) == self.inner.default.as_ref(),
                 );
             }
         }
