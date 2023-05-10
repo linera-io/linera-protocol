@@ -220,18 +220,25 @@ impl Client {
         &self,
         contract: PathBuf,
         service: PathBuf,
-        arg: impl ToString,
+        init_args: String,
+        parameters: Option<String>,
+        required_application_ids: Vec<String>,
         publisher: impl Into<Option<ChainId>>,
     ) -> String {
-        let stdout = Self::run_command(
-            self.run_with_storage()
-                .await
-                .arg("publish-and-create")
-                .args([contract, service])
-                .arg(arg.to_string())
-                .args(publisher.into().iter().map(ChainId::to_string)),
-        )
-        .await;
+        let mut command = self.run_with_storage().await;
+        command
+            .arg("publish-and-create")
+            .args([contract, service])
+            .arg(init_args)
+            .args(publisher.into().iter().map(ChainId::to_string));
+        if let Some(parameters) = parameters {
+            command.args(["--parameters", &parameters]);
+        }
+        if !required_application_ids.is_empty() {
+            command.arg("--required-application-ids");
+            command.args(required_application_ids);
+        }
+        let stdout = Self::run_command(&mut command).await;
         stdout.trim().to_string()
     }
 
@@ -387,7 +394,7 @@ impl Client {
         Some(public_key.into())
     }
 
-    async fn check_for_chain_in_wallet(&self, chain: ChainId) -> bool {
+    async fn is_chain_present_in_wallet(&self, chain: ChainId) -> bool {
         self.get_wallet().get(chain).is_some()
     }
 
@@ -857,6 +864,16 @@ impl Application {
         serde_json::from_value(response_body["accounts"].clone()).unwrap_or_default()
     }
 
+    async fn assert_fungible_app_has_accounts(
+        &self,
+        accounts: impl IntoIterator<Item = (AccountOwner, Amount)>,
+    ) {
+        for (account_owner, amount) in accounts {
+            let value = self.get_fungible_account_owner_amount(&account_owner).await;
+            assert_eq!(value, amount);
+        }
+    }
+
     async fn get_counter_value(&self) -> u64 {
         let data = self.query_application("query { value }").await;
         serde_json::from_value(data["value"].clone()).unwrap()
@@ -911,6 +928,8 @@ async fn test_end_to_end_counter() {
             contract,
             service,
             hex::encode(bcs::to_bytes(&original_counter_value).unwrap()),
+            None,
+            vec![],
             None,
         )
         .await;
@@ -1074,7 +1093,7 @@ async fn test_reconfiguration(network: Network) {
     let (_, chain_3) = client.open_chain(chain_1, None).await.unwrap();
 
     // Inspect state of derived chain
-    assert!(client.check_for_chain_in_wallet(chain_3).await);
+    assert!(client.is_chain_present_in_wallet(chain_3).await);
 
     // Create configurations for two more validators
     let server_5 = runner.generate_validator_config(5).await;
@@ -1194,8 +1213,6 @@ async fn test_end_to_end_social_user_pub_sub() {
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_fungible() {
     use fungible::{AccountOwner, InitialState};
-    use linera_base::data_types::Amount;
-    use std::collections::BTreeMap;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
@@ -1221,32 +1238,31 @@ async fn test_end_to_end_fungible() {
     assert_eq!(chain2, client2.assign(client2key, effect_id).await.unwrap());
 
     // The players
-    let owner1 = client1.get_owner().expect("Failed to get the owner");
+    let owner1 = client1.get_owner().unwrap();
     let account_owner1 = AccountOwner::User(owner1);
-    let owner2 = client2.get_owner().expect("Failed to get the owner");
+    let owner2 = client2.get_owner().unwrap();
     let account_owner2 = AccountOwner::User(owner2);
     // The initial accounts on chain1
-    let mut accounts = BTreeMap::new();
-    let amount1 = Amount::from(5);
-    let amount2 = Amount::from(2);
-    accounts.insert(account_owner1, amount1);
-    accounts.insert(account_owner2, amount2);
+    let accounts = BTreeMap::from([
+        (account_owner1, Amount::from(5)),
+        (account_owner2, Amount::from(2)),
+    ]);
     let state = InitialState { accounts };
 
     // Setting up the application and verifying
     let application_id = client1
-        .publish_and_create(contract, service, state, None)
+        .publish_and_create(contract, service, state.to_string(), None, vec![], None)
         .await;
 
     let mut node_service1 = client1.run_node_service(chain1, 8080).await;
     let mut node_service2 = client2.run_node_service(chain2, 8081).await;
 
     let app1 = node_service1.make_application(&application_id).await;
-
-    let value = app1
-        .get_fungible_account_owner_amount(&account_owner1)
-        .await;
-    assert_eq!(value, amount1);
+    app1.assert_fungible_app_has_accounts([
+        (account_owner1, Amount::from(5)),
+        (account_owner2, Amount::from(2)),
+    ])
+    .await;
 
     // Transferring
     let destination = Account {
@@ -1263,28 +1279,20 @@ async fn test_end_to_end_fungible() {
     app1.query_application(&query_string).await;
 
     // Checking the final values on chain1 and chain2.
-    let value = app1
-        .get_fungible_account_owner_amount(&account_owner1)
-        .await;
-    assert_eq!(value, Amount::from(4));
-
-    let value = app1
-        .get_fungible_account_owner_amount(&account_owner2)
-        .await;
-    assert_eq!(value, Amount::from(2));
+    app1.assert_fungible_app_has_accounts([
+        (account_owner1, Amount::from(4)),
+        (account_owner2, Amount::from(2)),
+    ])
+    .await;
 
     // Fungible didn't exist on chain2 initially but now it does and we can talk to it.
     let app2 = node_service2.make_application(&application_id).await;
 
-    let value = app2
-        .get_fungible_account_owner_amount(&account_owner1)
-        .await;
-    assert_eq!(value, Amount::from(0));
-
-    let value = app2
-        .get_fungible_account_owner_amount(&account_owner2)
-        .await;
-    assert_eq!(value, Amount::from(1));
+    app2.assert_fungible_app_has_accounts(BTreeMap::from([
+        (account_owner1, Amount::from(0)),
+        (account_owner2, Amount::from(1)),
+    ]))
+    .await;
 
     // Claiming more money from chain1 to chain2.
     let source = Account {
@@ -1309,25 +1317,16 @@ async fn test_end_to_end_fungible() {
     node_service2.process_inbox().await;
 
     // Checking the final value
-    let value = app1
-        .get_fungible_account_owner_amount(&account_owner1)
-        .await;
-    assert_eq!(value, Amount::from(4));
-
-    let value = app1
-        .get_fungible_account_owner_amount(&account_owner2)
-        .await;
-    assert_eq!(value, Amount::from(0));
-
-    let value = app2
-        .get_fungible_account_owner_amount(&account_owner1)
-        .await;
-    assert_eq!(value, Amount::from(0));
-
-    let value = app2
-        .get_fungible_account_owner_amount(&account_owner2)
-        .await;
-    assert_eq!(value, Amount::from(3));
+    app1.assert_fungible_app_has_accounts([
+        (account_owner1, Amount::from(4)),
+        (account_owner2, Amount::from(0)),
+    ])
+    .await;
+    app2.assert_fungible_app_has_accounts([
+        (account_owner1, Amount::from(0)),
+        (account_owner2, Amount::from(3)),
+    ])
+    .await;
 
     node_service1.assert_is_running();
     node_service2.assert_is_running();
