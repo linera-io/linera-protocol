@@ -19,8 +19,11 @@ pub struct InitializationArguments {
 
 impl std::fmt::Display for InitializationArguments {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let bytes = bcs::to_bytes(self).expect("Serialization failed");
-        write!(f, "{}", hex::encode(bytes))
+        write!(
+            f,
+            "{}",
+            serde_json::to_string(self).expect("Serialization failed")
+        )
     }
 }
 
