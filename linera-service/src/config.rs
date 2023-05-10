@@ -21,9 +21,9 @@ use linera_views::views::ViewError;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
-    fs::{self, OpenOptions},
-    io::{BufRead, BufReader, BufWriter, Seek, SeekFrom, Write},
-    path::Path,
+    fs::{self, File, OpenOptions},
+    io::{BufRead, BufReader, BufWriter, Write},
+    path::{Path, PathBuf},
 };
 
 pub trait Import: DeserializeOwned {
@@ -118,6 +118,7 @@ impl UserChain {
 /// two processes accessing it at the same time.
 pub struct WalletState {
     inner: InnerWallet,
+    wallet_path: PathBuf,
     _lock: FileLock,
 }
 
@@ -242,6 +243,7 @@ impl WalletState {
         let inner = serde_json::from_reader(BufReader::new(&file_lock.file))?;
         Ok(Self {
             inner,
+            wallet_path: path.into(),
             _lock: file_lock,
         })
     }
@@ -263,23 +265,42 @@ impl WalletState {
             };
             Ok(Self {
                 inner,
+                wallet_path: path.into(),
                 _lock: file_lock,
             })
         } else {
             let inner = serde_json::from_reader(reader)?;
             Ok(Self {
                 inner,
+                wallet_path: path.into(),
                 _lock: file_lock,
             })
         }
     }
 
-    pub fn write(&mut self) -> Result<(), std::io::Error> {
-        self._lock.file.set_len(0)?;
-        self._lock.file.seek(SeekFrom::Start(0))?;
-        let mut writer = BufWriter::new(&self._lock.file);
-        serde_json::to_writer_pretty(&mut writer, &self.inner)?;
-        writer.flush()?;
+    /// Writes the wallet to disk.
+    ///
+    /// The contents of the wallet need to be over-written completely, so
+    /// a temporary file is created as a backup in case a crash occurs while
+    /// writing to disk.
+    ///
+    /// The temporary file is then renamed to the original wallet name. If
+    /// serialization or writing to disk fails, the temporary filed is
+    /// deleted.
+    pub fn write(&mut self) -> Result<(), anyhow::Error> {
+        let mut temp_file_path = self.wallet_path.clone();
+        temp_file_path.set_extension("json.bak");
+        let backup_file = File::create(&temp_file_path)?;
+        let mut temp_file_writer = BufWriter::new(backup_file);
+        if let Err(e) = serde_json::to_writer_pretty(&mut temp_file_writer, &self.inner) {
+            fs::remove_file(&temp_file_path)?;
+            bail!("failed to serialize the wallet state: {}", e)
+        }
+        if let Err(e) = temp_file_writer.flush() {
+            fs::remove_file(&temp_file_path)?;
+            bail!("failed to write the wallet state: {}", e);
+        }
+        fs::rename(&temp_file_path, &self.wallet_path)?;
         Ok(())
     }
 
