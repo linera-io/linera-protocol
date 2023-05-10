@@ -5,9 +5,7 @@
 
 use super::{
     wit_types,
-    writable_system::{
-        self as system, PollFindKeyValues, PollFindKeys, PollLock, PollReadKeyBytes, PollUnit,
-    },
+    writable_system::{self as system, PollLock},
 };
 use linera_base::{
     crypto::CryptoHash,
@@ -174,42 +172,6 @@ impl From<system::SessionId> for SessionId {
             application_id: session_id.application_id.into(),
             kind: session_id.kind,
             index: session_id.index,
-        }
-    }
-}
-
-impl From<PollReadKeyBytes> for Poll<Option<Vec<u8>>> {
-    fn from(poll_read_key_bytes: PollReadKeyBytes) -> Self {
-        match poll_read_key_bytes {
-            PollReadKeyBytes::Ready(bytes) => Poll::Ready(bytes),
-            PollReadKeyBytes::Pending => Poll::Pending,
-        }
-    }
-}
-
-impl From<PollFindKeys> for Poll<Vec<Vec<u8>>> {
-    fn from(poll_find_keys: PollFindKeys) -> Self {
-        match poll_find_keys {
-            PollFindKeys::Ready(keys) => Poll::Ready(keys),
-            PollFindKeys::Pending => Poll::Pending,
-        }
-    }
-}
-
-impl From<PollFindKeyValues> for Poll<Vec<(Vec<u8>, Vec<u8>)>> {
-    fn from(poll_find_key_values: PollFindKeyValues) -> Self {
-        match poll_find_key_values {
-            PollFindKeyValues::Ready(key_values) => Poll::Ready(key_values),
-            PollFindKeyValues::Pending => Poll::Pending,
-        }
-    }
-}
-
-impl From<PollUnit> for Poll<()> {
-    fn from(poll_write_batch: PollUnit) -> Self {
-        match poll_write_batch {
-            PollUnit::Ready => Poll::Ready(()),
-            PollUnit::Pending => Poll::Pending,
         }
     }
 }

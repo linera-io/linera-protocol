@@ -20,11 +20,6 @@ macro_rules! impl_writable_system {
             type Error = ExecutionError;
 
             type Lock = HostFuture<$runtime, Result<(), ExecutionError>>;
-            type ReadKeyBytes = HostFuture<$runtime, Result<Option<Vec<u8>>, ExecutionError>>;
-            type FindKeys = HostFuture<$runtime, Result<Vec<Vec<u8>>, ExecutionError>>;
-            type FindKeyValues =
-                HostFuture<$runtime, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
-            type WriteBatch = HostFuture<$runtime, Result<(), ExecutionError>>;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -88,99 +83,6 @@ macro_rules! impl_writable_system {
                     Poll::Ready(Err(ExecutionError::ViewError(ViewError::TryLockError(_)))) => {
                         Ok(PollLock::ReadyNotLocked)
                     }
-                    Poll::Ready(Err(error)) => Err(error),
-                }
-            }
-
-            fn read_key_bytes_new(
-                &mut self,
-                key: &[u8],
-            ) -> Result<Self::ReadKeyBytes, Self::Error> {
-                Ok(self
-                    .queued_future_factory
-                    .enqueue(self.runtime().read_key_bytes(key.to_owned())))
-            }
-
-            fn read_key_bytes_poll(
-                &mut self,
-                future: &Self::ReadKeyBytes,
-            ) -> Result<writable_system::PollReadKeyBytes, Self::Error> {
-                use writable_system::PollReadKeyBytes;
-                match future.poll(&mut *self.waker()) {
-                    Poll::Pending => Ok(PollReadKeyBytes::Pending),
-                    Poll::Ready(opt_list) => Ok(PollReadKeyBytes::Ready(opt_list?)),
-                }
-            }
-
-            fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
-                Ok(self
-                    .queued_future_factory
-                    .enqueue(self.runtime().find_keys_by_prefix(key_prefix.to_owned())))
-            }
-
-            fn find_keys_poll(
-                &mut self,
-                future: &Self::FindKeys,
-            ) -> Result<writable_system::PollFindKeys, Self::Error> {
-                use writable_system::PollFindKeys;
-                match future.poll(&mut *self.waker()) {
-                    Poll::Pending => Ok(PollFindKeys::Pending),
-                    Poll::Ready(keys) => Ok(PollFindKeys::Ready(keys?)),
-                }
-            }
-
-            fn find_key_values_new(
-                &mut self,
-                key_prefix: &[u8],
-            ) -> Result<Self::FindKeyValues, Self::Error> {
-                Ok(self.queued_future_factory.enqueue(
-                    self.runtime()
-                        .find_key_values_by_prefix(key_prefix.to_owned()),
-                ))
-            }
-
-            fn find_key_values_poll(
-                &mut self,
-                future: &Self::FindKeyValues,
-            ) -> Result<writable_system::PollFindKeyValues, Self::Error> {
-                use writable_system::PollFindKeyValues;
-                match future.poll(&mut *self.waker()) {
-                    Poll::Pending => Ok(PollFindKeyValues::Pending),
-                    Poll::Ready(key_values) => Ok(PollFindKeyValues::Ready(key_values?)),
-                }
-            }
-
-            fn write_batch_new(
-                &mut self,
-                list_oper: Vec<writable_system::WriteOperation>,
-            ) -> Result<Self::WriteBatch, Self::Error> {
-                let mut batch = Batch::new();
-                for x in list_oper {
-                    match x {
-                        writable_system::WriteOperation::Delete(key) => {
-                            batch.delete_key(key.to_vec())
-                        }
-                        writable_system::WriteOperation::Deleteprefix(key_prefix) => {
-                            batch.delete_key_prefix(key_prefix.to_vec())
-                        }
-                        writable_system::WriteOperation::Put(key_value) => {
-                            batch.put_key_value_bytes(key_value.0.to_vec(), key_value.1.to_vec())
-                        }
-                    }
-                }
-                Ok(self
-                    .queued_future_factory
-                    .enqueue(self.runtime().write_batch_and_unlock(batch)))
-            }
-
-            fn write_batch_poll(
-                &mut self,
-                future: &Self::WriteBatch,
-            ) -> Result<writable_system::PollUnit, Self::Error> {
-                use writable_system::PollUnit;
-                match future.poll(&mut *self.waker()) {
-                    Poll::Pending => Ok(PollUnit::Pending),
-                    Poll::Ready(Ok(())) => Ok(PollUnit::Ready),
                     Poll::Ready(Err(error)) => Err(error),
                 }
             }
