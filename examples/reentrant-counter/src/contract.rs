@@ -26,6 +26,7 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
     type Effect = ();
     type SessionCall = ();
     type Response = u128;
+    type SessionState = ();
 
     async fn initialize(
         &mut self,
@@ -72,7 +73,8 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
         _context: &CalleeContext,
         increment: u128,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response>, Self::Error> {
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    {
         let value = self.value.get_mut();
         *value += increment;
         Ok(ApplicationCallResult {
@@ -84,10 +86,11 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
     async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
-        _session: Session,
+        _session: Session<Self::SessionState>,
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Effect, Self::Response>, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    {
         Err(Error::SessionsNotSupported)
     }
 }

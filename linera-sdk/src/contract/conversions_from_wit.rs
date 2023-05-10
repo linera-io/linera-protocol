@@ -14,6 +14,7 @@ use linera_base::{
 };
 
 use crate::{CalleeContext, EffectContext, OperationContext, Session};
+use serde::de::DeserializeOwned;
 use std::task::Poll;
 
 impl From<wit_types::OperationContext> for OperationContext {
@@ -79,11 +80,11 @@ impl From<wit_types::SessionId> for SessionId {
     }
 }
 
-impl From<wit_types::Session> for Session {
+impl<T: DeserializeOwned> From<wit_types::Session> for Session<T> {
     fn from(session: wit_types::Session) -> Self {
         Session {
             kind: session.kind,
-            data: session.data,
+            data: bcs::from_bytes(&session.data).expect("TODO"),
         }
     }
 }

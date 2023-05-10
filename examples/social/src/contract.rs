@@ -39,6 +39,7 @@ where
     type Effect = Effect;
     type SessionCall = ();
     type Response = ();
+    type SessionState = ();
 
     async fn initialize(
         &mut self,
@@ -89,17 +90,19 @@ where
         _context: &CalleeContext,
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response>, Self::Error> {
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    {
         Err(Error::ApplicationCallsNotSupported)
     }
 
     async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
-        _session: Session,
+        _session: Session<Self::SessionState>,
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Effect, Self::Response>, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    {
         Err(Error::SessionsNotSupported)
     }
 }

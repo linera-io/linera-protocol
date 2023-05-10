@@ -11,6 +11,7 @@ futures = { workspace = true }
 linera-sdk = { workspace = true }
 linera-views = { workspace = true }
 serde_json = { workspace = true }
+serde = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

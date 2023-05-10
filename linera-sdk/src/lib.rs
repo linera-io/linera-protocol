@@ -95,6 +95,8 @@ pub trait Contract: Sized {
     type SessionCall: DeserializeOwned + Send;
     /// The response type of an application call.
     type Response: Serialize + Send;
+    /// The type for the contract's sessions.
+    type SessionState: DeserializeOwned + Serialize + Send;
 
     /// Initializes the application on the chain that created it.
     ///
@@ -168,7 +170,7 @@ pub trait Contract: Sized {
         context: &CalleeContext,
         argument: Self::ApplicationCallArguments,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response>, Self::Error>;
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>;
 
     /// Handles a call into a [`Session`] created by this application.
     ///
@@ -205,10 +207,10 @@ pub trait Contract: Sized {
     async fn handle_session_call(
         &mut self,
         context: &CalleeContext,
-        session: Session,
+        session: Session<Self::SessionState>,
         argument: Self::SessionCall,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Effect, Self::Response>, Self::Error>;
+    ) -> Result<SessionCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>;
 }
 
 /// The public entry points provided by an application's service.
@@ -321,17 +323,17 @@ impl<Effect: Serialize + std::fmt::Debug + DeserializeOwned> ExecutionResult<Eff
 /// The result of calling into a user application.
 #[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct ApplicationCallResult<Effect, Value> {
+pub struct ApplicationCallResult<Effect, Value, SessionType> {
     /// The return value.
     // #[debug(with = "linera_base::hex_debug")]
     pub value: Option<Value>,
     /// The externally-visible result.
     pub execution_result: ExecutionResult<Effect>,
     /// The new sessions that were just created by the callee for us.
-    pub create_sessions: Vec<Session>,
+    pub create_sessions: Vec<Session<SessionType>>,
 }
 
-impl<Effect, Value> Default for ApplicationCallResult<Effect, Value> {
+impl<Effect, Value, Session> Default for ApplicationCallResult<Effect, Value, Session> {
     fn default() -> Self {
         Self {
             value: None,
@@ -344,19 +346,18 @@ impl<Effect, Value> Default for ApplicationCallResult<Effect, Value> {
 /// Syscall to request creating a new session.
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct Session {
+pub struct Session<T> {
     /// A kind provided by the creator (meant to be visible to other applications).
     pub kind: u64,
     /// The data associated to the session.
-    #[debug(with = "linera_base::hex_debug")]
-    pub data: Vec<u8>,
+    pub data: T,
 }
 
 /// The result of calling into a session.
 #[derive(Default, Deserialize, Serialize)]
-pub struct SessionCallResult<Effect, Value> {
+pub struct SessionCallResult<Effect, Value, Session> {
     /// The application result.
-    pub inner: ApplicationCallResult<Effect, Value>,
+    pub inner: ApplicationCallResult<Effect, Value, Session>,
     /// If `call_session` was called, this tells the system to clean up the session.
-    pub data: Option<Vec<u8>>,
+    pub new_state: Option<Session>,
 }

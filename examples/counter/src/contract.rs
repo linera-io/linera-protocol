@@ -25,6 +25,7 @@ impl Contract for Counter {
     type Effect = ();
     type SessionCall = ();
     type Response = u64;
+    type SessionState = ();
 
     async fn initialize(
         &mut self,
@@ -57,7 +58,8 @@ impl Contract for Counter {
         _context: &CalleeContext,
         increment: u64,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response>, Self::Error> {
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    {
         log::error!("incrementing by {:?}", increment);
         self.value += increment;
         Ok(ApplicationCallResult {
@@ -69,10 +71,11 @@ impl Contract for Counter {
     async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
-        _session: Session,
+        _session: Session<Self::SessionState>,
         _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Effect, Self::Response>, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    {
         Err(Error::SessionsNotSupported)
     }
 }

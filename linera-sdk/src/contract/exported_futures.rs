@@ -269,9 +269,17 @@ where
 ///
 /// Loads the `Application` state and calls its
 /// [`handle_application_call`][Contract::handle_application_call] method.
+#[allow(clippy::type_complexity)]
 pub struct HandleApplicationCall<Application: Contract> {
     future: ExportedFuture<
-        Result<ApplicationCallResult<Application::Effect, Application::Response>, String>,
+        Result<
+            ApplicationCallResult<
+                Application::Effect,
+                Application::Response,
+                Application::SessionState,
+            >,
+            String,
+        >,
     >,
     _application: PhantomData<Application>,
 }
@@ -283,6 +291,7 @@ where
     Application::Storage: ContractStateStorage<Application> + Send + 'static,
     Application::Effect: 'static,
     Application::Response: 'static,
+    Application::SessionState: 'static,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -332,9 +341,17 @@ where
 ///
 /// Loads the `Application` state and calls its
 /// [`handle_session_call`][Contract::handle_session_call] method.
+#[allow(clippy::type_complexity)]
 pub struct HandleSessionCall<Application: Contract> {
     future: ExportedFuture<
-        Result<SessionCallResult<Application::Effect, Application::Response>, String>,
+        Result<
+            SessionCallResult<
+                Application::Effect,
+                Application::Response,
+                Application::SessionState,
+            >,
+            String,
+        >,
     >,
     _application: PhantomData<Application>,
 }
@@ -346,6 +363,7 @@ where
     Application::Storage: ContractStateStorage<Application> + Send + 'static,
     Application::Effect: 'static,
     Application::Response: 'static,
+    Application::SessionState: 'static,
 {
     /// Creates the exported future that the host can poll.
     ///

@@ -80,13 +80,14 @@ impl From<log::Level> for wit_system_api::LogLevel {
     }
 }
 
-impl<Effect: Serialize + DeserializeOwned + Debug, Value> From<ApplicationCallResult<Effect, Value>>
-    for wit_types::ApplicationCallResult
+impl<Effect: Serialize + DeserializeOwned + Debug, Value, Session>
+    From<ApplicationCallResult<Effect, Value, Session>> for wit_types::ApplicationCallResult
 where
     Effect: Serialize,
     Value: Serialize,
+    Session: Serialize,
 {
-    fn from(result: ApplicationCallResult<Effect, Value>) -> Self {
+    fn from(result: ApplicationCallResult<Effect, Value, Session>) -> Self {
         let create_sessions = result
             .create_sessions
             .into_iter()
@@ -106,22 +107,28 @@ where
     }
 }
 
-impl From<Session> for wit_types::Session {
-    fn from(new_session: Session) -> Self {
+impl<T: Serialize> From<Session<T>> for wit_types::Session {
+    fn from(new_session: Session<T>) -> Self {
         wit_types::Session {
             kind: new_session.kind,
-            data: new_session.data,
+            data: bcs::to_bytes(&new_session.data).expect("TODO"),
         }
     }
 }
 
-impl<Effect: Serialize + DeserializeOwned + Debug, Value: Serialize>
-    From<SessionCallResult<Effect, Value>> for wit_types::SessionCallResult
+impl<Effect: Serialize + DeserializeOwned + Debug, Value: Serialize, Session: Serialize>
+    From<SessionCallResult<Effect, Value, Session>> for wit_types::SessionCallResult
 {
-    fn from(result: SessionCallResult<Effect, Value>) -> Self {
+    fn from(result: SessionCallResult<Effect, Value, Session>) -> Self {
         wit_types::SessionCallResult {
             inner: result.inner.into(),
-            data: result.data,
+            data: Some(
+                result
+                    .new_state
+                    .as_ref()
+                    .map(|new_state| bcs::to_bytes(new_state).expect("TODO"))
+                    .unwrap_or_default(),
+            ),
         }
     }
 }
@@ -196,11 +203,11 @@ impl<Effect: DeserializeOwned + Serialize + Debug>
     }
 }
 
-impl<Effect: Debug + Serialize + DeserializeOwned, Value: Serialize>
-    From<Poll<Result<ApplicationCallResult<Effect, Value>, String>>>
+impl<Effect: Debug + Serialize + DeserializeOwned, Value: Serialize, Session: Serialize>
+    From<Poll<Result<ApplicationCallResult<Effect, Value, Session>, String>>>
     for wit_types::PollCallApplication
 {
-    fn from(poll: Poll<Result<ApplicationCallResult<Effect, Value>, String>>) -> Self {
+    fn from(poll: Poll<Result<ApplicationCallResult<Effect, Value, Session>, String>>) -> Self {
         use wit_types::PollCallApplication;
         match poll {
             Poll::Pending => PollCallApplication::Pending,
@@ -210,10 +217,11 @@ impl<Effect: Debug + Serialize + DeserializeOwned, Value: Serialize>
     }
 }
 
-impl<Effect: Debug + Serialize + DeserializeOwned, Value: Serialize>
-    From<Poll<Result<SessionCallResult<Effect, Value>, String>>> for wit_types::PollCallSession
+impl<Effect: Debug + Serialize + DeserializeOwned, Value: Serialize, Session: Serialize>
+    From<Poll<Result<SessionCallResult<Effect, Value, Session>, String>>>
+    for wit_types::PollCallSession
 {
-    fn from(poll: Poll<Result<SessionCallResult<Effect, Value>, String>>) -> Self {
+    fn from(poll: Poll<Result<SessionCallResult<Effect, Value, Session>, String>>) -> Self {
         use wit_types::PollCallSession;
         match poll {
             Poll::Pending => PollCallSession::Pending,
