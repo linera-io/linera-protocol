@@ -30,9 +30,7 @@ async fn single_chain_test() {
         .await;
 
     let final_value = initial_state + increment;
-    let query_string = "query { value }";
-
-    let value: serde_json::Value = chain.query(application_id, query_string).await;
+    let value: serde_json::Value = chain.query(application_id, "query { value }").await;
     let state_value = value
         .as_object()
         .expect("Failed to obtain the first object")
