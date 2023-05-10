@@ -1330,6 +1330,302 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
 
+    linker.func_wrap2_async(
+        "view_system",
+        "read-key-bytes::new: func(key: list<u8>) -> handle<read-key-bytes>",
+        move |mut caller: Caller<'_, Resources>, key_address: i32, key_length: i32| {
+            Box::new(async move {
+                let key = load_bytes(&mut caller, key_address, key_length);
+                let resources = caller.data_mut();
+
+                resources.insert(key)
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "view_system",
+        "read-key-bytes::poll: func(self: handle<read-key-bytes>) -> variant { \
+            pending(unit), \
+            ready(option<list<u8>>) \
+        }",
+        move |mut caller: Caller<'_, Resources>, handle: i32, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-read-key-bytes: func(key: list<u8>) -> option<list<u8>>",
+                )
+                .expect(
+                    "Missing `mocked-read-key-bytes` function in the module. \
+                    Please ensure `linera_sdk::test::mock_key_value_store` was called",
+                );
+
+                let (key_address, key_length) =
+                    store_bytes_from_resource(&mut caller, |resources| {
+                        let key: &Vec<u8> = resources.get(handle);
+                        key
+                    })
+                    .await;
+
+                let (result_offset,) = function
+                    .typed::<(i32, i32), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-read-key-bytes` function signature")
+                    .call_async(&mut caller, (key_address, key_length))
+                    .await
+                    .expect("Failed to call `mocked-read-key-bytes` function");
+
+                store_in_memory(&mut caller, return_offset, 1_i32);
+                copy_memory_slices(&mut caller, result_offset, return_offset + 4, 12);
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "view_system",
+        "find-keys::new: func(prefix: list<u8>) -> handle<find-keys>",
+        move |mut caller: Caller<'_, Resources>, prefix_address: i32, prefix_length: i32| {
+            Box::new(async move {
+                let prefix = load_bytes(&mut caller, prefix_address, prefix_length);
+                let resources = caller.data_mut();
+
+                resources.insert(prefix)
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "view_system",
+        "find-keys::poll: func(self: handle<find-keys>) -> variant { \
+            pending(unit), \
+            ready(list<list<u8>>) \
+        }",
+        move |mut caller: Caller<'_, Resources>, handle: i32, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-find-keys: func(prefix: list<u8>) -> list<list<u8>>",
+                )
+                .expect(
+                    "Missing `mocked-find-keys` function in the module. \
+                    Please ensure `linera_sdk::test::mock_key_value_store` was called",
+                );
+
+                let (prefix_address, prefix_length) =
+                    store_bytes_from_resource(&mut caller, |resources| {
+                        let prefix: &Vec<u8> = resources.get(handle);
+                        prefix
+                    })
+                    .await;
+
+                let (result_offset,) = function
+                    .typed::<(i32, i32), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-find-keys` function signature")
+                    .call_async(&mut caller, (prefix_address, prefix_length))
+                    .await
+                    .expect("Failed to call `mocked-find-keys` function");
+
+                store_in_memory(&mut caller, return_offset, 1_i32);
+                copy_memory_slices(&mut caller, result_offset, return_offset + 4, 12);
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "view_system",
+        "find-key-values::new: func(prefix: list<u8>) -> handle<find-key-values>",
+        move |mut caller: Caller<'_, Resources>, prefix_address: i32, prefix_length: i32| {
+            Box::new(async move {
+                let prefix = load_bytes(&mut caller, prefix_address, prefix_length);
+                let resources = caller.data_mut();
+
+                resources.insert(prefix)
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "view_system",
+        "find-key-values::poll: func(self: handle<find-key-values>) -> variant { \
+            pending(unit), \
+            ready(list<tuple<list<u8>, list<u8>>>) \
+        }",
+        move |mut caller: Caller<'_, Resources>, handle: i32, return_offset: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-find-key-values: \
+                        func(prefix: list<u8>) -> list<tuple<list<u8>, list<u8>>>",
+                )
+                .expect(
+                    "Missing `mocked-find-key-values` function in the module. \
+                    Please ensure `linera_sdk::test::mock_key_value_store` was called",
+                );
+
+                let (prefix_address, prefix_length) =
+                    store_bytes_from_resource(&mut caller, |resources| {
+                        let prefix: &Vec<u8> = resources.get(handle);
+                        prefix
+                    })
+                    .await;
+
+                let (result_offset,) = function
+                    .typed::<(i32, i32), (i32,), _>(&mut caller)
+                    .expect("Incorrect `mocked-find-key-values` function signature")
+                    .call_async(&mut caller, (prefix_address, prefix_length))
+                    .await
+                    .expect("Failed to call `mocked-find-key-values` function");
+
+                store_in_memory(&mut caller, return_offset, 1_i32);
+                copy_memory_slices(&mut caller, result_offset, return_offset + 4, 12);
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "view_system",
+        "write-batch::new: func(\
+            key: list<variant { \
+                delete(list<u8>), \
+                deleteprefix(list<u8>), \
+                put(tuple<list<u8>, list<u8>>) \
+            }>\
+        ) -> handle<write-batch>",
+        move |mut caller: Caller<'_, Resources>,
+              operations_address: i32,
+              operations_length: i32| {
+            Box::new(async move {
+                let vector_length = operations_length
+                    .try_into()
+                    .expect("Invalid operations list length");
+
+                let memory = get_memory(&mut caller, "memory")
+                    .expect("Missing `memory` export in the module.");
+                let memory_data = memory.data_mut(&mut caller);
+
+                let mut offsets_and_codes = Vec::with_capacity(vector_length);
+                let mut operations = Vec::with_capacity(vector_length);
+                let operation_size = 20;
+
+                for index in 0..operations_length {
+                    let offset = operations_address + index * operation_size;
+                    let operation_code = memory_data
+                        .load::<u8>(offset)
+                        .expect("Failed to read from WebAssembly module's memory");
+
+                    offsets_and_codes.push((offset + 4, operation_code));
+                }
+
+                for (offset, operation_code) in offsets_and_codes {
+                    let operation = match operation_code {
+                        0 => WriteOperation::Delete {
+                            key: load_indirect_bytes(&mut caller, offset),
+                        },
+                        1 => WriteOperation::DeletePrefix {
+                            key_prefix: load_indirect_bytes(&mut caller, offset),
+                        },
+                        2 => WriteOperation::Put {
+                            key: load_indirect_bytes(&mut caller, offset),
+                            value: load_indirect_bytes(&mut caller, offset + 8),
+                        },
+                        _ => unreachable!("Unknown write operation"),
+                    };
+
+                    operations.push(operation);
+                }
+
+                let resources = caller.data_mut();
+                resources.insert(operations)
+            })
+        },
+    )?;
+    linker.func_wrap1_async(
+        "view_system",
+        "write-batch::poll: func(self: handle<write-batch>) -> variant { \
+            pending(unit), \
+            ready(unit) \
+        }",
+        move |mut caller: Caller<'_, Resources>, handle: i32| {
+            Box::new(async move {
+                let function = get_function(
+                    &mut caller,
+                    "mocked-write-batch: func(\
+                        operations: list<variant { \
+                            delete(list<u8>), \
+                            deleteprefix(list<u8>), \
+                            put(tuple<list<u8>, list<u8>>) \
+                        }>\
+                    ) -> unit",
+                )
+                .expect(
+                    "Missing `mocked-write-batch` function in the module. \
+                    Please ensure `linera_sdk::test::mock_key_value_store` was called",
+                );
+
+                let alloc_function = get_function(&mut caller, "cabi_realloc").expect(
+                    "Missing `cabi_realloc` function in the module. \
+                    Please ensure `linera_sdk` is compiled in with the module",
+                );
+
+                let resources = caller.data_mut();
+                let operations: &Vec<WriteOperation> = resources.get(handle);
+                let operation_count = operations.len();
+
+                let codes_and_parameter_counts = operations
+                    .iter()
+                    .map(|operation| match operation {
+                        WriteOperation::Delete { .. } => (0, 1),
+                        WriteOperation::DeletePrefix { .. } => (1, 1),
+                        WriteOperation::Put { .. } => (2, 2),
+                    })
+                    .collect::<Vec<_>>();
+
+                let operation_size = 20;
+                let vector_length =
+                    i32::try_from(operation_count).expect("Too many operations in batch");
+                let vector_memory_size = vector_length * operation_size;
+
+                let operations_vector = alloc_function
+                    .typed::<(i32, i32, i32, i32), i32, _>(&mut caller)
+                    .expect("Incorrect `cabi_realloc` function signature")
+                    .call_async(&mut caller, (0, 0, 1, vector_memory_size))
+                    .await
+                    .expect("Failed to call `cabi_realloc` function");
+
+                for (index, (operation_code, parameter_count)) in
+                    codes_and_parameter_counts.into_iter().enumerate()
+                {
+                    let vector_index = i32::try_from(index).expect("Too many operations in batch");
+                    let offset = operations_vector + vector_index * operation_size;
+
+                    store_in_memory(&mut caller, offset, operation_code);
+
+                    for parameter in 0..parameter_count {
+                        let (bytes_offset, bytes_length) =
+                            store_bytes_from_resource(&mut caller, |resources| {
+                                let operations: &Vec<WriteOperation> = resources.get(handle);
+                                match (&operations[index], parameter) {
+                                    (WriteOperation::Delete { key }, 0) => key,
+                                    (WriteOperation::DeletePrefix { key_prefix }, 0) => key_prefix,
+                                    (WriteOperation::Put { key, .. }, 0) => key,
+                                    (WriteOperation::Put { value, .. }, 1) => value,
+                                    _ => unreachable!("Unknown write operation parameter"),
+                                }
+                            })
+                            .await;
+
+                        let parameter_offset = offset + 4 + parameter * 8;
+
+                        store_in_memory(&mut caller, parameter_offset, bytes_offset);
+                        store_in_memory(&mut caller, parameter_offset + 4, bytes_length);
+                    }
+                }
+
+                function
+                    .typed::<(i32, i32), (), _>(&mut caller)
+                    .expect("Incorrect `mocked-write-batch` function signature")
+                    .call_async(&mut caller, (operations_vector, vector_length))
+                    .await
+                    .expect("Failed to call `mocked-write-batch` function");
+
+                1
+            })
+        },
+    )?;
+
     let resource_names = [
         "load",
         "lock",
