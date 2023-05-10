@@ -5,7 +5,7 @@
 use async_graphql::InputType;
 use fungible::{Account, AccountOwner};
 use linera_base::{
-    data_types::Amount,
+    data_types::{Amount, Timestamp},
     identifiers::{ChainId, EffectId, Owner},
 };
 use linera_execution::Bytecode;
@@ -1327,6 +1327,129 @@ async fn test_end_to_end_fungible() {
         (account_owner2, Amount::from(3)),
     ])
     .await;
+
+    node_service1.assert_is_running();
+    node_service2.assert_is_running();
+}
+
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_crowd_funding() {
+    use crowd_funding::InitializationArguments;
+    use fungible::{AccountOwner, InitialState};
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let network = Network::Grpc;
+    let mut runner = TestRunner::new(network, 4);
+    let client1 = runner.make_client(network);
+    let client2 = runner.make_client(network);
+
+    runner.generate_initial_validator_config().await;
+    client1.create_genesis_config().await;
+    client2.init(&[]).await;
+
+    // Create initial server and client config.
+    runner.run_local_net().await;
+    let (contract_fungible, service_fungible) = runner.build_application("fungible").await;
+
+    let chain1 = client1.get_wallet().default_chain().unwrap();
+    let client2key = client2.keygen().await.unwrap();
+
+    // Create chain2 using client1.
+    let (effect_id, chain2) = client1.open_chain(chain1, Some(client2key)).await.unwrap();
+
+    // Assign chain2 to client2key.
+    assert_eq!(chain2, client2.assign(client2key, effect_id).await.unwrap());
+
+    // The players
+    let owner1 = client1.get_owner().unwrap();
+    let account_owner1 = AccountOwner::User(owner1);
+    let owner2 = client2.get_owner().unwrap();
+    let account_owner2 = AccountOwner::User(owner2);
+    // The initial accounts on chain1
+    let accounts = BTreeMap::from([(account_owner1, Amount::from(6))]);
+    let state_fungible = InitialState { accounts };
+
+    // Setting up the application fungible
+    let application_id_fungible = client1
+        .publish_and_create(
+            contract_fungible,
+            service_fungible,
+            state_fungible.to_string(),
+            None,
+            vec![],
+            None,
+        )
+        .await;
+
+    // Setting up the application crowd funding
+    let deadline = Timestamp::from(std::u64::MAX);
+    let target = Amount::from(1);
+    let state_crowd = InitializationArguments {
+        owner: account_owner1,
+        deadline,
+        target,
+    };
+    let (contract_crowd, service_crowd) = runner.build_application("crowd-funding").await;
+    let application_id_crowd = client1
+        .publish_and_create(
+            contract_crowd,
+            service_crowd,
+            state_crowd.to_string(),
+            Some(application_id_fungible.clone()),
+            vec![application_id_fungible.clone()],
+            None,
+        )
+        .await;
+
+    let mut node_service1 = client1.run_node_service(chain1, 8080).await;
+    let mut node_service2 = client2.run_node_service(chain2, 8081).await;
+
+    let app_fungible1 = node_service1
+        .make_application(&application_id_fungible)
+        .await;
+
+    let app_crowd1 = node_service1.make_application(&application_id_crowd).await;
+
+    // Transferring tokens to user2 on chain2
+    let destination = Account {
+        chain_id: chain2,
+        owner: account_owner2,
+    };
+    let amount_transfer = Amount::from(1);
+    let query_string = format!(
+        "mutation {{ transfer(owner: {}, amount: {}, targetAccount: {}) }}",
+        account_owner1.to_value(),
+        amount_transfer,
+        destination.to_value(),
+    );
+    app_fungible1.query_application(&query_string).await;
+
+    // Inviting chain2 to the campaign.
+    // TODO(#718): There should be a better way for chain2 to learn about the campaign.
+    let query_string = format!("mutation {{ notify(chainId: {}) }}", chain2.to_value());
+    app_crowd1.query_application(&query_string).await;
+
+    let app_crowd2 = node_service2.make_application(&application_id_crowd).await;
+
+    // Transferring
+    let amount_transfer = Amount::from(1);
+    let query_string = format!(
+        "mutation {{ pledgeWithTransfer(owner: {}, amount: {}) }}",
+        account_owner2.to_value(),
+        amount_transfer,
+    );
+    app_crowd2.query_application(&query_string).await;
+
+    // Make sure that the pledge is processed fast enough by client1.
+    node_service1.process_inbox().await;
+
+    // Ending the campaign.
+    app_crowd1.query_application("mutation { collect }").await;
+
+    // The rich gets their money back.
+    app_fungible1
+        .assert_fungible_app_has_accounts([(account_owner1, Amount::from(6))])
+        .await;
 
     node_service1.assert_is_running();
     node_service2.assert_is_running();
