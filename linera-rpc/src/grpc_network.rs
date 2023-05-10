@@ -477,9 +477,11 @@ impl GrpcClient {
     /// Logs a warning on unexpected status codes.
     fn is_retryable(status: &Status) -> bool {
         match status.code() {
-            Code::DeadlineExceeded | Code::Aborted | Code::Unavailable => true,
-            Code::Unknown
-            | Code::Ok
+            Code::DeadlineExceeded | Code::Aborted | Code::Unavailable | Code::Unknown => {
+                info!("Notification stream interrupted: {}; retrying", status);
+                true
+            }
+            Code::Ok
             | Code::Cancelled
             | Code::NotFound
             | Code::AlreadyExists

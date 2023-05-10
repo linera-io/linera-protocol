@@ -1211,6 +1211,59 @@ async fn test_end_to_end_social_user_pub_sub() {
 }
 
 #[test_log::test(tokio::test)]
+async fn test_end_to_end_retry_notification_stream() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let network = Network::Grpc;
+    let mut runner = TestRunner::new(network, 1);
+    let client1 = runner.make_client(network);
+    let client2 = runner.make_client(network);
+
+    // Create initial server and client config.
+    runner.generate_initial_validator_config().await;
+    client1.create_genesis_config().await;
+    let chain = ChainId::root(0);
+    let mut height = 0;
+    client2.init(&[chain]).await;
+
+    // Start local network.
+    runner.run_local_net().await;
+
+    // Listen for updates on root chain 0. There are no blocks on that chain yet.
+    let mut node_service2 = client2.run_node_service(chain, 8081).await;
+    let response = node_service2
+        .query("query { chain { tipState { nextBlockHeight } } }")
+        .await;
+    assert_eq!(
+        response["chain"]["tipState"]["nextBlockHeight"].as_u64(),
+        Some(height)
+    );
+
+    // Oh no! The validator has an outage and gets restarted!
+    runner.remove_validator(1);
+    runner.start_validators(1..=1).await;
+
+    // The node service should try to reconnect.
+    'success: {
+        for i in 0..10 {
+            // Add a new block on the chain, triggering a notification.
+            client1.transfer(1, chain, ChainId::root(9)).await;
+            tokio::time::sleep(Duration::from_secs(i)).await;
+            height += 1;
+            let response = node_service2
+                .query("query { chain { tipState { nextBlockHeight } } }")
+                .await;
+            if response["chain"]["tipState"]["nextBlockHeight"].as_u64() == Some(height) {
+                break 'success;
+            }
+        }
+        panic!("Failed to re-establish notification stream");
+    }
+
+    node_service2.assert_is_running();
+}
+
+#[test_log::test(tokio::test)]
 async fn test_end_to_end_fungible() {
     use fungible::{AccountOwner, InitialState};
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
