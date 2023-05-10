@@ -6,7 +6,7 @@ use linera_sdk::base::Amount;
 use linera_views::{
     common::Context,
     map_view::MapView,
-    views::{GraphQLView, RootView, View},
+    views::{GraphQLView, RootView},
 };
 use thiserror::Error;
 

@@ -1,10 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_views::{
-    register_view::RegisterView,
-    views::{RootView, View},
-};
+use linera_views::{register_view::RegisterView, views::RootView};
 
 /// The application state.
 #[derive(Debug, RootView)]

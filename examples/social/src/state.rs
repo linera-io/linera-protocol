@@ -4,7 +4,7 @@
 use linera_views::{
     log_view::LogView,
     map_view::CustomMapView,
-    views::{GraphQLView, RootView, View},
+    views::{GraphQLView, RootView},
 };
 use social::{Key, OwnPost};
 

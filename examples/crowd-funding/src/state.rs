@@ -8,7 +8,7 @@ use linera_sdk::base::Amount;
 use linera_views::{
     map_view::MapView,
     register_view::RegisterView,
-    views::{GraphQLView, RootView, View},
+    views::{GraphQLView, RootView},
 };
 use serde::{Deserialize, Serialize};
 
