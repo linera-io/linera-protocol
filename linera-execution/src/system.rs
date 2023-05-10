@@ -152,6 +152,11 @@ pub enum SystemOperation {
         initialization_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     },
+    /// Requests a message from another chain to register a user application on this chain.
+    RequestApplication {
+        chain_id: ChainId,
+        application_id: UserApplicationId,
+    },
 }
 
 /// The effect of a system operation to be performed on a remote chain.
@@ -206,6 +211,9 @@ pub enum SystemEffect {
     },
     /// Does nothing. Used to debug the intended recipients of a block.
     Notify { id: ChainId },
+    /// Requests a `RegisterApplication` message from the target chain to register the specified
+    /// application on the sender chain.
+    RequestApplication(UserApplicationId),
 }
 
 impl SystemEffect {
@@ -235,7 +243,8 @@ impl SystemEffect {
             | SystemEffect::Subscribe { .. }
             | SystemEffect::Unsubscribe { .. }
             | SystemEffect::ApplicationCreated { .. }
-            | SystemEffect::Notify { .. } => Box::new(iter::empty()),
+            | SystemEffect::Notify { .. }
+            | SystemEffect::RequestApplication(_) => Box::new(iter::empty()),
         }
     }
 }
@@ -712,6 +721,14 @@ where
                 ));
                 new_application = Some((id, initialization_argument.clone()));
             }
+            RequestApplication {
+                chain_id,
+                application_id,
+            } => result.effects.push((
+                Destination::Recipient(*chain_id),
+                false,
+                SystemEffect::RequestApplication(*application_id),
+            )),
         }
 
         Ok((result, new_application))
@@ -834,6 +851,20 @@ where
                         .register_application(application.clone())
                         .await?;
                 }
+            }
+            RequestApplication(application_id) => {
+                let applications = self
+                    .registry
+                    .describe_applications_with_dependencies(
+                        vec![*application_id],
+                        &Default::default(),
+                    )
+                    .await?;
+                result.effects.push((
+                    Destination::Recipient(context.effect_id.chain_id),
+                    false,
+                    SystemEffect::RegisterApplications { applications },
+                ));
             }
             _ => {
                 tracing::error!(

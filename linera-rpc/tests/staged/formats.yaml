@@ -634,6 +634,10 @@ SystemEffect:
         STRUCT:
           - id:
               TYPENAME: ChainId
+    11:
+      RequestApplication:
+        NEWTYPE:
+          TYPENAME: UserApplicationId
 SystemOperation:
   ENUM:
     0:
@@ -736,6 +740,13 @@ SystemOperation:
           - required_application_ids:
               SEQ:
                 TYPENAME: UserApplicationId
+    12:
+      RequestApplication:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - application_id:
+              TYPENAME: UserApplicationId
 Timestamp:
   NEWTYPESTRUCT: U64
 UserApplicationDescription:

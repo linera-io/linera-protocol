@@ -848,6 +848,13 @@ impl NodeService {
         let data = self.query(&query_string).await;
         serde_json::from_value(data["createApplication"].clone()).unwrap()
     }
+
+    async fn request_application(&self, application_id: &str) -> String {
+        let query_string =
+            format!("mutation {{ requestApplication(applicationId: {application_id}) }}");
+        let data = self.query(&query_string).await;
+        serde_json::from_value(data["requestApplication"].clone()).unwrap()
+    }
 }
 
 struct Application {
@@ -1174,29 +1181,33 @@ async fn test_end_to_end_social_user_pub_sub() {
     let bytecode_id = node_service1.publish_bytecode(contract, service).await;
     let application_id = node_service1.create_application(&bytecode_id).await;
 
-    let app1 = node_service1.make_application(&application_id).await;
-    let subscribe = format!("mutation {{ subscribe(chainId: \"{}\") }}", chain2);
-    let hash = app1.query_application(&subscribe).await;
-
-    // The returned hash should now be the latest one.
-    let query = format!("query {{ chain(chainId: \"{chain1}\") {{ tipState {{ blockHash }} }} }}");
-    let response = node_service1.query(&query).await;
-    assert_eq!(hash, response["chain"]["tipState"]["blockHash"]);
+    // Request the application so chain 2 has it, too.
+    node_service2.request_application(&application_id).await;
+    node_service1.process_inbox().await; // Respond with RegisterApplications.
 
     let app2 = node_service2.make_application(&application_id).await;
+    let subscribe = format!("mutation {{ subscribe(chainId: \"{chain1}\") }}");
+    let hash = app2.query_application(&subscribe).await;
+
+    // The returned hash should now be the latest one.
+    let query = format!("query {{ chain(chainId: \"{chain2}\") {{ tipState {{ blockHash }} }} }}");
+    let response = node_service2.query(&query).await;
+    assert_eq!(hash, response["chain"]["tipState"]["blockHash"]);
+
+    let app1 = node_service1.make_application(&application_id).await;
     let post = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
-    app2.query_application(post).await;
+    app1.query_application(post).await;
 
     // Instead of retrying, we could call `node_service1.process_inbox().await` here.
     // However, we prefer to test the notification system for a change.
     let query = "query { receivedPostsKeys(count: 5) { author, index } }";
     let expected_response = json!({ "receivedPostsKeys": [
-        { "author": chain2, "index": 0 }
+        { "author": chain1, "index": 0 }
     ]});
     'success: {
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
-            let response = app1.query_application(query).await;
+            let response = app2.query_application(query).await;
             if response == expected_response {
                 info!("Confirmed post");
                 break 'success;
