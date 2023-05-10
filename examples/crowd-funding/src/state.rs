@@ -1,14 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_graphql::scalar;
 use crowd_funding::InitializationArguments;
 use fungible::AccountOwner;
 use linera_sdk::base::Amount;
 use linera_views::{
-    common::Context,
     map_view::MapView,
     register_view::RegisterView,
-    views::{RootView, View},
+    views::{GraphQLView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
 
@@ -24,8 +24,10 @@ pub enum Status {
     Cancelled,
 }
 
+scalar!(Status);
+
 /// The crowd-funding campaign's state.
-#[derive(RootView)]
+#[derive(RootView, GraphQLView)]
 pub struct CrowdFunding<C> {
     /// The status of the campaign.
     pub status: RegisterView<C, Status>,
@@ -40,19 +42,5 @@ impl Status {
     /// Returns `true` if the campaign status is [`Status::Complete`].
     pub fn is_complete(&self) -> bool {
         matches!(self, Status::Complete)
-    }
-}
-
-impl<C> CrowdFunding<C>
-where
-    C: Context + Send + Sync + Clone + 'static,
-    linera_views::views::ViewError: From<C::Error>,
-{
-    /// Retrieves the campaign [`InitializationArguments`] stored in the application's state.
-    pub fn initialization_arguments(&self) -> &InitializationArguments {
-        self.initialization_arguments
-            .get()
-            .as_ref()
-            .expect("Application was not initialized")
     }
 }

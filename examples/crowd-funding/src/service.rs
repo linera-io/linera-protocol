@@ -5,11 +5,14 @@
 
 mod state;
 
+use async_graphql::{EmptySubscription, Object, Schema};
 use async_trait::async_trait;
-use crowd_funding::Query;
+use crowd_funding::Operation;
+use fungible::AccountOwner;
 use linera_sdk::{
-    base::Amount, service::system_api::ReadOnlyViewStorageContext, QueryContext, Service,
-    ViewStateStorage,
+    base::{Amount, ChainId},
+    service::system_api::ReadOnlyViewStorageContext,
+    QueryContext, Service, ViewStateStorage,
 };
 use state::CrowdFunding;
 use std::sync::Arc;
@@ -27,39 +30,39 @@ impl Service for CrowdFunding<ReadOnlyViewStorageContext> {
         _context: &QueryContext,
         argument: &[u8],
     ) -> Result<Vec<u8>, Self::Error> {
-        let query = bcs::from_bytes(argument)?;
-
-        let response = match query {
-            Query::Status => bcs::to_bytes(&self.status.get()),
-            Query::Pledged => bcs::to_bytes(&self.pledged().await),
-            Query::Target => bcs::to_bytes(&self.initialization_arguments().target),
-            Query::Deadline => bcs::to_bytes(&self.initialization_arguments().deadline),
-            Query::Owner => bcs::to_bytes(&self.initialization_arguments().owner),
-        }?;
-
-        Ok(response)
+        let graphql_request: async_graphql::Request =
+            serde_json::from_slice(argument).map_err(|_| Error::InvalidQuery)?;
+        let schema = Schema::build(self.clone(), MutationRoot {}, EmptySubscription).finish();
+        let res = schema.execute(graphql_request).await;
+        Ok(serde_json::to_vec(&res).unwrap())
     }
 }
 
-impl CrowdFunding<ReadOnlyViewStorageContext> {
-    /// Returns the total amount of tokens pledged to this campaign.
-    pub async fn pledged(&self) -> Amount {
-        let mut total = Amount::zero();
-        self.pledges
-            .for_each_index_value(|_, value| {
-                total.saturating_add_assign(value);
-                Ok(())
-            })
-            .await
-            .expect("view iteration should not fail");
-        total
+struct MutationRoot;
+
+#[Object]
+impl MutationRoot {
+    async fn pledge_with_transfer(&self, owner: AccountOwner, amount: Amount) -> Vec<u8> {
+        bcs::to_bytes(&Operation::PledgeWithTransfer { owner, amount }).unwrap()
+    }
+
+    async fn collect(&self) -> Vec<u8> {
+        bcs::to_bytes(&Operation::Collect {}).unwrap()
+    }
+
+    async fn cancel(&self) -> Vec<u8> {
+        bcs::to_bytes(&Operation::Cancel {}).unwrap()
+    }
+
+    async fn notify(&self, chain_id: ChainId) -> Vec<u8> {
+        bcs::to_bytes(&Operation::Notify { chain_id }).unwrap()
     }
 }
 
 /// An error that can occur during the service execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// Invalid account query.
-    #[error("Invalid account specified in query parameter")]
-    InvalidQuery(#[from] bcs::Error),
+    /// Invalid query argument in crowd-funding app: could not deserialize GraphQL request.
+    #[error("Invalid query argument in crowd-funding app: could not deserialize GraphQL request.")]
+    InvalidQuery,
 }

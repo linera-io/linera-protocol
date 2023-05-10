@@ -1,12 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_graphql::SimpleObject;
 use fungible::AccountOwner;
 use linera_sdk::base::{Amount, ChainId, Timestamp};
 use serde::{Deserialize, Serialize};
 
 /// The initialization arguments required to create a crowd-funding campaign.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, SimpleObject)]
 pub struct InitializationArguments {
     /// The receiver of the pledges of a successful campaign.
     pub owner: AccountOwner,
@@ -61,19 +62,4 @@ pub enum ApplicationCall {
     Collect,
     /// Cancel the campaign and refund all pledges after the campaign has reached its deadline (campaign chain only).
     Cancel,
-}
-
-/// Queries that can be made to the [`CrowdFunding`] application service.
-#[derive(Clone, Copy, Debug, Deserialize)]
-pub enum Query {
-    /// The current [`Status`] of the crowd-funding campaign.
-    Status,
-    /// The total amount pledged to the crowd-funding campaign.
-    Pledged,
-    /// The crowd-funding campaign's target.
-    Target,
-    /// The crowd-funding campaign's deadline.
-    Deadline,
-    /// The recipient of the pledged amount.
-    Owner,
 }

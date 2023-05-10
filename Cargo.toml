@@ -111,6 +111,7 @@ linera-views = { version = "0.1.0", path = "./linera-views" }
 linera-views-derive = { version = "0.1.0", path = "./linera-views-derive" }
 
 fungible = { path = "./examples/fungible" }
+crowd-funding = { path = "./examples/crowd-funding" }
 social = { path = "./examples/social" }
 
 [profile.release]

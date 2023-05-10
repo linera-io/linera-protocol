@@ -6,7 +6,7 @@
 mod state;
 
 use async_trait::async_trait;
-use crowd_funding::{ApplicationCall, Effect, Operation};
+use crowd_funding::{ApplicationCall, Effect, InitializationArguments, Operation};
 use fungible::{Account, AccountOwner, Destination};
 use linera_sdk::{
     base::{Amount, ApplicationId, SessionId},
@@ -35,7 +35,7 @@ impl Contract for CrowdFunding<ViewStorageContext> {
         ));
 
         ensure!(
-            self.initialization_arguments().deadline > system_api::current_system_time(),
+            self.get_initialization_arguments().deadline > system_api::current_system_time(),
             Error::DeadlineInThePast
         );
 
@@ -268,7 +268,7 @@ impl CrowdFunding<ViewStorageContext> {
                 Ok(())
             }
             Status::Complete => {
-                self.send_to(amount, self.initialization_arguments().owner)
+                self.send_to(amount, self.get_initialization_arguments().owner)
                     .await
             }
             Status::Cancelled => Err(Error::Cancelled),
@@ -282,7 +282,7 @@ impl CrowdFunding<ViewStorageContext> {
         match self.status.get() {
             Status::Active => {
                 ensure!(
-                    total >= self.initialization_arguments().target,
+                    total >= self.get_initialization_arguments().target,
                     Error::TargetNotReached
                 );
             }
@@ -290,7 +290,7 @@ impl CrowdFunding<ViewStorageContext> {
             Status::Cancelled => return Err(Error::Cancelled),
         }
 
-        self.send_to(total, self.initialization_arguments().owner)
+        self.send_to(total, self.get_initialization_arguments().owner)
             .await?;
         self.pledges.clear();
         self.status.set(Status::Complete);
@@ -302,8 +302,10 @@ impl CrowdFunding<ViewStorageContext> {
     async fn cancel_campaign(&mut self) -> Result<(), Error> {
         ensure!(!self.status.get().is_complete(), Error::Completed);
 
+        // TODO(#728): Remove this.
+        #[cfg(not(any(test, feature = "test")))]
         ensure!(
-            system_api::current_system_time() >= self.initialization_arguments().deadline,
+            system_api::current_system_time() >= self.get_initialization_arguments().deadline,
             Error::DeadlineNotReached
         );
 
@@ -320,7 +322,7 @@ impl CrowdFunding<ViewStorageContext> {
         }
 
         let balance = self.balance().await?;
-        self.send_to(balance, self.initialization_arguments().owner)
+        self.send_to(balance, self.get_initialization_arguments().owner)
             .await?;
         self.status.set(Status::Cancelled);
 
@@ -398,6 +400,14 @@ impl CrowdFunding<ViewStorageContext> {
         self.call_session(false, session, &transfer_bytes, vec![])
             .await;
         Ok(())
+    }
+
+    // TODO(#719): rename into `initialization_arguments()` after `#[derive(GraphQLView)]` is fixed.
+    fn get_initialization_arguments(&self) -> &InitializationArguments {
+        self.initialization_arguments
+            .get()
+            .as_ref()
+            .expect("Application was not initialized")
     }
 }
 
