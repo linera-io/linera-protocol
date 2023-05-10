@@ -186,10 +186,6 @@ macro_rules! impl_queryable_system {
             type Load = HostFuture<$runtime, Result<Vec<u8>, ExecutionError>>;
             type Lock = HostFuture<$runtime, Result<(), ExecutionError>>;
             type Unlock = HostFuture<$runtime, Result<(), ExecutionError>>;
-            type ReadKeyBytes = HostFuture<$runtime, Result<Option<Vec<u8>>, ExecutionError>>;
-            type FindKeys = HostFuture<$runtime, Result<Vec<Vec<u8>>, ExecutionError>>;
-            type FindKeyValues =
-                HostFuture<$runtime, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
             type TryQueryApplication = HostFuture<$runtime, Result<Vec<u8>, ExecutionError>>;
 
             fn chain_id(&mut self) -> queryable_system::ChainId {
@@ -248,54 +244,6 @@ macro_rules! impl_queryable_system {
                     Poll::Pending => PollUnlock::Pending,
                     Poll::Ready(Ok(())) => PollUnlock::Ready(Ok(())),
                     Poll::Ready(Err(error)) => PollUnlock::Ready(Err(error.to_string())),
-                }
-            }
-
-            fn read_key_bytes_new(&mut self, key: &[u8]) -> Self::ReadKeyBytes {
-                HostFuture::new(self.runtime().read_key_bytes(key.to_owned()))
-            }
-
-            fn read_key_bytes_poll(
-                &mut self,
-                future: &Self::ReadKeyBytes,
-            ) -> queryable_system::PollReadKeyBytes {
-                use queryable_system::PollReadKeyBytes;
-                match future.poll(&mut *self.waker()) {
-                    Poll::Pending => PollReadKeyBytes::Pending,
-                    Poll::Ready(Ok(opt_list)) => PollReadKeyBytes::Ready(Ok(opt_list)),
-                    Poll::Ready(Err(error)) => PollReadKeyBytes::Ready(Err(error.to_string())),
-                }
-            }
-
-            fn find_keys_new(&mut self, key_prefix: &[u8]) -> Self::FindKeys {
-                HostFuture::new(self.runtime().find_keys_by_prefix(key_prefix.to_owned()))
-            }
-
-            fn find_keys_poll(&mut self, future: &Self::FindKeys) -> queryable_system::PollFindKeys {
-                use queryable_system::PollFindKeys;
-                match future.poll(&mut *self.waker()) {
-                    Poll::Pending => PollFindKeys::Pending,
-                    Poll::Ready(Ok(keys)) => PollFindKeys::Ready(Ok(keys)),
-                    Poll::Ready(Err(error)) => PollFindKeys::Ready(Err(error.to_string())),
-                }
-            }
-
-            fn find_key_values_new(&mut self, key_prefix: &[u8]) -> Self::FindKeyValues {
-                HostFuture::new(
-                    self.runtime()
-                        .find_key_values_by_prefix(key_prefix.to_owned()),
-                )
-            }
-
-            fn find_key_values_poll(
-                &mut self,
-                future: &Self::FindKeyValues,
-            ) -> queryable_system::PollFindKeyValues {
-                use queryable_system::PollFindKeyValues;
-                match future.poll(&mut *self.waker()) {
-                    Poll::Pending => PollFindKeyValues::Pending,
-                    Poll::Ready(Ok(key_values)) => PollFindKeyValues::Ready(Ok(key_values)),
-                    Poll::Ready(Err(error)) => PollFindKeyValues::Ready(Err(error.to_string())),
                 }
             }
 

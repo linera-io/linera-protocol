@@ -5,17 +5,12 @@
 
 use super::queryable_system as system;
 use crate::views::ViewStorageContext;
-use async_trait::async_trait;
 use futures::future;
 use linera_base::{
     data_types::{Balance, Timestamp},
     identifiers::{ApplicationId, ChainId},
 };
-use linera_views::{
-    batch::Batch,
-    common::{ContextFromDb, KeyValueStoreClient},
-    views::{View, ViewError},
-};
+use linera_views::views::{View, ViewError};
 use serde::de::DeserializeOwned;
 use std::{fmt, future::Future, task::Poll};
 
@@ -40,74 +35,6 @@ where
         bcs::from_bytes(&bytes).expect("Invalid application state")
     }
 }
-
-/// A type to interface in a read-only manner with the key value storage provided to applications.
-#[derive(Default, Clone)]
-pub struct ReadOnlyKeyValueStore;
-
-impl ReadOnlyKeyValueStore {
-    async fn find_keys_by_prefix_load(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
-        let future = system::FindKeys::new(key_prefix);
-        future::poll_fn(|_context| future.poll().into()).await
-    }
-
-    async fn find_key_values_by_prefix_load(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
-        let future = system::FindKeyValues::new(key_prefix);
-        future::poll_fn(|_context| future.poll().into()).await
-    }
-}
-
-#[async_trait]
-impl KeyValueStoreClient for ReadOnlyKeyValueStore {
-    type Error = ViewError;
-    type Keys = Vec<Vec<u8>>;
-    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
-
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
-        let future = system::ReadKeyBytes::new(key);
-        future::poll_fn(|_context| future.poll().into()).await
-    }
-
-    async fn read_multi_key_bytes(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        let mut results = Vec::new();
-        for key in keys {
-            let value = self.read_key_bytes(&key).await?;
-            results.push(value);
-        }
-        Ok(results)
-    }
-
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, ViewError> {
-        let keys = self.find_keys_by_prefix_load(key_prefix).await?;
-        Ok(keys)
-    }
-
-    async fn find_key_values_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, ViewError> {
-        let key_values = self.find_key_values_by_prefix_load(key_prefix).await?;
-        Ok(key_values)
-    }
-
-    async fn write_batch(&self, _batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
-        unreachable!();
-    }
-
-    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), Self::Error> {
-        unreachable!();
-    }
-}
-
-/// Implementation of [`linera_views::common::Context`] that uses the [`ReadOnlyKeyValueStore`] to
-/// allow views to read data from the storage layer provided to Linera applications.
-pub type ReadOnlyViewStorageContext = ContextFromDb<(), ReadOnlyKeyValueStore>;
 
 /// Loads the service state, without locking it for writes.
 pub async fn lock_and_load_view<State: View<ViewStorageContext>>() -> State {
