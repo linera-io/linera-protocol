@@ -165,8 +165,11 @@ pub struct InitialState {
 
 impl std::fmt::Display for InitialState {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let bytes = bcs::to_bytes(self).expect("Serialization failed");
-        write!(f, "{}", hex::encode(bytes))
+        write!(
+            f,
+            "{}",
+            serde_json::to_string(self).expect("Serialization failed")
+        )
     }
 }
 
@@ -203,6 +206,9 @@ impl InitialStateBuilder {
     /// Returns the serialized initial state of the application, ready to used as the
     /// initialization argument.
     pub fn build(&self) -> Vec<u8> {
-        bcs::to_bytes(&self.account_balances).expect("Failed to serialize initial state")
+        serde_json::to_vec(&InitialState {
+            accounts: self.account_balances.clone(),
+        })
+        .expect("Failed to serialize initial state")
     }
 }

@@ -17,7 +17,7 @@ async fn single_chain_test() {
     let mut chain = validator.new_chain().await;
 
     let initial_state: u64 = 42;
-    let initial_state_u8 = bcs::to_bytes(&initial_state).unwrap();
+    let initial_state_u8 = serde_json::to_vec(&initial_state).unwrap();
     let application_id = chain
         .create_application(bytecode_id, vec![], initial_state_u8, vec![])
         .await;
