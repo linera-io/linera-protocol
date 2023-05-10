@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Integration tests for the Fungible Token application.
+//! Integration tests for the Counter application.
 
 #![cfg(not(target_arch = "wasm32"))]
 
