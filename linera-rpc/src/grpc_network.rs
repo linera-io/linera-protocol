@@ -472,6 +472,34 @@ impl GrpcClient {
             notification_retries,
         })
     }
+
+    /// Returns whether this gRPC status means the server stream should be reconnected to, or not.
+    /// Logs a warning on unexpected status codes.
+    fn is_retryable(status: &Status) -> bool {
+        match status.code() {
+            Code::DeadlineExceeded | Code::Aborted | Code::Unavailable => true,
+            Code::Unknown
+            | Code::Ok
+            | Code::Cancelled
+            | Code::NotFound
+            | Code::AlreadyExists
+            | Code::ResourceExhausted => {
+                warn!("Unexpected gRPC status: {}; retrying", status);
+                true
+            }
+            Code::InvalidArgument
+            | Code::PermissionDenied
+            | Code::FailedPrecondition
+            | Code::OutOfRange
+            | Code::Unimplemented
+            | Code::Internal
+            | Code::DataLoss
+            | Code::Unauthenticated => {
+                warn!("Unexpected gRPC status: {}", status);
+                false
+            }
+        }
+    }
 }
 
 macro_rules! client_delegate {
@@ -612,29 +640,9 @@ impl ValidatorNode for GrpcClient {
                     delay = Duration::ZERO;
                     return future::Either::Left(future::ready(true));
                 };
-                match status.code() {
-                    Code::DeadlineExceeded | Code::Aborted | Code::Unavailable => {}
-                    Code::Unknown
-                    | Code::Ok
-                    | Code::Cancelled
-                    | Code::NotFound
-                    | Code::AlreadyExists
-                    | Code::ResourceExhausted => {
-                        warn!("Unexpected gRPC status: {}; retrying", status);
-                    }
-                    Code::InvalidArgument
-                    | Code::PermissionDenied
-                    | Code::FailedPrecondition
-                    | Code::OutOfRange
-                    | Code::Unimplemented
-                    | Code::Internal
-                    | Code::DataLoss
-                    | Code::Unauthenticated => {
-                        warn!("Unexpected gRPC status: {}", status);
-                        return future::Either::Left(future::ready(false));
-                    }
-                }
-                if delay >= notification_retry_delay.saturating_mul(notification_retries) {
+                if !Self::is_retryable(status)
+                    || delay >= notification_retry_delay.saturating_mul(notification_retries)
+                {
                     return future::Either::Left(future::ready(false));
                 }
                 delay = delay.saturating_add(notification_retry_delay);
