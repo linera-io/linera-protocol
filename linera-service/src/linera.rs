@@ -732,10 +732,23 @@ enum ClientCommand {
         /// that creates the application. (But not on other chains, when it is registered there.)
         arguments: String,
         publisher: Option<ChainId>,
-        #[structopt(long = "parameters")]
+        #[structopt(long)]
         parameters: Option<String>,
-        #[structopt(long = "required-application-ids")]
+        #[structopt(long)]
         required_application_ids: Option<Vec<UserApplicationId>>,
+    },
+
+    /// Request an application from another chain, so it can be used on this one.
+    RequestApplication {
+        /// The ID of the application to request.
+        application_id: UserApplicationId,
+        /// The target chain on which the application is already registered.
+        /// If not specified, the chain on which the application was created is used.
+        #[structopt(long)]
+        target_chain_id: Option<ChainId>,
+        /// The owned chain on which the application is missing.
+        #[structopt(long)]
+        requester_chain_id: Option<ChainId>,
     },
 
     /// Create an unassigned key-pair.
@@ -1174,6 +1187,22 @@ where
                 info!("{}", "Application published successfully!".green().bold());
                 println!("{}", application_id);
                 info!("Time elapsed: {}s", start_time.elapsed().as_secs());
+                context.update_wallet_from_client(&mut chain_client).await;
+                context.save_wallet();
+            }
+
+            RequestApplication {
+                application_id,
+                target_chain_id,
+                requester_chain_id,
+            } => {
+                let mut chain_client = context.make_chain_client(storage, requester_chain_id);
+                info!("Starting request");
+                let certificate = chain_client
+                    .request_application(application_id, target_chain_id)
+                    .await
+                    .unwrap();
+                info!("{:?}", certificate);
                 context.update_wallet_from_client(&mut chain_client).await;
                 context.save_wallet();
             }

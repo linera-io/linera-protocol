@@ -316,6 +316,22 @@ where
             .await?;
         Ok(application_id)
     }
+
+    /// Requests a `RegisterApplications` effect from another chain so the application can be used
+    /// on this one.
+    async fn request_application(
+        &self,
+        application_id: UserApplicationId,
+        target_chain_id: Option<ChainId>,
+    ) -> Result<CryptoHash, Error> {
+        let mut client = self.client.lock().await;
+        client.synchronize_from_validators().await?;
+        client.process_inbox().await?;
+        let certificate = client
+            .request_application(application_id, target_chain_id)
+            .await?;
+        Ok(certificate.value.hash())
+    }
 }
 
 #[Object]

@@ -1162,6 +1162,22 @@ where
         Ok(())
     }
 
+    /// Requests a `RegisterApplications` effect from another chain so the application can be used
+    /// on this one.
+    pub async fn request_application(
+        &mut self,
+        application_id: UserApplicationId,
+        chain_id: Option<ChainId>,
+    ) -> Result<Certificate> {
+        let chain_id = chain_id.unwrap_or(application_id.creation.chain_id);
+        let messages = self.pending_messages().await?;
+        let operations = vec![Operation::System(SystemOperation::RequestApplication {
+            application_id,
+            chain_id,
+        })];
+        self.execute_block(messages, operations).await
+    }
+
     /// Sends tokens to a chain.
     pub async fn transfer_to_account(
         &mut self,
