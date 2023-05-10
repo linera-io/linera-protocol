@@ -383,6 +383,14 @@ impl Client {
         Ok((effect_id, chain_id))
     }
 
+    async fn open_and_assign(&self, client: &Client) -> ChainId {
+        let our_chain = self.get_wallet().default_chain().unwrap();
+        let key = client.keygen().await.unwrap();
+        let (effect_id, new_chain) = self.open_chain(our_chain, Some(key)).await.unwrap();
+        assert_eq!(new_chain, client.assign(key, effect_id).await.unwrap());
+        new_chain
+    }
+
     fn get_wallet(&self) -> WalletState {
         WalletState::read(self.tmp_dir.path().join(&self.wallet).as_path()).unwrap()
     }
@@ -1167,13 +1175,7 @@ async fn test_end_to_end_social_user_pub_sub() {
     let (contract, service) = runner.build_application("social").await;
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
-    let client2key = client2.keygen().await.unwrap();
-
-    // Create chain2 using client1.
-    let (effect_id, chain2) = client1.open_chain(chain1, Some(client2key)).await.unwrap();
-
-    // Assign chain_2 to client_2_key.
-    assert_eq!(chain2, client2.assign(client2key, effect_id).await.unwrap());
+    let chain2 = client1.open_and_assign(&client2).await;
 
     let mut node_service1 = client1.run_node_service(chain1, 8080).await;
     let mut node_service2 = client2.run_node_service(chain2, 8081).await;
@@ -1293,13 +1295,7 @@ async fn test_end_to_end_fungible() {
     let (contract, service) = runner.build_application("fungible").await;
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
-    let client2key = client2.keygen().await.unwrap();
-
-    // Create chain2 using client1.
-    let (effect_id, chain2) = client1.open_chain(chain1, Some(client2key)).await.unwrap();
-
-    // Assign chain2 to client2key.
-    assert_eq!(chain2, client2.assign(client2key, effect_id).await.unwrap());
+    let chain2 = client1.open_and_assign(&client2).await;
 
     // The players
     let owner1 = client1.get_owner().unwrap();
@@ -1416,13 +1412,7 @@ async fn test_end_to_end_crowd_funding() {
     let (contract_fungible, service_fungible) = runner.build_application("fungible").await;
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
-    let client2key = client2.keygen().await.unwrap();
-
-    // Create chain2 using client1.
-    let (effect_id, chain2) = client1.open_chain(chain1, Some(client2key)).await.unwrap();
-
-    // Assign chain2 to client2key.
-    assert_eq!(chain2, client2.assign(client2key, effect_id).await.unwrap());
+    let chain2 = client1.open_and_assign(&client2).await;
 
     // The players
     let owner1 = client1.get_owner().unwrap();
