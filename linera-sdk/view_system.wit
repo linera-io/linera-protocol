@@ -1,0 +1,45 @@
+resource read-key-bytes {
+    static new: func(key: list<u8>) -> read-key-bytes
+    poll: func() -> poll-read-key-bytes
+}
+
+variant poll-read-key-bytes {
+    pending,
+    ready(option<list<u8>>),
+}
+
+resource find-keys {
+    static new: func(prefix: list<u8>) -> find-keys
+    poll: func() -> poll-find-keys
+}
+
+variant poll-find-keys {
+    pending,
+    ready(list<list<u8>>),
+}
+
+resource find-key-values {
+    static new: func(prefix: list<u8>) -> find-key-values
+    poll: func() -> poll-find-key-values
+}
+
+variant poll-find-key-values {
+    pending,
+    ready(list<tuple<list<u8>,list<u8>>>),
+}
+
+variant write-operation {
+    delete(list<u8>),
+    deleteprefix(list<u8>),
+    put(tuple<list<u8>,list<u8>>),
+}
+
+resource write-batch {
+    static new: func(key: list<write-operation>) -> write-batch
+    poll: func() -> poll-unit
+}
+
+variant poll-unit {
+    pending,
+    ready,
+}

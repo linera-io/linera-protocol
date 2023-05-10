@@ -436,3 +436,127 @@ macro_rules! impl_queryable_system {
         }
     };
 }
+
+/// Generates an implementation of `ViewSystem` for the provided `view_system_api` type.
+///
+/// Generates the common code for view system API types for all WASM runtimes.
+macro_rules! impl_view_system {
+    ($view_system_api:ident<$runtime:lifetime>) => {
+        impl_view_system!(
+            @generate $view_system_api<$runtime>, wasmtime::Trap, $runtime, <$runtime>
+        );
+    };
+
+    ($view_system_api:ty) => {
+        impl_view_system!(@generate $view_system_api, wasmer::RuntimeError, 'static);
+    };
+
+    (@generate $view_system_api:ty, $trap:ty, $runtime:lifetime $(, <$param:lifetime> )?) => {
+        impl$(<$param>)? ViewSystem for $view_system_api {
+            type Error = ExecutionError;
+
+            type ReadKeyBytes = HostFuture<$runtime, Result<Option<Vec<u8>>, ExecutionError>>;
+            type FindKeys = HostFuture<$runtime, Result<Vec<Vec<u8>>, ExecutionError>>;
+            type FindKeyValues =
+                HostFuture<$runtime, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
+            type WriteBatch = HostFuture<$runtime, Result<(), ExecutionError>>;
+
+            fn error_to_trap(&mut self, error: Self::Error) -> $trap {
+                error.into()
+            }
+
+            fn read_key_bytes_new(
+                &mut self,
+                key: &[u8],
+            ) -> Result<Self::ReadKeyBytes, Self::Error> {
+                Ok(self.new_host_future(self.runtime().read_key_bytes(key.to_owned())))
+            }
+
+            fn read_key_bytes_poll(
+                &mut self,
+                future: &Self::ReadKeyBytes,
+            ) -> Result<view_system::PollReadKeyBytes, Self::Error> {
+                use view_system::PollReadKeyBytes;
+                match future.poll(&mut *self.waker()) {
+                    Poll::Pending => Ok(PollReadKeyBytes::Pending),
+                    Poll::Ready(Ok(opt_list)) => Ok(PollReadKeyBytes::Ready(opt_list)),
+                    Poll::Ready(Err(error)) => Err(error),
+                }
+            }
+
+            fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
+                Ok(self.new_host_future(self.runtime().find_keys_by_prefix(key_prefix.to_owned())))
+            }
+
+            fn find_keys_poll(
+                &mut self,
+                future: &Self::FindKeys,
+            ) -> Result<view_system::PollFindKeys, Self::Error> {
+                use view_system::PollFindKeys;
+                match future.poll(&mut *self.waker()) {
+                    Poll::Pending => Ok(PollFindKeys::Pending),
+                    Poll::Ready(Ok(keys)) => Ok(PollFindKeys::Ready(keys)),
+                    Poll::Ready(Err(error)) => Err(error),
+                }
+            }
+
+            fn find_key_values_new(
+                &mut self,
+                key_prefix: &[u8],
+            ) -> Result<Self::FindKeyValues, Self::Error> {
+                Ok(HostFuture::new(
+                    self.runtime()
+                        .find_key_values_by_prefix(key_prefix.to_owned()),
+                ))
+            }
+
+            fn find_key_values_poll(
+                &mut self,
+                future: &Self::FindKeyValues,
+            ) -> Result<view_system::PollFindKeyValues, Self::Error> {
+                use view_system::PollFindKeyValues;
+                match future.poll(&mut *self.waker()) {
+                    Poll::Pending => Ok(PollFindKeyValues::Pending),
+                    Poll::Ready(Ok(key_values)) => Ok(PollFindKeyValues::Ready(key_values)),
+                    Poll::Ready(Err(error)) => Err(error),
+                }
+            }
+
+            fn write_batch_new(
+                &mut self,
+                list_oper: Vec<view_system::WriteOperation>,
+            ) -> Result<Self::WriteBatch, Self::Error> {
+                let mut batch = Batch::new();
+                for x in list_oper {
+                    match x {
+                        view_system::WriteOperation::Delete(key) => {
+                            batch.delete_key(key.to_vec())
+                        }
+                        view_system::WriteOperation::Deleteprefix(key_prefix) => {
+                            batch.delete_key_prefix(key_prefix.to_vec())
+                        }
+                        view_system::WriteOperation::Put(key_value) => {
+                            batch.put_key_value_bytes(key_value.0.to_vec(), key_value.1.to_vec())
+                        }
+                    }
+                }
+                Ok(self.new_host_future(
+                    self.runtime_with_writable_storage()?
+                        .write_batch_and_unlock(batch),
+                ))
+            }
+
+            fn write_batch_poll(
+                &mut self,
+                future: &Self::WriteBatch,
+            ) -> Result<view_system::PollUnit, Self::Error> {
+                use view_system::PollUnit;
+                match future.poll(&mut *self.waker()) {
+                    Poll::Pending => Ok(PollUnit::Pending),
+                    Poll::Ready(Ok(())) => Ok(PollUnit::Ready),
+                    Poll::Ready(Err(error)) => Err(error),
+                }
+            }
+        }
+    };
+}

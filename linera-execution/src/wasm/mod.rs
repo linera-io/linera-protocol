@@ -94,6 +94,8 @@ pub enum WasmExecutionError {
     #[cfg(feature = "wasmtime")]
     #[error("Failed to execute WASM module (Wasmtime)")]
     ExecuteModuleInWasmtime(#[from] ::wasmtime::Trap),
+    #[error("Attempt to use a system API to write to read-only storage")]
+    WriteAttemptToReadOnlyStorage,
 }
 
 #[async_trait]

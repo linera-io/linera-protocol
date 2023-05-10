@@ -12,6 +12,12 @@ wit_bindgen_host_wasmer_rust::export!({
 // Export the queryable system interface used by a user service.
 wit_bindgen_host_wasmer_rust::export!("queryable_system.wit");
 
+// Export the system interface used by views.
+wit_bindgen_host_wasmer_rust::export!({
+    custom_error: true,
+    paths: ["view_system.wit"],
+});
+
 // Import the interface implemented by a user contract.
 wit_bindgen_host_wasmer_rust::import!("contract.wit");
 
@@ -25,7 +31,9 @@ mod conversions_to_wit;
 #[path = "guest_futures.rs"]
 mod guest_futures;
 
-use self::{queryable_system::QueryableSystem, writable_system::WritableSystem};
+use self::{
+    queryable_system::QueryableSystem, view_system::ViewSystem, writable_system::WritableSystem,
+};
 use super::{
     async_boundary::{HostFuture, WakerForwarder},
     async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
@@ -35,7 +43,7 @@ use super::{
 use crate::{ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
 use linera_views::{batch::Batch, views::ViewError};
 use once_cell::sync::Lazy;
-use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
+use std::{future::Future, marker::PhantomData, mem, sync::Arc, task::Poll};
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use wasmer::{
     imports, wasmparser::Operator, CompilerConfig, EngineBuilder, Instance, Module, RuntimeError,
@@ -117,9 +125,13 @@ impl WasmApplication {
         let (system_api, runtime_guard): (SystemApi<&'static dyn ContractRuntime>, _) =
             SystemApi::new(waker_forwarder.clone(), runtime);
         let system_api = Arc::new(Mutex::new(system_api));
-        let contract_system_api = ContractSystemApi::new(system_api, queued_future_factory);
+        let contract_system_api =
+            ContractSystemApi::new(system_api.clone(), queued_future_factory.clone());
+        let view_system_api = ViewSystemApi::new(system_api, queued_future_factory);
         let system_api_setup =
             writable_system::add_to_imports(&mut store, &mut imports, contract_system_api);
+        let views_api_setup =
+            view_system::add_to_imports(&mut store, &mut imports, view_system_api);
         let (contract, instance) = {
             // TODO(#633): remove when possible or find better workaround.
             let _lock = WASMER_INSTANTIATE_LOCK.lock().unwrap();
@@ -131,6 +143,7 @@ impl WasmApplication {
         };
 
         system_api_setup(&instance, &store)?;
+        views_api_setup(&instance, &store)?;
 
         Ok(WasmRuntimeContext {
             waker_forwarder,
@@ -158,9 +171,12 @@ impl WasmApplication {
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
         let (system_api, runtime_guard) = SystemApi::new(waker_forwarder.clone(), runtime);
         let system_api = Arc::new(Mutex::new(system_api));
-        let service_system_api = ServiceSystemApi::new(system_api);
+        let service_system_api = ServiceSystemApi::new(system_api.clone());
+        let view_system_api = ViewSystemApi::new(system_api, ());
         let system_api_setup =
             queryable_system::add_to_imports(&mut store, &mut imports, service_system_api);
+        let views_api_setup =
+            view_system::add_to_imports(&mut store, &mut imports, view_system_api);
         let (service, instance) = {
             // TODO(#633): remove when possible or find better workaround.
             let _lock = WASMER_INSTANTIATE_LOCK.lock().unwrap();
@@ -172,6 +188,7 @@ impl WasmApplication {
         };
 
         system_api_setup(&instance, &store)?;
+        views_api_setup(&instance, &store)?;
 
         Ok(WasmRuntimeContext {
             waker_forwarder,
@@ -505,6 +522,126 @@ impl ServiceSystemApi {
 }
 
 impl_queryable_system!(ServiceSystemApi);
+
+/// Implementation to forward view system calls from the guest WASM module to the host
+/// implementation.
+pub struct ViewSystemApi<Runtime, MaybeQueuedFutureFactory> {
+    shared: Arc<Mutex<SystemApi<Runtime>>>,
+    queued_future_factory: MaybeQueuedFutureFactory,
+}
+
+impl<Runtime, MaybeQueuedFutureFactory> ViewSystemApi<Runtime, MaybeQueuedFutureFactory> {
+    /// Creates a new [`ViewSystemApi`] instance.
+    pub fn new(
+        shared: Arc<Mutex<SystemApi<Runtime>>>,
+        queued_future_factory: MaybeQueuedFutureFactory,
+    ) -> Self {
+        ViewSystemApi {
+            shared,
+            queued_future_factory,
+        }
+    }
+}
+
+impl ViewSystemApi<&'static dyn ContractRuntime, QueuedHostFutureFactory<'static>> {
+    /// Safely obtains the [`ContractRuntime`] trait object instance to handle a system call.
+    ///
+    /// # Panics
+    ///
+    /// If there is a concurrent call from the WASM application (which is impossible as long as it
+    /// is executed in a single thread) or if the trait object is no longer alive (or more
+    /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
+    /// no longer alive).
+    fn runtime(&self) -> &'static dyn ContractRuntime {
+        *self
+            .shared
+            .try_lock()
+            .expect("Unexpected concurrent system API access by application")
+            .runtime
+            .try_lock()
+            .expect("Unexpected concurrent runtime access by application")
+            .as_ref()
+            .expect("Application called runtime after it should have stopped")
+    }
+
+    /// Same as [`Self::runtime`].
+    fn runtime_with_writable_storage(
+        &self,
+    ) -> Result<&'static dyn ContractRuntime, ExecutionError> {
+        Ok(self.runtime())
+    }
+
+    /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
+    fn waker(&mut self) -> MappedMutexGuard<'_, WakerForwarder> {
+        MutexGuard::map(
+            self.shared
+                .try_lock()
+                .expect("Unexpected concurrent system API access by application"),
+            |system_api| &mut system_api.waker,
+        )
+    }
+
+    /// Creates a new [`HostFuture`] instance with the provided `future`.
+    fn new_host_future<Output>(
+        &mut self,
+        future: impl Future<Output = Output> + Send + 'static,
+    ) -> HostFuture<'static, Output>
+    where
+        Output: Send + 'static,
+    {
+        self.queued_future_factory.enqueue(future)
+    }
+}
+
+impl ViewSystemApi<&'static dyn ServiceRuntime, ()> {
+    /// Safely obtains the [`ServiceRuntime`] trait object instance to handle a system call.
+    ///
+    /// # Panics
+    ///
+    /// If there is a concurrent call from the WASM application (which is impossible as long as it
+    /// is executed in a single thread) or if the trait object is no longer alive (or more
+    /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
+    /// no longer alive).
+    fn runtime(&self) -> &'static dyn ServiceRuntime {
+        *self
+            .shared
+            .try_lock()
+            .expect("Unexpected concurrent system API access by application")
+            .runtime
+            .try_lock()
+            .expect("Unexpected concurrent runtime access by application")
+            .as_ref()
+            .expect("Application called runtime after it should have stopped")
+    }
+
+    /// Returns an error due to an attempt to write to storage from a service.
+    fn runtime_with_writable_storage(
+        &self,
+    ) -> Result<&'static dyn ContractRuntime, ExecutionError> {
+        Err(WasmExecutionError::WriteAttemptToReadOnlyStorage.into())
+    }
+
+    /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
+    fn waker(&mut self) -> MappedMutexGuard<'_, WakerForwarder> {
+        MutexGuard::map(
+            self.shared
+                .try_lock()
+                .expect("Unexpected concurrent system API access by application"),
+            |system_api| &mut system_api.waker,
+        )
+    }
+
+    /// Enqueues a `future` to be executed deterministically.
+    fn new_host_future<Output>(
+        &mut self,
+        future: impl Future<Output = Output> + Send + 'static,
+    ) -> HostFuture<'static, Output> {
+        HostFuture::new(future)
+    }
+}
+
+impl_view_system!(ViewSystemApi<&'static dyn ContractRuntime, QueuedHostFutureFactory<'static>>);
+impl_view_system!(ViewSystemApi<&'static dyn ServiceRuntime, ()>);
 
 /// Extra parameters necessary when cleaning up after contract execution.
 pub struct WasmerContractExtra<'runtime> {
