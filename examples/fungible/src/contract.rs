@@ -13,7 +13,8 @@ use fungible::{
 };
 use linera_sdk::{
     base::{Amount, ApplicationId, Owner, SessionId},
-    contract::{system_api, system_api::ViewStorageContext},
+    contract::system_api,
+    views::ViewStorageContext,
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
     OperationContext, Session, SessionCallResult, ViewStateStorage,
 };

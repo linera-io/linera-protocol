@@ -10,17 +10,16 @@ use async_trait::async_trait;
 use crowd_funding::Operation;
 use fungible::AccountOwner;
 use linera_sdk::{
-    base::Amount, service::system_api::ReadOnlyViewStorageContext, QueryContext, Service,
-    ViewStateStorage,
+    base::Amount, views::ViewStorageContext, QueryContext, Service, ViewStateStorage,
 };
 use state::CrowdFunding;
 use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(CrowdFunding<ReadOnlyViewStorageContext>);
+linera_sdk::service!(CrowdFunding<ViewStorageContext>);
 
 #[async_trait]
-impl Service for CrowdFunding<ReadOnlyViewStorageContext> {
+impl Service for CrowdFunding<ViewStorageContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 

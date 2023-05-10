@@ -8,10 +8,8 @@
 //! service type that implements [`linera-sdk::Service`].
 
 use crate::{
-    service::{
-        system_api::{self, ReadOnlyViewStorageContext},
-        wit_types,
-    },
+    service::{system_api, wit_types},
+    views::ViewStorageContext,
     ExportedFuture, Service, ServiceLogger, SimpleStateStorage, ViewStateStorage,
 };
 use linera_views::views::RootView;
@@ -47,7 +45,7 @@ where
 
 impl<Application> ServiceStateStorage for ViewStateStorage<Application>
 where
-    Application: Service + RootView<ReadOnlyViewStorageContext>,
+    Application: Service + RootView<ViewStorageContext>,
 {
     fn query_application(
         context: wit_types::QueryContext,

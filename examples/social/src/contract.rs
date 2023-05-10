@@ -8,7 +8,8 @@ mod state;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{ChannelName, Destination, SessionId},
-    contract::system_api::{self, ViewStorageContext},
+    contract::system_api,
+    views::ViewStorageContext,
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
     OperationContext, Session, SessionCallResult, ViewStateStorage,
 };

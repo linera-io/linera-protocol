@@ -8,10 +8,8 @@
 //! contract type that implements [`Contract`].
 
 use crate::{
-    contract::{
-        system_api::{self, ViewStorageContext},
-        wit_types,
-    },
+    contract::{system_api, wit_types},
+    views::ViewStorageContext,
     ApplicationCallResult, Contract, ContractLogger, ExecutionResult, ExportedFuture,
     SessionCallResult, SessionId, SimpleStateStorage, ViewStateStorage,
 };

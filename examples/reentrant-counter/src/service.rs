@@ -7,14 +7,12 @@ mod state;
 
 use self::state::ReentrantCounter;
 use async_trait::async_trait;
-use linera_sdk::{
-    service::system_api::ReadOnlyViewStorageContext, QueryContext, Service, ViewStateStorage,
-};
+use linera_sdk::{views::ViewStorageContext, QueryContext, Service, ViewStateStorage};
 use linera_views::{common::Context, views::ViewError};
 use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(ReentrantCounter<ReadOnlyViewStorageContext>);
+linera_sdk::service!(ReentrantCounter<ViewStorageContext>);
 
 #[async_trait]
 impl<C> Service for ReentrantCounter<C>

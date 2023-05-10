@@ -10,9 +10,11 @@ use crowd_funding::{ApplicationCall, Effect, InitializationArguments, Operation}
 use fungible::{Account, AccountOwner, Destination};
 use linera_sdk::{
     base::{Amount, ApplicationId, SessionId},
-    contract::{system_api, system_api::ViewStorageContext},
-    ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-    FromBcsBytes, OperationContext, Session, SessionCallResult, ViewStateStorage,
+    contract::system_api,
+    ensure,
+    views::ViewStorageContext,
+    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
+    OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
 use linera_views::views::View;
 use state::{CrowdFunding, Status};

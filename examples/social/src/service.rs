@@ -8,8 +8,7 @@ mod state;
 use async_graphql::{EmptySubscription, Object, Schema};
 use async_trait::async_trait;
 use linera_sdk::{
-    base::ChainId, service::system_api::ReadOnlyViewStorageContext, QueryContext, Service,
-    ViewStateStorage,
+    base::ChainId, views::ViewStorageContext, QueryContext, Service, ViewStateStorage,
 };
 use linera_views::views::ViewError;
 use social::Operation;
@@ -17,10 +16,10 @@ use state::Social;
 use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(Social<ReadOnlyViewStorageContext>);
+linera_sdk::service!(Social<ViewStorageContext>);
 
 #[async_trait]
-impl Service for Social<ReadOnlyViewStorageContext> {
+impl Service for Social<ViewStorageContext> {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 

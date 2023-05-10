@@ -4,6 +4,7 @@
 //! Functions and types to interface with the system API available to application services.
 
 use super::queryable_system as system;
+use crate::views::ViewStorageContext;
 use async_trait::async_trait;
 use futures::future;
 use linera_base::{
@@ -109,7 +110,7 @@ impl KeyValueStoreClient for ReadOnlyKeyValueStore {
 pub type ReadOnlyViewStorageContext = ContextFromDb<(), ReadOnlyKeyValueStore>;
 
 /// Loads the service state, without locking it for writes.
-pub async fn lock_and_load_view<State: View<ReadOnlyViewStorageContext>>() -> State {
+pub async fn lock_and_load_view<State: View<ViewStorageContext>>() -> State {
     let future = system::Lock::new();
     future::poll_fn(|_context| -> Poll<Result<(), ViewError>> { future.poll().into() })
         .await
@@ -124,8 +125,8 @@ pub async fn unlock_view() {
 }
 
 /// Helper function to load the service state or create a new one if it doesn't exist.
-pub async fn load_view_using<State: View<ReadOnlyViewStorageContext>>() -> State {
-    let context = ReadOnlyViewStorageContext::default();
+pub async fn load_view_using<State: View<ViewStorageContext>>() -> State {
+    let context = ViewStorageContext::default();
     State::load(context)
         .await
         .expect("Failed to load application state")

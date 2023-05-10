@@ -4,6 +4,7 @@
 //! Functions and types to interface with the system API available to application contracts.
 
 use super::writable_system as system;
+use crate::views::ViewStorageContext;
 use async_trait::async_trait;
 use futures::future;
 use linera_base::{
@@ -12,7 +13,7 @@ use linera_base::{
 };
 use linera_views::{
     batch::{Batch, WriteOperation},
-    common::{ContextFromDb, KeyValueStoreClient},
+    common::KeyValueStoreClient,
     views::{RootView, View, ViewError},
 };
 use serde::{de::DeserializeOwned, Serialize};
@@ -132,10 +133,6 @@ impl KeyValueStoreClient for KeyValueStore {
         Ok(())
     }
 }
-
-/// Implementation of [`linera_views::common::Context`] that uses the [`KeyValueStore`] to
-/// allow views to store data in the storage layer provided to Linera applications.
-pub type ViewStorageContext = ContextFromDb<(), KeyValueStore>;
 
 /// Loads the application state and locks it for writes.
 pub async fn load_and_lock_view<State: View<ViewStorageContext>>() -> Option<State> {
