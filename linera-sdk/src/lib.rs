@@ -47,6 +47,7 @@ pub mod service;
 #[cfg_attr(not(target_arch = "wasm32"), path = "./test/integration/mod.rs")]
 #[cfg_attr(target_arch = "wasm32", path = "./test/unit/mod.rs")]
 pub mod test;
+pub mod views;
 
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
