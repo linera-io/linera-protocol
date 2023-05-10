@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fungible::AccountOwner;
-use linera_sdk::base::{Amount, Timestamp};
+use linera_sdk::base::{Amount, ChainId, Timestamp};
 use serde::{Deserialize, Serialize};
 
 /// The initialization arguments required to create a crowd-funding campaign.
@@ -33,6 +33,9 @@ pub enum Operation {
     Collect,
     /// Cancel the campaign and refund all pledges after the campaign has reached its deadline (campaign chain only).
     Cancel,
+    /// Inform a chain about this crowd funding campaign.
+    // TODO(#718): This is currently the only way to make the app available on another chain.
+    Notify { chain_id: ChainId },
 }
 
 /// Effects that can be processed by the application.
@@ -41,6 +44,9 @@ pub enum Operation {
 pub enum Effect {
     /// Pledge some tokens to the campaign (from an account on the receiver chain).
     PledgeWithAccount { owner: AccountOwner, amount: Amount },
+    /// Notify a chain that this crowd-funding campaign exists.
+    // TODO(#718): This is currently the only way to make the app available on another chain.
+    Notify,
 }
 
 /// A cross-application call. This is meant to mimic operations, except triggered by another contract.
