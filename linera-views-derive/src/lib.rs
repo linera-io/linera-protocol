@@ -97,12 +97,13 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             linera_views::views::ViewError: From<#first_generic::Error>,
         {
             fn context(&self) -> &#first_generic {
+                use linera_views::views::View;
                 self.#first_name_quote.context()
             }
 
             async fn load(context: #first_generic) -> Result<Self, linera_views::views::ViewError> {
+                use linera_views::{futures::join, common::Context};
                 #increment_counter
-                use linera_views::futures::join;
                 #(#load_future_quotes)*
                 let result = join!(#(#load_ident_quotes),*);
                 #(#load_result_quotes)*
@@ -115,11 +116,13 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             }
 
             fn flush(&mut self, batch: &mut linera_views::batch::Batch) -> Result<(), linera_views::views::ViewError> {
+                use linera_views::views::View;
                 #(#flush_quotes)*
                 Ok(())
             }
 
             fn delete(self, batch: &mut linera_views::batch::Batch) {
+                use linera_views::views::View;
                 #(#delete_quotes)*
             }
 
@@ -154,12 +157,12 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
             linera_views::views::ViewError: From<#first_generic::Error>,
         {
             async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
+                use linera_views::{common::Context, batch::Batch, views::View};
                 linera_views::increment_counter(
                     linera_views::SAVE_VIEW_COUNTER,
                     stringify!(#struct_name),
                     &self.context().base_key(),
                 );
-                use linera_views::batch::Batch;
                 let mut batch = Batch::new();
                 #(#flushes)*
                 self.context().write_batch(batch).await?;
@@ -167,7 +170,7 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
             }
 
             async fn write_delete(self) -> Result<(), linera_views::views::ViewError> {
-                use linera_views::batch::Batch;
+                use linera_views::{common::Context, batch::Batch, views::View};
                 let context = self.context().clone();
                 let batch = Batch::build(move |batch| {
                     Box::pin(async move {
@@ -243,12 +246,14 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
             linera_views::views::ViewError: From<#first_generic::Error>,
         {
             async fn crypto_hash(&self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
-                use linera_views::generic_array::GenericArray;
-                use linera_views::batch::Batch;
                 use linera_base::crypto::{BcsHashable, CryptoHash};
-                use linera_views::views::HashableView;
+                use linera_views::{
+                    batch::Batch,
+                    generic_array::GenericArray,
+                    sha3::{digest::OutputSizeUser, Sha3_256},
+                    views::HashableView,
+                };
                 use serde::{Serialize, Deserialize};
-                use linera_views::sha3::{Sha3_256, digest::OutputSizeUser};
                 #[derive(Serialize, Deserialize)]
                 struct #hash_type(GenericArray<u8, <Sha3_256 as OutputSizeUser>::OutputSize>);
                 impl BcsHashable for #hash_type {}
@@ -625,15 +630,16 @@ pub mod tests {
                 linera_views::views::ViewError: From<C::Error>,
             {
                 fn context(&self) -> &C {
+                    use linera_views::views::View;
                     self.register.context()
                 }
                 async fn load(context: C) -> Result<Self, linera_views::views::ViewError> {
+                    use linera_views::{futures::join, common::Context};
                     linera_views::increment_counter(
                         linera_views::LOAD_VIEW_COUNTER,
                         stringify!(TestView),
                         &context.base_key(),
                     );
-                    use linera_views::futures::join;
                     let index = 0;
                     let base_key = context.derive_key(&index)?;
                     let register_fut =
@@ -658,11 +664,13 @@ pub mod tests {
                     &mut self,
                     batch: &mut linera_views::batch::Batch
                 ) -> Result<(), linera_views::views::ViewError> {
+                    use linera_views::views::View;
                     self.register.flush(batch)?;
                     self.collection.flush(batch)?;
                     Ok(())
                 }
                 fn delete(self, batch: &mut linera_views::batch::Batch) {
+                    use linera_views::views::View;
                     self.register.delete(batch);
                     self.collection.delete(batch);
                 }
@@ -744,12 +752,12 @@ pub mod tests {
                 linera_views::views::ViewError: From<C::Error>,
             {
                 async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
+                    use linera_views::{common::Context, batch::Batch, views::View};
                     linera_views::increment_counter(
                         linera_views::SAVE_VIEW_COUNTER,
                         stringify!(TestView),
                         &self.context().base_key(),
                     );
-                    use linera_views::batch::Batch;
                     let mut batch = Batch::new();
                     self.register.flush(&mut batch)?;
                     self.collection.flush(&mut batch)?;
@@ -757,7 +765,7 @@ pub mod tests {
                     Ok(())
                 }
                 async fn write_delete(self) -> Result<(), linera_views::views::ViewError> {
-                    use linera_views::batch::Batch;
+                    use linera_views::{common::Context, batch::Batch, views::View};
                     let context = self.context().clone();
                     let batch = Batch::build(move |batch| {
                         Box::pin(async move {
@@ -798,12 +806,14 @@ pub mod tests {
                     &self
                 ) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError>
                 {
-                    use linera_views::generic_array::GenericArray;
-                    use linera_views::batch::Batch;
                     use linera_base::crypto::{BcsHashable, CryptoHash};
-                    use linera_views::views::HashableView;
+                    use linera_views::{
+                        batch::Batch,
+                        generic_array::GenericArray,
+                        sha3::{digest::OutputSizeUser, Sha3_256},
+                        views::HashableView,
+                    };
                     use serde::{Serialize, Deserialize};
-                    use linera_views::sha3::{Sha3_256, digest::OutputSizeUser};
                     #[derive(Serialize, Deserialize)]
                     struct TestViewHash(GenericArray<u8, <Sha3_256 as OutputSizeUser>::OutputSize>);
                     impl BcsHashable for TestViewHash {}
