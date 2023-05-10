@@ -10,9 +10,8 @@ use async_trait::async_trait;
 use crowd_funding::Operation;
 use fungible::AccountOwner;
 use linera_sdk::{
-    base::{Amount, ChainId},
-    service::system_api::ReadOnlyViewStorageContext,
-    QueryContext, Service, ViewStateStorage,
+    base::Amount, service::system_api::ReadOnlyViewStorageContext, QueryContext, Service,
+    ViewStateStorage,
 };
 use state::CrowdFunding;
 use std::sync::Arc;
@@ -52,10 +51,6 @@ impl MutationRoot {
 
     async fn cancel(&self) -> Vec<u8> {
         bcs::to_bytes(&Operation::Cancel {}).unwrap()
-    }
-
-    async fn notify(&self, chain_id: ChainId) -> Vec<u8> {
-        bcs::to_bytes(&Operation::Notify { chain_id }).unwrap()
     }
 }
 

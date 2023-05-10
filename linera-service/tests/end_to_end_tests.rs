@@ -1488,10 +1488,11 @@ async fn test_end_to_end_crowd_funding() {
     );
     app_fungible1.query_application(&query_string).await;
 
-    // Inviting chain2 to the campaign.
-    // TODO(#718): There should be a better way for chain2 to learn about the campaign.
-    let query_string = format!("mutation {{ notify(chainId: {}) }}", chain2.to_value());
-    app_crowd1.query_application(&query_string).await;
+    // Register the campaign on chain2.
+    node_service2
+        .request_application(&application_id_crowd)
+        .await;
+    node_service1.process_inbox().await; // Respond with RegisterApplications.
 
     let app_crowd2 = node_service2.make_application(&application_id_crowd).await;
 

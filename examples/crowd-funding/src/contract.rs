@@ -63,11 +63,6 @@ impl Contract for CrowdFunding<ViewStorageContext> {
             }
             Operation::Collect => self.collect_pledges().await?,
             Operation::Cancel => self.cancel_campaign().await?,
-            Operation::Notify { chain_id } => {
-                let effect_bytes =
-                    bcs::to_bytes(&Effect::Notify).expect("Serializing the effect should not fail");
-                result.effects.push((chain_id.into(), false, effect_bytes));
-            }
         }
 
         Ok(result)
@@ -79,7 +74,6 @@ impl Contract for CrowdFunding<ViewStorageContext> {
         effect: &[u8],
     ) -> Result<ExecutionResult, Self::Error> {
         match bcs::from_bytes(effect).map_err(Error::InvalidEffect)? {
-            Effect::Notify => {}
             Effect::PledgeWithAccount { owner, amount } => {
                 ensure!(
                     context.chain_id == system_api::current_application_id().creation.chain_id,
