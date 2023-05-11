@@ -15,7 +15,7 @@ wit_bindgen_host_wasmer_rust::export!("queryable_system.wit");
 // Export the system interface used by views.
 wit_bindgen_host_wasmer_rust::export!({
     custom_error: true,
-    paths: ["view_system.wit"],
+    paths: ["view_system_api.wit"],
 });
 
 // Import the interface implemented by a user contract.
@@ -31,9 +31,7 @@ mod conversions_to_wit;
 #[path = "guest_futures.rs"]
 mod guest_futures;
 
-use self::{
-    queryable_system::QueryableSystem, view_system::ViewSystem, writable_system::WritableSystem,
-};
+use self::{queryable_system::QueryableSystem, writable_system::WritableSystem};
 use super::{
     async_boundary::{HostFuture, WakerForwarder},
     async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
@@ -131,7 +129,7 @@ impl WasmApplication {
         let system_api_setup =
             writable_system::add_to_imports(&mut store, &mut imports, contract_system_api);
         let views_api_setup =
-            view_system::add_to_imports(&mut store, &mut imports, view_system_api);
+            view_system_api::add_to_imports(&mut store, &mut imports, view_system_api);
         let (contract, instance) = {
             // TODO(#633): remove when possible or find better workaround.
             let _lock = WASMER_INSTANTIATE_LOCK.lock().unwrap();
@@ -176,7 +174,7 @@ impl WasmApplication {
         let system_api_setup =
             queryable_system::add_to_imports(&mut store, &mut imports, service_system_api);
         let views_api_setup =
-            view_system::add_to_imports(&mut store, &mut imports, view_system_api);
+            view_system_api::add_to_imports(&mut store, &mut imports, view_system_api);
         let (service, instance) = {
             // TODO(#633): remove when possible or find better workaround.
             let _lock = WASMER_INSTANTIATE_LOCK.lock().unwrap();
@@ -640,8 +638,10 @@ impl ViewSystemApi<&'static dyn ServiceRuntime, ()> {
     }
 }
 
-impl_view_system!(ViewSystemApi<&'static dyn ContractRuntime, QueuedHostFutureFactory<'static>>);
-impl_view_system!(ViewSystemApi<&'static dyn ServiceRuntime, ()>);
+impl_view_system_api!(
+    ViewSystemApi<&'static dyn ContractRuntime, QueuedHostFutureFactory<'static>>
+);
+impl_view_system_api!(ViewSystemApi<&'static dyn ServiceRuntime, ()>);
 
 /// Extra parameters necessary when cleaning up after contract execution.
 pub struct WasmerContractExtra<'runtime> {

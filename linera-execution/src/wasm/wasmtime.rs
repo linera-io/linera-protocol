@@ -15,7 +15,7 @@ wit_bindgen_host_wasmtime_rust::export!("queryable_system.wit");
 // Export the system interface used by views.
 wit_bindgen_host_wasmtime_rust::export!({
     custom_error: true,
-    paths: ["view_system.wit"],
+    paths: ["view_system_api.wit"],
 });
 
 // Import the interface implemented by a user contract.
@@ -34,8 +34,7 @@ mod guest_futures;
 use self::{
     contract::ContractData,
     queryable_system::{QueryableSystem, QueryableSystemTables},
-    service::ServiceData,
-    view_system::{ViewSystem, ViewSystemTables},
+    service::ServiceData, view_system_api::ViewSystemApiTables,
     writable_system::{WritableSystem, WritableSystemTables},
 };
 use super::{
@@ -98,7 +97,7 @@ impl WasmApplication {
         let mut linker = Linker::new(&engine);
 
         writable_system::add_to_linker(&mut linker, ContractState::system_api)?;
-        view_system::add_to_linker(&mut linker, ContractState::views_api)?;
+        view_system_api::add_to_linker(&mut linker, ContractState::views_api)?;
 
         let module = Module::new(&engine, &self.contract_bytecode)?;
         let waker_forwarder = WakerForwarder::default();
@@ -131,7 +130,7 @@ impl WasmApplication {
         let mut linker = Linker::new(&engine);
 
         queryable_system::add_to_linker(&mut linker, ServiceState::system_api)?;
-        view_system::add_to_linker(&mut linker, ServiceState::views_api)?;
+        view_system_api::add_to_linker(&mut linker, ServiceState::views_api)?;
 
         let module = Module::new(&engine, &self.service_bytecode)?;
         let waker_forwarder = WakerForwarder::default();
@@ -157,7 +156,7 @@ pub struct ContractState<'runtime> {
     data: ContractData,
     system_api: ContractSystemApi<'runtime>,
     system_tables: WritableSystemTables<ContractSystemApi<'runtime>>,
-    views_tables: ViewSystemTables<ContractSystemApi<'runtime>>,
+    views_tables: ViewSystemApiTables<ContractSystemApi<'runtime>>,
 }
 
 /// Data stored by the runtime that's necessary for handling queries to and from the WASM module.
@@ -165,7 +164,7 @@ pub struct ServiceState<'runtime> {
     data: ServiceData,
     system_api: ServiceSystemApi<'runtime>,
     system_tables: QueryableSystemTables<ServiceSystemApi<'runtime>>,
-    views_tables: ViewSystemTables<ServiceSystemApi<'runtime>>,
+    views_tables: ViewSystemApiTables<ServiceSystemApi<'runtime>>,
 }
 
 impl<'runtime> ContractState<'runtime> {
@@ -182,7 +181,7 @@ impl<'runtime> ContractState<'runtime> {
             data: ContractData::default(),
             system_api: ContractSystemApi::new(waker, runtime, queued_future_factory),
             system_tables: WritableSystemTables::default(),
-            views_tables: ViewSystemTables::default(),
+            views_tables: ViewSystemApiTables::default(),
         }
     }
 
@@ -206,7 +205,7 @@ impl<'runtime> ContractState<'runtime> {
         &mut self,
     ) -> (
         &mut ContractSystemApi<'runtime>,
-        &mut ViewSystemTables<ContractSystemApi<'runtime>>,
+        &mut ViewSystemApiTables<ContractSystemApi<'runtime>>,
     ) {
         (&mut self.system_api, &mut self.views_tables)
     }
@@ -222,7 +221,7 @@ impl<'runtime> ServiceState<'runtime> {
             data: ServiceData::default(),
             system_api: ServiceSystemApi::new(waker, runtime),
             system_tables: QueryableSystemTables::default(),
-            views_tables: ViewSystemTables::default(),
+            views_tables: ViewSystemApiTables::default(),
         }
     }
 
@@ -246,7 +245,7 @@ impl<'runtime> ServiceState<'runtime> {
         &mut self,
     ) -> (
         &mut ServiceSystemApi<'runtime>,
-        &mut ViewSystemTables<ServiceSystemApi<'runtime>>,
+        &mut ViewSystemApiTables<ServiceSystemApi<'runtime>>,
     ) {
         (&mut self.system_api, &mut self.views_tables)
     }
@@ -450,7 +449,7 @@ impl<'runtime> ContractSystemApi<'runtime> {
 }
 
 impl_writable_system!(ContractSystemApi<'runtime>);
-impl_view_system!(ContractSystemApi<'runtime>);
+impl_view_system_api!(ContractSystemApi<'runtime>);
 
 /// Implementation to forward service system calls from the guest WASM module to the host
 /// implementation.
@@ -494,7 +493,7 @@ impl<'runtime> ServiceSystemApi<'runtime> {
 }
 
 impl_queryable_system!(ServiceSystemApi<'runtime>);
-impl_view_system!(ServiceSystemApi<'runtime>);
+impl_view_system_api!(ServiceSystemApi<'runtime>);
 
 impl From<ExecutionError> for wasmtime::Trap {
     fn from(error: ExecutionError) -> Self {

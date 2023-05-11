@@ -290,19 +290,19 @@ macro_rules! impl_queryable_system {
 /// Generates an implementation of `ViewSystem` for the provided `view_system_api` type.
 ///
 /// Generates the common code for view system API types for all WASM runtimes.
-macro_rules! impl_view_system {
+macro_rules! impl_view_system_api {
     ($view_system_api:ident<$runtime:lifetime>) => {
-        impl_view_system!(
+        impl_view_system_api!(
             @generate $view_system_api<$runtime>, wasmtime::Trap, $runtime, <$runtime>
         );
     };
 
     ($view_system_api:ty) => {
-        impl_view_system!(@generate $view_system_api, wasmer::RuntimeError, 'static);
+        impl_view_system_api!(@generate $view_system_api, wasmer::RuntimeError, 'static);
     };
 
     (@generate $view_system_api:ty, $trap:ty, $runtime:lifetime $(, <$param:lifetime> )?) => {
-        impl$(<$param>)? ViewSystem for $view_system_api {
+        impl$(<$param>)? view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
             type ReadKeyBytes = HostFuture<$runtime, Result<Option<Vec<u8>>, ExecutionError>>;
@@ -325,8 +325,8 @@ macro_rules! impl_view_system {
             fn read_key_bytes_poll(
                 &mut self,
                 future: &Self::ReadKeyBytes,
-            ) -> Result<view_system::PollReadKeyBytes, Self::Error> {
-                use view_system::PollReadKeyBytes;
+            ) -> Result<view_system_api::PollReadKeyBytes, Self::Error> {
+                use view_system_api::PollReadKeyBytes;
                 match future.poll(&mut *self.waker()) {
                     Poll::Pending => Ok(PollReadKeyBytes::Pending),
                     Poll::Ready(Ok(opt_list)) => Ok(PollReadKeyBytes::Ready(opt_list)),
@@ -341,8 +341,8 @@ macro_rules! impl_view_system {
             fn find_keys_poll(
                 &mut self,
                 future: &Self::FindKeys,
-            ) -> Result<view_system::PollFindKeys, Self::Error> {
-                use view_system::PollFindKeys;
+            ) -> Result<view_system_api::PollFindKeys, Self::Error> {
+                use view_system_api::PollFindKeys;
                 match future.poll(&mut *self.waker()) {
                     Poll::Pending => Ok(PollFindKeys::Pending),
                     Poll::Ready(Ok(keys)) => Ok(PollFindKeys::Ready(keys)),
@@ -363,8 +363,8 @@ macro_rules! impl_view_system {
             fn find_key_values_poll(
                 &mut self,
                 future: &Self::FindKeyValues,
-            ) -> Result<view_system::PollFindKeyValues, Self::Error> {
-                use view_system::PollFindKeyValues;
+            ) -> Result<view_system_api::PollFindKeyValues, Self::Error> {
+                use view_system_api::PollFindKeyValues;
                 match future.poll(&mut *self.waker()) {
                     Poll::Pending => Ok(PollFindKeyValues::Pending),
                     Poll::Ready(Ok(key_values)) => Ok(PollFindKeyValues::Ready(key_values)),
@@ -374,18 +374,18 @@ macro_rules! impl_view_system {
 
             fn write_batch_new(
                 &mut self,
-                list_oper: Vec<view_system::WriteOperation>,
+                list_oper: Vec<view_system_api::WriteOperation>,
             ) -> Result<Self::WriteBatch, Self::Error> {
                 let mut batch = Batch::new();
                 for x in list_oper {
                     match x {
-                        view_system::WriteOperation::Delete(key) => {
+                        view_system_api::WriteOperation::Delete(key) => {
                             batch.delete_key(key.to_vec())
                         }
-                        view_system::WriteOperation::Deleteprefix(key_prefix) => {
+                        view_system_api::WriteOperation::Deleteprefix(key_prefix) => {
                             batch.delete_key_prefix(key_prefix.to_vec())
                         }
-                        view_system::WriteOperation::Put(key_value) => {
+                        view_system_api::WriteOperation::Put(key_value) => {
                             batch.put_key_value_bytes(key_value.0.to_vec(), key_value.1.to_vec())
                         }
                     }
@@ -399,8 +399,8 @@ macro_rules! impl_view_system {
             fn write_batch_poll(
                 &mut self,
                 future: &Self::WriteBatch,
-            ) -> Result<view_system::PollUnit, Self::Error> {
-                use view_system::PollUnit;
+            ) -> Result<view_system_api::PollUnit, Self::Error> {
+                use view_system_api::PollUnit;
                 match future.poll(&mut *self.waker()) {
                     Poll::Pending => Ok(PollUnit::Pending),
                     Poll::Ready(Ok(())) => Ok(PollUnit::Ready),

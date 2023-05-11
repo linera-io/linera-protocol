@@ -9,4 +9,4 @@ mod system_api;
 pub use self::system_api::{KeyValueStore, ViewStorageContext};
 
 // Import the views system interface.
-wit_bindgen_guest_rust::import!("view_system.wit");
+wit_bindgen_guest_rust::import!("view_system_api.wit");

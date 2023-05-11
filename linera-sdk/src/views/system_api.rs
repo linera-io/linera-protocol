@@ -3,7 +3,7 @@
 
 //! Functions and types to interface with the system API available to application views.
 
-use super::view_system as wit;
+use super::view_system_api as wit;
 use async_trait::async_trait;
 use futures::future;
 use linera_views::{

@@ -888,7 +888,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     )?;
 
     linker.func_wrap2_async(
-        "view_system",
+        "view_system_api",
         "read-key-bytes::new: func(key: list<u8>) -> handle<read-key-bytes>",
         move |mut caller: Caller<'_, Resources>, key_address: i32, key_length: i32| {
             Box::new(async move {
@@ -900,7 +900,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap2_async(
-        "view_system",
+        "view_system_api",
         "read-key-bytes::poll: func(self: handle<read-key-bytes>) -> variant { \
             pending(unit), \
             ready(option<list<u8>>) \
@@ -936,7 +936,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap2_async(
-        "view_system",
+        "view_system_api",
         "find-keys::new: func(prefix: list<u8>) -> handle<find-keys>",
         move |mut caller: Caller<'_, Resources>, prefix_address: i32, prefix_length: i32| {
             Box::new(async move {
@@ -948,7 +948,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap2_async(
-        "view_system",
+        "view_system_api",
         "find-keys::poll: func(self: handle<find-keys>) -> variant { \
             pending(unit), \
             ready(list<list<u8>>) \
@@ -984,7 +984,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap2_async(
-        "view_system",
+        "view_system_api",
         "find-key-values::new: func(prefix: list<u8>) -> handle<find-key-values>",
         move |mut caller: Caller<'_, Resources>, prefix_address: i32, prefix_length: i32| {
             Box::new(async move {
@@ -996,7 +996,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap2_async(
-        "view_system",
+        "view_system_api",
         "find-key-values::poll: func(self: handle<find-key-values>) -> variant { \
             pending(unit), \
             ready(list<tuple<list<u8>, list<u8>>>) \
@@ -1033,7 +1033,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap2_async(
-        "view_system",
+        "view_system_api",
         "write-batch::new: func(\
             key: list<variant { \
                 delete(list<u8>), \
@@ -1090,7 +1090,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap1_async(
-        "view_system",
+        "view_system_api",
         "write-batch::poll: func(self: handle<write-batch>) -> variant { \
             pending(unit), \
             ready(unit) \
