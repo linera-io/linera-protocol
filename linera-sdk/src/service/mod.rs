@@ -10,7 +10,7 @@ pub mod system_api;
 pub mod wit_types;
 
 // Import the system interface.
-wit_bindgen_guest_rust::import!("queryable_system.wit");
+wit_bindgen_guest_rust::import!("service_system_api.wit");
 
 /// Declares an implementation of the [`Service`][`crate::Service`] trait, exporting it from the
 /// WASM module.

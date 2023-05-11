@@ -8,7 +8,7 @@
 
 #![allow(clippy::duplicate_mod)]
 
-use super::{contract, queryable_system, service, writable_system};
+use super::{contract, service, service_system_api, writable_system};
 use crate::{
     CallResult, CalleeContext, EffectContext, EffectId, OperationContext, QueryContext, SessionId,
     UserApplicationId,
@@ -37,9 +37,9 @@ impl From<EffectContext> for contract::EffectContext {
     }
 }
 
-impl From<EffectId> for queryable_system::EffectId {
+impl From<EffectId> for service_system_api::EffectId {
     fn from(host: EffectId) -> Self {
-        queryable_system::EffectId {
+        service_system_api::EffectId {
             chain_id: host.chain_id.into(),
             height: host.height.0,
             index: host.index,
@@ -116,9 +116,9 @@ impl From<UserApplicationId> for contract::ApplicationId {
     }
 }
 
-impl From<UserApplicationId> for queryable_system::ApplicationId {
+impl From<UserApplicationId> for service_system_api::ApplicationId {
     fn from(host: UserApplicationId) -> Self {
-        queryable_system::ApplicationId {
+        service_system_api::ApplicationId {
             bytecode_id: host.bytecode_id.0.into(),
             creation: host.creation.into(),
         }
@@ -134,7 +134,7 @@ impl From<UserApplicationId> for writable_system::ApplicationId {
     }
 }
 
-impl From<ChainId> for queryable_system::ChainId {
+impl From<ChainId> for service_system_api::ChainId {
     fn from(chain_id: ChainId) -> Self {
         chain_id.0.into()
     }
@@ -184,11 +184,11 @@ impl From<CryptoHash> for service::CryptoHash {
     }
 }
 
-impl From<CryptoHash> for queryable_system::CryptoHash {
+impl From<CryptoHash> for service_system_api::CryptoHash {
     fn from(crypto_hash: CryptoHash) -> Self {
         let bytes = crypto_hash.as_bytes();
 
-        queryable_system::CryptoHash {
+        service_system_api::CryptoHash {
             part1: u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices")),
             part2: u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices")),
             part3: u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices")),
@@ -223,9 +223,9 @@ impl From<CallResult> for writable_system::CallResult {
     }
 }
 
-impl From<Balance> for queryable_system::Balance {
+impl From<Balance> for service_system_api::Balance {
     fn from(host: Balance) -> Self {
-        queryable_system::Balance {
+        service_system_api::Balance {
             lower_half: host.lower_half(),
             upper_half: host.upper_half(),
         }

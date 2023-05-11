@@ -10,7 +10,7 @@ wit_bindgen_host_wasmtime_rust::export!({
 });
 
 // Export the system interface used by a user service.
-wit_bindgen_host_wasmtime_rust::export!("queryable_system.wit");
+wit_bindgen_host_wasmtime_rust::export!("service_system_api.wit");
 
 // Export the system interface used by views.
 wit_bindgen_host_wasmtime_rust::export!({
@@ -32,9 +32,8 @@ mod conversions_to_wit;
 mod guest_futures;
 
 use self::{
-    contract::ContractData,
-    queryable_system::{QueryableSystem, QueryableSystemTables},
-    service::ServiceData, view_system_api::ViewSystemApiTables,
+    contract::ContractData, service::ServiceData, service_system_api::ServiceSystemApiTables,
+    view_system_api::ViewSystemApiTables,
     writable_system::{WritableSystem, WritableSystemTables},
 };
 use super::{
@@ -129,7 +128,7 @@ impl WasmApplication {
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
 
-        queryable_system::add_to_linker(&mut linker, ServiceState::system_api)?;
+        service_system_api::add_to_linker(&mut linker, ServiceState::system_api)?;
         view_system_api::add_to_linker(&mut linker, ServiceState::views_api)?;
 
         let module = Module::new(&engine, &self.service_bytecode)?;
@@ -163,7 +162,7 @@ pub struct ContractState<'runtime> {
 pub struct ServiceState<'runtime> {
     data: ServiceData,
     system_api: ServiceSystemApi<'runtime>,
-    system_tables: QueryableSystemTables<ServiceSystemApi<'runtime>>,
+    system_tables: ServiceSystemApiTables<ServiceSystemApi<'runtime>>,
     views_tables: ViewSystemApiTables<ServiceSystemApi<'runtime>>,
 }
 
@@ -220,7 +219,7 @@ impl<'runtime> ServiceState<'runtime> {
         Self {
             data: ServiceData::default(),
             system_api: ServiceSystemApi::new(waker, runtime),
-            system_tables: QueryableSystemTables::default(),
+            system_tables: ServiceSystemApiTables::default(),
             views_tables: ViewSystemApiTables::default(),
         }
     }
@@ -235,7 +234,7 @@ impl<'runtime> ServiceState<'runtime> {
         &mut self,
     ) -> (
         &mut ServiceSystemApi<'runtime>,
-        &mut QueryableSystemTables<ServiceSystemApi<'runtime>>,
+        &mut ServiceSystemApiTables<ServiceSystemApi<'runtime>>,
     ) {
         (&mut self.system_api, &mut self.system_tables)
     }
@@ -492,7 +491,7 @@ impl<'runtime> ServiceSystemApi<'runtime> {
     }
 }
 
-impl_queryable_system!(ServiceSystemApi<'runtime>);
+impl_service_system_api!(ServiceSystemApi<'runtime>);
 impl_view_system_api!(ServiceSystemApi<'runtime>);
 
 impl From<ExecutionError> for wasmtime::Trap {

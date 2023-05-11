@@ -8,7 +8,7 @@
 
 #![allow(clippy::duplicate_mod)]
 
-use super::{contract, queryable_system, writable_system};
+use super::{contract, service_system_api, writable_system};
 use crate::{
     ApplicationCallResult, ChannelName, Destination, NewSession, RawExecutionResult,
     SessionCallResult, SessionId, UserApplicationId,
@@ -176,8 +176,8 @@ impl From<writable_system::CryptoHash> for CryptoHash {
     }
 }
 
-impl From<queryable_system::ApplicationId> for UserApplicationId {
-    fn from(guest: queryable_system::ApplicationId) -> Self {
+impl From<service_system_api::ApplicationId> for UserApplicationId {
+    fn from(guest: service_system_api::ApplicationId) -> Self {
         UserApplicationId {
             bytecode_id: guest.bytecode_id.into(),
             creation: guest.creation.into(),
@@ -185,14 +185,14 @@ impl From<queryable_system::ApplicationId> for UserApplicationId {
     }
 }
 
-impl From<queryable_system::EffectId> for BytecodeId {
-    fn from(guest: queryable_system::EffectId) -> Self {
+impl From<service_system_api::EffectId> for BytecodeId {
+    fn from(guest: service_system_api::EffectId) -> Self {
         BytecodeId(guest.into())
     }
 }
 
-impl From<queryable_system::EffectId> for EffectId {
-    fn from(guest: queryable_system::EffectId) -> Self {
+impl From<service_system_api::EffectId> for EffectId {
+    fn from(guest: service_system_api::EffectId) -> Self {
         EffectId {
             chain_id: guest.chain_id.into(),
             height: BlockHeight(guest.height),
@@ -201,14 +201,14 @@ impl From<queryable_system::EffectId> for EffectId {
     }
 }
 
-impl From<queryable_system::CryptoHash> for ChainId {
-    fn from(guest: queryable_system::CryptoHash) -> Self {
+impl From<service_system_api::CryptoHash> for ChainId {
+    fn from(guest: service_system_api::CryptoHash) -> Self {
         ChainId(guest.into())
     }
 }
 
-impl From<queryable_system::CryptoHash> for CryptoHash {
-    fn from(guest: queryable_system::CryptoHash) -> Self {
+impl From<service_system_api::CryptoHash> for CryptoHash {
+    fn from(guest: service_system_api::CryptoHash) -> Self {
         let mut bytes = [0u8; 32];
 
         bytes[0..8].copy_from_slice(&guest.part1.to_le_bytes());

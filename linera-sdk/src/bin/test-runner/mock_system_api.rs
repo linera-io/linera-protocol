@@ -432,7 +432,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     )?;
 
     linker.func_wrap1_async(
-        "queryable_system",
+        "service_system_api",
         "chain-id: func() -> record { part1: u64, part2: u64, part3: u64, part4: u64 }",
         move |mut caller: Caller<'_, Resources>, return_offset: i32| {
             Box::new(async move {
@@ -458,7 +458,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap1_async(
-        "queryable_system",
+        "service_system_api",
         "application-id: func() -> record { \
             bytecode-id: record { \
                 chain-id: record { part1: u64, part2: u64, part3: u64, part4: u64 }, \
@@ -505,7 +505,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap1_async(
-        "queryable_system",
+        "service_system_api",
         "application-parameters: func() -> list<u8>",
         move |mut caller: Caller<'_, Resources>, return_offset: i32| {
             Box::new(async move {
@@ -530,7 +530,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap1_async(
-        "queryable_system",
+        "service_system_api",
         "read-system-balance: func() -> record { lower-half: u64, upper-half: u64 }",
         move |mut caller: Caller<'_, Resources>, return_offset: i32| {
             Box::new(async move {
@@ -556,7 +556,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap0_async(
-        "queryable_system",
+        "service_system_api",
         "read-system-timestamp: func() -> u64",
         move |mut caller: Caller<'_, Resources>| {
             Box::new(async move {
@@ -579,7 +579,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap3_async(
-        "queryable_system",
+        "service_system_api",
         "log: func(message: string, level: enum { trace, debug, info, warn, error }) -> unit",
         move |mut caller: Caller<'_, Resources>,
               message_address: i32,
@@ -627,12 +627,12 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap0_async(
-        "queryable_system",
+        "service_system_api",
         "load::new: func() -> handle<load>",
         move |_: Caller<'_, Resources>| Box::new(async move { 0 }),
     )?;
     linker.func_wrap2_async(
-        "queryable_system",
+        "service_system_api",
         "load::poll: \
             func(self: handle<load>) -> variant { pending(unit), ready(result<list<u8>, string>) }",
         move |mut caller: Caller<'_, Resources>, _handle: i32, return_offset: i32| {
@@ -656,12 +656,12 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap0_async(
-        "queryable_system",
+        "service_system_api",
         "lock::new: func() -> handle<lock>",
         move |_: Caller<'_, Resources>| Box::new(async move { 0 }),
     )?;
     linker.func_wrap2_async(
-        "queryable_system",
+        "service_system_api",
         "lock::poll: \
             func(self: handle<lock>) -> variant { pending(unit), ready(result<unit, string>) }",
         move |mut caller: Caller<'_, Resources>, _handle: i32, return_offset: i32| {
@@ -708,7 +708,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap14_async(
-        "queryable_system",
+        "service_system_api",
         "try-query-application::new: func(\
             application: record { \
                 bytecode-id: record { \
@@ -786,7 +786,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap2_async(
-        "queryable_system",
+        "service_system_api",
         "try-query-application::poll: func(self: handle<try-query-application>) -> variant { \
             pending(unit), \
             ready(result<list<u8>, string>) \

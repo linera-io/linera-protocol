@@ -9,8 +9,8 @@ wit_bindgen_host_wasmer_rust::export!({
     paths: ["writable_system.wit"],
 });
 
-// Export the queryable system interface used by a user service.
-wit_bindgen_host_wasmer_rust::export!("queryable_system.wit");
+// Export the system interface used by a user service.
+wit_bindgen_host_wasmer_rust::export!("service_system_api.wit");
 
 // Export the system interface used by views.
 wit_bindgen_host_wasmer_rust::export!({
@@ -31,7 +31,7 @@ mod conversions_to_wit;
 #[path = "guest_futures.rs"]
 mod guest_futures;
 
-use self::{queryable_system::QueryableSystem, writable_system::WritableSystem};
+use self::writable_system::WritableSystem;
 use super::{
     async_boundary::{HostFuture, WakerForwarder},
     async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
@@ -172,7 +172,7 @@ impl WasmApplication {
         let service_system_api = ServiceSystemApi::new(system_api.clone());
         let view_system_api = ViewSystemApi::new(system_api, ());
         let system_api_setup =
-            queryable_system::add_to_imports(&mut store, &mut imports, service_system_api);
+            service_system_api::add_to_imports(&mut store, &mut imports, service_system_api);
         let views_api_setup =
             view_system_api::add_to_imports(&mut store, &mut imports, view_system_api);
         let (service, instance) = {
@@ -519,7 +519,7 @@ impl ServiceSystemApi {
     }
 }
 
-impl_queryable_system!(ServiceSystemApi);
+impl_service_system_api!(ServiceSystemApi);
 
 /// Implementation to forward view system calls from the guest WASM module to the host
 /// implementation.

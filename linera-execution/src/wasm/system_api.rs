@@ -169,30 +169,30 @@ macro_rules! impl_writable_system {
     };
 }
 
-/// Generates an implementation of `QueryableSystem` for the provided `service_system_api` type.
+/// Generates an implementation of `ServiceSystemApi` for the provided `service_system_api` type.
 ///
 /// Generates the common code for service system API types for all WASM runtimes.
-macro_rules! impl_queryable_system {
+macro_rules! impl_service_system_api {
     ($service_system_api:ident<$runtime:lifetime>) => {
-        impl_queryable_system!(@generate $service_system_api<$runtime>, $runtime, <$runtime>);
+        impl_service_system_api!(@generate $service_system_api<$runtime>, $runtime, <$runtime>);
     };
 
     ($service_system_api:ident) => {
-        impl_queryable_system!(@generate $service_system_api, 'static);
+        impl_service_system_api!(@generate $service_system_api, 'static);
     };
 
     (@generate $service_system_api:ty, $runtime:lifetime $(, <$param:lifetime> )?) => {
-        impl$(<$param>)? QueryableSystem for $service_system_api {
+        impl$(<$param>)? service_system_api::ServiceSystemApi for $service_system_api {
             type Load = HostFuture<$runtime, Result<Vec<u8>, ExecutionError>>;
             type Lock = HostFuture<$runtime, Result<(), ExecutionError>>;
             type Unlock = HostFuture<$runtime, Result<(), ExecutionError>>;
             type TryQueryApplication = HostFuture<$runtime, Result<Vec<u8>, ExecutionError>>;
 
-            fn chain_id(&mut self) -> queryable_system::ChainId {
+            fn chain_id(&mut self) -> service_system_api::ChainId {
                 self.runtime().chain_id().into()
             }
 
-            fn application_id(&mut self) -> queryable_system::ApplicationId {
+            fn application_id(&mut self) -> service_system_api::ApplicationId {
                 self.runtime().application_id().into()
             }
 
@@ -200,11 +200,11 @@ macro_rules! impl_queryable_system {
                 self.runtime().application_parameters()
             }
 
-            fn read_system_balance(&mut self) -> queryable_system::Balance {
+            fn read_system_balance(&mut self) -> service_system_api::Balance {
                 self.runtime().read_system_balance().into()
             }
 
-            fn read_system_timestamp(&mut self) -> queryable_system::Timestamp {
+            fn read_system_timestamp(&mut self) -> service_system_api::Timestamp {
                 self.runtime().read_system_timestamp().micros()
             }
 
@@ -212,8 +212,8 @@ macro_rules! impl_queryable_system {
                 HostFuture::new(self.runtime().try_read_my_state())
             }
 
-            fn load_poll(&mut self, future: &Self::Load) -> queryable_system::PollLoad {
-                use queryable_system::PollLoad;
+            fn load_poll(&mut self, future: &Self::Load) -> service_system_api::PollLoad {
+                use service_system_api::PollLoad;
                 match future.poll(&mut *self.waker()) {
                     Poll::Pending => PollLoad::Pending,
                     Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
@@ -225,8 +225,8 @@ macro_rules! impl_queryable_system {
                 HostFuture::new(self.runtime().lock_view_user_state())
             }
 
-            fn lock_poll(&mut self, future: &Self::Lock) -> queryable_system::PollLock {
-                use queryable_system::PollLock;
+            fn lock_poll(&mut self, future: &Self::Lock) -> service_system_api::PollLock {
+                use service_system_api::PollLock;
                 match future.poll(&mut *self.waker()) {
                     Poll::Pending => PollLock::Pending,
                     Poll::Ready(Ok(())) => PollLock::Ready(Ok(())),
@@ -238,8 +238,8 @@ macro_rules! impl_queryable_system {
                 HostFuture::new(self.runtime().unlock_view_user_state())
             }
 
-            fn unlock_poll(&mut self, future: &Self::Lock) -> queryable_system::PollUnlock {
-                use queryable_system::PollUnlock;
+            fn unlock_poll(&mut self, future: &Self::Lock) -> service_system_api::PollUnlock {
+                use service_system_api::PollUnlock;
                 match future.poll(&mut *self.waker()) {
                     Poll::Pending => PollUnlock::Pending,
                     Poll::Ready(Ok(())) => PollUnlock::Ready(Ok(())),
@@ -249,7 +249,7 @@ macro_rules! impl_queryable_system {
 
             fn try_query_application_new(
                 &mut self,
-                application: queryable_system::ApplicationId,
+                application: service_system_api::ApplicationId,
                 argument: &[u8],
             ) -> Self::TryQueryApplication {
                 let runtime = self.runtime();
@@ -265,8 +265,8 @@ macro_rules! impl_queryable_system {
             fn try_query_application_poll(
                 &mut self,
                 future: &Self::TryQueryApplication,
-            ) -> queryable_system::PollLoad {
-                use queryable_system::PollLoad;
+            ) -> service_system_api::PollLoad {
+                use service_system_api::PollLoad;
                 match future.poll(&mut *self.waker()) {
                     Poll::Pending => PollLoad::Pending,
                     Poll::Ready(Ok(result)) => PollLoad::Ready(Ok(result)),
@@ -274,13 +274,13 @@ macro_rules! impl_queryable_system {
                 }
             }
 
-            fn log(&mut self, message: &str, level: queryable_system::LogLevel) {
+            fn log(&mut self, message: &str, level: service_system_api::LogLevel) {
                 match level {
-                    queryable_system::LogLevel::Trace => tracing::trace!("{message}"),
-                    queryable_system::LogLevel::Debug => tracing::debug!("{message}"),
-                    queryable_system::LogLevel::Info => tracing::info!("{message}"),
-                    queryable_system::LogLevel::Warn => tracing::warn!("{message}"),
-                    queryable_system::LogLevel::Error => tracing::error!("{message}"),
+                    service_system_api::LogLevel::Trace => tracing::trace!("{message}"),
+                    service_system_api::LogLevel::Debug => tracing::debug!("{message}"),
+                    service_system_api::LogLevel::Info => tracing::info!("{message}"),
+                    service_system_api::LogLevel::Warn => tracing::warn!("{message}"),
+                    service_system_api::LogLevel::Error => tracing::error!("{message}"),
                 }
             }
         }
