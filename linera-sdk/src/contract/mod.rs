@@ -10,7 +10,7 @@ pub mod system_api;
 pub mod wit_types;
 
 // Import the system interface.
-wit_bindgen_guest_rust::import!("writable_system.wit");
+wit_bindgen_guest_rust::import!("contract_system_api.wit");
 
 /// Declares an implementation of the [`Contract`][`crate::Contract`] trait, exporting it from the
 /// WASM module.

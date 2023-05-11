@@ -157,7 +157,7 @@ fn store_in_memory(caller: &mut Caller<'_, Resources>, offset: i32, value: impl 
 /// from `linera_sdk::test::unit`.
 pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
     linker.func_wrap1_async(
-        "writable_system",
+        "contract_system_api",
         "chain-id: func() -> record { part1: u64, part2: u64, part3: u64, part4: u64 }",
         move |mut caller: Caller<'_, Resources>, return_offset: i32| {
             Box::new(async move {
@@ -183,7 +183,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap1_async(
-        "writable_system",
+        "contract_system_api",
         "application-id: func() -> record { \
             bytecode-id: record { \
                 chain-id: record { part1: u64, part2: u64, part3: u64, part4: u64 }, \
@@ -230,7 +230,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap1_async(
-        "writable_system",
+        "contract_system_api",
         "application-parameters: func() -> list<u8>",
         move |mut caller: Caller<'_, Resources>, return_offset: i32| {
             Box::new(async move {
@@ -255,7 +255,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap1_async(
-        "writable_system",
+        "contract_system_api",
         "read-system-balance: func() -> record { lower-half: u64, upper-half: u64 }",
         move |mut caller: Caller<'_, Resources>, return_offset: i32| {
             Box::new(async move {
@@ -281,7 +281,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap0_async(
-        "writable_system",
+        "contract_system_api",
         "read-system-timestamp: func() -> u64",
         move |mut caller: Caller<'_, Resources>| {
             Box::new(async move {
@@ -304,7 +304,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap3_async(
-        "writable_system",
+        "contract_system_api",
         "log: func(message: string, level: enum { trace, debug, info, warn, error }) -> unit",
         move |mut caller: Caller<'_, Resources>,
               message_address: i32,
@@ -352,7 +352,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap1_async(
-        "writable_system",
+        "contract_system_api",
         "load: func() -> list<u8>",
         move |mut caller: Caller<'_, Resources>, return_offset: i32| {
             Box::new(async move {
@@ -373,7 +373,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap1_async(
-        "writable_system",
+        "contract_system_api",
         "load-and-lock: func() -> option<list<u8>>",
         move |mut caller: Caller<'_, Resources>, return_offset: i32| {
             Box::new(async move {
@@ -398,12 +398,12 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
         },
     )?;
     linker.func_wrap0_async(
-        "writable_system",
+        "contract_system_api",
         "lock::new: func() -> handle<lock>",
         move |_: Caller<'_, Resources>| Box::new(async move { 0 }),
     )?;
     linker.func_wrap1_async(
-        "writable_system",
+        "contract_system_api",
         "lock::poll: func(self: handle<lock>) -> variant { \
             pending(unit), \
             ready-locked(unit), \

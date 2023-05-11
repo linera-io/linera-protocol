@@ -1,22 +1,22 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Generates an implementation of `WritableSystem` for the provided `contract_system_api` type.
+/// Generates an implementation of `ContractSystemApi` for the provided `contract_system_api` type.
 ///
 /// Generates the common code for contract system API types for all WASM runtimes.
-macro_rules! impl_writable_system {
+macro_rules! impl_contract_system_api {
     ($contract_system_api:ident<$runtime:lifetime>) => {
-        impl_writable_system!(
+        impl_contract_system_api!(
             @generate $contract_system_api<$runtime>, wasmtime::Trap, $runtime, <$runtime>
         );
     };
 
     ($contract_system_api:ident) => {
-        impl_writable_system!(@generate $contract_system_api, wasmer::RuntimeError, 'static);
+        impl_contract_system_api!(@generate $contract_system_api, wasmer::RuntimeError, 'static);
     };
 
     (@generate $contract_system_api:ty, $trap:ty, $runtime:lifetime $(, <$param:lifetime> )?) => {
-        impl$(<$param>)? WritableSystem for $contract_system_api {
+        impl$(<$param>)? contract_system_api::ContractSystemApi for $contract_system_api {
             type Error = ExecutionError;
 
             type Lock = HostFuture<$runtime, Result<(), ExecutionError>>;
@@ -25,11 +25,11 @@ macro_rules! impl_writable_system {
                 error.into()
             }
 
-            fn chain_id(&mut self) -> Result<writable_system::ChainId, Self::Error> {
+            fn chain_id(&mut self) -> Result<contract_system_api::ChainId, Self::Error> {
                 Ok(self.runtime().chain_id().into())
             }
 
-            fn application_id(&mut self) -> Result<writable_system::ApplicationId, Self::Error> {
+            fn application_id(&mut self) -> Result<contract_system_api::ApplicationId, Self::Error> {
                 Ok(self.runtime().application_id().into())
             }
 
@@ -39,11 +39,11 @@ macro_rules! impl_writable_system {
 
             fn read_system_balance(
                 &mut self,
-            ) -> Result<writable_system::Balance, Self::Error> {
+            ) -> Result<contract_system_api::Balance, Self::Error> {
                 Ok(self.runtime().read_system_balance().into())
             }
 
-            fn read_system_timestamp(&mut self) -> Result<writable_system::Timestamp, Self::Error> {
+            fn read_system_timestamp(&mut self) -> Result<contract_system_api::Timestamp, Self::Error> {
                 Ok(self.runtime().read_system_timestamp().micros())
             }
 
@@ -75,8 +75,8 @@ macro_rules! impl_writable_system {
             fn lock_poll(
                 &mut self,
                 future: &Self::Lock,
-            ) -> Result<writable_system::PollLock, Self::Error> {
-                use writable_system::PollLock;
+            ) -> Result<contract_system_api::PollLock, Self::Error> {
+                use contract_system_api::PollLock;
                 match future.poll(&mut *self.waker()) {
                     Poll::Pending => Ok(PollLock::Pending),
                     Poll::Ready(Ok(())) => Ok(PollLock::ReadyLocked),
@@ -90,10 +90,10 @@ macro_rules! impl_writable_system {
             fn try_call_application(
                 &mut self,
                 authenticated: bool,
-                application: writable_system::ApplicationId,
+                application: contract_system_api::ApplicationId,
                 argument: &[u8],
-                forwarded_sessions: &[Le<writable_system::SessionId>],
-            ) -> Result<writable_system::CallResult, Self::Error> {
+                forwarded_sessions: &[Le<contract_system_api::SessionId>],
+            ) -> Result<contract_system_api::CallResult, Self::Error> {
                 let forwarded_sessions = forwarded_sessions
                     .iter()
                     .map(Le::get)
@@ -107,16 +107,16 @@ macro_rules! impl_writable_system {
                     &argument,
                     forwarded_sessions,
                 ))
-                .map(writable_system::CallResult::from)
+                .map(contract_system_api::CallResult::from)
             }
 
             fn try_call_session(
                 &mut self,
                 authenticated: bool,
-                session: writable_system::SessionId,
+                session: contract_system_api::SessionId,
                 argument: &[u8],
-                forwarded_sessions: &[Le<writable_system::SessionId>],
-            ) -> Result<writable_system::CallResult, Self::Error> {
+                forwarded_sessions: &[Le<contract_system_api::SessionId>],
+            ) -> Result<contract_system_api::CallResult, Self::Error> {
                 let forwarded_sessions = forwarded_sessions
                     .iter()
                     .map(Le::get)
@@ -130,20 +130,20 @@ macro_rules! impl_writable_system {
                     &argument,
                     forwarded_sessions,
                 ))
-                .map(writable_system::CallResult::from)
+                .map(contract_system_api::CallResult::from)
             }
 
             fn log(
                 &mut self,
                 message: &str,
-                level: writable_system::LogLevel,
+                level: contract_system_api::LogLevel,
             ) -> Result<(), Self::Error> {
                 match level {
-                    writable_system::LogLevel::Trace => tracing::trace!("{message}"),
-                    writable_system::LogLevel::Debug => tracing::debug!("{message}"),
-                    writable_system::LogLevel::Info => tracing::info!("{message}"),
-                    writable_system::LogLevel::Warn => tracing::warn!("{message}"),
-                    writable_system::LogLevel::Error => tracing::error!("{message}"),
+                    contract_system_api::LogLevel::Trace => tracing::trace!("{message}"),
+                    contract_system_api::LogLevel::Debug => tracing::debug!("{message}"),
+                    contract_system_api::LogLevel::Info => tracing::info!("{message}"),
+                    contract_system_api::LogLevel::Warn => tracing::warn!("{message}"),
+                    contract_system_api::LogLevel::Error => tracing::error!("{message}"),
                 }
                 Ok(())
             }

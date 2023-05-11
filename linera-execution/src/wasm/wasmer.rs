@@ -3,10 +3,10 @@
 
 //! Code specific to the usage of the [Wasmer](https://wasmer.io/) runtime.
 
-// Export the writable system interface used by a user contract.
+// Export the system interface used by a user contract.
 wit_bindgen_host_wasmer_rust::export!({
     custom_error: true,
-    paths: ["writable_system.wit"],
+    paths: ["contract_system_api.wit"],
 });
 
 // Export the system interface used by a user service.
@@ -31,7 +31,6 @@ mod conversions_to_wit;
 #[path = "guest_futures.rs"]
 mod guest_futures;
 
-use self::writable_system::WritableSystem;
 use super::{
     async_boundary::{HostFuture, WakerForwarder},
     async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
@@ -127,7 +126,7 @@ impl WasmApplication {
             ContractSystemApi::new(system_api.clone(), queued_future_factory.clone());
         let view_system_api = ViewSystemApi::new(system_api, queued_future_factory);
         let system_api_setup =
-            writable_system::add_to_imports(&mut store, &mut imports, contract_system_api);
+            contract_system_api::add_to_imports(&mut store, &mut imports, contract_system_api);
         let views_api_setup =
             view_system_api::add_to_imports(&mut store, &mut imports, view_system_api);
         let (contract, instance) = {
@@ -474,7 +473,7 @@ impl ContractSystemApi {
     }
 }
 
-impl_writable_system!(ContractSystemApi);
+impl_contract_system_api!(ContractSystemApi);
 
 /// Implementation to forward service system calls from the guest WASM module to the host
 /// implementation.

@@ -3,7 +3,7 @@
 
 //! Functions and types to interface with the system API available to application contracts.
 
-use super::writable_system as wit;
+use super::contract_system_api as wit;
 use crate::views::ViewStorageContext;
 use futures::future;
 use linera_base::{

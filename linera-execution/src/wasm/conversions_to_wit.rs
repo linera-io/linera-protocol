@@ -8,7 +8,7 @@
 
 #![allow(clippy::duplicate_mod)]
 
-use super::{contract, service, service_system_api, writable_system};
+use super::{contract, contract_system_api, service, service_system_api};
 use crate::{
     CallResult, CalleeContext, EffectContext, EffectId, OperationContext, QueryContext, SessionId,
     UserApplicationId,
@@ -47,9 +47,9 @@ impl From<EffectId> for service_system_api::EffectId {
     }
 }
 
-impl From<EffectId> for writable_system::EffectId {
+impl From<EffectId> for contract_system_api::EffectId {
     fn from(host: EffectId) -> Self {
-        writable_system::EffectId {
+        contract_system_api::EffectId {
             chain_id: host.chain_id.into(),
             height: host.height.0,
             index: host.index,
@@ -97,9 +97,9 @@ impl From<SessionId> for contract::SessionId {
     }
 }
 
-impl From<SessionId> for writable_system::SessionId {
+impl From<SessionId> for contract_system_api::SessionId {
     fn from(host: SessionId) -> Self {
-        writable_system::SessionId {
+        contract_system_api::SessionId {
             application_id: host.application_id.into(),
             kind: host.kind,
             index: host.index,
@@ -125,9 +125,9 @@ impl From<UserApplicationId> for service_system_api::ApplicationId {
     }
 }
 
-impl From<UserApplicationId> for writable_system::ApplicationId {
+impl From<UserApplicationId> for contract_system_api::ApplicationId {
     fn from(host: UserApplicationId) -> Self {
-        writable_system::ApplicationId {
+        contract_system_api::ApplicationId {
             bytecode_id: host.bytecode_id.0.into(),
             creation: host.creation.into(),
         }
@@ -140,7 +140,7 @@ impl From<ChainId> for service_system_api::ChainId {
     }
 }
 
-impl From<ChainId> for writable_system::ChainId {
+impl From<ChainId> for contract_system_api::ChainId {
     fn from(chain_id: ChainId) -> Self {
         chain_id.0.into()
     }
@@ -197,11 +197,11 @@ impl From<CryptoHash> for service_system_api::CryptoHash {
     }
 }
 
-impl From<CryptoHash> for writable_system::CryptoHash {
+impl From<CryptoHash> for contract_system_api::CryptoHash {
     fn from(crypto_hash: CryptoHash) -> Self {
         let bytes = crypto_hash.as_bytes();
 
-        writable_system::CryptoHash {
+        contract_system_api::CryptoHash {
             part1: u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices")),
             part2: u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices")),
             part3: u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices")),
@@ -210,14 +210,14 @@ impl From<CryptoHash> for writable_system::CryptoHash {
     }
 }
 
-impl From<CallResult> for writable_system::CallResult {
+impl From<CallResult> for contract_system_api::CallResult {
     fn from(host: CallResult) -> Self {
-        writable_system::CallResult {
+        contract_system_api::CallResult {
             value: host.value,
             sessions: host
                 .sessions
                 .into_iter()
-                .map(writable_system::SessionId::from)
+                .map(contract_system_api::SessionId::from)
                 .collect(),
         }
     }
@@ -232,9 +232,9 @@ impl From<Balance> for service_system_api::Balance {
     }
 }
 
-impl From<Balance> for writable_system::Balance {
+impl From<Balance> for contract_system_api::Balance {
     fn from(host: Balance) -> Self {
-        writable_system::Balance {
+        contract_system_api::Balance {
             lower_half: host.lower_half(),
             upper_half: host.upper_half(),
         }

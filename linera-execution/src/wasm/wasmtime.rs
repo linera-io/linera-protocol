@@ -6,7 +6,7 @@
 // Export the system interface used by a user contract.
 wit_bindgen_host_wasmtime_rust::export!({
     custom_error: true,
-    paths: ["writable_system.wit"],
+    paths: ["contract_system_api.wit"],
 });
 
 // Export the system interface used by a user service.
@@ -32,9 +32,8 @@ mod conversions_to_wit;
 mod guest_futures;
 
 use self::{
-    contract::ContractData, service::ServiceData, service_system_api::ServiceSystemApiTables,
-    view_system_api::ViewSystemApiTables,
-    writable_system::{WritableSystem, WritableSystemTables},
+    contract::ContractData, contract_system_api::ContractSystemApiTables, service::ServiceData,
+    service_system_api::ServiceSystemApiTables, view_system_api::ViewSystemApiTables,
 };
 use super::{
     async_boundary::{HostFuture, WakerForwarder},
@@ -95,7 +94,7 @@ impl WasmApplication {
         let engine = Engine::new(&config).map_err(WasmExecutionError::CreateWasmtimeEngine)?;
         let mut linker = Linker::new(&engine);
 
-        writable_system::add_to_linker(&mut linker, ContractState::system_api)?;
+        contract_system_api::add_to_linker(&mut linker, ContractState::system_api)?;
         view_system_api::add_to_linker(&mut linker, ContractState::views_api)?;
 
         let module = Module::new(&engine, &self.contract_bytecode)?;
@@ -154,7 +153,7 @@ impl WasmApplication {
 pub struct ContractState<'runtime> {
     data: ContractData,
     system_api: ContractSystemApi<'runtime>,
-    system_tables: WritableSystemTables<ContractSystemApi<'runtime>>,
+    system_tables: ContractSystemApiTables<ContractSystemApi<'runtime>>,
     views_tables: ViewSystemApiTables<ContractSystemApi<'runtime>>,
 }
 
@@ -179,7 +178,7 @@ impl<'runtime> ContractState<'runtime> {
         Self {
             data: ContractData::default(),
             system_api: ContractSystemApi::new(waker, runtime, queued_future_factory),
-            system_tables: WritableSystemTables::default(),
+            system_tables: ContractSystemApiTables::default(),
             views_tables: ViewSystemApiTables::default(),
         }
     }
@@ -194,7 +193,7 @@ impl<'runtime> ContractState<'runtime> {
         &mut self,
     ) -> (
         &mut ContractSystemApi<'runtime>,
-        &mut WritableSystemTables<ContractSystemApi<'runtime>>,
+        &mut ContractSystemApiTables<ContractSystemApi<'runtime>>,
     ) {
         (&mut self.system_api, &mut self.system_tables)
     }
@@ -447,7 +446,7 @@ impl<'runtime> ContractSystemApi<'runtime> {
     }
 }
 
-impl_writable_system!(ContractSystemApi<'runtime>);
+impl_contract_system_api!(ContractSystemApi<'runtime>);
 impl_view_system_api!(ContractSystemApi<'runtime>);
 
 /// Implementation to forward service system calls from the guest WASM module to the host

@@ -8,7 +8,7 @@
 
 #![allow(clippy::duplicate_mod)]
 
-use super::{contract, service_system_api, writable_system};
+use super::{contract, contract_system_api, service_system_api};
 use crate::{
     ApplicationCallResult, ChannelName, Destination, NewSession, RawExecutionResult,
     SessionCallResult, SessionId, UserApplicationId,
@@ -122,8 +122,8 @@ impl From<contract::ChainId> for ChainId {
     }
 }
 
-impl From<writable_system::SessionId> for SessionId {
-    fn from(guest: writable_system::SessionId) -> Self {
+impl From<contract_system_api::SessionId> for SessionId {
+    fn from(guest: contract_system_api::SessionId) -> Self {
         SessionId {
             application_id: guest.application_id.into(),
             kind: guest.kind,
@@ -132,8 +132,8 @@ impl From<writable_system::SessionId> for SessionId {
     }
 }
 
-impl From<writable_system::ApplicationId> for UserApplicationId {
-    fn from(guest: writable_system::ApplicationId) -> Self {
+impl From<contract_system_api::ApplicationId> for UserApplicationId {
+    fn from(guest: contract_system_api::ApplicationId) -> Self {
         UserApplicationId {
             bytecode_id: guest.bytecode_id.into(),
             creation: guest.creation.into(),
@@ -141,14 +141,14 @@ impl From<writable_system::ApplicationId> for UserApplicationId {
     }
 }
 
-impl From<writable_system::EffectId> for BytecodeId {
-    fn from(guest: writable_system::EffectId) -> Self {
+impl From<contract_system_api::EffectId> for BytecodeId {
+    fn from(guest: contract_system_api::EffectId) -> Self {
         BytecodeId(guest.into())
     }
 }
 
-impl From<writable_system::EffectId> for EffectId {
-    fn from(guest: writable_system::EffectId) -> Self {
+impl From<contract_system_api::EffectId> for EffectId {
+    fn from(guest: contract_system_api::EffectId) -> Self {
         EffectId {
             chain_id: guest.chain_id.into(),
             height: BlockHeight(guest.height),
@@ -157,14 +157,14 @@ impl From<writable_system::EffectId> for EffectId {
     }
 }
 
-impl From<writable_system::CryptoHash> for ChainId {
-    fn from(guest: writable_system::CryptoHash) -> Self {
+impl From<contract_system_api::CryptoHash> for ChainId {
+    fn from(guest: contract_system_api::CryptoHash) -> Self {
         ChainId(guest.into())
     }
 }
 
-impl From<writable_system::CryptoHash> for CryptoHash {
-    fn from(guest: writable_system::CryptoHash) -> Self {
+impl From<contract_system_api::CryptoHash> for CryptoHash {
+    fn from(guest: contract_system_api::CryptoHash) -> Self {
         let mut bytes = [0u8; 32];
 
         bytes[0..8].copy_from_slice(&guest.part1.to_le_bytes());
