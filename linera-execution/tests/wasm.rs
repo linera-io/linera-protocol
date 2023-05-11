@@ -23,10 +23,10 @@ use test_case::test_case;
 /// called correctly and consume the expected amount of fuel.
 ///
 /// To update the bytecode files, run `linera-execution/update_wasm_fixtures.sh`.
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, 9_965_746; "wasmer"))]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, 9_965_385; "wasmer_with_sanitizer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, 9_965_385 ; "wasmtime"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer, 9_965_385 ; "wasmtime_with_sanitizer"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, 9_968_006; "wasmer"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, 9_967_655; "wasmer_with_sanitizer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, 9_967_655 ; "wasmtime"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer, 9_967_655 ; "wasmtime_with_sanitizer"))]
 #[test_log::test(tokio::test)]
 async fn test_fuel_for_counter_wasm_application(
     wasm_runtime: WasmRuntime,
@@ -65,9 +65,9 @@ async fn test_fuel_for_counter_wasm_application(
         authenticated_signer: None,
         next_effect_index: 0,
     };
-    let increments = [2_u128, 9, 7, 1000];
+    let increments = [2_u64, 9, 7, 1000];
     for increment in &increments {
-        let operation = bcs::to_bytes(increment).expect("Serialization of u128 failed");
+        let operation = bcs::to_bytes(increment).expect("Serialization of u64 failed");
         let result = view
             .execute_operation(
                 &context,
@@ -88,9 +88,9 @@ async fn test_fuel_for_counter_wasm_application(
     let context = QueryContext {
         chain_id: ChainId::root(0),
     };
-    let expected_value: u128 = increments.into_iter().sum();
+    let expected_value: u64 = increments.into_iter().sum();
     let expected_serialized_value =
-        bcs::to_bytes(&expected_value).expect("Serialization of u128 failed");
+        bcs::to_bytes(&expected_value).expect("Serialization of u64 failed");
     assert_eq!(
         view.query_application(
             &context,
