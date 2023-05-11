@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod balance_scalar;
+
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 use thiserror::Error;
@@ -272,7 +274,6 @@ impl TryFrom<Balance> for Amount {
 }
 
 doc_scalar!(Amount, "A non-negative amount of money to be transferred");
-doc_scalar!(Balance, "The balance of a chain");
 doc_scalar!(BlockHeight, "A block height to identify blocks in a chain");
 doc_scalar!(
     Timestamp,
