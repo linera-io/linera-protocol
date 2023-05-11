@@ -20,6 +20,7 @@ linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 tokio = { workspace = true, features = ["rt", "sync"] }
 
 [dev-dependencies]
+linera-sdk = { workspace = true, features = ["test"] }
 webassembly-test = { workspace = true }
 
 [[bin]]
