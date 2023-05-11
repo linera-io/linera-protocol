@@ -2734,7 +2734,7 @@ where
         assert_eq!(
             admin_chain
                 .channels
-                .load_entry_mut(&admin_channel_full_name)
+                .try_load_entry_mut(&admin_channel_full_name)
                 .await
                 .unwrap()
                 .subscribers
