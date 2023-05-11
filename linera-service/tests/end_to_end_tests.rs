@@ -1079,11 +1079,19 @@ async fn test_reconfiguration(network: Network) {
     runner.run_local_net().await;
 
     let chain_1 = client.get_wallet().default_chain().unwrap();
-    let chain_2 = client.open_and_assign(&client_2).await;
 
-    let node_service_2 = match network {
-        Network::Grpc => Some(client_2.run_node_service(chain_2, 8081).await),
-        Network::Simple => None,
+    let (node_service_2, chain_2) = match network {
+        Network::Grpc => {
+            let chain_2 = client.open_and_assign(&client_2).await;
+            let node_service_2 = client_2.run_node_service(chain_2, 8081).await;
+            (Some(node_service_2), chain_2)
+        }
+        Network::Simple => {
+            client
+                .transfer(10, ChainId::root(9), ChainId::root(8))
+                .await;
+            (None, ChainId::root(9))
+        }
     };
 
     client.query_validators(None).await;
