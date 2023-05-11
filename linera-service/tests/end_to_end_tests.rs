@@ -864,7 +864,7 @@ impl Application {
         serde_json::from_value(response_body["accounts"].clone()).unwrap_or_default()
     }
 
-    async fn assert_fungible_app_has_accounts(
+    async fn assert_fungible_account_balances(
         &self,
         accounts: impl IntoIterator<Item = (AccountOwner, Amount)>,
     ) {
@@ -1258,7 +1258,7 @@ async fn test_end_to_end_fungible() {
     let mut node_service2 = client2.run_node_service(chain2, 8081).await;
 
     let app1 = node_service1.make_application(&application_id).await;
-    app1.assert_fungible_app_has_accounts([
+    app1.assert_fungible_account_balances([
         (account_owner1, Amount::from(5)),
         (account_owner2, Amount::from(2)),
     ])
@@ -1279,7 +1279,7 @@ async fn test_end_to_end_fungible() {
     app1.query_application(&query_string).await;
 
     // Checking the final values on chain1 and chain2.
-    app1.assert_fungible_app_has_accounts([
+    app1.assert_fungible_account_balances([
         (account_owner1, Amount::from(4)),
         (account_owner2, Amount::from(2)),
     ])
@@ -1288,7 +1288,7 @@ async fn test_end_to_end_fungible() {
     // Fungible didn't exist on chain2 initially but now it does and we can talk to it.
     let app2 = node_service2.make_application(&application_id).await;
 
-    app2.assert_fungible_app_has_accounts(BTreeMap::from([
+    app2.assert_fungible_account_balances(BTreeMap::from([
         (account_owner1, Amount::from(0)),
         (account_owner2, Amount::from(1)),
     ]))
@@ -1317,12 +1317,12 @@ async fn test_end_to_end_fungible() {
     node_service2.process_inbox().await;
 
     // Checking the final value
-    app1.assert_fungible_app_has_accounts([
+    app1.assert_fungible_account_balances([
         (account_owner1, Amount::from(4)),
         (account_owner2, Amount::from(0)),
     ])
     .await;
-    app2.assert_fungible_app_has_accounts([
+    app2.assert_fungible_account_balances([
         (account_owner1, Amount::from(0)),
         (account_owner2, Amount::from(3)),
     ])
@@ -1448,7 +1448,7 @@ async fn test_end_to_end_crowd_funding() {
 
     // The rich gets their money back.
     app_fungible1
-        .assert_fungible_app_has_accounts([(account_owner1, Amount::from(6))])
+        .assert_fungible_account_balances([(account_owner1, Amount::from(6))])
         .await;
 
     node_service1.assert_is_running();
