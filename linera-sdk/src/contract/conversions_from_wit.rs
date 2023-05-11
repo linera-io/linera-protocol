@@ -5,7 +5,7 @@
 
 use super::{
     wit_types,
-    writable_system::{self as system, PollLock},
+    writable_system::{self as wit_system_api, PollLock},
 };
 use linera_base::{
     crypto::CryptoHash,
@@ -105,8 +105,8 @@ impl From<wit_types::CryptoHash> for CryptoHash {
     }
 }
 
-impl From<system::EffectId> for EffectId {
-    fn from(effect_id: system::EffectId) -> Self {
+impl From<wit_system_api::EffectId> for EffectId {
+    fn from(effect_id: wit_system_api::EffectId) -> Self {
         EffectId {
             chain_id: ChainId(effect_id.chain_id.into()),
             height: BlockHeight(effect_id.height),
@@ -115,8 +115,8 @@ impl From<system::EffectId> for EffectId {
     }
 }
 
-impl From<system::ApplicationId> for ApplicationId {
-    fn from(application_id: system::ApplicationId) -> Self {
+impl From<wit_system_api::ApplicationId> for ApplicationId {
+    fn from(application_id: wit_system_api::ApplicationId) -> Self {
         ApplicationId {
             bytecode_id: BytecodeId(application_id.bytecode_id.into()),
             creation: application_id.creation.into(),
@@ -124,8 +124,8 @@ impl From<system::ApplicationId> for ApplicationId {
     }
 }
 
-impl From<system::CryptoHash> for CryptoHash {
-    fn from(hash_value: system::CryptoHash) -> Self {
+impl From<wit_system_api::CryptoHash> for CryptoHash {
+    fn from(hash_value: wit_system_api::CryptoHash) -> Self {
         CryptoHash::from([
             hash_value.part1,
             hash_value.part2,
@@ -135,8 +135,8 @@ impl From<system::CryptoHash> for CryptoHash {
     }
 }
 
-impl From<system::Balance> for Balance {
-    fn from(balance: system::Balance) -> Self {
+impl From<wit_system_api::Balance> for Balance {
+    fn from(balance: wit_system_api::Balance) -> Self {
         let value = ((balance.upper_half as u128) << 64) | (balance.lower_half as u128);
         Balance::from(value)
     }
@@ -152,8 +152,8 @@ impl From<PollLock> for Poll<bool> {
     }
 }
 
-impl From<system::CallResult> for (Vec<u8>, Vec<SessionId>) {
-    fn from(call_result: system::CallResult) -> (Vec<u8>, Vec<SessionId>) {
+impl From<wit_system_api::CallResult> for (Vec<u8>, Vec<SessionId>) {
+    fn from(call_result: wit_system_api::CallResult) -> (Vec<u8>, Vec<SessionId>) {
         let value = call_result.value;
 
         let sessions = call_result
@@ -166,8 +166,8 @@ impl From<system::CallResult> for (Vec<u8>, Vec<SessionId>) {
     }
 }
 
-impl From<system::SessionId> for SessionId {
-    fn from(session_id: system::SessionId) -> SessionId {
+impl From<wit_system_api::SessionId> for SessionId {
+    fn from(session_id: wit_system_api::SessionId) -> SessionId {
         SessionId {
             application_id: session_id.application_id.into(),
             kind: session_id.kind,
