@@ -3,7 +3,7 @@
 
 //! Functions and types to interface with the system API available to application views.
 
-use super::view_system as system;
+use super::view_system as wit;
 use async_trait::async_trait;
 use futures::future;
 use linera_views::{
@@ -18,12 +18,12 @@ pub struct KeyValueStore;
 
 impl KeyValueStore {
     async fn find_keys_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
-        let future = system::FindKeys::new(key_prefix);
+        let future = wit::FindKeys::new(key_prefix);
         future::poll_fn(|_context| future.poll().into()).await
     }
 
     async fn find_key_values_by_prefix_load(&self, key_prefix: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
-        let future = system::FindKeyValues::new(key_prefix);
+        let future = wit::FindKeyValues::new(key_prefix);
         future::poll_fn(|_context| future.poll().into()).await
     }
 }
@@ -35,7 +35,7 @@ impl KeyValueStoreClient for KeyValueStore {
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        let future = system::ReadKeyBytes::new(key);
+        let future = wit::ReadKeyBytes::new(key);
         Ok(future::poll_fn(|_context| future.poll().into()).await)
     }
 
@@ -69,17 +69,17 @@ impl KeyValueStoreClient for KeyValueStore {
         for op in &batch.operations {
             match op {
                 WriteOperation::Delete { key } => {
-                    list_oper.push(system::WriteOperation::Delete(key));
+                    list_oper.push(wit::WriteOperation::Delete(key));
                 }
                 WriteOperation::Put { key, value } => {
-                    list_oper.push(system::WriteOperation::Put((key, value)))
+                    list_oper.push(wit::WriteOperation::Put((key, value)))
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    list_oper.push(system::WriteOperation::Deleteprefix(key_prefix))
+                    list_oper.push(wit::WriteOperation::Deleteprefix(key_prefix))
                 }
             }
         }
-        let future = system::WriteBatch::new(&list_oper);
+        let future = wit::WriteBatch::new(&list_oper);
         let () = future::poll_fn(|_context| future.poll().into()).await;
         Ok(())
     }

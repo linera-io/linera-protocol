@@ -3,7 +3,7 @@
 
 //! Functions and types to interface with the system API available to application contracts.
 
-use super::writable_system as system;
+use super::writable_system as wit;
 use crate::views::ViewStorageContext;
 use futures::future;
 use linera_base::{
@@ -19,7 +19,7 @@ pub fn load<State>() -> State
 where
     State: Default + DeserializeOwned,
 {
-    let state_bytes = system::load();
+    let state_bytes = wit::load();
     deserialize_state(state_bytes)
 }
 
@@ -28,7 +28,7 @@ pub fn load_and_lock<State>() -> Option<State>
 where
     State: Default + DeserializeOwned,
 {
-    let state_bytes = system::load_and_lock()?;
+    let state_bytes = wit::load_and_lock()?;
     Some(deserialize_state(state_bytes))
 }
 
@@ -49,12 +49,12 @@ pub async fn store_and_unlock<State>(state: State)
 where
     State: Serialize,
 {
-    system::store_and_unlock(&bcs::to_bytes(&state).expect("State serialization failed"));
+    wit::store_and_unlock(&bcs::to_bytes(&state).expect("State serialization failed"));
 }
 
 /// Loads the application state and locks it for writes.
 pub async fn load_and_lock_view<State: View<ViewStorageContext>>() -> Option<State> {
-    let future = system::Lock::new();
+    let future = wit::Lock::new();
     if future::poll_fn(|_context| future.poll().into()).await {
         Some(load_view_using::<State>().await)
     } else {
@@ -76,27 +76,27 @@ pub async fn store_and_unlock_view<State: RootView<ViewStorageContext>>(mut stat
 
 /// Retrieves the current chain ID.
 pub fn current_chain_id() -> ChainId {
-    ChainId(system::chain_id().into())
+    ChainId(wit::chain_id().into())
 }
 
 /// Retrieves the current application ID.
 pub fn current_application_id() -> ApplicationId {
-    system::application_id().into()
+    wit::application_id().into()
 }
 
 /// Retrieves the current application parameters.
 pub fn current_application_parameters() -> Vec<u8> {
-    system::application_parameters()
+    wit::application_parameters()
 }
 
 /// Retrieves the current system balance.
 pub fn current_system_balance() -> Balance {
-    system::read_system_balance().into()
+    wit::read_system_balance().into()
 }
 
 /// Retrieves the current system time.
 pub fn current_system_time() -> Timestamp {
-    system::read_system_timestamp().into()
+    wit::read_system_timestamp().into()
 }
 
 /// Calls another application without persisting the current application's state.
@@ -111,10 +111,10 @@ pub fn call_application_without_persisting_state(
 ) -> (Vec<u8>, Vec<SessionId>) {
     let forwarded_sessions: Vec<_> = forwarded_sessions
         .into_iter()
-        .map(system::SessionId::from)
+        .map(wit::SessionId::from)
         .collect();
 
-    system::try_call_application(
+    wit::try_call_application(
         authenticated,
         application.into(),
         argument,
@@ -135,15 +135,15 @@ pub fn call_session_without_persisting_state(
 ) -> (Vec<u8>, Vec<SessionId>) {
     let forwarded_sessions: Vec<_> = forwarded_sessions
         .into_iter()
-        .map(system::SessionId::from)
+        .map(wit::SessionId::from)
         .collect();
 
-    system::try_call_session(authenticated, session.into(), argument, &forwarded_sessions).into()
+    wit::try_call_session(authenticated, session.into(), argument, &forwarded_sessions).into()
 }
 
 /// Requests the host to log a message.
 ///
 /// Useful for debugging locally, but may be ignored by validators.
 pub fn log(message: &fmt::Arguments<'_>, level: log::Level) {
-    system::log(&message.to_string(), level.into());
+    wit::log(&message.to_string(), level.into());
 }

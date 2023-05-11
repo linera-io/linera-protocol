@@ -3,7 +3,7 @@
 
 //! Functions and types to interface with the system API available to application services.
 
-use super::queryable_system as system;
+use super::queryable_system as wit;
 use crate::views::ViewStorageContext;
 use futures::future;
 use linera_base::{
@@ -19,7 +19,7 @@ pub async fn load<State>() -> State
 where
     State: Default + DeserializeOwned,
 {
-    let future = system::Load::new();
+    let future = wit::Load::new();
     load_using(future::poll_fn(|_context| future.poll().into())).await
 }
 
@@ -38,7 +38,7 @@ where
 
 /// Loads the service state, without locking it for writes.
 pub async fn lock_and_load_view<State: View<ViewStorageContext>>() -> State {
-    let future = system::Lock::new();
+    let future = wit::Lock::new();
     future::poll_fn(|_context| -> Poll<Result<(), ViewError>> { future.poll().into() })
         .await
         .expect("Failed to lock application state");
@@ -47,7 +47,7 @@ pub async fn lock_and_load_view<State: View<ViewStorageContext>>() -> State {
 
 /// Loads the service state, without locking it for writes.
 pub async fn unlock_view() {
-    let future = system::Unlock::new();
+    let future = wit::Unlock::new();
     future::poll_fn(|_context| future.poll().into()).await;
 }
 
@@ -61,27 +61,27 @@ pub async fn load_view_using<State: View<ViewStorageContext>>() -> State {
 
 /// Retrieves the current chain ID.
 pub fn current_chain_id() -> ChainId {
-    ChainId(system::chain_id().into())
+    ChainId(wit::chain_id().into())
 }
 
 /// Retrieves the current application ID.
 pub fn current_application_id() -> ApplicationId {
-    system::application_id().into()
+    wit::application_id().into()
 }
 
 /// Retrieves the current application parameters.
 pub fn current_application_parameters() -> Vec<u8> {
-    system::application_parameters()
+    wit::application_parameters()
 }
 
 /// Retrieves the current system balance.
 pub fn current_system_balance() -> Balance {
-    system::read_system_balance().into()
+    wit::read_system_balance().into()
 }
 
 /// Retrieves the current system time.
 pub fn current_system_time() -> Timestamp {
-    system::read_system_timestamp().into()
+    wit::read_system_timestamp().into()
 }
 
 /// Queries another application.
@@ -89,7 +89,7 @@ pub async fn query_application(
     application: ApplicationId,
     argument: &[u8],
 ) -> Result<Vec<u8>, String> {
-    let future = system::TryQueryApplication::new(application.into(), argument);
+    let future = wit::TryQueryApplication::new(application.into(), argument);
 
     future::poll_fn(|_context| future.poll().into()).await
 }
@@ -98,5 +98,5 @@ pub async fn query_application(
 ///
 /// Useful for debugging locally, but may be ignored by validators.
 pub fn log(message: &fmt::Arguments<'_>, level: log::Level) {
-    system::log(&message.to_string(), level.into());
+    wit::log(&message.to_string(), level.into());
 }
