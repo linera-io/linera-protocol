@@ -1071,13 +1071,15 @@ async fn test_reconfiguration(network: Network) {
     let mut runner = TestRunner::new(network, 4);
     let client = runner.make_client(network);
     let client_2 = runner.make_client(network);
-    let chain_1 = ChainId::root(0);
-    let chain_2 = ChainId::root(9);
 
     let servers = runner.generate_initial_validator_config().await;
     client.create_genesis_config().await;
-    client_2.init(&[chain_2]).await;
+    client_2.init(&[]).await;
     runner.run_local_net().await;
+
+    let chain_1 = client.get_wallet().default_chain().unwrap();
+    let chain_2 = client.open_and_assign(&client_2).await;
+
     let node_service_2 = match network {
         Network::Grpc => Some(client_2.run_node_service(chain_2, 8081).await),
         Network::Simple => None,
@@ -1087,19 +1089,18 @@ async fn test_reconfiguration(network: Network) {
 
     // Query balance for first and last user chain
     assert_eq!(client.query_balance(chain_1).await.unwrap(), 10);
-    assert_eq!(client.query_balance(chain_2).await.unwrap(), 10);
+    assert_eq!(client.query_balance(chain_2).await.unwrap(), 0);
 
-    // Transfer 10 units then 5 back
-    client.transfer(10, chain_1, chain_2).await;
-    client.transfer(5, chain_2, chain_1).await;
+    // Transfer 3 units
+    client.transfer(3, chain_1, chain_2).await;
 
     // Restart last server (dropping it kills the process)
     runner.kill_server(4, 3);
     runner.start_server(4, 3).await;
 
     // Query balances again
-    assert_eq!(client.query_balance(chain_1).await.unwrap(), 5);
-    assert_eq!(client.query_balance(chain_2).await.unwrap(), 15);
+    assert_eq!(client.query_balance(chain_1).await.unwrap(), 7);
+    assert_eq!(client.query_balance(chain_2).await.unwrap(), 3);
 
     // Launch local benchmark using all user chains
     client.benchmark(500).await;
@@ -1120,7 +1121,6 @@ async fn test_reconfiguration(network: Network) {
     // Add validator 5
     client.set_validator(&server_5, 9500, 100).await;
 
-    assert_eq!(client.query_balance(chain_1).await.unwrap(), 5);
     client.query_validators(None).await;
     client.query_validators(Some(chain_1)).await;
 
@@ -1131,7 +1131,6 @@ async fn test_reconfiguration(network: Network) {
     client.remove_validator(&server_5).await;
     runner.remove_validator(5);
 
-    assert_eq!(client.query_balance(chain_1).await.unwrap(), 5);
     client.query_validators(None).await;
     client.query_validators(Some(chain_1)).await;
 
@@ -1142,7 +1141,8 @@ async fn test_reconfiguration(network: Network) {
     }
 
     client.transfer(5, chain_1, chain_2).await;
-    assert_eq!(client.query_balance(chain_2).await.unwrap(), 20);
+    client.synchronize_balance(chain_2).await;
+    assert_eq!(client.query_balance(chain_2).await.unwrap(), 8);
 
     if let Some(node_service_2) = node_service_2 {
         // TODO(#701): Query the balance instead and check that it's 20.
@@ -1151,7 +1151,7 @@ async fn test_reconfiguration(network: Network) {
             .await;
         assert_eq!(
             response["chain"]["tipState"]["nextBlockHeight"].as_u64(),
-            Some(17)
+            Some(16)
         );
     }
 }

@@ -141,6 +141,14 @@ impl WalletState {
         self.chains.keys().copied().collect()
     }
 
+    /// Returns the list of all chain IDs for which we have a secret key.
+    pub fn own_chain_ids(&self) -> Vec<ChainId> {
+        self.chains
+            .iter()
+            .filter_map(|(chain_id, chain)| chain.key_pair.is_some().then_some(*chain_id))
+            .collect()
+    }
+
     pub fn num_chains(&self) -> usize {
         self.chains.len()
     }
