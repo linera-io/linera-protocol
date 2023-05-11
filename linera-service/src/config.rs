@@ -152,7 +152,8 @@ impl WalletState {
 
     /// Returns the list of all chain IDs for which we have a secret key.
     pub fn own_chain_ids(&self) -> Vec<ChainId> {
-        self.chains
+        self.inner
+            .chains
             .iter()
             .filter_map(|(chain_id, chain)| chain.key_pair.is_some().then_some(*chain_id))
             .collect()
