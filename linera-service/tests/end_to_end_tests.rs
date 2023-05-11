@@ -1185,7 +1185,6 @@ async fn test_end_to_end_social_user_pub_sub() {
 
     // Request the application so chain 2 has it, too.
     node_service2.request_application(&application_id).await;
-    node_service1.process_inbox().await; // Respond with RegisterApplications.
 
     let app2 = node_service2.make_application(&application_id).await;
     let subscribe = format!("mutation {{ subscribe(chainId: \"{chain1}\") }}");
@@ -1482,7 +1481,6 @@ async fn test_end_to_end_crowd_funding() {
     node_service2
         .request_application(&application_id_crowd)
         .await;
-    node_service1.process_inbox().await; // Respond with RegisterApplications.
 
     let app_crowd2 = node_service2.make_application(&application_id_crowd).await;
 
