@@ -186,7 +186,6 @@ where
                 info!("Running all shards");
                 let num_shards = self.server_config.internal_network.shards.len();
                 (0..num_shards)
-                    .into_iter()
                     .map(|shard| self.make_shard_state(listen_address, shard, storage.clone()))
                     .collect()
             }
