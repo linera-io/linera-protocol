@@ -6,21 +6,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Represents the owner(s) of a chain.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub enum ChainOwnership {
     /// The chain is not active. (No blocks can be created)
+    #[default]
     None,
     /// The chain is managed by a single owner.
     Single { owner: Owner, public_key: PublicKey },
     /// The chain is managed by multiple owners.
     Multi { owners: HashMap<Owner, PublicKey> },
-}
-
-impl Default for ChainOwnership {
-    fn default() -> Self {
-        ChainOwnership::None
-    }
 }
 
 impl ChainOwnership {

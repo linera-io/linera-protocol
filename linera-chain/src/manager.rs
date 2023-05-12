@@ -20,9 +20,10 @@ use std::collections::HashMap;
 use tracing::error;
 
 /// How to produce new blocks.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub enum ChainManager {
     /// The chain is not active. (No blocks can be created)
+    #[default]
     None,
     /// The chain is managed by a single owner.
     Single(Box<SingleOwnerManager>),
@@ -61,12 +62,6 @@ pub struct MultiOwnerManager {
 pub enum Outcome {
     Accept,
     Skip,
-}
-
-impl Default for ChainManager {
-    fn default() -> Self {
-        ChainManager::None
-    }
 }
 
 impl SingleOwnerManager {
@@ -326,10 +321,11 @@ impl ChainManager {
 }
 
 /// Chain manager information that is included in `ChainInfo` sent to clients.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub enum ChainManagerInfo {
     /// The chain is not active. (No blocks can be created)
+    #[default]
     None,
     /// The chain is managed by a single owner.
     Single(Box<SingleOwnerManagerInfo>),
@@ -392,12 +388,6 @@ impl From<&ChainManager> for ChainManagerInfo {
             }
             ChainManager::None => ChainManagerInfo::None,
         }
-    }
-}
-
-impl Default for ChainManagerInfo {
-    fn default() -> Self {
-        ChainManagerInfo::None
     }
 }
 
