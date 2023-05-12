@@ -184,7 +184,7 @@ where
                 event.is_none(),
                 ChainError::MissingCrossChainUpdate {
                     chain_id,
-                    origin,
+                    origin: origin.into(),
                     height: event.unwrap().height,
                 }
             );

@@ -112,14 +112,14 @@ impl From<(ChainId, Origin, InboxError)> for ChainError {
                 previous_event,
             } => ChainError::UnexpectedMessage {
                 chain_id,
-                origin,
+                origin: origin.into(),
                 event,
                 previous_event,
             },
             InboxError::IncorrectOrder { event, next_cursor } => {
                 ChainError::IncorrectMessageOrder {
                     chain_id,
-                    origin,
+                    origin: origin.into(),
                     event,
                     next_height: next_cursor.height,
                     next_index: next_cursor.index,

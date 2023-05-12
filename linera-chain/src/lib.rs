@@ -40,7 +40,7 @@ pub enum ChainError {
     )]
     MissingCrossChainUpdate {
         chain_id: ChainId,
-        origin: Origin,
+        origin: Box<Origin>,
         height: BlockHeight,
     },
     #[error(
@@ -49,7 +49,7 @@ pub enum ChainError {
     )]
     UnexpectedMessage {
         chain_id: ChainId,
-        origin: Origin,
+        origin: Box<Origin>,
         event: Event,
         previous_event: Event,
     },
@@ -59,7 +59,7 @@ pub enum ChainError {
     )]
     IncorrectMessageOrder {
         chain_id: ChainId,
-        origin: Origin,
+        origin: Box<Origin>,
         event: Event,
         next_height: BlockHeight,
         next_index: u32,

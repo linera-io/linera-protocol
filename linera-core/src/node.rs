@@ -203,7 +203,7 @@ impl From<ChainError> for NodeError {
                 height,
             } => Self::MissingCrossChainUpdate {
                 chain_id,
-                origin,
+                origin: *origin,
                 height,
             },
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
