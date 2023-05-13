@@ -329,6 +329,21 @@ fn generic_argument_from_type_path(type_path: &TypePath) -> Vec<&Type> {
         .collect()
 }
 
+fn generic_offset(
+    context: &Type,
+    context_constraints: &Option<TokenStream2>,
+    generics: &[&Type],
+) -> usize {
+    let requires_generic_context = context_constraints.is_some();
+    let first_generic_argument_is_context = requires_generic_context || generics[0] == context;
+
+    if first_generic_argument_is_context {
+        1
+    } else {
+        0
+    }
+}
+
 fn generate_graphql_code_for_field(
     context: Type,
     context_constraints: Option<TokenStream2>,
@@ -348,8 +363,10 @@ fn generate_graphql_code_for_field(
     match view_type.to_string().as_str() {
         "RegisterView" => {
             let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_types_offset =
+                generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
-                .get(1)
+                .get(generic_types_offset)
                 .expect("no generic specified for 'RegisterView'");
             let r#impl = quote! {
                 async fn #field_name(&self) -> &#generic_ident {
@@ -363,11 +380,13 @@ fn generate_graphql_code_for_field(
         | "CustomCollectionView"
         | "ReentrantCustomCollectionView" => {
             let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_types_offset =
+                generic_offset(&context, &context_constraints, &generic_arguments);
             let index_ident = generic_arguments
-                .get(1)
+                .get(generic_types_offset)
                 .unwrap_or_else(|| panic!("no index specified for '{}'", view_name));
             let generic_ident = generic_arguments
-                .get(2)
+                .get(generic_types_offset + 1)
                 .unwrap_or_else(|| panic!("no generic type specified for '{}'", view_name));
 
             let index_name = snakify(index_ident);
@@ -431,8 +450,10 @@ fn generate_graphql_code_for_field(
         }
         "SetView" | "CustomSetView" => {
             let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_types_offset =
+                generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
-                .get(1)
+                .get(generic_types_offset)
                 .unwrap_or_else(|| panic!("no generic type specified for '{}'", view_name));
 
             let r#impl = quote! {
@@ -444,8 +465,10 @@ fn generate_graphql_code_for_field(
         }
         "LogView" => {
             let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_types_offset =
+                generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
-                .get(1)
+                .get(generic_types_offset)
                 .expect("no generic type specified for 'LogView'");
 
             let r#impl = quote! {
@@ -464,8 +487,10 @@ fn generate_graphql_code_for_field(
         }
         "WrappedHashableContainerView" => {
             let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_types_offset =
+                generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
-                .get(1)
+                .get(generic_types_offset)
                 .expect("no generic specified for 'WrappedHashableContainerView'");
             let r#impl = quote! {
                 async fn #field_name(&self) -> &#generic_ident {
@@ -477,8 +502,10 @@ fn generate_graphql_code_for_field(
         }
         "QueueView" => {
             let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_types_offset =
+                generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
-                .get(1)
+                .get(generic_types_offset)
                 .expect("no generic type specified for 'QueueView'");
 
             let r#impl = quote! {
@@ -491,8 +518,10 @@ fn generate_graphql_code_for_field(
         }
         "ByteMapView" => {
             let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_types_offset =
+                generic_offset(&context, &context_constraints, &generic_arguments);
             let generic_ident = generic_arguments
-                .get(1)
+                .get(generic_types_offset)
                 .expect("no generic type specified for 'ByteMapView'");
 
             let r#impl = quote! {
@@ -504,11 +533,13 @@ fn generate_graphql_code_for_field(
         }
         "MapView" | "CustomMapView" => {
             let generic_arguments = generic_argument_from_type_path(&type_path);
+            let generic_types_offset =
+                generic_offset(&context, &context_constraints, &generic_arguments);
             let index_ident = generic_arguments
-                .get(1)
+                .get(generic_types_offset)
                 .unwrap_or_else(|| panic!("no index specified for '{}'", view_name));
             let generic_ident = generic_arguments
-                .get(2)
+                .get(generic_types_offset + 1)
                 .unwrap_or_else(|| panic!("no generic type specified for '{}'", view_name));
 
             let index_name = snakify(index_ident);
