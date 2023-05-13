@@ -577,9 +577,9 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, fields(address = self.address))]
-    async fn handle_lite_certificate<'a>(
+    async fn handle_lite_certificate(
         &mut self,
-        certificate: data_types::LiteCertificate<'a>,
+        certificate: data_types::LiteCertificate<'_>,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         client_delegate!(self, handle_lite_certificate, certificate)
     }

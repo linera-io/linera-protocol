@@ -74,9 +74,9 @@ where
         .await
     }
 
-    async fn handle_lite_certificate<'a>(
+    async fn handle_lite_certificate(
         &mut self,
-        certificate: LiteCertificate<'a>,
+        certificate: LiteCertificate<'_>,
     ) -> Result<ChainInfoResponse, NodeError> {
         let certificate = certificate.cloned();
         self.spawn_and_receive(move |validator, sender| {

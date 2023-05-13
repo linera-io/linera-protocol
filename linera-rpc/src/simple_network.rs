@@ -409,9 +409,9 @@ impl ValidatorNode for SimpleClient {
     }
 
     /// Processes a hash certificate.
-    async fn handle_lite_certificate<'a>(
+    async fn handle_lite_certificate(
         &mut self,
-        certificate: LiteCertificate<'a>,
+        certificate: LiteCertificate<'_>,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.send_recv_info(certificate.cloned().into()).await
     }
