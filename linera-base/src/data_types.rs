@@ -2,8 +2,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod balance_scalar;
-
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 use thiserror::Error;
@@ -25,10 +23,37 @@ use crate::doc_scalar;
 pub struct Amount(u64);
 
 /// The balance of a chain.
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
 pub struct Balance(u128);
+
+#[derive(Serialize, Deserialize)]
+struct BalanceU64 {
+    upper: u64,
+    lower: u64,
+}
+
+impl Serialize for Balance {
+    fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            let upper = self.upper_half();
+            let lower = self.lower_half();
+            BalanceU64 { upper, lower }.serialize(serializer)
+        } else {
+            self.0.serialize(serializer)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Balance {
+    fn deserialize<D: serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        if deserializer.is_human_readable() {
+            let b = BalanceU64::deserialize(deserializer)?;
+            Ok(Balance(((b.upper as u128) << 64) | (b.lower as u128)))
+        } else {
+            Ok(Balance(u128::deserialize(deserializer)?))
+        }
+    }
+}
 
 /// A block height to identify blocks in a chain.
 #[derive(
@@ -274,6 +299,7 @@ impl TryFrom<Balance> for Amount {
 }
 
 doc_scalar!(Amount, "A non-negative amount of money to be transferred");
+doc_scalar!(Balance, "The balance of a chain");
 doc_scalar!(BlockHeight, "A block height to identify blocks in a chain");
 doc_scalar!(
     Timestamp,

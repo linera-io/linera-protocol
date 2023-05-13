@@ -1154,20 +1154,18 @@ async fn test_reconfiguration(network: Network) {
     assert_eq!(client.query_balance(chain_2).await.unwrap(), 8);
 
     if let Some(node_service_2) = node_service_2 {
-        'success: {
-            for i in 0..10 {
-                tokio::time::sleep(Duration::from_secs(i)).await;
-                let response = node_service_2
-                    .query("query { chain { executionState { system { balance } } } }")
-                    .await;
-                if response["chain"]["executionState"]["system"]["balance"]
-                    == json!({ "upper": 0, "lower": 8 })
-                {
-                    break 'success;
-                }
+        for i in 0..10 {
+            tokio::time::sleep(Duration::from_secs(i)).await;
+            let response = node_service_2
+                .query("query { chain { executionState { system { balance } } } }")
+                .await;
+            if response["chain"]["executionState"]["system"]["balance"]
+                == json!({ "upper": 0, "lower": 8 })
+            {
+                return;
             }
-            panic!("Failed to receive new block");
         }
+        panic!("Failed to receive new block");
     }
 }
 
