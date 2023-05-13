@@ -10,8 +10,11 @@ extern crate syn;
 use crate::util::{concat, create_entry_name, snakify};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{format_ident, quote, ToTokens};
-use syn::{parse_macro_input, Field, GenericArgument, ItemStruct, PathArguments, Type, TypePath};
+use quote::{format_ident, quote};
+use syn::{
+    parse_macro_input, Attribute, Field, GenericArgument, ItemStruct, Lit, LitStr, MetaNameValue,
+    PathArguments, Type, TypePath,
+};
 
 fn get_seq_parameter(generics: syn::Generics) -> Vec<syn::Ident> {
     let mut generic_vect = Vec::new();
@@ -35,16 +38,49 @@ fn get_type_field(field: syn::Field) -> Option<syn::Ident> {
     }
 }
 
-fn context_and_constraints(template_vect: &[syn::Ident]) -> (TokenStream2, TokenStream2) {
-    let context = template_vect
-        .get(0)
-        .expect("failed to find the first generic parameter")
-        .into_token_stream();
-    let constraints = quote! {
-        where
-            #context: linera_views::common::Context + Send + Sync + Clone + 'static,
-            linera_views::views::ViewError: From<#context::Error>,
-    };
+fn custom_attribute(attributes: &[Attribute], key: &str) -> Option<LitStr> {
+    attributes
+        .iter()
+        .filter(|attribute| attribute.path.is_ident("view"))
+        .filter_map(|attribute| match attribute.parse_args() {
+            Ok(MetaNameValue {
+                path,
+                lit: Lit::Str(value),
+                ..
+            }) => path.is_ident(key).then_some(value),
+            _ => panic!(
+                r#"Invalid `view` attribute syntax. \
+                Expected syntax: `#[view(key = "value")]`"#,
+            ),
+        })
+        .next()
+}
+
+fn context_and_constraints(
+    attributes: &[Attribute],
+    template_vect: &[syn::Ident],
+) -> (Type, Option<TokenStream2>) {
+    let context;
+    let constraints;
+
+    if let Some(context_literal) = custom_attribute(attributes, "context") {
+        context = context_literal.parse().expect("Invalid context");
+        constraints = None;
+    } else {
+        context = Type::Path(TypePath {
+            qself: None,
+            path: template_vect
+                .get(0)
+                .expect("failed to find the first generic parameter")
+                .clone()
+                .into(),
+        });
+        constraints = Some(quote! {
+            where
+                #context: linera_views::common::Context + Send + Sync + Clone + 'static,
+                linera_views::views::ViewError: From<#context::Error>,
+        });
+    }
 
     (context, constraints)
 }
@@ -54,7 +90,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let generics = input.generics;
     let template_vect = get_seq_parameter(generics.clone());
 
-    let (context, context_constraints) = context_and_constraints(&template_vect);
+    let (context, context_constraints) = context_and_constraints(&input.attrs, &template_vect);
 
     let mut name_quotes = Vec::new();
     let mut load_future_quotes = Vec::new();
@@ -149,7 +185,7 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
     let generics = input.generics;
     let template_vect = get_seq_parameter(generics.clone());
 
-    let (context, context_constraints) = context_and_constraints(&template_vect);
+    let (context, context_constraints) = context_and_constraints(&input.attrs, &template_vect);
 
     let mut flushes = Vec::new();
     let mut deletes = Vec::new();
@@ -197,9 +233,8 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
     let struct_name = input.ident;
     let generics = input.generics;
     let template_vect = get_seq_parameter(generics.clone());
-    let first_generic = template_vect
-        .get(0)
-        .expect("failed to find the first generic parameter");
+
+    let (context, context_constraints) = context_and_constraints(&input.attrs, &template_vect);
 
     let mut field_hashes_mut = Vec::new();
     let mut field_hashes = Vec::new();
@@ -211,10 +246,8 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
 
     quote! {
         #[async_trait::async_trait]
-        impl #generics linera_views::views::HashableView<#first_generic> for #struct_name #generics
-        where
-            #first_generic: linera_views::common::Context + Send + Sync + Clone + 'static,
-            linera_views::views::ViewError: From<#first_generic::Error>,
+        impl #generics linera_views::views::HashableView<#context> for #struct_name #generics
+        #context_constraints
         {
             type Hasher = linera_views::sha3::Sha3_256;
 
@@ -241,17 +274,14 @@ fn generate_crypto_hash_code(input: ItemStruct) -> TokenStream2 {
     let struct_name = input.ident;
     let generics = input.generics;
     let template_vect = get_seq_parameter(generics.clone());
-    let first_generic = template_vect
-        .get(0)
-        .expect("failed to find the first generic parameter");
+
+    let (context, context_constraints) = context_and_constraints(&input.attrs, &template_vect);
 
     let hash_type = syn::Ident::new(&format!("{}Hash", struct_name), Span::call_site());
     quote! {
         #[async_trait::async_trait]
-        impl #generics linera_views::views::CryptoHashView<#first_generic> for #struct_name #generics
-        where
-            #first_generic: linera_views::common::Context + Send + Sync + Clone + 'static,
-            linera_views::views::ViewError: From<#first_generic::Error>,
+        impl #generics linera_views::views::CryptoHashView<#context> for #struct_name #generics
+        #context_constraints
         {
             async fn crypto_hash(&self) -> Result<linera_base::crypto::CryptoHash, linera_views::views::ViewError> {
                 use linera_base::crypto::{BcsHashable, CryptoHash};
@@ -299,7 +329,11 @@ fn generic_argument_from_type_path(type_path: &TypePath) -> Vec<&Type> {
         .collect()
 }
 
-fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenStream2>) {
+fn generate_graphql_code_for_field(
+    context: Type,
+    context_constraints: Option<TokenStream2>,
+    field: Field,
+) -> (TokenStream2, Option<TokenStream2>) {
     let field_name = field
         .ident
         .clone()
@@ -338,9 +372,13 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
 
             let index_name = snakify(index_ident);
             let entry_name = create_entry_name(generic_ident);
+            let context_generics = context_constraints.as_ref().map(|_| quote! { <#context> });
 
             let r#impl = quote! {
-                async fn #field_name(&self, #index_name: #index_ident) -> Result<#entry_name<C>, async_graphql::Error> {
+                async fn #field_name(
+                    &self,
+                    #index_name: #index_ident,
+                ) -> Result<#entry_name #context_generics, async_graphql::Error> {
                     Ok(#entry_name {
                         #index_name: #index_name.clone(),
                         guard: self.#field_name.try_load_entry(&#index_name).await?,
@@ -362,21 +400,21 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
                     todo!()
                 }
             };
+            let context_generics_with_lifetime = context_constraints
+                .as_ref()
+                .map(|_| quote! { <#lifetime #context> })
+                .unwrap_or_else(|| quote! { <#lifetime> });
             let r#struct = quote! {
-                pub struct #entry_name<#lifetime C>
-                where
-                    C: Sync + Send + linera_views::common::Context + 'static,
-                    linera_views::views::ViewError: From<C::Error>,
+                pub struct #entry_name #context_generics_with_lifetime
+                #context_constraints
                 {
                     #index_name: #index_ident,
                     guard: #guard<#lifetime #generic_ident>,
                 }
 
                 #[async_graphql::Object]
-                impl<#lifetime C> #entry_name<#lifetime C>
-                where
-                    C: Sync + Send + linera_views::common::Context + 'static + Clone,
-                    linera_views::views::ViewError: From<C::Error>,
+                impl #context_generics_with_lifetime #entry_name #context_generics_with_lifetime
+                #context_constraints
                 {
                     async fn #index_name(&self) -> &#index_ident {
                         &self.#index_name
@@ -513,13 +551,14 @@ fn generate_graphql_code(input: ItemStruct) -> TokenStream2 {
     let generics = input.generics;
     let template_vect = get_seq_parameter(generics.clone());
 
-    let (_context, constraints) = context_and_constraints(&template_vect);
+    let (context, context_constraints) = context_and_constraints(&input.attrs, &template_vect);
 
     let mut impls = vec![];
     let mut structs = vec![];
 
     for field in input.fields {
-        let (r#impl, r#struct) = generate_graphql_code_for_field(field);
+        let (r#impl, r#struct) =
+            generate_graphql_code_for_field(context.clone(), context_constraints.clone(), field);
         impls.push(r#impl);
         if let Some(r#struct) = r#struct {
             structs.push(r#struct);
@@ -531,7 +570,7 @@ fn generate_graphql_code(input: ItemStruct) -> TokenStream2 {
 
         #[async_graphql::Object]
         impl #generics #struct_name #generics
-        #constraints
+        #context_constraints
         {
             #
 
@@ -542,13 +581,13 @@ fn generate_graphql_code(input: ItemStruct) -> TokenStream2 {
     }
 }
 
-#[proc_macro_derive(View)]
+#[proc_macro_derive(View, attributes(view))]
 pub fn derive_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     generate_view_code(input, false).into()
 }
 
-#[proc_macro_derive(HashableView)]
+#[proc_macro_derive(HashableView, attributes(view))]
 pub fn derive_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), false);
@@ -556,7 +595,7 @@ pub fn derive_hash_view(input: TokenStream) -> TokenStream {
     stream.into()
 }
 
-#[proc_macro_derive(RootView)]
+#[proc_macro_derive(RootView, attributes(view))]
 pub fn derive_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), true);
@@ -564,7 +603,7 @@ pub fn derive_root_view(input: TokenStream) -> TokenStream {
     stream.into()
 }
 
-#[proc_macro_derive(CryptoHashView)]
+#[proc_macro_derive(CryptoHashView, attributes(view))]
 pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), false);
@@ -573,7 +612,7 @@ pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
     stream.into()
 }
 
-#[proc_macro_derive(CryptoHashRootView)]
+#[proc_macro_derive(CryptoHashRootView, attributes(view))]
 pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), true);
@@ -583,7 +622,7 @@ pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
     stream.into()
 }
 
-#[proc_macro_derive(HashableRootView)]
+#[proc_macro_derive(HashableRootView, attributes(view))]
 #[cfg(test)]
 pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
@@ -593,7 +632,7 @@ pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
     stream.into()
 }
 
-#[proc_macro_derive(GraphQLView)]
+#[proc_macro_derive(GraphQLView, attributes(view))]
 pub fn derive_graphql_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     generate_graphql_code(input).into()
