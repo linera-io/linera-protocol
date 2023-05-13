@@ -918,103 +918,131 @@ pub mod tests {
                 generics_with_lifetime,
             } = context;
 
-            let input: ItemStruct = parse_quote!(
-                #attribute
-                struct TestView #generics {
-                    raw: String,
-                    register: RegisterView<#context, Option<usize>>,
-                    collection: CollectionView<#context, String, SomeOtherView<#context>>,
-                    set: SetView<#context, HashSet<usize>>,
-                    log: LogView<#context, usize>,
-                    queue: QueueView<#context, usize>,
-                    map: MapView<#context, String, usize>
-                }
-            );
+            let explicit_context_cases = if attribute.is_some() {
+                [true, false].iter()
+            } else {
+                [true].iter()
+            }
+            .copied();
 
-            let output = generate_graphql_code(input);
+            for with_explicit_context in explicit_context_cases {
+                let maybe_context = with_explicit_context.then(|| quote! { #context, });
 
-            let expected = quote! {
-                pub struct SomeOtherViewEntry #generics_with_lifetime
-                #constraints
-                {
-                    string: String,
-                    guard: linera_views::collection_view::ReadGuardedView<'a, SomeOtherView<#context>>,
-                }
-                #[async_graphql::Object]
-                impl #generics_with_lifetime SomeOtherViewEntry #generics_with_lifetime
-                #constraints
-                {
-                    async fn string(&self) -> &String {
-                        &self.string
+                let input: ItemStruct = parse_quote!(
+                    #attribute
+                    struct TestView #generics {
+                        raw: String,
+                        register: RegisterView<#maybe_context Option<usize>>,
+                        collection: CollectionView<#maybe_context String, SomeOtherView<#context>>,
+                        set: SetView<#maybe_context HashSet<usize>>,
+                        log: LogView<#maybe_context usize>,
+                        queue: QueueView<#maybe_context usize>,
+                        map: MapView<#maybe_context String, usize>
                     }
-                    async fn some_other_view(&self) -> &SomeOtherView<#context> {
-                        use std::ops::Deref;
-                        self.guard.deref()
-                    }
-                }
-                #[async_graphql::Object]
-                impl #generics TestView #generics
-                #constraints
-                {
-                    async fn raw(&self) -> &String {
-                        &self.raw
-                    }
-                    async fn register(&self) -> &Option<usize> {
-                        self.register.get()
-                    }
-                    async fn collection(
-                        &self,
-                        string: String,
-                    ) -> Result<SomeOtherViewEntry #generics, async_graphql::Error> {
-                        Ok(SomeOtherViewEntry {
-                            string: string.clone(),
-                            guard: self.collection.try_load_entry(&string).await?,
-                        })
-                    }
-                    async fn set(&self) -> Result<Vec<HashSet<usize>>, async_graphql::Error> {
-                        Ok(self.set.indices().await?)
-                    }
-                    async fn log(
-                        &self,
-                        start: Option<usize>,
-                        end: Option<usize>
-                    ) -> Result<Vec<usize>, async_graphql::Error> {
-                        let range = std::ops::Range {
-                            start: start.unwrap_or(0),
-                            end: end.unwrap_or(self.log.count()),
-                        };
-                        Ok(self.log.read(range).await?)
-                    }
-                    async fn queue(&self, count: Option<usize>) -> Result<Vec<usize>, async_graphql::Error> {
-                        let count = count.unwrap_or_else(|| self.queue.count());
-                        Ok(self.queue.read_front(count).await?)
-                    }
-                    async fn map(&self, string: String) -> Result<Option<usize>, async_graphql::Error> {
-                        Ok(self.map.get(&string).await?)
-                    }
-                    async fn map_keys(&self, count: Option<u64>)
-                        -> Result<Vec<String>, async_graphql::Error>
+                );
+
+                let output = generate_graphql_code(input);
+
+                let expected = quote! {
+                    pub struct SomeOtherViewEntry #generics_with_lifetime
+                    #constraints
                     {
-                        let count = count.unwrap_or(u64::MAX).try_into().unwrap_or(usize::MAX);
-                        let mut keys = vec![];
-                        if count == 0 {
-                            return Ok(keys);
-                        }
-                        self.map.for_each_index_while(|key| {
-                            keys.push(key);
-                            Ok(keys.len() < count)
-                        }).await?;
-                        Ok(keys)
+                        string: String,
+                        guard: linera_views::collection_view::ReadGuardedView<
+                            'a,
+                            SomeOtherView<#context>
+                        >,
                     }
-                }
-            };
+                    #[async_graphql::Object]
+                    impl #generics_with_lifetime SomeOtherViewEntry #generics_with_lifetime
+                    #constraints
+                    {
+                        async fn string(&self) -> &String {
+                            &self.string
+                        }
+                        async fn some_other_view(&self) -> &SomeOtherView<#context> {
+                            use std::ops::Deref;
+                            self.guard.deref()
+                        }
+                    }
+                    #[async_graphql::Object]
+                    impl #generics TestView #generics
+                    #constraints
+                    {
+                        async fn raw(&self) -> &String {
+                            &self.raw
+                        }
 
-            assert_eq_no_whitespace(output.to_string(), expected.to_string())
+                        async fn register(&self) -> &Option<usize> {
+                            self.register.get()
+                        }
+
+                        async fn collection(
+                            &self,
+                            string: String,
+                        ) -> Result<SomeOtherViewEntry #generics, async_graphql::Error> {
+                            Ok(SomeOtherViewEntry {
+                                string: string.clone(),
+                                guard: self.collection.try_load_entry(&string).await?,
+                            })
+                        }
+
+                        async fn set(&self) -> Result<Vec<HashSet<usize>>, async_graphql::Error> {
+                            Ok(self.set.indices().await?)
+                        }
+
+                        async fn log(
+                            &self,
+                            start: Option<usize>,
+                            end: Option<usize>
+                        ) -> Result<Vec<usize>, async_graphql::Error> {
+                            let range = std::ops::Range {
+                                start: start.unwrap_or(0),
+                                end: end.unwrap_or(self.log.count()),
+                            };
+                            Ok(self.log.read(range).await?)
+                        }
+
+                        async fn queue(
+                            &self,
+                            count: Option<usize>
+                        ) -> Result<Vec<usize>, async_graphql::Error> {
+                            let count = count.unwrap_or_else(|| self.queue.count());
+                            Ok(self.queue.read_front(count).await?)
+                        }
+
+                        async fn map(
+                            &self,
+                            string: String
+                        ) -> Result<Option<usize>, async_graphql::Error> {
+                            Ok(self.map.get(&string).await?)
+                        }
+
+                        async fn map_keys(
+                            &self,
+                            count: Option<u64>
+                        ) -> Result<Vec<String>, async_graphql::Error> {
+                            let count = count.unwrap_or(u64::MAX).try_into().unwrap_or(usize::MAX);
+                            let mut keys = vec![];
+                            if count == 0 {
+                                return Ok(keys);
+                            }
+                            self.map.for_each_index_while(|key| {
+                                keys.push(key);
+                                Ok(keys.len() < count)
+                            }).await?;
+                            Ok(keys)
+                        }
+                    }
+                };
+
+                assert_eq_no_whitespace(output.to_string(), expected.to_string())
+            }
         }
     }
 
     pub struct SpecificContextInfo {
-        attribute: TokenStream2,
+        attribute: Option<TokenStream2>,
         context: Type,
         generics: TokenStream2,
         generics_with_lifetime: TokenStream2,
@@ -1024,7 +1052,7 @@ pub mod tests {
     impl SpecificContextInfo {
         pub fn empty() -> Self {
             SpecificContextInfo {
-                attribute: quote! {},
+                attribute: None,
                 context: syn::parse_str("C").unwrap(),
                 generics: quote! { <C> },
                 generics_with_lifetime: quote! { <'a, C> },
@@ -1038,7 +1066,7 @@ pub mod tests {
 
         pub fn new(context: &str) -> Self {
             SpecificContextInfo {
-                attribute: quote! { #[view(context = #context)] },
+                attribute: Some(quote! { #[view(context = #context)] }),
                 context: syn::parse_str(context).unwrap(),
                 generics: quote! {},
                 generics_with_lifetime: quote! { <'a,> },
