@@ -27,10 +27,15 @@ pub struct Amount(u64);
 pub struct Balance(u128);
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename = "Balance")]
 struct BalanceU64 {
     upper: u64,
     lower: u64,
 }
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "Balance")]
+struct BalanceU128(u128);
 
 impl Serialize for Balance {
     fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -39,7 +44,7 @@ impl Serialize for Balance {
             let lower = self.lower_half();
             BalanceU64 { upper, lower }.serialize(serializer)
         } else {
-            self.0.serialize(serializer)
+            BalanceU128(self.0).serialize(serializer)
         }
     }
 }
@@ -50,7 +55,7 @@ impl<'de> Deserialize<'de> for Balance {
             let b = BalanceU64::deserialize(deserializer)?;
             Ok(Balance(((b.upper as u128) << 64) | (b.lower as u128)))
         } else {
-            Ok(Balance(u128::deserialize(deserializer)?))
+            Ok(Balance(BalanceU128::deserialize(deserializer)?.0))
         }
     }
 }

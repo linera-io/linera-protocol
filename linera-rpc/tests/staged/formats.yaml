@@ -16,6 +16,8 @@ ApplicationId:
       User:
         NEWTYPE:
           TYPENAME: UserApplicationId
+Balance:
+  NEWTYPESTRUCT: U128
 Block:
   STRUCT:
     - chain_id:
@@ -113,7 +115,8 @@ ChainInfo:
           TYPENAME: ChainDescription
     - manager:
         TYPENAME: ChainManagerInfo
-    - system_balance: U128
+    - system_balance:
+        TYPENAME: Balance
     - block_hash:
         OPTION:
           TYPENAME: CryptoHash
