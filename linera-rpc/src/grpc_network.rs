@@ -12,9 +12,11 @@ use crate::{
         CrossChainConfig, NotificationConfig, ShardId, ValidatorInternalNetworkConfig,
         ValidatorPublicNetworkConfig,
     },
-    conversions::{HandleCertificateRequest, HandleLiteCertificateRequest, ProtoConversionError},
+    conversions::ProtoConversionError,
     grpc_pool::ConnectionPool,
     mass::{MassClient, MassClientError},
+    node_provider::NodeOptions,
+    rpc::{HandleCertificateRequest, HandleLiteCertificateRequest},
     RpcMessage,
 };
 use async_trait::async_trait;
@@ -455,27 +457,26 @@ pub struct GrpcClient {
     client: ValidatorNodeClient<Channel>,
     notification_retry_delay: Duration,
     notification_retries: u32,
+    wait_for_outgoing_messages: bool,
 }
 
 impl GrpcClient {
     pub fn new(
         network: ValidatorPublicNetworkConfig,
-        connect_timeout: Duration,
-        timeout: Duration,
-        notification_retry_delay: Duration,
-        notification_retries: u32,
+        options: NodeOptions,
     ) -> Result<Self, GrpcError> {
         let address = network.http_address();
         let channel = Channel::from_shared(address.clone())?
-            .connect_timeout(connect_timeout)
-            .timeout(timeout)
+            .connect_timeout(options.send_timeout)
+            .timeout(options.recv_timeout)
             .connect_lazy();
         let client = ValidatorNodeClient::new(channel);
         Ok(Self {
             address,
             client,
-            notification_retry_delay,
-            notification_retries,
+            notification_retry_delay: options.notification_retry_delay,
+            notification_retries: options.notification_retries,
+            wait_for_outgoing_messages: options.wait_for_outgoing_messages,
         })
     }
 
@@ -548,8 +549,8 @@ macro_rules! client_delegate {
 }
 
 macro_rules! mass_client_delegate {
-    ($client:ident, $handler:ident, $msg:expr, $responses:ident) => {{
-        let response = $client.$handler(Request::new(($msg).try_into()?)).await?;
+    ($client:ident, $handler:ident, $msg:ident, $responses:ident) => {{
+        let response = $client.$handler(Request::new((*$msg).try_into()?)).await?;
         match response
             .into_inner()
             .inner
@@ -583,11 +584,10 @@ impl ValidatorNode for GrpcClient {
     async fn handle_lite_certificate(
         &mut self,
         certificate: data_types::LiteCertificate<'_>,
-        wait_for_outgoing_messages: bool,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         let request = HandleLiteCertificateRequest {
             certificate,
-            wait_for_outgoing_messages,
+            wait_for_outgoing_messages: self.wait_for_outgoing_messages,
         };
         client_delegate!(self, handle_lite_certificate, request)
     }
@@ -597,12 +597,11 @@ impl ValidatorNode for GrpcClient {
         &mut self,
         certificate: data_types::Certificate,
         blobs: Vec<data_types::HashedValue>,
-        wait_for_outgoing_messages: bool,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         let request = HandleCertificateRequest {
             certificate,
             blobs,
-            wait_for_outgoing_messages,
+            wait_for_outgoing_messages: self.wait_for_outgoing_messages,
         };
         client_delegate!(self, handle_certificate, request)
     }
@@ -684,14 +683,9 @@ impl MassClient for GrpcClient {
         for request in requests {
             match request {
                 RpcMessage::BlockProposal(proposal) => {
-                    mass_client_delegate!(client, handle_block_proposal, *proposal, responses)
+                    mass_client_delegate!(client, handle_block_proposal, proposal, responses)
                 }
-                RpcMessage::Certificate(certificate, blobs) => {
-                    let request = HandleCertificateRequest {
-                        certificate: *certificate,
-                        blobs,
-                        wait_for_outgoing_messages: true,
-                    };
+                RpcMessage::Certificate(request) => {
                     mass_client_delegate!(client, handle_certificate, request, responses)
                 }
                 msg => panic!("attempted to send msg: {:?}", msg),

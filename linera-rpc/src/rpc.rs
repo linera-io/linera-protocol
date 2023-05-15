@@ -18,8 +18,8 @@ use serde::{Deserialize, Serialize};
 pub enum RpcMessage {
     // Inbound
     BlockProposal(Box<BlockProposal>),
-    Certificate(Box<Certificate>, Vec<HashedValue>),
-    LiteCertificate(Box<LiteCertificate<'static>>),
+    Certificate(Box<HandleCertificateRequest>),
+    LiteCertificate(Box<HandleLiteCertificateRequest<'static>>),
     ChainInfoQuery(Box<ChainInfoQuery>),
     // Outbound
     Vote(Box<LiteVote>),
@@ -36,8 +36,8 @@ impl RpcMessage {
     pub fn target_chain_id(&self) -> Option<ChainId> {
         let chain_id = match self {
             RpcMessage::BlockProposal(proposal) => proposal.content.block.chain_id,
-            RpcMessage::LiteCertificate(certificate) => certificate.value.chain_id,
-            RpcMessage::Certificate(certificate, _) => certificate.value.chain_id(),
+            RpcMessage::LiteCertificate(request) => request.certificate.value.chain_id,
+            RpcMessage::Certificate(request) => request.certificate.value.chain_id(),
             RpcMessage::ChainInfoQuery(query) => query.chain_id,
             RpcMessage::CrossChainRequest(request) => request.target_chain_id(),
             RpcMessage::Vote(_) | RpcMessage::Error(_) | RpcMessage::ChainInfoResponse(_) => {
@@ -54,15 +54,15 @@ impl From<BlockProposal> for RpcMessage {
     }
 }
 
-impl From<LiteCertificate<'static>> for RpcMessage {
-    fn from(certificate: LiteCertificate<'static>) -> Self {
-        RpcMessage::LiteCertificate(Box::new(certificate))
+impl From<HandleLiteCertificateRequest<'static>> for RpcMessage {
+    fn from(request: HandleLiteCertificateRequest<'static>) -> Self {
+        RpcMessage::LiteCertificate(Box::new(request))
     }
 }
 
-impl From<(Certificate, Vec<HashedValue>)> for RpcMessage {
-    fn from((certificate, blobs): (Certificate, Vec<HashedValue>)) -> Self {
-        RpcMessage::Certificate(Box::new(certificate), blobs)
+impl From<HandleCertificateRequest> for RpcMessage {
+    fn from(request: HandleCertificateRequest) -> Self {
+        RpcMessage::Certificate(Box::new(request))
     }
 }
 
@@ -94,4 +94,19 @@ impl From<CrossChainRequest> for RpcMessage {
     fn from(cross_chain_request: CrossChainRequest) -> Self {
         RpcMessage::CrossChainRequest(Box::new(cross_chain_request))
     }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct HandleLiteCertificateRequest<'a> {
+    pub certificate: LiteCertificate<'a>,
+    pub wait_for_outgoing_messages: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct HandleCertificateRequest {
+    pub certificate: Certificate,
+    pub wait_for_outgoing_messages: bool,
+    pub blobs: Vec<HashedValue>,
 }

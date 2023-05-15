@@ -17,4 +17,4 @@ mod codec;
 mod conversions;
 mod rpc;
 
-pub use rpc::RpcMessage;
+pub use rpc::{HandleCertificateRequest, HandleLiteCertificateRequest, RpcMessage};

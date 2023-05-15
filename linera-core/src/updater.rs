@@ -128,13 +128,13 @@ where
         loop {
             let mut result = match self
                 .client
-                .handle_lite_certificate(certificate.lite_certificate(), true)
+                .handle_lite_certificate(certificate.lite_certificate())
                 .await
             {
                 Ok(response) => Ok(response),
                 Err(NodeError::MissingCertificateValue) => {
                     self.client
-                        .handle_certificate(certificate.clone(), vec![], true)
+                        .handle_certificate(certificate.clone(), vec![])
                         .await
                 }
                 Err(err) => Err(err),
@@ -163,7 +163,7 @@ where
                 .collect::<Result<Vec<_>, _>>()?;
                 result = self
                     .client
-                    .handle_certificate(certificate.clone(), blobs, true)
+                    .handle_certificate(certificate.clone(), blobs)
                     .await;
             }
             match result {
