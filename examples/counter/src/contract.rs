@@ -117,15 +117,14 @@ mod tests {
         let mut counter = create_and_initialize_counter(initial_value);
 
         let increment = 42_308_u64;
-        let operation = bcs::to_bytes(&increment).expect("Increment value is not serializable");
 
         let result = counter
-            .execute_operation(&dummy_operation_context(), &operation)
+            .execute_operation(&dummy_operation_context(), increment)
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), ExecutionResult::default());
+        assert_eq!(result.unwrap(), ExecutionResult::<()>::default());
         assert_eq!(counter.value, initial_value + increment);
     }
 
@@ -135,7 +134,7 @@ mod tests {
         let mut counter = create_and_initialize_counter(initial_value);
 
         let result = counter
-            .execute_effect(&dummy_effect_context(), &[])
+            .execute_effect(&dummy_effect_context(), ())
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
@@ -149,16 +148,15 @@ mod tests {
         let mut counter = create_and_initialize_counter(initial_value);
 
         let increment = 8_u64;
-        let argument = bcs::to_bytes(&increment).expect("Increment value is not serializable");
 
         let result = counter
-            .handle_application_call(&dummy_callee_context(), &argument, vec![])
+            .handle_application_call(&dummy_callee_context(), increment, vec![])
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
         let expected_value = initial_value + increment;
         let expected_result = ApplicationCallResult {
-            value: bcs::to_bytes(&expected_value).expect("Expected value is not serializable"),
+            value: Some(expected_value),
             create_sessions: vec![],
             execution_result: ExecutionResult::default(),
         };
@@ -174,7 +172,7 @@ mod tests {
         let mut counter = create_and_initialize_counter(initial_value);
 
         let result = counter
-            .handle_session_call(&dummy_callee_context(), Session::default(), &[], vec![])
+            .handle_session_call(&dummy_callee_context(), Session::default(), (), vec![])
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
@@ -184,11 +182,9 @@ mod tests {
 
     fn create_and_initialize_counter(initial_value: u64) -> Counter {
         let mut counter = Counter::default();
-        let initial_argument =
-            serde_json::to_vec(&initial_value).expect("Initial value is not serializable");
 
         let result = counter
-            .initialize(&dummy_operation_context(), &initial_argument)
+            .initialize(&dummy_operation_context(), initial_value)
             .now_or_never()
             .expect("Initialization of counter state should not await anything");
 

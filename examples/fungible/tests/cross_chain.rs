@@ -12,7 +12,7 @@ use linera_sdk::{
     test::{ActiveChain, TestValidator},
 };
 
-/// Test transfering tokens across microchains.
+/// Test transferring tokens across microchains.
 ///
 /// Creates the application on a `sender_chain`, initializing it with a single account with some
 /// tokens for that chain's owner. Transfers some of those tokens to a new `receiver_chain`, and

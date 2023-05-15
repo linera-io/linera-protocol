@@ -25,3 +25,6 @@ path = "src/contract.rs"
 [[bin]]
 name = "reentrant_counter_service"
 path = "src/service.rs"
+
+[package.metadata.cargo-machete]
+ignored = ["serde"]
