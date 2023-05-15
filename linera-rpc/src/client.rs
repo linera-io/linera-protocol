@@ -45,11 +45,18 @@ impl ValidatorNode for Client {
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
+        wait_for_outgoing_messages: bool,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
-            Client::Grpc(grpc_client) => grpc_client.handle_lite_certificate(certificate).await,
+            Client::Grpc(grpc_client) => {
+                grpc_client
+                    .handle_lite_certificate(certificate, wait_for_outgoing_messages)
+                    .await
+            }
             Client::Simple(simple_client) => {
-                simple_client.handle_lite_certificate(certificate).await
+                simple_client
+                    .handle_lite_certificate(certificate, wait_for_outgoing_messages)
+                    .await
             }
         }
     }
@@ -58,11 +65,18 @@ impl ValidatorNode for Client {
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
+        wait_for_outgoing_messages: bool,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
-            Client::Grpc(grpc_client) => grpc_client.handle_certificate(certificate, blobs).await,
+            Client::Grpc(grpc_client) => {
+                grpc_client
+                    .handle_certificate(certificate, blobs, wait_for_outgoing_messages)
+                    .await
+            }
             Client::Simple(simple_client) => {
-                simple_client.handle_certificate(certificate, blobs).await
+                simple_client
+                    .handle_certificate(certificate, blobs, wait_for_outgoing_messages)
+                    .await
             }
         }
     }

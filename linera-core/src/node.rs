@@ -45,16 +45,24 @@ pub trait ValidatorNode {
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a certificate without a value.
+    ///
+    /// If `wait_for_outgoing_messages`, waits until all cross-chain messages sent from this
+    /// certificate have been received by the target chains.
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
+        wait_for_outgoing_messages: bool,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a certificate.
+    ///
+    /// If `wait_for_outgoing_messages`, waits until all cross-chain messages sent from this
+    /// certificate have been received by the target chains.
     async fn handle_certificate(
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
+        wait_for_outgoing_messages: bool,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Handles information queries for this chain.
@@ -259,24 +267,13 @@ where
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
+        _wait_for_outgoing_messages: bool,
     ) -> Result<ChainInfoResponse, NodeError> {
         let mut node = self.node.lock().await;
         let mut notifications = Vec::new();
-        let value = node
-            .state
-            .recent_value(&certificate.value.value_hash)
-            .ok_or(NodeError::MissingCertificateValue)?
-            .clone();
-        let full_cert = certificate
-            .with_value(value)
-            .ok_or(WorkerError::InvalidLiteCertificate)?;
         let response = node
             .state
-            .fully_handle_certificate_with_notifications(
-                full_cert,
-                vec![],
-                Some(&mut notifications),
-            )
+            .fully_handle_lite_certificate_with_notifications(certificate, Some(&mut notifications))
             .await?;
         for notification in notifications {
             self.notifier
@@ -289,22 +286,9 @@ where
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
+        _wait_for_outgoing_messages: bool,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let mut node = self.node.lock().await;
-        let mut notifications = Vec::new();
-        let response = node
-            .state
-            .fully_handle_certificate_with_notifications(
-                certificate,
-                blobs,
-                Some(&mut notifications),
-            )
-            .await?;
-        for notification in notifications {
-            self.notifier
-                .notify(&notification.chain_id.clone(), notification);
-        }
-        Ok(response)
+        self.do_handle_certificate(certificate, blobs).await
     }
 
     async fn handle_chain_info_query(
@@ -357,6 +341,28 @@ where
         Ok((effects, info))
     }
 
+    pub async fn do_handle_certificate(
+        &mut self,
+        certificate: Certificate,
+        blobs: Vec<HashedValue>,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        let mut node = self.node.lock().await;
+        let mut notifications = Vec::new();
+        let response = node
+            .state
+            .fully_handle_certificate_with_notifications(
+                certificate,
+                blobs,
+                Some(&mut notifications),
+            )
+            .await?;
+        for notification in notifications {
+            self.notifier
+                .notify(&notification.chain_id.clone(), notification);
+        }
+        Ok(response)
+    }
+
     async fn try_process_certificates<A>(
         &mut self,
         name: ValidatorName,
@@ -375,7 +381,9 @@ where
                 tracing::warn!("Failed to process network certificate {}", hash);
                 return info;
             }
-            let mut result = self.handle_certificate(certificate.clone(), vec![]).await;
+            let mut result = self
+                .do_handle_certificate(certificate.clone(), vec![])
+                .await;
             if let Err(NodeError::ApplicationBytecodesNotFound(locations)) = &result {
                 let chain_id = certificate.value.chain_id();
                 let mut blobs = Vec::new();
@@ -395,7 +403,7 @@ where
                         return info;
                     }
                 }
-                result = self.handle_certificate(certificate.clone(), blobs).await;
+                result = self.do_handle_certificate(certificate.clone(), blobs).await;
             }
             match result {
                 Ok(response) => info = Some(response.info),
@@ -492,7 +500,7 @@ where
         let mut tasks = vec![];
         let mut node = self.node.lock().await;
         for (location, chain_id) in blob_locations {
-            if let Some(blob) = node.state.get_recent_value(&location.certificate_hash) {
+            if let Some(blob) = node.state.recent_value(&location.certificate_hash) {
                 blobs.push(blob.clone());
             } else {
                 let validators = validators.clone();
@@ -510,7 +518,7 @@ where
         let mut node = self.node.lock().await;
         for result in results {
             if let Some(blob) = result? {
-                if node.state.get_recent_value(&blob.hash()).is_none() {
+                if node.state.recent_value(&blob.hash()).is_none() {
                     node.state.cache_recent_value(blob.clone());
                 }
                 blobs.push(blob);
@@ -677,7 +685,7 @@ where
             if let Some(cert) = manager.requested_locked {
                 if cert.value.is_validated() && cert.value.block().chain_id == chain_id {
                     let hash = cert.value.hash();
-                    if let Err(error) = self.handle_certificate(cert, vec![]).await {
+                    if let Err(error) = self.do_handle_certificate(cert, vec![]).await {
                         tracing::warn!("Skipping certificate {}: {}", hash, error);
                     }
                 }

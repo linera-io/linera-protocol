@@ -410,7 +410,9 @@ impl ClientContext {
         // Second replay the certificates locally.
         for certificate in certificates {
             // No required certificates from other chains: This is only used with benchmark.
-            node.handle_certificate(certificate, vec![]).await.unwrap();
+            node.do_handle_certificate(certificate, vec![])
+                .await
+                .unwrap();
         }
         // Last update the wallet.
         for chain in self.wallet_state.chains_mut() {

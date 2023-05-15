@@ -946,7 +946,7 @@ where
     ) -> Result<(), NodeError> {
         let info = self
             .node_client
-            .handle_certificate(certificate, blobs)
+            .do_handle_certificate(certificate, blobs)
             .await?
             .info;
         self.update_from_info(&info);

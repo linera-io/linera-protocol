@@ -281,6 +281,19 @@ impl<Client> WorkerState<Client> {
         &self.storage
     }
 
+    fn full_certificate(
+        &mut self,
+        certificate: LiteCertificate<'_>,
+    ) -> Result<Certificate, WorkerError> {
+        let value = self
+            .recent_value(&certificate.value.value_hash)
+            .ok_or(WorkerError::MissingCertificateValue)?
+            .clone();
+        certificate
+            .with_value(value)
+            .ok_or(WorkerError::InvalidLiteCertificate)
+    }
+
     pub(crate) fn recent_value(&mut self, hash: &CryptoHash) -> Option<&HashedValue> {
         self.recent_values.get(hash)
     }
@@ -299,6 +312,17 @@ where
         blobs: Vec<HashedValue>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.fully_handle_certificate_with_notifications(certificate, blobs, None)
+            .await
+    }
+
+    #[inline]
+    pub(crate) async fn fully_handle_lite_certificate_with_notifications(
+        &mut self,
+        certificate: LiteCertificate<'_>,
+        notifications: Option<&mut Vec<Notification>>,
+    ) -> Result<ChainInfoResponse, WorkerError> {
+        let full_cert = self.full_certificate(certificate)?;
+        self.fully_handle_certificate_with_notifications(full_cert, vec![], notifications)
             .await
     }
 
@@ -714,10 +738,6 @@ where
         Ok(Some(last_updated_height))
     }
 
-    pub fn get_recent_value(&mut self, hash: &CryptoHash) -> Option<&HashedValue> {
-        self.recent_values.get(hash)
-    }
-
     pub fn cache_recent_value(&mut self, value: HashedValue) {
         let hash = value.hash();
         if self.recent_values.contains(&hash) {
@@ -925,14 +945,7 @@ where
         certificate: LiteCertificate<'a>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let value = self
-            .recent_values
-            .get(&certificate.value.value_hash)
-            .ok_or(WorkerError::MissingCertificateValue)?
-            .clone();
-        let full_cert = certificate
-            .with_value(value)
-            .ok_or(WorkerError::InvalidLiteCertificate)?;
+        let full_cert = self.full_certificate(certificate)?;
         self.handle_certificate(full_cert, vec![], notify_when_messages_are_delivered)
             .await
     }

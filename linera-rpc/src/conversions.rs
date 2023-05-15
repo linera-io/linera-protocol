@@ -10,8 +10,7 @@ use linera_base::{
     identifiers::{ChainId, Owner},
 };
 use linera_chain::data_types::{
-    BlockAndRound, BlockProposal, Certificate, CertificateWithDependencies, HashedValue,
-    LiteCertificate, LiteValue,
+    BlockAndRound, BlockProposal, Certificate, HashedValue, LiteCertificate, LiteValue,
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -193,7 +192,14 @@ impl TryFrom<CrossChainRequest> for grpc::CrossChainRequest {
     }
 }
 
-impl<'a> TryFrom<grpc::LiteCertificate> for LiteCertificate<'a> {
+#[derive(Debug, Clone)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub(crate) struct HandleLiteCertificateRequest<'a> {
+    pub certificate: LiteCertificate<'a>,
+    pub wait_for_outgoing_messages: bool,
+}
+
+impl<'a> TryFrom<grpc::LiteCertificate> for HandleLiteCertificateRequest<'a> {
     type Error = ProtoConversionError;
 
     fn try_from(certificate: grpc::LiteCertificate) -> Result<Self, Self::Error> {
@@ -202,65 +208,64 @@ impl<'a> TryFrom<grpc::LiteCertificate> for LiteCertificate<'a> {
             chain_id: try_proto_convert(certificate.chain_id)?,
         };
         let signatures = bincode::deserialize(&certificate.signatures)?;
-        Ok(LiteCertificate::new(value, signatures))
-    }
-}
-
-impl<'a> TryFrom<LiteCertificate<'a>> for grpc::LiteCertificate {
-    type Error = ProtoConversionError;
-
-    fn try_from(certificate: LiteCertificate<'a>) -> Result<Self, Self::Error> {
         Ok(Self {
-            hash: certificate.value.value_hash.as_bytes().to_vec(),
-            chain_id: Some(certificate.value.chain_id.into()),
-            signatures: bincode::serialize(&certificate.signatures)?,
+            certificate: LiteCertificate::new(value, signatures),
+            wait_for_outgoing_messages: certificate.wait_for_outgoing_messages,
         })
     }
 }
 
-impl TryFrom<grpc::Certificate> for Certificate {
+impl<'a> TryFrom<HandleLiteCertificateRequest<'a>> for grpc::LiteCertificate {
     type Error = ProtoConversionError;
 
-    fn try_from(certificate: grpc::Certificate) -> Result<Self, Self::Error> {
-        let value: HashedValue = bincode::deserialize(&certificate.value)?;
+    fn try_from(request: HandleLiteCertificateRequest) -> Result<Self, Self::Error> {
+        Ok(Self {
+            hash: request.certificate.value.value_hash.as_bytes().to_vec(),
+            chain_id: Some(request.certificate.value.chain_id.into()),
+            signatures: bincode::serialize(&request.certificate.signatures)?,
+            wait_for_outgoing_messages: request.wait_for_outgoing_messages,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub(crate) struct HandleCertificateRequest {
+    pub certificate: Certificate,
+    pub wait_for_outgoing_messages: bool,
+    pub blobs: Vec<HashedValue>,
+}
+
+impl TryFrom<grpc::Certificate> for HandleCertificateRequest {
+    type Error = ProtoConversionError;
+
+    fn try_from(cert_request: grpc::Certificate) -> Result<Self, Self::Error> {
+        let value: HashedValue = bincode::deserialize(&cert_request.value)?;
         ensure!(
-            Some(value.chain_id().into()) == certificate.chain_id,
+            Some(value.chain_id().into()) == cert_request.chain_id,
             ProtoConversionError::InconsistentChainId
         );
-        let signatures = bincode::deserialize(&certificate.signatures)?;
-        Ok(Certificate::new(value, signatures))
-    }
-}
-
-impl TryFrom<Certificate> for grpc::Certificate {
-    type Error = ProtoConversionError;
-
-    fn try_from(certificate: Certificate) -> Result<Self, Self::Error> {
-        Ok(Self {
-            chain_id: Some(certificate.value.chain_id().into()),
-            value: bincode::serialize(&certificate.value)?,
-            signatures: bincode::serialize(&certificate.signatures)?,
+        let signatures = bincode::deserialize(&cert_request.signatures)?;
+        let blobs = bincode::deserialize(&cert_request.blobs)?;
+        Ok(HandleCertificateRequest {
+            certificate: Certificate::new(value, signatures),
+            wait_for_outgoing_messages: cert_request.wait_for_outgoing_messages,
+            blobs,
         })
     }
 }
 
-impl TryFrom<grpc::CertificateWithDependencies> for CertificateWithDependencies {
+impl TryFrom<HandleCertificateRequest> for grpc::Certificate {
     type Error = ProtoConversionError;
 
-    fn try_from(cert_with_deps: grpc::CertificateWithDependencies) -> Result<Self, Self::Error> {
-        let blobs = bincode::deserialize(&cert_with_deps.blobs)?;
-        let certificate: Certificate = try_proto_convert(cert_with_deps.certificate)?;
-        Ok(CertificateWithDependencies { certificate, blobs })
-    }
-}
-
-impl TryFrom<CertificateWithDependencies> for grpc::CertificateWithDependencies {
-    type Error = ProtoConversionError;
-
-    fn try_from(cert_with_deps: CertificateWithDependencies) -> Result<Self, Self::Error> {
-        let blobs = bincode::serialize(&cert_with_deps.blobs)?;
-        let certificate = Some(cert_with_deps.certificate.try_into()?);
-        Ok(Self { certificate, blobs })
+    fn try_from(request: HandleCertificateRequest) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: Some(request.certificate.value.chain_id().into()),
+            value: bincode::serialize(&request.certificate.value)?,
+            signatures: bincode::serialize(&request.certificate.signatures)?,
+            blobs: bincode::serialize(&request.blobs)?,
+            wait_for_outgoing_messages: request.wait_for_outgoing_messages,
+        })
     }
 }
 
@@ -577,7 +582,7 @@ pub mod tests {
     #[test]
     pub fn test_lite_certificate() {
         let key_pair = KeyPair::generate();
-        let certificate_validated = LiteCertificate {
+        let certificate = LiteCertificate {
             value: LiteValue {
                 value_hash: CryptoHash::new(&Foo("value".into())),
                 chain_id: ChainId::root(0),
@@ -587,14 +592,18 @@ pub mod tests {
                 Signature::new(&Foo("test".into()), &key_pair),
             )]),
         };
+        let request = HandleLiteCertificateRequest {
+            certificate,
+            wait_for_outgoing_messages: true,
+        };
 
-        round_trip_check::<_, grpc::LiteCertificate>(certificate_validated);
+        round_trip_check::<_, grpc::LiteCertificate>(request);
     }
 
     #[test]
     pub fn test_certificate() {
         let key_pair = KeyPair::generate();
-        let certificate_validated = Certificate::new(
+        let certificate = Certificate::new(
             HashedValue::new_validated(
                 get_block(),
                 vec![],
@@ -606,8 +615,19 @@ pub mod tests {
                 Signature::new(&Foo("test".into()), &key_pair),
             )],
         );
+        let blobs = vec![HashedValue::new_validated(
+            get_block(),
+            vec![],
+            CryptoHash::new(&Foo("also test".into())),
+            Default::default(),
+        )];
+        let request = HandleCertificateRequest {
+            certificate,
+            blobs,
+            wait_for_outgoing_messages: false,
+        };
 
-        round_trip_check::<_, grpc::Certificate>(certificate_validated);
+        round_trip_check::<_, grpc::Certificate>(request);
     }
 
     #[test]
