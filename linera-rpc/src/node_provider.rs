@@ -19,19 +19,9 @@ pub struct NodeProvider {
 }
 
 impl NodeProvider {
-    pub fn new(
-        send_timeout: Duration,
-        recv_timeout: Duration,
-        notification_retry_delay: Duration,
-        notification_retries: u32,
-    ) -> Self {
-        let grpc = GrpcNodeProvider::new(
-            send_timeout,
-            recv_timeout,
-            notification_retry_delay,
-            notification_retries,
-        );
-        let simple = SimpleNodeProvider::new(send_timeout, recv_timeout);
+    pub fn new(options: NodeOptions) -> Self {
+        let grpc = GrpcNodeProvider::new(options);
+        let simple = SimpleNodeProvider::new(options);
         Self { grpc, simple }
     }
 }
@@ -57,26 +47,20 @@ impl ValidatorNodeProvider for NodeProvider {
 }
 
 #[derive(Copy, Clone)]
-pub struct GrpcNodeProvider {
-    send_timeout: Duration,
-    recv_timeout: Duration,
-    notification_retry_delay: Duration,
-    notification_retries: u32,
+pub struct NodeOptions {
+    pub send_timeout: Duration,
+    pub recv_timeout: Duration,
+    pub notification_retry_delay: Duration,
+    pub notification_retries: u32,
+    pub wait_for_outgoing_messages: bool,
 }
 
+#[derive(Copy, Clone)]
+pub struct GrpcNodeProvider(NodeOptions);
+
 impl GrpcNodeProvider {
-    pub fn new(
-        send_timeout: Duration,
-        recv_timeout: Duration,
-        notification_retry_delay: Duration,
-        notification_retries: u32,
-    ) -> Self {
-        Self {
-            send_timeout,
-            recv_timeout,
-            notification_retry_delay,
-            notification_retries,
-        }
+    pub fn new(options: NodeOptions) -> Self {
+        Self(options)
     }
 }
 
@@ -90,14 +74,7 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
             }
         })?;
 
-        let client = GrpcClient::new(
-            network,
-            self.send_timeout,
-            self.recv_timeout,
-            self.notification_retry_delay,
-            self.notification_retries,
-        )
-        .map_err(|e| NodeError::GrpcError {
+        let client = GrpcClient::new(network, self.0).map_err(|e| NodeError::GrpcError {
             error: format!(
                 "could not initialize gRPC client for address {} : {}",
                 address, e
@@ -109,17 +86,11 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
 
 /// A client without an address - serves as a client factory.
 #[derive(Copy, Clone)]
-pub struct SimpleNodeProvider {
-    send_timeout: Duration,
-    recv_timeout: Duration,
-}
+pub struct SimpleNodeProvider(NodeOptions);
 
 impl SimpleNodeProvider {
-    pub fn new(send_timeout: Duration, recv_timeout: Duration) -> Self {
-        Self {
-            send_timeout,
-            recv_timeout,
-        }
+    pub fn new(options: NodeOptions) -> Self {
+        Self(options)
     }
 }
 
@@ -133,7 +104,12 @@ impl ValidatorNodeProvider for SimpleNodeProvider {
             }
         })?;
 
-        let client = SimpleClient::new(network, self.send_timeout, self.recv_timeout);
+        let client = SimpleClient::new(
+            network,
+            self.0.send_timeout,
+            self.0.recv_timeout,
+            self.0.wait_for_outgoing_messages,
+        );
 
         Ok(client)
     }

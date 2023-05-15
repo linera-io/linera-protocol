@@ -10,7 +10,7 @@ use crate::{
     },
     mass::{MassClient, MassClientError},
     transport::{MessageHandler, ServerHandle, TransportProtocol},
-    RpcMessage,
+    HandleCertificateRequest, HandleLiteCertificateRequest, RpcMessage,
 };
 use async_trait::async_trait;
 use futures::{channel::mpsc, sink::SinkExt, stream::StreamExt};
@@ -164,9 +164,9 @@ where
         let state = RunningServerState {
             server: self,
             cross_chain_sender,
-            // Udp servers cannot process several requests (e.g. user requests and
+            // UDP servers cannot process several requests (e.g. user requests and
             // cross-chain requests) at the same time.
-            wait_for_outgoing_messages: protocol == TransportProtocol::Tcp,
+            can_wait_for_outgoing_messages: protocol == TransportProtocol::Tcp,
         };
         // Launch server for the appropriate protocol.
         protocol.spawn_server(&address, state).await
@@ -177,7 +177,7 @@ where
 struct RunningServerState<S> {
     server: Server<S>,
     cross_chain_sender: mpsc::Sender<(RpcMessage, ShardId)>,
-    wait_for_outgoing_messages: bool,
+    can_wait_for_outgoing_messages: bool,
 }
 
 #[async_trait]
@@ -203,15 +203,15 @@ where
                     }
                 }
             }
-            RpcMessage::LiteCertificate(message) => {
-                let (sender, receiver) = self
-                    .wait_for_outgoing_messages
+            RpcMessage::LiteCertificate(request) => {
+                let (sender, receiver) = (self.can_wait_for_outgoing_messages
+                    && request.wait_for_outgoing_messages)
                     .then(oneshot::channel)
                     .unzip();
                 match self
                     .server
                     .state
-                    .handle_lite_certificate(*message, sender)
+                    .handle_lite_certificate(request.certificate, sender)
                     .await
                 {
                     Ok((info, actions)) => {
@@ -235,15 +235,15 @@ where
                     }
                 }
             }
-            RpcMessage::Certificate(message, blobs) => {
-                let (sender, receiver) = self
-                    .wait_for_outgoing_messages
+            RpcMessage::Certificate(request) => {
+                let (sender, receiver) = (self.can_wait_for_outgoing_messages
+                    && request.wait_for_outgoing_messages)
                     .then(oneshot::channel)
                     .unzip();
                 match self
                     .server
                     .state
-                    .handle_certificate(*message, blobs, sender)
+                    .handle_certificate(request.certificate, request.blobs, sender)
                     .await
                 {
                     Ok((info, actions)) => {
@@ -347,6 +347,7 @@ pub struct SimpleClient {
     network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
     send_timeout: Duration,
     recv_timeout: Duration,
+    wait_for_outgoing_messages: bool,
 }
 
 impl SimpleClient {
@@ -354,11 +355,13 @@ impl SimpleClient {
         network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
         send_timeout: Duration,
         recv_timeout: Duration,
+        wait_for_outgoing_messages: bool,
     ) -> Self {
         Self {
             network,
             send_timeout,
             recv_timeout,
+            wait_for_outgoing_messages,
         }
     }
 
@@ -412,9 +415,12 @@ impl ValidatorNode for SimpleClient {
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
-        _wait_for_outgoing_messages: bool,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.send_recv_info(certificate.cloned().into()).await
+        let request = HandleLiteCertificateRequest {
+            certificate: certificate.cloned(),
+            wait_for_outgoing_messages: self.wait_for_outgoing_messages,
+        };
+        self.send_recv_info(request.into()).await
     }
 
     /// Processes a certificate.
@@ -422,9 +428,13 @@ impl ValidatorNode for SimpleClient {
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
-        _wait_for_outgoing_messages: bool,
     ) -> Result<ChainInfoResponse, NodeError> {
-        self.send_recv_info((certificate, blobs).into()).await
+        let request = HandleCertificateRequest {
+            certificate,
+            blobs,
+            wait_for_outgoing_messages: self.wait_for_outgoing_messages,
+        };
+        self.send_recv_info(request.into()).await
     }
 
     /// Handles information queries for this chain.

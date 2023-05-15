@@ -155,7 +155,8 @@ impl Client {
             .kill_on_drop(true)
             .args(["--wallet", &self.wallet])
             .args(["--send-timeout-us", "10000000"])
-            .args(["--recv-timeout-us", "10000000"]);
+            .args(["--recv-timeout-us", "10000000"])
+            .arg("--wait-for-outgoing-messages");
         command
     }
 

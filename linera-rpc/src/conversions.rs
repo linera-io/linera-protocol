@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::grpc_network::{grpc, grpc::ChainInfoResult};
+use crate::{
+    grpc_network::{grpc, grpc::ChainInfoResult},
+    HandleCertificateRequest, HandleLiteCertificateRequest,
+};
 use ed25519::signature::Signature as edSignature;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
@@ -192,13 +195,6 @@ impl TryFrom<CrossChainRequest> for grpc::CrossChainRequest {
     }
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub(crate) struct HandleLiteCertificateRequest<'a> {
-    pub certificate: LiteCertificate<'a>,
-    pub wait_for_outgoing_messages: bool,
-}
-
 impl<'a> TryFrom<grpc::LiteCertificate> for HandleLiteCertificateRequest<'a> {
     type Error = ProtoConversionError;
 
@@ -226,14 +222,6 @@ impl<'a> TryFrom<HandleLiteCertificateRequest<'a>> for grpc::LiteCertificate {
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
         })
     }
-}
-
-#[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub(crate) struct HandleCertificateRequest {
-    pub certificate: Certificate,
-    pub wait_for_outgoing_messages: bool,
-    pub blobs: Vec<HashedValue>,
 }
 
 impl TryFrom<grpc::Certificate> for HandleCertificateRequest {

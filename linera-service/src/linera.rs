@@ -25,7 +25,7 @@ use linera_execution::{
     system::{Account, UserData},
     Bytecode, UserApplicationId, WasmRuntime, WithWasmDefault,
 };
-use linera_rpc::node_provider::NodeProvider;
+use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
     chain_listener::ChainListenerConfig,
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
@@ -60,7 +60,7 @@ use {
     },
     linera_rpc::{
         config::NetworkProtocol, grpc_network::GrpcClient, mass::MassClient, simple_network,
-        RpcMessage,
+        HandleCertificateRequest, RpcMessage,
     },
     std::collections::{HashMap, HashSet},
     tracing::error,
@@ -75,6 +75,7 @@ struct ClientContext {
     cross_chain_retries: usize,
     notification_retry_delay: Duration,
     notification_retries: u32,
+    wait_for_outgoing_messages: bool,
 }
 
 impl ClientContext {
@@ -121,6 +122,7 @@ impl ClientContext {
         let cross_chain_delay = Duration::from_micros(options.cross_chain_delay_ms);
         let notification_retry_delay = Duration::from_micros(options.notification_retry_delay_us);
         let notification_retries = options.notification_retries;
+        let wait_for_outgoing_messages = options.wait_for_outgoing_messages;
 
         ClientContext {
             wallet_state,
@@ -131,6 +133,7 @@ impl ClientContext {
             cross_chain_retries: options.cross_chain_retries,
             notification_retry_delay,
             notification_retries,
+            wait_for_outgoing_messages,
         }
     }
 
@@ -163,14 +166,7 @@ impl ClientContext {
                     ))
                 }
                 NetworkProtocol::Grpc => Box::new(
-                    GrpcClient::new(
-                        config.network.clone(),
-                        self.send_timeout,
-                        self.recv_timeout,
-                        self.notification_retry_delay,
-                        self.notification_retries,
-                    )
-                    .unwrap(),
+                    GrpcClient::new(config.network.clone(), self.make_node_options()).unwrap(),
                 ),
             };
 
@@ -214,12 +210,17 @@ impl ClientContext {
     }
 
     fn make_node_provider(&self) -> NodeProvider {
-        NodeProvider::new(
-            self.send_timeout,
-            self.recv_timeout,
-            self.notification_retry_delay,
-            self.notification_retries,
-        )
+        NodeProvider::new(self.make_node_options())
+    }
+
+    fn make_node_options(&self) -> NodeOptions {
+        NodeOptions {
+            send_timeout: self.send_timeout,
+            recv_timeout: self.recv_timeout,
+            notification_retry_delay: self.notification_retry_delay,
+            notification_retries: self.notification_retries,
+            wait_for_outgoing_messages: self.wait_for_outgoing_messages,
+        }
     }
 
     #[cfg(feature = "benchmark")]
@@ -410,9 +411,7 @@ impl ClientContext {
         // Second replay the certificates locally.
         for certificate in certificates {
             // No required certificates from other chains: This is only used with benchmark.
-            node.do_handle_certificate(certificate, vec![])
-                .await
-                .unwrap();
+            node.handle_certificate(certificate, vec![]).await.unwrap();
         }
         // Last update the wallet.
         for chain in self.wallet_state.chains_mut() {
@@ -564,6 +563,11 @@ struct ClientOptions {
     /// Number of times to retry connecting to a validator for notifications.
     #[structopt(long, default_value = "10")]
     notification_retries: u32,
+
+    /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
+    /// messages have been delivered.
+    #[structopt(long)]
+    wait_for_outgoing_messages: bool,
 }
 
 #[derive(StructOpt)]
@@ -1063,7 +1067,14 @@ where
                 );
                 let messages = certificates
                     .iter()
-                    .map(|certificate| (certificate.clone(), vec![]).into())
+                    .map(|certificate| {
+                        HandleCertificateRequest {
+                            certificate: certificate.clone(),
+                            blobs: vec![],
+                            wait_for_outgoing_messages: true,
+                        }
+                        .into()
+                    })
                     .collect();
                 let responses = context
                     .mass_broadcast("certificates", max_in_flight, messages)

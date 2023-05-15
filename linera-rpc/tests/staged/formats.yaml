@@ -289,6 +289,19 @@ Event:
         TYPENAME: Timestamp
     - effect:
         TYPENAME: Effect
+HandleCertificateRequest:
+  STRUCT:
+    - certificate:
+        TYPENAME: Certificate
+    - wait_for_outgoing_messages: BOOL
+    - blobs:
+        SEQ:
+          TYPENAME: Value
+HandleLiteCertificateRequest:
+  STRUCT:
+    - certificate:
+        TYPENAME: LiteCertificate
+    - wait_for_outgoing_messages: BOOL
 LiteCertificate:
   STRUCT:
     - value:
@@ -498,14 +511,12 @@ RpcMessage:
           TYPENAME: BlockProposal
     1:
       Certificate:
-        TUPLE:
-          - TYPENAME: Certificate
-          - SEQ:
-              TYPENAME: Value
+        NEWTYPE:
+          TYPENAME: HandleCertificateRequest
     2:
       LiteCertificate:
         NEWTYPE:
-          TYPENAME: LiteCertificate
+          TYPENAME: HandleLiteCertificateRequest
     3:
       ChainInfoQuery:
         NEWTYPE:

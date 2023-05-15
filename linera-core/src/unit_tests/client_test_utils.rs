@@ -77,7 +77,6 @@ where
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
-        _wait_for_outgoing_messages: bool,
     ) -> Result<ChainInfoResponse, NodeError> {
         let certificate = certificate.cloned();
         self.spawn_and_receive(move |validator, sender| {
@@ -90,7 +89,6 @@ where
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
-        _wait_for_outgoing_messages: bool,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_handle_certificate(certificate, blobs, sender)
