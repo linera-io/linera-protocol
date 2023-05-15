@@ -412,6 +412,7 @@ impl ValidatorNode for SimpleClient {
     async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
+        _wait_for_outgoing_messages: bool,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.send_recv_info(certificate.cloned().into()).await
     }
@@ -421,6 +422,7 @@ impl ValidatorNode for SimpleClient {
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
+        _wait_for_outgoing_messages: bool,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.send_recv_info((certificate, blobs).into()).await
     }

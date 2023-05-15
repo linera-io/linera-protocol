@@ -12,7 +12,7 @@ use crate::{
         CrossChainConfig, NotificationConfig, ShardId, ValidatorInternalNetworkConfig,
         ValidatorPublicNetworkConfig,
     },
-    conversions::ProtoConversionError,
+    conversions::{HandleCertificateRequest, HandleLiteCertificateRequest, ProtoConversionError},
     grpc_pool::ConnectionPool,
     mass::{MassClient, MassClientError},
     RpcMessage,
@@ -28,7 +28,7 @@ use grpc::{
     validator_node_client::ValidatorNodeClient,
     validator_worker_client::ValidatorWorkerClient,
     validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
-    BlockProposal, CertificateWithDependencies, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
+    BlockProposal, Certificate, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
     LiteCertificate, SubscriptionRequest,
 };
 use linera_base::identifiers::ChainId;
@@ -347,19 +347,24 @@ where
         &self,
         request: Request<LiteCertificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let certificate = request.into_inner().try_into()?;
+        let HandleLiteCertificateRequest {
+            certificate,
+            wait_for_outgoing_messages,
+        } = request.into_inner().try_into()?;
         debug!(?certificate, "Handling lite certificate");
-        let (sender, receiver) = oneshot::channel();
+        let (sender, receiver) = wait_for_outgoing_messages.then(oneshot::channel).unzip();
         match self
             .state
             .clone()
-            .handle_lite_certificate(certificate, Some(sender))
+            .handle_lite_certificate(certificate, sender)
             .await
         {
             Ok((info, actions)) => {
                 self.handle_network_actions(actions);
-                if let Err(e) = receiver.await {
-                    error!("Failed to wait for message delivery: {e}");
+                if let Some(receiver) = receiver {
+                    if let Err(e) = receiver.await {
+                        error!("Failed to wait for message delivery: {e}");
+                    }
                 }
                 Ok(Response::new(info.try_into()?))
             }
@@ -377,26 +382,27 @@ where
     #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
     async fn handle_certificate(
         &self,
-        request: Request<CertificateWithDependencies>,
+        request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let cert_with_deps: data_types::CertificateWithDependencies =
-            request.into_inner().try_into()?;
-        debug!(certificate = ?cert_with_deps.certificate, "Handling certificate");
-        let (sender, receiver) = oneshot::channel();
+        let HandleCertificateRequest {
+            certificate,
+            blobs,
+            wait_for_outgoing_messages,
+        } = request.into_inner().try_into()?;
+        debug!(?certificate, "Handling certificate");
+        let (sender, receiver) = wait_for_outgoing_messages.then(oneshot::channel).unzip();
         match self
             .state
             .clone()
-            .handle_certificate(
-                cert_with_deps.certificate,
-                cert_with_deps.blobs,
-                Some(sender),
-            )
+            .handle_certificate(certificate, blobs, sender)
             .await
         {
             Ok((info, actions)) => {
                 self.handle_network_actions(actions);
-                if let Err(e) = receiver.await {
-                    error!("Failed to wait for message delivery: {e}");
+                if let Some(receiver) = receiver {
+                    if let Err(e) = receiver.await {
+                        error!("Failed to wait for message delivery: {e}");
+                    }
                 }
                 Ok(Response::new(info.try_into()?))
             }
@@ -506,10 +512,7 @@ impl GrpcClient {
 
 macro_rules! client_delegate {
     ($self:ident, $handler:ident, $req:ident) => {{
-        tracing::debug!(
-            request = ?$req,
-            "sending gRPC request",
-        );
+        debug!(request = ?$req, "sending gRPC request");
         let request_inner = $req.try_into().map_err(|_| NodeError::GrpcError {
             error: "could not convert request to proto".to_string(),
         })?;
@@ -545,8 +548,8 @@ macro_rules! client_delegate {
 }
 
 macro_rules! mass_client_delegate {
-    ($client:ident, $handler:ident, $msg:ident, $responses: ident) => {{
-        let response = $client.$handler(Request::new((*$msg).try_into()?)).await?;
+    ($client:ident, $handler:ident, $msg:expr, $responses:ident) => {{
+        let response = $client.$handler(Request::new(($msg).try_into()?)).await?;
         match response
             .into_inner()
             .inner
@@ -580,8 +583,13 @@ impl ValidatorNode for GrpcClient {
     async fn handle_lite_certificate(
         &mut self,
         certificate: data_types::LiteCertificate<'_>,
+        wait_for_outgoing_messages: bool,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
-        client_delegate!(self, handle_lite_certificate, certificate)
+        let request = HandleLiteCertificateRequest {
+            certificate,
+            wait_for_outgoing_messages,
+        };
+        client_delegate!(self, handle_lite_certificate, request)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
@@ -589,9 +597,14 @@ impl ValidatorNode for GrpcClient {
         &mut self,
         certificate: data_types::Certificate,
         blobs: Vec<data_types::HashedValue>,
+        wait_for_outgoing_messages: bool,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
-        let cert_with_deps = data_types::CertificateWithDependencies { certificate, blobs };
-        client_delegate!(self, handle_certificate, cert_with_deps)
+        let request = HandleCertificateRequest {
+            certificate,
+            blobs,
+            wait_for_outgoing_messages,
+        };
+        client_delegate!(self, handle_certificate, request)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
@@ -599,7 +612,6 @@ impl ValidatorNode for GrpcClient {
         &mut self,
         query: linera_core::data_types::ChainInfoQuery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
-        debug!(?query);
         client_delegate!(self, handle_chain_info_query, query)
     }
 
@@ -672,14 +684,15 @@ impl MassClient for GrpcClient {
         for request in requests {
             match request {
                 RpcMessage::BlockProposal(proposal) => {
-                    mass_client_delegate!(client, handle_block_proposal, proposal, responses)
+                    mass_client_delegate!(client, handle_block_proposal, *proposal, responses)
                 }
                 RpcMessage::Certificate(certificate, blobs) => {
-                    let cert_with_deps = Box::new(data_types::CertificateWithDependencies {
+                    let request = HandleCertificateRequest {
                         certificate: *certificate,
                         blobs,
-                    });
-                    mass_client_delegate!(client, handle_certificate, cert_with_deps, responses)
+                        wait_for_outgoing_messages: true,
+                    };
+                    mass_client_delegate!(client, handle_certificate, request, responses)
                 }
                 msg => panic!("attempted to send msg: {:?}", msg),
             }
@@ -706,9 +719,9 @@ impl Proxyable for LiteCertificate {
     }
 }
 
-impl Proxyable for CertificateWithDependencies {
+impl Proxyable for Certificate {
     fn chain_id(&self) -> Option<ChainId> {
-        self.certificate.as_ref()?.chain_id.clone()?.try_into().ok()
+        self.chain_id.clone()?.try_into().ok()
     }
 }
 

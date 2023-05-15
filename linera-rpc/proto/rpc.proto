@@ -23,7 +23,7 @@ service ValidatorWorker {
   rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
   // Process a certificate.
-  rpc HandleCertificate(CertificateWithDependencies) returns (ChainInfoResult);
+  rpc HandleCertificate(Certificate) returns (ChainInfoResult);
 
   // Handle information queries for this chain.
   rpc HandleChainInfoQuery(ChainInfoQuery) returns (ChainInfoResult);
@@ -41,7 +41,7 @@ service ValidatorNode {
   rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
   // Process a certificate.
-  rpc HandleCertificate(CertificateWithDependencies) returns (ChainInfoResult);
+  rpc HandleCertificate(Certificate) returns (ChainInfoResult);
 
   // Handle information queries for this chain.
   rpc HandleChainInfoQuery(ChainInfoQuery) returns (ChainInfoResult);
@@ -141,17 +141,22 @@ message BlockProposal {
 
 // A certified statement from the committee, without the value.
 message LiteCertificate {
+  // The ID of the chain the value belongs to.
+  ChainId chain_id = 10;
+
   // The certified value's hash
   bytes hash = 1;
 
-  // The ID of the chain the value belongs to.
-  ChainId chain_id = 2;
-
   // Signatures on the value
-  bytes signatures = 3;
+  bytes signatures = 2;
+
+  // Wait until all outgoing cross-chain messages from this certificate have
+  // been received by the target chains.
+  bool wait_for_outgoing_messages = 3;
 }
 
-// A certified statement from the committee.
+// A certified statement from the committee, together with other certificates
+// required for execution.
 message Certificate {
   // The ID of the chain (used for routing).
   ChainId chain_id = 10;
@@ -161,16 +166,13 @@ message Certificate {
 
   // Signatures on the value
   bytes signatures = 2;
-}
-
-// A certified statement from the committee, together with other certificates
-// required for execution.
-message CertificateWithDependencies {
-  // The certificate
-  Certificate certificate = 1;
 
   // Other certificates containing bytecode required by the first one
-  bytes blobs = 2;
+  bytes blobs = 3;
+
+  // Wait until all outgoing cross-chain messages from this certificate have
+  // been received by the target chains.
+  bool wait_for_outgoing_messages = 4;
 }
 
 message ChainId {

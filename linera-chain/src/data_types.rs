@@ -309,16 +309,6 @@ pub struct Certificate {
     pub signatures: Vec<(ValidatorName, Signature)>,
 }
 
-/// A certificate, together with others required for its execution.
-#[derive(Clone, Debug, Serialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct CertificateWithDependencies {
-    /// Certificate that may require blobs (e.g. bytecode) for execution.
-    pub certificate: Certificate,
-    /// Values containing blobs (e.g. bytecode) that the other one depends on.
-    pub blobs: Vec<HashedValue>,
-}
-
 impl Origin {
     pub fn chain(sender: ChainId) -> Self {
         Self {
