@@ -9,16 +9,14 @@ use self::state::FungibleToken;
 use async_graphql::{EmptySubscription, Object, Schema};
 use async_trait::async_trait;
 use fungible::{Account, AccountOwner, Operation};
-use linera_sdk::{
-    base::Amount, views::ViewStorageContext, QueryContext, Service, ViewStateStorage,
-};
+use linera_sdk::{base::Amount, QueryContext, Service, ViewStateStorage};
 use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(FungibleToken<ViewStorageContext>);
+linera_sdk::service!(FungibleToken);
 
 #[async_trait]
-impl Service for FungibleToken<ViewStorageContext> {
+impl Service for FungibleToken {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 

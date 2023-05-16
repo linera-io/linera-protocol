@@ -9,11 +9,10 @@ use async_trait::async_trait;
 use linera_sdk::{
     base::{ChannelName, Destination, SessionId},
     contract::system_api,
-    views::ViewStorageContext,
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
     OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
-use linera_views::{common::Context, views::ViewError};
+use linera_views::views::ViewError;
 use social::{Effect, Key, Operation, OwnPost};
 use state::Social;
 use thiserror::Error;
@@ -23,14 +22,10 @@ const POSTS_CHANNEL_NAME: &[u8] = b"posts";
 /// The number of recent posts sent in each cross-chain message.
 const RECENT_POSTS: usize = 10;
 
-linera_sdk::contract!(Social<ViewStorageContext>);
+linera_sdk::contract!(Social);
 
 #[async_trait]
-impl<C> Contract for Social<C>
-where
-    C: Context + Send + Sync + Clone + 'static,
-    ViewError: From<<C as Context>::Error>,
-{
+impl Contract for Social {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 
@@ -98,11 +93,7 @@ where
     }
 }
 
-impl<C> Social<C>
-where
-    C: Context + Send + Sync + Clone + 'static,
-    ViewError: From<<C as Context>::Error>,
-{
+impl Social {
     async fn execute_post_operation(&mut self, text: String) -> Result<ExecutionResult, Error> {
         let timestamp = system_api::current_system_time();
         self.own_posts.push(OwnPost { timestamp, text });

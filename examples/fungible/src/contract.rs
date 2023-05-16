@@ -14,17 +14,16 @@ use fungible::{
 use linera_sdk::{
     base::{Amount, ApplicationId, Owner, SessionId},
     contract::system_api,
-    views::ViewStorageContext,
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
     OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
 use std::str::FromStr;
 use thiserror::Error;
 
-linera_sdk::contract!(FungibleToken<ViewStorageContext>);
+linera_sdk::contract!(FungibleToken);
 
 #[async_trait]
-impl Contract for FungibleToken<ViewStorageContext> {
+impl Contract for FungibleToken {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 
@@ -180,7 +179,7 @@ impl Contract for FungibleToken<ViewStorageContext> {
     }
 }
 
-impl FungibleToken<ViewStorageContext> {
+impl FungibleToken {
     /// Verifies that a transfer is authenticated for this local account.
     fn check_account_authentication(
         authenticated_application_id: Option<ApplicationId>,

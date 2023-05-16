@@ -7,19 +7,14 @@ mod state;
 
 use self::state::ReentrantCounter;
 use async_trait::async_trait;
-use linera_sdk::{views::ViewStorageContext, QueryContext, Service, ViewStateStorage};
-use linera_views::{common::Context, views::ViewError};
+use linera_sdk::{QueryContext, Service, ViewStateStorage};
 use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(ReentrantCounter<ViewStorageContext>);
+linera_sdk::service!(ReentrantCounter);
 
 #[async_trait]
-impl<C> Service for ReentrantCounter<C>
-where
-    C: Context + Send + Sync + Clone + 'static,
-    ViewError: From<C::Error>,
-{
+impl Service for ReentrantCounter {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 
@@ -44,21 +39,21 @@ pub enum Error {
     InvalidQuery,
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::Error;
     use crate::ReentrantCounter;
     use futures::FutureExt;
-    use linera_sdk::{base::ChainId, QueryContext, Service};
-    use linera_views::{memory::create_test_context, views::View};
+    use linera_sdk::{base::ChainId, test, views::ViewStorageContext, QueryContext, Service};
+    use linera_views::views::View;
     use std::sync::Arc;
     use webassembly_test::webassembly_test;
 
     #[webassembly_test]
     fn query() {
+        test::mock_key_value_store();
         let value = 61_098_721_u128;
-        let context = create_test_context();
-        let mut counter = ReentrantCounter::load(context)
+        let mut counter = ReentrantCounter::load(ViewStorageContext::default())
             .now_or_never()
             .unwrap()
             .expect("Failed to load Counter");
@@ -77,9 +72,9 @@ mod tests {
 
     #[webassembly_test]
     fn invalid_query() {
+        test::mock_key_value_store();
         let value = 4_u128;
-        let context = create_test_context();
-        let mut counter = ReentrantCounter::load(context)
+        let mut counter = ReentrantCounter::load(ViewStorageContext::default())
             .now_or_never()
             .unwrap()
             .expect("Failed to load Counter");

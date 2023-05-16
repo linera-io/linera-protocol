@@ -4,12 +4,11 @@
 use async_graphql::scalar;
 use crowd_funding::InitializationArguments;
 use fungible::AccountOwner;
-use linera_sdk::base::Amount;
-use linera_views::{
-    map_view::MapView,
-    register_view::RegisterView,
-    views::{GraphQLView, RootView},
+use linera_sdk::{
+    base::Amount,
+    views::{MapView, RegisterView, ViewStorageContext},
 };
+use linera_views::views::{GraphQLView, RootView};
 use serde::{Deserialize, Serialize};
 
 /// The status of a crowd-funding campaign.
@@ -28,13 +27,14 @@ scalar!(Status);
 
 /// The crowd-funding campaign's state.
 #[derive(RootView, GraphQLView)]
-pub struct CrowdFunding<C> {
+#[view(context = "ViewStorageContext")]
+pub struct CrowdFunding {
     /// The status of the campaign.
-    pub status: RegisterView<C, Status>,
+    pub status: RegisterView<Status>,
     /// The map of pledges that will be collected if the campaign succeeds.
-    pub pledges: MapView<C, AccountOwner, Amount>,
+    pub pledges: MapView<AccountOwner, Amount>,
     /// The initialization arguments that determine the details the campaign.
-    pub initialization_arguments: RegisterView<C, Option<InitializationArguments>>,
+    pub initialization_arguments: RegisterView<Option<InitializationArguments>>,
 }
 
 #[allow(dead_code)]

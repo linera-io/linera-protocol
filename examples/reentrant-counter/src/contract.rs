@@ -8,16 +8,15 @@ mod state;
 use self::state::ReentrantCounter;
 use async_trait::async_trait;
 use linera_sdk::{
-    base::SessionId, contract::system_api, views::ViewStorageContext, ApplicationCallResult,
-    CalleeContext, Contract, EffectContext, ExecutionResult, OperationContext, Session,
-    SessionCallResult, ViewStateStorage,
+    base::SessionId, contract::system_api, ApplicationCallResult, CalleeContext, Contract,
+    EffectContext, ExecutionResult, OperationContext, Session, SessionCallResult, ViewStateStorage,
 };
 use thiserror::Error;
 
-linera_sdk::contract!(ReentrantCounter<ViewStorageContext>);
+linera_sdk::contract!(ReentrantCounter);
 
 #[async_trait]
-impl Contract for ReentrantCounter<ViewStorageContext> {
+impl Contract for ReentrantCounter {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 

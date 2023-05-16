@@ -9,17 +9,15 @@ use async_graphql::{EmptySubscription, Object, Schema};
 use async_trait::async_trait;
 use crowd_funding::Operation;
 use fungible::AccountOwner;
-use linera_sdk::{
-    base::Amount, views::ViewStorageContext, QueryContext, Service, ViewStateStorage,
-};
+use linera_sdk::{base::Amount, QueryContext, Service, ViewStateStorage};
 use state::CrowdFunding;
 use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(CrowdFunding<ViewStorageContext>);
+linera_sdk::service!(CrowdFunding);
 
 #[async_trait]
-impl Service for CrowdFunding<ViewStorageContext> {
+impl Service for CrowdFunding {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 
