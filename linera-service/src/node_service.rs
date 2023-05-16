@@ -306,6 +306,10 @@ where
         let mut client = self.client.lock().await;
         client.synchronize_from_validators().await?;
         client.process_inbox().await?;
+        let initialization_argument = match initialization_argument.len() {
+            0 => serde_json::to_vec(&()).unwrap(),
+            _ => initialization_argument,
+        };
         let (application_id, _) = client
             .create_application(
                 bytecode_id,

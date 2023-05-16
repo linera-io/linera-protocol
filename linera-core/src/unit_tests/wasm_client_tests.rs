@@ -225,7 +225,7 @@ where
         .create_application(
             bytecode_id2,
             bcs::to_bytes(&application_id1)?,
-            vec![],
+            serde_json::to_vec(&()).unwrap(),
             vec![application_id1],
         )
         .await
@@ -599,7 +599,12 @@ where
     receiver.process_inbox().await.unwrap();
 
     let (application_id, _cert) = receiver
-        .create_application(bytecode_id, vec![], vec![], vec![])
+        .create_application(
+            bytecode_id,
+            vec![],
+            serde_json::to_vec(&()).unwrap(),
+            vec![],
+        )
         .await?;
 
     // Request to subscribe to the sender.

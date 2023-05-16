@@ -44,7 +44,6 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
     ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         let first_half = increment / 2;
         let second_half = increment - first_half;
-        let second_half_as_bytes = bcs::to_bytes(&second_half).expect("Failed to serialize `u128`");
 
         let value = self.value.get_mut();
         *value += first_half;
@@ -52,7 +51,7 @@ impl Contract for ReentrantCounter<ViewStorageContext> {
         self.call_application(
             false,
             system_api::current_application_id(),
-            &second_half_as_bytes,
+            &second_half,
             vec![],
         )
         .await?;
