@@ -96,7 +96,10 @@ where
 
         let value = result
             .value
-            .map(|v| bcs::to_bytes(&v).expect("TODO"))
+            // TODO(#743): Do we need explicit error handling?
+            .map(|v| {
+                bcs::to_bytes(&v).expect("failed to serialize Value for ApplicationCallResult")
+            })
             .unwrap_or_default();
 
         wit_types::ApplicationCallResult {
@@ -111,7 +114,8 @@ impl<T: Serialize> From<Session<T>> for wit_types::Session {
     fn from(new_session: Session<T>) -> Self {
         wit_types::Session {
             kind: new_session.kind,
-            data: bcs::to_bytes(&new_session.data).expect("TODO"),
+            // TODO(#743): Do we need explicit error handling?
+            data: bcs::to_bytes(&new_session.data).expect("session type serialization failed"),
         }
     }
 }
@@ -126,7 +130,10 @@ impl<Effect: Serialize + DeserializeOwned + Debug, Value: Serialize, Session: Se
                 result
                     .new_state
                     .as_ref()
-                    .map(|new_state| bcs::to_bytes(new_state).expect("TODO"))
+                    // TODO(#743): Do we need explicit error handling?
+                    .map(|new_state| {
+                        bcs::to_bytes(new_state).expect("session type serialization failed")
+                    })
                     .unwrap_or_default(),
             ),
         }
@@ -144,7 +151,8 @@ impl<Effect: Debug + Serialize + DeserializeOwned> From<ExecutionResult<Effect>>
                 (
                     destination.into(),
                     authenticated,
-                    bcs::to_bytes(&effect).expect("TODO"),
+                    // TODO(#743): Do we need explicit error handling?
+                    bcs::to_bytes(&effect).expect("effect serialization failed"),
                 )
             })
             .collect();

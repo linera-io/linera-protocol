@@ -84,7 +84,8 @@ impl<T: DeserializeOwned> From<wit_types::Session> for Session<T> {
     fn from(session: wit_types::Session) -> Self {
         Session {
             kind: session.kind,
-            data: bcs::from_bytes(&session.data).expect("TODO"),
+            // TODO(#743): Do we need explicit error handling?
+            data: bcs::from_bytes(&session.data).expect("session type deserialization failed"),
         }
     }
 }
