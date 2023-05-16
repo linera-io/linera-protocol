@@ -124,55 +124,55 @@ message ChainInfoQuery {
 // An authenticated proposal for a new block.
 message BlockProposal {
   // The ID of the chain (used for routing).
-  ChainId chain_id = 10;
+  ChainId chain_id = 1;
 
   // bincode-encoded content
-  bytes content = 1;
+  bytes content = 2;
 
   // Byte-encoded public key
-  Owner owner = 2;
+  Owner owner = 3;
 
   // Signature value
-  Signature signature = 3;
+  Signature signature = 4;
 
   // Required bytecode
-  bytes blobs = 4;
+  bytes blobs = 5;
 }
 
 // A certified statement from the committee, without the value.
 message LiteCertificate {
   // The ID of the chain the value belongs to.
-  ChainId chain_id = 10;
+  ChainId chain_id = 1;
 
   // The certified value's hash
-  bytes hash = 1;
+  bytes hash = 2;
 
   // Signatures on the value
-  bytes signatures = 2;
+  bytes signatures = 3;
 
   // Wait until all outgoing cross-chain messages from this certificate have
   // been received by the target chains.
-  bool wait_for_outgoing_messages = 3;
+  bool wait_for_outgoing_messages = 4;
 }
 
 // A certified statement from the committee, together with other certificates
 // required for execution.
 message Certificate {
   // The ID of the chain (used for routing).
-  ChainId chain_id = 10;
+  ChainId chain_id = 1;
 
   // The certified value (BCS signable)
-  bytes value = 1;
+  bytes value = 2;
 
   // Signatures on the value
-  bytes signatures = 2;
+  bytes signatures = 3;
 
   // Other certificates containing bytecode required by the first one
-  bytes blobs = 3;
+  bytes blobs = 4;
 
   // Wait until all outgoing cross-chain messages from this certificate have
   // been received by the target chains.
-  bool wait_for_outgoing_messages = 4;
+  bool wait_for_outgoing_messages = 5;
 }
 
 message ChainId {
