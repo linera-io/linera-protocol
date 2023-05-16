@@ -10,6 +10,8 @@ use linera_base::{
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use crate::fees::Pricing;
+
 /// A number identifying the configuration of the chain (aka the committee).
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
@@ -40,6 +42,8 @@ pub struct Committee {
     pub quorum_threshold: u64,
     /// The threshold to prove the validity of a statement.
     pub validity_threshold: u64,
+    /// The pricing agreed on for this epoch.
+    pub pricing: Pricing,
 }
 
 impl std::fmt::Display for ValidatorName {
@@ -97,7 +101,7 @@ impl Epoch {
 }
 
 impl Committee {
-    pub fn new(validators: BTreeMap<ValidatorName, ValidatorState>) -> Self {
+    pub fn new(validators: BTreeMap<ValidatorName, ValidatorState>, pricing: Pricing) -> Self {
         let total_votes = validators.values().fold(0, |sum, state| sum + state.votes);
         // Let N = 3f + 1 + k (0 <= k < 3).
         // * (2 N + 3) / 3 = 2f + 1 + (2k + 2)/3 = 2f + 1 + k = N - f
@@ -110,6 +114,7 @@ impl Committee {
             total_votes,
             quorum_threshold,
             validity_threshold,
+            pricing,
         }
     }
 
@@ -127,7 +132,7 @@ impl Committee {
                 )
             })
             .collect();
-        Committee::new(map)
+        Committee::new(map, Default::default())
     }
 
     pub fn weight(&self, author: &ValidatorName) -> u64 {

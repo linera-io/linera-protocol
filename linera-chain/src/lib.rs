@@ -16,7 +16,7 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, RoundNumber, Timestamp},
     identifiers::ChainId,
 };
-use linera_execution::ExecutionError;
+use linera_execution::{fees::PricingError, ExecutionError};
 use linera_views::views::ViewError;
 pub use manager::{ChainManager, ChainManagerInfo, Outcome as ChainManagerOutcome};
 use thiserror::Error;
@@ -31,6 +31,8 @@ pub enum ChainError {
     ViewError(#[from] ViewError),
     #[error("Execution error: {0}")]
     ExecutionError(#[from] ExecutionError),
+    #[error("Pricing error: {0}")]
+    PricingError(#[from] PricingError),
 
     #[error("The chain being queried is not active {0:?}")]
     InactiveChain(ChainId),

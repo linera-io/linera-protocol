@@ -1020,7 +1020,10 @@ where
                     }
                     _ => unreachable!(),
                 }
-                let certificate = chain_client.stage_new_committee(validators).await.unwrap();
+                let certificate = chain_client
+                    .stage_new_committee(validators, committee.pricing) // TODO(fees)
+                    .await
+                    .unwrap();
                 context.update_wallet_from_client(&mut chain_client).await;
                 info!("Staging committee:\n{:?}", certificate);
                 context.push_to_all_chains(&storage, &certificate).await;

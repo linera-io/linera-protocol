@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use linera_base::crypto::KeyPair;
 use linera_core::worker::WorkerState;
-use linera_execution::{committee::ValidatorName, WasmRuntime, WithWasmDefault};
+use linera_execution::{committee::ValidatorName, fees::Pricing, WasmRuntime, WithWasmDefault};
 use linera_rpc::{
     config::{
         CrossChainConfig, NetworkProtocol, NotificationConfig, ShardConfig, ShardId,
@@ -390,6 +390,7 @@ async fn main() {
             if let Some(committee) = committee {
                 let config = CommitteeConfig {
                     validators: config_validators,
+                    pricing: Pricing::default(), // TODO(fees)
                 };
                 config
                     .write(&committee)
