@@ -208,6 +208,8 @@ Committee:
     - total_votes: U64
     - quorum_threshold: U64
     - validity_threshold: U64
+    - pricing:
+        TYPENAME: Pricing
 CrossChainRequest:
   ENUM:
     0:
@@ -487,6 +489,16 @@ OutgoingEffect:
 Owner:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
+Pricing:
+  STRUCT:
+    - certificate:
+        TYPENAME: Balance
+    - fuel:
+        TYPENAME: Balance
+    - storage:
+        TYPENAME: Balance
+    - messages:
+        TYPENAME: Balance
 PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:

@@ -193,6 +193,10 @@ macro_rules! impl_strictly_wrapped_number {
                     .ok_or(ArithmeticError::Underflow)?;
                 Ok(())
             }
+
+            pub fn saturating_mul(&self, other: $wrapped) -> Self {
+                Self(self.0.saturating_mul(other))
+            }
         }
 
         impl From<$name> for $wrapped {

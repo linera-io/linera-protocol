@@ -28,6 +28,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
+    fees::Pricing,
     system::{Account, Recipient, SystemChannel, SystemOperation, UserData},
     Bytecode, Effect, Operation, Query, Response, SystemEffect, SystemQuery, SystemResponse,
     UserApplicationId,
@@ -1405,13 +1406,14 @@ where
         Ok((id, certificate))
     }
 
-    /// Creates a new committee and start using it (admin chains only).
+    /// Creates a new committee and starts using it (admin chains only).
     pub async fn stage_new_committee(
         &mut self,
         validators: BTreeMap<ValidatorName, ValidatorState>,
+        pricing: Pricing,
     ) -> Result<Certificate> {
         self.prepare_chain().await?;
-        let committee = Committee::new(validators);
+        let committee = Committee::new(validators, pricing);
         let epoch = self.epoch().await?;
         let messages = self.pending_messages().await?;
         self.execute_block(

@@ -413,7 +413,8 @@ where
 
     /// Executes a new block: first the incoming messages, then the main operation.
     /// * Modifies the state of inboxes, outboxes, and channels, if needed.
-    /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown away.
+    /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown
+    ///   away.
     /// * Returns the list of effects caused by the block being executed.
     pub async fn execute_block(
         &mut self,
@@ -426,8 +427,19 @@ where
             ChainError::InvalidBlockTimestamp
         );
         self.execution_state.system.timestamp.set(block.timestamp);
+        let Some((_, committee)) = self.execution_state.system.current_committee() else {
+            return Err(ChainError::InactiveChain(chain_id));
+        };
+
+        let pricing = committee.pricing.clone();
+        let balance = self.execution_state.system.balance.get_mut();
+        balance.try_sub_assign(pricing.certificate_price())?;
+        balance.try_sub_assign(pricing.storage_price(&block.incoming_messages)?)?;
+        balance.try_sub_assign(pricing.storage_price(&block.operations)?)?;
+
         self.execution_state.add_fuel(10_000_000);
         let mut effects = Vec::new();
+        let available_fuel = *self.execution_state.available_fuel.get();
         for message in &block.incoming_messages {
             // Execute the received effect.
             let context = EffectContext {
@@ -467,6 +479,12 @@ where
             self.process_execution_results(&mut effects, context.height, results)
                 .await?;
         }
+        let used_fuel = available_fuel.saturating_sub(*self.execution_state.available_fuel.get());
+
+        let balance = self.execution_state.system.balance.get_mut();
+        balance.try_sub_assign(pricing.fuel_price(used_fuel))?;
+        balance.try_sub_assign(pricing.storage_and_messages_price(&effects)?)?;
+
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash().await?;
         self.execution_state_hash.set(Some(hash));

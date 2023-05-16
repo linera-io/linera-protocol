@@ -14,7 +14,10 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, Owner},
 };
 use linera_core::client::{ChainClient, ValidatorNodeProvider};
-use linera_execution::committee::{Committee, ValidatorName, ValidatorState};
+use linera_execution::{
+    committee::{Committee, ValidatorName, ValidatorState},
+    fees::Pricing,
+};
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -68,6 +71,7 @@ impl Export for ValidatorServerConfig {}
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct CommitteeConfig {
     pub validators: Vec<ValidatorConfig>,
+    pub pricing: Pricing,
 }
 
 impl Import for CommitteeConfig {}
@@ -88,7 +92,7 @@ impl CommitteeConfig {
                 )
             })
             .collect();
-        Committee::new(validators)
+        Committee::new(validators, self.pricing)
     }
 }
 

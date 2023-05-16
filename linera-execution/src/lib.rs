@@ -6,6 +6,7 @@
 mod applications;
 pub mod committee;
 mod execution;
+pub mod fees;
 mod graphql;
 mod ownership;
 mod runtime;

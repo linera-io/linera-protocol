@@ -1669,6 +1669,7 @@ dependencies = [
  "async-graphql",
  "async-lock",
  "async-trait",
+ "bcs",
  "linera-base",
  "linera-execution",
  "linera-views",
