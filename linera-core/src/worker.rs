@@ -281,7 +281,7 @@ impl<Client> WorkerState<Client> {
         &self.storage
     }
 
-    fn full_certificate(
+    pub fn full_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
     ) -> Result<Certificate, WorkerError> {
@@ -312,17 +312,6 @@ where
         blobs: Vec<HashedValue>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.fully_handle_certificate_with_notifications(certificate, blobs, None)
-            .await
-    }
-
-    #[inline]
-    pub(crate) async fn fully_handle_lite_certificate_with_notifications(
-        &mut self,
-        certificate: LiteCertificate<'_>,
-        notifications: Option<&mut Vec<Notification>>,
-    ) -> Result<ChainInfoResponse, WorkerError> {
-        let full_cert = self.full_certificate(certificate)?;
-        self.fully_handle_certificate_with_notifications(full_cert, vec![], notifications)
             .await
     }
 
