@@ -3,11 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
-use std::time::SystemTime;
+use std::{fmt, time::SystemTime};
 use thiserror::Error;
 
-#[cfg(not(target_arch = "wasm32"))]
-use std::fmt;
 #[cfg(any(test, feature = "test"))]
 use test_strategy::Arbitrary;
 
@@ -16,46 +14,35 @@ use chrono::NaiveDateTime;
 
 use crate::doc_scalar;
 
-/// A non-negative amount of money to be transferred.
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
-pub struct Amount(u64);
-
-/// The balance of a chain.
+/// A non-negative amount of money.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
-pub struct Balance(u128);
+pub struct Amount(u128);
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename = "Balance")]
-struct BalanceU64 {
-    upper: u64,
-    lower: u64,
-}
+#[serde(rename = "Amount")]
+struct AmountString(String);
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename = "Balance")]
-struct BalanceU128(u128);
+#[serde(rename = "Amount")]
+struct AmountU128(u128);
 
-impl Serialize for Balance {
+impl Serialize for Amount {
     fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         if serializer.is_human_readable() {
-            let upper = self.upper_half();
-            let lower = self.lower_half();
-            BalanceU64 { upper, lower }.serialize(serializer)
+            AmountString(self.to_string()).serialize(serializer)
         } else {
-            BalanceU128(self.0).serialize(serializer)
+            AmountU128(self.0).serialize(serializer)
         }
     }
 }
 
-impl<'de> Deserialize<'de> for Balance {
+impl<'de> Deserialize<'de> for Amount {
     fn deserialize<D: serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         if deserializer.is_human_readable() {
-            let b = BalanceU64::deserialize(deserializer)?;
-            Ok(Balance(((b.upper as u128) << 64) | (b.lower as u128)))
+            let AmountString(s) = AmountString::deserialize(deserializer)?;
+            s.parse().map_err(serde::de::Error::custom)
         } else {
-            Ok(Balance(BalanceU128::deserialize(deserializer)?.0))
+            Ok(Amount(AmountU128::deserialize(deserializer)?.0))
         }
     }
 }
@@ -205,20 +192,6 @@ macro_rules! impl_strictly_wrapped_number {
             }
         }
 
-        impl std::fmt::Display for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                self.0.fmt(f)
-            }
-        }
-
-        impl std::str::FromStr for $name {
-            type Err = std::num::ParseIntError;
-
-            fn from_str(src: &str) -> Result<Self, Self::Err> {
-                Ok(Self($wrapped::from_str(src)?))
-            }
-        }
-
         impl From<$name> for $wrapped {
             fn from(value: $name) -> Self {
                 value.0
@@ -266,10 +239,115 @@ macro_rules! impl_wrapped_number {
     };
 }
 
-impl_wrapped_number!(Balance, u128);
-impl_strictly_wrapped_number!(Amount, u64);
+impl_wrapped_number!(Amount, u128);
 impl_wrapped_number!(BlockHeight, u64);
 impl_strictly_wrapped_number!(RoundNumber, u64);
+
+impl fmt::Display for Amount {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Print the wrapped integer, padded with zeros to cover a digit before the decimal point.
+        let places = Amount::DECIMAL_PLACES as usize;
+        let min_digits = places + 1;
+        let decimals = format!("{:0min_digits$}", self.0);
+        let integer_part = &decimals[..(decimals.len() - places)];
+        let fractional_part = decimals[(decimals.len() - places)..].trim_end_matches('0');
+
+        // For now, we never trim non-zero digits so we don't lose any precision.
+        let precision = f.precision().unwrap_or(0).max(fractional_part.len());
+        let sign = if f.sign_plus() && self.0 > 0 { "+" } else { "" };
+        // The amount of padding: desired width minus sign, point and number of digits.
+        let pad_width = f.width().map_or(0, |w| {
+            w.saturating_sub(precision)
+                .saturating_sub(sign.len() + integer_part.len() + 1)
+        });
+        let left_pad = match f.align() {
+            None | Some(fmt::Alignment::Right) => pad_width,
+            Some(fmt::Alignment::Center) => pad_width / 2,
+            Some(fmt::Alignment::Left) => 0,
+        };
+
+        for _ in 0..left_pad {
+            write!(f, "{}", f.fill())?;
+        }
+        write!(f, "{sign}{integer_part}.{fractional_part:0<precision$}")?;
+        for _ in left_pad..pad_width {
+            write!(f, "{}", f.fill())?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum ParseAmountError {
+    #[error("cannot parse amount")]
+    Parse,
+    #[error("cannot represent amount: number too high")]
+    TooHigh,
+    #[error("cannot represent amount: too many decimal places after the point")]
+    TooManyDigits,
+}
+
+impl std::str::FromStr for Amount {
+    type Err = ParseAmountError;
+
+    fn from_str(src: &str) -> Result<Self, Self::Err> {
+        let mut result: u128 = 0;
+        let mut decimals: Option<u8> = None;
+        let mut chars = src.trim().chars().peekable();
+        if chars.peek() == Some(&'+') {
+            chars.next();
+        }
+        for char in chars {
+            match char {
+                '_' => {}
+                '.' if decimals.is_some() => return Err(ParseAmountError::Parse),
+                '.' => decimals = Some(Amount::DECIMAL_PLACES),
+                char => {
+                    let digit = u128::from(char.to_digit(10).ok_or(ParseAmountError::Parse)?);
+                    if let Some(d) = &mut decimals {
+                        *d = d.checked_sub(1).ok_or(ParseAmountError::TooManyDigits)?;
+                    }
+                    result = result
+                        .checked_mul(10)
+                        .and_then(|r| r.checked_add(digit))
+                        .ok_or(ParseAmountError::TooHigh)?;
+                }
+            }
+        }
+        result = result
+            .checked_mul(10u128.pow(decimals.unwrap_or(Amount::DECIMAL_PLACES) as u32))
+            .ok_or(ParseAmountError::TooHigh)?;
+        Ok(Amount(result))
+    }
+}
+
+impl fmt::Display for BlockHeight {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::str::FromStr for BlockHeight {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(src: &str) -> Result<Self, Self::Err> {
+        Ok(Self(u64::from_str(src)?))
+    }
+}
+
+impl fmt::Display for RoundNumber {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::str::FromStr for RoundNumber {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(src: &str) -> Result<Self, Self::Err> {
+        Ok(Self(u64::from_str(src)?))
+    }
+}
 
 impl<'a> std::iter::Sum<&'a Amount> for Amount {
     fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
@@ -277,7 +355,10 @@ impl<'a> std::iter::Sum<&'a Amount> for Amount {
     }
 }
 
-impl Balance {
+impl Amount {
+    pub const DECIMAL_PLACES: u8 = 18;
+    pub const ONE: Amount = Amount(10u128.pow(Amount::DECIMAL_PLACES as u32));
+
     /// Helper function to obtain the 64 most significant bits of the balance.
     pub fn upper_half(self) -> u64 {
         (self.0 >> 64) as u64
@@ -289,24 +370,41 @@ impl Balance {
     }
 }
 
-impl From<Amount> for Balance {
-    fn from(val: Amount) -> Self {
-        Balance(val.0 as u128)
-    }
-}
-
-impl TryFrom<Balance> for Amount {
-    type Error = std::num::TryFromIntError;
-
-    fn try_from(val: Balance) -> Result<Self, Self::Error> {
-        Ok(Amount(val.0.try_into()?))
-    }
-}
-
-doc_scalar!(Amount, "A non-negative amount of money to be transferred");
-doc_scalar!(Balance, "The balance of a chain");
+doc_scalar!(Amount, "A non-negative amount of money.");
 doc_scalar!(BlockHeight, "A block height to identify blocks in a chain");
 doc_scalar!(
     Timestamp,
     "A timestamp, in microseconds since the Unix epoch"
 );
+
+#[cfg(test)]
+mod tests {
+    use super::Amount;
+    use std::str::FromStr;
+
+    #[test]
+    fn display_amount() {
+        assert_eq!("1.", Amount::ONE.to_string());
+        assert_eq!("1.", Amount::from_str("1.").unwrap().to_string());
+        assert_eq!(
+            Amount(10_000_000_000_000_000_000),
+            Amount::from_str("10").unwrap()
+        );
+        assert_eq!("10.", Amount(10_000_000_000_000_000_000).to_string(),);
+        assert_eq!(
+            "1001.3",
+            (Amount::from_str("1.1")
+                .unwrap()
+                .saturating_add(Amount::from_str("1_000.2").unwrap()))
+            .to_string()
+        );
+        assert_eq!(
+            "   1.00000000000000000000",
+            format!("{:25.20}", Amount::ONE)
+        );
+        assert_eq!(
+            "~+12.34~~",
+            format!("{:~^+9.1}", Amount::from_str("12.34").unwrap())
+        );
+    }
+}

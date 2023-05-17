@@ -1,7 +1,7 @@
 mocked-chain-id: func() -> chain-id
 mocked-application-id: func() -> application-id
 mocked-application-parameters: func() -> list<u8>
-mocked-read-system-balance: func() -> balance
+mocked-read-system-balance: func() -> amount
 mocked-read-system-timestamp: func() -> timestamp
 
 mocked-log: func(message: string, level: log-level)
@@ -60,7 +60,7 @@ record crypto-hash {
     part4: u64,
 }
 
-record balance {
+record amount {
     lower-half: u64,
     upper-half: u64,
 }

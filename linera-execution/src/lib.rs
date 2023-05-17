@@ -39,7 +39,7 @@ use dashmap::DashMap;
 use derive_more::Display;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{ArithmeticError, Balance, BlockHeight, Timestamp},
+    data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     hex_debug,
     identifiers::{BytecodeId, ChainId, ChannelName, Destination, EffectId, Owner, SessionId},
 };
@@ -267,7 +267,7 @@ pub trait BaseRuntime: Send + Sync {
     fn application_parameters(&self) -> Vec<u8>;
 
     /// Reads the system balance.
-    fn read_system_balance(&self) -> Balance;
+    fn read_system_balance(&self) -> Amount;
 
     /// Reads the system timestamp.
     fn read_system_timestamp(&self) -> Timestamp;

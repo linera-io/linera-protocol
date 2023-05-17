@@ -285,11 +285,11 @@ struct GenesisStoreBuilder {
 struct GenesisAccount {
     description: ChainDescription,
     public_key: PublicKey,
-    balance: Balance,
+    balance: Amount,
 }
 
 impl GenesisStoreBuilder {
-    fn add(&mut self, description: ChainDescription, public_key: PublicKey, balance: Balance) {
+    fn add(&mut self, description: ChainDescription, public_key: PublicKey, balance: Amount) {
         self.accounts.push(GenesisAccount {
             description,
             public_key,
@@ -389,7 +389,7 @@ where
     pub async fn add_initial_chain(
         &mut self,
         description: ChainDescription,
-        balance: Balance,
+        balance: Amount,
     ) -> Result<ChainClient<NodeProvider<B::Store>, B::Store>, anyhow::Error> {
         let key_pair = KeyPair::generate();
         let public_key = key_pair.public();
@@ -405,7 +405,7 @@ where
                         self.admin_id,
                         description,
                         public_key,
-                        Balance::from(0),
+                        Amount::from(0),
                         Timestamp::from(0),
                     )
                     .await

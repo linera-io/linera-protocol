@@ -13,7 +13,7 @@ use crate::{
     CallResult, CalleeContext, EffectContext, EffectId, OperationContext, QueryContext, SessionId,
     UserApplicationId,
 };
-use linera_base::{crypto::CryptoHash, data_types::Balance, identifiers::ChainId};
+use linera_base::{crypto::CryptoHash, data_types::Amount, identifiers::ChainId};
 
 impl From<OperationContext> for contract::OperationContext {
     fn from(host: OperationContext) -> Self {
@@ -223,18 +223,18 @@ impl From<CallResult> for contract_system_api::CallResult {
     }
 }
 
-impl From<Balance> for service_system_api::Balance {
-    fn from(host: Balance) -> Self {
-        service_system_api::Balance {
+impl From<Amount> for service_system_api::Amount {
+    fn from(host: Amount) -> Self {
+        service_system_api::Amount {
             lower_half: host.lower_half(),
             upper_half: host.upper_half(),
         }
     }
 }
 
-impl From<Balance> for contract_system_api::Balance {
-    fn from(host: Balance) -> Self {
-        contract_system_api::Balance {
+impl From<Amount> for contract_system_api::Amount {
+    fn from(host: Amount) -> Self {
+        contract_system_api::Amount {
             lower_half: host.lower_half(),
             upper_half: host.upper_half(),
         }

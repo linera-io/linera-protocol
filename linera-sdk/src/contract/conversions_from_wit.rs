@@ -9,7 +9,7 @@ use super::{
 };
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Balance, BlockHeight},
+    data_types::{Amount, BlockHeight},
     identifiers::{ApplicationId, BytecodeId, ChainId, EffectId, Owner, SessionId},
 };
 
@@ -135,10 +135,10 @@ impl From<wit_system_api::CryptoHash> for CryptoHash {
     }
 }
 
-impl From<wit_system_api::Balance> for Balance {
-    fn from(balance: wit_system_api::Balance) -> Self {
+impl From<wit_system_api::Amount> for Amount {
+    fn from(balance: wit_system_api::Amount) -> Self {
         let value = ((balance.upper_half as u128) << 64) | (balance.lower_half as u128);
-        Balance::from(value)
+        Amount::from(value)
     }
 }
 

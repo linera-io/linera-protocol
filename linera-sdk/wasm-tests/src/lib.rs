@@ -10,7 +10,7 @@
 
 use futures::FutureExt;
 use linera_sdk::{
-    base::{ApplicationId, Balance, BlockHeight, BytecodeId, ChainId, EffectId, Timestamp},
+    base::{Amount, ApplicationId, BlockHeight, BytecodeId, ChainId, EffectId, Timestamp},
     contract, service, test, ContractLogger, ServiceLogger,
 };
 use linera_views::{
@@ -80,7 +80,7 @@ fn mock_application_parameters() {
 /// Test if the system balance getter API is mocked successfully.
 #[webassembly_test]
 fn mock_system_balance() {
-    let balance = Balance::from(0x00010203_04050607_08090a0b_0c0d0e0f);
+    let balance = Amount::from(0x00010203_04050607_08090a0b_0c0d0e0f);
 
     test::mock_system_balance(balance);
 

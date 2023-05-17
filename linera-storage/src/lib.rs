@@ -20,7 +20,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Balance, Timestamp},
+    data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
 use linera_chain::{
@@ -129,7 +129,7 @@ pub trait Store: Sized {
         admin_id: ChainId,
         description: ChainDescription,
         public_key: PublicKey,
-        balance: Balance,
+        balance: Amount,
         timestamp: Timestamp,
     ) -> Result<(), ChainError>
     where

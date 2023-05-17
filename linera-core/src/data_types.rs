@@ -5,7 +5,7 @@
 use crate::node::NodeError;
 use linera_base::{
     crypto::{BcsSignable, CryptoHash, KeyPair, Signature},
-    data_types::{Balance, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
 use linera_chain::{
@@ -126,7 +126,7 @@ pub struct ChainInfo {
     /// The state of the chain authentication.
     pub manager: ChainManagerInfo,
     /// The current balance.
-    pub system_balance: Balance,
+    pub system_balance: Amount,
     /// The last block hash, if any.
     pub block_hash: Option<CryptoHash>,
     /// The earliest possible timestamp for the next block.

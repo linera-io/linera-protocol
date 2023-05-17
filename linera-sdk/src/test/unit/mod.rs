@@ -19,7 +19,7 @@ mod conversions_to_wit;
 use self::mock_system_api as wit;
 use futures::FutureExt;
 use linera_base::{
-    data_types::{Balance, Timestamp},
+    data_types::{Amount, Timestamp},
     identifiers::{ApplicationId, ChainId},
 };
 use linera_views::{
@@ -31,7 +31,7 @@ use linera_views::{
 static mut MOCK_CHAIN_ID: Option<ChainId> = None;
 static mut MOCK_APPLICATION_ID: Option<ApplicationId> = None;
 static mut MOCK_APPLICATION_PARAMETERS: Option<Vec<u8>> = None;
-static mut MOCK_SYSTEM_BALANCE: Option<Balance> = None;
+static mut MOCK_SYSTEM_BALANCE: Option<Amount> = None;
 static mut MOCK_SYSTEM_TIMESTAMP: Option<Timestamp> = None;
 static mut MOCK_LOG_COLLECTOR: Vec<(log::Level, String)> = Vec::new();
 static mut MOCK_APPLICATION_STATE: Option<Vec<u8>> = None;
@@ -57,7 +57,7 @@ pub fn mock_application_parameters(application_parameters: impl Into<Option<Vec<
 }
 
 /// Sets the mocked system balance.
-pub fn mock_system_balance(system_balance: impl Into<Option<Balance>>) {
+pub fn mock_system_balance(system_balance: impl Into<Option<Amount>>) {
     unsafe { MOCK_SYSTEM_BALANCE = system_balance.into() };
 }
 
@@ -126,7 +126,7 @@ impl wit::MockSystemApi for MockSystemApi {
             .into()
     }
 
-    fn mocked_read_system_balance() -> wit::Balance {
+    fn mocked_read_system_balance() -> wit::Amount {
         unsafe { MOCK_SYSTEM_BALANCE }
             .expect(
                 "Unexpected call to the `read_system_balance` system API. \

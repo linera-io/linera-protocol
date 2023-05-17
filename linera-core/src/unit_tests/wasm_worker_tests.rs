@@ -12,7 +12,7 @@
 use super::{init_worker_with_chains, make_block, make_certificate, make_state_hash};
 use linera_base::{
     crypto::KeyPair,
-    data_types::{Balance, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{BytecodeId, ChainDescription, ChainId, Destination, EffectId},
 };
 use linera_chain::data_types::{
@@ -103,9 +103,9 @@ where
             (
                 publisher_chain,
                 publisher_key_pair.public(),
-                Balance::from(0),
+                Amount::from(0),
             ),
-            (creator_chain, creator_key_pair.public(), Balance::from(0)),
+            (creator_chain, creator_key_pair.public(), Amount::from(0)),
         ],
     )
     .await;
@@ -144,7 +144,7 @@ where
         subscriptions: BTreeSet::new(),
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(publisher_key_pair.public()),
-        balance: Balance::from(0),
+        balance: Amount::from(0),
         balances: BTreeMap::new(),
         timestamp: Timestamp::from(1),
         registry: ApplicationRegistry::default(),
@@ -167,7 +167,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::from(publisher_chain), info.chain_id);
-    assert_eq!(Balance::from(0), info.system_balance);
+    assert_eq!(Amount::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Timestamp::from(1), info.timestamp);
     assert_eq!(Some(publish_certificate.value.hash()), info.block_hash);
@@ -230,7 +230,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::from(publisher_chain), info.chain_id);
-    assert_eq!(Balance::from(0), info.system_balance);
+    assert_eq!(Amount::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(2), info.next_block_height);
     assert_eq!(Timestamp::from(1), info.timestamp);
     assert_eq!(Some(broadcast_certificate.value.hash()), info.block_hash);
@@ -266,7 +266,7 @@ where
         subscriptions: [publisher_channel].into_iter().collect(),
         committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(creator_key_pair.public()),
-        balance: Balance::from(0),
+        balance: Amount::from(0),
         balances: BTreeMap::new(),
         timestamp: Timestamp::from(2),
         registry: ApplicationRegistry::default(),
@@ -291,7 +291,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::from(creator_chain), info.chain_id);
-    assert_eq!(Balance::from(0), info.system_balance);
+    assert_eq!(Amount::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Timestamp::from(2), info.timestamp);
     assert_eq!(Some(subscribe_certificate.value.hash()), info.block_hash);
@@ -339,7 +339,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::from(publisher_chain), info.chain_id);
-    assert_eq!(Balance::from(0), info.system_balance);
+    assert_eq!(Amount::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(3), info.next_block_height);
     assert_eq!(Timestamp::from(3), info.timestamp);
     assert_eq!(Some(accept_certificate.value.hash()), info.block_hash);
@@ -428,7 +428,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::root(2), info.chain_id);
-    assert_eq!(Balance::from(0), info.system_balance);
+    assert_eq!(Amount::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(2), info.next_block_height);
     assert_eq!(Timestamp::from(4), info.timestamp);
     assert_eq!(Some(create_certificate.value.hash()), info.block_hash);
@@ -477,7 +477,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::root(2), info.chain_id);
-    assert_eq!(Balance::from(0), info.system_balance);
+    assert_eq!(Amount::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(3), info.next_block_height);
     assert_eq!(Some(run_certificate.value.hash()), info.block_hash);
     assert_eq!(Timestamp::from(5), info.timestamp);

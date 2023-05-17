@@ -79,7 +79,7 @@ where
 /// Same as `init_worker` but also instantiate some initial chains.
 async fn init_worker_with_chains<S, I>(client: S, balances: I) -> (Committee, WorkerState<S>)
 where
-    I: IntoIterator<Item = (ChainDescription, PublicKey, Balance)>,
+    I: IntoIterator<Item = (ChainDescription, PublicKey, Amount)>,
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
@@ -106,7 +106,7 @@ async fn init_worker_with_chain<S>(
     client: S,
     description: ChainDescription,
     owner: PublicKey,
-    balance: Balance,
+    balance: Amount,
 ) -> (Committee, WorkerState<S>)
 where
     S: Store + Clone + Send + Sync + 'static,
@@ -196,7 +196,7 @@ async fn make_transfer_certificate<S>(
     amount: Amount,
     incoming_messages: Vec<Message>,
     committee: &Committee,
-    balance: Balance,
+    balance: Amount,
     worker: &WorkerState<S>,
     previous_confirmed_block: Option<&Certificate>,
 ) -> Certificate {
@@ -224,7 +224,7 @@ async fn make_transfer_certificate_for_epoch<S>(
     incoming_messages: Vec<Message>,
     epoch: Epoch,
     committee: &Committee,
-    balance: Balance,
+    balance: Amount,
     worker: &WorkerState<S>,
     previous_confirmed_block: Option<&Certificate>,
 ) -> Certificate {
@@ -326,12 +326,12 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Balance::from(5),
+                Amount::from(5),
             ),
             (
                 ChainDescription::Root(2),
                 PublicKey::debug(2),
-                Balance::from(0),
+                Amount::from(0),
             ),
         ],
     )
@@ -405,12 +405,12 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Balance::from(5),
+                Amount::from(5),
             ),
             (
                 ChainDescription::Root(2),
                 PublicKey::debug(2),
-                Balance::from(0),
+                Amount::from(0),
             ),
         ],
     )
@@ -474,7 +474,7 @@ where
     ViewError: From<S::ContextError>,
 {
     let key_pair = KeyPair::generate();
-    let balance = Balance::from(5);
+    let balance = Amount::from(5);
     let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
     let epoch = Epoch::from(0);
     let (committee, mut worker) = init_worker_with_chains(client, balances).await;
@@ -586,12 +586,12 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Balance::from(5),
+                Amount::from(5),
             ),
             (
                 ChainDescription::Root(2),
                 PublicKey::debug(2),
-                Balance::from(0),
+                Amount::from(0),
             ),
         ],
     )
@@ -664,7 +664,7 @@ where
         vec![(
             ChainDescription::Root(1),
             sender_key_pair.public(),
-            Balance::from(5),
+            Amount::from(5),
         )],
     )
     .await;
@@ -683,7 +683,7 @@ where
         Amount::from(1),
         Vec::new(),
         &committee,
-        Balance::from(4),
+        Amount::from(4),
         &worker,
         None,
     )
@@ -785,12 +785,12 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Balance::from(6),
+                Amount::from(6),
             ),
             (
                 ChainDescription::Root(2),
                 recipient_key_pair.public(),
-                Balance::from(0),
+                Amount::from(0),
             ),
         ],
     )
@@ -848,7 +848,7 @@ where
                     subscriptions: BTreeSet::new(),
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(sender_key_pair.public()),
-                    balance: Balance::from(3),
+                    balance: Amount::from(3),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
                     registry: ApplicationRegistry::default(),
@@ -893,7 +893,7 @@ where
                     subscriptions: BTreeSet::new(),
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(sender_key_pair.public()),
-                    balance: Balance::from(0),
+                    balance: Amount::from(0),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
                     registry: ApplicationRegistry::default(),
@@ -1182,7 +1182,7 @@ where
                         subscriptions: BTreeSet::new(),
                         committees: [(epoch, committee.clone())].into_iter().collect(),
                         ownership: ChainOwnership::single(recipient_key_pair.public()),
-                        balance: Balance::from(0),
+                        balance: Amount::from(0),
                         balances: BTreeMap::new(),
                         timestamp: Timestamp::from(0),
                         registry: ApplicationRegistry::default(),
@@ -1267,12 +1267,12 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Balance::from(5),
+                Amount::from(5),
             ),
             (
                 ChainDescription::Root(2),
                 PublicKey::debug(2),
-                Balance::from(0),
+                Amount::from(0),
             ),
         ],
     )
@@ -1338,7 +1338,7 @@ where
         vec![(
             ChainDescription::Root(1),
             sender_key_pair.public(),
-            Balance::from(5),
+            Amount::from(5),
         )],
     )
     .await;
@@ -1414,12 +1414,12 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Balance::from(5),
+                Amount::from(5),
             ),
             (
                 ChainDescription::Root(2),
                 PublicKey::debug(2),
-                Balance::from(0),
+                Amount::from(0),
             ),
         ],
     )
@@ -1489,7 +1489,7 @@ where
         vec![(
             ChainDescription::Root(2),
             PublicKey::debug(2),
-            Balance::from(0),
+            Amount::from(0),
         )],
     )
     .await;
@@ -1500,7 +1500,7 @@ where
         Amount::from(5),
         Vec::new(),
         &committee,
-        Balance::from(0),
+        Amount::from(0),
         &worker,
         None,
     )
@@ -1552,12 +1552,12 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Balance::from(5),
+                Amount::from(5),
             ),
             (
                 ChainDescription::Root(2),
                 PublicKey::debug(2),
-                Balance::from(0),
+                Amount::from(0),
             ),
         ],
     )
@@ -1569,7 +1569,7 @@ where
         Amount::from(5),
         Vec::new(),
         &committee,
-        Balance::from(0),
+        Amount::from(0),
         &worker,
         None,
     )
@@ -1627,12 +1627,12 @@ where
             (
                 ChainDescription::Root(1),
                 key_pair.public(),
-                Balance::from(5),
+                Amount::from(5),
             ),
             (
                 ChainDescription::Root(2),
                 PublicKey::debug(2),
-                Balance::from(0),
+                Amount::from(0),
             ),
         ],
     )
@@ -1658,7 +1658,7 @@ where
             },
         }],
         &committee,
-        Balance::from(0),
+        Amount::from(0),
         &worker,
         None,
     )
@@ -1672,10 +1672,7 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap();
-    assert_eq!(
-        Balance::from(0),
-        *chain.execution_state.system.balance.get()
-    );
+    assert_eq!(Amount::from(0), *chain.execution_state.system.balance.get());
     assert_eq!(
         BlockHeight::from(1),
         chain.tip_state.get().next_block_height
@@ -1777,12 +1774,12 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Balance::from(1),
+                Amount::from(1),
             ),
             (
                 ChainDescription::Root(2),
                 PublicKey::debug(2),
-                Balance::max(),
+                Amount::max(),
             ),
         ],
     )
@@ -1795,7 +1792,7 @@ where
         Amount::from(1),
         Vec::new(),
         &committee,
-        Balance::from(0),
+        Amount::from(0),
         &worker,
         None,
     )
@@ -1810,7 +1807,7 @@ where
         .await
         .unwrap();
     assert_eq!(
-        Balance::from(0),
+        Amount::from(0),
         *new_sender_chain.execution_state.system.balance.get()
     );
     assert_eq!(
@@ -1828,7 +1825,7 @@ where
         .await
         .unwrap();
     assert_eq!(
-        Balance::max(),
+        Amount::max(),
         *new_recipient_chain.execution_state.system.balance.get()
     );
 }
@@ -1870,7 +1867,7 @@ where
     let key_pair = KeyPair::generate();
     let name = key_pair.public();
     let (committee, mut worker) =
-        init_worker_with_chain(client, ChainDescription::Root(1), name, Balance::from(1)).await;
+        init_worker_with_chain(client, ChainDescription::Root(1), name, Amount::from(1)).await;
 
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
@@ -1879,7 +1876,7 @@ where
         Amount::from(1),
         Vec::new(),
         &committee,
-        Balance::from(0),
+        Amount::from(0),
         &worker,
         None,
     )
@@ -1893,10 +1890,7 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap();
-    assert_eq!(
-        Balance::from(0),
-        *chain.execution_state.system.balance.get()
-    );
+    assert_eq!(Amount::from(0), *chain.execution_state.system.balance.get());
     assert_eq!(
         BlockHeight::from(1),
         chain
@@ -1981,7 +1975,7 @@ where
         vec![(
             ChainDescription::Root(2),
             PublicKey::debug(2),
-            Balance::from(1),
+            Amount::from(1),
         )],
     )
     .await;
@@ -1992,7 +1986,7 @@ where
         Amount::from(10),
         Vec::new(),
         &committee,
-        Balance::from(0),
+        Amount::from(0),
         &worker,
         None,
     )
@@ -2011,10 +2005,7 @@ where
         .load_active_chain(ChainId::root(2))
         .await
         .unwrap();
-    assert_eq!(
-        Balance::from(1),
-        *chain.execution_state.system.balance.get()
-    );
+    assert_eq!(Amount::from(1), *chain.execution_state.system.balance.get());
     assert_eq!(
         BlockHeight::from(0),
         chain.tip_state.get().next_block_height
@@ -2101,7 +2092,7 @@ where
         Amount::from(10),
         Vec::new(),
         &committee,
-        Balance::from(0),
+        Amount::from(0),
         &worker,
         None,
     )
@@ -2166,7 +2157,7 @@ where
         Amount::from(10),
         Vec::new(),
         &committee,
-        Balance::from(0),
+        Amount::from(0),
         &worker,
         None,
     )
@@ -2241,12 +2232,12 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Balance::from(5),
+                Amount::from(5),
             ),
             (
                 ChainDescription::Root(2),
                 recipient_key_pair.public(),
-                Balance::from(0),
+                Amount::from(0),
             ),
         ],
     )
@@ -2258,7 +2249,7 @@ where
             .unwrap(),
         Response::System(SystemResponse {
             chain_id: ChainId::root(1),
-            balance: Balance::from(5),
+            balance: Amount::from(5),
         })
     );
     assert_eq!(
@@ -2268,7 +2259,7 @@ where
             .unwrap(),
         Response::System(SystemResponse {
             chain_id: ChainId::root(2),
-            balance: Balance::from(0),
+            balance: Amount::from(0),
         })
     );
 
@@ -2279,7 +2270,7 @@ where
         Amount::from(5),
         Vec::new(),
         &committee,
-        Balance::from(0),
+        Amount::from(0),
         &worker,
         None,
     )
@@ -2291,7 +2282,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
-    assert_eq!(Balance::from(0), info.system_balance);
+    assert_eq!(Amount::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.value.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
@@ -2302,7 +2293,7 @@ where
             .unwrap(),
         Response::System(SystemResponse {
             chain_id: ChainId::root(1),
-            balance: Balance::from(0),
+            balance: Amount::from(0),
         })
     );
 
@@ -2327,7 +2318,7 @@ where
             },
         }],
         &committee,
-        Balance::from(4),
+        Amount::from(4),
         &worker,
         None,
     )
@@ -2344,7 +2335,7 @@ where
             .unwrap(),
         Response::System(SystemResponse {
             chain_id: ChainId::root(2),
-            balance: Balance::from(4),
+            balance: Amount::from(4),
         })
     );
 
@@ -2356,7 +2347,7 @@ where
             .unwrap();
         assert_eq!(
             *recipient_chain.execution_state.system.balance.get(),
-            Balance::from(4)
+            Amount::from(4)
         );
         assert_eq!(
             recipient_chain
@@ -2424,7 +2415,7 @@ where
         vec![(
             ChainDescription::Root(1),
             sender_key_pair.public(),
-            Balance::from(5),
+            Amount::from(5),
         )],
     )
     .await;
@@ -2435,7 +2426,7 @@ where
         Amount::from(5),
         Vec::new(),
         &committee,
-        Balance::from(0),
+        Amount::from(0),
         &worker,
         None,
     )
@@ -2447,7 +2438,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
-    assert_eq!(Balance::from(0), info.system_balance);
+    assert_eq!(Amount::from(0), info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.value.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
@@ -2493,7 +2484,7 @@ where
         vec![(
             ChainDescription::Root(0),
             key_pair.public(),
-            Balance::from(2),
+            Amount::from(2),
         )],
     )
     .await;
@@ -2565,7 +2556,7 @@ where
                     subscriptions: BTreeSet::new(),
                     committees: committees.clone(),
                     ownership: ChainOwnership::single(key_pair.public()),
-                    balance: Balance::from(2),
+                    balance: Amount::from(2),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
                     registry: ApplicationRegistry::default(),
@@ -2657,7 +2648,7 @@ where
                     // The root chain knows both committees at the end.
                     committees: committees2.clone(),
                     ownership: ChainOwnership::single(key_pair.public()),
-                    balance: Balance::from(0),
+                    balance: Amount::from(0),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
                     registry: ApplicationRegistry::default(),
@@ -2713,7 +2704,7 @@ where
                     // The root chain knows both committees at the end.
                     committees: committees2.clone(),
                     ownership: ChainOwnership::single(key_pair.public()),
-                    balance: Balance::from(0),
+                    balance: Amount::from(0),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
                     registry: ApplicationRegistry::default(),
@@ -2891,7 +2882,7 @@ where
                     // Finally the child knows about both committees and has the money.
                     committees: committees2.clone(),
                     ownership: ChainOwnership::single(key_pair.public()),
-                    balance: Balance::from(2),
+                    balance: Amount::from(2),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
                     registry: ApplicationRegistry::default(),
@@ -2999,12 +2990,12 @@ where
             (
                 ChainDescription::Root(0),
                 key_pair0.public(),
-                Balance::from(0),
+                Amount::from(0),
             ),
             (
                 ChainDescription::Root(1),
                 key_pair1.public(),
-                Balance::from(3),
+                Amount::from(3),
             ),
         ],
     )
@@ -3049,7 +3040,7 @@ where
                     subscriptions: BTreeSet::new(),
                     committees: committees.clone(),
                     ownership: ChainOwnership::single(key_pair1.public()),
-                    balance: Balance::from(2),
+                    balance: Amount::from(2),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
                     registry: ApplicationRegistry::default(),
@@ -3098,7 +3089,7 @@ where
                     subscriptions: BTreeSet::new(),
                     committees: committees2.clone(),
                     ownership: ChainOwnership::single(key_pair0.public()),
-                    balance: Balance::from(0),
+                    balance: Amount::from(0),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
                     registry: ApplicationRegistry::default(),
@@ -3127,7 +3118,7 @@ where
     );
     assert_eq!(
         *user_chain.execution_state.system.balance.get(),
-        Balance::from(2)
+        Amount::from(2)
     );
     assert_eq!(
         *user_chain.execution_state.system.epoch.get(),
@@ -3196,12 +3187,12 @@ where
             (
                 ChainDescription::Root(0),
                 key_pair0.public(),
-                Balance::from(0),
+                Amount::from(0),
             ),
             (
                 ChainDescription::Root(1),
                 key_pair1.public(),
-                Balance::from(3),
+                Amount::from(3),
             ),
         ],
     )
@@ -3246,7 +3237,7 @@ where
                     subscriptions: BTreeSet::new(),
                     committees: committees.clone(),
                     ownership: ChainOwnership::single(key_pair1.public()),
-                    balance: Balance::from(2),
+                    balance: Amount::from(2),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
                     registry: ApplicationRegistry::default(),
@@ -3312,7 +3303,7 @@ where
                     subscriptions: BTreeSet::new(),
                     committees: committees3.clone(),
                     ownership: ChainOwnership::single(key_pair0.public()),
-                    balance: Balance::from(0),
+                    balance: Amount::from(0),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
                     registry: ApplicationRegistry::default(),
@@ -3342,7 +3333,7 @@ where
         );
         assert_eq!(
             *user_chain.execution_state.system.balance.get(),
-            Balance::from(2)
+            Amount::from(2)
         );
         assert_eq!(
             *user_chain.execution_state.system.epoch.get(),
@@ -3391,7 +3382,7 @@ where
                     subscriptions: BTreeSet::new(),
                     committees: committees3.clone(),
                     ownership: ChainOwnership::single(key_pair0.public()),
-                    balance: Balance::from(1),
+                    balance: Amount::from(1),
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
                     registry: ApplicationRegistry::default(),
@@ -3444,7 +3435,7 @@ async fn test_cross_chain_helper() {
         Vec::new(),
         Epoch::from(0),
         &committee,
-        Balance::from(1),
+        Amount::from(1),
         &worker,
         None,
     )
@@ -3457,7 +3448,7 @@ async fn test_cross_chain_helper() {
         Vec::new(),
         Epoch::from(0),
         &committee,
-        Balance::from(1),
+        Amount::from(1),
         &worker,
         Some(&certificate0),
     )
@@ -3470,7 +3461,7 @@ async fn test_cross_chain_helper() {
         Vec::new(),
         Epoch::from(1),
         &committee,
-        Balance::from(1),
+        Amount::from(1),
         &worker,
         Some(&certificate1),
     )
@@ -3484,7 +3475,7 @@ async fn test_cross_chain_helper() {
         Vec::new(),
         Epoch::from(0),
         &committee,
-        Balance::from(1),
+        Amount::from(1),
         &worker,
         Some(&certificate2),
     )

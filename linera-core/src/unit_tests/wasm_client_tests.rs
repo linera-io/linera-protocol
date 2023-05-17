@@ -12,7 +12,7 @@ use crate::client::client_tests::{
     MakeMemoryStoreClient, MakeRocksdbStoreClient, StoreBuilder, TestBuilder, ROCKSDB_SEMAPHORE,
 };
 use linera_base::{
-    data_types::{Amount, Balance},
+    data_types::Amount,
     identifiers::{ChainDescription, ChainId, Destination, Owner},
 };
 use linera_chain::data_types::OutgoingEffect;
@@ -59,10 +59,10 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut publisher = builder
-        .add_initial_chain(ChainDescription::Root(0), Balance::from(3))
+        .add_initial_chain(ChainDescription::Root(0), Amount::from(3))
         .await?;
     let mut creator = builder
-        .add_initial_chain(ChainDescription::Root(1), Balance::from(0))
+        .add_initial_chain(ChainDescription::Root(1), Amount::from(0))
         .await?;
 
     let cert = creator
@@ -162,15 +162,15 @@ where
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // Will publish the bytecodes.
     let mut publisher = builder
-        .add_initial_chain(ChainDescription::Root(0), Balance::from(3))
+        .add_initial_chain(ChainDescription::Root(0), Amount::from(3))
         .await?;
     // Will create the apps and use them to send a message.
     let mut creator = builder
-        .add_initial_chain(ChainDescription::Root(1), Balance::from(0))
+        .add_initial_chain(ChainDescription::Root(1), Amount::from(0))
         .await?;
     // Will receive the message.
     let mut receiver = builder
-        .add_initial_chain(ChainDescription::Root(2), Balance::from(0))
+        .add_initial_chain(ChainDescription::Root(2), Amount::from(0))
         .await?;
     let receiver_id = ChainId::root(2);
 
@@ -296,11 +296,11 @@ where
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // Will publish the bytecodes.
     let mut publisher = builder
-        .add_initial_chain(ChainDescription::Root(0), Balance::from(3))
+        .add_initial_chain(ChainDescription::Root(0), Amount::from(3))
         .await?;
     // Will create the apps and use them to send a message.
     let mut creator = builder
-        .add_initial_chain(ChainDescription::Root(1), Balance::from(0))
+        .add_initial_chain(ChainDescription::Root(1), Amount::from(0))
         .await?;
 
     let cert = creator
@@ -397,10 +397,10 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(0), Balance::from(3))
+        .add_initial_chain(ChainDescription::Root(0), Amount::from(3))
         .await?;
     let mut receiver = builder
-        .add_initial_chain(ChainDescription::Root(1), Balance::from(0))
+        .add_initial_chain(ChainDescription::Root(1), Amount::from(0))
         .await?;
 
     let (bytecode_id, pub_cert) = {
@@ -574,10 +574,10 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(0), Balance::from(0))
+        .add_initial_chain(ChainDescription::Root(0), Amount::from(0))
         .await?;
     let mut receiver = builder
-        .add_initial_chain(ChainDescription::Root(1), Balance::from(0))
+        .add_initial_chain(ChainDescription::Root(1), Amount::from(0))
         .await?;
 
     let (bytecode_id, pub_cert) = {

@@ -9,7 +9,7 @@ use colored::Colorize;
 use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{Amount, Balance, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{BytecodeId, ChainDescription, ChainId, EffectId},
 };
 use linera_chain::data_types::Certificate;
@@ -676,7 +676,7 @@ enum ClientCommand {
 
         /// Known initial balance of the chain
         #[structopt(long, default_value = "0")]
-        initial_funding: Balance,
+        initial_funding: Amount,
 
         /// The start timestamp: no blocks can be created before this time.
         #[structopt(long)]

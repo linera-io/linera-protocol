@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use criterion::{criterion_group, criterion_main, measurement::Measurement, BatchSize, Criterion};
-use linera_base::{
-    data_types::{Amount, Balance},
-    identifiers::ChainDescription,
-};
+use linera_base::{data_types::Amount, identifiers::ChainDescription};
 use linera_core::client::{
     self,
     client_test_utils::{MakeMemoryStoreClient, NodeProvider, StoreBuilder, TestBuilder},
@@ -39,11 +36,11 @@ where
     futures::executor::block_on(async move {
         let mut builder = TestBuilder::new(store_builder, 4, 1).await.unwrap();
         let chain1 = builder
-            .add_initial_chain(ChainDescription::Root(1), Balance::from(10))
+            .add_initial_chain(ChainDescription::Root(1), Amount::from(10))
             .await
             .unwrap();
         let chain2 = builder
-            .add_initial_chain(ChainDescription::Root(2), Balance::from(0))
+            .add_initial_chain(ChainDescription::Root(2), Amount::from(0))
             .await
             .unwrap();
         (chain1, chain2)
@@ -68,7 +65,7 @@ where
 
     chain2.receive_certificate(cert).await.unwrap();
     chain2.process_inbox().await.unwrap();
-    assert_eq!(chain1.local_balance().await.unwrap(), Balance::from(9));
+    assert_eq!(chain1.local_balance().await.unwrap(), Amount::from(9));
 
     let account = Recipient::Account(Account::chain(chain1.chain_id()));
     let cert = chain1
@@ -81,7 +78,7 @@ where
 
     chain1.receive_certificate(cert).await.unwrap();
     chain1.process_inbox().await.unwrap();
-    assert_eq!(chain1.local_balance().await.unwrap(), Balance::from(10));
+    assert_eq!(chain1.local_balance().await.unwrap(), Amount::from(10));
 }
 
 fn criterion_benchmark<M: Measurement + 'static>(c: &mut Criterion<M>) {

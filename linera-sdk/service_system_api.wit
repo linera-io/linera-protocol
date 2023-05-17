@@ -1,7 +1,7 @@
 chain-id: func() -> chain-id
 application-id: func() -> application-id
 application-parameters: func() -> list<u8>
-read-system-balance: func() -> balance
+read-system-balance: func() -> amount
 read-system-timestamp: func() -> timestamp
 
 log: func(message: string, level: log-level)
@@ -77,7 +77,7 @@ record crypto-hash {
     part4: u64,
 }
 
-record balance {
+record amount {
     lower-half: u64,
     upper-half: u64,
 }
