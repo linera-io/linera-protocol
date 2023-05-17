@@ -39,8 +39,6 @@ pub struct ExecutionStateView<C> {
     pub simple_users: ReentrantCollectionView<C, UserApplicationId, RegisterView<C, Vec<u8>>>,
     /// User applications (View based).
     pub view_users: ReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
-    /// Fuel available for running applications.
-    pub available_fuel: RegisterView<C, u64>,
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -100,13 +98,8 @@ where
         view
     }
 
-    /// Sets the amount of `available_fuel` using the builder pattern.
-    pub fn with_fuel(mut self, fuel: u64) -> Self {
-        self.available_fuel.set(fuel);
-        self
-    }
-
     /// Simulates the initialization of an application.
+    #[cfg(any(test, feature = "test"))]
     pub async fn simulate_initialization(
         &mut self,
         application: UserApplicationCode,
@@ -135,7 +128,7 @@ where
             .user_applications()
             .insert(application_id, application);
 
-        self.run_user_action(application_id, chain_id, action)
+        self.run_user_action(application_id, chain_id, action, &mut 10_000_000)
             .await?;
 
         Ok(())
@@ -165,17 +158,12 @@ where
     ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
-    /// Adds `fuel` to the amount of `available_fuel` in the chain.
-    pub fn add_fuel(&mut self, fuel: u64) {
-        let updated_amount = self.available_fuel.get().saturating_add(fuel);
-        self.available_fuel.set(updated_amount);
-    }
-
     async fn run_user_action(
         &mut self,
         application_id: UserApplicationId,
         chain_id: ChainId,
         action: UserAction<'_>,
+        remaining_fuel: &mut u64,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         // Try to load the application. This may fail if the corresponding
         // bytecode-publishing certificate doesn't exist yet on this validator.
@@ -198,14 +186,13 @@ where
             parameters: description.parameters,
             signer,
         }];
-        let available_fuel = *self.available_fuel.get();
         let runtime = ExecutionRuntime::new(
             chain_id,
             &mut applications,
             self,
             &mut session_manager,
             &mut results,
-            available_fuel,
+            *remaining_fuel,
         );
         // Make the call to user code.
         let call_result = match action {
@@ -227,9 +214,8 @@ where
         let mut result = call_result?;
         // Set the authenticated signer to be used in outgoing effects.
         result.authenticated_signer = signer;
-        // Update the amount of available fuel after execution has consumed some or all of it
-        let remaining_fuel = runtime.remaining_fuel();
-        self.available_fuel.set(remaining_fuel);
+        *remaining_fuel = runtime.remaining_fuel();
+
         // Check that applications were correctly stacked and unstacked.
         assert_eq!(applications.len(), 1);
         assert_eq!(applications[0].id, application_id);
@@ -267,6 +253,7 @@ where
         &mut self,
         context: &OperationContext,
         operation: &Operation,
+        remaining_fuel: &mut u64,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
@@ -278,8 +265,13 @@ where
                 if let Some((application_id, argument)) = new_application {
                     let user_action = UserAction::Initialize(context, argument);
                     results.extend(
-                        self.run_user_action(application_id, context.chain_id, user_action)
-                            .await?,
+                        self.run_user_action(
+                            application_id,
+                            context.chain_id,
+                            user_action,
+                            remaining_fuel,
+                        )
+                        .await?,
                     );
                 }
                 Ok(results)
@@ -292,6 +284,7 @@ where
                     *application_id,
                     context.chain_id,
                     UserAction::Operation(context, bytes),
+                    remaining_fuel,
                 )
                 .await
             }
@@ -302,6 +295,7 @@ where
         &mut self,
         context: &EffectContext,
         effect: &Effect,
+        remaining_fuel: &mut u64,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match effect {
@@ -317,6 +311,7 @@ where
                     *application_id,
                     context.chain_id,
                     UserAction::Effect(context, bytes),
+                    remaining_fuel,
                 )
                 .await
             }

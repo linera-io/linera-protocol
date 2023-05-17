@@ -23,14 +23,14 @@ use test_case::test_case;
 /// called correctly and consume the expected amount of fuel.
 ///
 /// To update the bytecode files, run `linera-execution/update_wasm_fixtures.sh`.
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, 9_966_630; "wasmer"))]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, 9_966_291; "wasmer_with_sanitizer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, 9_966_291 ; "wasmtime"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer, 9_966_291 ; "wasmtime_with_sanitizer"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, 33_370; "wasmer"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, 33_709; "wasmer_with_sanitizer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, 33_709 ; "wasmtime"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer, 33_709 ; "wasmtime_with_sanitizer"))]
 #[test_log::test(tokio::test)]
 async fn test_fuel_for_counter_wasm_application(
     wasm_runtime: WasmRuntime,
-    expected_gas: u64,
+    expected_fuel: u64,
 ) -> anyhow::Result<()> {
     let state = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
@@ -38,8 +38,7 @@ async fn test_fuel_for_counter_wasm_application(
     };
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
-            .await
-            .with_fuel(10_000_000);
+            .await;
     let app_desc = create_dummy_user_application_description();
     let app_id = view
         .system
@@ -66,6 +65,8 @@ async fn test_fuel_for_counter_wasm_application(
         next_effect_index: 0,
     };
     let increments = [2_u64, 9, 7, 1000];
+    let available_fuel = 10_000_000;
+    let mut remaining_fuel = available_fuel;
     for increment in &increments {
         let operation = bcs::to_bytes(increment).expect("Serialization of u64 failed");
         let result = view
@@ -75,6 +76,7 @@ async fn test_fuel_for_counter_wasm_application(
                     application_id: app_id,
                     bytes: operation,
                 },
+                &mut remaining_fuel,
             )
             .await?;
         assert_eq!(
@@ -83,7 +85,7 @@ async fn test_fuel_for_counter_wasm_application(
         );
     }
 
-    assert_eq!(*view.available_fuel.get(), expected_gas);
+    assert_eq!(available_fuel - remaining_fuel, expected_fuel);
 
     let context = QueryContext {
         chain_id: ChainId::root(0),
