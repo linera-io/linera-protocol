@@ -435,7 +435,7 @@ where
     ) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
         for target in chain.outboxes.indices().await? {
-            let outbox = chain.outboxes.load_entry(&target).await?;
+            let outbox = chain.outboxes.try_load_entry(&target).await?;
             let heights = outbox.queue.elements().await?;
             heights_by_recipient
                 .entry(target.recipient)

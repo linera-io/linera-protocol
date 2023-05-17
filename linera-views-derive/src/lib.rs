@@ -311,7 +311,10 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
             };
             (r#impl, None)
         }
-        "CollectionView" | "CustomCollectionView" => {
+        "CollectionView"
+        | "ReentrantCollectionView"
+        | "CustomCollectionView"
+        | "ReentrantCustomCollectionView" => {
             let generic_arguments = generic_argument_from_type_path(&type_path);
             let index_ident = generic_arguments
                 .get(1)
@@ -334,18 +337,30 @@ fn generate_graphql_code_for_field(field: Field) -> (TokenStream2, Option<TokenS
 
             let generic_method_name = snakify(generic_ident);
 
+            let (guard, lifetime) = match view_name.as_str() {
+                "ReentrantCollectionView" | "ReentrantCustomCollectionView" => {
+                    (quote!(tokio::sync::OwnedRwLockReadGuard), quote!())
+                }
+                "CollectionView" | "CustomCollectionView" => (
+                    quote!(linera_views::collection_view::ReadGuardedView),
+                    quote!('a,),
+                ),
+                _ => {
+                    todo!()
+                }
+            };
             let r#struct = quote! {
-                pub struct #entry_name<'a, C>
+                pub struct #entry_name<#lifetime C>
                 where
                     C: Sync + Send + linera_views::common::Context + 'static,
                     linera_views::views::ViewError: From<C::Error>,
                 {
                     #index_name: #index_ident,
-                    guard: linera_views::collection_view::ReadGuardedView<'a, #generic_ident>,
+                    guard: #guard<#lifetime #generic_ident>,
                 }
 
                 #[async_graphql::Object]
-                impl<'a, C> #entry_name<'a, C>
+                impl<#lifetime C> #entry_name<#lifetime C>
                 where
                     C: Sync + Send + linera_views::common::Context + 'static + Clone,
                     linera_views::views::ViewError: From<C::Error>,

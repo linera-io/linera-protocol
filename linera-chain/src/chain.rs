@@ -25,6 +25,7 @@ use linera_views::{
     collection_view::CollectionView,
     common::Context,
     log_view::LogView,
+    reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     set_view::SetView,
     views::{CryptoHashView, GraphQLView, RootView, View, ViewError},
@@ -55,12 +56,12 @@ pub struct ChainStateView<C> {
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: CollectionView<C, Origin, InboxStateView<C>>,
     /// Mailboxes used to send messages, indexed by their target.
-    pub outboxes: CollectionView<C, Target, OutboxStateView<C>>,
+    pub outboxes: ReentrantCollectionView<C, Target, OutboxStateView<C>>,
     /// Number of outgoing messages in flight for each block height.
     /// We use a `RegisterView` to prioritize speed for small maps.
     pub outbox_counters: RegisterView<C, BTreeMap<BlockHeight, u32>>,
     /// Channels able to multicast messages to subscribers.
-    pub channels: CollectionView<C, ChannelFullName, ChannelStateView<C>>,
+    pub channels: ReentrantCollectionView<C, ChannelFullName, ChannelStateView<C>>,
 }
 
 /// Block-chaining state.
@@ -119,7 +120,7 @@ where
         target: Target,
         height: BlockHeight,
     ) -> Result<bool, ChainError> {
-        let outbox = self.outboxes.load_entry_mut(&target).await?;
+        let mut outbox = self.outboxes.try_load_entry_mut(&target).await?;
         let updates = outbox.mark_messages_as_received(height).await?;
         if updates.is_empty() {
             return Ok(false);
@@ -507,9 +508,12 @@ where
 
         // Update the (regular) outboxes.
         let outbox_counters = self.outbox_counters.get_mut();
-        for recipient in recipients {
-            let target = Target::chain(recipient);
-            let outbox = self.outboxes.load_entry_mut(&target).await?;
+        let targets = recipients
+            .into_iter()
+            .map(Target::chain)
+            .collect::<Vec<_>>();
+        let outboxes = self.outboxes.try_load_entries_mut(targets).await?;
+        for mut outbox in outboxes {
             if outbox.schedule_message(height)? {
                 *outbox_counters.entry(height).or_default() += 1;
             }
@@ -521,7 +525,7 @@ where
                 application_id,
                 name,
             };
-            let channel = self.channels.load_entry_mut(&full_name).await?;
+            let mut channel = self.channels.try_load_entry_mut(&full_name).await?;
             // Remove subscriber. Do not remove the channel outbox yet.
             channel.subscribers.remove(&id)?;
         }
@@ -530,28 +534,41 @@ where
                 application_id,
                 name,
             };
-            let channel = self.channels.load_entry_mut(&full_name).await?;
-            for recipient in channel.subscribers.indices().await? {
-                let target = Target::channel(recipient, full_name.clone());
-                let outbox = self.outboxes.load_entry_mut(&target).await?;
+            let mut channel = self.channels.try_load_entry_mut(&full_name).await?;
+            let recipients = channel.subscribers.indices().await?;
+            let targets = recipients
+                .into_iter()
+                .map(|recipient| Target::channel(recipient, full_name.clone()))
+                .collect::<Vec<_>>();
+            let outboxes = self.outboxes.try_load_entries_mut(targets).await?;
+            for mut outbox in outboxes {
                 if outbox.schedule_message(height)? {
                     *outbox_counters.entry(height).or_default() += 1;
                 }
             }
             channel.block_height.set(Some(height));
         }
-        for (name, id) in raw_result.subscribe {
+        let full_names = raw_result
+            .subscribe
+            .clone()
+            .into_iter()
+            .map(|(name, _id)| ChannelFullName {
+                application_id,
+                name,
+            })
+            .collect::<Vec<_>>();
+        let channels = self.channels.try_load_entries_mut(full_names).await?;
+        for ((name, id), mut channel) in raw_result.subscribe.into_iter().zip(channels) {
             let full_name = ChannelFullName {
                 application_id,
                 name,
             };
-            let channel = self.channels.load_entry_mut(&full_name).await?;
             // Add subscriber.
             if !channel.subscribers.contains(&id).await? {
                 // Send the latest message if any.
                 if let Some(latest_height) = channel.block_height.get() {
                     let target = Target::channel(id, full_name.clone());
-                    let outbox = self.outboxes.load_entry_mut(&target).await?;
+                    let mut outbox = self.outboxes.try_load_entry_mut(&target).await?;
                     if outbox.schedule_message(*latest_height)? {
                         *outbox_counters.entry(*latest_height).or_default() += 1;
                     }
