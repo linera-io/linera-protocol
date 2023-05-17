@@ -39,7 +39,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         next_effect_index: 0,
     };
     let results = view
-        .execute_operation(&context, &Operation::System(operation))
+        .execute_operation(&context, &Operation::System(operation), &mut 10_000_000)
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Balance::from(0));
@@ -78,7 +78,7 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
         authenticated_signer: None,
     };
     let results = view
-        .execute_effect(&context, &Effect::System(effect))
+        .execute_effect(&context, &Effect::System(effect), &mut 10_000_000)
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Balance::from(4));

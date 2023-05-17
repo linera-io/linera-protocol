@@ -52,6 +52,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
                 application_id: app_id,
                 bytes: vec![],
             },
+            &mut 10_000_000,
         )
         .await;
 
@@ -223,6 +224,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 application_id: app_id,
                 bytes: vec![1],
             },
+            &mut 10_000_000,
         )
         .await
         .unwrap();
@@ -293,6 +295,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
                 application_id: app_id,
                 bytes: vec![],
             },
+            &mut 10_000_000,
         )
         .await;
 

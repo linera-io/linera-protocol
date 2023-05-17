@@ -383,8 +383,9 @@ where
             ChainError::InvalidBlockTimestamp
         );
         self.execution_state.system.timestamp.set(block.timestamp);
-        self.execution_state.add_fuel(10_000_000);
         let mut effects = Vec::new();
+        let available_fuel = 10_000_000;
+        let mut remaining_fuel = available_fuel;
         for message in &block.incoming_messages {
             // Execute the received effect.
             let context = EffectContext {
@@ -400,7 +401,7 @@ where
             };
             let results = self
                 .execution_state
-                .execute_effect(&context, &message.event.effect)
+                .execute_effect(&context, &message.event.effect, &mut remaining_fuel)
                 .await?;
             self.process_execution_results(&mut effects, context.height, results)
                 .await?;
@@ -419,7 +420,7 @@ where
             };
             let results = self
                 .execution_state
-                .execute_operation(&context, operation)
+                .execute_operation(&context, operation, &mut remaining_fuel)
                 .await?;
             self.process_execution_results(&mut effects, context.height, results)
                 .await?;
