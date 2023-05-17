@@ -492,13 +492,13 @@ Owner:
 Pricing:
   STRUCT:
     - certificate:
-        TYPENAME: Balance
+        TYPENAME: Amount
     - fuel:
-        TYPENAME: Balance
+        TYPENAME: Amount
     - storage:
-        TYPENAME: Balance
+        TYPENAME: Amount
     - messages:
-        TYPENAME: Balance
+        TYPENAME: Amount
 PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:

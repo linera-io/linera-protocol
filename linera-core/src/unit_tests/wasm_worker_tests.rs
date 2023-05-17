@@ -149,7 +149,7 @@ where
         timestamp: Timestamp::from(1),
         registry: ApplicationRegistry::default(),
     };
-    let publisher_state_hash = make_state_hash(publisher_system_state.clone(), 10_000_000).await;
+    let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
     let publish_block_proposal = HashedValue::new_confirmed(
         publish_block,
         vec![OutgoingEffect {
@@ -212,7 +212,7 @@ where
         .registry
         .published_bytecodes
         .insert(bytecode_id, bytecode_location);
-    let publisher_state_hash = make_state_hash(publisher_system_state.clone(), 20_000_000).await;
+    let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
     let broadcast_block_proposal = HashedValue::new_confirmed(
         broadcast_block,
         vec![OutgoingEffect {
@@ -271,9 +271,7 @@ where
         timestamp: Timestamp::from(2),
         registry: ApplicationRegistry::default(),
     };
-    let creator_state = ExecutionStateView::from_system_state(creator_system_state.clone())
-        .await
-        .with_fuel(10_000_000);
+    let creator_state = ExecutionStateView::from_system_state(creator_system_state.clone()).await;
     let subscribe_block_proposal = HashedValue::new_confirmed(
         subscribe_block,
         vec![OutgoingEffect {
@@ -319,7 +317,7 @@ where
         Timestamp::from(3),
     );
     publisher_system_state.timestamp = Timestamp::from(3);
-    let publisher_state_hash = make_state_hash(publisher_system_state, 30_000_000).await;
+    let publisher_state_hash = make_state_hash(publisher_system_state).await;
     let accept_block_proposal = HashedValue::new_confirmed(
         accept_block,
         vec![OutgoingEffect {
@@ -401,9 +399,7 @@ where
         .known_applications
         .insert(application_id, application_description.clone());
     creator_system_state.timestamp = Timestamp::from(4);
-    let mut creator_state = ExecutionStateView::from_system_state(creator_system_state)
-        .await
-        .with_fuel(20_000_000);
+    let mut creator_state = ExecutionStateView::from_system_state(creator_system_state).await;
     creator_state
         .simulate_initialization(
             application,
@@ -456,7 +452,6 @@ where
         index: 0,
         next_effect_index: 0,
     };
-    creator_state.add_fuel(10_000_000);
     creator_state
         .execute_operation(
             &operation_context,
@@ -464,6 +459,7 @@ where
                 application_id,
                 bytes: user_operation,
             },
+            &mut 10_000_000,
         )
         .await?;
     creator_state.system.timestamp.set(Timestamp::from(5));

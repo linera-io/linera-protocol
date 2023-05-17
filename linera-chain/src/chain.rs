@@ -437,9 +437,9 @@ where
         balance.try_sub_assign(pricing.storage_price(&block.incoming_messages)?)?;
         balance.try_sub_assign(pricing.storage_price(&block.operations)?)?;
 
-        self.execution_state.add_fuel(10_000_000);
         let mut effects = Vec::new();
-        let available_fuel = *self.execution_state.available_fuel.get();
+        let available_fuel = 10_000_000;
+        let mut remaining_fuel = available_fuel;
         for message in &block.incoming_messages {
             // Execute the received effect.
             let context = EffectContext {
@@ -455,7 +455,7 @@ where
             };
             let results = self
                 .execution_state
-                .execute_effect(&context, &message.event.effect)
+                .execute_effect(&context, &message.event.effect, &mut remaining_fuel)
                 .await?;
             self.process_execution_results(&mut effects, context.height, results)
                 .await?;
@@ -474,12 +474,12 @@ where
             };
             let results = self
                 .execution_state
-                .execute_operation(&context, operation)
+                .execute_operation(&context, operation, &mut remaining_fuel)
                 .await?;
             self.process_execution_results(&mut effects, context.height, results)
                 .await?;
         }
-        let used_fuel = available_fuel.saturating_sub(*self.execution_state.available_fuel.get());
+        let used_fuel = available_fuel.saturating_sub(remaining_fuel);
 
         let balance = self.execution_state.system.balance.get_mut();
         balance.try_sub_assign(pricing.fuel_price(used_fuel))?;
