@@ -22,7 +22,6 @@ use linera_execution::{
     RawExecutionResult, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
-    collection_view::CollectionView,
     common::Context,
     log_view::LogView,
     reentrant_collection_view::ReentrantCollectionView,
@@ -54,7 +53,7 @@ pub struct ChainStateView<C> {
     pub received_log: LogView<C, ChainAndHeight>,
 
     /// Mailboxes used to receive messages indexed by their origin.
-    pub inboxes: CollectionView<C, Origin, InboxStateView<C>>,
+    pub inboxes: ReentrantCollectionView<C, Origin, InboxStateView<C>>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: ReentrantCollectionView<C, Target, OutboxStateView<C>>,
     /// Number of outgoing messages in flight for each block height.
@@ -178,8 +177,9 @@ where
     /// have been properly received by now.
     pub async fn validate_incoming_messages(&mut self) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
-        for origin in self.inboxes.indices().await? {
-            let inbox = self.inboxes.load_entry(&origin).await?;
+        let origins = self.inboxes.indices().await?;
+        let inboxes = self.inboxes.try_load_entries(origins.clone()).await?;
+        for (origin, inbox) in origins.into_iter().zip(inboxes) {
             let event = inbox.removed_events.front().await?;
             ensure!(
                 event.is_none(),
@@ -197,7 +197,7 @@ where
         &mut self,
         origin: &Origin,
     ) -> Result<BlockHeight, ChainError> {
-        let inbox = self.inboxes.load_entry(origin).await?;
+        let inbox = self.inboxes.try_load_entry(origin).await?;
         inbox.next_block_height_to_receive()
     }
 
@@ -205,7 +205,7 @@ where
         &mut self,
         origin: &Origin,
     ) -> Result<Option<BlockHeight>, ChainError> {
-        let inbox = self.inboxes.load_entry(origin).await?;
+        let inbox = self.inboxes.try_load_entry(origin).await?;
         match inbox.removed_events.back().await? {
             Some(event) => Ok(Some(event.height)),
             None => Ok(None),
@@ -292,7 +292,7 @@ where
             ))
         );
         // Process the inbox events and update the inbox state.
-        let inbox = self.inboxes.load_entry_mut(origin).await?;
+        let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
         for event in events {
             inbox.add_event(event).await.map_err(|error| match error {
                 InboxError::ViewError(error) => ChainError::ViewError(error),
@@ -345,7 +345,14 @@ where
     /// Removes the incoming messages in the block from the inboxes.
     pub async fn remove_events_from_inboxes(&mut self, block: &Block) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
-        for message in &block.incoming_messages {
+        let origins = block
+            .incoming_messages
+            .clone()
+            .into_iter()
+            .map(|message| message.origin)
+            .collect::<Vec<_>>();
+        let inboxes = self.inboxes.try_load_entries_mut(origins).await?;
+        for (message, mut inbox) in block.incoming_messages.clone().into_iter().zip(inboxes) {
             tracing::trace!(
                 "Updating inbox {:?} in chain {:?}",
                 message.origin,
@@ -359,7 +366,6 @@ where
                 });
             }
             // Mark the message as processed in the inbox.
-            let inbox = self.inboxes.load_entry_mut(&message.origin).await?;
             inbox
                 .remove_event(&message.event)
                 .await
@@ -520,21 +526,32 @@ where
         }
 
         // Update the channels.
-        for (name, id) in raw_result.unsubscribe {
-            let full_name = ChannelFullName {
+        let full_names = raw_result
+            .unsubscribe
+            .clone()
+            .into_iter()
+            .map(|(name, _id)| ChannelFullName {
                 application_id,
                 name,
-            };
-            let mut channel = self.channels.try_load_entry_mut(&full_name).await?;
+            })
+            .collect::<Vec<_>>();
+        let channels = self.channels.try_load_entries_mut(full_names).await?;
+        for ((_name, id), mut channel) in raw_result.unsubscribe.into_iter().zip(channels) {
             // Remove subscriber. Do not remove the channel outbox yet.
             channel.subscribers.remove(&id)?;
         }
-        for name in channel_broadcasts {
-            let full_name = ChannelFullName {
+        let full_names = channel_broadcasts
+            .into_iter()
+            .map(|name| ChannelFullName {
                 application_id,
                 name,
-            };
-            let mut channel = self.channels.try_load_entry_mut(&full_name).await?;
+            })
+            .collect::<Vec<_>>();
+        let channels = self
+            .channels
+            .try_load_entries_mut(full_names.clone())
+            .await?;
+        for (full_name, mut channel) in full_names.into_iter().zip(channels) {
             let recipients = channel.subscribers.indices().await?;
             let targets = recipients
                 .into_iter()

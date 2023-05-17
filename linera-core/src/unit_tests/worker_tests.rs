@@ -1684,7 +1684,7 @@ where
         BlockHeight::from(0),
         chain
             .inboxes
-            .load_entry_mut(&Origin::chain(ChainId::root(3)))
+            .try_load_entry_mut(&Origin::chain(ChainId::root(3)))
             .await
             .unwrap()
             .next_block_height_to_receive()
@@ -1693,7 +1693,7 @@ where
     assert_eq!(
         chain
             .inboxes
-            .load_entry_mut(&Origin::chain(ChainId::root(3)))
+            .try_load_entry_mut(&Origin::chain(ChainId::root(3)))
             .await
             .unwrap()
             .added_events
@@ -1703,7 +1703,7 @@ where
     assert!(matches!(
         chain
             .inboxes
-            .load_entry_mut(&Origin::chain(ChainId::root(3)))
+            .try_load_entry_mut(&Origin::chain(ChainId::root(3)))
             .await
             .unwrap()
             .removed_events
@@ -1901,7 +1901,7 @@ where
         BlockHeight::from(1),
         chain
             .inboxes
-            .load_entry_mut(&Origin::chain(ChainId::root(1)))
+            .try_load_entry_mut(&Origin::chain(ChainId::root(1)))
             .await
             .unwrap()
             .next_block_height_to_receive()
@@ -1910,7 +1910,7 @@ where
     assert!(matches!(
         chain
             .inboxes
-            .load_entry_mut(&Origin::chain(ChainId::root(1)))
+            .try_load_entry_mut(&Origin::chain(ChainId::root(1)))
             .await
             .unwrap()
             .added_events
@@ -2023,7 +2023,7 @@ where
         BlockHeight::from(1),
         chain
             .inboxes
-            .load_entry_mut(&Origin::chain(ChainId::root(1)))
+            .try_load_entry_mut(&Origin::chain(ChainId::root(1)))
             .await
             .unwrap()
             .next_block_height_to_receive()
@@ -2032,7 +2032,7 @@ where
     assert!(matches!(
         chain
             .inboxes
-            .load_entry_mut(&Origin::chain(ChainId::root(1)))
+            .try_load_entry_mut(&Origin::chain(ChainId::root(1)))
             .await
             .unwrap()
             .added_events
@@ -2771,7 +2771,7 @@ where
         matches!(
             user_chain
                 .inboxes
-                .load_entry_mut(&Origin::chain(admin_id))
+                .try_load_entry_mut(&Origin::chain(admin_id))
                 .await
                 .unwrap()
                 .added_events
@@ -2796,7 +2796,7 @@ where
         matches!(
             user_chain
                 .inboxes
-                .load_entry_mut(&admin_channel_origin)
+                .try_load_entry_mut(&admin_channel_origin)
                 .await
                 .unwrap()
                 .added_events
@@ -2811,7 +2811,7 @@ where
         assert_eq!(
             user_chain
                 .inboxes
-                .load_entry_mut(&admin_channel_origin)
+                .try_load_entry_mut(&admin_channel_origin)
                 .await
                 .unwrap()
                 .removed_events
@@ -2931,7 +2931,7 @@ where
         {
             let inbox = user_chain
                 .inboxes
-                .load_entry_mut(&Origin::chain(admin_id))
+                .try_load_entry_mut(&Origin::chain(admin_id))
                 .await
                 .unwrap();
             assert_eq!(
@@ -2944,7 +2944,7 @@ where
         {
             let inbox = user_chain
                 .inboxes
-                .load_entry_mut(&admin_channel_origin)
+                .try_load_entry_mut(&admin_channel_origin)
                 .await
                 .unwrap();
             assert_eq!(
@@ -3140,7 +3140,7 @@ where
     matches!(
         admin_chain
             .inboxes
-            .load_entry_mut(&Origin::chain(user_id))
+            .try_load_entry_mut(&Origin::chain(user_id))
             .await
             .unwrap()
             .added_events
