@@ -9,7 +9,7 @@ use crate::{
 };
 use async_graphql::{Error, Object};
 use linera_base::{
-    data_types::{Balance, Timestamp},
+    data_types::{Amount, Timestamp},
     doc_scalar,
     identifiers::{ChainDescription, ChainId},
 };
@@ -93,7 +93,7 @@ where
         self.ownership.get()
     }
 
-    async fn balance(&self) -> &Balance {
+    async fn balance(&self) -> &Amount {
         self.balance.get()
     }
 

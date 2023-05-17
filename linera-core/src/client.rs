@@ -16,7 +16,7 @@ use futures::{
 };
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
-    data_types::{Amount, Balance, BlockHeight, RoundNumber, Timestamp},
+    data_types::{Amount, BlockHeight, RoundNumber, Timestamp},
     identifiers::{BytecodeId, ChainId, EffectId, Owner},
 };
 use linera_chain::{
@@ -1128,7 +1128,7 @@ where
         Ok(response)
     }
 
-    pub async fn local_balance(&mut self) -> Result<Balance> {
+    pub async fn local_balance(&mut self) -> Result<Amount> {
         ensure!(
             self.chain_info().await?.next_block_height == self.next_block_height,
             "The local node is behind the trusted state in wallet and needs synchronization with validators"
@@ -1202,7 +1202,7 @@ where
     }
 
     /// Attempts to synchronize with validators and re-compute our balance.
-    pub async fn synchronize_from_validators(&mut self) -> Result<Balance> {
+    pub async fn synchronize_from_validators(&mut self) -> Result<Amount> {
         self.find_received_certificates().await?;
         self.prepare_chain().await?;
         self.local_balance().await

@@ -12,7 +12,7 @@ use async_graphql::Enum;
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, ArithmeticError, Balance, Timestamp},
+    data_types::{Amount, ArithmeticError, Timestamp},
     ensure, hex_debug,
     identifiers::{BytecodeId, ChainDescription, ChainId, EffectId, Owner},
 };
@@ -54,9 +54,9 @@ pub struct SystemExecutionStateView<C> {
     /// Ownership of the chain.
     pub ownership: RegisterView<C, ChainOwnership>,
     /// Balance of the chain (unattributed).
-    pub balance: RegisterView<C, Balance>,
+    pub balance: RegisterView<C, Amount>,
     /// Balances attributed to a given owner.
-    pub balances: MapView<C, Owner, Balance>,
+    pub balances: MapView<C, Owner, Amount>,
     /// The timestamp of the most recent block.
     pub timestamp: RegisterView<C, Timestamp>,
     /// Track the locations of known bytecodes as well as the descriptions of known applications.
@@ -73,8 +73,8 @@ pub struct SystemExecutionState {
     pub subscriptions: BTreeSet<ChannelSubscription>,
     pub committees: BTreeMap<Epoch, Committee>,
     pub ownership: ChainOwnership,
-    pub balance: Balance,
-    pub balances: BTreeMap<Owner, Balance>,
+    pub balance: Amount,
+    pub balances: BTreeMap<Owner, Amount>,
     pub timestamp: Timestamp,
     pub registry: ApplicationRegistry,
 }
@@ -257,7 +257,7 @@ pub struct SystemQuery;
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct SystemResponse {
     pub chain_id: ChainId,
-    pub balance: Balance,
+    pub balance: Amount,
 }
 
 /// The channels available in the system application.
@@ -541,12 +541,12 @@ where
                     None => self.balance.get_mut(),
                 };
                 ensure!(
-                    *balance >= (*amount).into(),
+                    *balance >= *amount,
                     SystemExecutionError::InsufficientFunding {
                         current_balance: (*balance).into()
                     }
                 );
-                balance.try_sub_assign((*amount).into())?;
+                balance.try_sub_assign(*amount)?;
                 if let Recipient::Account(account) = recipient {
                     result.effects.push((
                         Destination::Recipient(account.chain_id),
@@ -754,12 +754,12 @@ where
             Credit { amount, account } if context.chain_id == account.chain_id => {
                 match &account.owner {
                     None => {
-                        let new_balance = self.balance.get().saturating_add((*amount).into());
+                        let new_balance = self.balance.get().saturating_add(*amount);
                         self.balance.set(new_balance);
                     }
                     Some(owner) => {
                         let balance = self.balances.get_mut_or_default(owner).await?;
-                        *balance = balance.saturating_add((*amount).into());
+                        *balance = balance.saturating_add(*amount);
                     }
                 }
             }
@@ -776,7 +776,7 @@ where
                 && context.authenticated_signer.as_ref() == Some(owner) =>
             {
                 let balance = self.balances.get_mut_or_default(owner).await?;
-                if balance.try_sub_assign((*amount).into()).is_ok() {
+                if balance.try_sub_assign(*amount).is_ok() {
                     if let Recipient::Account(account) = recipient {
                         result.effects.push((
                             Destination::Recipient(account.chain_id),

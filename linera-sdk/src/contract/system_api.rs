@@ -7,7 +7,7 @@ use super::contract_system_api as wit;
 use crate::views::ViewStorageContext;
 use futures::future;
 use linera_base::{
-    data_types::{Balance, Timestamp},
+    data_types::{Amount, Timestamp},
     identifiers::{ApplicationId, ChainId, SessionId},
 };
 use linera_views::views::{RootView, View};
@@ -90,7 +90,7 @@ pub fn current_application_parameters() -> Vec<u8> {
 }
 
 /// Retrieves the current system balance.
-pub fn current_system_balance() -> Balance {
+pub fn current_system_balance() -> Amount {
     wit::read_system_balance().into()
 }
 

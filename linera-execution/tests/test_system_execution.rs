@@ -5,7 +5,7 @@
 
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
-    data_types::{Amount, Balance, BlockHeight},
+    data_types::{Amount, BlockHeight},
     identifiers::{ChainDescription, ChainId, EffectId},
 };
 use linera_execution::{
@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 async fn test_simple_system_operation() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
-    state.balance = Balance::from(4);
+    state.balance = Amount::from(4);
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
@@ -42,7 +42,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         .execute_operation(&context, &Operation::System(operation))
         .await
         .unwrap();
-    assert_eq!(view.system.balance.get(), &Balance::from(0));
+    assert_eq!(view.system.balance.get(), &Amount::from(0));
     assert_eq!(
         results,
         vec![ExecutionResult::System(RawExecutionResult::default())]
@@ -81,7 +81,7 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
         .execute_effect(&context, &Effect::System(effect))
         .await
         .unwrap();
-    assert_eq!(view.system.balance.get(), &Balance::from(4));
+    assert_eq!(view.system.balance.get(), &Amount::from(4));
     assert_eq!(
         results,
         vec![ExecutionResult::System(RawExecutionResult::default())]
@@ -93,7 +93,7 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
 async fn test_simple_system_query() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
-    state.balance = Balance::from(4);
+    state.balance = Amount::from(4);
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
@@ -108,7 +108,7 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
         response,
         Response::System(SystemResponse {
             chain_id: ChainId::root(0),
-            balance: Balance::from(4)
+            balance: Amount::from(4)
         })
     );
     Ok(())

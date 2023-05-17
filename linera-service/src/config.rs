@@ -10,7 +10,7 @@ use comfy_table::{
 use file_lock::{FileLock, FileOptions};
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
-    data_types::{Balance, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{ChainDescription, ChainId, Owner},
 };
 use linera_core::client::{ChainClient, ValidatorNodeProvider};
@@ -389,7 +389,7 @@ Next Block Height:  {}"#,
 pub struct GenesisConfig {
     pub committee: CommitteeConfig,
     pub admin_id: ChainId,
-    pub chains: Vec<(ChainDescription, PublicKey, Balance, Timestamp)>,
+    pub chains: Vec<(ChainDescription, PublicKey, Amount, Timestamp)>,
 }
 
 impl Import for GenesisConfig {}

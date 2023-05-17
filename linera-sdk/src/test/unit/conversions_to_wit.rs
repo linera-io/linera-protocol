@@ -6,7 +6,7 @@
 use super::wit;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::Balance,
+    data_types::Amount,
     identifiers::{ApplicationId, ChainId, EffectId},
 };
 
@@ -48,9 +48,9 @@ impl From<EffectId> for wit::EffectId {
     }
 }
 
-impl From<Balance> for wit::Balance {
-    fn from(balance: Balance) -> Self {
-        wit::Balance {
+impl From<Amount> for wit::Amount {
+    fn from(balance: Amount) -> Self {
+        wit::Amount {
             lower_half: balance.lower_half(),
             upper_half: balance.upper_half(),
         }

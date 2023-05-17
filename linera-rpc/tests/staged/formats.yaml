@@ -7,7 +7,7 @@ Account:
         OPTION:
           TYPENAME: Owner
 Amount:
-  NEWTYPESTRUCT: U64
+  NEWTYPESTRUCT: U128
 ApplicationId:
   ENUM:
     0:
@@ -16,8 +16,6 @@ ApplicationId:
       User:
         NEWTYPE:
           TYPENAME: UserApplicationId
-Balance:
-  NEWTYPESTRUCT: U128
 Block:
   STRUCT:
     - chain_id:
@@ -116,7 +114,7 @@ ChainInfo:
     - manager:
         TYPENAME: ChainManagerInfo
     - system_balance:
-        TYPENAME: Balance
+        TYPENAME: Amount
     - block_hash:
         OPTION:
           TYPENAME: CryptoHash

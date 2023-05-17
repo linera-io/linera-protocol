@@ -319,7 +319,7 @@ where
             .clone()
     }
 
-    fn read_system_balance(&self) -> linera_base::data_types::Balance {
+    fn read_system_balance(&self) -> linera_base::data_types::Amount {
         *self.execution_state_mut().system.balance.get()
     }
 

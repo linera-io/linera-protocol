@@ -39,7 +39,7 @@ macro_rules! impl_contract_system_api {
 
             fn read_system_balance(
                 &mut self,
-            ) -> Result<contract_system_api::Balance, Self::Error> {
+            ) -> Result<contract_system_api::Amount, Self::Error> {
                 Ok(self.runtime().read_system_balance().into())
             }
 
@@ -200,7 +200,7 @@ macro_rules! impl_service_system_api {
                 self.runtime().application_parameters()
             }
 
-            fn read_system_balance(&mut self) -> service_system_api::Balance {
+            fn read_system_balance(&mut self) -> service_system_api::Amount {
                 self.runtime().read_system_balance().into()
             }
 

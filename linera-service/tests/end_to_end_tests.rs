@@ -325,7 +325,7 @@ impl Client {
         Self::run_command(&mut command).await;
     }
 
-    async fn query_balance(&self, chain_id: ChainId) -> anyhow::Result<usize> {
+    async fn query_balance(&self, chain_id: ChainId) -> anyhow::Result<String> {
         let stdout = Self::run_command(
             self.run_with_storage()
                 .await
@@ -333,16 +333,16 @@ impl Client {
                 .arg(&chain_id.to_string()),
         )
         .await;
-        let amount = stdout.trim().parse()?;
+        let amount = stdout.trim().to_string();
         Ok(amount)
     }
 
-    async fn transfer(&self, amount: usize, from: ChainId, to: ChainId) {
+    async fn transfer(&self, amount: &str, from: ChainId, to: ChainId) {
         Self::run_command(
             self.run_with_storage()
                 .await
                 .arg("transfer")
-                .arg(&amount.to_string())
+                .arg(amount)
                 .args(["--from", &from.to_string()])
                 .args(["--to", &to.to_string()]),
         )
@@ -1040,21 +1040,21 @@ async fn test_end_to_end_multiple_wallets() {
     );
 
     // Check initial balance of Chain 1.
-    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), 10);
+    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), "10.");
 
     // Transfer 5 units from Chain 1 to Chain 2.
-    client_1.transfer(5, chain_1, chain_2).await;
+    client_1.transfer("5", chain_1, chain_2).await;
     client_2.synchronize_balance(chain_2).await;
 
-    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), 5);
-    assert_eq!(client_2.query_balance(chain_2).await.unwrap(), 5);
+    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), "5.");
+    assert_eq!(client_2.query_balance(chain_2).await.unwrap(), "5.");
 
     // Transfer 2 units from Chain 2 to Chain 1.
-    client_2.transfer(2, chain_2, chain_1).await;
+    client_2.transfer("2", chain_2, chain_1).await;
     client_1.synchronize_balance(chain_1).await;
 
-    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), 7);
-    assert_eq!(client_2.query_balance(chain_2).await.unwrap(), 3);
+    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), "7.");
+    assert_eq!(client_2.query_balance(chain_2).await.unwrap(), "3.");
 }
 
 #[test_log::test(tokio::test)]
@@ -1089,7 +1089,7 @@ async fn test_reconfiguration(network: Network) {
         }
         Network::Simple => {
             client
-                .transfer(10, ChainId::root(9), ChainId::root(8))
+                .transfer("10", ChainId::root(9), ChainId::root(8))
                 .await;
             (None, ChainId::root(9))
         }
@@ -1098,19 +1098,19 @@ async fn test_reconfiguration(network: Network) {
     client.query_validators(None).await;
 
     // Query balance for first and last user chain
-    assert_eq!(client.query_balance(chain_1).await.unwrap(), 10);
-    assert_eq!(client.query_balance(chain_2).await.unwrap(), 0);
+    assert_eq!(client.query_balance(chain_1).await.unwrap(), "10.");
+    assert_eq!(client.query_balance(chain_2).await.unwrap(), "0.");
 
     // Transfer 3 units
-    client.transfer(3, chain_1, chain_2).await;
+    client.transfer("3", chain_1, chain_2).await;
 
     // Restart last server (dropping it kills the process)
     runner.kill_server(4, 3);
     runner.start_server(4, 3).await;
 
     // Query balances again
-    assert_eq!(client.query_balance(chain_1).await.unwrap(), 7);
-    assert_eq!(client.query_balance(chain_2).await.unwrap(), 3);
+    assert_eq!(client.query_balance(chain_1).await.unwrap(), "7.");
+    assert_eq!(client.query_balance(chain_2).await.unwrap(), "3.");
 
     // Launch local benchmark using all user chains
     client.benchmark(500).await;
@@ -1150,9 +1150,9 @@ async fn test_reconfiguration(network: Network) {
         runner.remove_validator(i + 1);
     }
 
-    client.transfer(5, chain_1, chain_2).await;
+    client.transfer("5", chain_1, chain_2).await;
     client.synchronize_balance(chain_2).await;
-    assert_eq!(client.query_balance(chain_2).await.unwrap(), 8);
+    assert_eq!(client.query_balance(chain_2).await.unwrap(), "8.");
 
     if let Some(node_service_2) = node_service_2 {
         for i in 0..10 {
@@ -1160,9 +1160,7 @@ async fn test_reconfiguration(network: Network) {
             let response = node_service_2
                 .query("query { chain { executionState { system { balance } } } }")
                 .await;
-            if response["chain"]["executionState"]["system"]["balance"]
-                == json!({ "upper": 0, "lower": 8 })
-            {
+            if response["chain"]["executionState"]["system"]["balance"].as_str() == Some("8.") {
                 return;
             }
         }
@@ -1273,7 +1271,7 @@ async fn test_end_to_end_retry_notification_stream() {
     'success: {
         for i in 0..10 {
             // Add a new block on the chain, triggering a notification.
-            client1.transfer(1, chain, ChainId::root(9)).await;
+            client1.transfer("1", chain, ChainId::root(9)).await;
             tokio::time::sleep(Duration::from_secs(i)).await;
             height += 1;
             let response = node_service2
@@ -1344,7 +1342,7 @@ async fn test_end_to_end_fungible() {
     };
     let amount_transfer = Amount::from(1);
     let query_string = format!(
-        "mutation {{ transfer(owner: {}, amount: {}, targetAccount: {}) }}",
+        "mutation {{ transfer(owner: {}, amount: \"{}\", targetAccount: {}) }}",
         account_owner1.to_value(),
         amount_transfer,
         destination.to_value(),
@@ -1378,7 +1376,7 @@ async fn test_end_to_end_fungible() {
     };
     let amount_transfer = Amount::from(2);
     let query_string = format!(
-        "mutation {{ claim(sourceAccount: {}, amount: {}, targetAccount: {}) }}",
+        "mutation {{ claim(sourceAccount: {}, amount: \"{}\", targetAccount: {}) }}",
         source.to_value(),
         amount_transfer,
         destination.to_value()
@@ -1484,7 +1482,7 @@ async fn test_end_to_end_crowd_funding() {
     };
     let amount_transfer = Amount::from(1);
     let query_string = format!(
-        "mutation {{ transfer(owner: {}, amount: {}, targetAccount: {}) }}",
+        "mutation {{ transfer(owner: {}, amount: \"{}\", targetAccount: {}) }}",
         account_owner1.to_value(),
         amount_transfer,
         destination.to_value(),
@@ -1501,7 +1499,7 @@ async fn test_end_to_end_crowd_funding() {
     // Transferring
     let amount_transfer = Amount::from(1);
     let query_string = format!(
-        "mutation {{ pledgeWithTransfer(owner: {}, amount: {}) }}",
+        "mutation {{ pledgeWithTransfer(owner: {}, amount: \"{}\") }}",
         account_owner2.to_value(),
         amount_transfer,
     );
