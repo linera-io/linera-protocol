@@ -342,9 +342,10 @@ where
     ) -> Result<(), NodeError> {
         let mut info = BTreeMap::new();
         {
-            let mut chain = self.store.load_chain(chain_id).await?;
-            for origin in chain.inboxes.indices().await? {
-                let inbox = chain.inboxes.load_entry(&origin).await?;
+            let chain = self.store.load_chain(chain_id).await?;
+            let origins = chain.inboxes.indices().await?;
+            let inboxes = chain.inboxes.try_load_entries(origins.clone()).await?;
+            for (origin, inbox) in origins.into_iter().zip(inboxes) {
                 let next_height = info.entry(origin.sender).or_default();
                 let inbox_next_height = inbox.next_block_height_to_receive()?;
                 if inbox_next_height > *next_height {
