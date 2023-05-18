@@ -1370,6 +1370,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "heck"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
+
+[[package]]
 name = "hermit-abi"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1807,6 +1813,7 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "convert_case 0.6.0",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "serde",
@@ -1829,7 +1836,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec7cbe0895b566d675ec18881efb52b0871b4f487f7d23df9a2d837fc543ebc4"
 dependencies = [
- "heck",
+ "heck 0.3.3",
  "linera-wit-bindgen-core",
  "linera-wit-bindgen-gen-rust-lib",
 ]
@@ -1840,7 +1847,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95d531afaf2990383a8a0c3dbdd200dfd4c4ccd58c62e43f9efd74d5b0b70927"
 dependencies = [
- "heck",
+ "heck 0.3.3",
  "linera-wit-bindgen-core",
  "linera-wit-bindgen-gen-rust-lib",
 ]
@@ -1851,7 +1858,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95dbd8133b71d70b457b233848eac2227c0d90d99a318e0cd0688d44db97e08d"
 dependencies = [
- "heck",
+ "heck 0.3.3",
  "linera-wit-bindgen-core",
  "linera-wit-bindgen-gen-rust-lib",
 ]
@@ -1862,7 +1869,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "722e038115235d09f1d6351ff97b9663dd2fcf0245076c551700e8aefa191767"
 dependencies = [
- "heck",
+ "heck 0.3.3",
  "linera-wit-bindgen-core",
 ]
 
