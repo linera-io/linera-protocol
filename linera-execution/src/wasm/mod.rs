@@ -34,10 +34,21 @@ use std::path::Path;
 use thiserror::Error;
 
 /// A user application in a compiled WebAssembly module.
-pub struct WasmApplication {
-    contract_bytecode: Bytecode,
-    service_bytecode: Bytecode,
-    runtime: WasmRuntime,
+pub enum WasmApplication {
+    #[cfg(feature = "wasmer")]
+    Wasmer {
+        contract_engine: ::wasmer::Engine,
+        contract_module: ::wasmer::Module,
+        service_engine: ::wasmer::Engine,
+        service_module: ::wasmer::Module,
+    },
+    #[cfg(feature = "wasmtime")]
+    Wasmtime {
+        contract_engine: ::wasmtime::Engine,
+        contract_module: ::wasmtime::Module,
+        service_engine: ::wasmtime::Engine,
+        service_module: ::wasmtime::Module,
+    },
 }
 
 impl WasmApplication {
@@ -54,11 +65,16 @@ impl WasmApplication {
         } else {
             contract_bytecode
         };
-        Ok(WasmApplication {
-            contract_bytecode,
-            service_bytecode,
-            runtime,
-        })
+        match runtime {
+            #[cfg(feature = "wasmer")]
+            WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
+                Self::new_with_wasmer(contract_bytecode, service_bytecode)
+            }
+            #[cfg(feature = "wasmtime")]
+            WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
+                Self::new_with_wasmtime(contract_bytecode, service_bytecode)
+            }
+        }
     }
 
     /// Creates a new [`WasmApplication`] using the WebAssembly module in `bytecode_file`.
@@ -106,18 +122,34 @@ impl UserApplication for WasmApplication {
         runtime: &dyn ContractRuntime,
         argument: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        let result = match self.runtime {
+        let result = match self {
             #[cfg(feature = "wasmtime")]
-            WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                self.prepare_contract_runtime_with_wasmtime(runtime)?
-                    .initialize(context, argument)
-                    .await?
+            WasmApplication::Wasmtime {
+                contract_engine,
+                contract_module,
+                ..
+            } => {
+                Self::prepare_contract_runtime_with_wasmtime(
+                    contract_engine,
+                    contract_module,
+                    runtime,
+                )?
+                .initialize(context, argument)
+                .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                self.prepare_contract_runtime_with_wasmer(runtime)?
-                    .initialize(context, argument)
-                    .await?
+            WasmApplication::Wasmer {
+                contract_engine,
+                contract_module,
+                ..
+            } => {
+                Self::prepare_contract_runtime_with_wasmer(
+                    contract_engine,
+                    contract_module,
+                    runtime,
+                )?
+                .initialize(context, argument)
+                .await?
             }
         };
         Ok(result)
@@ -129,18 +161,34 @@ impl UserApplication for WasmApplication {
         runtime: &dyn ContractRuntime,
         operation: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        let result = match self.runtime {
+        let result = match self {
             #[cfg(feature = "wasmtime")]
-            WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                self.prepare_contract_runtime_with_wasmtime(runtime)?
-                    .execute_operation(context, operation)
-                    .await?
+            WasmApplication::Wasmtime {
+                contract_engine,
+                contract_module,
+                ..
+            } => {
+                Self::prepare_contract_runtime_with_wasmtime(
+                    contract_engine,
+                    contract_module,
+                    runtime,
+                )?
+                .execute_operation(context, operation)
+                .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                self.prepare_contract_runtime_with_wasmer(runtime)?
-                    .execute_operation(context, operation)
-                    .await?
+            WasmApplication::Wasmer {
+                contract_engine,
+                contract_module,
+                ..
+            } => {
+                Self::prepare_contract_runtime_with_wasmer(
+                    contract_engine,
+                    contract_module,
+                    runtime,
+                )?
+                .execute_operation(context, operation)
+                .await?
             }
         };
         Ok(result)
@@ -152,18 +200,34 @@ impl UserApplication for WasmApplication {
         runtime: &dyn ContractRuntime,
         effect: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
-        let result = match self.runtime {
+        let result = match self {
             #[cfg(feature = "wasmtime")]
-            WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                self.prepare_contract_runtime_with_wasmtime(runtime)?
-                    .execute_effect(context, effect)
-                    .await?
+            WasmApplication::Wasmtime {
+                contract_engine,
+                contract_module,
+                ..
+            } => {
+                Self::prepare_contract_runtime_with_wasmtime(
+                    contract_engine,
+                    contract_module,
+                    runtime,
+                )?
+                .execute_effect(context, effect)
+                .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                self.prepare_contract_runtime_with_wasmer(runtime)?
-                    .execute_effect(context, effect)
-                    .await?
+            WasmApplication::Wasmer {
+                contract_engine,
+                contract_module,
+                ..
+            } => {
+                Self::prepare_contract_runtime_with_wasmer(
+                    contract_engine,
+                    contract_module,
+                    runtime,
+                )?
+                .execute_effect(context, effect)
+                .await?
             }
         };
         Ok(result)
@@ -176,18 +240,34 @@ impl UserApplication for WasmApplication {
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
-        let result = match self.runtime {
+        let result = match self {
             #[cfg(feature = "wasmtime")]
-            WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                self.prepare_contract_runtime_with_wasmtime(runtime)?
-                    .handle_application_call(context, argument, forwarded_sessions)
-                    .await?
+            WasmApplication::Wasmtime {
+                contract_engine,
+                contract_module,
+                ..
+            } => {
+                Self::prepare_contract_runtime_with_wasmtime(
+                    contract_engine,
+                    contract_module,
+                    runtime,
+                )?
+                .handle_application_call(context, argument, forwarded_sessions)
+                .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                self.prepare_contract_runtime_with_wasmer(runtime)?
-                    .handle_application_call(context, argument, forwarded_sessions)
-                    .await?
+            WasmApplication::Wasmer {
+                contract_engine,
+                contract_module,
+                ..
+            } => {
+                Self::prepare_contract_runtime_with_wasmer(
+                    contract_engine,
+                    contract_module,
+                    runtime,
+                )?
+                .handle_application_call(context, argument, forwarded_sessions)
+                .await?
             }
         };
         Ok(result)
@@ -202,30 +282,46 @@ impl UserApplication for WasmApplication {
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, ExecutionError> {
-        let result = match self.runtime {
+        let result = match self {
             #[cfg(feature = "wasmtime")]
-            WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                self.prepare_contract_runtime_with_wasmtime(runtime)?
-                    .handle_session_call(
-                        context,
-                        session_kind,
-                        session_data,
-                        argument,
-                        forwarded_sessions,
-                    )
-                    .await?
+            WasmApplication::Wasmtime {
+                contract_engine,
+                contract_module,
+                ..
+            } => {
+                Self::prepare_contract_runtime_with_wasmtime(
+                    contract_engine,
+                    contract_module,
+                    runtime,
+                )?
+                .handle_session_call(
+                    context,
+                    session_kind,
+                    session_data,
+                    argument,
+                    forwarded_sessions,
+                )
+                .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                self.prepare_contract_runtime_with_wasmer(runtime)?
-                    .handle_session_call(
-                        context,
-                        session_kind,
-                        session_data,
-                        argument,
-                        forwarded_sessions,
-                    )
-                    .await?
+            WasmApplication::Wasmer {
+                contract_engine,
+                contract_module,
+                ..
+            } => {
+                Self::prepare_contract_runtime_with_wasmer(
+                    contract_engine,
+                    contract_module,
+                    runtime,
+                )?
+                .handle_session_call(
+                    context,
+                    session_kind,
+                    session_data,
+                    argument,
+                    forwarded_sessions,
+                )
+                .await?
             }
         };
         Ok(result)
@@ -237,16 +333,28 @@ impl UserApplication for WasmApplication {
         runtime: &dyn ServiceRuntime,
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
-        let result = match self.runtime {
+        let result = match self {
             #[cfg(feature = "wasmtime")]
-            WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                self.prepare_service_runtime_with_wasmtime(runtime)?
-                    .query_application(context, argument)
-                    .await?
+            WasmApplication::Wasmtime {
+                service_engine,
+                service_module,
+                ..
+            } => {
+                Self::prepare_service_runtime_with_wasmtime(
+                    service_engine,
+                    service_module,
+                    runtime,
+                )?
+                .query_application(context, argument)
+                .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                self.prepare_service_runtime_with_wasmer(runtime)?
+            WasmApplication::Wasmer {
+                service_engine,
+                service_module,
+                ..
+            } => {
+                Self::prepare_service_runtime_with_wasmer(service_engine, service_module, runtime)?
                     .query_application(context, argument)
                     .await?
             }
