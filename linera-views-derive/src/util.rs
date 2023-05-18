@@ -10,15 +10,6 @@ pub fn snakify(r#type: &Type) -> Ident {
     transform_type_to_ident(r#type, |s: String| s.to_case(Case::Snake))
 }
 
-/// Capitalize the first character of a string
-pub fn capitalize_first_character(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().chain(c).collect(),
-    }
-}
-
 /// Convert a string into an identifier
 pub fn string_to_ident(s: &str) -> Ident {
     syn::Ident::new(s, Span::call_site())

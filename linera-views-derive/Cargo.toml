@@ -13,6 +13,7 @@ proc-macro = true
 
 [dependencies]
 syn = { workspace = true, features = ["full", "extra-traits"] }
+heck = { workspace = true }
 quote = { workspace = true }
 proc-macro2 = { workspace = true }
 convert_case = { workspace = true }

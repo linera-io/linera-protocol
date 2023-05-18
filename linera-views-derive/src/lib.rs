@@ -5,9 +5,11 @@
 
 pub(crate) mod util;
 
+extern crate heck;
 extern crate proc_macro;
 extern crate syn;
-use crate::util::{capitalize_first_character, concat, snakify, string_to_ident};
+use crate::util::{concat, snakify, string_to_ident};
+use heck::AsUpperCamelCase;
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
@@ -392,8 +394,9 @@ fn generate_graphql_code_for_field(
 
             let index_name = snakify(index_ident);
 
-            let camel_index_name = capitalize_first_character(&format!("{}", field_name));
-            let entry_name = format!("{}{}{}", struct_name, camel_index_name, "Entry");
+            let camel_index_name = format!("{}", field_name);
+            let camel_index_name = AsUpperCamelCase(&camel_index_name);
+            let entry_name = format!("{}{}Entry", struct_name, camel_index_name);
             let entry_name = string_to_ident(&entry_name);
             let context_generics = context_constraints.as_ref().map(|_| quote! { <#context> });
 

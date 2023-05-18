@@ -18,6 +18,7 @@ exclude = [
 resolver = "2"
 
 [workspace.dependencies]
+heck = "0.4.1"
 anyhow = "1.0.57"
 async-graphql = "5.0.7"
 async-graphql-axum = "5.0.5"

@@ -2781,6 +2781,7 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "convert_case 0.6.0",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "serde",
