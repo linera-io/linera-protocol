@@ -10,9 +10,9 @@ pub fn snakify(r#type: &Type) -> Ident {
     transform_type_to_ident(r#type, |s: String| s.to_case(Case::Snake))
 }
 
-/// Extracts the first `Ident` in a type and append the string 'Element' to the end.
-pub fn create_entry_name(r#type: &Type) -> Ident {
-    transform_type_to_ident(r#type, |s: String| format!("{}{}", s, "Entry"))
+/// Convert a string into an identifier
+pub fn string_to_ident(s: &str) -> Ident {
+    syn::Ident::new(s, Span::call_site())
 }
 
 /// Extends an identifier with a suffix.

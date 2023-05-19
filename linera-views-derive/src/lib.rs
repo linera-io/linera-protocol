@@ -5,9 +5,11 @@
 
 pub(crate) mod util;
 
+extern crate heck;
 extern crate proc_macro;
 extern crate syn;
-use crate::util::{concat, create_entry_name, snakify};
+use crate::util::{concat, snakify, string_to_ident};
+use heck::AsUpperCamelCase;
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
@@ -345,6 +347,7 @@ fn generic_offset(
 }
 
 fn generate_graphql_code_for_field(
+    struct_name: syn::Ident,
     context: Type,
     context_constraints: Option<TokenStream2>,
     field: Field,
@@ -390,7 +393,11 @@ fn generate_graphql_code_for_field(
                 .unwrap_or_else(|| panic!("no generic type specified for '{}'", view_name));
 
             let index_name = snakify(index_ident);
-            let entry_name = create_entry_name(generic_ident);
+
+            let camel_index_name = format!("{}", field_name);
+            let camel_index_name = AsUpperCamelCase(&camel_index_name);
+            let entry_name = format!("{}{}Entry", struct_name, camel_index_name);
+            let entry_name = string_to_ident(&entry_name);
             let context_generics = context_constraints.as_ref().map(|_| quote! { <#context> });
 
             let r#impl = quote! {
@@ -588,8 +595,12 @@ fn generate_graphql_code(input: ItemStruct) -> TokenStream2 {
     let mut structs = vec![];
 
     for field in input.fields {
-        let (r#impl, r#struct) =
-            generate_graphql_code_for_field(context.clone(), context_constraints.clone(), field);
+        let (r#impl, r#struct) = generate_graphql_code_for_field(
+            struct_name.clone(),
+            context.clone(),
+            context_constraints.clone(),
+            field,
+        );
         impls.push(r#impl);
         if let Some(r#struct) = r#struct {
             structs.push(r#struct);
@@ -944,7 +955,7 @@ pub mod tests {
                 let output = generate_graphql_code(input);
 
                 let expected = quote! {
-                    pub struct SomeOtherViewEntry #generics_with_lifetime
+                    pub struct TestViewCollectionEntry #generics_with_lifetime
                     #constraints
                     {
                         string: String,
@@ -954,7 +965,7 @@ pub mod tests {
                         >,
                     }
                     #[async_graphql::Object]
-                    impl #generics_with_lifetime SomeOtherViewEntry #generics_with_lifetime
+                    impl #generics_with_lifetime TestViewCollectionEntry #generics_with_lifetime
                     #constraints
                     {
                         async fn string(&self) -> &String {
@@ -980,8 +991,8 @@ pub mod tests {
                         async fn collection(
                             &self,
                             string: String,
-                        ) -> Result<SomeOtherViewEntry #generics, async_graphql::Error> {
-                            Ok(SomeOtherViewEntry {
+                        ) -> Result<TestViewCollectionEntry #generics, async_graphql::Error> {
+                            Ok(TestViewCollectionEntry {
                                 string: string.clone(),
                                 guard: self.collection.try_load_entry(&string).await?,
                             })
