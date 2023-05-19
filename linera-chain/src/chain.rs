@@ -30,7 +30,7 @@ use linera_views::{
     views::{CryptoHashView, GraphQLView, RootView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// A view accessing the state of a chain.
 #[derive(Debug, RootView, GraphQLView)]
@@ -345,6 +345,17 @@ where
     /// Removes the incoming messages in the block from the inboxes.
     pub async fn remove_events_from_inboxes(&mut self, block: &Block) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
+        let origins = block
+            .incoming_messages
+            .clone()
+            .into_iter()
+            .map(|message| message.origin)
+            .collect::<HashSet<_>>();
+        let inboxes = self.inboxes.try_load_entries_mut(origins.clone()).await?;
+        let mut map = HashMap::new();
+        for (origin, inbox) in origins.into_iter().zip(inboxes) {
+            map.insert(origin, inbox);
+        }
         for message in &block.incoming_messages {
             tracing::trace!(
                 "Updating inbox {:?} in chain {:?}",
@@ -359,7 +370,7 @@ where
                 });
             }
             // Mark the message as processed in the inbox.
-            let mut inbox = self.inboxes.try_load_entry_mut(&message.origin).await?;
+            let inbox = map.get_mut(&message.origin).unwrap();
             inbox
                 .remove_event(&message.event)
                 .await
