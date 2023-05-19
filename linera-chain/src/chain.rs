@@ -178,7 +178,7 @@ where
     pub async fn validate_incoming_messages(&mut self) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let origins = self.inboxes.indices().await?;
-        let inboxes = self.inboxes.try_load_entries(origins.clone()).await?;
+        let inboxes = self.inboxes.try_load_entries(&origins).await?;
         for (origin, inbox) in origins.into_iter().zip(inboxes) {
             let event = inbox.removed_events.front().await?;
             ensure!(
@@ -351,7 +351,7 @@ where
             .into_iter()
             .map(|message| message.origin)
             .collect::<HashSet<_>>();
-        let inboxes = self.inboxes.try_load_entries_mut(origins.clone()).await?;
+        let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
         let mut map = HashMap::new();
         for (origin, inbox) in origins.into_iter().zip(inboxes) {
             map.insert(origin, inbox);
@@ -523,7 +523,7 @@ where
             .into_iter()
             .map(Target::chain)
             .collect::<Vec<_>>();
-        let outboxes = self.outboxes.try_load_entries_mut(targets).await?;
+        let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
         for mut outbox in outboxes {
             if outbox.schedule_message(height)? {
                 *outbox_counters.entry(height).or_default() += 1;
@@ -540,7 +540,7 @@ where
                 name,
             })
             .collect::<Vec<_>>();
-        let channels = self.channels.try_load_entries_mut(full_names).await?;
+        let channels = self.channels.try_load_entries_mut(&full_names).await?;
         for ((_name, id), mut channel) in raw_result.unsubscribe.into_iter().zip(channels) {
             // Remove subscriber. Do not remove the channel outbox yet.
             channel.subscribers.remove(&id)?;
@@ -552,17 +552,14 @@ where
                 name,
             })
             .collect::<Vec<_>>();
-        let channels = self
-            .channels
-            .try_load_entries_mut(full_names.clone())
-            .await?;
+        let channels = self.channels.try_load_entries_mut(&full_names).await?;
         for (full_name, mut channel) in full_names.into_iter().zip(channels) {
             let recipients = channel.subscribers.indices().await?;
             let targets = recipients
                 .into_iter()
                 .map(|recipient| Target::channel(recipient, full_name.clone()))
                 .collect::<Vec<_>>();
-            let outboxes = self.outboxes.try_load_entries_mut(targets).await?;
+            let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
             for mut outbox in outboxes {
                 if outbox.schedule_message(height)? {
                     *outbox_counters.entry(height).or_default() += 1;
@@ -579,7 +576,7 @@ where
                 name,
             })
             .collect::<Vec<_>>();
-        let channels = self.channels.try_load_entries_mut(full_names).await?;
+        let channels = self.channels.try_load_entries_mut(&full_names).await?;
         for ((name, id), mut channel) in raw_result.subscribe.into_iter().zip(channels) {
             let full_name = ChannelFullName {
                 application_id,

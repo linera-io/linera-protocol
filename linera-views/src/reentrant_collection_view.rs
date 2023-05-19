@@ -835,7 +835,7 @@ where
     }
 }
 
-impl<C, I, W> ReentrantCollectionView<C, I, W>
+impl<'a, C, I, W> ReentrantCollectionView<C, I, W>
 where
     C: Context + Send + Clone + 'static,
     ViewError: From<C::Error>,
@@ -861,16 +861,16 @@ where
     /// # })
     /// ```
     pub async fn try_load_entries_mut<Q>(
-        &mut self,
-        indices: impl IntoIterator<Item = Q>,
+        &'a mut self,
+        indices: impl IntoIterator<Item = &'a Q>,
     ) -> Result<Vec<OwnedRwLockWriteGuard<W>>, ViewError>
     where
         I: Borrow<Q>,
-        Q: Serialize,
+        Q: Serialize + 'a,
     {
         let short_keys = indices
             .into_iter()
-            .map(|index| C::derive_short_key(&index))
+            .map(|index| C::derive_short_key(index))
             .collect::<Result<_, _>>()?;
         self.collection.try_load_entries_mut(short_keys).await
     }
@@ -894,16 +894,16 @@ where
     /// # })
     /// ```
     pub async fn try_load_entries<Q>(
-        &self,
-        indices: impl IntoIterator<Item = Q>,
+        &'a self,
+        indices: impl IntoIterator<Item = &'a Q>,
     ) -> Result<Vec<OwnedRwLockReadGuard<W>>, ViewError>
     where
         I: Borrow<Q>,
-        Q: Serialize,
+        Q: Serialize + 'a,
     {
         let short_keys = indices
             .into_iter()
-            .map(|index| C::derive_short_key(&index))
+            .map(|index| C::derive_short_key(index))
             .collect::<Result<_, _>>()?;
         self.collection.try_load_entries(short_keys).await
     }
