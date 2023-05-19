@@ -212,8 +212,7 @@ where
         } else {
             let mut keys = Vec::new();
             let mut positions = Vec::new();
-            let mut pos = 0;
-            for index in indices {
+            for (pos,index) in indices.into_iter().enumerate() {
                 if index < self.stored_count {
                     let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
                     keys.push(key);
@@ -222,7 +221,6 @@ where
                 } else {
                     result.push(self.new_values.get(index - self.stored_count).cloned());
                 }
-                pos += 1;
             }
             let values = self.context.read_multi_key(keys).await?;
             for (pos, value) in positions.into_iter().zip(values) {

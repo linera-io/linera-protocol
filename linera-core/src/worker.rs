@@ -418,12 +418,7 @@ where
             heights_red.push(height.try_into()?);
         }
         let values = confirmed_log.multi_get(heights_red).await?;
-        let mut keys = Vec::new();
-        for value in values {
-            if let Some(key) = value {
-                keys.push(key);
-            }
-        }
+        let keys = values.into_iter().flatten();
         let certificates = self.storage.read_certificates(keys).await?;
         Ok(CrossChainRequest::UpdateRecipient {
             height_map,
