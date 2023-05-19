@@ -43,9 +43,23 @@ use super::{
 };
 use crate::{Bytecode, ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
 use linera_views::{batch::Batch, views::ViewError};
+use once_cell::sync::Lazy;
 use std::{error::Error, future::Future, task::Poll};
 use wasmtime::{Config, Engine, Linker, Module, Store, Trap};
 use wit_bindgen_host_wasmtime_rust::Le;
+
+/// An [`Engine`] instance configured to run application contracts.
+static CONTRACT_ENGINE: Lazy<Engine> = Lazy::new(|| {
+    let mut config = Config::default();
+    config
+        .consume_fuel(true)
+        .cranelift_nan_canonicalization(true);
+
+    Engine::new(&config).expect("Failed to create Wasmtime `Engine` for contracts")
+});
+
+/// An [`Engine`] instance configured to run application services.
+static SERVICE_ENGINE: Lazy<Engine> = Lazy::new(Engine::default);
 
 /// Type representing the [Wasmtime](https://wasmtime.dev/) runtime for contracts.
 ///
@@ -86,42 +100,18 @@ impl WasmApplication {
         contract_bytecode: Bytecode,
         service_bytecode: Bytecode,
     ) -> Result<Self, WasmExecutionError> {
-        let contract_engine = Self::create_wasmtime_engine_for_contracts()?;
-        let contract_module = Module::new(&contract_engine, contract_bytecode)?;
+        let contract = Module::new(&CONTRACT_ENGINE, contract_bytecode)?;
+        let service = Module::new(&SERVICE_ENGINE, service_bytecode)?;
 
-        let service_engine = Self::create_wasmtime_engine_for_services()?;
-        let service_module = Module::new(&service_engine, service_bytecode)?;
-
-        Ok(WasmApplication::Wasmtime {
-            contract_engine,
-            contract_module,
-            service_module,
-            service_engine,
-        })
-    }
-
-    /// Creates an [`Engine`] instance configured to run application contracts.
-    fn create_wasmtime_engine_for_contracts() -> Result<Engine, WasmExecutionError> {
-        let mut config = Config::default();
-        config
-            .consume_fuel(true)
-            .cranelift_nan_canonicalization(true);
-
-        Engine::new(&config).map_err(WasmExecutionError::CreateWasmtimeEngine)
-    }
-
-    /// Creates an [`Engine`] instance configured to run application services.
-    fn create_wasmtime_engine_for_services() -> Result<Engine, WasmExecutionError> {
-        Ok(Engine::default())
+        Ok(WasmApplication::Wasmtime { contract, service })
     }
 
     /// Prepares a runtime instance to call into the WASM contract.
     pub fn prepare_contract_runtime_with_wasmtime<'runtime>(
-        contract_engine: &Engine,
         contract_module: &Module,
         runtime: &'runtime dyn ContractRuntime,
     ) -> Result<WasmRuntimeContext<'runtime, Contract<'runtime>>, WasmExecutionError> {
-        let mut linker = Linker::new(contract_engine);
+        let mut linker = Linker::new(&CONTRACT_ENGINE);
 
         contract_system_api::add_to_linker(&mut linker, ContractState::system_api)?;
         view_system_api::add_to_linker(&mut linker, ContractState::views_api)?;
@@ -129,7 +119,7 @@ impl WasmApplication {
         let waker_forwarder = WakerForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
         let state = ContractState::new(runtime, waker_forwarder.clone(), queued_future_factory);
-        let mut store = Store::new(contract_engine, state);
+        let mut store = Store::new(&CONTRACT_ENGINE, state);
         let (contract, _instance) = contract::Contract::instantiate(
             &mut store,
             contract_module,
@@ -153,11 +143,10 @@ impl WasmApplication {
 
     /// Prepares a runtime instance to call into the WASM service.
     pub fn prepare_service_runtime_with_wasmtime<'runtime>(
-        service_engine: &Engine,
         service_module: &Module,
         runtime: &'runtime dyn ServiceRuntime,
     ) -> Result<WasmRuntimeContext<'runtime, Service<'runtime>>, WasmExecutionError> {
-        let mut linker = Linker::new(service_engine);
+        let mut linker = Linker::new(&SERVICE_ENGINE);
 
         service_system_api::add_to_linker(&mut linker, ServiceState::system_api)?;
         view_system_api::add_to_linker(&mut linker, ServiceState::views_api)?;
@@ -165,7 +154,7 @@ impl WasmApplication {
         let waker_forwarder = WakerForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
         let state = ServiceState::new(runtime, waker_forwarder.clone());
-        let mut store = Store::new(service_engine, state);
+        let mut store = Store::new(&SERVICE_ENGINE, state);
         let (service, _instance) = service::Service::instantiate(
             &mut store,
             service_module,

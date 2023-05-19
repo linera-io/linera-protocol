@@ -37,17 +37,13 @@ use thiserror::Error;
 pub enum WasmApplication {
     #[cfg(feature = "wasmer")]
     Wasmer {
-        contract_engine: ::wasmer::Engine,
-        contract_module: ::wasmer::Module,
-        service_engine: ::wasmer::Engine,
-        service_module: ::wasmer::Module,
+        contract: (::wasmer::Engine, ::wasmer::Module),
+        service: ::wasmer::Module,
     },
     #[cfg(feature = "wasmtime")]
     Wasmtime {
-        contract_engine: ::wasmtime::Engine,
-        contract_module: ::wasmtime::Module,
-        service_engine: ::wasmtime::Engine,
-        service_module: ::wasmtime::Module,
+        contract: ::wasmtime::Module,
+        service: ::wasmtime::Module,
     },
 }
 
@@ -124,23 +120,14 @@ impl UserApplication for WasmApplication {
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         let result = match self {
             #[cfg(feature = "wasmtime")]
-            WasmApplication::Wasmtime {
-                contract_engine,
-                contract_module,
-                ..
-            } => {
-                Self::prepare_contract_runtime_with_wasmtime(
-                    contract_engine,
-                    contract_module,
-                    runtime,
-                )?
-                .initialize(context, argument)
-                .await?
+            WasmApplication::Wasmtime { contract, .. } => {
+                Self::prepare_contract_runtime_with_wasmtime(contract, runtime)?
+                    .initialize(context, argument)
+                    .await?
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer {
-                contract_engine,
-                contract_module,
+                contract: (contract_engine, contract_module),
                 ..
             } => {
                 Self::prepare_contract_runtime_with_wasmer(
@@ -163,23 +150,14 @@ impl UserApplication for WasmApplication {
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         let result = match self {
             #[cfg(feature = "wasmtime")]
-            WasmApplication::Wasmtime {
-                contract_engine,
-                contract_module,
-                ..
-            } => {
-                Self::prepare_contract_runtime_with_wasmtime(
-                    contract_engine,
-                    contract_module,
-                    runtime,
-                )?
-                .execute_operation(context, operation)
-                .await?
+            WasmApplication::Wasmtime { contract, .. } => {
+                Self::prepare_contract_runtime_with_wasmtime(contract, runtime)?
+                    .execute_operation(context, operation)
+                    .await?
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer {
-                contract_engine,
-                contract_module,
+                contract: (contract_engine, contract_module),
                 ..
             } => {
                 Self::prepare_contract_runtime_with_wasmer(
@@ -202,23 +180,14 @@ impl UserApplication for WasmApplication {
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         let result = match self {
             #[cfg(feature = "wasmtime")]
-            WasmApplication::Wasmtime {
-                contract_engine,
-                contract_module,
-                ..
-            } => {
-                Self::prepare_contract_runtime_with_wasmtime(
-                    contract_engine,
-                    contract_module,
-                    runtime,
-                )?
-                .execute_message(context, message)
-                .await?
+            WasmApplication::Wasmtime { contract, .. } => {
+                Self::prepare_contract_runtime_with_wasmtime(contract, runtime)?
+                    .execute_message(context, message)
+                    .await?
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer {
-                contract_engine,
-                contract_module,
+                contract: (contract_engine, contract_module),
                 ..
             } => {
                 Self::prepare_contract_runtime_with_wasmer(
@@ -242,23 +211,14 @@ impl UserApplication for WasmApplication {
     ) -> Result<ApplicationCallResult, ExecutionError> {
         let result = match self {
             #[cfg(feature = "wasmtime")]
-            WasmApplication::Wasmtime {
-                contract_engine,
-                contract_module,
-                ..
-            } => {
-                Self::prepare_contract_runtime_with_wasmtime(
-                    contract_engine,
-                    contract_module,
-                    runtime,
-                )?
-                .handle_application_call(context, argument, forwarded_sessions)
-                .await?
+            WasmApplication::Wasmtime { contract, .. } => {
+                Self::prepare_contract_runtime_with_wasmtime(contract, runtime)?
+                    .handle_application_call(context, argument, forwarded_sessions)
+                    .await?
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer {
-                contract_engine,
-                contract_module,
+                contract: (contract_engine, contract_module),
                 ..
             } => {
                 Self::prepare_contract_runtime_with_wasmer(
@@ -283,23 +243,14 @@ impl UserApplication for WasmApplication {
     ) -> Result<SessionCallResult, ExecutionError> {
         let result = match self {
             #[cfg(feature = "wasmtime")]
-            WasmApplication::Wasmtime {
-                contract_engine,
-                contract_module,
-                ..
-            } => {
-                Self::prepare_contract_runtime_with_wasmtime(
-                    contract_engine,
-                    contract_module,
-                    runtime,
-                )?
-                .handle_session_call(context, session_state, argument, forwarded_sessions)
-                .await?
+            WasmApplication::Wasmtime { contract, .. } => {
+                Self::prepare_contract_runtime_with_wasmtime(contract, runtime)?
+                    .handle_session_call(context, session_state, argument, forwarded_sessions)
+                    .await?
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer {
-                contract_engine,
-                contract_module,
+                contract: (contract_engine, contract_module),
                 ..
             } => {
                 Self::prepare_contract_runtime_with_wasmer(
@@ -322,26 +273,14 @@ impl UserApplication for WasmApplication {
     ) -> Result<Vec<u8>, ExecutionError> {
         let result = match self {
             #[cfg(feature = "wasmtime")]
-            WasmApplication::Wasmtime {
-                service_engine,
-                service_module,
-                ..
-            } => {
-                Self::prepare_service_runtime_with_wasmtime(
-                    service_engine,
-                    service_module,
-                    runtime,
-                )?
-                .query_application(context, argument)
-                .await?
+            WasmApplication::Wasmtime { service, .. } => {
+                Self::prepare_service_runtime_with_wasmtime(service, runtime)?
+                    .query_application(context, argument)
+                    .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmApplication::Wasmer {
-                service_engine,
-                service_module,
-                ..
-            } => {
-                Self::prepare_service_runtime_with_wasmer(service_engine, service_module, runtime)?
+            WasmApplication::Wasmer { service, .. } => {
+                Self::prepare_service_runtime_with_wasmer(service, runtime)?
                     .query_application(context, argument)
                     .await?
             }
