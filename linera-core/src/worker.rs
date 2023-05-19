@@ -524,8 +524,8 @@ where
         // Persist certificate and blobs.
         for value in blobs {
             self.cache_recent_value(value.clone());
-            self.storage.write_value(value).await?;
         }
+        self.storage.write_values(blobs).await?;
         self.storage.write_certificate(&certificate).await?;
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
@@ -890,9 +890,7 @@ where
         // Verify that all required bytecode blobs are available, and no unrelated ones provided.
         self.check_no_missing_bytecode(block, blobs).await?;
         // Write the values so that the bytecode is available during execution.
-        for value in blobs {
-            self.storage.write_value(value).await?;
-        }
+        self.storage.write_values(blobs).await?;
         let time_till_block = block.timestamp.saturating_diff_micros(Timestamp::now());
         ensure!(
             time_till_block <= self.grace_period_micros,
