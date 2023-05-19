@@ -413,11 +413,11 @@ where
     ) -> Result<CrossChainRequest, WorkerError> {
         let heights =
             BTreeSet::from_iter(height_map.iter().flat_map(|(_, heights)| heights).copied());
-        let mut heights_red = Vec::new();
+        let mut heights_usize = Vec::new();
         for height in heights {
-            heights_red.push(height.try_into()?);
+            heights_usize.push(height.try_into()?);
         }
-        let values = confirmed_log.multi_get(heights_red).await?;
+        let values = confirmed_log.multi_get(heights_usize).await?;
         let keys = values.into_iter().flatten();
         let certificates = self.storage.read_certificates(keys).await?;
         Ok(CrossChainRequest::UpdateRecipient {
