@@ -853,7 +853,7 @@ where
     /// # let context = create_test_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
     ///   let indices = vec![23, 42];
-    ///   let subviews = view.try_load_entries_mut(indices).await.unwrap();
+    ///   let subviews = view.try_load_entries_mut(&indices).await.unwrap();
     ///   let value1 = subviews[0].get();
     ///   let value2 = subviews[1].get();
     ///   assert_eq!(*value1, String::default());
@@ -886,7 +886,7 @@ where
     /// # let context = create_test_context();
     ///   let mut view : ReentrantCollectionView<_, u64, RegisterView<_,String>> = ReentrantCollectionView::load(context).await.unwrap();
     ///   let indices = vec![23, 42];
-    ///   let subviews = view.try_load_entries(indices).await.unwrap();
+    ///   let subviews = view.try_load_entries(&indices).await.unwrap();
     ///   let value1 = subviews[0].get();
     ///   let value2 = subviews[1].get();
     ///   assert_eq!(*value1, String::default());
