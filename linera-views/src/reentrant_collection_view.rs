@@ -862,7 +862,7 @@ where
     /// ```
     pub async fn try_load_entries_mut<Q>(
         &mut self,
-        indices: Vec<Q>,
+        indices: impl IntoIterator<Item = Q>,
     ) -> Result<Vec<OwnedRwLockWriteGuard<W>>, ViewError>
     where
         I: Borrow<Q>,
@@ -895,7 +895,7 @@ where
     /// ```
     pub async fn try_load_entries<Q>(
         &self,
-        indices: Vec<Q>,
+        indices: impl IntoIterator<Item = Q>,
     ) -> Result<Vec<OwnedRwLockReadGuard<W>>, ViewError>
     where
         I: Borrow<Q>,
@@ -1223,7 +1223,7 @@ where
     /// ```
     pub async fn try_load_entries_mut<Q>(
         &mut self,
-        indices: Vec<Q>,
+        indices: impl IntoIterator<Item = Q>,
     ) -> Result<Vec<OwnedRwLockWriteGuard<W>>, ViewError>
     where
         I: Borrow<Q>,
@@ -1256,7 +1256,7 @@ where
     /// ```
     pub async fn try_load_entries<Q>(
         &self,
-        indices: Vec<Q>,
+        indices: impl IntoIterator<Item = Q>,
     ) -> Result<Vec<OwnedRwLockReadGuard<W>>, ViewError>
     where
         I: Borrow<Q>,
