@@ -40,7 +40,7 @@ async fn cross_chain_transfer() {
                 application_id,
                 Operation::Transfer {
                     owner: sender_account,
-                    amount: transfer_amount.into(),
+                    amount: transfer_amount,
                     target_account: Account {
                         chain_id: receiver_chain.id(),
                         owner: receiver_account,
@@ -81,11 +81,11 @@ async fn query_account(
         .get("data")?
         .as_object()?
         .get("accounts")?
-        .as_i64()?;
+        .as_str()?;
 
     Some(
-        u64::try_from(balance)
-            .expect("Account balance should be non-negative")
-            .into(),
+        balance
+            .parse()
+            .expect("Account balance cannot be parsed as a number"),
     )
 }
