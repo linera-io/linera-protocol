@@ -39,7 +39,6 @@ use super::{
 };
 use crate::{Bytecode, ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
 use linera_views::{batch::Batch, views::ViewError};
-use once_cell::sync::Lazy;
 use std::{future::Future, marker::PhantomData, mem, sync::Arc, task::Poll};
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use wasmer::{
@@ -95,9 +94,6 @@ impl<'runtime> ApplicationRuntimeContext for Service<'runtime> {
     type Error = RuntimeError;
     type Extra = RuntimeGuard<'runtime, &'static dyn ServiceRuntime>;
 }
-
-static WASMER_INSTANTIATE_LOCK: Lazy<std::sync::Mutex<()>> =
-    Lazy::new(|| std::sync::Mutex::new(()));
 
 impl WasmApplication {
     /// Creates a new [`WasmApplication`] using Wasmtime with the provided bytecodes.
@@ -157,11 +153,8 @@ impl WasmApplication {
             contract_system_api::add_to_imports(&mut store, &mut imports, contract_system_api);
         let views_api_setup =
             view_system_api::add_to_imports(&mut store, &mut imports, view_system_api);
-        let (contract, instance) = {
-            // TODO(#633): remove when possible or find better workaround.
-            let _lock = WASMER_INSTANTIATE_LOCK.lock().unwrap();
-            contract::Contract::instantiate(&mut store, contract_module, &mut imports)?
-        };
+        let (contract, instance) =
+            contract::Contract::instantiate(&mut store, contract_module, &mut imports)?;
         let application = Contract {
             contract,
             _lifetime: PhantomData,
@@ -202,11 +195,8 @@ impl WasmApplication {
             service_system_api::add_to_imports(&mut store, &mut imports, service_system_api);
         let views_api_setup =
             view_system_api::add_to_imports(&mut store, &mut imports, view_system_api);
-        let (service, instance) = {
-            // TODO(#633): remove when possible or find better workaround.
-            let _lock = WASMER_INSTANTIATE_LOCK.lock().unwrap();
-            service::Service::instantiate(&mut store, service_module, &mut imports)?
-        };
+        let (service, instance) =
+            service::Service::instantiate(&mut store, service_module, &mut imports)?;
         let application = Service {
             service,
             _lifetime: PhantomData,
