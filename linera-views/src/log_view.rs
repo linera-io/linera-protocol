@@ -190,6 +190,48 @@ where
         Ok(value)
     }
 
+    /// Reads several logged keys (including staged ones)
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::log_view::LogView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_context();
+    ///   let mut log = LogView::load(context).await.unwrap();
+    ///   log.push(34);
+    ///   log.push(42);
+    ///   assert_eq!(log.multi_get(vec![0,1]).await.unwrap(), vec![Some(34),Some(42)]);
+    /// # })
+    /// ```
+    pub async fn multi_get(&self, indices: Vec<usize>) -> Result<Vec<Option<T>>, ViewError> {
+        let mut result = Vec::new();
+        if self.was_cleared {
+            for index in indices {
+                result.push(self.new_values.get(index).cloned());
+            }
+        } else {
+            let mut keys = Vec::new();
+            let mut positions = Vec::new();
+            let mut pos = 0;
+            for index in indices {
+                if index < self.stored_count {
+                    let key = self.context.derive_tag_key(KeyTag::Index as u8, &index)?;
+                    keys.push(key);
+                    positions.push(pos);
+                    result.push(None);
+                } else {
+                    result.push(self.new_values.get(index - self.stored_count).cloned());
+                }
+                pos += 1;
+            }
+            let values = self.context.read_multi_key(keys).await?;
+            for (pos, value) in positions.into_iter().zip(values) {
+                *result.get_mut(pos).unwrap() = value;
+            }
+        }
+        Ok(result)
+    }
+
     async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
         let count = range.len();
         let mut keys = Vec::with_capacity(count);
