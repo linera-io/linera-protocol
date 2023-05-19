@@ -121,6 +121,7 @@ jobs:
         cd examples
         cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
         cargo clippy --all-targets --all-features --target wasm32-unknown-unknown --locked
+        cargo clippy --all-targets --all-features --target x86_64-unknown-linux-gnu --locked
     - name: Run clippy
       run: |
         cargo clippy --all-targets --all-features --tests --locked
