@@ -75,6 +75,9 @@ pub trait Store: Sized {
     /// Writes the given value.
     async fn write_value(&self, value: &HashedValue) -> Result<(), ViewError>;
 
+    /// Writes several values
+    async fn write_values(&self, values: &[HashedValue]) -> Result<(), ViewError>;
+
     /// Reads the certificate with the given hash.
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError>;
 
@@ -278,6 +281,18 @@ where
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         let mut batch = Batch::new();
         batch.put_key_value(value_key.to_vec(), value)?;
+        self.client.client.write_batch(batch, &[]).await?;
+        Ok(())
+    }
+
+    async fn write_values(&self, values: &[HashedValue]) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        for value in values {
+            let id = value.block().chain_id.to_string();
+            increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
+            let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
+            batch.put_key_value(value_key.to_vec(), value)?;
+        }
         self.client.client.write_batch(batch, &[]).await?;
         Ok(())
     }
