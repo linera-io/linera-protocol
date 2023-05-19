@@ -14,7 +14,10 @@ use chrono::NaiveDateTime;
 
 use crate::doc_scalar;
 
-/// A non-negative amount of money.
+/// A non-negative amount of tokens.
+///
+/// This is a fixed-point fraction, with [`Amount::DECIMAL_PLACES`] digits after the point.
+/// [`Amount::ONE`] is one whole token, divisible into `10.pow(Amount::DECIMAL_PLACES)` parts.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
 pub struct Amount(u128);
 
@@ -370,7 +373,7 @@ impl Amount {
     }
 }
 
-doc_scalar!(Amount, "A non-negative amount of money.");
+doc_scalar!(Amount, "A non-negative amount of tokens.");
 doc_scalar!(BlockHeight, "A block height to identify blocks in a chain");
 doc_scalar!(
     Timestamp,
