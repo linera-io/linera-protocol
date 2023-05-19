@@ -344,7 +344,7 @@ where
         {
             let chain = self.store.load_chain(chain_id).await?;
             let origins = chain.inboxes.indices().await?;
-            let inboxes = chain.inboxes.try_load_entries(origins.clone()).await?;
+            let inboxes = chain.inboxes.try_load_entries(&origins).await?;
             for (origin, inbox) in origins.into_iter().zip(inboxes) {
                 let next_height = info.entry(origin.sender).or_default();
                 let inbox_next_height = inbox.next_block_height_to_receive()?;

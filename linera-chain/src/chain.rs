@@ -30,7 +30,7 @@ use linera_views::{
     views::{CryptoHashView, GraphQLView, RootView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// A view accessing the state of a chain.
 #[derive(Debug, RootView, GraphQLView)]
@@ -178,7 +178,7 @@ where
     pub async fn validate_incoming_messages(&mut self) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let origins = self.inboxes.indices().await?;
-        let inboxes = self.inboxes.try_load_entries(origins.clone()).await?;
+        let inboxes = self.inboxes.try_load_entries(&origins).await?;
         for (origin, inbox) in origins.into_iter().zip(inboxes) {
             let event = inbox.removed_events.front().await?;
             ensure!(
@@ -345,6 +345,16 @@ where
     /// Removes the incoming messages in the block from the inboxes.
     pub async fn remove_events_from_inboxes(&mut self, block: &Block) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
+        let origins = block
+            .incoming_messages
+            .iter()
+            .map(|message| message.origin.clone())
+            .collect::<HashSet<_>>();
+        let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
+        let mut map = HashMap::new();
+        for (origin, inbox) in origins.into_iter().zip(inboxes) {
+            map.insert(origin, inbox);
+        }
         for message in &block.incoming_messages {
             tracing::trace!(
                 "Updating inbox {:?} in chain {:?}",
@@ -359,7 +369,9 @@ where
                 });
             }
             // Mark the message as processed in the inbox.
-            let mut inbox = self.inboxes.try_load_entry_mut(&message.origin).await?;
+            let inbox = map
+                .get_mut(&message.origin)
+                .expect("Message origin was added to the map above");
             inbox
                 .remove_event(&message.event)
                 .await
@@ -512,7 +524,7 @@ where
             .into_iter()
             .map(Target::chain)
             .collect::<Vec<_>>();
-        let outboxes = self.outboxes.try_load_entries_mut(targets).await?;
+        let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
         for mut outbox in outboxes {
             if outbox.schedule_message(height)? {
                 *outbox_counters.entry(height).or_default() += 1;
@@ -529,7 +541,7 @@ where
                 name,
             })
             .collect::<Vec<_>>();
-        let channels = self.channels.try_load_entries_mut(full_names).await?;
+        let channels = self.channels.try_load_entries_mut(&full_names).await?;
         for ((_name, id), mut channel) in raw_result.unsubscribe.into_iter().zip(channels) {
             // Remove subscriber. Do not remove the channel outbox yet.
             channel.subscribers.remove(&id)?;
@@ -541,17 +553,14 @@ where
                 name,
             })
             .collect::<Vec<_>>();
-        let channels = self
-            .channels
-            .try_load_entries_mut(full_names.clone())
-            .await?;
+        let channels = self.channels.try_load_entries_mut(&full_names).await?;
         for (full_name, mut channel) in full_names.into_iter().zip(channels) {
             let recipients = channel.subscribers.indices().await?;
             let targets = recipients
                 .into_iter()
                 .map(|recipient| Target::channel(recipient, full_name.clone()))
                 .collect::<Vec<_>>();
-            let outboxes = self.outboxes.try_load_entries_mut(targets).await?;
+            let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
             for mut outbox in outboxes {
                 if outbox.schedule_message(height)? {
                     *outbox_counters.entry(height).or_default() += 1;
@@ -568,7 +577,7 @@ where
                 name,
             })
             .collect::<Vec<_>>();
-        let channels = self.channels.try_load_entries_mut(full_names).await?;
+        let channels = self.channels.try_load_entries_mut(&full_names).await?;
         for ((name, id), mut channel) in raw_result.subscribe.into_iter().zip(channels) {
             let full_name = ChannelFullName {
                 application_id,
