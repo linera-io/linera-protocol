@@ -347,9 +347,8 @@ where
         let chain_id = self.chain_id();
         let origins = block
             .incoming_messages
-            .clone()
-            .into_iter()
-            .map(|message| message.origin)
+            .iter()
+            .map(|message| message.origin.clone())
             .collect::<HashSet<_>>();
         let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
         let mut map = HashMap::new();
@@ -370,7 +369,9 @@ where
                 });
             }
             // Mark the message as processed in the inbox.
-            let inbox = map.get_mut(&message.origin).unwrap();
+            let inbox = map
+                .get_mut(&message.origin)
+                .expect("Message origin was added to the map above");
             inbox
                 .remove_event(&message.event)
                 .await
