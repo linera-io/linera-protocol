@@ -55,7 +55,7 @@ pub struct ApplicationId {
 }
 
 /// A unique identifier for an application bytecode.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct BytecodeId(pub EffectId);
 
