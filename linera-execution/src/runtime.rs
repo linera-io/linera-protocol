@@ -3,8 +3,8 @@
 
 use crate::{
     execution::ExecutionStateView, BaseRuntime, CallResult, ContractRuntime, ExecutionError,
-    ExecutionResult, ExecutionRuntimeContext, NewSession, ServiceRuntime, SessionId,
-    UserApplicationCode, UserApplicationDescription, UserApplicationId,
+    ExecutionResult, ExecutionRuntimeContext, ServiceRuntime, SessionId, UserApplicationCode,
+    UserApplicationDescription, UserApplicationId,
 };
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
@@ -198,7 +198,7 @@ where
 
     fn make_sessions(
         &self,
-        new_sessions: Vec<NewSession>,
+        new_sessions: Vec<Vec<u8>>,
         creator_id: UserApplicationId,
         receiver_id: UserApplicationId,
     ) -> Vec<SessionId> {
@@ -207,17 +207,16 @@ where
         let states = &mut manager.states;
         let counter = manager.counters.entry(creator_id).or_default();
         let mut session_ids = Vec::new();
-        for session in new_sessions {
+        for data in new_sessions {
             let id = SessionId {
                 application_id: creator_id,
-                kind: session.kind,
                 index: *counter,
             };
             *counter += 1;
             session_ids.push(id);
             let state = SessionState {
                 owner: receiver_id,
-                data: session.data,
+                data,
             };
             states.insert(id, Arc::new(Mutex::new(state)));
         }
@@ -568,7 +567,7 @@ where
         // Change the owners of forwarded sessions.
         self.forward_sessions(&forwarded_sessions, caller.id, callee_id)?;
         // Load the session.
-        let mut session_data = self.try_load_session(session_id, self.application_id())?;
+        let mut session_state = self.try_load_session(session_id, self.application_id())?;
         // Make the call to user code.
         let authenticated_signer = match caller.signer {
             Some(signer) if authenticated => Some(signer),
@@ -590,8 +589,7 @@ where
             .handle_session_call(
                 &callee_context,
                 self,
-                session_id.kind,
-                &mut session_data,
+                &mut session_state,
                 argument,
                 forwarded_sessions,
             )
@@ -603,7 +601,7 @@ where
             self.try_close_session(session_id, self.application_id())?;
         } else {
             // Save the session.
-            self.try_save_session(session_id, self.application_id(), session_data)?;
+            self.try_save_session(session_id, self.application_id(), session_state)?;
         }
         let inner_result = raw_result.inner;
         self.execution_results_mut().push(ExecutionResult::User(

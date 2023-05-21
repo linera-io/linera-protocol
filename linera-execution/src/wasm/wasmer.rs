@@ -241,7 +241,6 @@ impl<'runtime> common::Contract for Contract<'runtime> {
     type OperationContext = contract::OperationContext;
     type EffectContext = contract::EffectContext;
     type CalleeContext = contract::CalleeContext;
-    type SessionParam<'param> = contract::SessionParam<'param>;
     type SessionId = contract::SessionId;
     type PollExecutionResult = contract::PollExecutionResult;
     type PollCallApplication = contract::PollCallApplication;
@@ -326,7 +325,7 @@ impl<'runtime> common::Contract for Contract<'runtime> {
         &self,
         store: &mut Store,
         context: contract::CalleeContext,
-        session: contract::SessionParam,
+        session: &[u8],
         argument: &[u8],
         forwarded_sessions: &[contract::SessionId],
     ) -> Result<contract::HandleSessionCall, RuntimeError> {

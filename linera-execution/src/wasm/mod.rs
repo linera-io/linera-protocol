@@ -277,8 +277,7 @@ impl UserApplication for WasmApplication {
         &self,
         context: &CalleeContext,
         runtime: &dyn ContractRuntime,
-        session_kind: u64,
-        session_data: &mut Vec<u8>,
+        session_state: &mut Vec<u8>,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, ExecutionError> {
@@ -294,13 +293,7 @@ impl UserApplication for WasmApplication {
                     contract_module,
                     runtime,
                 )?
-                .handle_session_call(
-                    context,
-                    session_kind,
-                    session_data,
-                    argument,
-                    forwarded_sessions,
-                )
+                .handle_session_call(context, session_state, argument, forwarded_sessions)
                 .await?
             }
             #[cfg(feature = "wasmer")]
@@ -314,13 +307,7 @@ impl UserApplication for WasmApplication {
                     contract_module,
                     runtime,
                 )?
-                .handle_session_call(
-                    context,
-                    session_kind,
-                    session_data,
-                    argument,
-                    forwarded_sessions,
-                )
+                .handle_session_call(context, session_state, argument, forwarded_sessions)
                 .await?
             }
         };

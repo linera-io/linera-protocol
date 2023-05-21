@@ -10,7 +10,7 @@ use linera_sdk::{
     base::{ChannelName, Destination, SessionId},
     contract::system_api,
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
-    OperationContext, Session, SessionCallResult, ViewStateStorage,
+    OperationContext, SessionCallResult, ViewStateStorage,
 };
 use linera_views::views::ViewError;
 use social::{Effect, Key, Operation, OwnPost};
@@ -85,7 +85,7 @@ impl Contract for Social {
     async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
-        _session: Session,
+        _session: &[u8],
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error> {

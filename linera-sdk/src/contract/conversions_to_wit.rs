@@ -5,7 +5,7 @@
 //! [`wit-bindgen-guest-rust`].
 
 use super::{contract_system_api as wit_system_api, wit_types};
-use crate::{ApplicationCallResult, ExecutionResult, Session, SessionCallResult};
+use crate::{ApplicationCallResult, ExecutionResult, SessionCallResult};
 use linera_base::{
     crypto::CryptoHash,
     identifiers::{ApplicationId, ChannelName, Destination, EffectId, SessionId},
@@ -51,7 +51,6 @@ impl From<SessionId> for wit_system_api::SessionId {
     fn from(session_id: SessionId) -> Self {
         wit_system_api::SessionId {
             application_id: session_id.application_id.into(),
-            kind: session_id.kind,
             index: session_id.index,
         }
     }
@@ -81,25 +80,10 @@ impl From<log::Level> for wit_system_api::LogLevel {
 
 impl From<ApplicationCallResult> for wit_types::ApplicationCallResult {
     fn from(result: ApplicationCallResult) -> Self {
-        let create_sessions = result
-            .create_sessions
-            .into_iter()
-            .map(wit_types::Session::from)
-            .collect();
-
         wit_types::ApplicationCallResult {
-            create_sessions,
+            create_sessions: result.create_sessions,
             execution_result: result.execution_result.into(),
             value: result.value,
-        }
-    }
-}
-
-impl From<Session> for wit_types::Session {
-    fn from(new_session: Session) -> Self {
-        wit_types::Session {
-            kind: new_session.kind,
-            data: new_session.data,
         }
     }
 }
@@ -108,7 +92,7 @@ impl From<SessionCallResult> for wit_types::SessionCallResult {
     fn from(result: SessionCallResult) -> Self {
         wit_types::SessionCallResult {
             inner: result.inner.into(),
-            data: result.data,
+            new_state: result.new_state,
         }
     }
 }

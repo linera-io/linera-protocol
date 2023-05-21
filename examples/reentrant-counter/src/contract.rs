@@ -9,7 +9,7 @@ use self::state::ReentrantCounter;
 use async_trait::async_trait;
 use linera_sdk::{
     base::SessionId, contract::system_api, ApplicationCallResult, CalleeContext, Contract,
-    EffectContext, ExecutionResult, OperationContext, Session, SessionCallResult, ViewStateStorage,
+    EffectContext, ExecutionResult, OperationContext, SessionCallResult, ViewStateStorage,
 };
 use thiserror::Error;
 
@@ -80,7 +80,7 @@ impl Contract for ReentrantCounter {
     async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
-        _session: Session,
+        _session: &[u8],
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error> {

@@ -38,7 +38,7 @@ resource handle-application-call {
 resource handle-session-call {
     static new: func(
         context: callee-context,
-        session: session,
+        state: session-state,
         argument: list<u8>,
         forwarded-sessions: list<session-id>,
     ) -> handle-session-call
@@ -100,23 +100,17 @@ variant poll-call-session {
 record application-call-result {
     value: list<u8>,
     execution-result: execution-result,
-    create-sessions: list<session>,
+    create-sessions: list<session-state>,
 }
 
 record session-id {
     application-id: application-id,
-    kind: u64,
     index: u64,
-}
-
-record session {
-    kind: u64,
-    data: list<u8>,
 }
 
 record session-call-result {
     inner: application-call-result,
-    data: option<list<u8>>,
+    new-state: option<session-state>,
 }
 
 record execution-result {
@@ -134,6 +128,7 @@ record channel-name {
     name: list<u8>,
 }
 
+type session-state = list<u8>
 type effect = list<u8>
 
 record crypto-hash {

@@ -15,7 +15,7 @@ use linera_sdk::{
     base::{Amount, ApplicationId, Owner, SessionId},
     contract::system_api,
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
-    OperationContext, Session, SessionCallResult, ViewStateStorage,
+    OperationContext, SessionCallResult, ViewStateStorage,
 };
 use std::str::FromStr;
 use thiserror::Error;
@@ -161,18 +161,18 @@ impl Contract for FungibleToken {
     async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
-        session: Session,
+        state: &[u8],
         argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error> {
         let request = SessionCall::from_bcs_bytes(argument).map_err(Error::InvalidSessionCall)?;
         match request {
-            SessionCall::Balance => self.handle_session_balance(session.data),
+            SessionCall::Balance => self.handle_session_balance(state),
             SessionCall::Transfer {
                 amount,
                 destination,
             } => {
-                self.handle_session_transfer(session.data, amount, destination)
+                self.handle_session_transfer(state, amount, destination)
                     .await
             }
         }
@@ -194,15 +194,14 @@ impl FungibleToken {
     }
 
     /// Handles a session balance request sent by an application.
-    fn handle_session_balance(&self, session_data: Vec<u8>) -> Result<SessionCallResult, Error> {
-        let balance_bytes = session_data.clone();
+    fn handle_session_balance(&self, session_state: &[u8]) -> Result<SessionCallResult, Error> {
         let application_call_result = ApplicationCallResult {
-            value: balance_bytes,
+            value: session_state.to_vec(),
             ..Default::default()
         };
         let session_call_result = SessionCallResult {
             inner: application_call_result,
-            data: Some(session_data),
+            new_state: Some(session_state.to_vec()),
         };
         Ok(session_call_result)
     }
@@ -210,24 +209,24 @@ impl FungibleToken {
     /// Handles a transfer from a session.
     async fn handle_session_transfer(
         &mut self,
-        session_data: Vec<u8>,
+        session_state: &[u8],
         amount: Amount,
         destination: Destination,
     ) -> Result<SessionCallResult, Error> {
         let mut balance =
-            Amount::from_bcs_bytes(&session_data).expect("Session contains corrupt data");
+            Amount::from_bcs_bytes(session_state).expect("Session contains corrupt data");
         balance
             .try_sub_assign(amount)
             .map_err(|_| Error::InsufficientSessionBalance)?;
 
-        let updated_session = (balance > Amount::zero())
+        let new_state = (balance > Amount::zero())
             .then(|| bcs::to_bytes(&balance).expect("Serializing amounts should not fail"));
 
         Ok(SessionCallResult {
             inner: self
                 .finish_transfer_to_destination(amount, destination)
                 .await,
-            data: updated_session,
+            new_state,
         })
     }
 
@@ -265,7 +264,8 @@ impl FungibleToken {
                 result.execution_result = self.finish_transfer_to_account(amount, account).await;
             }
             Destination::NewSession => {
-                result.create_sessions.push(Self::new_session(amount));
+                let amount = bcs::to_bytes(&amount).expect("Serializing amounts should not fail");
+                result.create_sessions.push(amount);
             }
         }
         result
@@ -286,14 +286,6 @@ impl FungibleToken {
                 amount,
             };
             ExecutionResult::default().with_effect(account.chain_id, &effect)
-        }
-    }
-
-    /// Creates a new session with the specified `amount` of tokens.
-    fn new_session(amount: Amount) -> Session {
-        Session {
-            kind: 0,
-            data: bcs::to_bytes(&amount).expect("Serializing amounts should not fail"),
         }
     }
 }

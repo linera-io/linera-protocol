@@ -12,7 +12,7 @@ use linera_sdk::{
     base::{Amount, ApplicationId, SessionId},
     contract::system_api,
     ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-    FromBcsBytes, OperationContext, Session, SessionCallResult, ViewStateStorage,
+    FromBcsBytes, OperationContext, SessionCallResult, ViewStateStorage,
 };
 use linera_views::views::View;
 use state::{CrowdFunding, Status};
@@ -121,7 +121,7 @@ impl Contract for CrowdFunding {
     async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
-        _session: Session,
+        _session: &[u8],
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error> {

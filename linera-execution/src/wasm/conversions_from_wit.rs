@@ -10,8 +10,8 @@
 
 use super::{contract, contract_system_api, service_system_api};
 use crate::{
-    ApplicationCallResult, ChannelName, Destination, NewSession, RawExecutionResult,
-    SessionCallResult, SessionId, UserApplicationId,
+    ApplicationCallResult, ChannelName, Destination, RawExecutionResult, SessionCallResult,
+    SessionId, UserApplicationId,
 };
 use linera_base::{
     crypto::CryptoHash,
@@ -23,25 +23,19 @@ impl From<contract::SessionCallResult> for (SessionCallResult, Vec<u8>) {
     fn from(result: contract::SessionCallResult) -> Self {
         let session_call_result = SessionCallResult {
             inner: result.inner.into(),
-            close_session: result.data.is_some(),
+            close_session: result.new_state.is_some(),
         };
 
-        let updated_session_data = result.data.unwrap_or_default();
+        let updated_session_state = result.new_state.unwrap_or_default();
 
-        (session_call_result, updated_session_data)
+        (session_call_result, updated_session_state)
     }
 }
 
 impl From<contract::ApplicationCallResult> for ApplicationCallResult {
     fn from(result: contract::ApplicationCallResult) -> Self {
-        let create_sessions = result
-            .create_sessions
-            .into_iter()
-            .map(NewSession::from)
-            .collect();
-
         ApplicationCallResult {
-            create_sessions,
+            create_sessions: result.create_sessions,
             execution_result: result.execution_result.into(),
             value: result.value,
         }
@@ -88,15 +82,6 @@ impl From<contract::Destination> for Destination {
     }
 }
 
-impl From<contract::SessionResult> for NewSession {
-    fn from(guest: contract::SessionResult) -> Self {
-        NewSession {
-            kind: guest.kind,
-            data: guest.data,
-        }
-    }
-}
-
 impl From<contract::ChannelName> for ChannelName {
     fn from(guest: contract::ChannelName) -> Self {
         guest.name.into()
@@ -126,7 +111,6 @@ impl From<contract_system_api::SessionId> for SessionId {
     fn from(guest: contract_system_api::SessionId) -> Self {
         SessionId {
             application_id: guest.application_id.into(),
-            kind: guest.kind,
             index: guest.index,
         }
     }

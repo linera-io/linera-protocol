@@ -64,8 +64,6 @@ pub struct BytecodeId(pub EffectId);
 pub struct SessionId {
     /// The user application that runs the session.
     pub application_id: ApplicationId,
-    /// User-defined tag.
-    pub kind: u64,
     /// Unique index set by the runtime.
     pub index: u64,
 }

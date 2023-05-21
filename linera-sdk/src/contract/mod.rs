@@ -120,7 +120,7 @@ macro_rules! contract {
         $crate::instance_exported_future! {
             contract::HandleSessionCall<$application>(
                 context: $crate::contract::wit_types::CalleeContext,
-                session: $crate::contract::wit_types::Session,
+                session: Vec<u8>,
                 argument: Vec<u8>,
                 forwarded_sessions: Vec<$crate::contract::wit_types::SessionId>,
             ) -> PollCallSession

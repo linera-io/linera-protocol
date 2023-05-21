@@ -50,7 +50,6 @@ record call-result {
 
 record session-id {
     application-id: application-id,
-    kind: u64,
     index: u64,
 }
 
