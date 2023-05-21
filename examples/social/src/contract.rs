@@ -154,22 +154,23 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
+    use super::Key;
     use linera_sdk::base::{ChainId, Timestamp};
-    use linera_views::{common::CustomSerialize, memory::MemoryContext};
-    use social::Key;
+    use linera_views::common::CustomSerialize;
     use webassembly_test::webassembly_test;
 
     #[webassembly_test]
-    fn key_custom_serialize() {
+    fn test_key_custom_serialize() {
         let key = Key {
             timestamp: Timestamp::from(0x123456789ABCDEF),
             author: ChainId([0x12345, 0x6789A, 0xBCDEF, 0x0248A].into()),
             index: 0xFEDCBA9876543210,
         };
         let ser_key = key
-            .to_custom_bytes::<MemoryContext<()>>()
-            .expect("serialize");
-        let deser_key = Key::from_custom_bytes::<MemoryContext<()>>(&ser_key).expect("deserialize");
+            .to_custom_bytes()
+            .expect("serialization of Key should succeeed");
+        let deser_key =
+            Key::from_custom_bytes(&ser_key).expect("deserialization of Key should succeed");
         assert_eq!(key, deser_key);
     }
 }

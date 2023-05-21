@@ -495,49 +495,37 @@ where
 /// Sometimes we need a serialization that is different from the usual one and
 /// for example preserves order.
 /// The {to/from}_custom_bytes has to be coherent with the Borrow trait.
-pub trait CustomSerialize {
+pub trait CustomSerialize: Sized {
     /// Serializes the value
-    fn to_custom_bytes<C: Context>(&self) -> Result<Vec<u8>, ViewError>
-    where
-        ViewError: std::convert::From<<C as Context>::Error>;
+    fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError>;
 
     /// Deserialize the vector
-    fn from_custom_bytes<C: Context>(short_key: &[u8]) -> Result<Self, ViewError>
-    where
-        ViewError: std::convert::From<<C as Context>::Error>,
-        Self: Sized;
+    fn from_custom_bytes(short_key: &[u8]) -> Result<Self, ViewError>;
 }
 
 impl CustomSerialize for u128 {
-    fn to_custom_bytes<C: Context>(&self) -> Result<Vec<u8>, ViewError>
-    where
-        ViewError: std::convert::From<<C as Context>::Error>,
-    {
-        let mut short_key: Vec<u8> = C::derive_short_key(self)?;
-        short_key.reverse();
-        Ok(short_key)
+    fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError> {
+        let mut bytes = bcs::to_bytes(&self)?;
+        bytes.reverse();
+        Ok(bytes)
     }
 
-    fn from_custom_bytes<C: Context>(short_key: &[u8]) -> Result<Self, ViewError>
-    where
-        ViewError: std::convert::From<<C as Context>::Error>,
-    {
-        let mut vector = short_key.to_vec();
-        vector.reverse();
-        let value = C::deserialize_value(&vector)?;
+    fn from_custom_bytes(bytes: &[u8]) -> Result<Self, ViewError> {
+        let mut bytes = bytes.to_vec();
+        bytes.reverse();
+        let value = bcs::from_bytes(&bytes)?;
         Ok(value)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use linera_views::{common::CustomSerialize, memory::MemoryContext};
+    use linera_views::common::CustomSerialize;
     use rand::{Rng, SeedableRng};
     use std::collections::BTreeSet;
 
     #[test]
     fn test_ordering_serialization() {
-        type C = MemoryContext<()>;
         let mut rng = rand::rngs::StdRng::seed_from_u64(2);
         let n = 1000;
         let mut set = BTreeSet::new();
@@ -553,11 +541,11 @@ mod tests {
             let val1 = vec[i - 1];
             let val2 = vec[i];
             assert!(val1 < val2);
-            let vec1 = val1.to_custom_bytes::<C>().unwrap();
-            let vec2 = val2.to_custom_bytes::<C>().unwrap();
+            let vec1 = val1.to_custom_bytes().unwrap();
+            let vec2 = val2.to_custom_bytes().unwrap();
             assert!(vec1 < vec2);
-            let val_ret1 = u128::from_custom_bytes::<C>(&vec1).unwrap();
-            let val_ret2 = u128::from_custom_bytes::<C>(&vec2).unwrap();
+            let val_ret1 = u128::from_custom_bytes(&vec1).unwrap();
+            let val_ret2 = u128::from_custom_bytes(&vec2).unwrap();
             assert_eq!(val1, val_ret1);
             assert_eq!(val2, val_ret2);
         }
