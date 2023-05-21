@@ -13,7 +13,7 @@ use linera_base::{
     identifiers::{ApplicationId, BytecodeId, ChainId, EffectId, Owner, SessionId},
 };
 
-use crate::{CalleeContext, EffectContext, OperationContext, Session};
+use crate::{CalleeContext, EffectContext, OperationContext};
 use std::task::Poll;
 
 impl From<wit_types::OperationContext> for OperationContext {
@@ -73,17 +73,7 @@ impl From<wit_types::SessionId> for SessionId {
     fn from(session_id: wit_types::SessionId) -> Self {
         SessionId {
             application_id: session_id.application_id.into(),
-            kind: session_id.kind,
             index: session_id.index,
-        }
-    }
-}
-
-impl From<wit_types::Session> for Session {
-    fn from(session: wit_types::Session) -> Self {
-        Session {
-            kind: session.kind,
-            data: session.data,
         }
     }
 }
@@ -170,7 +160,6 @@ impl From<wit_system_api::SessionId> for SessionId {
     fn from(session_id: wit_system_api::SessionId) -> SessionId {
         SessionId {
             application_id: session_id.application_id.into(),
-            kind: session_id.kind,
             index: session_id.index,
         }
     }

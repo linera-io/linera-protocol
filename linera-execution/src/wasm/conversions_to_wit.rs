@@ -91,7 +91,6 @@ impl From<SessionId> for contract::SessionId {
     fn from(host: SessionId) -> Self {
         contract::SessionId {
             application_id: host.application_id.into(),
-            kind: host.kind,
             index: host.index,
         }
     }
@@ -101,7 +100,6 @@ impl From<SessionId> for contract_system_api::SessionId {
     fn from(host: SessionId) -> Self {
         contract_system_api::SessionId {
             application_id: host.application_id.into(),
-            kind: host.kind,
             index: host.index,
         }
     }
@@ -238,11 +236,5 @@ impl From<Amount> for contract_system_api::Amount {
             lower_half: host.lower_half(),
             upper_half: host.upper_half(),
         }
-    }
-}
-
-impl<'data> From<(u64, &'data [u8])> for contract::SessionParam<'data> {
-    fn from((kind, data): (u64, &'data [u8])) -> Self {
-        contract::SessionParam { kind, data }
     }
 }

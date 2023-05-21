@@ -69,12 +69,6 @@ pub trait Contract: ApplicationRuntimeContext {
     /// The WIT type equivalent for the [`CalleeContext`].
     type CalleeContext: From<CalleeContext>;
 
-    /// The WIT type equivalent for the [`Session`], used as a parameter for calling guest methods.
-    ///
-    /// This type is created from a tuple rather than a [`Session`] instance so that allocation of a
-    /// [`Vec`] is avoided when passing the session as a parameter to the WASM guest module.
-    type SessionParam<'param>: From<(u64, &'param [u8])>;
-
     /// The WIT type equivalent for the [`SessionId`].
     type SessionId: From<SessionId>;
 
@@ -154,7 +148,7 @@ pub trait Contract: ApplicationRuntimeContext {
         &self,
         store: &mut Self::Store,
         context: Self::CalleeContext,
-        session: Self::SessionParam<'_>,
+        session_state: &[u8],
         argument: &[u8],
         forwarded_sessions: &[Self::SessionId],
     ) -> Result<Self::HandleSessionCall, Self::Error>;
@@ -337,25 +331,23 @@ where
     /// pub async fn handle_session_call(
     ///     mut self,
     ///     context: &CalleeContext,
-    ///     session_kind: u64,
-    ///     session_data: &mut Vec<u8>,
+    ///     session_state: &mut Vec<u8>,
     ///     argument: &[u8],
     ///     forwarded_sessions: Vec<SessionId>,
     /// ) -> Result<SessionCallResult, ExecutionError>
     /// ```
-    pub fn handle_session_call<'session_data>(
+    pub fn handle_session_call<'session_state>(
         mut self,
         context: &CalleeContext,
-        session_kind: u64,
-        session_data: &'session_data mut Vec<u8>,
+        session_state: &'session_state mut Vec<u8>,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> future::MapOk<
         GuestFuture<'context, A::HandleSessionCall, A>,
-        impl FnOnce((SessionCallResult, Vec<u8>)) -> SessionCallResult + 'session_data,
+        impl FnOnce((SessionCallResult, Vec<u8>)) -> SessionCallResult + 'session_state,
     >
     where
-        A: Unpin + 'session_data,
+        A: Unpin + 'session_state,
         A::Store: Unpin,
         A::Error: Unpin,
         A::Extra: Unpin,
@@ -365,18 +357,16 @@ where
             .map(A::SessionId::from)
             .collect();
 
-        let session = A::SessionParam::from((session_kind, &*session_data));
-
         let future = self.application.handle_session_call_new(
             &mut self.store,
             (*context).into(),
-            session,
+            &*session_state,
             argument,
             &forwarded_sessions,
         );
 
         GuestFuture::new(future, self).map_ok(|(session_call_result, updated_data)| {
-            *session_data = updated_data;
+            *session_state = updated_data;
             session_call_result
         })
     }

@@ -147,8 +147,7 @@ pub trait UserApplication {
         &self,
         context: &CalleeContext,
         runtime: &dyn ContractRuntime,
-        session_kind: u64,
-        session_data: &mut Vec<u8>,
+        session_state: &mut Vec<u8>,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, ExecutionError>;
@@ -173,8 +172,8 @@ pub struct ApplicationCallResult {
     pub value: Vec<u8>,
     /// The externally-visible result.
     pub execution_result: RawExecutionResult<Vec<u8>>,
-    /// The new sessions that were just created by the callee for us.
-    pub create_sessions: Vec<NewSession>,
+    /// The states of the new sessions to be created, if any.
+    pub create_sessions: Vec<Vec<u8>>,
 }
 
 /// The result of calling into a session.
@@ -182,17 +181,8 @@ pub struct ApplicationCallResult {
 pub struct SessionCallResult {
     /// The application result.
     pub inner: ApplicationCallResult,
-    /// If `call_session` was called, this tells the system to clean up the session.
+    /// If true, the session should be terminated.
     pub close_session: bool,
-}
-
-/// Syscall to request creating a new session.
-#[derive(Default)]
-pub struct NewSession {
-    /// A kind provided by the creator (meant to be visible to other applications).
-    pub kind: u64,
-    /// The data associated to the session.
-    pub data: Vec<u8>,
 }
 
 /// Requirements for the `extra` field in our state views (and notably the

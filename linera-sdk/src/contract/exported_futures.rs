@@ -323,7 +323,7 @@ where
     /// This is called from the host.
     pub fn new(
         context: wit_types::CalleeContext,
-        session: wit_types::Session,
+        session_state: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<wit_types::SessionId>,
     ) -> Self {
@@ -340,7 +340,7 @@ where
                         application
                             .handle_session_call(
                                 &context.into(),
-                                session.into(),
+                                &session_state,
                                 &argument,
                                 forwarded_sessions,
                             )

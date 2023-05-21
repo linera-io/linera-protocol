@@ -9,7 +9,7 @@ use self::state::Counter;
 use async_trait::async_trait;
 use linera_sdk::{
     base::SessionId, ApplicationCallResult, CalleeContext, Contract, EffectContext,
-    ExecutionResult, OperationContext, Session, SessionCallResult, SimpleStateStorage,
+    ExecutionResult, OperationContext, SessionCallResult, SimpleStateStorage,
 };
 use thiserror::Error;
 
@@ -65,7 +65,7 @@ impl Contract for Counter {
     async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
-        _session: Session,
+        _session: &[u8],
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, Self::Error> {
@@ -100,7 +100,7 @@ mod tests {
     use linera_sdk::{
         base::{BlockHeight, ChainId, EffectId},
         ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-        OperationContext, Session,
+        OperationContext,
     };
     use webassembly_test::webassembly_test;
 
@@ -167,7 +167,7 @@ mod tests {
         let mut counter = create_and_initialize_counter(initial_value);
 
         let result = counter
-            .handle_session_call(&dummy_callee_context(), Session::default(), &[], vec![])
+            .handle_session_call(&dummy_callee_context(), &[], &[], vec![])
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 

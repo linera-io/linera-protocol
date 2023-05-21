@@ -149,10 +149,7 @@ impl UserApplication for TestApplication {
     ) -> Result<ApplicationCallResult, ExecutionError> {
         assert_eq!(context.authenticated_signer, Some(self.owner));
         Ok(ApplicationCallResult {
-            create_sessions: vec![NewSession {
-                kind: 0,
-                data: vec![1],
-            }],
+            create_sessions: vec![vec![1]],
             ..ApplicationCallResult::default()
         })
     }
@@ -162,8 +159,7 @@ impl UserApplication for TestApplication {
         &self,
         context: &CalleeContext,
         _runtime: &dyn ContractRuntime,
-        _session_kind: u64,
-        _session_data: &mut Vec<u8>,
+        _session_state: &mut Vec<u8>,
         _argument: &[u8],
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, ExecutionError> {
