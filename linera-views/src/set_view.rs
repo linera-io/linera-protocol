@@ -657,7 +657,7 @@ where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
     {
-        let short_key = index.to_custom_bytes::<C>()?;
+        let short_key = index.to_custom_bytes()?;
         self.set.insert(short_key);
         Ok(())
     }
@@ -679,7 +679,7 @@ where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
     {
-        let short_key = index.to_custom_bytes::<C>()?;
+        let short_key = index.to_custom_bytes()?;
         self.set.remove(short_key);
         Ok(())
     }
@@ -714,7 +714,7 @@ where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
     {
-        let short_key = index.to_custom_bytes::<C>()?;
+        let short_key = index.to_custom_bytes()?;
         self.set.contains(short_key).await
     }
 }
@@ -776,7 +776,7 @@ where
     {
         self.set
             .for_each_key_while(|key| {
-                let index = I::from_custom_bytes::<C>(key)?;
+                let index = I::from_custom_bytes(key)?;
                 f(index)
             })
             .await?;
@@ -809,7 +809,7 @@ where
     {
         self.set
             .for_each_key(|key| {
-                let index = I::from_custom_bytes::<C>(key)?;
+                let index = I::from_custom_bytes(key)?;
                 f(index)
             })
             .await?;

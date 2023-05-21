@@ -917,7 +917,7 @@ where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
     {
-        let short_key = index.to_custom_bytes::<C>()?;
+        let short_key = index.to_custom_bytes()?;
         self.collection.load_entry_mut(short_key).await
     }
 
@@ -942,7 +942,7 @@ where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
     {
-        let short_key = index.to_custom_bytes::<C>()?;
+        let short_key = index.to_custom_bytes()?;
         self.collection.load_entry(short_key).await
     }
 
@@ -966,7 +966,7 @@ where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
     {
-        let short_key = index.to_custom_bytes::<C>()?;
+        let short_key = index.to_custom_bytes()?;
         self.collection.try_load_entry(short_key).await
     }
 
@@ -993,7 +993,7 @@ where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
     {
-        let short_key = index.to_custom_bytes::<C>()?;
+        let short_key = index.to_custom_bytes()?;
         self.collection.reset_entry_to_default(short_key).await
     }
 
@@ -1019,7 +1019,7 @@ where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
     {
-        let short_key = index.to_custom_bytes::<C>()?;
+        let short_key = index.to_custom_bytes()?;
         self.collection.remove_entry(short_key);
         Ok(())
     }
@@ -1098,7 +1098,7 @@ where
     {
         self.collection
             .for_each_key_while(|key| {
-                let index = I::from_custom_bytes::<C>(key)?;
+                let index = I::from_custom_bytes(key)?;
                 f(index)
             })
             .await?;
@@ -1132,7 +1132,7 @@ where
     {
         self.collection
             .for_each_key(|key| {
-                let index = I::from_custom_bytes::<C>(key)?;
+                let index = I::from_custom_bytes(key)?;
                 f(index)
             })
             .await?;

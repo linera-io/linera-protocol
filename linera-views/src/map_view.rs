@@ -997,7 +997,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized + CustomSerialize,
     {
-        let short_key = index.to_custom_bytes::<C>()?;
+        let short_key = index.to_custom_bytes()?;
         self.map.insert(short_key, value);
         Ok(())
     }
@@ -1019,7 +1019,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized + CustomSerialize,
     {
-        let short_key = index.to_custom_bytes::<C>()?;
+        let short_key = index.to_custom_bytes()?;
         self.map.remove(short_key);
         Ok(())
     }
@@ -1055,7 +1055,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized + CustomSerialize,
     {
-        let short_key = index.to_custom_bytes::<C>()?;
+        let short_key = index.to_custom_bytes()?;
         self.map.get(short_key).await
     }
 
@@ -1078,7 +1078,7 @@ where
         I: Borrow<Q>,
         Q: Serialize + ?Sized + CustomSerialize,
     {
-        let short_key = index.to_custom_bytes::<C>()?;
+        let short_key = index.to_custom_bytes()?;
         self.map.get_mut(short_key).await
     }
 }
@@ -1140,7 +1140,7 @@ where
     {
         self.map
             .for_each_key_while(|key| {
-                let index = I::from_custom_bytes::<C>(key)?;
+                let index = I::from_custom_bytes(key)?;
                 f(index)
             })
             .await?;
@@ -1172,7 +1172,7 @@ where
     {
         self.map
             .for_each_key(|key| {
-                let index = I::from_custom_bytes::<C>(key)?;
+                let index = I::from_custom_bytes(key)?;
                 f(index)
             })
             .await?;
@@ -1205,7 +1205,7 @@ where
     {
         self.map
             .for_each_key_value_while(|key, bytes| {
-                let index = I::from_custom_bytes::<C>(key)?;
+                let index = I::from_custom_bytes(key)?;
                 let value = C::deserialize_value(bytes)?;
                 f(index, value)
             })
@@ -1238,7 +1238,7 @@ where
     {
         self.map
             .for_each_key_value(|key, bytes| {
-                let index = I::from_custom_bytes::<C>(key)?;
+                let index = I::from_custom_bytes(key)?;
                 let value = C::deserialize_value(bytes)?;
                 f(index, value)
             })
@@ -1271,7 +1271,7 @@ where
         I: Borrow<Q>,
         Q: Sync + Send + Serialize + ?Sized + CustomSerialize,
     {
-        let short_key = index.to_custom_bytes::<C>()?;
+        let short_key = index.to_custom_bytes()?;
         self.map.get_mut_or_default(short_key).await
     }
 }
