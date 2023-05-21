@@ -99,8 +99,9 @@ impl Epoch {
 impl Committee {
     pub fn new(validators: BTreeMap<ValidatorName, ValidatorState>) -> Self {
         let total_votes = validators.values().fold(0, |sum, state| sum + state.votes);
-        // Let N = 3f + 1 + k (0 <= k < 3).
-        // * (2 N + 3) / 3 = 2f + 1 + (2k + 2)/3 = 2f + 1 + k = N - f
+        // Let N = 3f + 1 + k (0 <= k <= 2).
+        // * k / 3 = 0, (2 - k) /3 = 0 (0 <= 2 - k <= 2)
+        // * 2 N / 3 + 1 = 2f + 1 + (2k + 2 + k - k)/3 = 2f + 1 + k = N - f
         // * (N + 2) / 3 = f + 1 + k/3 = f + 1
         let quorum_threshold = 2 * total_votes / 3 + 1;
         let validity_threshold = (total_votes + 2) / 3;
