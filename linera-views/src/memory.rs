@@ -8,7 +8,6 @@ use crate::{
 };
 use async_lock::{Mutex, MutexGuardArc, RwLock};
 use async_trait::async_trait;
-use futures::FutureExt;
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use thiserror::Error;
 
@@ -37,8 +36,7 @@ impl<E> MemoryContext<E> {
 pub fn create_test_context() -> MemoryContext<()> {
     let state = Arc::new(Mutex::new(BTreeMap::new()));
     let guard = state
-        .lock_arc()
-        .now_or_never()
+        .try_lock_arc()
         .expect("We should acquire the lock just after creating the object");
     MemoryContext::new(guard, ())
 }

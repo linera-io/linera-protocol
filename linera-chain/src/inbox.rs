@@ -19,7 +19,7 @@ use thiserror::Error;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    async_lock::Mutex, futures::FutureExt, linera_views::memory::MemoryContext,
+    async_lock::Mutex, linera_views::memory::MemoryContext,
     std::collections::BTreeMap, std::sync::Arc,
 };
 
@@ -244,8 +244,7 @@ where
 {
     pub async fn new() -> Self {
         let guard = Arc::new(Mutex::new(BTreeMap::new()))
-            .lock_arc()
-            .now_or_never()
+            .try_lock_arc()
             .expect("a guard");
         let context = MemoryContext::new(guard, ());
         Self::load(context)
