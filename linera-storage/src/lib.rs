@@ -79,7 +79,11 @@ pub trait Store: Sized {
     async fn write_values(&self, values: &[HashedValue]) -> Result<(), ViewError>;
 
     /// Writes several values in a batch
-    fn write_values_batch(&self, values: &[HashedValue], batch: &mut Batch) -> Result<(), ViewError>;
+    fn write_values_batch(
+        &self,
+        values: &[HashedValue],
+        batch: &mut Batch,
+    ) -> Result<(), ViewError>;
 
     /// Reads the certificate with the given hash.
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError>;
@@ -88,7 +92,11 @@ pub trait Store: Sized {
     async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError>;
 
     /// Writes the given certificate to the batch
-    fn write_certificate_batch(&self, certificate: &Certificate, batch: &mut Batch) -> Result<(), ViewError>;
+    fn write_certificate_batch(
+        &self,
+        certificate: &Certificate,
+        batch: &mut Batch,
+    ) -> Result<(), ViewError>;
 
     /// Writes the batch
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError>;
@@ -300,7 +308,11 @@ where
         self.write_batch(batch).await
     }
 
-    fn write_values_batch(&self, values: &[HashedValue], batch: &mut Batch) -> Result<(), ViewError> {
+    fn write_values_batch(
+        &self,
+        values: &[HashedValue],
+        batch: &mut Batch,
+    ) -> Result<(), ViewError> {
         for value in values {
             let id = value.block().chain_id.to_string();
             increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
@@ -346,7 +358,11 @@ where
         Ok(())
     }
 
-    fn write_certificate_batch(&self, certificate: &Certificate, batch: &mut Batch) -> Result<(), ViewError> {
+    fn write_certificate_batch(
+        &self,
+        certificate: &Certificate,
+        batch: &mut Batch,
+    ) -> Result<(), ViewError> {
         let id = certificate.value.block().chain_id.to_string();
         increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id)]);
         let hash = certificate.value.hash();

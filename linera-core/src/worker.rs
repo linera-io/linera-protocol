@@ -528,7 +528,8 @@ where
         }
         let mut batch = Batch::new();
         self.storage.write_values_batch(blobs, &mut batch)?;
-        self.storage.write_certificate_batch(&certificate, &mut batch)?;
+        self.storage
+            .write_certificate_batch(&certificate, &mut batch)?;
         self.storage.write_batch(batch).await?;
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
@@ -714,7 +715,8 @@ where
                     certificate.value.hash(),
                 )
                 .await?;
-            self.storage.write_certificate_batch(&certificate, &mut batch)?;
+            self.storage
+                .write_certificate_batch(&certificate, &mut batch)?;
         }
         self.storage.write_batch(batch).await?;
         if !self.allow_inactive_chains && !chain.is_active() {
