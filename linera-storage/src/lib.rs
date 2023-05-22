@@ -203,11 +203,9 @@ pub trait Store: Sized {
             .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?;
         match operations.get(index) {
             Some(Operation::System(SystemOperation::PublishBytecode { contract, service })) => {
-                Ok(Arc::new(WasmApplication::new(
-                    contract.clone(),
-                    service.clone(),
-                    wasm_runtime,
-                )?))
+                Ok(Arc::new(
+                    WasmApplication::new(contract.clone(), service.clone(), wasm_runtime).await?,
+                ))
             }
             _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
         }

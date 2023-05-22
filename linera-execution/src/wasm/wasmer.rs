@@ -35,6 +35,7 @@ use super::{
     async_boundary::{HostFuture, WakerForwarder},
     async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
+    module_cache::ModuleCache,
     WasmApplication, WasmExecutionError,
 };
 use crate::{Bytecode, ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
@@ -54,6 +55,16 @@ static SERVICE_ENGINE: Lazy<Engine> = Lazy::new(|| {
     let compiler_config = Singlepass::default();
     EngineBuilder::new(compiler_config).into()
 });
+
+/// A cache of compiled contract modules, with their respective [`Engine`] instances.
+///
+/// Each [`Module`] needs to have a separate [`Engine`] instance, otherwise Wasmer
+/// [panics](https://docs.rs/wasmer-middlewares/3.3.0/wasmer_middlewares/metering/struct.Metering.html#panic)
+/// because fuel metering is configured and used across different modules.
+static CONTRACT_CACHE: Lazy<Mutex<ModuleCache<(Engine, Module)>>> = Lazy::new(Mutex::default);
+
+/// A cache of compiled service modules.
+static SERVICE_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::default);
 
 /// Type representing the [Wasmer](https://wasmer.io/) contract runtime.
 ///
@@ -104,21 +115,25 @@ impl<'runtime> ApplicationRuntimeContext for Service<'runtime> {
 
 impl WasmApplication {
     /// Creates a new [`WasmApplication`] using Wasmtime with the provided bytecodes.
-    pub fn new_with_wasmer(
+    pub async fn new_with_wasmer(
         contract_bytecode: Bytecode,
         service_bytecode: Bytecode,
     ) -> Result<Self, WasmExecutionError> {
-        let contract_engine = Self::create_wasmer_engine_for_a_contract();
-        let contract_module = Module::new(&contract_engine, contract_bytecode)
-            .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
+        let mut contract_cache = CONTRACT_CACHE.lock().await;
+        let contract = contract_cache.get_or_insert_with(contract_bytecode, |bytecode| {
+            let engine = Self::create_wasmer_engine_for_a_contract();
+            let module = Module::new(&engine, bytecode)
+                .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
+            Ok::<_, WasmExecutionError>((engine, module))
+        })?;
 
-        let service = Module::new(&*SERVICE_ENGINE, service_bytecode)
-            .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
+        let mut service_cache = SERVICE_CACHE.lock().await;
+        let service = service_cache.get_or_insert_with(service_bytecode, |bytecode| {
+            Module::new(&*SERVICE_ENGINE, bytecode)
+                .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)
+        })?;
 
-        Ok(WasmApplication::Wasmer {
-            contract: (contract_engine, contract_module),
-            service,
-        })
+        Ok(WasmApplication::Wasmer { contract, service })
     }
 
     fn create_wasmer_engine_for_a_contract() -> Engine {
@@ -132,8 +147,7 @@ impl WasmApplication {
 
     /// Prepares a runtime instance to call into the WASM contract.
     pub fn prepare_contract_runtime_with_wasmer<'runtime>(
-        contract_engine: &Engine,
-        contract_module: &Module,
+        (contract_engine, contract_module): &(Engine, Module),
         runtime: &'runtime dyn ContractRuntime,
     ) -> Result<WasmRuntimeContext<'static, Contract<'runtime>>, WasmExecutionError> {
         let mut store = Store::new(contract_engine);

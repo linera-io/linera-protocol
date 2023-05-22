@@ -31,26 +31,26 @@ use crate::{
     SessionCallResult, SessionId, UserApplication, WasmRuntime,
 };
 use async_trait::async_trait;
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 use thiserror::Error;
 
 /// A user application in a compiled WebAssembly module.
 pub enum WasmApplication {
     #[cfg(feature = "wasmer")]
     Wasmer {
-        contract: (::wasmer::Engine, ::wasmer::Module),
-        service: ::wasmer::Module,
+        contract: Arc<(::wasmer::Engine, ::wasmer::Module)>,
+        service: Arc<::wasmer::Module>,
     },
     #[cfg(feature = "wasmtime")]
     Wasmtime {
-        contract: ::wasmtime::Module,
-        service: ::wasmtime::Module,
+        contract: Arc<::wasmtime::Module>,
+        service: Arc<::wasmtime::Module>,
     },
 }
 
 impl WasmApplication {
     /// Creates a new [`WasmApplication`] using the WebAssembly module with the provided bytecodes.
-    pub fn new(
+    pub async fn new(
         contract_bytecode: Bytecode,
         service_bytecode: Bytecode,
         runtime: WasmRuntime,
@@ -65,11 +65,11 @@ impl WasmApplication {
         match runtime {
             #[cfg(feature = "wasmer")]
             WasmRuntime::Wasmer | WasmRuntime::WasmerWithSanitizer => {
-                Self::new_with_wasmer(contract_bytecode, service_bytecode)
+                Self::new_with_wasmer(contract_bytecode, service_bytecode).await
             }
             #[cfg(feature = "wasmtime")]
             WasmRuntime::Wasmtime | WasmRuntime::WasmtimeWithSanitizer => {
-                Self::new_with_wasmtime(contract_bytecode, service_bytecode)
+                Self::new_with_wasmtime(contract_bytecode, service_bytecode).await
             }
         }
     }
@@ -89,6 +89,7 @@ impl WasmApplication {
                 .map_err(anyhow::Error::from)?,
             runtime,
         )
+        .await
     }
 }
 
@@ -127,17 +128,10 @@ impl UserApplication for WasmApplication {
                     .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmApplication::Wasmer {
-                contract: (contract_engine, contract_module),
-                ..
-            } => {
-                Self::prepare_contract_runtime_with_wasmer(
-                    contract_engine,
-                    contract_module,
-                    runtime,
-                )?
-                .initialize(context, argument)
-                .await?
+            WasmApplication::Wasmer { contract, .. } => {
+                Self::prepare_contract_runtime_with_wasmer(contract, runtime)?
+                    .initialize(context, argument)
+                    .await?
             }
         };
         Ok(result)
@@ -157,17 +151,10 @@ impl UserApplication for WasmApplication {
                     .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmApplication::Wasmer {
-                contract: (contract_engine, contract_module),
-                ..
-            } => {
-                Self::prepare_contract_runtime_with_wasmer(
-                    contract_engine,
-                    contract_module,
-                    runtime,
-                )?
-                .execute_operation(context, operation)
-                .await?
+            WasmApplication::Wasmer { contract, .. } => {
+                Self::prepare_contract_runtime_with_wasmer(contract, runtime)?
+                    .execute_operation(context, operation)
+                    .await?
             }
         };
         Ok(result)
@@ -187,17 +174,10 @@ impl UserApplication for WasmApplication {
                     .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmApplication::Wasmer {
-                contract: (contract_engine, contract_module),
-                ..
-            } => {
-                Self::prepare_contract_runtime_with_wasmer(
-                    contract_engine,
-                    contract_module,
-                    runtime,
-                )?
-                .execute_message(context, message)
-                .await?
+            WasmApplication::Wasmer { contract, .. } => {
+                Self::prepare_contract_runtime_with_wasmer(contract, runtime)?
+                    .execute_message(context, message)
+                    .await?
             }
         };
         Ok(result)
@@ -218,17 +198,10 @@ impl UserApplication for WasmApplication {
                     .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmApplication::Wasmer {
-                contract: (contract_engine, contract_module),
-                ..
-            } => {
-                Self::prepare_contract_runtime_with_wasmer(
-                    contract_engine,
-                    contract_module,
-                    runtime,
-                )?
-                .handle_application_call(context, argument, forwarded_sessions)
-                .await?
+            WasmApplication::Wasmer { contract, .. } => {
+                Self::prepare_contract_runtime_with_wasmer(contract, runtime)?
+                    .handle_application_call(context, argument, forwarded_sessions)
+                    .await?
             }
         };
         Ok(result)
@@ -250,17 +223,10 @@ impl UserApplication for WasmApplication {
                     .await?
             }
             #[cfg(feature = "wasmer")]
-            WasmApplication::Wasmer {
-                contract: (contract_engine, contract_module),
-                ..
-            } => {
-                Self::prepare_contract_runtime_with_wasmer(
-                    contract_engine,
-                    contract_module,
-                    runtime,
-                )?
-                .handle_session_call(context, session_state, argument, forwarded_sessions)
-                .await?
+            WasmApplication::Wasmer { contract, .. } => {
+                Self::prepare_contract_runtime_with_wasmer(contract, runtime)?
+                    .handle_session_call(context, session_state, argument, forwarded_sessions)
+                    .await?
             }
         };
         Ok(result)

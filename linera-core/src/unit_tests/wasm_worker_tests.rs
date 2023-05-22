@@ -111,11 +111,14 @@ where
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
     let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
     let service_bytecode = Bytecode::load_from_file(service_path).await?;
-    let application = Arc::new(WasmApplication::new(
-        contract_bytecode.clone(),
-        service_bytecode.clone(),
-        wasm_runtime,
-    )?);
+    let application = Arc::new(
+        WasmApplication::new(
+            contract_bytecode.clone(),
+            service_bytecode.clone(),
+            wasm_runtime,
+        )
+        .await?,
+    );
 
     // Publish some bytecode.
     let publish_operation = SystemOperation::PublishBytecode {

@@ -39,12 +39,14 @@ use super::{
     async_boundary::{HostFuture, WakerForwarder},
     async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
+    module_cache::ModuleCache,
     WasmApplication, WasmExecutionError,
 };
 use crate::{Bytecode, ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
 use linera_views::{batch::Batch, views::ViewError};
 use once_cell::sync::Lazy;
 use std::{error::Error, future::Future, task::Poll};
+use tokio::sync::Mutex;
 use wasmtime::{Config, Engine, Linker, Module, Store, Trap};
 use wit_bindgen_host_wasmtime_rust::Le;
 
@@ -60,6 +62,12 @@ static CONTRACT_ENGINE: Lazy<Engine> = Lazy::new(|| {
 
 /// An [`Engine`] instance configured to run application services.
 static SERVICE_ENGINE: Lazy<Engine> = Lazy::new(Engine::default);
+
+/// A cache of compiled contract modules.
+static CONTRACT_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::default);
+
+/// A cache of compiled service modules.
+static SERVICE_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::default);
 
 /// Type representing the [Wasmtime](https://wasmtime.dev/) runtime for contracts.
 ///
@@ -96,12 +104,19 @@ impl<'runtime> ApplicationRuntimeContext for Service<'runtime> {
 
 impl WasmApplication {
     /// Creates a new [`WasmApplication`] using Wasmtime with the provided bytecodes.
-    pub fn new_with_wasmtime(
+    pub async fn new_with_wasmtime(
         contract_bytecode: Bytecode,
         service_bytecode: Bytecode,
     ) -> Result<Self, WasmExecutionError> {
-        let contract = Module::new(&CONTRACT_ENGINE, contract_bytecode)?;
-        let service = Module::new(&SERVICE_ENGINE, service_bytecode)?;
+        let mut contract_cache = CONTRACT_CACHE.lock().await;
+        let contract = contract_cache.get_or_insert_with(contract_bytecode, |bytecode| {
+            Module::new(&CONTRACT_ENGINE, bytecode)
+        })?;
+
+        let mut service_cache = SERVICE_CACHE.lock().await;
+        let service = service_cache.get_or_insert_with(service_bytecode, |bytecode| {
+            Module::new(&SERVICE_ENGINE, bytecode)
+        })?;
 
         Ok(WasmApplication::Wasmtime { contract, service })
     }
