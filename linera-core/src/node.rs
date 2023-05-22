@@ -514,7 +514,7 @@ where
 
     pub async fn read_or_download_blob<A>(
         storage: S,
-        mut validators: Vec<(ValidatorName, A)>,
+        validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
         location: BytecodeLocation,
     ) -> Result<Option<HashedValue>, NodeError>
@@ -526,17 +526,13 @@ where
             Err(ViewError::NotFound(..)) => {}
             Err(err) => Err(err)?,
         }
-        // Sequentially try each validator in random order.
-        validators.shuffle(&mut rand::thread_rng());
-        for (name, mut client) in validators {
-            if let Some(blob) =
-                Self::try_download_blob_from(name, &mut client, chain_id, location).await
-            {
+        match Self::download_blob(validators, chain_id, location).await {
+            Some(blob) => {
                 storage.write_value(&blob).await?;
-                return Ok(Some(blob));
+                Ok(Some(blob))
             }
+            None => Ok(None),
         }
-        Ok(None)
     }
 
     /// Obtains the certificate containing the specified effect.

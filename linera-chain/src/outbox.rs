@@ -79,7 +79,9 @@ where
     ViewError: From<<MemoryContext<()> as linera_views::common::Context>::Error>,
 {
     pub async fn new() -> Self {
-        let guard = Arc::new(Mutex::new(BTreeMap::new())).lock_arc().await;
+        let guard = Arc::new(Mutex::new(BTreeMap::new()))
+            .try_lock_arc()
+            .expect("a guard");
         let context = MemoryContext::new(guard, ());
         Self::load(context)
             .await
