@@ -529,9 +529,9 @@ where
         match Self::download_blob(validators, chain_id, location).await {
             Some(blob) => {
                 storage.write_value(&blob).await?;
-                return Ok(Some(blob))
-            },
-            None => return Ok(None),
+                Ok(Some(blob))
+            }
+            None => Ok(None),
         }
     }
 

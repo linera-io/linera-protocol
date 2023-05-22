@@ -80,7 +80,10 @@ where
 {
     pub async fn new() -> Self {
         use futures::FutureExt;
-        let guard = Arc::new(Mutex::new(BTreeMap::new())).lock_arc().now_or_never().expect("a guard");
+        let guard = Arc::new(Mutex::new(BTreeMap::new()))
+            .lock_arc()
+            .now_or_never()
+            .expect("a guard");
         let context = MemoryContext::new(guard, ());
         Self::load(context)
             .await
