@@ -56,6 +56,11 @@ impl Pricing {
     pub fn fuel_price(&self, fuel: u64) -> Amount {
         self.fuel.saturating_mul(u128::from(fuel))
     }
+
+    /// Returns how much fuel can be paid with the given balance.
+    pub fn remaining_fuel(&self, balance: Amount) -> u64 {
+        u64::try_from(balance.saturating_div(self.fuel)).unwrap_or(u64::MAX)
+    }
 }
 
 #[derive(Error, Debug)]

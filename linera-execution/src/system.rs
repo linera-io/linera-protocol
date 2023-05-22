@@ -378,7 +378,7 @@ pub enum SystemExecutionError {
     #[error(
         "The transferred amount must be not exceed the current chain balance: {current_balance}"
     )]
-    InsufficientFunding { current_balance: u128 },
+    InsufficientFunding { current_balance: Amount },
     #[error("Claim must have positive amount")]
     IncorrectClaimAmount,
     #[error("Claim must be authenticated by the right signer")]
@@ -550,7 +550,7 @@ where
                 ensure!(
                     *balance >= *amount,
                     SystemExecutionError::InsufficientFunding {
-                        current_balance: (*balance).into()
+                        current_balance: *balance
                     }
                 );
                 balance.try_sub_assign(*amount)?;
