@@ -22,6 +22,7 @@ linera-execution = { workspace = true }
 linera-views = { workspace = true, features = ["metrics"] }
 tracing = { workspace = true }
 serde = { workspace = true }
+futures = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 
