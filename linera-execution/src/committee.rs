@@ -132,7 +132,7 @@ impl Committee {
                 )
             })
             .collect();
-        Committee::new(map, Default::default())
+        Committee::new(map, Pricing::make_simple())
     }
 
     pub fn weight(&self, author: &ValidatorName) -> u64 {

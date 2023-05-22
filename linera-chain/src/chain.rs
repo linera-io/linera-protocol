@@ -12,14 +12,15 @@ use crate::{
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{ArithmeticError, BlockHeight, Timestamp},
+    data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     ensure,
     identifiers::{ChainId, Destination, EffectId},
 };
 use linera_execution::{
-    system::SystemEffect, ApplicationId, Effect, EffectContext, ExecutionResult,
-    ExecutionRuntimeContext, ExecutionStateView, OperationContext, Query, QueryContext,
-    RawExecutionResult, Response, UserApplicationDescription, UserApplicationId,
+    system::{Account, SystemEffect},
+    ApplicationId, Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext,
+    ExecutionStateView, OperationContext, Query, QueryContext, RawExecutionResult, Response,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     common::Context,
@@ -432,13 +433,26 @@ where
         };
 
         let pricing = committee.pricing.clone();
+        let credit: Amount = block
+            .incoming_messages
+            .iter()
+            .filter_map(|msg| match &msg.event.effect {
+                Effect::System(SystemEffect::Credit { account, amount })
+                    if *account == Account::chain(chain_id) =>
+                {
+                    Some(amount)
+                }
+                _ => None,
+            })
+            .sum();
         let balance = self.execution_state.system.balance.get_mut();
+        balance.try_add_assign(credit)?;
         balance.try_sub_assign(pricing.certificate_price())?;
         balance.try_sub_assign(pricing.storage_price(&block.incoming_messages)?)?;
         balance.try_sub_assign(pricing.storage_price(&block.operations)?)?;
 
         let mut effects = Vec::new();
-        let available_fuel = 10_000_000;
+        let available_fuel = pricing.remaining_fuel(*balance);
         let mut remaining_fuel = available_fuel;
         for message in &block.incoming_messages {
             // Execute the received effect.
@@ -482,6 +496,7 @@ where
         let used_fuel = available_fuel.saturating_sub(remaining_fuel);
 
         let balance = self.execution_state.system.balance.get_mut();
+        balance.try_sub_assign(credit)?;
         balance.try_sub_assign(pricing.fuel_price(used_fuel))?;
         balance.try_sub_assign(pricing.storage_and_messages_price(&effects)?)?;
 

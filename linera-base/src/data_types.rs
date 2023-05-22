@@ -376,6 +376,12 @@ impl Amount {
     pub fn lower_half(self) -> u64 {
         self.0 as u64
     }
+
+    /// Divides this by the other amount. If the other is 0 or the result would be too large, it
+    /// returns `u128::MAX`.
+    pub fn saturating_div(self, other: Amount) -> u128 {
+        self.0.checked_div(other.0).unwrap_or(u128::MAX)
+    }
 }
 
 doc_scalar!(Amount, "A non-negative amount of tokens.");
