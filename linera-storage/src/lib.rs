@@ -78,11 +78,20 @@ pub trait Store: Sized {
     /// Writes several values
     async fn write_values(&self, values: &[HashedValue]) -> Result<(), ViewError>;
 
+    /// Writes several values in a batch
+    fn write_values_batch(&self, values: &[HashedValue], batch: &mut Batch) -> Result<(), ViewError>;
+
     /// Reads the certificate with the given hash.
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError>;
 
     /// Writes the given certificate.
     async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError>;
+
+    /// Writes the given certificate to the batch
+    fn write_certificate_batch(&self, certificate: &Certificate, batch: &mut Batch) -> Result<(), ViewError>;
+
+    /// Writes the batch
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
     async fn load_active_chain(
@@ -287,13 +296,17 @@ where
 
     async fn write_values(&self, values: &[HashedValue]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
+        self.write_values_batch(values, &mut batch)?;
+        self.write_batch(batch).await
+    }
+
+    fn write_values_batch(&self, values: &[HashedValue], batch: &mut Batch) -> Result<(), ViewError> {
         for value in values {
             let id = value.block().chain_id.to_string();
             increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
             let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
             batch.put_key_value(value_key.to_vec(), value)?;
         }
-        self.client.client.write_batch(batch, &[]).await?;
         Ok(())
     }
 
@@ -329,6 +342,22 @@ where
         let mut batch = Batch::new();
         batch.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
         batch.put_key_value(value_key.to_vec(), &certificate.value)?;
+        self.client.client.write_batch(batch, &[]).await?;
+        Ok(())
+    }
+
+    fn write_certificate_batch(&self, certificate: &Certificate, batch: &mut Batch) -> Result<(), ViewError> {
+        let id = certificate.value.block().chain_id.to_string();
+        increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id)]);
+        let hash = certificate.value.hash();
+        let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
+        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
+        batch.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
+        batch.put_key_value(value_key.to_vec(), &certificate.value)?;
+        Ok(())
+    }
+
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         self.client.client.write_batch(batch, &[]).await?;
         Ok(())
     }
