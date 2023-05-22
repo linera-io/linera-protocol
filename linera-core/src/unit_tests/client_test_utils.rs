@@ -405,7 +405,7 @@ where
                         self.admin_id,
                         description,
                         public_key,
-                        Amount::from(0),
+                        Amount::ZERO,
                         Timestamp::from(0),
                     )
                     .await

@@ -254,7 +254,7 @@ impl ClientContext {
                 operations: vec![Operation::System(SystemOperation::Transfer {
                     owner: None,
                     recipient: Recipient::Account(Account::chain(next_recipient)),
-                    amount: Amount::from(1),
+                    amount: Amount::ONE,
                     user_data: UserData::default(),
                 })],
                 previous_block_hash: chain.block_hash,

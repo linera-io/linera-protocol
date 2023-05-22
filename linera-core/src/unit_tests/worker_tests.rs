@@ -324,13 +324,9 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Amount::from(5),
+                "5".parse().unwrap(),
             ),
-            (
-                ChainDescription::Root(2),
-                PublicKey::debug(2),
-                Amount::from(0),
-            ),
+            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
         ],
     )
     .await;
@@ -338,7 +334,7 @@ where
         ChainId::root(1),
         &sender_key_pair,
         recipient,
-        Amount::from(5),
+        "5".parse().unwrap(),
         Vec::new(),
         None,
     );
@@ -403,13 +399,9 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Amount::from(5),
+                "5".parse().unwrap(),
             ),
-            (
-                ChainDescription::Root(2),
-                PublicKey::debug(2),
-                Amount::from(0),
-            ),
+            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
         ],
     )
     .await;
@@ -472,7 +464,7 @@ where
     ViewError: From<S::ContextError>,
 {
     let key_pair = KeyPair::generate();
-    let balance = Amount::from(5);
+    let balance: Amount = "5".parse().unwrap();
     let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
     let epoch = Epoch::from(0);
     let (committee, mut worker) = init_worker_with_chains(client, balances).await;
@@ -584,13 +576,9 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Amount::from(5),
+                "5".parse().unwrap(),
             ),
-            (
-                ChainDescription::Root(2),
-                PublicKey::debug(2),
-                Amount::from(0),
-            ),
+            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
         ],
     )
     .await;
@@ -598,7 +586,7 @@ where
         ChainId::root(1),
         &sender_key_pair,
         recipient,
-        Amount::from(5),
+        "5".parse().unwrap(),
         Vec::new(),
         None,
     );
@@ -662,7 +650,7 @@ where
         vec![(
             ChainDescription::Root(1),
             sender_key_pair.public(),
-            Amount::from(5),
+            "5".parse().unwrap(),
         )],
     )
     .await;
@@ -670,7 +658,7 @@ where
         ChainId::root(1),
         &sender_key_pair,
         recipient,
-        Amount::from(1),
+        Amount::ONE,
         Vec::new(),
         None,
     );
@@ -678,10 +666,10 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         recipient,
-        Amount::from(1),
+        Amount::ONE,
         Vec::new(),
         &committee,
-        Amount::from(4),
+        "4".parse().unwrap(),
         &worker,
         None,
     )
@@ -690,7 +678,7 @@ where
         ChainId::root(1),
         &sender_key_pair,
         recipient,
-        Amount::from(2),
+        "2".parse().unwrap(),
         Vec::new(),
         Some(&certificate0),
     );
@@ -783,12 +771,12 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Amount::from(6),
+                "6".parse().unwrap(),
             ),
             (
                 ChainDescription::Root(2),
                 recipient_key_pair.public(),
-                Amount::from(0),
+                Amount::ZERO,
             ),
         ],
     )
@@ -807,13 +795,13 @@ where
                     Operation::System(SystemOperation::Transfer {
                         owner: None,
                         recipient,
-                        amount: Amount::from(1),
+                        amount: Amount::ONE,
                         user_data: UserData::default(),
                     }),
                     Operation::System(SystemOperation::Transfer {
                         owner: None,
                         recipient,
-                        amount: Amount::from(2),
+                        amount: "2".parse().unwrap(),
                         user_data: UserData::default(),
                     }),
                 ],
@@ -827,14 +815,14 @@ where
                     ChainId::root(2),
                     SystemEffect::Credit {
                         account: Account::chain(ChainId::root(2)),
-                        amount: Amount::from(1),
+                        amount: Amount::ONE,
                     },
                 ),
                 direct_outgoing_effect(
                     ChainId::root(2),
                     SystemEffect::Credit {
                         account: Account::chain(ChainId::root(2)),
-                        amount: Amount::from(2),
+                        amount: "2".parse().unwrap(),
                     },
                 ),
             ],
@@ -845,7 +833,7 @@ where
                 subscriptions: BTreeSet::new(),
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public()),
-                balance: Amount::from(3),
+                balance: "3".parse().unwrap(),
                 balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
@@ -865,7 +853,7 @@ where
                 operations: vec![Operation::System(SystemOperation::Transfer {
                     owner: None,
                     recipient,
-                    amount: Amount::from(3),
+                    amount: "3".parse().unwrap(),
                     user_data: UserData::default(),
                 })],
                 previous_block_hash: Some(certificate0.value.hash()),
@@ -877,7 +865,7 @@ where
                 ChainId::root(2),
                 SystemEffect::Credit {
                     account: Account::chain(ChainId::root(2)),
-                    amount: Amount::from(3),
+                    amount: "3".parse().unwrap(),
                 },
             )],
             make_state_hash(SystemExecutionState {
@@ -887,7 +875,7 @@ where
                 subscriptions: BTreeSet::new(),
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public()),
-                balance: Amount::from(0),
+                balance: Amount::ZERO,
                 balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
@@ -943,7 +931,7 @@ where
             ChainId::root(2),
             &recipient_key_pair,
             Recipient::Account(Account::chain(ChainId::root(3))),
-            Amount::from(6),
+            "6".parse().unwrap(),
             Vec::new(),
             None,
         );
@@ -955,7 +943,7 @@ where
             ChainId::root(2),
             &recipient_key_pair,
             Recipient::Account(Account::chain(ChainId::root(3))),
-            Amount::from(5),
+            "5".parse().unwrap(),
             vec![
                 Message {
                     origin: Origin::chain(ChainId::root(1)),
@@ -967,7 +955,7 @@ where
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
-                            amount: Amount::from(1),
+                            amount: Amount::ONE,
                         }),
                     },
                 },
@@ -981,7 +969,7 @@ where
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
-                            amount: Amount::from(2),
+                            amount: "2".parse().unwrap(),
                         }),
                     },
                 },
@@ -995,7 +983,7 @@ where
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
-                            amount: Amount::from(2), // wrong
+                            amount: "2".parse().unwrap(), // wrong
                         }),
                     },
                 },
@@ -1014,7 +1002,7 @@ where
             ChainId::root(2),
             &recipient_key_pair,
             Recipient::Account(Account::chain(ChainId::root(3))),
-            Amount::from(6),
+            "6".parse().unwrap(),
             vec![
                 Message {
                     origin: Origin::chain(ChainId::root(1)),
@@ -1026,7 +1014,7 @@ where
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
-                            amount: Amount::from(2),
+                            amount: "2".parse().unwrap(),
                         }),
                     },
                 },
@@ -1040,7 +1028,7 @@ where
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
-                            amount: Amount::from(1),
+                            amount: Amount::ONE,
                         }),
                     },
                 },
@@ -1054,7 +1042,7 @@ where
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
-                            amount: Amount::from(3),
+                            amount: "3".parse().unwrap(),
                         }),
                     },
                 },
@@ -1073,7 +1061,7 @@ where
             ChainId::root(2),
             &recipient_key_pair,
             Recipient::Account(Account::chain(ChainId::root(3))),
-            Amount::from(6),
+            "6".parse().unwrap(),
             vec![
                 Message {
                     origin: Origin::chain(ChainId::root(1)),
@@ -1085,7 +1073,7 @@ where
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
-                            amount: Amount::from(3),
+                            amount: "3".parse().unwrap(),
                         }),
                     },
                 },
@@ -1099,7 +1087,7 @@ where
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
-                            amount: Amount::from(1),
+                            amount: Amount::ONE,
                         }),
                     },
                 },
@@ -1113,7 +1101,7 @@ where
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(ChainId::root(2)),
-                            amount: Amount::from(2),
+                            amount: "2".parse().unwrap(),
                         }),
                     },
                 },
@@ -1132,7 +1120,7 @@ where
             ChainId::root(2),
             &recipient_key_pair,
             Recipient::Account(Account::chain(ChainId::root(3))),
-            Amount::from(1),
+            Amount::ONE,
             vec![Message {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
@@ -1143,7 +1131,7 @@ where
                     timestamp: Timestamp::from(0),
                     effect: Effect::System(SystemEffect::Credit {
                         account: Account::chain(ChainId::root(2)),
-                        amount: Amount::from(1),
+                        amount: Amount::ONE,
                     }),
                 },
             }],
@@ -1163,7 +1151,7 @@ where
                     ChainId::root(3),
                     SystemEffect::Credit {
                         account: Account::chain(ChainId::root(3)),
-                        amount: Amount::from(1),
+                        amount: Amount::ONE,
                     },
                 )],
                 make_state_hash(SystemExecutionState {
@@ -1173,7 +1161,7 @@ where
                     subscriptions: BTreeSet::new(),
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(recipient_key_pair.public()),
-                    balance: Amount::from(0),
+                    balance: Amount::ZERO,
                     balances: BTreeMap::new(),
                     timestamp: Timestamp::from(0),
                     registry: ApplicationRegistry::default(),
@@ -1190,7 +1178,7 @@ where
             ChainId::root(2),
             &recipient_key_pair,
             Recipient::Account(Account::chain(ChainId::root(3))),
-            Amount::from(3),
+            "3".parse().unwrap(),
             vec![Message {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
@@ -1201,7 +1189,7 @@ where
                     timestamp: Timestamp::from(0),
                     effect: Effect::System(SystemEffect::Credit {
                         account: Account::chain(ChainId::root(2)),
-                        amount: Amount::from(3),
+                        amount: "3".parse().unwrap(),
                     }),
                 },
             }],
@@ -1256,13 +1244,9 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Amount::from(5),
+                "5".parse().unwrap(),
             ),
-            (
-                ChainDescription::Root(2),
-                PublicKey::debug(2),
-                Amount::from(0),
-            ),
+            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
         ],
     )
     .await;
@@ -1270,7 +1254,7 @@ where
         ChainId::root(1),
         &sender_key_pair,
         recipient,
-        Amount::from(1000),
+        "1000".parse().unwrap(),
         Vec::new(),
         None,
     );
@@ -1327,7 +1311,7 @@ where
         vec![(
             ChainDescription::Root(1),
             sender_key_pair.public(),
-            Amount::from(5),
+            "5".parse().unwrap(),
         )],
     )
     .await;
@@ -1335,7 +1319,7 @@ where
         ChainId::root(1),
         &sender_key_pair,
         recipient,
-        Amount::from(5),
+        "5".parse().unwrap(),
         Vec::new(),
         None,
     );
@@ -1403,13 +1387,9 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Amount::from(5),
+                "5".parse().unwrap(),
             ),
-            (
-                ChainDescription::Root(2),
-                PublicKey::debug(2),
-                Amount::from(0),
-            ),
+            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
         ],
     )
     .await;
@@ -1417,7 +1397,7 @@ where
         ChainId::root(1),
         &sender_key_pair,
         recipient,
-        Amount::from(5),
+        "5".parse().unwrap(),
         Vec::new(),
         None,
     );
@@ -1475,21 +1455,17 @@ where
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         client,
-        vec![(
-            ChainDescription::Root(2),
-            PublicKey::debug(2),
-            Amount::from(0),
-        )],
+        vec![(ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO)],
     )
     .await;
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
         Recipient::Account(Account::chain(ChainId::root(2))),
-        Amount::from(5),
+        "5".parse().unwrap(),
         Vec::new(),
         &committee,
-        Amount::from(0),
+        Amount::ZERO,
         &worker,
         None,
     )
@@ -1541,13 +1517,9 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Amount::from(5),
+                "5".parse().unwrap(),
             ),
-            (
-                ChainDescription::Root(2),
-                PublicKey::debug(2),
-                Amount::from(0),
-            ),
+            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
         ],
     )
     .await;
@@ -1555,10 +1527,10 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Recipient::Account(Account::chain(ChainId::root(2))),
-        Amount::from(5),
+        "5".parse().unwrap(),
         Vec::new(),
         &committee,
-        Amount::from(0),
+        Amount::ZERO,
         &worker,
         None,
     )
@@ -1616,13 +1588,9 @@ where
             (
                 ChainDescription::Root(1),
                 key_pair.public(),
-                Amount::from(5),
+                "5".parse().unwrap(),
             ),
-            (
-                ChainDescription::Root(2),
-                PublicKey::debug(2),
-                Amount::from(0),
-            ),
+            (ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO),
         ],
     )
     .await;
@@ -1631,7 +1599,7 @@ where
         ChainDescription::Root(1),
         &key_pair,
         Recipient::Account(Account::chain(ChainId::root(2))),
-        Amount::from(1000),
+        "1000".parse().unwrap(),
         vec![Message {
             origin: Origin::chain(ChainId::root(3)),
             event: Event {
@@ -1642,12 +1610,12 @@ where
                 timestamp: Timestamp::from(0),
                 effect: Effect::System(SystemEffect::Credit {
                     account: Account::chain(ChainId::root(1)),
-                    amount: Amount::from(995),
+                    amount: "995".parse().unwrap(),
                 }),
             },
         }],
         &committee,
-        Amount::from(0),
+        Amount::ZERO,
         &worker,
         None,
     )
@@ -1661,7 +1629,7 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap();
-    assert_eq!(Amount::from(0), *chain.execution_state.system.balance.get());
+    assert_eq!(Amount::ZERO, *chain.execution_state.system.balance.get(),);
     assert_eq!(
         BlockHeight::from(1),
         chain.tip_state.get().next_block_height
@@ -1707,7 +1675,7 @@ where
         } if certificate_hash == CryptoHash::new(&Dummy)
             && height == BlockHeight::from(0)
             && timestamp == Timestamp::from(0)
-            && amount == Amount::from(995),
+            && amount == "995".parse().unwrap(),
     ));
     assert_eq!(chain.confirmed_log.count(), 1);
     assert_eq!(
@@ -1763,7 +1731,7 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Amount::from(1),
+                Amount::ONE,
             ),
             (
                 ChainDescription::Root(2),
@@ -1778,10 +1746,10 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Recipient::Account(Account::chain(ChainId::root(2))),
-        Amount::from(1),
+        Amount::ONE,
         Vec::new(),
         &committee,
-        Amount::from(0),
+        Amount::ZERO,
         &worker,
         None,
     )
@@ -1796,7 +1764,7 @@ where
         .await
         .unwrap();
     assert_eq!(
-        Amount::from(0),
+        Amount::ZERO,
         *new_sender_chain.execution_state.system.balance.get()
     );
     assert_eq!(
@@ -1856,16 +1824,16 @@ where
     let key_pair = KeyPair::generate();
     let name = key_pair.public();
     let (committee, mut worker) =
-        init_worker_with_chain(client, ChainDescription::Root(1), name, Amount::from(1)).await;
+        init_worker_with_chain(client, ChainDescription::Root(1), name, Amount::ONE).await;
 
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &key_pair,
         Recipient::Account(Account::chain(ChainId::root(1))),
-        Amount::from(1),
+        Amount::ONE,
         Vec::new(),
         &committee,
-        Amount::from(0),
+        Amount::ZERO,
         &worker,
         None,
     )
@@ -1879,7 +1847,7 @@ where
         .load_active_chain(ChainId::root(1))
         .await
         .unwrap();
-    assert_eq!(Amount::from(0), *chain.execution_state.system.balance.get());
+    assert_eq!(Amount::ZERO, *chain.execution_state.system.balance.get());
     assert_eq!(
         BlockHeight::from(1),
         chain
@@ -1911,7 +1879,7 @@ where
         } if certificate_hash == certificate.value.hash()
             && height == BlockHeight::from(0)
             && timestamp == Timestamp::from(0)
-            && amount == Amount::from(1),
+            && amount == Amount::ONE,
     ));
     assert_eq!(
         BlockHeight::from(1),
@@ -1961,21 +1929,17 @@ where
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         client,
-        vec![(
-            ChainDescription::Root(2),
-            PublicKey::debug(2),
-            Amount::from(1),
-        )],
+        vec![(ChainDescription::Root(2), PublicKey::debug(2), Amount::ONE)],
     )
     .await;
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
         Recipient::Account(Account::chain(ChainId::root(2))),
-        Amount::from(10),
+        "10".parse().unwrap(),
         Vec::new(),
         &committee,
-        Amount::from(0),
+        Amount::ZERO,
         &worker,
         None,
     )
@@ -1994,7 +1958,7 @@ where
         .load_active_chain(ChainId::root(2))
         .await
         .unwrap();
-    assert_eq!(Amount::from(1), *chain.execution_state.system.balance.get());
+    assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
     assert_eq!(
         BlockHeight::from(0),
         chain.tip_state.get().next_block_height
@@ -2030,7 +1994,7 @@ where
         } if certificate_hash == certificate.value.hash()
             && height == BlockHeight::from(0)
             && timestamp == Timestamp::from(0)
-            && amount == Amount::from(10),
+            && amount == "10".parse().unwrap(),
     ));
     assert_eq!(chain.confirmed_log.count(), 0);
     assert_eq!(None, chain.tip_state.get().block_hash);
@@ -2078,10 +2042,10 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Recipient::Account(Account::chain(ChainId::root(2))),
-        Amount::from(10),
+        "10".parse().unwrap(),
         Vec::new(),
         &committee,
-        Amount::from(0),
+        Amount::ZERO,
         &worker,
         None,
     )
@@ -2143,10 +2107,10 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Recipient::Account(Account::chain(ChainId::root(2))),
-        Amount::from(10),
+        "10".parse().unwrap(),
         Vec::new(),
         &committee,
-        Amount::from(0),
+        Amount::ZERO,
         &worker,
         None,
     )
@@ -2221,12 +2185,12 @@ where
             (
                 ChainDescription::Root(1),
                 sender_key_pair.public(),
-                Amount::from(5),
+                "5".parse().unwrap(),
             ),
             (
                 ChainDescription::Root(2),
                 recipient_key_pair.public(),
-                Amount::from(0),
+                Amount::ZERO,
             ),
         ],
     )
@@ -2238,7 +2202,7 @@ where
             .unwrap(),
         Response::System(SystemResponse {
             chain_id: ChainId::root(1),
-            balance: Amount::from(5),
+            balance: "5".parse().unwrap(),
         })
     );
     assert_eq!(
@@ -2248,7 +2212,7 @@ where
             .unwrap(),
         Response::System(SystemResponse {
             chain_id: ChainId::root(2),
-            balance: Amount::from(0),
+            balance: Amount::ZERO,
         })
     );
 
@@ -2256,10 +2220,10 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Recipient::Account(Account::chain(ChainId::root(2))),
-        Amount::from(5),
+        "5".parse().unwrap(),
         Vec::new(),
         &committee,
-        Amount::from(0),
+        Amount::ZERO,
         &worker,
         None,
     )
@@ -2271,7 +2235,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
-    assert_eq!(Amount::from(0), info.system_balance);
+    assert_eq!(Amount::ZERO, info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.value.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
@@ -2282,7 +2246,7 @@ where
             .unwrap(),
         Response::System(SystemResponse {
             chain_id: ChainId::root(1),
-            balance: Amount::from(0),
+            balance: Amount::ZERO,
         })
     );
 
@@ -2291,7 +2255,7 @@ where
         ChainDescription::Root(2),
         &recipient_key_pair,
         Recipient::Account(Account::chain(ChainId::root(3))),
-        Amount::from(1),
+        Amount::ONE,
         vec![Message {
             origin: Origin::chain(ChainId::root(1)),
             event: Event {
@@ -2302,12 +2266,12 @@ where
                 timestamp: Timestamp::from(0),
                 effect: Effect::System(SystemEffect::Credit {
                     account: Account::chain(ChainId::root(2)),
-                    amount: Amount::from(5),
+                    amount: "5".parse().unwrap(),
                 }),
             },
         }],
         &committee,
-        Amount::from(4),
+        "4".parse().unwrap(),
         &worker,
         None,
     )
@@ -2324,7 +2288,7 @@ where
             .unwrap(),
         Response::System(SystemResponse {
             chain_id: ChainId::root(2),
-            balance: Amount::from(4),
+            balance: "4".parse().unwrap(),
         })
     );
 
@@ -2336,7 +2300,7 @@ where
             .unwrap();
         assert_eq!(
             *recipient_chain.execution_state.system.balance.get(),
-            Amount::from(4)
+            "4".parse().unwrap()
         );
         assert_eq!(
             recipient_chain
@@ -2404,7 +2368,7 @@ where
         vec![(
             ChainDescription::Root(1),
             sender_key_pair.public(),
-            Amount::from(5),
+            "5".parse().unwrap(),
         )],
     )
     .await;
@@ -2412,10 +2376,10 @@ where
         ChainDescription::Root(1),
         &sender_key_pair,
         Recipient::Account(Account::chain(ChainId::root(2))), // the recipient chain does not exist
-        Amount::from(5),
+        "5".parse().unwrap(),
         Vec::new(),
         &committee,
-        Amount::from(0),
+        Amount::ZERO,
         &worker,
         None,
     )
@@ -2427,7 +2391,7 @@ where
         .unwrap()
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
-    assert_eq!(Amount::from(0), info.system_balance);
+    assert_eq!(Amount::ZERO, info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.value.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
@@ -2473,7 +2437,7 @@ where
         vec![(
             ChainDescription::Root(0),
             key_pair.public(),
-            Amount::from(2),
+            "2".parse().unwrap(),
         )],
     )
     .await;
@@ -2544,7 +2508,7 @@ where
                 subscriptions: BTreeSet::new(),
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair.public()),
-                balance: Amount::from(2),
+                balance: "2".parse().unwrap(),
                 balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
@@ -2599,7 +2563,7 @@ where
                     Operation::System(SystemOperation::Transfer {
                         owner: None,
                         recipient: Recipient::Account(Account::chain(user_id)),
-                        amount: Amount::from(2),
+                        amount: "2".parse().unwrap(),
                         user_data: UserData::default(),
                     }),
                 ],
@@ -2621,7 +2585,7 @@ where
                     user_id,
                     SystemEffect::Credit {
                         account: Account::chain(user_id),
-                        amount: Amount::from(2),
+                        amount: "2".parse().unwrap(),
                     },
                 ),
             ],
@@ -2633,7 +2597,7 @@ where
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public()),
-                balance: Amount::from(0),
+                balance: Amount::ZERO,
                 balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
@@ -2686,7 +2650,7 @@ where
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public()),
-                balance: Amount::from(0),
+                balance: Amount::ZERO,
                 balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
@@ -2825,7 +2789,7 @@ where
                             timestamp: Timestamp::from(0),
                             effect: Effect::System(SystemEffect::Credit {
                                 account: Account::chain(user_id),
-                                amount: Amount::from(2),
+                                amount: "2".parse().unwrap(),
                             }),
                         },
                     },
@@ -2861,7 +2825,7 @@ where
                 // Finally the child knows about both committees and has the money.
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair.public()),
-                balance: Amount::from(2),
+                balance: "2".parse().unwrap(),
                 balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
@@ -2964,15 +2928,11 @@ where
     let (committee, mut worker) = init_worker_with_chains(
         client,
         vec![
-            (
-                ChainDescription::Root(0),
-                key_pair0.public(),
-                Amount::from(0),
-            ),
+            (ChainDescription::Root(0), key_pair0.public(), Amount::ZERO),
             (
                 ChainDescription::Root(1),
                 key_pair1.public(),
-                Amount::from(3),
+                "3".parse().unwrap(),
             ),
         ],
     )
@@ -2994,7 +2954,7 @@ where
                 operations: vec![Operation::System(SystemOperation::Transfer {
                     owner: None,
                     recipient: Recipient::Account(Account::chain(admin_id)),
-                    amount: Amount::from(1),
+                    amount: Amount::ONE,
                     user_data: UserData::default(),
                 })],
                 previous_block_hash: None,
@@ -3006,7 +2966,7 @@ where
                 admin_id,
                 SystemEffect::Credit {
                     account: Account::chain(admin_id),
-                    amount: Amount::from(1),
+                    amount: Amount::ONE,
                 },
             )],
             make_state_hash(SystemExecutionState {
@@ -3016,7 +2976,7 @@ where
                 subscriptions: BTreeSet::new(),
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public()),
-                balance: Amount::from(2),
+                balance: "2".parse().unwrap(),
                 balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
@@ -3062,7 +3022,7 @@ where
                 subscriptions: BTreeSet::new(),
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair0.public()),
-                balance: Amount::from(0),
+                balance: Amount::ZERO,
                 balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
@@ -3089,7 +3049,7 @@ where
     );
     assert_eq!(
         *user_chain.execution_state.system.balance.get(),
-        Amount::from(2)
+        "2".parse().unwrap()
     );
     assert_eq!(
         *user_chain.execution_state.system.epoch.get(),
@@ -3155,15 +3115,11 @@ where
     let (committee, mut worker) = init_worker_with_chains(
         client,
         vec![
-            (
-                ChainDescription::Root(0),
-                key_pair0.public(),
-                Amount::from(0),
-            ),
+            (ChainDescription::Root(0), key_pair0.public(), Amount::ZERO),
             (
                 ChainDescription::Root(1),
                 key_pair1.public(),
-                Amount::from(3),
+                "3".parse().unwrap(),
             ),
         ],
     )
@@ -3185,7 +3141,7 @@ where
                 operations: vec![Operation::System(SystemOperation::Transfer {
                     owner: None,
                     recipient: Recipient::Account(Account::chain(admin_id)),
-                    amount: Amount::from(1),
+                    amount: Amount::ONE,
                     user_data: UserData::default(),
                 })],
                 previous_block_hash: None,
@@ -3197,7 +3153,7 @@ where
                 admin_id,
                 SystemEffect::Credit {
                     account: Account::chain(admin_id),
-                    amount: Amount::from(1),
+                    amount: Amount::ONE,
                 },
             )],
             make_state_hash(SystemExecutionState {
@@ -3207,7 +3163,7 @@ where
                 subscriptions: BTreeSet::new(),
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public()),
-                balance: Amount::from(2),
+                balance: "2".parse().unwrap(),
                 balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
@@ -3270,7 +3226,7 @@ where
                 subscriptions: BTreeSet::new(),
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public()),
-                balance: Amount::from(0),
+                balance: Amount::ZERO,
                 balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
@@ -3298,7 +3254,7 @@ where
         );
         assert_eq!(
             *user_chain.execution_state.system.balance.get(),
-            Amount::from(2)
+            "2".parse().unwrap()
         );
         assert_eq!(
             *user_chain.execution_state.system.epoch.get(),
@@ -3328,7 +3284,7 @@ where
                         timestamp: Timestamp::from(0),
                         effect: Effect::System(SystemEffect::Credit {
                             account: Account::chain(admin_id),
-                            amount: Amount::from(1),
+                            amount: Amount::ONE,
                         }),
                     },
                 }],
@@ -3346,7 +3302,7 @@ where
                 subscriptions: BTreeSet::new(),
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public()),
-                balance: Amount::from(1),
+                balance: Amount::ONE,
                 balances: BTreeMap::new(),
                 timestamp: Timestamp::from(0),
                 registry: ApplicationRegistry::default(),
@@ -3393,11 +3349,11 @@ async fn test_cross_chain_helper() {
         ChainDescription::Root(0),
         &key_pair0,
         Recipient::Account(Account::chain(id1)),
-        Amount::from(1),
+        Amount::ONE,
         Vec::new(),
         Epoch::from(0),
         &committee,
-        Amount::from(1),
+        Amount::ONE,
         &worker,
         None,
     )
@@ -3406,11 +3362,11 @@ async fn test_cross_chain_helper() {
         ChainDescription::Root(0),
         &key_pair0,
         Recipient::Account(Account::chain(id1)),
-        Amount::from(1),
+        Amount::ONE,
         Vec::new(),
         Epoch::from(0),
         &committee,
-        Amount::from(1),
+        Amount::ONE,
         &worker,
         Some(&certificate0),
     )
@@ -3419,11 +3375,11 @@ async fn test_cross_chain_helper() {
         ChainDescription::Root(0),
         &key_pair0,
         Recipient::Account(Account::chain(id1)),
-        Amount::from(1),
+        Amount::ONE,
         Vec::new(),
         Epoch::from(1),
         &committee,
-        Amount::from(1),
+        Amount::ONE,
         &worker,
         Some(&certificate1),
     )
@@ -3433,11 +3389,11 @@ async fn test_cross_chain_helper() {
         ChainDescription::Root(0),
         &key_pair0,
         Recipient::Account(Account::chain(id1)),
-        Amount::from(1),
+        Amount::ONE,
         Vec::new(),
         Epoch::from(0),
         &committee,
-        Amount::from(1),
+        Amount::ONE,
         &worker,
         Some(&certificate2),
     )

@@ -36,11 +36,11 @@ where
     futures::executor::block_on(async move {
         let mut builder = TestBuilder::new(store_builder, 4, 1).await.unwrap();
         let chain1 = builder
-            .add_initial_chain(ChainDescription::Root(1), Amount::from(10))
+            .add_initial_chain(ChainDescription::Root(1), "10".parse().unwrap())
             .await
             .unwrap();
         let chain2 = builder
-            .add_initial_chain(ChainDescription::Root(2), Amount::from(0))
+            .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
             .await
             .unwrap();
         (chain1, chain2)
@@ -55,7 +55,7 @@ where
     ViewError: From<<B::Store as Store>::ContextError>,
 {
     let owner1 = chain1.identity().await.unwrap();
-    let amt = Amount::from(1);
+    let amt = Amount::ONE;
 
     let account = Account::owner(chain2.chain_id(), owner1);
     let cert = chain1
@@ -65,7 +65,7 @@ where
 
     chain2.receive_certificate(cert).await.unwrap();
     chain2.process_inbox().await.unwrap();
-    assert_eq!(chain1.local_balance().await.unwrap(), Amount::from(9));
+    assert_eq!(chain1.local_balance().await.unwrap(), "9".parse().unwrap());
 
     let account = Recipient::Account(Account::chain(chain1.chain_id()));
     let cert = chain1
@@ -78,7 +78,7 @@ where
 
     chain1.receive_certificate(cert).await.unwrap();
     chain1.process_inbox().await.unwrap();
-    assert_eq!(chain1.local_balance().await.unwrap(), Amount::from(10));
+    assert_eq!(chain1.local_balance().await.unwrap(), "10".parse().unwrap());
 }
 
 fn criterion_benchmark<M: Measurement + 'static>(c: &mut Criterion<M>) {

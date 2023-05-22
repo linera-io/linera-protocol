@@ -54,12 +54,12 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(4))
+        .add_initial_chain(ChainDescription::Root(1), "4".parse().unwrap())
         .await?;
     let certificate = sender
         .transfer_to_account(
             None,
-            Amount::from(3),
+            "3".parse().unwrap(),
             Account::chain(ChainId::root(2)),
             UserData(Some(*b"hello...........hello...........")),
         )
@@ -67,7 +67,7 @@ where
         .unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
-    assert_eq!(sender.local_balance().await.unwrap(), Amount::from(1));
+    assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
@@ -103,26 +103,26 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(4))
+        .add_initial_chain(ChainDescription::Root(1), "4".parse().unwrap())
         .await?;
     let owner = sender.identity().await?;
     let mut receiver = builder
-        .add_initial_chain(ChainDescription::Root(2), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
         .await?;
     let cert = sender
         .transfer_to_account(
             None,
-            Amount::from(3),
+            "3".parse().unwrap(),
             Account::owner(ChainId::root(2), owner),
             UserData(None),
         )
         .await
         .unwrap();
-    assert_eq!(sender.local_balance().await.unwrap(), Amount::from(1));
+    assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
     receiver.receive_certificate(cert).await?;
     receiver.process_inbox().await?;
     // The received amount is not in the unprotected balance.
-    assert_eq!(receiver.local_balance().await.unwrap(), Amount::from(0));
+    assert_eq!(receiver.local_balance().await.unwrap(), Amount::ZERO);
 
     // First attempt that should be skipped.
     sender
@@ -130,7 +130,7 @@ where
             owner,
             ChainId::root(2),
             Recipient::Account(Account::chain(ChainId::root(1))),
-            Amount::from(5),
+            "5".parse().unwrap(),
             UserData(None),
         )
         .await
@@ -141,7 +141,7 @@ where
             owner,
             ChainId::root(2),
             Recipient::Account(Account::chain(ChainId::root(1))),
-            Amount::from(2),
+            "2".parse().unwrap(),
             UserData(None),
         )
         .await
@@ -152,7 +152,7 @@ where
 
     sender.receive_certificate(cert).await?;
     sender.process_inbox().await?;
-    assert_eq!(sender.local_balance().await.unwrap(), Amount::from(3));
+    assert_eq!(sender.local_balance().await.unwrap(), "3".parse().unwrap());
 
     Ok(())
 }
@@ -181,7 +181,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(4))
+        .add_initial_chain(ChainDescription::Root(1), "4".parse().unwrap())
         .await?;
     let new_key_pair = KeyPair::generate();
     let new_owner = Owner::from(new_key_pair.public());
@@ -197,16 +197,16 @@ where
             .value,
         certificate.value
     );
-    assert_eq!(sender.local_balance().await.unwrap(), Amount::from(4));
+    assert_eq!(sender.local_balance().await.unwrap(), "4".parse().unwrap());
     assert_eq!(
         sender.synchronize_from_validators().await.unwrap(),
-        Amount::from(4)
+        "4".parse().unwrap()
     );
     // Can still use the chain.
     sender
         .transfer_to_account(
             None,
-            Amount::from(3),
+            "3".parse().unwrap(),
             Account::chain(ChainId::root(2)),
             UserData::default(),
         )
@@ -239,7 +239,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(4))
+        .add_initial_chain(ChainDescription::Root(1), "4".parse().unwrap())
         .await?;
 
     let new_key_pair = KeyPair::generate();
@@ -258,16 +258,16 @@ where
             .value,
         certificate.value
     );
-    assert_eq!(sender.local_balance().await.unwrap(), Amount::from(4));
+    assert_eq!(sender.local_balance().await.unwrap(), "4".parse().unwrap());
     assert_eq!(
         sender.synchronize_from_validators().await.unwrap(),
-        Amount::from(4)
+        "4".parse().unwrap()
     );
     // Cannot use the chain any more.
     assert!(sender
         .transfer_to_account(
             None,
-            Amount::from(3),
+            "3".parse().unwrap(),
             Account::chain(ChainId::root(2)),
             UserData::default()
         )
@@ -300,7 +300,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 0).await?;
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(4))
+        .add_initial_chain(ChainDescription::Root(1), "4".parse().unwrap())
         .await?;
     let new_key_pair = KeyPair::generate();
     let certificate = sender.share_ownership(new_key_pair.public()).await.unwrap();
@@ -315,16 +315,16 @@ where
             .value,
         certificate.value
     );
-    assert_eq!(sender.local_balance().await.unwrap(), Amount::from(4));
+    assert_eq!(sender.local_balance().await.unwrap(), "4".parse().unwrap());
     assert_eq!(
         sender.synchronize_from_validators().await.unwrap(),
-        Amount::from(4)
+        "4".parse().unwrap()
     );
     // Can still use the chain with the old client.
     sender
         .transfer_to_account(
             None,
-            Amount::from(2),
+            "2".parse().unwrap(),
             Account::chain(ChainId::root(2)),
             UserData::default(),
         )
@@ -345,16 +345,16 @@ where
     assert!(client.local_balance().await.is_err());
     assert_eq!(
         client.synchronize_from_validators().await.unwrap(),
-        Amount::from(2)
+        "2".parse().unwrap()
     );
-    assert_eq!(client.local_balance().await.unwrap(), Amount::from(2));
+    assert_eq!(client.local_balance().await.unwrap(), "2".parse().unwrap());
 
     // We need at least three validators for making a transfer.
     builder.set_fault_type(..2, FaultType::Offline).await;
     assert!(client
         .transfer_to_account(
             None,
-            Amount::from(1),
+            Amount::ONE,
             Account::chain(ChainId::root(3)),
             UserData::default(),
         )
@@ -365,7 +365,7 @@ where
     assert!(sender
         .transfer_to_account(
             None,
-            Amount::from(1),
+            Amount::ONE,
             Account::chain(ChainId::root(3)),
             UserData::default(),
         )
@@ -377,13 +377,13 @@ where
     builder.set_fault_type(.., FaultType::Honest).await;
     assert_eq!(
         client.synchronize_from_validators().await.unwrap(),
-        Amount::from(2)
+        "2".parse().unwrap()
     );
     client.clear_pending_block().await;
     client
         .transfer_to_account(
             None,
-            Amount::from(1),
+            Amount::ONE,
             Account::chain(ChainId::root(3)),
             UserData::default(),
         )
@@ -393,13 +393,13 @@ where
     // The other client doesn't know the new round number yet:
     assert_eq!(
         sender.synchronize_from_validators().await.unwrap(),
-        Amount::from(1)
+        Amount::ONE
     );
     sender.clear_pending_block().await;
     sender
         .transfer_to_account(
             None,
-            Amount::from(1),
+            Amount::ONE,
             Account::chain(ChainId::root(2)),
             UserData::default(),
         )
@@ -407,10 +407,10 @@ where
         .unwrap();
 
     // That's it, we spent all our money on this test!
-    assert_eq!(sender.local_balance().await.unwrap(), Amount::from(0));
+    assert_eq!(sender.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         client.synchronize_from_validators().await.unwrap(),
-        Amount::from(0)
+        Amount::ZERO
     );
     Ok(())
 }
@@ -440,10 +440,10 @@ where
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
     builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
         .await?;
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(4))
+        .add_initial_chain(ChainDescription::Root(1), "4".parse().unwrap())
         .await?;
     let new_key_pair = KeyPair::generate();
     // Open the new chain.
@@ -459,9 +459,9 @@ where
     client.receive_certificate(certificate).await.unwrap();
     assert_eq!(
         client.synchronize_from_validators().await.unwrap(),
-        Amount::from(0)
+        Amount::ZERO
     );
-    assert_eq!(client.local_balance().await.unwrap(), Amount::from(0));
+    assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
     client.close_chain().await.unwrap();
     Ok(())
 }
@@ -491,10 +491,10 @@ where
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
     builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
         .await?;
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(4))
+        .add_initial_chain(ChainDescription::Root(1), "4".parse().unwrap())
         .await?;
     let new_key_pair = KeyPair::generate();
     let new_id = ChainId::child(EffectId {
@@ -506,7 +506,7 @@ where
     sender
         .transfer_to_account(
             None,
-            Amount::from(3),
+            "3".parse().unwrap(),
             Account::chain(new_id),
             UserData::default(),
         )
@@ -538,11 +538,11 @@ where
         .make_client(new_id, new_key_pair, None, BlockHeight::from(0))
         .await?;
     client.receive_certificate(certificate).await.unwrap();
-    assert_eq!(client.local_balance().await.unwrap(), Amount::from(3));
+    assert_eq!(client.local_balance().await.unwrap(), "3".parse().unwrap());
     client
         .transfer_to_account(
             None,
-            Amount::from(3),
+            "3".parse().unwrap(),
             Account::chain(ChainId::root(3)),
             UserData::default(),
         )
@@ -576,10 +576,10 @@ where
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
     builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
         .await?;
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(4))
+        .add_initial_chain(ChainDescription::Root(1), "4".parse().unwrap())
         .await?;
     let new_key_pair = KeyPair::generate();
     // Open the new chain.
@@ -589,7 +589,7 @@ where
     let transfer_certificate = sender
         .transfer_to_account(
             None,
-            Amount::from(3),
+            "3".parse().unwrap(),
             Account::chain(new_id),
             UserData::default(),
         )
@@ -607,22 +607,22 @@ where
         .receive_certificate(creation_certificate)
         .await
         .unwrap();
-    assert_eq!(client.local_balance().await.unwrap(), Amount::from(0));
+    assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
     client
         .receive_certificate(transfer_certificate)
         .await
         .unwrap();
-    assert_eq!(client.local_balance().await.unwrap(), Amount::from(3));
+    assert_eq!(client.local_balance().await.unwrap(), "3".parse().unwrap());
     client
         .transfer_to_account(
             None,
-            Amount::from(3),
+            "3".parse().unwrap(),
             Account::chain(ChainId::root(3)),
             UserData::default(),
         )
         .await
         .unwrap();
-    assert_eq!(client.local_balance().await.unwrap(), Amount::from(0));
+    assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
     Ok(())
 }
 
@@ -650,7 +650,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(4))
+        .add_initial_chain(ChainDescription::Root(1), "4".parse().unwrap())
         .await?;
     let certificate = sender.close_chain().await.unwrap();
     assert!(certificate.value.is_confirmed());
@@ -673,7 +673,7 @@ where
     assert!(sender
         .transfer_to_account(
             None,
-            Amount::from(3),
+            "3".parse().unwrap(),
             Account::chain(ChainId::root(2)),
             UserData::default()
         )
@@ -708,12 +708,12 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 2).await?;
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(4))
+        .add_initial_chain(ChainDescription::Root(1), "4".parse().unwrap())
         .await?;
     assert!(sender
         .transfer_to_account_unsafe_unconfirmed(
             None,
-            Amount::from(3),
+            "3".parse().unwrap(),
             Account::chain(ChainId::root(2)),
             UserData(Some(*b"hello...........hello...........")),
         )
@@ -721,7 +721,7 @@ where
         .is_err());
     assert_eq!(sender.next_block_height, BlockHeight::from(0));
     assert!(sender.pending_block.is_some());
-    assert_eq!(sender.local_balance().await.unwrap(), Amount::from(4));
+    assert_eq!(sender.local_balance().await.unwrap(), "4".parse().unwrap());
     Ok(())
 }
 
@@ -749,24 +749,24 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut client1 = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(3))
+        .add_initial_chain(ChainDescription::Root(1), "3".parse().unwrap())
         .await?;
     let mut client2 = builder
-        .add_initial_chain(ChainDescription::Root(2), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
         .await?;
-    assert_eq!(client1.local_balance().await.unwrap(), Amount::from(3));
+    assert_eq!(client1.local_balance().await.unwrap(), "3".parse().unwrap());
     assert_eq!(
         client1.query_system_application(SystemQuery).await.unwrap(),
         SystemResponse {
             chain_id: ChainId::root(1),
-            balance: Amount::from(3),
+            balance: "3".parse().unwrap(),
         }
     );
 
     let certificate = client1
         .transfer_to_account(
             None,
-            Amount::from(3),
+            "3".parse().unwrap(),
             Account::chain(client2.chain_id),
             UserData::default(),
         )
@@ -775,12 +775,12 @@ where
 
     assert_eq!(client1.next_block_height, BlockHeight::from(1));
     assert!(client1.pending_block.is_none());
-    assert_eq!(client1.local_balance().await.unwrap(), Amount::from(0));
+    assert_eq!(client1.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         client1.query_system_application(SystemQuery).await.unwrap(),
         SystemResponse {
             chain_id: ChainId::root(1),
-            balance: Amount::from(0),
+            balance: Amount::ZERO,
         }
     );
 
@@ -793,20 +793,20 @@ where
         certificate.value
     );
     // Local balance is lagging.
-    assert_eq!(client2.local_balance().await.unwrap(), Amount::from(0));
+    assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Force synchronization of local balance.
     assert_eq!(
         client2.synchronize_from_validators().await.unwrap(),
-        Amount::from(3)
+        "3".parse().unwrap()
     );
-    assert_eq!(client2.local_balance().await.unwrap(), Amount::from(3));
+    assert_eq!(client2.local_balance().await.unwrap(), "3".parse().unwrap());
     // The local balance from the client is reflecting incoming messages but the
     // SystemResponse only reads the ChainState.
     assert_eq!(
         client2.query_system_application(SystemQuery).await.unwrap(),
         SystemResponse {
             chain_id: ChainId::root(2),
-            balance: Amount::from(0),
+            balance: Amount::ZERO,
         }
     );
 
@@ -815,7 +815,7 @@ where
     client2
         .transfer_to_account(
             None,
-            Amount::from(1),
+            Amount::ONE,
             Account::chain(client1.chain_id),
             UserData::default(),
         )
@@ -823,17 +823,17 @@ where
         .unwrap();
     assert_eq!(client2.next_block_height, BlockHeight::from(1));
     assert!(client2.pending_block.is_none());
-    assert_eq!(client2.local_balance().await.unwrap(), Amount::from(2));
+    assert_eq!(client2.local_balance().await.unwrap(), "2".parse().unwrap());
     assert_eq!(
         client1.synchronize_from_validators().await.unwrap(),
-        Amount::from(1)
+        Amount::ONE
     );
     // Local balance from client2 is now consolidated.
     assert_eq!(
         client2.query_system_application(SystemQuery).await.unwrap(),
         SystemResponse {
             chain_id: ChainId::root(2),
-            balance: Amount::from(2),
+            balance: "2".parse().unwrap(),
         }
     );
     Ok(())
@@ -863,27 +863,27 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut client1 = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(3))
+        .add_initial_chain(ChainDescription::Root(1), "3".parse().unwrap())
         .await?;
     let mut client2 = builder
-        .add_initial_chain(ChainDescription::Root(2), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
         .await?;
     let certificate = client1
         .transfer_to_account_unsafe_unconfirmed(
             None,
-            Amount::from(2),
+            "2".parse().unwrap(),
             Account::chain(client2.chain_id),
             UserData::default(),
         )
         .await
         .unwrap();
     // Transfer was executed locally.
-    assert_eq!(client1.local_balance().await.unwrap(), Amount::from(1));
+    assert_eq!(client1.local_balance().await.unwrap(), Amount::ONE);
     assert_eq!(client1.next_block_height, BlockHeight::from(1));
     assert!(client1.pending_block.is_none());
     // Let the receiver confirm in last resort.
     client2.receive_certificate(certificate).await.unwrap();
-    assert_eq!(client2.local_balance().await.unwrap(), Amount::from(2));
+    assert_eq!(client2.local_balance().await.unwrap(), "2".parse().unwrap());
     Ok(())
 }
 
@@ -925,13 +925,13 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut client1 = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(3))
+        .add_initial_chain(ChainDescription::Root(1), "3".parse().unwrap())
         .await?;
     let mut client2 = builder
-        .add_initial_chain(ChainDescription::Root(2), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
         .await?;
     let mut client3 = builder
-        .add_initial_chain(ChainDescription::Root(3), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(3), Amount::ZERO)
         .await?;
 
     // Transferring funds from client1 to client2.
@@ -939,7 +939,7 @@ where
     client1
         .transfer_to_account_unsafe_unconfirmed(
             None,
-            Amount::from(1),
+            Amount::ONE,
             Account::chain(client2.chain_id),
             UserData::default(),
         )
@@ -948,7 +948,7 @@ where
     client1
         .transfer_to_account_unsafe_unconfirmed(
             None,
-            Amount::from(1),
+            Amount::ONE,
             Account::chain(client2.chain_id),
             UserData::default(),
         )
@@ -963,12 +963,12 @@ where
         .await
         .unwrap();
     // Client2 does not know about the money yet.
-    assert_eq!(client2.local_balance().await.unwrap(), Amount::from(0));
+    assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Sending money from client2 fails, as a consequence.
     assert!(client2
         .transfer_to_account_unsafe_unconfirmed(
             None,
-            Amount::from(2),
+            "2".parse().unwrap(),
             Account::chain(client3.chain_id),
             UserData::default(),
         )
@@ -980,29 +980,29 @@ where
     // Retrying the whole command works after synchronization.
     assert_eq!(
         client2.synchronize_from_validators().await.unwrap(),
-        Amount::from(2)
+        "2".parse().unwrap()
     );
     let certificate = client2
         .transfer_to_account(
             None,
-            Amount::from(2),
+            "2".parse().unwrap(),
             Account::chain(client3.chain_id),
             UserData::default(),
         )
         .await
         .unwrap();
     // Blocks were executed locally.
-    assert_eq!(client1.local_balance().await.unwrap(), Amount::from(1));
+    assert_eq!(client1.local_balance().await.unwrap(), Amount::ONE);
     assert_eq!(client1.next_block_height, BlockHeight::from(2));
     assert!(client1.pending_block.is_none());
-    assert_eq!(client2.local_balance().await.unwrap(), Amount::from(0));
+    assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(client2.next_block_height, BlockHeight::from(1));
     assert!(client2.pending_block.is_none());
     // Last one was not confirmed remotely, hence a conservative balance.
-    assert_eq!(client2.local_balance().await.unwrap(), Amount::from(0));
+    assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Let the receiver confirm in last resort.
     client3.receive_certificate(certificate).await.unwrap();
-    assert_eq!(client3.local_balance().await.unwrap(), Amount::from(2));
+    assert_eq!(client3.local_balance().await.unwrap(), "2".parse().unwrap());
     Ok(())
 }
 
@@ -1030,10 +1030,10 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut admin = builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::from(3))
+        .add_initial_chain(ChainDescription::Root(0), "3".parse().unwrap())
         .await?;
     let mut user = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(1), Amount::ZERO)
         .await?;
 
     // Create a new committee.
@@ -1051,7 +1051,7 @@ where
     let cert = admin
         .transfer_to_account(
             None,
-            Amount::from(2),
+            "2".parse().unwrap(),
             Account::chain(ChainId::root(1)),
             UserData(None),
         )
@@ -1060,7 +1060,7 @@ where
     admin
         .transfer_to_account(
             None,
-            Amount::from(1),
+            Amount::ONE,
             Account::chain(ChainId::root(1)),
             UserData(None),
         )
@@ -1073,7 +1073,7 @@ where
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(0));
     assert_eq!(
         user.synchronize_from_validators().await.unwrap(),
-        Amount::from(3)
+        "3".parse().unwrap()
     );
 
     // User is a genesis chain so the migration message is not even in the inbox yet.
@@ -1092,7 +1092,7 @@ where
     let cert = user
         .transfer_to_account(
             None,
-            Amount::from(2),
+            "2".parse().unwrap(),
             Account::chain(ChainId::root(0)),
             UserData(None),
         )
@@ -1102,7 +1102,7 @@ where
     // Transfer is blocked because the epoch #0 has been retired by admin.
     assert_eq!(
         admin.synchronize_from_validators().await.unwrap(),
-        Amount::from(0)
+        Amount::ZERO
     );
 
     // Have the user receive the notification to migrate to epoch #1.
@@ -1114,7 +1114,7 @@ where
     let cert = user
         .transfer_to_account(
             None,
-            Amount::from(1),
+            Amount::ONE,
             Account::chain(ChainId::root(0)),
             UserData(None),
         )
@@ -1124,7 +1124,7 @@ where
     // Transfer goes through and the previous one as well thanks to block chaining.
     assert_eq!(
         admin.synchronize_from_validators().await.unwrap(),
-        Amount::from(3)
+        "3".parse().unwrap()
     );
     Ok(())
 }

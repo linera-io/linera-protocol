@@ -19,8 +19,8 @@ use linera_sdk::{
 /// checks that the balances on each microchain are correct.
 #[tokio::test]
 async fn test_cross_chain_transfer() {
-    let initial_amount = Amount::from(20);
-    let transfer_amount = Amount::from(15);
+    let initial_amount: Amount = "20".parse().unwrap();
+    let transfer_amount: Amount = "15".parse().unwrap();
 
     let (validator, bytecode_id) = TestValidator::with_current_bytecode().await;
     let mut sender_chain = validator.new_chain().await;
