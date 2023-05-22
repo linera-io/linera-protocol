@@ -2604,6 +2604,7 @@ dependencies = [
  "linera-views-derive",
  "linera-wit-bindgen-host-wasmer-rust",
  "linera-wit-bindgen-host-wasmtime-rust",
+ "lru",
  "once_cell",
  "serde",
  "serde_bytes",

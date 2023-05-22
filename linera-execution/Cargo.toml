@@ -29,6 +29,7 @@ futures = { workspace = true }
 linera-base = { workspace = true }
 linera-views = { workspace = true, features = ["metrics"] }
 linera-views-derive = { workspace = true }
+lru = { workspace = true }
 once_cell = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
