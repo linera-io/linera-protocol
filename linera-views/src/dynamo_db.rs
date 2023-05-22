@@ -963,7 +963,7 @@ pub enum DynamoDbContextError {
     DatabaseRecoveryFailed,
 
     /// The length of the value should be at most 400KB.
-    #[error("The DynamoDB vakue should be less than 400KB")]
+    #[error("The DynamoDB value should be less than 400KB")]
     ValueLengthTooLarge,
 
     /// The stored key is missing.
