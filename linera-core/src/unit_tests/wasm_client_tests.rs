@@ -59,10 +59,10 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut publisher = builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::from(3))
+        .add_initial_chain(ChainDescription::Root(0), "3".parse().unwrap())
         .await?;
     let mut creator = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(1), Amount::ZERO)
         .await?;
 
     let cert = creator
@@ -159,15 +159,15 @@ where
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // Will publish the bytecodes.
     let mut publisher = builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::from(3))
+        .add_initial_chain(ChainDescription::Root(0), "3".parse().unwrap())
         .await?;
     // Will create the apps and use them to send a message.
     let mut creator = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(1), Amount::ZERO)
         .await?;
     // Will receive the message.
     let mut receiver = builder
-        .add_initial_chain(ChainDescription::Root(2), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
         .await?;
     let receiver_id = ChainId::root(2);
 
@@ -286,11 +286,11 @@ where
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // Will publish the bytecodes.
     let mut publisher = builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::from(3))
+        .add_initial_chain(ChainDescription::Root(0), "3".parse().unwrap())
         .await?;
     // Will create the apps and use them to send a message.
     let mut creator = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(1), Amount::ZERO)
         .await?;
 
     let cert = creator
@@ -375,10 +375,10 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::from(3))
+        .add_initial_chain(ChainDescription::Root(0), "3".parse().unwrap())
         .await?;
     let mut receiver = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(1), Amount::ZERO)
         .await?;
 
     let (bytecode_id, pub_cert) = {
@@ -402,7 +402,7 @@ where
     let receiver_owner =
         fungible::AccountOwner::User(Owner::from(receiver.key_pair().await?.public()));
 
-    let accounts = BTreeMap::from_iter([(sender_owner, Amount::from(1_000_000))]);
+    let accounts = BTreeMap::from_iter([(sender_owner, "1_000_000".parse().unwrap())]);
     let state = fungible::InitialState { accounts };
     let (application_id, _cert) = sender
         .create_application(bytecode_id, &(), &state, vec![])
@@ -540,10 +540,10 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
         .await?;
     let mut receiver = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from(0))
+        .add_initial_chain(ChainDescription::Root(1), Amount::ZERO)
         .await?;
 
     let (bytecode_id, pub_cert) = {

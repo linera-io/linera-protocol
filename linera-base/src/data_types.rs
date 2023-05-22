@@ -365,6 +365,7 @@ impl<'a> std::iter::Sum<&'a Amount> for Amount {
 impl Amount {
     pub const DECIMAL_PLACES: u8 = 18;
     pub const ONE: Amount = Amount(10u128.pow(Amount::DECIMAL_PLACES as u32));
+    pub const ZERO: Amount = Amount(0);
 
     /// Helper function to obtain the 64 most significant bits of the balance.
     pub fn upper_half(self) -> u64 {

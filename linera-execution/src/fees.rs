@@ -26,10 +26,10 @@ impl Pricing {
     #[cfg(any(test, feature = "test"))]
     pub fn make_simple() -> Self {
         Pricing {
-            certificate: Amount::from(0),
-            fuel: Amount::from(0),
-            storage: Amount::from(0),
-            messages: Amount::from(0),
+            certificate: Amount::ZERO,
+            fuel: Amount::ZERO,
+            storage: Amount::ZERO,
+            messages: Amount::ZERO,
         }
     }
 
