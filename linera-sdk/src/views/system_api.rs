@@ -30,6 +30,7 @@ impl KeyValueStore {
 
 #[async_trait]
 impl KeyValueStoreClient for KeyValueStore {
+    const MAX_CONNECTIONS: usize = 1;
     type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;

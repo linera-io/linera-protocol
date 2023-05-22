@@ -208,20 +208,26 @@ where
     /// Verifies that this chain is up-to-date and all the messages executed ahead of time
     /// have been properly received by now.
     pub async fn validate_incoming_messages(&mut self) -> Result<(), ChainError> {
+        use futures::stream::{self, StreamExt, TryStreamExt};
         let chain_id = self.chain_id();
         let origins = self.inboxes.indices().await?;
         let inboxes = self.inboxes.try_load_entries(&origins).await?;
-        for (origin, inbox) in origins.into_iter().zip(inboxes) {
-            let event = inbox.removed_events.front().await?;
-            ensure!(
-                event.is_none(),
-                ChainError::MissingCrossChainUpdate {
-                    chain_id,
-                    origin: origin.into(),
-                    height: event.unwrap().height,
-                }
-            );
-        }
+        let stream = origins.into_iter().zip(inboxes);
+        let stream = stream::iter(stream)
+            .map(|(origin, inbox)| async move {
+                let event = inbox.removed_events.front().await?;
+                ensure!(
+                    event.is_none(),
+                    ChainError::MissingCrossChainUpdate {
+                        chain_id,
+                        origin: origin.into(),
+                        height: event.unwrap().height,
+                    }
+                );
+                Ok::<(), ChainError>(())
+            })
+            .buffer_unordered(C::MAX_CONNECTIONS);
+        stream.try_collect::<Vec<_>>().await?;
         Ok(())
     }
 

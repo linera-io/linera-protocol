@@ -43,6 +43,7 @@ pub fn create_test_context() -> MemoryContext<()> {
 
 #[async_trait]
 impl KeyValueStoreClient for MemoryClient {
+    const MAX_CONNECTIONS: usize = 1;
     type Error = MemoryContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;

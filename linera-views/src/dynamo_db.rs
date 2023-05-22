@@ -66,6 +66,10 @@ pub const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
 /// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html>
 const MAX_BATCH_WRITE_ITEM_BYTES: usize = 16777216;
 
+/// Fundamental constant of DynamoDB: The maximum number of simultaneous connections is 50.
+/// See https://stackoverflow.com/questions/13128613/amazon-dynamo-db-max-client-connections
+const MAX_CONNECTIONS: usize = 50;
+
 /// Builds the key attributes for a table item.
 ///
 /// The key is composed of two attributes that are both binary blobs. The first attribute is a
@@ -639,6 +643,7 @@ impl DynamoDbClientInternal {
 
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClientInternal {
+    const MAX_CONNECTIONS: usize = MAX_CONNECTIONS;
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
@@ -723,6 +728,7 @@ pub struct DynamoDbClient {
 
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClient {
+    const MAX_CONNECTIONS: usize = MAX_CONNECTIONS;
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;

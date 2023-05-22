@@ -111,6 +111,9 @@ pub trait KeyValueIterable<Error> {
 /// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
 #[async_trait]
 pub trait KeyValueStoreClient {
+    /// Maximum number of simultaneous connections
+    const MAX_CONNECTIONS: usize;
+
     /// The error type.
     type Error: Debug;
 
@@ -251,6 +254,9 @@ impl<E> KeyValueIterable<E> for Vec<(Vec<u8>, Vec<u8>)> {
 /// connect to the database and the address of the current entry.
 #[async_trait]
 pub trait Context {
+    /// Maximum number of simultaneous connections
+    const MAX_CONNECTIONS: usize;
+
     /// User provided data to be carried along.
     type Extra: Clone + Send + Sync;
 
@@ -436,6 +442,7 @@ where
     DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<DB::Error>,
 {
+    const MAX_CONNECTIONS: usize = DB::MAX_CONNECTIONS;
     type Extra = E;
     type Error = DB::Error;
     type Keys = DB::Keys;

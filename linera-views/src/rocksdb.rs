@@ -44,6 +44,7 @@ pub type RocksdbContext<E> = ContextFromDb<E, RocksdbClient>;
 
 #[async_trait]
 impl KeyValueStoreClient for DbInternal {
+    const MAX_CONNECTIONS: usize = 1;
     type Error = RocksdbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -171,6 +172,7 @@ impl KeyValueStoreClient for DbInternal {
 
 #[async_trait]
 impl KeyValueStoreClient for RocksdbClient {
+    const MAX_CONNECTIONS: usize = 1;
     type Error = RocksdbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
