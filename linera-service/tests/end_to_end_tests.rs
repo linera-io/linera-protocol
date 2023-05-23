@@ -2,12 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg_attr(not(any(feature = "wasmer", feature = "wasmtime")), allow(dead_code))]
+
 use async_graphql::InputType;
-use fungible::{Account, AccountOwner};
-use linera_base::{
-    data_types::{Amount, Timestamp},
-    identifiers::{ChainId, EffectId, Owner},
-};
+use linera_base::identifiers::{ChainId, EffectId, Owner};
 use linera_execution::Bytecode;
 use linera_service::config::WalletState;
 use once_cell::sync::{Lazy, OnceCell};
@@ -31,6 +29,9 @@ use tonic_health::proto::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
 use tracing::{info, warn};
+
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+use linera_base::data_types::{Amount, Timestamp};
 
 /// A static lock to prevent integration tests from running in parallel.
 static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
@@ -76,6 +77,28 @@ impl Network {
     }
 }
 
+#[allow(unused_mut)]
+fn detect_current_features() -> Vec<&'static str> {
+    let mut features = vec![];
+    #[cfg(benchmark)]
+    {
+        features.push("benchmark");
+    }
+    #[cfg(wasmer)]
+    {
+        features.push("wasmer");
+    }
+    #[cfg(wasmtime)]
+    {
+        features.push("wasmtime");
+    }
+    #[cfg(aws)]
+    {
+        features.push("aws");
+    }
+    features
+}
+
 async fn cargo_force_build_binary(name: &'static str) -> PathBuf {
     let mut build_command = Command::new("cargo");
     build_command.arg("build");
@@ -87,9 +110,15 @@ async fn cargo_force_build_binary(name: &'static str) -> PathBuf {
     } else {
         false
     };
-    build_command
-        .args(["--features", "benchmark"])
-        .args(["--bin", name]);
+    // Use the same features as the current environment so that we don't rebuild as often.
+    let features = detect_current_features();
+    if !features.is_empty() {
+        build_command
+            .arg("--no-default-features")
+            .arg("--features")
+            .args(features);
+    }
+    build_command.args(["--bin", name]);
     info!("Running compiler: {:?}", build_command);
     assert!(build_command
         .spawn()
@@ -349,6 +378,7 @@ impl Client {
         .await;
     }
 
+    #[cfg(benchmark)]
     async fn benchmark(&self, max_in_flight: usize) {
         assert!(self
             .run_with_storage()
@@ -871,8 +901,12 @@ struct Application {
     uri: String,
 }
 
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 impl Application {
-    async fn get_fungible_account_owner_amount(&self, account_owner: &AccountOwner) -> Amount {
+    async fn get_fungible_account_owner_amount(
+        &self,
+        account_owner: &fungible::AccountOwner,
+    ) -> Amount {
         let query = format!(
             "query {{ accounts(accountOwner: {} ) }}",
             account_owner.to_value()
@@ -883,7 +917,7 @@ impl Application {
 
     async fn assert_fungible_account_balances(
         &self,
-        accounts: impl IntoIterator<Item = (AccountOwner, Amount)>,
+        accounts: impl IntoIterator<Item = (fungible::AccountOwner, Amount)>,
     ) {
         for (account_owner, amount) in accounts {
             let value = self.get_fungible_account_owner_amount(&account_owner).await;
@@ -924,6 +958,7 @@ impl Application {
     }
 }
 
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_counter() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -965,6 +1000,7 @@ async fn test_end_to_end_counter() {
     node_service.assert_is_running();
 }
 
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_counter_publish_create() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1004,6 +1040,7 @@ async fn test_end_to_end_counter_publish_create() {
     node_service.assert_is_running();
 }
 
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_multiple_wallets() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1112,8 +1149,11 @@ async fn test_reconfiguration(network: Network) {
     assert_eq!(client.query_balance(chain_1).await.unwrap(), "7.");
     assert_eq!(client.query_balance(chain_2).await.unwrap(), "3.");
 
-    // Launch local benchmark using all user chains
-    client.benchmark(500).await;
+    #[cfg(benchmark)]
+    {
+        // Launch local benchmark using all user chains
+        client.benchmark(500).await;
+    }
 
     // Create derived chain
     let (_, chain_3) = client.open_chain(chain_1, None).await.unwrap();
@@ -1168,6 +1208,7 @@ async fn test_reconfiguration(network: Network) {
     }
 }
 
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_social_user_pub_sub() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1287,9 +1328,10 @@ async fn test_end_to_end_retry_notification_stream() {
     node_service2.assert_is_running();
 }
 
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_fungible() {
-    use fungible::{AccountOwner, InitialState};
+    use fungible::{Account, AccountOwner, InitialState};
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
@@ -1403,10 +1445,11 @@ async fn test_end_to_end_fungible() {
     node_service2.assert_is_running();
 }
 
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_crowd_funding() {
     use crowd_funding::InitializationArguments;
-    use fungible::{AccountOwner, InitialState};
+    use fungible::{Account, AccountOwner, InitialState};
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
