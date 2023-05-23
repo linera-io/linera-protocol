@@ -124,7 +124,7 @@ where
     // Creating the application used fuel because of the `initialize` call.
     assert_eq!(
         Amount::ONE.saturating_sub(creator.local_balance().await?),
-        "0.005_016_483_000_574_143".parse().unwrap()
+        "0.005_016_479_000_578_143".parse().unwrap()
     );
     Ok(())
 }

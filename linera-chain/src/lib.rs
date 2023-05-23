@@ -108,4 +108,6 @@ pub enum ChainError {
     CertificateSignatureVerificationFailed { error: String },
     #[error("Internal error {0}")]
     InternalError(String),
+    #[error("Insufficient balance to pay the fees")]
+    InsufficientBalance,
 }
