@@ -18,7 +18,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, EffectId, Owner},
 };
 use linera_execution::{
-    committee::Epoch,
+    committee::{Committee, Epoch},
     pricing::Pricing,
     system::{Account, Recipient, SystemOperation, UserData},
     Operation, SystemQuery, SystemResponse,
@@ -1038,10 +1038,8 @@ where
 
     // Create a new committee.
     let validators = builder.initial_committee.validators;
-    admin
-        .stage_new_committee(validators, Pricing::make_simple())
-        .await
-        .unwrap();
+    let committee = Committee::new(validators, Pricing::make_simple());
+    admin.stage_new_committee(committee).await.unwrap();
     assert_eq!(admin.next_block_height, BlockHeight::from(1));
     assert!(admin.pending_block.is_none());
     assert!(admin.key_pair().await.is_ok());

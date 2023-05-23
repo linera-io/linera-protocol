@@ -646,6 +646,25 @@ enum ClientCommand {
         name: ValidatorName,
     },
 
+    /// View or update the pricing.
+    Pricing {
+        /// Set the base price for each certificate.
+        #[structopt(long)]
+        certificate: Option<Amount>,
+
+        /// Set the price per unit of fuel when executing user effects and operations.
+        #[structopt(long)]
+        fuel: Option<Amount>,
+
+        /// Set the price per byte to store a block's operations, incoming and outgoing messages.
+        #[structopt(long)]
+        storage: Option<Amount>,
+
+        /// Set the price per byte to store and send outgoing cross-chain messages.
+        #[structopt(long)]
+        messages: Option<Amount>,
+    },
+
     /// Send one transfer per chain in bulk mode
     #[cfg(feature = "benchmark")]
     Benchmark {
@@ -975,7 +994,7 @@ where
                 context.save_wallet();
             }
 
-            command @ (SetValidator { .. } | RemoveValidator { .. }) => {
+            command @ (SetValidator { .. } | RemoveValidator { .. } | Pricing { .. }) => {
                 info!("Starting operations to change validator set");
                 let time_start = Instant::now();
 
@@ -996,15 +1015,14 @@ where
                 info!("Subscribed {} chains to new committees", n);
 
                 // Create the new committee.
-                let committee = chain_client.local_committee().await.unwrap();
-                let mut validators = committee.validators;
+                let mut committee = chain_client.local_committee().await.unwrap();
                 match command {
                     SetValidator {
                         name,
                         address,
                         votes,
                     } => {
-                        validators.insert(
+                        committee.validators.insert(
                             name,
                             ValidatorState {
                                 network_address: address,
@@ -1013,17 +1031,51 @@ where
                         );
                     }
                     RemoveValidator { name } => {
-                        if validators.remove(&name).is_none() {
+                        if committee.validators.remove(&name).is_none() {
                             warn!("Skipping removal of nonexistent validator");
+                            return Ok(());
+                        }
+                    }
+                    Pricing {
+                        certificate,
+                        fuel,
+                        storage,
+                        messages,
+                    } => {
+                        if let Some(certificate) = certificate {
+                            committee.pricing.certificate = certificate;
+                        }
+                        if let Some(fuel) = fuel {
+                            committee.pricing.fuel = fuel;
+                        }
+                        if let Some(storage) = storage {
+                            committee.pricing.storage = storage;
+                        }
+                        if let Some(messages) = messages {
+                            committee.pricing.messages = messages;
+                        }
+                        println!(
+                            "Pricing:\n\
+                            {:.2} base cost per block\n\
+                            {:.2} per unit of fuel used in executing user operations and effects\n\
+                            {:.2} per byte of operations and incoming messages\n\
+                            {:.2} per byte of outgoing messages",
+                            committee.pricing.certificate,
+                            committee.pricing.fuel,
+                            committee.pricing.storage,
+                            committee.pricing.messages
+                        );
+                        if certificate.is_none()
+                            && fuel.is_none()
+                            && storage.is_none()
+                            && messages.is_none()
+                        {
                             return Ok(());
                         }
                     }
                     _ => unreachable!(),
                 }
-                let certificate = chain_client
-                    .stage_new_committee(validators, committee.pricing) // TODO(fees)
-                    .await
-                    .unwrap();
+                let certificate = chain_client.stage_new_committee(committee).await.unwrap();
                 context.update_wallet_from_client(&mut chain_client).await;
                 info!("Staging committee:\n{:?}", certificate);
                 context.push_to_all_chains(&storage, &certificate).await;
