@@ -23,16 +23,6 @@ pub struct Pricing {
 }
 
 impl Pricing {
-    #[cfg(any(test, feature = "test"))]
-    pub fn make_simple() -> Self {
-        Pricing {
-            certificate: Amount::ZERO,
-            fuel: Amount::ZERO,
-            storage: Amount::ZERO,
-            messages: Amount::ZERO,
-        }
-    }
-
     pub fn certificate_price(&self) -> Amount {
         self.certificate
     }
@@ -56,6 +46,45 @@ impl Pricing {
     /// Returns how much fuel can be paid with the given balance.
     pub fn remaining_fuel(&self, balance: Amount) -> u64 {
         u64::try_from(balance.saturating_div(self.fuel)).unwrap_or(u64::MAX)
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    /// Creates a pricing with no cost for anything except fuel.
+    ///
+    /// This can be used in tests that need whole numbers in their chain balance and don't expect
+    /// to execute any Wasm code.
+    pub fn only_fuel() -> Self {
+        Pricing {
+            certificate: Amount::ZERO,
+            fuel: "0.0000001".parse().unwrap(),
+            storage: Amount::ZERO,
+            messages: Amount::ZERO,
+        }
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    /// Creates a pricing with no cost for anything except fuel, and 0.001 per certificate.
+    ///
+    /// This can be used in tests that don't expect to execute any Wasm code, and that keep track of
+    /// how many certificates were created.
+    pub fn fuel_and_certificate() -> Self {
+        Pricing {
+            certificate: "0.001".parse().unwrap(),
+            fuel: "0.000_001".parse().unwrap(),
+            storage: Amount::ZERO,
+            messages: Amount::ZERO,
+        }
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    /// Creates a pricing where all categories have a small non-zero cost.
+    pub fn all_categories() -> Self {
+        Pricing {
+            certificate: "0.001".parse().unwrap(),
+            fuel: "0.000_000_001".parse().unwrap(),
+            storage: "0.000_000_000_000_001".parse().unwrap(),
+            messages: "0.000_000_000_000_000_001".parse().unwrap(),
+        }
     }
 }
 

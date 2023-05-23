@@ -52,7 +52,9 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1)
+        .await?
+        .with_pricing(Pricing::fuel_and_certificate());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), "4".parse().unwrap())
         .await?;
@@ -61,13 +63,17 @@ where
             None,
             "3".parse().unwrap(),
             Account::chain(ChainId::root(2)),
-            UserData(Some(*b"hello...........hello...........")),
+            UserData(Some(*b"I paid 0.001 to pay you these 3!")),
         )
         .await
         .unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
-    assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
+    // `local_balance` stages another block execution, which costs another 0.001.
+    assert_eq!(
+        sender.local_balance().await.unwrap(),
+        "0.998".parse().unwrap()
+    );
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
@@ -101,7 +107,9 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1)
+        .await?
+        .with_pricing(Pricing::only_fuel());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), "4".parse().unwrap())
         .await?;
@@ -179,7 +187,9 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1)
+        .await?
+        .with_pricing(Pricing::fuel_and_certificate());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), "4".parse().unwrap())
         .await?;
@@ -197,10 +207,13 @@ where
             .value,
         certificate.value
     );
-    assert_eq!(sender.local_balance().await.unwrap(), "4".parse().unwrap());
+    assert_eq!(
+        sender.local_balance().await.unwrap(),
+        "3.998".parse().unwrap()
+    );
     assert_eq!(
         sender.synchronize_from_validators().await.unwrap(),
-        "4".parse().unwrap()
+        "3.998".parse().unwrap()
     );
     // Can still use the chain.
     sender
@@ -237,7 +250,9 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1)
+        .await?
+        .with_pricing(Pricing::fuel_and_certificate());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), "4".parse().unwrap())
         .await?;
@@ -258,10 +273,13 @@ where
             .value,
         certificate.value
     );
-    assert_eq!(sender.local_balance().await.unwrap(), "4".parse().unwrap());
+    assert_eq!(
+        sender.local_balance().await.unwrap(),
+        "3.998".parse().unwrap()
+    );
     assert_eq!(
         sender.synchronize_from_validators().await.unwrap(),
-        "4".parse().unwrap()
+        "3.998".parse().unwrap()
     );
     // Cannot use the chain any more.
     assert!(sender
@@ -648,7 +666,9 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1)
+        .await?
+        .with_pricing(Pricing::all_categories());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), "4".parse().unwrap())
         .await?;
@@ -861,7 +881,9 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1)
+        .await?
+        .with_pricing(Pricing::fuel_and_certificate());
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), "3".parse().unwrap())
         .await?;
@@ -878,12 +900,18 @@ where
         .await
         .unwrap();
     // Transfer was executed locally.
-    assert_eq!(client1.local_balance().await.unwrap(), Amount::ONE);
+    assert_eq!(
+        client1.local_balance().await.unwrap(),
+        "0.998".parse().unwrap()
+    );
     assert_eq!(client1.next_block_height, BlockHeight::from(1));
     assert!(client1.pending_block.is_none());
     // Let the receiver confirm in last resort.
     client2.receive_certificate(certificate).await.unwrap();
-    assert_eq!(client2.local_balance().await.unwrap(), "2".parse().unwrap());
+    assert_eq!(
+        client2.local_balance().await.unwrap(),
+        "1.999".parse().unwrap()
+    );
     Ok(())
 }
 
@@ -1038,7 +1066,7 @@ where
 
     // Create a new committee.
     let validators = builder.initial_committee.validators;
-    let committee = Committee::new(validators, Pricing::make_simple());
+    let committee = Committee::new(validators, Pricing::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
     assert_eq!(admin.next_block_height, BlockHeight::from(1));
     assert!(admin.pending_block.is_none());

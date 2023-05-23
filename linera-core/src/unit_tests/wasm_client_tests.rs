@@ -18,7 +18,8 @@ use linera_base::{
 };
 use linera_chain::data_types::OutgoingEffect;
 use linera_execution::{
-    Bytecode, Effect, Operation, SystemEffect, UserApplicationDescription, WasmRuntime,
+    pricing::Pricing, Bytecode, Effect, Operation, SystemEffect, UserApplicationDescription,
+    WasmRuntime,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -57,12 +58,14 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1)
+        .await?
+        .with_pricing(Pricing::all_categories());
     let mut publisher = builder
         .add_initial_chain(ChainDescription::Root(0), "3".parse().unwrap())
         .await?;
     let mut creator = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::ZERO)
+        .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
         .await?;
 
     let cert = creator
@@ -89,6 +92,12 @@ where
     creator.synchronize_from_validators().await.unwrap();
     creator.process_inbox().await.unwrap();
 
+    // No fuel was used so far, but some storage for messages and operations in three blocks.
+    assert_eq!(
+        Amount::ONE.saturating_sub(creator.local_balance().await?),
+        "0.003_000_000_000_333_105".parse().unwrap()
+    );
+
     let initial_value = 10_u64;
     let (application_id, _) = creator
         .create_application(bytecode_id, &(), &initial_value, vec![])
@@ -112,6 +121,11 @@ where
     );
 
     assert_eq!(expected, response);
+    // Creating the application used fuel because of the `initialize` call.
+    assert_eq!(
+        Amount::ONE.saturating_sub(creator.local_balance().await?),
+        "0.005_016_483_000_574_143".parse().unwrap()
+    );
     Ok(())
 }
 
@@ -156,18 +170,20 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1)
+        .await?
+        .with_pricing(Pricing::all_categories());
     // Will publish the bytecodes.
     let mut publisher = builder
         .add_initial_chain(ChainDescription::Root(0), "3".parse().unwrap())
         .await?;
     // Will create the apps and use them to send a message.
     let mut creator = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::ZERO)
+        .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
         .await?;
     // Will receive the message.
     let mut receiver = builder
-        .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
+        .add_initial_chain(ChainDescription::Root(2), Amount::ONE)
         .await?;
     let receiver_id = ChainId::root(2);
 
@@ -283,14 +299,16 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1)
+        .await?
+        .with_pricing(Pricing::all_categories());
     // Will publish the bytecodes.
     let mut publisher = builder
         .add_initial_chain(ChainDescription::Root(0), "3".parse().unwrap())
         .await?;
     // Will create the apps and use them to send a message.
     let mut creator = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::ZERO)
+        .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
         .await?;
 
     let cert = creator
@@ -373,12 +391,14 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1)
+        .await?
+        .with_pricing(Pricing::all_categories());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(0), "3".parse().unwrap())
         .await?;
     let mut receiver = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::ZERO)
+        .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
         .await?;
 
     let (bytecode_id, pub_cert) = {
@@ -538,12 +558,14 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
-    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let mut builder = TestBuilder::new(store_builder, 4, 1)
+        .await?
+        .with_pricing(Pricing::all_categories());
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
+        .add_initial_chain(ChainDescription::Root(0), Amount::ONE)
         .await?;
     let mut receiver = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::ZERO)
+        .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
         .await?;
 
     let (bytecode_id, pub_cert) = {
