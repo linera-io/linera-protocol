@@ -498,7 +498,7 @@ where
         let balance = self.execution_state.system.balance.get_mut();
         balance.try_sub_assign(credit)?;
         balance.try_sub_assign(pricing.fuel_price(used_fuel))?;
-        balance.try_sub_assign(pricing.storage_and_messages_price(&effects)?)?;
+        balance.try_sub_assign(pricing.messages_price(&effects)?)?;
 
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash().await?;

@@ -16,9 +16,9 @@ pub struct Pricing {
     pub certificate: Amount,
     /// The price per unit of fuel used when executing effects and operations for user applications.
     pub fuel: Amount,
-    /// The cost to store the new certificate, per byte.
+    /// The cost to store a block's operations and incoming messages, per byte.
     pub storage: Amount,
-    /// The cost to send cross-chain messages, per byte.
+    /// The cost to store and send cross-chain messages, per byte.
     pub messages: Amount,
 }
 
@@ -37,14 +37,10 @@ impl Pricing {
         self.certificate
     }
 
-    pub fn storage_and_messages_price(
-        &self,
-        data: &impl Serialize,
-    ) -> Result<Amount, PricingError> {
+    pub fn messages_price(&self, data: &impl Serialize) -> Result<Amount, PricingError> {
         let size =
             u128::try_from(bcs::serialized_size(data)?).map_err(|_| ArithmeticError::Overflow)?;
-        let storage_and_messages = self.storage.saturating_add(self.messages);
-        Ok(storage_and_messages.saturating_mul(size))
+        Ok(self.messages.saturating_mul(size))
     }
 
     pub fn storage_price(&self, data: &impl Serialize) -> Result<Amount, PricingError> {
