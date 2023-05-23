@@ -2,12 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{InputObject, SimpleObject};
-use linera_sdk::base::{ChainId, Timestamp};
+use linera_sdk::base::{ChainId, ContractAbi, Timestamp};
 use linera_views::{common::CustomSerialize, views};
 use serde::{Deserialize, Serialize};
 
+pub struct SocialAbi;
+
+impl ContractAbi for SocialAbi {
+    type InitializationArgument = ();
+    type Parameters = ();
+    type Operation = Operation;
+    type ApplicationCall = ();
+    type Effect = Effect;
+    type SessionCall = ();
+    type Response = ();
+    type SessionState = ();
+}
+
 /// An operation that can be executed by the application.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Operation {
     /// Request to be subscribed to another chain.
     RequestSubscribe(ChainId),
@@ -18,7 +31,7 @@ pub enum Operation {
 }
 
 /// An effect of the application on one chain, to be handled on another chain.
-#[derive(PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum Effect {
     /// The origin chain wants to subscribe to the target chain.
     RequestSubscribe,

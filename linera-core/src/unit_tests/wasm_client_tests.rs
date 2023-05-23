@@ -89,9 +89,8 @@ where
     creator.process_inbox().await.unwrap();
 
     let initial_value = 10_u64;
-    let initial_value_bytes = serde_json::to_vec(&initial_value)?;
     let (application_id, _) = creator
-        .create_application(bytecode_id, vec![], initial_value_bytes, vec![])
+        .create_application::<counter::CounterAbi>(bytecode_id, &(), &initial_value, vec![])
         .await
         .unwrap();
 
@@ -213,19 +212,14 @@ where
     creator.process_inbox().await.unwrap();
     let initial_value = 10_u64;
     let (application_id1, _) = creator
-        .create_application(
-            bytecode_id1,
-            vec![],
-            serde_json::to_vec(&initial_value)?,
-            vec![],
-        )
+        .create_application::<counter::CounterAbi>(bytecode_id1, &(), &initial_value, vec![])
         .await
         .unwrap();
     let (application_id2, _) = creator
-        .create_application(
+        .create_application::<meta_counter::MetaCounterAbi>(
             bytecode_id2,
-            bcs::to_bytes(&application_id1)?,
-            vec![],
+            &application_id1,
+            &(),
             vec![application_id1],
         )
         .await
@@ -331,10 +325,10 @@ where
     creator.process_inbox().await.unwrap();
     let initial_value = 100_u128;
     let (application_id, _) = creator
-        .create_application(
+        .create_application::<reentrant_counter::ReentrantCounterAbi>(
             bytecode_id,
-            vec![],
-            serde_json::to_vec(&initial_value)?,
+            &(),
+            &initial_value,
             vec![],
         )
         .await
@@ -425,9 +419,8 @@ where
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from(1_000_000))]);
     let state = fungible::InitialState { accounts };
-    let initial_value_bytes = serde_json::to_vec(&state)?;
     let (application_id, _cert) = sender
-        .create_application(bytecode_id, vec![], initial_value_bytes, vec![])
+        .create_application::<fungible::FungibleTokenAbi>(bytecode_id, &(), &state, vec![])
         .await?;
 
     // Make a transfer using the fungible app.
@@ -599,7 +592,7 @@ where
     receiver.process_inbox().await.unwrap();
 
     let (application_id, _cert) = receiver
-        .create_application(bytecode_id, vec![], vec![], vec![])
+        .create_application::<social::SocialAbi>(bytecode_id, &(), &(), vec![])
         .await?;
 
     // Request to subscribe to the sender.

@@ -711,32 +711,76 @@ enum ClientCommand {
 
     /// Publish bytecode.
     PublishBytecode {
+        /// Path to the WASM file for the application "contract" bytecode.
         contract: PathBuf,
+
+        /// Path to the WASM file for the application "service" bytecode.
         service: PathBuf,
+
+        /// An optional chain ID to publish the bytecode. The default chain of the wallet
+        /// is used otherwise.
         publisher: Option<ChainId>,
     },
 
     /// Create an application.
     CreateApplication {
+        /// The bytecode ID of the application to create.
         bytecode_id: BytecodeId,
-        #[structopt(flatten)]
-        arguments: JsonArg,
+
+        /// An optional chain ID to host the application. The default chain of the wallet
+        /// is used otherwise.
         creator: Option<ChainId>,
+
+        /// The shared parameters as JSON string.
         #[structopt(long)]
-        parameters: Option<String>,
+        json_parameters: Option<String>,
+
+        /// Path to a JSON file containing the shared parameters.
+        #[structopt(long)]
+        json_parameters_path: Option<PathBuf>,
+
+        /// The initialization argument as a JSON string.
+        #[structopt(long)]
+        json_argument: Option<String>,
+
+        /// Path to a JSON file containing the initialization argument.
+        #[structopt(long)]
+        json_argument_path: Option<PathBuf>,
+
+        /// The list of required dependencies of application, if any.
         #[structopt(long)]
         required_application_ids: Option<Vec<UserApplicationId>>,
     },
 
     /// Create an application, and publish the required bytecode.
     PublishAndCreate {
+        /// Path to the WASM file for the application "contract" bytecode.
         contract: PathBuf,
+
+        /// Path to the WASM file for the application "service" bytecode.
         service: PathBuf,
-        #[structopt(flatten)]
-        arguments: JsonArg,
+
+        /// An optional chain ID to publish the bytecode. The default chain of the wallet
+        /// is used otherwise.
         publisher: Option<ChainId>,
+
+        /// The shared parameters as JSON string.
         #[structopt(long)]
-        parameters: Option<String>,
+        json_parameters: Option<String>,
+
+        /// Path to a JSON file containing the shared parameters.
+        #[structopt(long)]
+        json_parameters_path: Option<PathBuf>,
+
+        /// The initialization argument as a JSON string.
+        #[structopt(long)]
+        json_argument: Option<String>,
+
+        /// Path to a JSON file containing the initialization argument.
+        #[structopt(long)]
+        json_argument_path: Option<PathBuf>,
+
+        /// The list of required dependencies of application, if any.
         #[structopt(long)]
         required_application_ids: Option<Vec<UserApplicationId>>,
     },
@@ -745,10 +789,12 @@ enum ClientCommand {
     RequestApplication {
         /// The ID of the application to request.
         application_id: UserApplicationId,
+
         /// The target chain on which the application is already registered.
         /// If not specified, the chain on which the application was created is used.
         #[structopt(long)]
         target_chain_id: Option<ChainId>,
+
         /// The owned chain on which the application is missing.
         #[structopt(long)]
         requester_chain_id: Option<ChainId>,
@@ -757,11 +803,14 @@ enum ClientCommand {
     /// Create an unassigned key-pair.
     Keygen,
 
-    /// Assign a key to a chain given a certificate.
+    /// Link a key owned by the wallet to a chain that was just created for that key.
     Assign {
+        /// The public key to assign.
         #[structopt(long)]
         key: PublicKey,
 
+        /// The ID of the effect that created the chain. (This uniquely describes the
+        /// chain and where it was created.)
         #[structopt(long)]
         effect_id: EffectId,
     },
@@ -803,41 +852,20 @@ enum ProjectCommand {
     Test { path: Option<PathBuf> },
 }
 
-#[derive(StructOpt)]
-struct JsonArg {
-    /// JSON file specifying initialization arguments, passed to the contract's `initialize` method on the chain
-    /// that creates the application. (But not on other chains, when it is registered there.)
-    ///
-    /// Cannot be used with `--json-args`.
-    #[structopt(long)]
-    file_args: Option<PathBuf>,
-    /// JSON file specifying initialization arguments, passed to the contract's `initialize` method on the chain
-    /// that creates the application. (But not on other chains, when it is registered there.)
-    ///
-    /// Cannot be used with `--file-args`.
-    #[structopt(long)]
-    json_args: Option<String>,
-}
-
-impl JsonArg {
-    fn into_bytes(self) -> Result<Vec<u8>, anyhow::Error> {
-        match (self.file_args, self.json_args) {
-            (Some(_), Some(_)) => bail!("cannot have both a json string and file"),
-            (Some(file), None) => {
-                let file_contents = fs::read_to_string(file)?;
-                let as_value: Value = serde_json::from_str(&file_contents)?;
-                Ok(serde_json::to_vec(&as_value)?)
-            }
-            (None, Some(json)) => {
-                let as_value: Value = serde_json::from_str(&json)?;
-                Ok(serde_json::to_vec(&as_value)?)
-            }
-            (None, None) => bail!("json arguments must be provided"),
-        }
-    }
-}
-
 struct Job(ClientContext, ClientCommand);
+
+fn read_json(string: Option<String>, path: Option<PathBuf>) -> Result<Vec<u8>, anyhow::Error> {
+    let value = match (string, path) {
+        (Some(_), Some(_)) => bail!("cannot have both a json string and file"),
+        (Some(s), None) => serde_json::from_str(&s)?,
+        (None, Some(path)) => {
+            let s = fs::read_to_string(path)?;
+            serde_json::from_str(&s)?
+        }
+        (None, None) => Value::Null,
+    };
+    Ok(serde_json::to_vec(&value)?)
+}
 
 #[async_trait]
 impl<S> Runnable<S> for Job
@@ -1154,20 +1182,19 @@ where
 
             CreateApplication {
                 bytecode_id,
-                arguments,
                 creator,
-                parameters,
+                json_parameters,
+                json_parameters_path,
+                json_argument,
+                json_argument_path,
                 required_application_ids,
             } => {
                 let start_time = Instant::now();
                 let mut chain_client = context.make_chain_client(storage, creator);
 
                 info!("Processing arguments...");
-                let arg_as_bytes = arguments.into_bytes()?;
-                let parameters = match parameters {
-                    None => vec![],
-                    Some(parameters) => hex::decode(parameters)?,
-                };
+                let parameters = read_json(json_parameters, json_parameters_path)?;
+                let argument = read_json(json_argument, json_argument_path)?;
 
                 info!("Synchronizing...");
                 chain_client.synchronize_from_validators().await?;
@@ -1175,10 +1202,10 @@ where
 
                 info!("Creating application...");
                 let (application_id, _) = chain_client
-                    .create_application(
+                    .create_application_untyped(
                         bytecode_id,
                         parameters,
-                        arg_as_bytes,
+                        argument,
                         required_application_ids.unwrap_or_default(),
                     )
                     .await
@@ -1194,20 +1221,19 @@ where
             PublishAndCreate {
                 contract,
                 service,
-                arguments,
                 publisher,
-                parameters,
+                json_parameters,
+                json_parameters_path,
+                json_argument,
+                json_argument_path,
                 required_application_ids,
             } => {
                 let start_time = Instant::now();
                 let mut chain_client = context.make_chain_client(storage, publisher);
 
                 info!("Processing arguments...");
-                let arg_as_bytes = arguments.into_bytes()?;
-                let parameters = match parameters {
-                    None => vec![],
-                    Some(parameters) => hex::decode(parameters)?,
-                };
+                let parameters = read_json(json_parameters, json_parameters_path)?;
+                let argument = read_json(json_argument, json_argument_path)?;
 
                 let bytecode_id = context
                     .publish_bytecode(&mut chain_client, contract, service)
@@ -1219,10 +1245,10 @@ where
 
                 info!("Creating application...");
                 let (application_id, _) = chain_client
-                    .create_application(
+                    .create_application_untyped(
                         bytecode_id,
                         parameters,
-                        arg_as_bytes,
+                        argument,
                         required_application_ids.unwrap_or_default(),
                     )
                     .await

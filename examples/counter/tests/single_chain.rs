@@ -16,13 +16,12 @@ async fn single_chain_test() {
     let (validator, bytecode_id) = TestValidator::with_current_bytecode().await;
     let mut chain = validator.new_chain().await;
 
-    let initial_state: u64 = 42;
-    let initial_state_u8 = serde_json::to_vec(&initial_state).unwrap();
+    let initial_state = 42u64;
     let application_id = chain
-        .create_application(bytecode_id, vec![], initial_state_u8, vec![])
+        .create_application::<counter::CounterAbi>(bytecode_id, (), initial_state, vec![])
         .await;
 
-    let increment: u64 = 15;
+    let increment = 15u64;
     chain
         .add_block(|block| {
             block.with_operation(application_id, increment);

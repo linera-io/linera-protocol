@@ -1040,6 +1040,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "counter"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-trait",
+ "bcs",
+ "futures",
+ "linera-sdk",
+ "log",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "cpp_demangle"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2528,6 +2543,7 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "bcs",
+ "counter",
  "criterion",
  "dashmap",
  "fungible",
@@ -2539,11 +2555,13 @@ dependencies = [
  "linera-storage",
  "linera-views",
  "lru",
+ "meta-counter",
  "metrics",
  "metrics-util",
  "portable-atomic",
  "proptest",
  "rand 0.7.3",
+ "reentrant-counter",
  "serde",
  "serde_json",
  "social",
@@ -2639,7 +2657,6 @@ dependencies = [
  "async-trait",
  "bcs",
  "cargo_toml",
- "custom_debug_derive",
  "dashmap",
  "futures",
  "linera-base",
@@ -2683,6 +2700,7 @@ dependencies = [
  "chrono",
  "colored",
  "comfy-table",
+ "counter",
  "crowd-funding",
  "dirs",
  "file-lock",
@@ -3067,6 +3085,20 @@ dependencies = [
  "keccak",
  "rand_core 0.5.1",
  "zeroize",
+]
+
+[[package]]
+name = "meta-counter"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "counter",
+ "linera-sdk",
+ "log",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -4009,6 +4041,20 @@ checksum = "b033d837a7cf162d7993aded9304e30a83213c648b6e389db233191f891e5c2b"
 dependencies = [
  "getrandom 0.2.9",
  "redox_syscall 0.2.16",
+ "thiserror",
+]
+
+[[package]]
+name = "reentrant-counter"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bcs",
+ "futures",
+ "linera-sdk",
+ "linera-views",
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 

@@ -11,6 +11,7 @@ futures = { workspace = true }
 linera-sdk = { workspace = true }
 linera-views = { workspace = true }
 serde_json = { workspace = true }
+serde = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
@@ -24,3 +25,6 @@ path = "src/contract.rs"
 [[bin]]
 name = "reentrant_counter_service"
 path = "src/service.rs"
+
+[package.metadata.cargo-machete]
+ignored = ["serde"]

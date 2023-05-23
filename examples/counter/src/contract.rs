@@ -8,12 +8,17 @@ mod state;
 use self::state::Counter;
 use async_trait::async_trait;
 use linera_sdk::{
-    base::SessionId, ApplicationCallResult, CalleeContext, Contract, EffectContext,
-    ExecutionResult, OperationContext, SessionCallResult, SimpleStateStorage,
+    base::{SessionId, WithContractAbi},
+    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    OperationContext, SessionCallResult, SimpleStateStorage,
 };
 use thiserror::Error;
 
 linera_sdk::contract!(Counter);
+
+impl WithContractAbi for Counter {
+    type Abi = counter::CounterAbi;
+}
 
 #[async_trait]
 impl Contract for Counter {
@@ -23,41 +28,40 @@ impl Contract for Counter {
     async fn initialize(
         &mut self,
         _context: &OperationContext,
-        argument: &[u8],
-    ) -> Result<ExecutionResult, Self::Error> {
-        self.value = serde_json::from_slice(argument)?;
+        value: u64,
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
+        self.value = value;
         Ok(ExecutionResult::default())
     }
 
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
-        operation: &[u8],
-    ) -> Result<ExecutionResult, Self::Error> {
-        self.value += bcs::from_bytes::<u64>(operation)?;
+        operation: u64,
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
+        self.value += operation;
         Ok(ExecutionResult::default())
     }
 
     async fn execute_effect(
         &mut self,
         _context: &EffectContext,
-        _effect: &[u8],
-    ) -> Result<ExecutionResult, Self::Error> {
+        _effect: (),
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         Err(Error::EffectsNotSupported)
     }
 
     async fn handle_application_call(
         &mut self,
         _context: &CalleeContext,
-        argument: &[u8],
+        increment: u64,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, Self::Error> {
-        log::error!("received {:?}", argument);
-        let increment: u64 = bcs::from_bytes(argument)?;
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    {
         log::error!("incrementing by {:?}", increment);
         self.value += increment;
         Ok(ApplicationCallResult {
-            value: bcs::to_bytes(&self.value).expect("Serialization should not fail"),
+            value: self.value,
             ..ApplicationCallResult::default()
         })
     }
@@ -65,10 +69,11 @@ impl Contract for Counter {
     async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
-        _session: &[u8],
-        _argument: &[u8],
+        _state: Self::SessionState,
+        _call: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    {
         Err(Error::SessionsNotSupported)
     }
 }
@@ -84,13 +89,13 @@ pub enum Error {
     #[error("Counter application doesn't support any cross-application sessions")]
     SessionsNotSupported,
 
-    /// Invalid serialized increment value.
-    #[error("Invalid serialized increment value")]
-    InvalidIncrement(#[from] bcs::Error),
+    /// Failed to deserialize BCS bytes
+    #[error("Failed to deserialize BCS bytes")]
+    BcsError(#[from] bcs::Error),
 
-    /// Invalid serialized initialization value.
-    #[error("Invalid serialized increment value")]
-    InvalidInitializationArgument(#[from] serde_json::Error),
+    /// Failed to deserialize JSON string
+    #[error("Failed to deserialize JSON string")]
+    JsonError(#[from] serde_json::Error),
 }
 
 #[cfg(test)]
@@ -110,10 +115,9 @@ mod tests {
         let mut counter = create_and_initialize_counter(initial_value);
 
         let increment = 42_308_u64;
-        let operation = bcs::to_bytes(&increment).expect("Increment value is not serializable");
 
         let result = counter
-            .execute_operation(&dummy_operation_context(), &operation)
+            .execute_operation(&dummy_operation_context(), increment)
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
@@ -128,7 +132,7 @@ mod tests {
         let mut counter = create_and_initialize_counter(initial_value);
 
         let result = counter
-            .execute_effect(&dummy_effect_context(), &[])
+            .execute_effect(&dummy_effect_context(), ())
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
@@ -142,16 +146,15 @@ mod tests {
         let mut counter = create_and_initialize_counter(initial_value);
 
         let increment = 8_u64;
-        let argument = bcs::to_bytes(&increment).expect("Increment value is not serializable");
 
         let result = counter
-            .handle_application_call(&dummy_callee_context(), &argument, vec![])
+            .handle_application_call(&dummy_callee_context(), increment, vec![])
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
         let expected_value = initial_value + increment;
         let expected_result = ApplicationCallResult {
-            value: bcs::to_bytes(&expected_value).expect("Expected value is not serializable"),
+            value: expected_value,
             create_sessions: vec![],
             execution_result: ExecutionResult::default(),
         };
@@ -167,7 +170,7 @@ mod tests {
         let mut counter = create_and_initialize_counter(initial_value);
 
         let result = counter
-            .handle_session_call(&dummy_callee_context(), &[], &[], vec![])
+            .handle_session_call(&dummy_callee_context(), Default::default(), (), vec![])
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
@@ -177,11 +180,9 @@ mod tests {
 
     fn create_and_initialize_counter(initial_value: u64) -> Counter {
         let mut counter = Counter::default();
-        let initial_argument =
-            serde_json::to_vec(&initial_value).expect("Initial value is not serializable");
 
         let result = counter
-            .initialize(&dummy_operation_context(), &initial_argument)
+            .initialize(&dummy_operation_context(), initial_value)
             .now_or_never()
             .expect("Initialization of counter state should not await anything");
 

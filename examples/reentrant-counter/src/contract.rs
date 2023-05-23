@@ -8,12 +8,18 @@ mod state;
 use self::state::ReentrantCounter;
 use async_trait::async_trait;
 use linera_sdk::{
-    base::SessionId, contract::system_api, ApplicationCallResult, CalleeContext, Contract,
-    EffectContext, ExecutionResult, OperationContext, SessionCallResult, ViewStateStorage,
+    base::{SessionId, WithContractAbi},
+    contract::system_api,
+    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    OperationContext, SessionCallResult, ViewStateStorage,
 };
 use thiserror::Error;
 
 linera_sdk::contract!(ReentrantCounter);
+
+impl WithContractAbi for ReentrantCounter {
+    type Abi = reentrant_counter::ReentrantCounterAbi;
+}
 
 #[async_trait]
 impl Contract for ReentrantCounter {
@@ -23,33 +29,30 @@ impl Contract for ReentrantCounter {
     async fn initialize(
         &mut self,
         _context: &OperationContext,
-        argument: &[u8],
-    ) -> Result<ExecutionResult, Self::Error> {
-        self.value.set(serde_json::from_slice(argument)?);
+        value: u128,
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
+        self.value.set(value);
         Ok(ExecutionResult::default())
     }
 
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
-        operation: &[u8],
-    ) -> Result<ExecutionResult, Self::Error> {
-        let increment: u128 = bcs::from_bytes(operation)?;
-
+        increment: u128,
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         let first_half = increment / 2;
         let second_half = increment - first_half;
-        let second_half_as_bytes = bcs::to_bytes(&second_half).expect("Failed to serialize `u128`");
 
         let value = self.value.get_mut();
         *value += first_half;
 
-        self.call_application(
+        self.call_application::<Self>(
             false,
             system_api::current_application_id(),
-            &second_half_as_bytes,
+            &second_half,
             vec![],
         )
-        .await;
+        .await?;
 
         Ok(ExecutionResult::default())
     }
@@ -57,22 +60,22 @@ impl Contract for ReentrantCounter {
     async fn execute_effect(
         &mut self,
         _context: &EffectContext,
-        _effect: &[u8],
-    ) -> Result<ExecutionResult, Self::Error> {
+        _effect: (),
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         Err(Error::EffectsNotSupported)
     }
 
     async fn handle_application_call(
         &mut self,
         _context: &CalleeContext,
-        argument: &[u8],
+        increment: u128,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, Self::Error> {
-        let increment: u128 = bcs::from_bytes(argument)?;
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    {
         let value = self.value.get_mut();
         *value += increment;
         Ok(ApplicationCallResult {
-            value: bcs::to_bytes(&value).expect("Serialization should not fail"),
+            value: *value,
             ..ApplicationCallResult::default()
         })
     }
@@ -80,10 +83,11 @@ impl Contract for ReentrantCounter {
     async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
-        _session: &[u8],
-        _argument: &[u8],
+        _state: Self::SessionState,
+        _call: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    {
         Err(Error::SessionsNotSupported)
     }
 }
@@ -99,11 +103,11 @@ pub enum Error {
     #[error("Counter application doesn't support any cross-application sessions")]
     SessionsNotSupported,
 
-    /// Invalid serialized increment value.
-    #[error("Invalid serialized increment value")]
-    InvalidIncrement(#[from] bcs::Error),
+    /// Failed to deserialize BCS bytes
+    #[error("Failed to deserialize BCS bytes")]
+    BcsError(#[from] bcs::Error),
 
-    /// Invalid serialized initialization value.
-    #[error("Invalid serialized initialization value")]
-    InvalidInitializationArguments(#[from] serde_json::Error),
+    /// Failed to deserialize JSON string
+    #[error("Failed to deserialize JSON string")]
+    JsonError(#[from] serde_json::Error),
 }

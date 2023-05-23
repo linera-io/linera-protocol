@@ -296,21 +296,22 @@ where
         Ok(bytecode_id)
     }
 
+    /// Creates a new application.
     async fn create_application(
         &self,
         bytecode_id: BytecodeId,
-        parameters: Vec<u8>,
-        initialization_argument: Vec<u8>,
+        parameters: String,
+        initialization_argument: String,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ApplicationId, Error> {
         let mut client = self.client.lock().await;
         client.synchronize_from_validators().await?;
         client.process_inbox().await?;
         let (application_id, _) = client
-            .create_application(
+            .create_application_untyped(
                 bytecode_id,
-                parameters,
-                initialization_argument,
+                parameters.as_bytes().to_vec(),
+                initialization_argument.as_bytes().to_vec(),
                 required_application_ids,
             )
             .await?;

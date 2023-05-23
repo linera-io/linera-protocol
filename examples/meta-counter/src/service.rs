@@ -18,7 +18,7 @@ linera_sdk::service!(MetaCounter);
 impl MetaCounter {
     fn counter_id() -> Result<ApplicationId, Error> {
         let parameters = system_api::current_application_parameters();
-        bcs::from_bytes(&parameters).map_err(|_| Error::Parameters)
+        serde_json::from_slice(&parameters).map_err(|_| Error::Parameters)
     }
 }
 

@@ -6,6 +6,7 @@
 //! This allows manipulating a test microchain.
 
 use super::{BlockBuilder, TestValidator};
+use crate::ContractAbi;
 use cargo_toml::Manifest;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
@@ -262,13 +263,16 @@ impl ActiveChain {
     /// The application is initialized using the initialization parameters, which consist of the
     /// global static `parameters`, the one time `initialization_argument` and the
     /// `required_application_ids` of the applications that the new application will depend on.
-    pub async fn create_application(
+    pub async fn create_application<A>(
         &mut self,
         bytecode_id: BytecodeId,
-        parameters: Vec<u8>,
-        initialization_argument: Vec<u8>,
+        parameters: A::Parameters,
+        initialization_argument: A::InitializationArgument,
         required_application_ids: Vec<ApplicationId>,
-    ) -> ApplicationId {
+    ) -> ApplicationId
+    where
+        A: ContractAbi,
+    {
         let bytecode_location_effect = if self.needs_bytecode_location(bytecode_id).await {
             self.subscribe_to_published_bytecodes_from(bytecode_id.0.chain_id)
                 .await;
@@ -276,6 +280,9 @@ impl ActiveChain {
         } else {
             None
         };
+
+        let parameters = serde_json::to_vec(&parameters).unwrap();
+        let initialization_argument = serde_json::to_vec(&initialization_argument).unwrap();
 
         self.add_block(|block| {
             if let Some(effect_id) = bytecode_location_effect {

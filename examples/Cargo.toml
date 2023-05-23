@@ -25,6 +25,7 @@ thiserror = "1.0.38"
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 webassembly-test = "0.1.0"
 
+counter = { path = "./counter" }
 crowd-funding = { path = "./crowd-funding" }
 fungible = { path = "./fungible" }
 
