@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::SimpleObject;
+use async_graphql::{Request, Response, SimpleObject};
 use fungible::AccountOwner;
-use linera_sdk::base::{Amount, ApplicationId, ContractAbi, Timestamp};
+use linera_sdk::base::{Amount, ApplicationId, ContractAbi, ServiceAbi, Timestamp};
 use serde::{Deserialize, Serialize};
 
 pub struct CrowdFundingAbi;
@@ -17,6 +17,12 @@ impl ContractAbi for CrowdFundingAbi {
     type SessionCall = ();
     type Response = ();
     type SessionState = ();
+}
+
+impl ServiceAbi for CrowdFundingAbi {
+    type Query = Request;
+    type QueryResponse = Response;
+    type Parameters = ApplicationId;
 }
 
 /// The initialization data required to create a crowd-funding campaign.

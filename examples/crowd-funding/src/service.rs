@@ -5,16 +5,23 @@
 
 mod state;
 
-use async_graphql::{EmptySubscription, Object, Schema};
+use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use async_trait::async_trait;
 use crowd_funding::Operation;
 use fungible::AccountOwner;
-use linera_sdk::{base::Amount, QueryContext, Service, ViewStateStorage};
+use linera_sdk::{
+    base::{Amount, WithServiceAbi},
+    QueryContext, Service, ViewStateStorage,
+};
 use state::CrowdFunding;
 use std::sync::Arc;
 use thiserror::Error;
 
 linera_sdk::service!(CrowdFunding);
+
+impl WithServiceAbi for CrowdFunding {
+    type Abi = crowd_funding::CrowdFundingAbi;
+}
 
 #[async_trait]
 impl Service for CrowdFunding {
@@ -24,13 +31,11 @@ impl Service for CrowdFunding {
     async fn query_application(
         self: Arc<Self>,
         _context: &QueryContext,
-        argument: &[u8],
-    ) -> Result<Vec<u8>, Self::Error> {
-        let graphql_request: async_graphql::Request =
-            serde_json::from_slice(argument).map_err(|_| Error::InvalidQuery)?;
+        request: Request,
+    ) -> Result<Response, Self::Error> {
         let schema = Schema::build(self.clone(), MutationRoot {}, EmptySubscription).finish();
-        let res = schema.execute(graphql_request).await;
-        Ok(serde_json::to_vec(&res).unwrap())
+        let response = schema.execute(request).await;
+        Ok(response)
     }
 }
 
@@ -56,5 +61,5 @@ impl MutationRoot {
 pub enum Error {
     /// Invalid query argument in crowd-funding app: could not deserialize GraphQL request.
     #[error("Invalid query argument in crowd-funding app: could not deserialize GraphQL request.")]
-    InvalidQuery,
+    InvalidQuery(#[from] serde_json::Error),
 }

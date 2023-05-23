@@ -1,8 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{InputObject, SimpleObject};
-use linera_sdk::base::{ChainId, ContractAbi, Timestamp};
+use async_graphql::{InputObject, Request, Response, SimpleObject};
+use linera_sdk::base::{ChainId, ContractAbi, ServiceAbi, Timestamp};
 use linera_views::{common::CustomSerialize, views};
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +17,12 @@ impl ContractAbi for SocialAbi {
     type SessionCall = ();
     type Response = ();
     type SessionState = ();
+}
+
+impl ServiceAbi for SocialAbi {
+    type Query = Request;
+    type QueryResponse = Response;
+    type Parameters = ();
 }
 
 /// An operation that can be executed by the application.

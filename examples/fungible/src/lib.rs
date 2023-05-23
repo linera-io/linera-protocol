@@ -1,8 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{scalar, InputObject};
-use linera_sdk::base::{Amount, ApplicationId, ChainId, ContractAbi, Owner};
+use async_graphql::{scalar, InputObject, Request, Response};
+use linera_sdk::base::{Amount, ApplicationId, ChainId, ContractAbi, Owner, ServiceAbi};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::BTreeMap, str::FromStr};
 
@@ -17,6 +17,12 @@ impl ContractAbi for FungibleTokenAbi {
     type SessionCall = SessionCall;
     type Response = Amount;
     type SessionState = Amount;
+}
+
+impl ServiceAbi for FungibleTokenAbi {
+    type Query = Request;
+    type QueryResponse = Response;
+    type Parameters = ();
 }
 
 /// An operation.

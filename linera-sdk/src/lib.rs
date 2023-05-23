@@ -67,6 +67,7 @@ pub use self::{
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
 };
+use linera_base::abi::ServiceAbi;
 pub use linera_base::ensure;
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
@@ -281,11 +282,11 @@ pub trait Contract: ContractAbi + Send + Sized {
 /// are triggered by JSON queries (typically GraphQL). Their execution cannot modify
 /// storage and is not gas-metered.
 #[async_trait]
-pub trait Service {
+pub trait Service: ServiceAbi {
     /// Type used to report errors to the execution environment.
     ///
     /// Errors are not recoverable and always interrupt the current query.
-    type Error: Error;
+    type Error: Error + From<serde_json::Error>;
 
     /// The desired storage backend used to store the application's state.
     ///
@@ -298,8 +299,15 @@ pub trait Service {
     async fn query_application(
         self: Arc<Self>,
         context: &QueryContext,
-        argument: &[u8],
-    ) -> Result<Vec<u8>, Self::Error>;
+        argument: Self::Query,
+    ) -> Result<Self::QueryResponse, Self::Error>;
+
+    /// Retrieves the parameters of the application.
+    fn parameters() -> Result<Self::Parameters, Self::Error> {
+        let bytes = crate::contract::system_api::current_application_parameters();
+        let parameters = serde_json::from_slice(&bytes)?;
+        Ok(parameters)
+    }
 }
 
 /// The context of the execution of an application's operation.
