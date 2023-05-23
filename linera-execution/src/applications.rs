@@ -173,7 +173,7 @@ where
     }
 
     /// Registers a newly created application.
-    pub async fn create_application(
+    pub async fn register_new_application(
         &mut self,
         application_id: UserApplicationId,
         parameters: Vec<u8>,

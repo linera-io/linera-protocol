@@ -49,14 +49,18 @@ pub mod service;
 pub mod test;
 pub mod views;
 
+use crate::{
+    contract::exported_futures::ContractStateStorage,
+    service::exported_futures::ServiceStateStorage,
+};
 use async_trait::async_trait;
-use custom_debug_derive::Debug;
 use linera_base::{
+    abi::ContractAbi,
     data_types::BlockHeight,
     identifiers::{ApplicationId, ChainId, ChannelName, Destination, EffectId, Owner, SessionId},
 };
-use serde::{Deserialize, Serialize};
-use std::{error::Error, sync::Arc};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::{error::Error, fmt::Debug, sync::Arc};
 
 pub use self::{
     exported_future::ExportedFuture,
@@ -67,39 +71,52 @@ pub use linera_base::ensure;
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 
-/// A simple state management runtime using a single byte array.
+/// A simple state management runtime based on a single byte array.
 pub struct SimpleStateStorage<A>(std::marker::PhantomData<A>);
 
-/// A state management runtime based on `linera-views`.
+/// A state management runtime based on [`linera_views`].
 pub struct ViewStateStorage<A>(std::marker::PhantomData<A>);
 
-/// The public entry points provided by an application's contract.
+/// The contract interfaces of a Linera application.
 ///
-/// Execution of these endpoints consume fuel, because they can change the application's state and
-/// are therefore consensus criticial.
+/// As opposed to the [`Service`] interfaces of an application, contract entry points
+/// are triggered by the execution of blocks in a chain. Their execution may modify
+/// storage and is gas-metered.
+///
+/// Below we use the word "transaction" to refer to the current operation or effect being
+/// executed.
 #[async_trait]
-pub trait Contract: Sized {
-    /// Message reports for application execution errors.
-    type Error: Error;
-    /// The desired storage backend to use to store the application's state.
-    type Storage;
+pub trait Contract: ContractAbi + Sized {
+    /// The type used to report errors to the execution environment.
+    ///
+    /// Errors are not recoverable and always interrupt the current transaction. To return
+    /// recoverable errors in the case of application calls and session calls, you may use
+    /// the response types.
+    type Error: Error + From<serde_json::Error> + From<bcs::Error>;
+
+    /// The desired storage backend used to store the application's state.
+    ///
+    /// Currently, the two supported backends are [`SimpleStateStorage`] or
+    /// [`ViewStateStorage`]. Accordingly, this associated type may be defined as `type
+    /// Storage = SimpleStateStorage<Self>` or `type Storage = ViewStateStorage<Self>`.
+    ///
+    /// The first deployment on other chains will use the [`Default`] implementation of the application
+    /// state if [`SimpleStateStorage`] is used, or the [`Default`] value of all sub-views in the
+    /// state if the [`ViewStateStorage`] is used.
+    type Storage: ContractStateStorage<Self>;
 
     /// Initializes the application on the chain that created it.
     ///
-    /// This is only called once when the application is created and only on the chain that
+    /// This is only called once when the application is created and only on the microchain that
     /// created the application.
-    ///
-    /// Deployment on other chains will use the [`Default`] implementation of the application
-    /// state if [`SimpleStateStorage`] is used, or the [`Default`] value of all sub-views in the
-    /// state if the [`ViewStateStorage`] is used.
     ///
     /// Returns an [`ExecutionResult`], which can contain subscription or unsubscription requests
     /// to channels and effects to be sent to this application on another chain.
     async fn initialize(
         &mut self,
         context: &OperationContext,
-        argument: &[u8],
-    ) -> Result<ExecutionResult, Self::Error>;
+        argument: Self::InitializationArgument,
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error>;
 
     /// Applies an operation from the current block.
     ///
@@ -111,8 +128,8 @@ pub trait Contract: Sized {
     async fn execute_operation(
         &mut self,
         context: &OperationContext,
-        operation: &[u8],
-    ) -> Result<ExecutionResult, Self::Error>;
+        operation: Self::Operation,
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error>;
 
     /// Applies an effect originating from a cross-chain message.
     ///
@@ -131,8 +148,8 @@ pub trait Contract: Sized {
     async fn execute_effect(
         &mut self,
         context: &EffectContext,
-        effect: &[u8],
-    ) -> Result<ExecutionResult, Self::Error>;
+        effect: Self::Effect,
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error>;
 
     /// Handles a call from another application.
     ///
@@ -154,9 +171,9 @@ pub trait Contract: Sized {
     async fn handle_application_call(
         &mut self,
         context: &CalleeContext,
-        argument: &[u8],
+        argument: Self::ApplicationCall,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, Self::Error>;
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>;
 
     /// Handles a call into a session created by this application.
     ///
@@ -164,14 +181,16 @@ pub trait Contract: Sized {
     /// are very similar to cross-application calls (see [`Self::handle_application_call`]), but
     /// each one of them has a separate state, in addition to the application state.
     ///
-    /// This allows moving parts of the application's state out into sessions, which are sent
-    /// to other applications. These sessions can be freely moved between other applications, and
-    /// the application that created the session does not have to keep track of which application
-    /// is the current owner of the session.
+    /// Sessions allow representing transferrable objects (typically assets and
+    /// liabilities) for the duration of a transaction. A session is initially *owned* by
+    /// the application that made a call to create it. Ownership over a session can be
+    /// transferred to other applications by passing them as session arguments. The
+    /// execution environment keeps track of which application is the current owner of the
+    /// session.
     ///
-    /// Other applications receive [`SessionId`]s to reference the sessions, so that they can't
-    /// read or alter the session's state. The only way for an application to interact with another
-    /// application's session is through calls into that session.
+    /// The state of a session is only visible to the application that created it (and
+    /// which handles the session calls). Other applications only see the [`SessionId`]
+    /// and may only interact with the session through session calls.
     ///
     /// At the end of the execution of a block, no sessions should be alive. If a block's execution
     /// ends with any leaked sessions, the block is rejected. This means that all sessions should
@@ -193,22 +212,87 @@ pub trait Contract: Sized {
     async fn handle_session_call(
         &mut self,
         context: &CalleeContext,
-        state: &[u8],
-        argument: &[u8],
+        session: Self::SessionState,
+        argument: Self::SessionCall,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, Self::Error>;
+    ) -> Result<SessionCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>;
+
+    /// Calls another application.
+    // TODO(#488): Currently, the application state is persisted before the call and restored after the call in
+    // order to allow reentrant calls to use the most up-to-date state.
+    async fn call_application<A: ContractAbi>(
+        &mut self,
+        authenticated: bool,
+        application: ApplicationId,
+        call: &A::ApplicationCall,
+        forwarded_sessions: Vec<SessionId>,
+    ) -> Result<(A::Response, Vec<SessionId>), Self::Error> {
+        let call_bytes = bcs::to_bytes(call)?;
+        let (response_bytes, ids) =
+            Self::Storage::execute_with_released_state(self, move || async move {
+                crate::contract::system_api::call_application_without_persisting_state(
+                    authenticated,
+                    application,
+                    &call_bytes,
+                    forwarded_sessions,
+                )
+            })
+            .await;
+        let response = bcs::from_bytes(&response_bytes)?;
+        Ok((response, ids))
+    }
+
+    /// Calls a session from another application.
+    // TODO(#488): Currently, the application state is persisted before the call and restored after the call in
+    // order to allow reentrant calls to use the most up-to-date state.
+    async fn call_session<A: ContractAbi>(
+        &mut self,
+        authenticated: bool,
+        session: SessionId,
+        call: &A::SessionCall,
+        forwarded_sessions: Vec<SessionId>,
+    ) -> Result<(A::Response, Vec<SessionId>), Self::Error> {
+        let call_bytes = bcs::to_bytes(call)?;
+        let (response_bytes, ids) =
+            Self::Storage::execute_with_released_state(self, move || async move {
+                crate::contract::system_api::call_session_without_persisting_state(
+                    authenticated,
+                    session,
+                    &call_bytes,
+                    forwarded_sessions,
+                )
+            })
+            .await;
+        let response = bcs::from_bytes(&response_bytes)?;
+        Ok((response, ids))
+    }
+
+    /// Retrieves the parameters of the application.
+    fn parameters() -> Result<Self::Parameters, Self::Error> {
+        let bytes = crate::contract::system_api::current_application_parameters();
+        let parameters = serde_json::from_slice(&bytes)?;
+        Ok(parameters)
+    }
 }
 
-/// The public entry points provided by an application's service.
+/// The service interfaces of a Linera application.
 ///
-/// Execution of these endpoints does *not* consume fuel, because they can't change the
-/// application's state and are therefore *not* consensus criticial.
+/// As opposed to the [`Contract`] interfaces of an application, service entry points
+/// are triggered by JSON queries (typically GraphQL). Their execution cannot modify
+/// storage and is not gas-metered.
 #[async_trait]
 pub trait Service {
-    /// Message reports for service execution errors.
+    /// Type used to report errors to the execution environment.
+    ///
+    /// Errors are not recoverable and always interrupt the current query.
     type Error: Error;
-    /// The desired storage backend to use to read the application's state.
-    type Storage;
+
+    /// The desired storage backend used to store the application's state.
+    ///
+    /// Currently, the two supported backends are [`SimpleStateStorage`] or
+    /// [`ViewStateStorage`]. Accordingly, this associated type may be defined as `type
+    /// Storage = SimpleStateStorage<Self>` or `type Storage = ViewStateStorage<Self>`.
+    type Storage: ServiceStateStorage;
 
     /// Executes a read-only query on the state of this application.
     async fn query_application(
@@ -266,27 +350,32 @@ pub struct QueryContext {
 
 /// Externally visible results of an execution. These results are meant in the context of
 /// the application that created them.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct ExecutionResult {
+pub struct ExecutionResult<Effect> {
     /// Sends messages to the given destinations, possibly forwarding the authenticated
     /// signer.
-    pub effects: Vec<(Destination, bool, Vec<u8>)>,
+    pub effects: Vec<(Destination, bool, Effect)>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(ChannelName, ChainId)>,
     /// Unsubscribe chains to channels.
     pub unsubscribe: Vec<(ChannelName, ChainId)>,
 }
 
-impl ExecutionResult {
+impl<Effect> Default for ExecutionResult<Effect> {
+    fn default() -> Self {
+        Self {
+            effects: vec![],
+            subscribe: vec![],
+            unsubscribe: vec![],
+        }
+    }
+}
+
+impl<Effect: Serialize + Debug + DeserializeOwned> ExecutionResult<Effect> {
     /// Adds an effect to the execution result.
-    pub fn with_effect(
-        mut self,
-        destination: impl Into<Destination>,
-        effect: &impl Serialize,
-    ) -> Self {
-        let effect_bytes = bcs::to_bytes(effect).expect("Effect should be serializable");
-        self.effects.push((destination.into(), false, effect_bytes));
+    pub fn with_effect(mut self, destination: impl Into<Destination>, effect: Effect) -> Self {
+        self.effects.push((destination.into(), false, effect));
         self
     }
 
@@ -294,33 +383,44 @@ impl ExecutionResult {
     pub fn with_authenticated_effect(
         mut self,
         destination: impl Into<Destination>,
-        effect: &impl Serialize,
+        effect: Effect,
     ) -> Self {
-        let effect_bytes = bcs::to_bytes(effect).expect("Effect should be serializable");
-        self.effects.push((destination.into(), true, effect_bytes));
+        self.effects.push((destination.into(), true, effect));
         self
     }
 }
 
-/// The result of calling into a user application.
-#[derive(Debug, Default, Deserialize, Serialize)]
+/// The result of calling into an application.
+#[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct ApplicationCallResult {
-    /// The return value.
-    #[debug(with = "linera_base::hex_debug")]
-    pub value: Vec<u8>,
+pub struct ApplicationCallResult<Effect, Value, SessionState> {
+    /// The return value, if any.
+    pub value: Value,
     /// The externally-visible result.
-    pub execution_result: ExecutionResult,
-    /// The new sessions that were just created by the callee for us.
-    pub create_sessions: Vec<Vec<u8>>,
+    pub execution_result: ExecutionResult<Effect>,
+    /// New sessions were created with the following new states.
+    pub create_sessions: Vec<SessionState>,
+}
+
+impl<Effect, Value, SessionState> Default for ApplicationCallResult<Effect, Value, SessionState>
+where
+    Value: Default,
+{
+    fn default() -> Self {
+        Self {
+            value: Default::default(),
+            execution_result: Default::default(),
+            create_sessions: vec![],
+        }
+    }
 }
 
 /// The result of calling into a session.
 #[derive(Default, Deserialize, Serialize)]
-pub struct SessionCallResult {
-    /// The application result.
-    pub inner: ApplicationCallResult,
+pub struct SessionCallResult<Effect, Value, SessionState> {
+    /// The result of the application call.
+    pub inner: ApplicationCallResult<Effect, Value, SessionState>,
     /// The new state of the session, if any. `None` means that the session was consumed
     /// by the call.
-    pub new_state: Option<Vec<u8>>,
+    pub new_state: Option<SessionState>,
 }

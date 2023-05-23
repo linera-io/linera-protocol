@@ -25,10 +25,10 @@ test = []
 [dependencies]
 async-trait = { workspace = true }
 bcs = { workspace = true }
-custom_debug_derive = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 linera-base = { workspace = true }
 linera-views = { workspace = true }
 wit-bindgen-guest-rust = { workspace = true }

@@ -2,12 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{scalar, InputObject};
-use linera_sdk::base::{Amount, ApplicationId, ChainId, Owner};
+use linera_sdk::base::{Amount, ApplicationId, ChainId, ContractAbi, Owner};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::BTreeMap, str::FromStr};
 
+pub struct FungibleTokenAbi;
+
+impl ContractAbi for FungibleTokenAbi {
+    type InitializationArgument = InitialState;
+    type Parameters = ();
+    type ApplicationCall = ApplicationCall;
+    type Operation = Operation;
+    type Effect = Effect;
+    type SessionCall = SessionCall;
+    type Response = Amount;
+    type SessionState = Amount;
+}
+
 /// An operation.
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub enum Operation {
     /// A transfer from a (locally owned) account to a (possibly remote) account.
     Transfer {
@@ -26,7 +39,7 @@ pub enum Operation {
 }
 
 /// An effect.
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub enum Effect {
     /// Credit the given account.
     Credit { owner: AccountOwner, amount: Amount },
@@ -40,7 +53,7 @@ pub enum Effect {
 }
 
 /// A cross-application call.
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub enum ApplicationCall {
     /// A request for an account balance.
     Balance { owner: AccountOwner },
@@ -59,7 +72,7 @@ pub enum ApplicationCall {
 }
 
 /// A cross-application call into a session.
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub enum SessionCall {
     /// A request for the session's balance.
     Balance,
@@ -163,16 +176,6 @@ pub struct InitialState {
     pub accounts: BTreeMap<AccountOwner, Amount>,
 }
 
-impl std::fmt::Display for InitialState {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            serde_json::to_string(self).expect("Serialization failed")
-        )
-    }
-}
-
 /// An account.
 #[derive(
     Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, InputObject,
@@ -182,7 +185,7 @@ pub struct Account {
     pub owner: AccountOwner,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub enum Destination {
     Account(Account),
     NewSession,
@@ -205,10 +208,9 @@ impl InitialStateBuilder {
 
     /// Returns the serialized initial state of the application, ready to used as the
     /// initialization argument.
-    pub fn build(&self) -> Vec<u8> {
-        serde_json::to_vec(&InitialState {
+    pub fn build(&self) -> InitialState {
+        InitialState {
             accounts: self.account_balances.clone(),
-        })
-        .expect("Failed to serialize initial state")
+        }
     }
 }

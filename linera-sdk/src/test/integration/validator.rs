@@ -7,6 +7,7 @@
 //! it, and blocks can be added to each microchain individually.
 
 use super::ActiveChain;
+use crate::ContractAbi;
 use dashmap::DashMap;
 use linera_base::{
     crypto::KeyPair,
@@ -89,16 +90,19 @@ impl TestValidator {
     /// another microchain.
     ///
     /// Returns the new [`TestValidator`] and the [`ApplicationId`] of the created application.
-    pub async fn with_current_application(
-        parameters: Vec<u8>,
-        initialization_argument: Vec<u8>,
-    ) -> (TestValidator, ApplicationId) {
+    pub async fn with_current_application<A>(
+        parameters: A::Parameters,
+        initialization_argument: A::InitializationArgument,
+    ) -> (TestValidator, ApplicationId)
+    where
+        A: ContractAbi,
+    {
         let (validator, bytecode_id) = TestValidator::with_current_bytecode().await;
 
         let mut creator = validator.new_chain().await;
 
         let application_id = creator
-            .create_application(bytecode_id, parameters, initialization_argument, vec![])
+            .create_application::<A>(bytecode_id, parameters, initialization_argument, vec![])
             .await;
 
         (validator, application_id)

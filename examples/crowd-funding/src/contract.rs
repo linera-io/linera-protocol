@@ -6,19 +6,23 @@
 mod state;
 
 use async_trait::async_trait;
-use crowd_funding::{ApplicationCall, Effect, InitializationArguments, Operation};
+use crowd_funding::{ApplicationCall, Effect, InitializationArgument, Operation};
 use fungible::{Account, AccountOwner, Destination};
 use linera_sdk::{
-    base::{Amount, ApplicationId, SessionId},
+    base::{Amount, ApplicationId, SessionId, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
-    FromBcsBytes, OperationContext, SessionCallResult, ViewStateStorage,
+    OperationContext, SessionCallResult, ViewStateStorage,
 };
 use linera_views::views::View;
 use state::{CrowdFunding, Status};
 use thiserror::Error;
 
 linera_sdk::contract!(CrowdFunding);
+
+impl WithContractAbi for CrowdFunding {
+    type Abi = crowd_funding::CrowdFundingAbi;
+}
 
 #[async_trait]
 impl Contract for CrowdFunding {
@@ -28,14 +32,12 @@ impl Contract for CrowdFunding {
     async fn initialize(
         &mut self,
         _context: &OperationContext,
-        argument: &[u8],
-    ) -> Result<ExecutionResult, Self::Error> {
-        self.initialization_arguments.set(Some(
-            serde_json::from_slice(argument).map_err(Error::InvalidInitializationArguments)?,
-        ));
+        argument: InitializationArgument,
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
+        self.initialization_argument.set(Some(argument));
 
         ensure!(
-            self.get_initialization_arguments().deadline > system_api::current_system_time(),
+            self.get_initialization_argument().deadline > system_api::current_system_time(),
             Error::DeadlineInThePast
         );
 
@@ -45,11 +47,8 @@ impl Contract for CrowdFunding {
     async fn execute_operation(
         &mut self,
         context: &OperationContext,
-        operation_bytes: &[u8],
-    ) -> Result<ExecutionResult, Self::Error> {
-        let operation: Operation =
-            bcs::from_bytes(operation_bytes).map_err(Error::InvalidOperation)?;
-
+        operation: Operation,
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         let mut result = ExecutionResult::default();
 
         match operation {
@@ -71,9 +70,9 @@ impl Contract for CrowdFunding {
     async fn execute_effect(
         &mut self,
         context: &EffectContext,
-        effect: &[u8],
-    ) -> Result<ExecutionResult, Self::Error> {
-        match bcs::from_bytes(effect).map_err(Error::InvalidEffect)? {
+        effect: Effect,
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
+        match effect {
             Effect::PledgeWithAccount { owner, amount } => {
                 ensure!(
                     context.chain_id == system_api::current_application_id().creation.chain_id,
@@ -88,14 +87,11 @@ impl Contract for CrowdFunding {
     async fn handle_application_call(
         &mut self,
         context: &CalleeContext,
-        argument: &[u8],
+        call: ApplicationCall,
         sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, Self::Error> {
-        let call: ApplicationCall =
-            bcs::from_bytes(argument).map_err(Error::InvalidCrossApplicationCall)?;
-
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    {
         let mut result = ApplicationCallResult::default();
-
         match call {
             ApplicationCall::PledgeWithSessions { source } => {
                 // Only sessions on the campaign chain are supported.
@@ -121,10 +117,11 @@ impl Contract for CrowdFunding {
     async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
-        _session: &[u8],
-        _argument: &[u8],
+        _state: Self::SessionState,
+        _call: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    {
         Err(Error::SessionsNotSupported)
     }
 }
@@ -133,15 +130,13 @@ impl CrowdFunding {
     fn fungible_id() -> Result<ApplicationId, Error> {
         // TODO(#723): We should be able to pull the fungible ID from the
         // `required_application_ids` of the application description.
-        let parameters = system_api::current_application_parameters();
-        let id = bcs::from_bytes(&parameters).map_err(Error::InvalidParameters)?;
-        Ok(id)
+        Self::parameters()
     }
 
     /// Adds a pledge from a local account to the remote campaign chain.
     async fn execute_pledge_with_transfer(
         &mut self,
-        result: &mut ExecutionResult,
+        result: &mut ExecutionResult<Effect>,
         owner: AccountOwner,
         amount: Amount,
     ) -> Result<(), Error> {
@@ -157,19 +152,19 @@ impl CrowdFunding {
             amount,
             destination,
         };
-        self.call_application(
+        self.call_application::<fungible::FungibleTokenAbi>(
             /* authenticated by owner */ true,
             Self::fungible_id()?,
-            &bcs::to_bytes(&call).unwrap(),
+            &call,
             vec![],
         )
-        .await;
+        .await?;
         // Second, schedule the attribution of the funds to the (remote) campaign.
         let effect = Effect::PledgeWithAccount { owner, amount };
         result.effects.push((
             chain_id.into(),
             /* authenticated by owner */ true,
-            bcs::to_bytes(&effect).unwrap(),
+            effect,
         ));
         Ok(())
     }
@@ -222,17 +217,17 @@ impl CrowdFunding {
         &mut self,
         sessions: &[SessionId],
     ) -> Result<Vec<Amount>, Error> {
-        let balance_query = bcs::to_bytes(&fungible::SessionCall::Balance)
-            .map_err(Error::InvalidSessionBalanceQuery)?;
-
         let mut balances = Vec::with_capacity(sessions.len());
         for session in sessions {
-            let (balance_bytes, _) = self
-                .call_session(false, *session, &balance_query, vec![])
-                .await;
-            balances.push(
-                Amount::from_bcs_bytes(&balance_bytes).map_err(Error::InvalidSessionBalance)?,
-            );
+            let (balance, _) = self
+                .call_session::<fungible::FungibleTokenAbi>(
+                    false,
+                    *session,
+                    &fungible::SessionCall::Balance,
+                    vec![],
+                )
+                .await?;
+            balances.push(balance);
         }
         Ok(balances)
     }
@@ -262,7 +257,7 @@ impl CrowdFunding {
                 Ok(())
             }
             Status::Complete => {
-                self.send_to(amount, self.get_initialization_arguments().owner)
+                self.send_to(amount, self.get_initialization_argument().owner)
                     .await
             }
             Status::Cancelled => Err(Error::Cancelled),
@@ -276,7 +271,7 @@ impl CrowdFunding {
         match self.status.get() {
             Status::Active => {
                 ensure!(
-                    total >= self.get_initialization_arguments().target,
+                    total >= self.get_initialization_argument().target,
                     Error::TargetNotReached
                 );
             }
@@ -284,7 +279,7 @@ impl CrowdFunding {
             Status::Cancelled => return Err(Error::Cancelled),
         }
 
-        self.send_to(total, self.get_initialization_arguments().owner)
+        self.send_to(total, self.get_initialization_argument().owner)
             .await?;
         self.pledges.clear();
         self.status.set(Status::Complete);
@@ -299,7 +294,7 @@ impl CrowdFunding {
         // TODO(#728): Remove this.
         #[cfg(not(any(test, feature = "test")))]
         ensure!(
-            system_api::current_system_time() >= self.get_initialization_arguments().deadline,
+            system_api::current_system_time() >= self.get_initialization_argument().deadline,
             Error::DeadlineNotReached
         );
 
@@ -316,7 +311,7 @@ impl CrowdFunding {
         }
 
         let balance = self.balance().await?;
-        self.send_to(balance, self.get_initialization_arguments().owner)
+        self.send_to(balance, self.get_initialization_argument().owner)
             .await?;
         self.status.set(Status::Cancelled);
 
@@ -326,13 +321,15 @@ impl CrowdFunding {
     /// Queries the token application to determine the total amount of tokens in custody.
     async fn balance(&mut self) -> Result<Amount, Error> {
         let owner = AccountOwner::Application(system_api::current_application_id());
-        let query_bytes = bcs::to_bytes(&fungible::ApplicationCall::Balance { owner })
-            .map_err(Error::InvalidBalanceQuery)?;
-        let (response, _sessions) = self
-            .call_application(true, Self::fungible_id()?, &query_bytes, vec![])
-            .await;
-
-        bcs::from_bytes(&response).map_err(Error::InvalidBalance)
+        let (amount, _) = self
+            .call_application::<fungible::FungibleTokenAbi>(
+                true,
+                Self::fungible_id()?,
+                &fungible::ApplicationCall::Balance { owner },
+                vec![],
+            )
+            .await?;
+        Ok(amount)
     }
 
     /// Transfers `amount` tokens from the funds in custody to the `destination`.
@@ -347,9 +344,13 @@ impl CrowdFunding {
             amount,
             destination,
         };
-        let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
-        self.call_application(true, Self::fungible_id()?, &transfer_bytes, vec![])
-            .await;
+        self.call_application::<fungible::FungibleTokenAbi>(
+            true,
+            Self::fungible_id()?,
+            &transfer,
+            vec![],
+        )
+        .await?;
         Ok(())
     }
 
@@ -369,9 +370,13 @@ impl CrowdFunding {
             amount,
             destination,
         };
-        let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
-        self.call_application(true, Self::fungible_id()?, &transfer_bytes, vec![])
-            .await;
+        self.call_application::<fungible::FungibleTokenAbi>(
+            true,
+            Self::fungible_id()?,
+            &transfer,
+            vec![],
+        )
+        .await?;
         Ok(())
     }
 
@@ -390,18 +395,17 @@ impl CrowdFunding {
             amount,
             destination,
         };
-        let transfer_bytes = bcs::to_bytes(&transfer).map_err(Error::InvalidTransfer)?;
-        self.call_session(false, session, &transfer_bytes, vec![])
-            .await;
+        self.call_session::<fungible::FungibleTokenAbi>(false, session, &transfer, vec![])
+            .await?;
         Ok(())
     }
 
-    // TODO(#719): rename into `initialization_arguments()` after `#[derive(GraphQLView)]` is fixed.
-    fn get_initialization_arguments(&self) -> &InitializationArguments {
-        self.initialization_arguments
+    // TODO(#719): rename into `initialization_argument()` after `#[derive(GraphQLView)]` is fixed.
+    fn get_initialization_argument(&self) -> &InitializationArgument {
+        self.initialization_argument
             .get()
             .as_ref()
-            .expect("Application was not initialized")
+            .expect("Application is not running on the host chain or was not initialized yet")
     }
 }
 
@@ -416,35 +420,15 @@ pub enum Error {
     #[error("Crowd-funding application doesn't support any cross-application sessions")]
     SessionsNotSupported,
 
-    /// Failure to deserialize the initialization arguments.
-    #[error("Crowd-funding campaign arguments are invalid")]
-    InvalidInitializationArguments(serde_json::Error),
-
-    /// Failure to deserialize the parameters.
-    #[error("Crowd-funding parameters are invalid")]
-    InvalidParameters(bcs::Error),
-
     /// Crowd-funding campaign cannot start after its deadline.
     #[error("Crowd-funding campaign cannot start after its deadline")]
     DeadlineInThePast,
-
-    /// Effect bytes does not deserialize into an [`Effect`].
-    #[error("Requested effect is invalid")]
-    InvalidEffect(bcs::Error),
-
-    /// Operation bytes does not deserialize into an [`Operation`].
-    #[error("Requested operation is invalid")]
-    InvalidOperation(bcs::Error),
-
-    /// Cross-application call argument does not deserialize into an [`ApplicationCall`].
-    #[error("Requested cross-application call is invalid")]
-    InvalidCrossApplicationCall(bcs::Error),
 
     /// A pledge can not be empty.
     #[error("Pledge is empty")]
     EmptyPledge,
 
-    /// Pledge used a token that's not the same as the one in the campaign's [`InitializationArguments`].
+    /// Pledge used a token that's not the same as the one in the campaign's [`InitializationArgument`].
     #[error("Pledge uses the incorrect token")]
     IncorrectToken,
 
@@ -455,26 +439,6 @@ pub enum Error {
     /// Cross-application call without a source application ID.
     #[error("Applications must identify themselves to perform transfers")]
     MissingSourceApplication,
-
-    /// An invalid transfer was constructed.
-    #[error("Transfer is invalid because it can't be serialized")]
-    InvalidTransfer(bcs::Error),
-
-    /// [`fungible::ApplicationCall::Balance`] could not be serialized.
-    #[error("Can't check balance because the query can't be serialized")]
-    InvalidBalanceQuery(bcs::Error),
-
-    /// Fungible Token application returned an invalid balance.
-    #[error("Received an invalid balance from token application")]
-    InvalidBalance(bcs::Error),
-
-    /// [`fungible::SessionCall::Balance`] could not be serialized.
-    #[error("Can't check session balance because the query can't be serialized")]
-    InvalidSessionBalanceQuery(bcs::Error),
-
-    /// Fungible Token application returned an invalid session balance.
-    #[error("Received an invalid session balance from token application")]
-    InvalidSessionBalance(bcs::Error),
 
     /// Can't collect pledges before the campaign target has been reached.
     #[error("Crowd-funding campaign has not reached its target yet")]
@@ -491,4 +455,12 @@ pub enum Error {
     /// Can't pledge to or collect pledges from a cancelled campaign.
     #[error("Crowd-funding campaign has been cancelled")]
     Cancelled,
+
+    /// Failed to deserialize BCS bytes
+    #[error("Failed to deserialize BCS bytes")]
+    BcsError(#[from] bcs::Error),
+
+    /// Failed to deserialize JSON string
+    #[error("Failed to deserialize JSON string")]
+    JsonError(#[from] serde_json::Error),
 }

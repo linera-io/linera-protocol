@@ -8,19 +8,22 @@ mod state;
 use self::state::FungibleToken;
 use async_trait::async_trait;
 use fungible::{
-    Account, AccountOwner, ApplicationCall, Destination, Effect, InitialState, Operation,
-    SessionCall,
+    Account, AccountOwner, ApplicationCall, Destination, Effect, Operation, SessionCall,
 };
 use linera_sdk::{
-    base::{Amount, ApplicationId, Owner, SessionId},
+    base::{Amount, ApplicationId, Owner, SessionId, WithContractAbi},
     contract::system_api,
-    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult, FromBcsBytes,
+    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
     OperationContext, SessionCallResult, ViewStateStorage,
 };
 use std::str::FromStr;
 use thiserror::Error;
 
 linera_sdk::contract!(FungibleToken);
+
+impl WithContractAbi for FungibleToken {
+    type Abi = fungible::FungibleTokenAbi;
+}
 
 #[async_trait]
 impl Contract for FungibleToken {
@@ -30,10 +33,8 @@ impl Contract for FungibleToken {
     async fn initialize(
         &mut self,
         context: &OperationContext,
-        argument: &[u8],
-    ) -> Result<ExecutionResult, Self::Error> {
-        let mut state: InitialState =
-            serde_json::from_slice(argument).map_err(Error::InvalidInitialState)?;
+        mut state: Self::InitializationArgument,
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         // If initial accounts are empty, creator gets 1M tokens to act like a faucet.
         if state.accounts.is_empty() {
             if let Some(owner) = context.authenticated_signer {
@@ -50,9 +51,8 @@ impl Contract for FungibleToken {
     async fn execute_operation(
         &mut self,
         context: &OperationContext,
-        operation: &[u8],
-    ) -> Result<ExecutionResult, Self::Error> {
-        let operation = Operation::from_bcs_bytes(operation).map_err(Error::InvalidOperation)?;
+        operation: Self::Operation,
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         match operation {
             Operation::Transfer {
                 owner,
@@ -84,9 +84,8 @@ impl Contract for FungibleToken {
     async fn execute_effect(
         &mut self,
         context: &EffectContext,
-        effect: &[u8],
-    ) -> Result<ExecutionResult, Self::Error> {
-        let effect = Effect::from_bcs_bytes(effect).map_err(Error::InvalidEffect)?;
+        effect: Effect,
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         match effect {
             Effect::Credit { owner, amount } => {
                 self.credit(owner, amount).await;
@@ -109,17 +108,15 @@ impl Contract for FungibleToken {
     async fn handle_application_call(
         &mut self,
         context: &CalleeContext,
-        argument: &[u8],
+        call: ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, Self::Error> {
-        let request =
-            ApplicationCall::from_bcs_bytes(argument).map_err(Error::InvalidApplicationCall)?;
-        match request {
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    {
+        match call {
             ApplicationCall::Balance { owner } => {
                 let mut result = ApplicationCallResult::default();
                 let balance = self.balance(&owner).await;
-                result.value =
-                    bcs::to_bytes(&balance).expect("Serializing amounts should not fail");
+                result.value = balance;
                 Ok(result)
             }
 
@@ -161,11 +158,10 @@ impl Contract for FungibleToken {
     async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
-        state: &[u8],
-        argument: &[u8],
+        state: Self::SessionState,
+        request: SessionCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, Self::Error> {
-        let request = SessionCall::from_bcs_bytes(argument).map_err(Error::InvalidSessionCall)?;
+    ) -> Result<SessionCallResult<Self::Effect, Amount, Self::SessionState>, Self::Error> {
         match request {
             SessionCall::Balance => self.handle_session_balance(state),
             SessionCall::Transfer {
@@ -194,14 +190,18 @@ impl FungibleToken {
     }
 
     /// Handles a session balance request sent by an application.
-    fn handle_session_balance(&self, session_state: &[u8]) -> Result<SessionCallResult, Error> {
+    fn handle_session_balance(
+        &self,
+        balance: Amount,
+    ) -> Result<SessionCallResult<Effect, Amount, Amount>, Error> {
         let application_call_result = ApplicationCallResult {
-            value: session_state.to_vec(),
-            ..Default::default()
+            value: balance,
+            execution_result: ExecutionResult::default(),
+            create_sessions: vec![],
         };
         let session_call_result = SessionCallResult {
             inner: application_call_result,
-            new_state: Some(session_state.to_vec()),
+            new_state: Some(balance),
         };
         Ok(session_call_result)
     }
@@ -209,24 +209,21 @@ impl FungibleToken {
     /// Handles a transfer from a session.
     async fn handle_session_transfer(
         &mut self,
-        session_state: &[u8],
+        mut balance: Amount,
         amount: Amount,
         destination: Destination,
-    ) -> Result<SessionCallResult, Error> {
-        let mut balance =
-            Amount::from_bcs_bytes(session_state).expect("Session contains corrupt data");
+    ) -> Result<SessionCallResult<Effect, Amount, Amount>, Error> {
         balance
             .try_sub_assign(amount)
             .map_err(|_| Error::InsufficientSessionBalance)?;
 
-        let new_state = (balance > Amount::zero())
-            .then(|| bcs::to_bytes(&balance).expect("Serializing amounts should not fail"));
+        let updated_session = (balance > Amount::zero()).then_some(balance);
 
         Ok(SessionCallResult {
             inner: self
                 .finish_transfer_to_destination(amount, destination)
                 .await,
-            new_state,
+            new_state: updated_session,
         })
     }
 
@@ -235,7 +232,7 @@ impl FungibleToken {
         source_account: Account,
         amount: Amount,
         target_account: Account,
-    ) -> Result<ExecutionResult, Error> {
+    ) -> Result<ExecutionResult<Effect>, Error> {
         if source_account.chain_id == system_api::current_chain_id() {
             self.debit(source_account.owner, amount).await?;
             Ok(self
@@ -248,7 +245,7 @@ impl FungibleToken {
                 target_account,
             };
             Ok(ExecutionResult::default()
-                .with_authenticated_effect(source_account.chain_id, &effect))
+                .with_authenticated_effect(source_account.chain_id, effect))
         }
     }
 
@@ -257,14 +254,13 @@ impl FungibleToken {
         &mut self,
         amount: Amount,
         destination: Destination,
-    ) -> ApplicationCallResult {
+    ) -> ApplicationCallResult<Effect, Amount, Amount> {
         let mut result = ApplicationCallResult::default();
         match destination {
             Destination::Account(account) => {
                 result.execution_result = self.finish_transfer_to_account(amount, account).await;
             }
             Destination::NewSession => {
-                let amount = bcs::to_bytes(&amount).expect("Serializing amounts should not fail");
                 result.create_sessions.push(amount);
             }
         }
@@ -276,7 +272,7 @@ impl FungibleToken {
         &mut self,
         amount: Amount,
         account: Account,
-    ) -> ExecutionResult {
+    ) -> ExecutionResult<Effect> {
         if account.chain_id == system_api::current_chain_id() {
             self.credit(account.owner, amount).await;
             ExecutionResult::default()
@@ -285,7 +281,7 @@ impl FungibleToken {
                 owner: account.owner,
                 amount,
             };
-            ExecutionResult::default().with_effect(account.chain_id, &effect)
+            ExecutionResult::default().with_effect(account.chain_id, effect)
         }
     }
 }
@@ -293,26 +289,6 @@ impl FungibleToken {
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// Invalid serialized initial state.
-    #[error("Serialized initial state is invalid")]
-    InvalidInitialState(#[source] serde_json::Error),
-
-    /// Invalid serialized [`SignedTransfer`].
-    #[error("Operation is not a valid serialized signed transfer")]
-    InvalidOperation(#[source] bcs::Error),
-
-    /// Invalid serialized [`Credit`].
-    #[error("Effect is not a valid serialized credit operation")]
-    InvalidEffect(#[source] bcs::Error),
-
-    /// Invalid serialized [`ApplicationCall`].
-    #[error("Cross-application call argument is not a valid request")]
-    InvalidApplicationCall(#[source] bcs::Error),
-
-    /// Invalid serialized [`SessionCall`].
-    #[error("Cross-application session call argument is not a valid request")]
-    InvalidSessionCall(#[source] bcs::Error),
-
     /// Insufficient balance in source account.
     #[error("Source account does not have sufficient balance for transfer")]
     InsufficientBalance(#[from] state::InsufficientBalanceError),
@@ -324,4 +300,12 @@ pub enum Error {
     /// Requested transfer does not have permission on this account.
     #[error("The requested transfer is not correctly authenticated.")]
     IncorrectAuthentication,
+
+    /// Failed to deserialize BCS bytes
+    #[error("Failed to deserialize BCS bytes")]
+    BcsError(#[from] bcs::Error),
+
+    /// Failed to deserialize JSON string
+    #[error("Failed to deserialize JSON string")]
+    JsonError(#[from] serde_json::Error),
 }

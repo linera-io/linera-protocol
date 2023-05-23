@@ -111,6 +111,9 @@ linera-storage = { version = "0.1.0", path = "./linera-storage", default-feature
 linera-views = { version = "0.1.0", path = "./linera-views" }
 linera-views-derive = { version = "0.1.0", path = "./linera-views-derive" }
 
+counter = { path = "./examples/counter" }
+meta-counter = { path = "./examples/meta-counter" }
+reentrant-counter = { path = "./examples/reentrant-counter" }
 fungible = { path = "./examples/fungible" }
 crowd-funding = { path = "./examples/crowd-funding" }
 social = { path = "./examples/social" }

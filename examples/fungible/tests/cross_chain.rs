@@ -12,13 +12,13 @@ use linera_sdk::{
     test::{ActiveChain, TestValidator},
 };
 
-/// Test transfering tokens across microchains.
+/// Test transferring tokens across microchains.
 ///
 /// Creates the application on a `sender_chain`, initializing it with a single account with some
 /// tokens for that chain's owner. Transfers some of those tokens to a new `receiver_chain`, and
 /// checks that the balances on each microchain are correct.
 #[tokio::test]
-async fn cross_chain_transfer() {
+async fn test_cross_chain_transfer() {
     let initial_amount = Amount::from(20);
     let transfer_amount = Amount::from(15);
 
@@ -28,7 +28,12 @@ async fn cross_chain_transfer() {
 
     let initial_state = InitialStateBuilder::default().with_account(sender_account, initial_amount);
     let application_id = sender_chain
-        .create_application(bytecode_id, vec![], initial_state.build(), vec![])
+        .create_application::<fungible::FungibleTokenAbi>(
+            bytecode_id,
+            (),
+            initial_state.build(),
+            vec![],
+        )
         .await;
 
     let receiver_chain = validator.new_chain().await;

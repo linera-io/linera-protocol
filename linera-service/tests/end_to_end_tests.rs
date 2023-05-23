@@ -5,7 +5,10 @@
 #![cfg_attr(not(any(feature = "wasmer", feature = "wasmtime")), allow(dead_code))]
 
 use async_graphql::InputType;
-use linera_base::identifiers::{ChainId, EffectId, Owner};
+use linera_base::{
+    abi::ContractAbi,
+    identifiers::{ChainId, EffectId, Owner},
+};
 use linera_execution::Bytecode;
 use linera_service::config::WalletState;
 use once_cell::sync::{Lazy, OnceCell};
@@ -246,24 +249,24 @@ impl Client {
         String::from_utf8(output.stdout).unwrap()
     }
 
-    async fn publish_and_create(
+    async fn publish_and_create<A: ContractAbi>(
         &self,
         contract: PathBuf,
         service: PathBuf,
-        init_args: String,
-        parameters: Option<String>,
+        parameters: &A::Parameters,
+        argument: &A::InitializationArgument,
         required_application_ids: Vec<String>,
         publisher: impl Into<Option<ChainId>>,
     ) -> String {
+        let json_parameters = serde_json::to_string(parameters).unwrap();
+        let json_argument = serde_json::to_string(argument).unwrap();
         let mut command = self.run_with_storage().await;
         command
             .arg("publish-and-create")
             .args([contract, service])
-            .args(["--json-args", &init_args])
-            .args(publisher.into().iter().map(ChainId::to_string));
-        if let Some(parameters) = parameters {
-            command.args(["--parameters", &parameters]);
-        }
+            .args(publisher.into().iter().map(ChainId::to_string))
+            .args(["--json-parameters", &json_parameters])
+            .args(["--json-argument", &json_argument]);
         if !required_application_ids.is_empty() {
             command.arg("--required-application-ids");
             command.args(required_application_ids);
@@ -289,18 +292,19 @@ impl Client {
         stdout.trim().to_string()
     }
 
-    async fn create_application(
+    async fn create_application<A: ContractAbi>(
         &self,
         bytecode_id: String,
-        arg: impl ToString,
+        argument: &A::InitializationArgument,
         creator: impl Into<Option<ChainId>>,
     ) -> String {
+        let json_argument = serde_json::to_string(argument).unwrap();
         let stdout = Self::run_command(
             self.run_with_storage()
                 .await
                 .arg("create-application")
                 .arg(bytecode_id)
-                .args(["--json-args", &arg.to_string()])
+                .args(["--json-argument", &json_argument])
                 .args(creator.into().iter().map(ChainId::to_string)),
         )
         .await;
@@ -880,8 +884,8 @@ impl NodeService {
         let query_string = format!(
             "mutation {{ createApplication(\
                 bytecodeId: \"{bytecode_id}\", \
-                parameters: [], \
-                initializationArgument: [], \
+                parameters: \"null\", \
+                initializationArgument: \"null\", \
                 requiredApplicationIds: []) \
             }}"
         );
@@ -961,6 +965,8 @@ impl Application {
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_counter() {
+    use counter::CounterAbi;
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
@@ -976,11 +982,11 @@ async fn test_end_to_end_counter() {
     let (contract, service) = runner.build_application("counter").await;
 
     let application_id = client
-        .publish_and_create(
+        .publish_and_create::<CounterAbi>(
             contract,
             service,
-            serde_json::to_string(&original_counter_value).unwrap(),
-            None,
+            &(),
+            &original_counter_value,
             vec![],
             None,
         )
@@ -1003,6 +1009,8 @@ async fn test_end_to_end_counter() {
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_counter_publish_create() {
+    use counter::CounterAbi;
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
@@ -1019,11 +1027,7 @@ async fn test_end_to_end_counter_publish_create() {
 
     let bytecode_id = client.publish_bytecode(contract, service, None).await;
     let application_id = client
-        .create_application(
-            bytecode_id,
-            serde_json::to_string(&original_counter_value).unwrap(),
-            None,
-        )
+        .create_application::<CounterAbi>(bytecode_id, &original_counter_value, None)
         .await;
     let mut node_service = client.run_node_service(None, None).await;
 
@@ -1331,7 +1335,8 @@ async fn test_end_to_end_retry_notification_stream() {
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_fungible() {
-    use fungible::{Account, AccountOwner, InitialState};
+    use fungible::{Account, AccountOwner, FungibleTokenAbi, InitialState};
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
@@ -1361,10 +1366,9 @@ async fn test_end_to_end_fungible() {
         (account_owner2, Amount::from(2)),
     ]);
     let state = InitialState { accounts };
-    let state_as_json = serde_json::to_string(&state).unwrap();
     // Setting up the application and verifying
     let application_id = client1
-        .publish_and_create(contract, service, state_as_json, None, vec![], None)
+        .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, vec![], None)
         .await;
 
     let mut node_service1 = client1.run_node_service(chain1, 8080).await;
@@ -1448,8 +1452,9 @@ async fn test_end_to_end_fungible() {
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_crowd_funding() {
-    use crowd_funding::InitializationArguments;
-    use fungible::{Account, AccountOwner, InitialState};
+    use crowd_funding::{CrowdFundingAbi, InitializationArgument};
+    use fungible::{Account, AccountOwner, FungibleTokenAbi, InitialState};
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
@@ -1479,11 +1484,11 @@ async fn test_end_to_end_crowd_funding() {
 
     // Setting up the application fungible
     let application_id_fungible = client1
-        .publish_and_create(
+        .publish_and_create::<FungibleTokenAbi>(
             contract_fungible,
             service_fungible,
-            state_fungible.to_string(),
-            None,
+            &(),
+            &state_fungible,
             vec![],
             None,
         )
@@ -1492,18 +1497,19 @@ async fn test_end_to_end_crowd_funding() {
     // Setting up the application crowd funding
     let deadline = Timestamp::from(std::u64::MAX);
     let target = Amount::from(1);
-    let state_crowd = InitializationArguments {
+    let state_crowd = InitializationArgument {
         owner: account_owner1,
         deadline,
         target,
     };
     let (contract_crowd, service_crowd) = runner.build_application("crowd-funding").await;
     let application_id_crowd = client1
-        .publish_and_create(
+        .publish_and_create::<CrowdFundingAbi>(
             contract_crowd,
             service_crowd,
-            state_crowd.to_string(),
-            Some(application_id_fungible.clone()),
+            // TODO(#723): This hack will disappear soon.
+            &application_id_fungible.parse().unwrap(),
+            &state_crowd,
             vec![application_id_fungible.clone()],
             None,
         )

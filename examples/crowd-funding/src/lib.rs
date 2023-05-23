@@ -3,12 +3,25 @@
 
 use async_graphql::SimpleObject;
 use fungible::AccountOwner;
-use linera_sdk::base::{Amount, Timestamp};
+use linera_sdk::base::{Amount, ApplicationId, ContractAbi, Timestamp};
 use serde::{Deserialize, Serialize};
 
-/// The initialization arguments required to create a crowd-funding campaign.
+pub struct CrowdFundingAbi;
+
+impl ContractAbi for CrowdFundingAbi {
+    type InitializationArgument = InitializationArgument;
+    type Parameters = ApplicationId;
+    type Operation = Operation;
+    type ApplicationCall = ApplicationCall;
+    type Effect = Effect;
+    type SessionCall = ();
+    type Response = ();
+    type SessionState = ();
+}
+
+/// The initialization data required to create a crowd-funding campaign.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, SimpleObject)]
-pub struct InitializationArguments {
+pub struct InitializationArgument {
     /// The receiver of the pledges of a successful campaign.
     pub owner: AccountOwner,
     /// The deadline of the campaign, after which it can be cancelled if it hasn't met its target.
@@ -17,7 +30,7 @@ pub struct InitializationArguments {
     pub target: Amount,
 }
 
-impl std::fmt::Display for InitializationArguments {
+impl std::fmt::Display for InitializationArgument {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
@@ -28,7 +41,7 @@ impl std::fmt::Display for InitializationArguments {
 }
 
 /// Operations that can be sent to the application.
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum Operation {
     /// Pledge some tokens to the campaign (from an account on the current chain to the campaign chain).
@@ -40,7 +53,7 @@ pub enum Operation {
 }
 
 /// Effects that can be processed by the application.
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum Effect {
     /// Pledge some tokens to the campaign (from an account on the receiver chain).
@@ -48,7 +61,7 @@ pub enum Effect {
 }
 
 /// A cross-application call. This is meant to mimic operations, except triggered by another contract.
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum ApplicationCall {
     /// Pledge some tokens to the campaign (from an account on the current chain).

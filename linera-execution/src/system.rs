@@ -711,7 +711,11 @@ where
                     creation: context.next_effect_id(),
                 };
                 self.registry
-                    .create_application(id, parameters.clone(), required_application_ids.clone())
+                    .register_new_application(
+                        id,
+                        parameters.clone(),
+                        required_application_ids.clone(),
+                    )
                     .await?;
                 // Send an effect to ourself to increment the effect ID.
                 result.effects.push((

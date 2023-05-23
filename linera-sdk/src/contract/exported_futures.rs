@@ -131,8 +131,8 @@ where
 /// [`Contract::initialize`].
 ///
 /// Loads the `Application` state and calls its [`initialize`][Contract::initialize] method.
-pub struct Initialize<Application> {
-    future: ExportedFuture<Result<ExecutionResult, String>>,
+pub struct Initialize<Application: Contract> {
+    future: ExportedFuture<Result<ExecutionResult<Application::Effect>, String>>,
     _application: PhantomData<Application>,
 }
 
@@ -141,16 +141,22 @@ where
     Application: Contract + Send,
     Application::Error: 'static,
     Application::Storage: ContractStateStorage<Application> + Send + 'static,
+    Application::Effect: 'static,
+    Application::Response: 'static,
 {
     /// Creates the exported future that the host can poll.
     ///
     /// This is called from the host.
-    pub fn new(context: wit_types::OperationContext, argument: Vec<u8>) -> Self {
+    pub fn new(context: wit_types::OperationContext, bytes: Vec<u8>) -> Self {
         ContractLogger::install();
         Initialize {
             future: ExportedFuture::new(Application::Storage::execute_with_state(
                 move |application| {
-                    async move { application.initialize(&context.into(), &argument).await }.boxed()
+                    async move {
+                        let argument = serde_json::from_slice(&bytes)?;
+                        application.initialize(&context.into(), argument).await
+                    }
+                    .boxed()
                 },
             )),
             _application: PhantomData,
@@ -170,8 +176,8 @@ where
 ///
 /// Loads the `Application` state and calls its
 /// [`execute_operation`][Contract::execute_operation] method.
-pub struct ExecuteOperation<Application> {
-    future: ExportedFuture<Result<ExecutionResult, String>>,
+pub struct ExecuteOperation<Application: Contract> {
+    future: ExportedFuture<Result<ExecutionResult<Application::Effect>, String>>,
     _application: PhantomData<Application>,
 }
 
@@ -180,6 +186,8 @@ where
     Application: Contract + Send,
     Application::Error: 'static,
     Application::Storage: ContractStateStorage<Application> + Send + 'static,
+    Application::Effect: 'static,
+    Application::Response: 'static,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -190,8 +198,9 @@ where
             future: ExportedFuture::new(Application::Storage::execute_with_state(
                 move |application| {
                     async move {
+                        let operation: Application::Operation = bcs::from_bytes(&operation)?;
                         application
-                            .execute_operation(&context.into(), &operation)
+                            .execute_operation(&context.into(), operation)
                             .await
                     }
                     .boxed()
@@ -214,8 +223,8 @@ where
 ///
 /// Loads the `Application` state and calls its [`execute_effect`][Contract::execute_effect]
 /// method.
-pub struct ExecuteEffect<Application> {
-    future: ExportedFuture<Result<ExecutionResult, String>>,
+pub struct ExecuteEffect<Application: Contract> {
+    future: ExportedFuture<Result<ExecutionResult<Application::Effect>, String>>,
     _application: PhantomData<Application>,
 }
 
@@ -224,6 +233,8 @@ where
     Application: Contract + Send,
     Application::Error: 'static,
     Application::Storage: ContractStateStorage<Application> + Send + 'static,
+    Application::Effect: 'static,
+    Application::Response: 'static,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -233,8 +244,11 @@ where
         ExecuteEffect {
             future: ExportedFuture::new(Application::Storage::execute_with_state(
                 move |application| {
-                    async move { application.execute_effect(&context.into(), &effect).await }
-                        .boxed()
+                    async move {
+                        let effect: Application::Effect = bcs::from_bytes(&effect)?;
+                        application.execute_effect(&context.into(), effect).await
+                    }
+                    .boxed()
                 },
             )),
             _application: PhantomData,
@@ -254,8 +268,18 @@ where
 ///
 /// Loads the `Application` state and calls its
 /// [`handle_application_call`][Contract::handle_application_call] method.
-pub struct HandleApplicationCall<Application> {
-    future: ExportedFuture<Result<ApplicationCallResult, String>>,
+#[allow(clippy::type_complexity)]
+pub struct HandleApplicationCall<Application: Contract> {
+    future: ExportedFuture<
+        Result<
+            ApplicationCallResult<
+                Application::Effect,
+                Application::Response,
+                Application::SessionState,
+            >,
+            String,
+        >,
+    >,
     _application: PhantomData<Application>,
 }
 
@@ -264,6 +288,9 @@ where
     Application: Contract + Send,
     Application::Error: 'static,
     Application::Storage: ContractStateStorage<Application> + Send + 'static,
+    Application::Effect: 'static,
+    Application::Response: 'static,
+    Application::SessionState: 'static,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -278,13 +305,14 @@ where
             future: ExportedFuture::new(Application::Storage::execute_with_state(
                 move |application| {
                     async move {
+                        let argument: Application::ApplicationCall = bcs::from_bytes(&argument)?;
                         let forwarded_sessions = forwarded_sessions
                             .into_iter()
                             .map(SessionId::from)
                             .collect();
 
                         application
-                            .handle_application_call(&context.into(), &argument, forwarded_sessions)
+                            .handle_application_call(&context.into(), argument, forwarded_sessions)
                             .await
                     }
                     .boxed()
@@ -307,8 +335,18 @@ where
 ///
 /// Loads the `Application` state and calls its
 /// [`handle_session_call`][Contract::handle_session_call] method.
-pub struct HandleSessionCall<Application> {
-    future: ExportedFuture<Result<SessionCallResult, String>>,
+#[allow(clippy::type_complexity)]
+pub struct HandleSessionCall<Application: Contract> {
+    future: ExportedFuture<
+        Result<
+            SessionCallResult<
+                Application::Effect,
+                Application::Response,
+                Application::SessionState,
+            >,
+            String,
+        >,
+    >,
     _application: PhantomData<Application>,
 }
 
@@ -317,13 +355,16 @@ where
     Application: Contract + Send,
     Application::Error: 'static,
     Application::Storage: ContractStateStorage<Application> + Send + 'static,
+    Application::Effect: 'static,
+    Application::Response: 'static,
+    Application::SessionState: 'static,
 {
     /// Creates the exported future that the host can poll.
     ///
     /// This is called from the host.
     pub fn new(
         context: wit_types::CalleeContext,
-        session_state: Vec<u8>,
+        session: Vec<u8>,
         argument: Vec<u8>,
         forwarded_sessions: Vec<wit_types::SessionId>,
     ) -> Self {
@@ -332,6 +373,8 @@ where
             future: ExportedFuture::new(Application::Storage::execute_with_state(
                 move |application| {
                     async move {
+                        let session: Application::SessionState = bcs::from_bytes(&session)?;
+                        let argument: Application::SessionCall = bcs::from_bytes(&argument)?;
                         let forwarded_sessions = forwarded_sessions
                             .into_iter()
                             .map(SessionId::from)
@@ -340,8 +383,8 @@ where
                         application
                             .handle_session_call(
                                 &context.into(),
-                                &session_state,
-                                &argument,
+                                session,
+                                argument,
                                 forwarded_sessions,
                             )
                             .await

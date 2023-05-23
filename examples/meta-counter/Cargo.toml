@@ -7,9 +7,11 @@ edition = "2021"
 [dependencies]
 async-trait = { workspace = true }
 bcs = { workspace = true }
+counter = { workspace = true }
 linera-sdk = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

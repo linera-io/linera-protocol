@@ -13,13 +13,13 @@ use social::Operation;
 /// Creates the application on chain2 indirectly from the subscription, then
 /// send a message to chain2 and see it received on chain1.
 #[tokio::test]
-async fn cross_chain_transfer() {
+async fn test_cross_chain_posting() {
     let (validator, bytecode_id) = TestValidator::with_current_bytecode().await;
     let mut chain1 = validator.new_chain().await;
 
     // Initialization is trivial for the social app
     let application_id = chain1
-        .create_application(bytecode_id, vec![], vec![], vec![])
+        .create_application::<social::SocialAbi>(bytecode_id, (), (), vec![])
         .await;
 
     let chain2 = validator.new_chain().await;

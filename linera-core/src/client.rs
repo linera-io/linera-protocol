@@ -15,6 +15,7 @@ use futures::{
     stream::{self, FuturesUnordered, StreamExt},
 };
 use linera_base::{
+    abi::ContractAbi,
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, RoundNumber, Timestamp},
     identifiers::{BytecodeId, ChainId, EffectId, Owner},
@@ -1321,7 +1322,26 @@ where
     }
 
     /// Creates an application by instantiating some bytecode.
-    pub async fn create_application(
+    pub async fn create_application<A: ContractAbi>(
+        &mut self,
+        bytecode_id: BytecodeId,
+        parameters: &A::Parameters,
+        initialization_argument: &A::InitializationArgument,
+        required_application_ids: Vec<UserApplicationId>,
+    ) -> Result<(UserApplicationId, Certificate)> {
+        let initialization_argument = serde_json::to_vec(initialization_argument)?;
+        let parameters = serde_json::to_vec(parameters)?;
+        self.create_application_untyped(
+            bytecode_id,
+            parameters,
+            initialization_argument,
+            required_application_ids,
+        )
+        .await
+    }
+
+    /// Creates an application by instantiating some bytecode.
+    pub async fn create_application_untyped(
         &mut self,
         bytecode_id: BytecodeId,
         parameters: Vec<u8>,
