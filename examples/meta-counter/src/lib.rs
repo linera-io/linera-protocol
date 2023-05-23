@@ -1,8 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_graphql::{Request, Response};
 use linera_sdk::base::{ApplicationId, ChainId, ContractAbi, ServiceAbi};
-
 pub struct MetaCounterAbi;
 
 impl ContractAbi for MetaCounterAbi {
@@ -17,7 +17,7 @@ impl ContractAbi for MetaCounterAbi {
 }
 
 impl ServiceAbi for MetaCounterAbi {
-    type Query = Vec<u8>;
-    type QueryResponse = Vec<u8>;
+    type Query = Request;
+    type QueryResponse = Response;
     type Parameters = ApplicationId;
 }

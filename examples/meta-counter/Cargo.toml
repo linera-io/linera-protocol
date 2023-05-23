@@ -5,6 +5,7 @@ authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
 [dependencies]
+async-graphql = { workspace = true }
 async-trait = { workspace = true }
 bcs = { workspace = true }
 counter = { workspace = true }

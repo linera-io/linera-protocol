@@ -6,6 +6,7 @@
 mod state;
 
 use self::state::MetaCounter;
+use async_graphql::{Request, Response};
 use async_trait::async_trait;
 use linera_sdk::{
     base::{ApplicationId, WithServiceAbi},
@@ -36,12 +37,14 @@ impl Service for MetaCounter {
     async fn query_application(
         self: Arc<Self>,
         _context: &QueryContext,
-        argument: Vec<u8>,
-    ) -> Result<Vec<u8>, Self::Error> {
+        request: Request,
+    ) -> Result<Response, Self::Error> {
+        let argument = serde_json::to_vec(&request).unwrap();
         let value = system_api::query_application(Self::counter_id()?, &argument)
             .await
             .map_err(|_| Error::InternalQuery)?;
-        Ok(value)
+        let response = serde_json::from_slice(&value).unwrap();
+        Ok(response)
     }
 }
 
