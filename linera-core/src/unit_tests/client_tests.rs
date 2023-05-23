@@ -1154,3 +1154,43 @@ where
     );
     Ok(())
 }
+
+#[test(tokio::test)]
+pub async fn test_memory_insufficient_balance() -> Result<(), anyhow::Error> {
+    run_test_insufficient_balance(MakeMemoryStoreClient::default()).await
+}
+
+#[test(tokio::test)]
+async fn test_rocksdb_insufficient_balance() -> Result<(), anyhow::Error> {
+    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
+    run_test_insufficient_balance(MakeRocksdbStoreClient::default()).await
+}
+
+#[cfg(feature = "aws")]
+#[test(tokio::test)]
+async fn test_dynamo_db_insufficient_balance() -> Result<(), anyhow::Error> {
+    run_test_insufficient_balance(MakeDynamoDbStoreClient::default()).await
+}
+
+async fn run_test_insufficient_balance<B>(store_builder: B) -> Result<(), anyhow::Error>
+where
+    B: StoreBuilder,
+    ViewError: From<<B::Store as Store>::ContextError>,
+{
+    let mut builder = TestBuilder::new(store_builder, 4, 1)
+        .await?
+        .with_pricing(Pricing::fuel_and_certificate());
+    let mut sender = builder
+        .add_initial_chain(ChainDescription::Root(1), "3".parse().unwrap())
+        .await?;
+    assert!(sender
+        .transfer_to_account(
+            None,
+            "3".parse().unwrap(),
+            Account::chain(ChainId::root(2)),
+            UserData(Some(*b"I'm giving away all of my money!")),
+        )
+        .await
+        .is_err());
+    Ok(())
+}

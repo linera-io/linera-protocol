@@ -75,7 +75,7 @@ where
     (committee, worker)
 }
 
-/// Same as `init_worker` but also instantiate some initial chains.
+/// Same as `init_worker` but also instantiates some initial chains.
 async fn init_worker_with_chains<S, I>(client: S, balances: I) -> (Committee, WorkerState<S>)
 where
     I: IntoIterator<Item = (ChainDescription, PublicKey, Amount)>,
