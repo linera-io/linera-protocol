@@ -16,7 +16,7 @@ use linera_base::{
 use linera_core::client::{ChainClient, ValidatorNodeProvider};
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
-    fees::Pricing,
+    pricing::Pricing,
 };
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Store;

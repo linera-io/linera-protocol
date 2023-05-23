@@ -10,7 +10,7 @@ use linera_base::{
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use crate::fees::Pricing;
+use crate::pricing::Pricing;
 
 /// A number identifying the configuration of the chain (aka the committee).
 #[derive(
