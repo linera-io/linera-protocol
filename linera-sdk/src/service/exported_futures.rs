@@ -77,7 +77,6 @@ pub struct QueryApplication<Application> {
 impl<Application> QueryApplication<Application>
 where
     Application: Service,
-    Application::Storage: ServiceStateStorage,
 {
     /// Creates the exported future that the host can poll.
     ///
