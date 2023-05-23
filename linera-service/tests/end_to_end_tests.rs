@@ -34,7 +34,10 @@ use tonic_health::proto::{
 use tracing::{info, warn};
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-use linera_base::data_types::{Amount, Timestamp};
+use linera_base::{
+    data_types::{Amount, Timestamp},
+    identifiers::ApplicationId,
+};
 
 /// A static lock to prevent integration tests from running in parallel.
 static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
@@ -1508,7 +1511,10 @@ async fn test_end_to_end_crowd_funding() {
             contract_crowd,
             service_crowd,
             // TODO(#723): This hack will disappear soon.
-            &application_id_fungible.parse().unwrap(),
+            &application_id_fungible
+                .parse::<ApplicationId>()
+                .unwrap()
+                .with_abi(),
             &state_crowd,
             vec![application_id_fungible.clone()],
             None,

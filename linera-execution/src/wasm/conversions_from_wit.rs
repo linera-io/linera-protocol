@@ -127,7 +127,7 @@ impl From<contract_system_api::ApplicationId> for UserApplicationId {
 
 impl From<contract_system_api::EffectId> for BytecodeId {
     fn from(guest: contract_system_api::EffectId) -> Self {
-        BytecodeId(guest.into())
+        BytecodeId::new(guest.into())
     }
 }
 
@@ -171,7 +171,7 @@ impl From<service_system_api::ApplicationId> for UserApplicationId {
 
 impl From<service_system_api::EffectId> for BytecodeId {
     fn from(guest: service_system_api::EffectId) -> Self {
-        BytecodeId(guest.into())
+        BytecodeId::new(guest.into())
     }
 }
 

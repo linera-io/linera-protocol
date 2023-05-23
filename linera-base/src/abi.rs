@@ -7,17 +7,23 @@
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 
+/// A trait that includes all the types exported by a Linera application (both contract and service).
+pub trait Abi: ContractAbi + ServiceAbi {}
+
+// T::Parameters is duplicated for simplicity but it must match.
+impl<T> Abi for T where T: ContractAbi + ServiceAbi<Parameters = <T as ContractAbi>::Parameters> {}
+
 /// A trait that includes all the types exported by a Linera application contract.
 pub trait ContractAbi {
+    /// Immutable parameters specific to this application (e.g. the name of a token).
+    type Parameters: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
+
     /// Initialization argument passed to a new application on the chain that created it
     /// (e.g. an initial amount of tokens minted).
     ///
     /// To share configuration data on every chain, use [`ContractAbi::Parameters`]
     /// instead.
     type InitializationArgument: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
-
-    /// Immutable parameters specific to this application (e.g. the name of a token).
-    type Parameters: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
     /// The type of operation executed by the application.
     ///
@@ -49,6 +55,18 @@ pub trait ContractAbi {
     type Response: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 }
 
+/// A trait that includes all the types exported by a Linera application service.
+pub trait ServiceAbi {
+    /// Immutable parameters specific to this application (e.g. the name of a token).
+    type Parameters: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
+
+    /// The type of a query receivable by the application's service.
+    type Query: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
+
+    /// The response type of the application's service.
+    type QueryResponse: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
+}
+
 /// Marker trait to help importing contract types.
 pub trait WithContractAbi {
     /// The contract types to import.
@@ -70,18 +88,6 @@ where
     type SessionState = <<A as WithContractAbi>::Abi as ContractAbi>::SessionState;
 }
 
-/// A trait that includes all the types exported by a Linera application service.
-pub trait ServiceAbi {
-    /// The type of a query receivable by the application's service.
-    type Query: DeserializeOwned + Send + Sync + Debug + 'static;
-
-    /// The response type of the application's service.
-    type QueryResponse: Serialize + Send + Sync + Debug + 'static;
-
-    /// Immutable parameters specific to this application (e.g. the name of a token).
-    type Parameters: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
-}
-
 /// Marker trait to help importing service types.
 pub trait WithServiceAbi {
     /// The service types to import.
@@ -93,8 +99,6 @@ where
     A: WithServiceAbi,
 {
     type Query = <<A as WithServiceAbi>::Abi as ServiceAbi>::Query;
-
     type QueryResponse = <<A as WithServiceAbi>::Abi as ServiceAbi>::QueryResponse;
-
     type Parameters = <<A as WithServiceAbi>::Abi as ServiceAbi>::Parameters;
 }

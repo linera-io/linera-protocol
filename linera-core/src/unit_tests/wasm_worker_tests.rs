@@ -194,7 +194,7 @@ where
         None,
         Timestamp::from(1),
     );
-    let bytecode_id = BytecodeId(EffectId {
+    let bytecode_id = BytecodeId::new(EffectId {
         chain_id: publisher_chain.into(),
         height: publish_block_height,
         index: 0,

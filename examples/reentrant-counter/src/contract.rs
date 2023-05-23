@@ -9,7 +9,6 @@ use self::state::ReentrantCounter;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{SessionId, WithContractAbi},
-    contract::system_api,
     ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
     OperationContext, SessionCallResult, ViewStateStorage,
 };
@@ -46,13 +45,8 @@ impl Contract for ReentrantCounter {
         let value = self.value.get_mut();
         *value += first_half;
 
-        self.call_application::<Self>(
-            false,
-            system_api::current_application_id(),
-            &second_half,
-            vec![],
-        )
-        .await?;
+        self.call_application(false, Self::current_application_id(), &second_half, vec![])
+            .await?;
 
         Ok(ExecutionResult::default())
     }

@@ -44,26 +44,30 @@ pub struct EffectId {
 }
 
 /// A unique identifier for a user application.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 #[serde(rename = "UserApplicationId")]
-pub struct ApplicationId {
+pub struct ApplicationId<A = ()> {
     /// The bytecode to use for the application.
-    pub bytecode_id: BytecodeId,
+    pub bytecode_id: BytecodeId<A>,
     /// The unique ID of the application's creation.
     pub creation: EffectId,
 }
 
 /// A unique identifier for an application bytecode.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
-pub struct BytecodeId(pub EffectId);
+pub struct BytecodeId<A = ()> {
+    pub effect_id: EffectId,
+    #[serde(skip)]
+    _phantom: std::marker::PhantomData<A>,
+}
 
 /// The identifier of a session.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
-pub struct SessionId {
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct SessionId<A = ()> {
     /// The user application that runs the session.
-    pub application_id: ApplicationId,
+    pub application_id: ApplicationId<A>,
     /// Unique index set by the runtime.
     pub index: u64,
 }
@@ -105,9 +109,100 @@ impl ChannelName {
     }
 }
 
-impl From<EffectId> for BytecodeId {
-    fn from(effect_id: EffectId) -> Self {
-        BytecodeId(effect_id)
+// Cannot use #[derive(Clone)] because it requires `A: Copy`.
+impl<A> Clone for BytecodeId<A> {
+    fn clone(&self) -> Self {
+        Self {
+            effect_id: self.effect_id,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<A> Copy for BytecodeId<A> {}
+
+impl BytecodeId {
+    pub fn new(effect_id: EffectId) -> Self {
+        BytecodeId {
+            effect_id,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    pub fn with_abi<A>(self) -> BytecodeId<A> {
+        BytecodeId {
+            effect_id: self.effect_id,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<A> BytecodeId<A> {
+    pub fn forget_abi(self) -> BytecodeId {
+        BytecodeId {
+            effect_id: self.effect_id,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+// Cannot use #[derive(Clone)] because it requires `A: Copy`.
+impl<A> Clone for ApplicationId<A> {
+    fn clone(&self) -> Self {
+        Self {
+            bytecode_id: self.bytecode_id,
+            creation: self.creation,
+        }
+    }
+}
+
+impl<A> Copy for ApplicationId<A> {}
+
+impl ApplicationId {
+    pub fn with_abi<A>(self) -> ApplicationId<A> {
+        ApplicationId {
+            bytecode_id: self.bytecode_id.with_abi(),
+            creation: self.creation,
+        }
+    }
+}
+
+impl<A> ApplicationId<A> {
+    pub fn forget_abi(self) -> ApplicationId {
+        ApplicationId {
+            bytecode_id: self.bytecode_id.forget_abi(),
+            creation: self.creation,
+        }
+    }
+}
+
+// Cannot use #[derive(Clone)] because it requires `A: Copy`.
+impl<A> Clone for SessionId<A> {
+    fn clone(&self) -> Self {
+        Self {
+            application_id: self.application_id,
+            index: self.index,
+        }
+    }
+}
+
+impl<A> Copy for SessionId<A> {}
+
+impl SessionId {
+    pub fn with_abi<A>(self) -> SessionId<A> {
+        SessionId {
+            application_id: self.application_id.with_abi(),
+            index: self.index,
+        }
+    }
+}
+
+impl<A> SessionId<A> {
+    pub fn forget_abi(self) -> SessionId {
+        SessionId {
+            application_id: self.application_id.forget_abi(),
+            index: self.index,
+        }
     }
 }
 

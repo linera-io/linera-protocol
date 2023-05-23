@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use linera_base::identifiers::{ApplicationId, ChainId, EffectId};
+use linera_base::identifiers::{ApplicationId, BytecodeId, ChainId, EffectId};
 use linera_views::batch::WriteOperation;
 use std::any::Any;
 use wasmtime::{Caller, Extern, Func, Linker};
@@ -760,12 +760,11 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                 );
 
                 let application_id = ApplicationId {
-                    bytecode_id: EffectId {
+                    bytecode_id: BytecodeId::new(EffectId {
                         chain_id: bytecode_chain_id,
                         height: (application_bytecode_height as u64).into(),
                         index: application_bytecode_index as u32,
-                    }
-                    .into(),
+                    }),
                     creation: EffectId {
                         chain_id: creation_chain_id,
                         height: (application_creation_height as u64).into(),
@@ -836,7 +835,7 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                 let application_id = caller.data().get::<Query>(handle).application_id;
 
                 let application_id_bytecode_chain_id: [u64; 4] =
-                    application_id.bytecode_id.0.chain_id.0.into();
+                    application_id.bytecode_id.effect_id.chain_id.0.into();
 
                 let application_id_creation_chain_id: [u64; 4] =
                     application_id.creation.chain_id.0.into();
@@ -866,8 +865,8 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                             application_id_bytecode_chain_id[1] as i64,
                             application_id_bytecode_chain_id[2] as i64,
                             application_id_bytecode_chain_id[3] as i64,
-                            application_id.bytecode_id.0.height.0 as i64,
-                            application_id.bytecode_id.0.index as i32,
+                            application_id.bytecode_id.effect_id.height.0 as i64,
+                            application_id.bytecode_id.effect_id.index as i32,
                             application_id_creation_chain_id[0] as i64,
                             application_id_creation_chain_id[1] as i64,
                             application_id_creation_chain_id[2] as i64,

@@ -1727,6 +1727,7 @@ dependencies = [
  "once_cell",
  "serde",
  "serde_bytes",
+ "serde_json",
  "thiserror",
  "tokio",
  "tracing",

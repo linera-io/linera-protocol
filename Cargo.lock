@@ -2598,6 +2598,7 @@ dependencies = [
  "once_cell",
  "serde",
  "serde_bytes",
+ "serde_json",
  "test-case",
  "test-log",
  "thiserror",

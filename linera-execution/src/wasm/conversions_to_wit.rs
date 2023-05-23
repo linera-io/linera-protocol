@@ -108,7 +108,7 @@ impl From<SessionId> for contract_system_api::SessionId {
 impl From<UserApplicationId> for contract::ApplicationId {
     fn from(host: UserApplicationId) -> Self {
         contract::ApplicationId {
-            bytecode_id: host.bytecode_id.0.into(),
+            bytecode_id: host.bytecode_id.effect_id.into(),
             creation: host.creation.into(),
         }
     }
@@ -117,7 +117,7 @@ impl From<UserApplicationId> for contract::ApplicationId {
 impl From<UserApplicationId> for service_system_api::ApplicationId {
     fn from(host: UserApplicationId) -> Self {
         service_system_api::ApplicationId {
-            bytecode_id: host.bytecode_id.0.into(),
+            bytecode_id: host.bytecode_id.effect_id.into(),
             creation: host.creation.into(),
         }
     }
@@ -126,7 +126,7 @@ impl From<UserApplicationId> for service_system_api::ApplicationId {
 impl From<UserApplicationId> for contract_system_api::ApplicationId {
     fn from(host: UserApplicationId) -> Self {
         contract_system_api::ApplicationId {
-            bytecode_id: host.bytecode_id.0.into(),
+            bytecode_id: host.bytecode_id.effect_id.into(),
             creation: host.creation.into(),
         }
     }
