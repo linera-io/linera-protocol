@@ -12,29 +12,31 @@ pub trait ContractAbi {
     /// Initialization argument passed to a new application on the chain that created it
     /// (e.g. an initial amount of tokens minted).
     ///
-    /// To share configuration data on every chain, use parameters instead.
+    /// To share configuration data on every chain, use [`ContractAbi::Parameters`]
+    /// instead.
     type InitializationArgument: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
     /// Immutable parameters specific to this application (e.g. the name of a token).
     type Parameters: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
-    /// The type of operations executed by the application.
+    /// The type of operation executed by the application.
     ///
     /// Operations are transactions directly added to a block by the creator (and signer)
     /// of the block. Users typically use operations to start interacting with an
     /// application on their own chain.
     type Operation: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
-    /// The type of effects executed by the application.
+    /// The type of effect executed by the application.
     ///
     /// Effects are executed when a message created by the same application is received
     /// from another chain and accepted in a block.
     type Effect: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
-    /// The type of arguments used to call this application from another application on the chain.
+    /// The argument type when this application is called from another application on the same chain.
     type ApplicationCall: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
-    /// The type of arguments used to call a session of this application from another application on the chain.
+    /// The argument type when a session of this application is called from another
+    /// application on the same chain.
     ///
     /// Sessions are temporary objects that may be spawned by an application call. Once
     /// created, they must be consumed before the current transaction ends.

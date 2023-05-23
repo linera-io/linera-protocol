@@ -77,9 +77,9 @@ pub struct SimpleStateStorage<A>(std::marker::PhantomData<A>);
 /// A state management runtime based on [`linera_views`].
 pub struct ViewStateStorage<A>(std::marker::PhantomData<A>);
 
-/// The contract interfaces of a Linera application.
+/// The contract interface of a Linera application.
 ///
-/// As opposed to the [`Service`] interfaces of an application, contract entry points
+/// As opposed to the [`Service`] interface of an application, contract entry points
 /// are triggered by the execution of blocks in a chain. Their execution may modify
 /// storage and is gas-metered.
 ///
@@ -275,9 +275,9 @@ pub trait Contract: ContractAbi + Sized {
     }
 }
 
-/// The service interfaces of a Linera application.
+/// The service interface of a Linera application.
 ///
-/// As opposed to the [`Contract`] interfaces of an application, service entry points
+/// As opposed to the [`Contract`] interface of an application, service entry points
 /// are triggered by JSON queries (typically GraphQL). Their execution cannot modify
 /// storage and is not gas-metered.
 #[async_trait]
