@@ -38,6 +38,7 @@ use custom_debug_derive::Debug;
 use dashmap::DashMap;
 use derive_more::Display;
 use linera_base::{
+    abi::Abi,
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     hex_debug,
@@ -524,6 +525,22 @@ impl From<SystemOperation> for Operation {
 }
 
 impl Operation {
+    pub fn system(operation: SystemOperation) -> Self {
+        Operation::System(operation)
+    }
+
+    pub fn user<A: Abi>(
+        application_id: UserApplicationId<A>,
+        operation: &A::Operation,
+    ) -> Result<Self, bcs::Error> {
+        let application_id = application_id.forget_abi();
+        let bytes = bcs::to_bytes(&operation)?;
+        Ok(Operation::User {
+            application_id,
+            bytes,
+        })
+    }
+
     pub fn application_id(&self) -> ApplicationId {
         match self {
             Self::System(_) => ApplicationId::System,
@@ -539,6 +556,22 @@ impl From<SystemEffect> for Effect {
 }
 
 impl Effect {
+    pub fn system(effect: SystemEffect) -> Self {
+        Effect::System(effect)
+    }
+
+    pub fn user<A: Abi>(
+        application_id: UserApplicationId<A>,
+        effect: &A::Effect,
+    ) -> Result<Self, bcs::Error> {
+        let application_id = application_id.forget_abi();
+        let bytes = bcs::to_bytes(&effect)?;
+        Ok(Effect::User {
+            application_id,
+            bytes,
+        })
+    }
+
     pub fn application_id(&self) -> ApplicationId {
         match self {
             Self::System(_) => ApplicationId::System,
@@ -554,6 +587,22 @@ impl From<SystemQuery> for Query {
 }
 
 impl Query {
+    pub fn system(query: SystemQuery) -> Self {
+        Query::System(query)
+    }
+
+    pub fn user<A: Abi>(
+        application_id: UserApplicationId<A>,
+        query: &A::Query,
+    ) -> Result<Self, serde_json::Error> {
+        let application_id = application_id.forget_abi();
+        let bytes = serde_json::to_vec(&query)?;
+        Ok(Query::User {
+            application_id,
+            bytes,
+        })
+    }
+
     pub fn application_id(&self) -> ApplicationId {
         match self {
             Self::System(_) => ApplicationId::System,

@@ -18,8 +18,7 @@ use linera_base::{
 };
 use linera_chain::data_types::OutgoingEffect;
 use linera_execution::{
-    Bytecode, Effect, Operation, Query, Response, SystemEffect, UserApplicationDescription,
-    WasmRuntime,
+    Bytecode, Effect, Operation, SystemEffect, UserApplicationDescription, WasmRuntime,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -82,6 +81,7 @@ where
         )
         .await
         .unwrap();
+    let bytecode_id = bytecode_id.with_abi::<counter::CounterAbi>();
     // Receive our own cert to broadcast the bytecode location.
     publisher.receive_certificate(cert).await.unwrap();
     publisher.process_inbox().await.unwrap();
@@ -91,26 +91,19 @@ where
 
     let initial_value = 10_u64;
     let (application_id, _) = creator
-        .create_application::<counter::CounterAbi>(bytecode_id, &(), &initial_value, vec![])
+        .create_application(bytecode_id, &(), &initial_value, vec![])
         .await
         .unwrap();
 
     let increment = 5_u64;
-    let operation_bytes = bcs::to_bytes(&increment)?;
     creator
-        .execute_operation(Operation::User {
-            application_id,
-            bytes: operation_bytes,
-        })
+        .execute_operation(Operation::user(application_id, &increment)?)
         .await
         .unwrap();
 
-    let query_bytes = serde_json::to_vec(&Request::new("{ value }")).unwrap();
+    let query = Request::new("{ value }");
     let response = creator
-        .query_application(&Query::User {
-            application_id,
-            bytes: query_bytes,
-        })
+        .query_user_application(application_id, &query)
         .await
         .unwrap();
 
@@ -118,12 +111,7 @@ where
         async_graphql::Value::from_json(json!({"value": 15})).unwrap(),
     );
 
-    let actual = match response {
-        Response::System(_) => panic!("should be Response::User"),
-        Response::User(bytes) => serde_json::from_slice(&bytes).unwrap(),
-    };
-
-    assert_eq!(expected, actual);
+    assert_eq!(expected, response);
     Ok(())
 }
 
@@ -201,6 +189,7 @@ where
             .await
             .unwrap()
     };
+    let bytecode_id1 = bytecode_id1.with_abi::<counter::CounterAbi>();
     let (bytecode_id2, cert2) = {
         let (contract_path, service_path) =
             linera_execution::wasm_test::get_example_bytecode_paths("meta_counter")?;
@@ -212,6 +201,7 @@ where
             .await
             .unwrap()
     };
+    let bytecode_id2 = bytecode_id2.with_abi::<meta_counter::MetaCounterAbi>();
     // Receive our own certs to broadcast the bytecode locations.
     publisher.receive_certificate(cert1).await.unwrap();
     publisher.receive_certificate(cert2).await.unwrap();
@@ -222,50 +212,38 @@ where
     creator.process_inbox().await.unwrap();
     let initial_value = 10_u64;
     let (application_id1, _) = creator
-        .create_application::<counter::CounterAbi>(bytecode_id1, &(), &initial_value, vec![])
+        .create_application(bytecode_id1, &(), &initial_value, vec![])
         .await
         .unwrap();
     let (application_id2, _) = creator
-        .create_application::<meta_counter::MetaCounterAbi>(
+        .create_application(
             bytecode_id2,
             &application_id1,
             &(),
-            vec![application_id1],
+            vec![application_id1.forget_abi()],
         )
         .await
         .unwrap();
 
     let increment = 5_u64;
-    let bytes = bcs::to_bytes(&(receiver_id, increment))?;
     let cert = creator
-        .execute_operation(Operation::User {
-            application_id: application_id2,
-            bytes,
-        })
+        .execute_operation(Operation::user(application_id2, &(receiver_id, increment))?)
         .await
         .unwrap();
 
     receiver.receive_certificate(cert).await.unwrap();
     receiver.process_inbox().await.unwrap();
 
-    let query_bytes = serde_json::to_vec(&Request::new("{ value }")).unwrap();
+    let query = Request::new("{ value }");
     let response = receiver
-        .query_application(&Query::User {
-            application_id: application_id2,
-            bytes: query_bytes,
-        })
+        .query_user_application(application_id2, &query)
         .await
         .unwrap();
 
     let expected =
         async_graphql::Response::new(async_graphql::Value::from_json(json!({"value": 5})).unwrap());
 
-    let actual = match response {
-        Response::System(_) => panic!("should be Response::User"),
-        Response::User(bytes) => serde_json::from_slice(&bytes).unwrap(),
-    };
-
-    assert_eq!(expected, actual);
+    assert_eq!(expected, response);
     Ok(())
 }
 
@@ -334,6 +312,7 @@ where
             .await
             .unwrap()
     };
+    let bytecode_id = bytecode_id.with_abi::<reentrant_counter::ReentrantCounterAbi>();
     // Receive our own certificate to broadcast the bytecode locations.
     publisher.receive_certificate(certificate).await.unwrap();
     publisher.process_inbox().await.unwrap();
@@ -343,37 +322,24 @@ where
     creator.process_inbox().await.unwrap();
     let initial_value = 100_u64;
     let (application_id, _) = creator
-        .create_application::<reentrant_counter::ReentrantCounterAbi>(
-            bytecode_id,
-            &(),
-            &initial_value,
-            vec![],
-        )
+        .create_application(bytecode_id, &(), &initial_value, vec![])
         .await
         .unwrap();
 
     let increment = 51_u64;
-    let bytes = bcs::to_bytes(&increment)?;
     let certificate = creator
-        .execute_operation(Operation::User {
-            application_id,
-            bytes,
-        })
+        .execute_operation(Operation::user(application_id, &increment)?)
         .await
         .unwrap();
     creator.receive_certificate(certificate).await.unwrap();
 
     let response = creator
-        .query_application(&Query::User {
-            application_id,
-            bytes: serde_json::to_vec(&()).unwrap(),
-        })
+        .query_user_application(application_id, &())
         .await
         .unwrap();
 
     let expected = 151_u64;
-    let expected_bytes = serde_json::to_vec(&expected)?;
-    assert!(matches!(response, Response::User(bytes) if bytes == expected_bytes));
+    assert_eq!(response, expected);
     Ok(())
 }
 
@@ -426,6 +392,7 @@ where
             )
             .await?
     };
+    let bytecode_id = bytecode_id.with_abi::<fungible::FungibleTokenAbi>();
 
     // Receive our own cert to broadcast the bytecode location.
     sender.receive_certificate(pub_cert.clone()).await.unwrap();
@@ -438,7 +405,7 @@ where
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from(1_000_000))]);
     let state = fungible::InitialState { accounts };
     let (application_id, _cert) = sender
-        .create_application::<fungible::FungibleTokenAbi>(bytecode_id, &(), &state, vec![])
+        .create_application(bytecode_id, &(), &state, vec![])
         .await?;
 
     // Make a transfer using the fungible app.
@@ -451,10 +418,7 @@ where
         },
     };
     let cert = sender
-        .execute_operation(Operation::User {
-            application_id,
-            bytes: bcs::to_bytes(&transfer)?,
-        })
+        .execute_operation(Operation::user(application_id, &transfer)?)
         .await?;
 
     assert!(cert
@@ -465,7 +429,7 @@ where
             matches!(
                 effect,
                 Effect::System(SystemEffect::RegisterApplications { applications })
-                if matches!(applications[0], UserApplicationDescription{ bytecode_id: b_id, .. } if b_id == bytecode_id)
+                if matches!(applications[0], UserApplicationDescription{ bytecode_id: b_id, .. } if b_id == bytecode_id.forget_abi())
             ) && *destination == Destination::Recipient(receiver.chain_id())
         }));
     receiver.synchronize_from_validators().await.unwrap();
@@ -492,10 +456,7 @@ where
         },
     };
     let cert = sender
-        .execute_operation(Operation::User {
-            application_id,
-            bytes: bcs::to_bytes(&transfer)?,
-        })
+        .execute_operation(Operation::user(application_id, &transfer)?)
         .await?;
 
     receiver.receive_certificate(cert).await?;
@@ -523,10 +484,7 @@ where
         },
     };
     assert!(receiver
-        .execute_operation(Operation::User {
-            application_id,
-            bytes: bcs::to_bytes(&transfer)?
-        })
+        .execute_operation(Operation::user(application_id, &transfer)?)
         .await
         .is_err());
     receiver.clear_pending_block().await;
@@ -541,10 +499,7 @@ where
         },
     };
     receiver
-        .execute_operation(Operation::User {
-            application_id,
-            bytes: bcs::to_bytes(&transfer)?,
-        })
+        .execute_operation(Operation::user(application_id, &transfer)?)
         .await
         .unwrap();
 
@@ -601,6 +556,7 @@ where
             )
             .await?
     };
+    let bytecode_id = bytecode_id.with_abi::<social::SocialAbi>();
 
     // Receive our own cert to broadcast the bytecode location.
     receiver
@@ -610,16 +566,13 @@ where
     receiver.process_inbox().await.unwrap();
 
     let (application_id, _cert) = receiver
-        .create_application::<social::SocialAbi>(bytecode_id, &(), &(), vec![])
+        .create_application(bytecode_id, &(), &(), vec![])
         .await?;
 
     // Request to subscribe to the sender.
     let request_subscribe = social::Operation::RequestSubscribe(sender.chain_id());
     let cert = receiver
-        .execute_operation(Operation::User {
-            application_id,
-            bytes: bcs::to_bytes(&request_subscribe)?,
-        })
+        .execute_operation(Operation::user(application_id, &request_subscribe)?)
         .await?;
 
     // Subscribe the receiver. This also registers the application.
@@ -631,10 +584,7 @@ where
     let text = "Please like and subscribe! No, wait, like isn't supported yet.".to_string();
     let post = social::Operation::Post(text.clone());
     let cert = sender
-        .execute_operation(Operation::User {
-            application_id,
-            bytes: bcs::to_bytes(&post)?,
-        })
+        .execute_operation(Operation::user(application_id, &post)?)
         .await?;
 
     receiver.receive_certificate(cert.clone()).await?;
@@ -649,29 +599,22 @@ where
         .iter()
         .any(|msg| matches!(&msg.event.effect, Effect::User { .. })));
 
-    let json = json!({ "query": "query { receivedPostsKeys(count: 5) { author, index } }"});
-    let query = Query::User {
-        application_id,
-        bytes: json.to_string().into_bytes(),
-    };
-    let posts = match receiver.query_application(&query).await? {
-        Response::System(_) => panic!("Expected user response."),
-        Response::User(bytes) => bytes,
-    };
-    assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&posts).expect("invalid JSON"),
-        json!({"data": { "receivedPostsKeys": [
+    let query = async_graphql::Request::new("{ receivedPostsKeys(count: 5) { author, index } }");
+    let posts = receiver
+        .query_user_application(application_id, &query)
+        .await?;
+    let expected = async_graphql::Response::new(
+        async_graphql::Value::from_json(json!({ "receivedPostsKeys": [
             { "author": sender.chain_id, "index": 0 }
-        ]}})
+        ]}))
+        .unwrap(),
     );
+    assert_eq!(posts, expected);
 
     // Request to unsubscribe from the sender.
     let request_unsubscribe = social::Operation::RequestUnsubscribe(sender.chain_id());
     let cert = receiver
-        .execute_operation(Operation::User {
-            application_id,
-            bytes: bcs::to_bytes(&request_unsubscribe)?,
-        })
+        .execute_operation(Operation::user(application_id, &request_unsubscribe)?)
         .await?;
 
     // Unsubscribe the receiver.
@@ -682,10 +625,7 @@ where
     // Make a post.
     let post = social::Operation::Post("Nobody will read this!".to_string());
     let cert = sender
-        .execute_operation(Operation::User {
-            application_id,
-            bytes: bcs::to_bytes(&post)?,
-        })
+        .execute_operation(Operation::user(application_id, &post)?)
         .await?;
 
     // The post will not be received by the unsubscribed chain.
@@ -694,21 +634,17 @@ where
     assert!(certs.is_empty());
 
     // There is still only one post it can see.
-    let json = json!({ "query": "query { receivedPostsKeys { author, index } }"});
-    let query = Query::User {
-        application_id,
-        bytes: json.to_string().into_bytes(),
-    };
-    let posts = match receiver.query_application(&query).await? {
-        Response::System(_) => panic!("Expected user response."),
-        Response::User(bytes) => bytes,
-    };
-    assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&posts).expect("invalid JSON"),
-        json!({"data": { "receivedPostsKeys": [
+    let query = async_graphql::Request::new("{ receivedPostsKeys { author, index } }");
+    let posts = receiver
+        .query_user_application(application_id, &query)
+        .await?;
+    let expected = async_graphql::Response::new(
+        async_graphql::Value::from_json(json!({ "receivedPostsKeys": [
             { "author": sender.chain_id, "index": 0 }
-        ]}})
+        ]}))
+        .unwrap(),
     );
+    assert_eq!(posts, expected);
 
     Ok(())
 }

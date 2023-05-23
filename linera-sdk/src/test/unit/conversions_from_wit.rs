@@ -33,7 +33,7 @@ impl From<wit::ApplicationId> for ApplicationId {
 
 impl From<wit::EffectId> for BytecodeId {
     fn from(effect_id: wit::EffectId) -> Self {
-        EffectId::from(effect_id).into()
+        BytecodeId::new(EffectId::from(effect_id))
     }
 }
 

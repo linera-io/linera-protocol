@@ -55,7 +55,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use linera_base::{
-    abi::ContractAbi,
+    abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     data_types::BlockHeight,
     identifiers::{ApplicationId, ChainId, ChannelName, Destination, EffectId, Owner, SessionId},
 };
@@ -67,7 +67,6 @@ pub use self::{
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
 };
-use linera_base::abi::ServiceAbi;
 pub use linera_base::ensure;
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
@@ -87,7 +86,7 @@ pub struct ViewStateStorage<A>(std::marker::PhantomData<A>);
 /// Below we use the word "transaction" to refer to the current operation or effect being
 /// executed.
 #[async_trait]
-pub trait Contract: ContractAbi + Send + Sized {
+pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// The type used to report errors to the execution environment.
     ///
     /// Errors are not recoverable and always interrupt the current transaction. To return
@@ -221,10 +220,10 @@ pub trait Contract: ContractAbi + Send + Sized {
     /// Calls another application.
     // TODO(#488): Currently, the application state is persisted before the call and restored after the call in
     // order to allow reentrant calls to use the most up-to-date state.
-    async fn call_application<A: ContractAbi>(
+    async fn call_application<A: ContractAbi + Send>(
         &mut self,
         authenticated: bool,
-        application: ApplicationId,
+        application: ApplicationId<A>,
         call: &A::ApplicationCall,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<(A::Response, Vec<SessionId>), Self::Error> {
@@ -233,7 +232,7 @@ pub trait Contract: ContractAbi + Send + Sized {
             Self::Storage::execute_with_released_state(self, move || async move {
                 crate::contract::system_api::call_application_without_persisting_state(
                     authenticated,
-                    application,
+                    application.forget_abi(),
                     &call_bytes,
                     forwarded_sessions,
                 )
@@ -246,10 +245,10 @@ pub trait Contract: ContractAbi + Send + Sized {
     /// Calls a session from another application.
     // TODO(#488): Currently, the application state is persisted before the call and restored after the call in
     // order to allow reentrant calls to use the most up-to-date state.
-    async fn call_session<A: ContractAbi>(
+    async fn call_session<A: ContractAbi + Send>(
         &mut self,
         authenticated: bool,
-        session: SessionId,
+        session: SessionId<A>,
         call: &A::SessionCall,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<(A::Response, Vec<SessionId>), Self::Error> {
@@ -258,7 +257,7 @@ pub trait Contract: ContractAbi + Send + Sized {
             Self::Storage::execute_with_released_state(self, move || async move {
                 crate::contract::system_api::call_session_without_persisting_state(
                     authenticated,
-                    session,
+                    session.forget_abi(),
                     &call_bytes,
                     forwarded_sessions,
                 )
@@ -274,6 +273,11 @@ pub trait Contract: ContractAbi + Send + Sized {
         let parameters = serde_json::from_slice(&bytes)?;
         Ok(parameters)
     }
+
+    /// Retrieves the current application ID.
+    fn current_application_id() -> ApplicationId<Self::Abi> {
+        crate::contract::system_api::current_application_id().with_abi()
+    }
 }
 
 /// The service interface of a Linera application.
@@ -282,7 +286,7 @@ pub trait Contract: ContractAbi + Send + Sized {
 /// are triggered by JSON queries (typically GraphQL). Their execution cannot modify
 /// storage and is not gas-metered.
 #[async_trait]
-pub trait Service: ServiceAbi {
+pub trait Service: WithServiceAbi + ServiceAbi {
     /// Type used to report errors to the execution environment.
     ///
     /// Errors are not recoverable and always interrupt the current query.

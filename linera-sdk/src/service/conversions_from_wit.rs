@@ -49,7 +49,7 @@ impl From<wit_system_api::CryptoHash> for CryptoHash {
 impl From<wit_system_api::ApplicationId> for ApplicationId {
     fn from(application_id: wit_system_api::ApplicationId) -> Self {
         ApplicationId {
-            bytecode_id: BytecodeId(application_id.bytecode_id.into()),
+            bytecode_id: BytecodeId::new(application_id.bytecode_id.into()),
             creation: application_id.creation.into(),
         }
     }

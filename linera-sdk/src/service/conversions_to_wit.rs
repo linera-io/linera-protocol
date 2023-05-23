@@ -62,7 +62,7 @@ impl From<Poll<Result<Vec<u8>, String>>> for wit_types::PollQuery {
 impl From<ApplicationId> for wit_system_api::ApplicationId {
     fn from(application_id: ApplicationId) -> wit_system_api::ApplicationId {
         wit_system_api::ApplicationId {
-            bytecode_id: application_id.bytecode_id.0.into(),
+            bytecode_id: application_id.bytecode_id.effect_id.into(),
             creation: application_id.creation.into(),
         }
     }

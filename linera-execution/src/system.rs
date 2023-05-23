@@ -826,7 +826,7 @@ where
                 result.unsubscribe.push((subscription.name.clone(), *id));
             }
             BytecodePublished { operation_index } => {
-                let bytecode_id = BytecodeId(context.effect_id);
+                let bytecode_id = BytecodeId::new(context.effect_id);
                 let bytecode_location = BytecodeLocation {
                     certificate_hash: context.certificate_hash,
                     operation_index: *operation_index,

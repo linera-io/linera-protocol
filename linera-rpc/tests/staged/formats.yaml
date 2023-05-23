@@ -67,8 +67,9 @@ Bytecode:
   STRUCT:
     - bytes: BYTES
 BytecodeId:
-  NEWTYPESTRUCT:
-    TYPENAME: EffectId
+  STRUCT:
+    - effect_id:
+        TYPENAME: EffectId
 BytecodeLocation:
   STRUCT:
     - certificate_hash:

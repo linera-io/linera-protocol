@@ -141,7 +141,7 @@ impl ActiveChain {
         })
         .await;
 
-        BytecodeId(publish_effect_id)
+        BytecodeId::new(publish_effect_id)
     }
 
     /// Compiles the crate calling this method to generate the WebAssembly binaries.
@@ -274,7 +274,7 @@ impl ActiveChain {
         A: ContractAbi,
     {
         let bytecode_location_effect = if self.needs_bytecode_location(bytecode_id).await {
-            self.subscribe_to_published_bytecodes_from(bytecode_id.0.chain_id)
+            self.subscribe_to_published_bytecodes_from(bytecode_id.effect_id.chain_id)
                 .await;
             Some(self.find_bytecode_location(bytecode_id).await)
         } else {
@@ -329,12 +329,12 @@ impl ActiveChain {
 
     /// Finds the effect that sends the message with the bytecode location of `bytecode_id`.
     async fn find_bytecode_location(&self, bytecode_id: BytecodeId) -> EffectId {
-        for height in bytecode_id.0.height.0.. {
+        for height in bytecode_id.effect_id.height.0.. {
             let certificate = self
                 .validator
                 .worker()
                 .await
-                .read_certificate(bytecode_id.0.chain_id, height.into())
+                .read_certificate(bytecode_id.effect_id.chain_id, height.into())
                 .await
                 .expect("Failed to load certificate to search for bytecode location")
                 .expect("Bytecode location not found");
@@ -349,7 +349,7 @@ impl ActiveChain {
 
             if let Some(index) = effect_index {
                 return EffectId {
-                    chain_id: bytecode_id.0.chain_id,
+                    chain_id: bytecode_id.effect_id.chain_id,
                     height: BlockHeight(height),
                     index: index.try_into().expect(
                         "Incompatible `EffectId` index types in \

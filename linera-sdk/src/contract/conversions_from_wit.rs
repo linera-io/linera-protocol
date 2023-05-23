@@ -63,7 +63,7 @@ impl From<wit_types::CalleeContext> for CalleeContext {
 impl From<wit_types::ApplicationId> for ApplicationId {
     fn from(application_id: wit_types::ApplicationId) -> Self {
         ApplicationId {
-            bytecode_id: BytecodeId(application_id.bytecode_id.into()),
+            bytecode_id: BytecodeId::new(application_id.bytecode_id.into()),
             creation: application_id.creation.into(),
         }
     }
@@ -108,7 +108,7 @@ impl From<wit_system_api::EffectId> for EffectId {
 impl From<wit_system_api::ApplicationId> for ApplicationId {
     fn from(application_id: wit_system_api::ApplicationId) -> Self {
         ApplicationId {
-            bytecode_id: BytecodeId(application_id.bytecode_id.into()),
+            bytecode_id: BytecodeId::new(application_id.bytecode_id.into()),
             creation: application_id.creation.into(),
         }
     }

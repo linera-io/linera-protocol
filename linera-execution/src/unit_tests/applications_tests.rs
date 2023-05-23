@@ -21,7 +21,7 @@ fn effect_id(index: u32) -> EffectId {
 }
 
 fn bytecode_id(index: u32) -> BytecodeId {
-    BytecodeId(effect_id(index))
+    BytecodeId::new(effect_id(index))
 }
 
 fn app_id(index: u32) -> UserApplicationId {

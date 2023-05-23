@@ -6,11 +6,13 @@ use fungible::AccountOwner;
 use linera_sdk::base::{Amount, ApplicationId, ContractAbi, ServiceAbi, Timestamp};
 use serde::{Deserialize, Serialize};
 
+// TODO(#768): Remove the derive macros.
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
 pub struct CrowdFundingAbi;
 
 impl ContractAbi for CrowdFundingAbi {
     type InitializationArgument = InitializationArgument;
-    type Parameters = ApplicationId;
+    type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
     type Operation = Operation;
     type ApplicationCall = ApplicationCall;
     type Effect = Effect;
@@ -20,9 +22,9 @@ impl ContractAbi for CrowdFundingAbi {
 }
 
 impl ServiceAbi for CrowdFundingAbi {
+    type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
     type Query = Request;
     type QueryResponse = Response;
-    type Parameters = ApplicationId;
 }
 
 /// The initialization data required to create a crowd-funding campaign.

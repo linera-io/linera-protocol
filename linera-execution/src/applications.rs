@@ -47,7 +47,7 @@ impl ApplicationId {
 
 /// Alias for `linera_base::identifiers::ApplicationId`. Use this alias in the core
 /// protocol where the distinction with the more general enum [`ApplicationId`] matters.
-pub type UserApplicationId = linera_base::identifiers::ApplicationId;
+pub type UserApplicationId<A = ()> = linera_base::identifiers::ApplicationId<A>;
 
 /// Description of the necessary information to run a user application.
 #[allow(clippy::large_enum_variant)]

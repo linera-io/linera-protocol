@@ -17,7 +17,7 @@ use thiserror::Error;
 linera_sdk::contract!(MetaCounter);
 
 impl MetaCounter {
-    fn counter_id() -> Result<ApplicationId, Error> {
+    fn counter_id() -> Result<ApplicationId<counter::CounterAbi>, Error> {
         Self::parameters()
     }
 }
@@ -55,7 +55,7 @@ impl Contract for MetaCounter {
         effect: u64,
     ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         log::trace!("executing {:?} via {:?}", effect, Self::counter_id()?);
-        self.call_application::<counter::CounterAbi>(true, Self::counter_id()?, &effect, vec![])
+        self.call_application(true, Self::counter_id()?, &effect, vec![])
             .await?;
         Ok(ExecutionResult::default())
     }

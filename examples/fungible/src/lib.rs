@@ -6,6 +6,8 @@ use linera_sdk::base::{Amount, ApplicationId, ChainId, ContractAbi, Owner, Servi
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::BTreeMap, str::FromStr};
 
+// TODO(#768): Remove the derive macros.
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
 pub struct FungibleTokenAbi;
 
 impl ContractAbi for FungibleTokenAbi {

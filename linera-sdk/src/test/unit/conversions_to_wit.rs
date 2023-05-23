@@ -32,7 +32,7 @@ impl From<CryptoHash> for wit::CryptoHash {
 impl From<ApplicationId> for wit::ApplicationId {
     fn from(application_id: ApplicationId) -> Self {
         wit::ApplicationId {
-            bytecode_id: application_id.bytecode_id.0.into(),
+            bytecode_id: application_id.bytecode_id.effect_id.into(),
             creation: application_id.creation.into(),
         }
     }

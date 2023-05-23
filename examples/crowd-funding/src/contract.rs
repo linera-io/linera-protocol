@@ -7,7 +7,7 @@ mod state;
 
 use async_trait::async_trait;
 use crowd_funding::{ApplicationCall, Effect, InitializationArgument, Operation};
-use fungible::{Account, AccountOwner, Destination};
+use fungible::{Account, AccountOwner, Destination, FungibleTokenAbi};
 use linera_sdk::{
     base::{Amount, ApplicationId, SessionId, WithContractAbi},
     contract::system_api,
@@ -127,7 +127,7 @@ impl Contract for CrowdFunding {
 }
 
 impl CrowdFunding {
-    fn fungible_id() -> Result<ApplicationId, Error> {
+    fn fungible_id() -> Result<ApplicationId<FungibleTokenAbi>, Error> {
         // TODO(#723): We should be able to pull the fungible ID from the
         // `required_application_ids` of the application description.
         Self::parameters()
@@ -152,7 +152,7 @@ impl CrowdFunding {
             amount,
             destination,
         };
-        self.call_application::<fungible::FungibleTokenAbi>(
+        self.call_application(
             /* authenticated by owner */ true,
             Self::fungible_id()?,
             &call,
@@ -186,7 +186,7 @@ impl CrowdFunding {
         source: AccountOwner,
         sessions: Vec<SessionId>,
     ) -> Result<(), Error> {
-        self.check_session_tokens(&sessions)?;
+        let sessions = self.check_session_tokens(sessions)?;
 
         let session_balances = self.query_session_balances(&sessions).await?;
         let amount = session_balances.iter().sum();
@@ -199,33 +199,32 @@ impl CrowdFunding {
         self.finish_pledge(source, amount).await
     }
 
-    /// Checks that the sessions pledged all use the correct token.
-    fn check_session_tokens(&self, sessions: &[SessionId]) -> Result<(), Error> {
-        let fungible_id = Self::fungible_id()?;
+    /// Checks that the sessions pledged all use the correct token. Marks the sessions
+    /// with the correct Abi.
+    fn check_session_tokens(
+        &self,
+        sessions: Vec<SessionId>,
+    ) -> Result<Vec<SessionId<FungibleTokenAbi>>, Error> {
+        let fungible_id = Self::fungible_id()?.forget_abi();
         ensure!(
             sessions
                 .iter()
                 .all(|session_id| session_id.application_id == fungible_id),
             Error::IncorrectToken
         );
-
-        Ok(())
+        let sessions = sessions.into_iter().map(|s| s.with_abi()).collect();
+        Ok(sessions)
     }
 
     /// Gathers the balances in all the pledged sessions.
     async fn query_session_balances(
         &mut self,
-        sessions: &[SessionId],
+        sessions: &[SessionId<FungibleTokenAbi>],
     ) -> Result<Vec<Amount>, Error> {
         let mut balances = Vec::with_capacity(sessions.len());
         for session in sessions {
             let (balance, _) = self
-                .call_session::<fungible::FungibleTokenAbi>(
-                    false,
-                    *session,
-                    &fungible::SessionCall::Balance,
-                    vec![],
-                )
+                .call_session(false, *session, &fungible::SessionCall::Balance, vec![])
                 .await?;
             balances.push(balance);
         }
@@ -235,7 +234,7 @@ impl CrowdFunding {
     /// Collects all tokens in the sessions and places them in custody of the campaign.
     async fn collect_session_tokens(
         &mut self,
-        sessions: Vec<SessionId>,
+        sessions: Vec<SessionId<FungibleTokenAbi>>,
         balances: Vec<Amount>,
     ) -> Result<(), Error> {
         for (session, balance) in sessions.into_iter().zip(balances) {
@@ -322,7 +321,7 @@ impl CrowdFunding {
     async fn balance(&mut self) -> Result<Amount, Error> {
         let owner = AccountOwner::Application(system_api::current_application_id());
         let (amount, _) = self
-            .call_application::<fungible::FungibleTokenAbi>(
+            .call_application(
                 true,
                 Self::fungible_id()?,
                 &fungible::ApplicationCall::Balance { owner },
@@ -344,13 +343,8 @@ impl CrowdFunding {
             amount,
             destination,
         };
-        self.call_application::<fungible::FungibleTokenAbi>(
-            true,
-            Self::fungible_id()?,
-            &transfer,
-            vec![],
-        )
-        .await?;
+        self.call_application(true, Self::fungible_id()?, &transfer, vec![])
+            .await?;
         Ok(())
     }
 
@@ -370,20 +364,15 @@ impl CrowdFunding {
             amount,
             destination,
         };
-        self.call_application::<fungible::FungibleTokenAbi>(
-            true,
-            Self::fungible_id()?,
-            &transfer,
-            vec![],
-        )
-        .await?;
+        self.call_application(true, Self::fungible_id()?, &transfer, vec![])
+            .await?;
         Ok(())
     }
 
     /// Calls into the Fungible Token application to receive tokens from the given account.
     async fn receive_from_session(
         &mut self,
-        session: SessionId,
+        session: SessionId<FungibleTokenAbi>,
         amount: Amount,
     ) -> Result<(), Error> {
         let account = Account {
@@ -395,8 +384,7 @@ impl CrowdFunding {
             amount,
             destination,
         };
-        self.call_session::<fungible::FungibleTokenAbi>(false, session, &transfer, vec![])
-            .await?;
+        self.call_session(false, session, &transfer, vec![]).await?;
         Ok(())
     }
 

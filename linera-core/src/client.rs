@@ -15,7 +15,7 @@ use futures::{
     stream::{self, FuturesUnordered, StreamExt},
 };
 use linera_base::{
-    abi::ContractAbi,
+    abi::{Abi, ContractAbi},
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, RoundNumber, Timestamp},
     identifiers::{BytecodeId, ChainId, EffectId, Owner},
@@ -29,7 +29,8 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
     system::{Account, Recipient, SystemChannel, SystemOperation, UserData},
-    Bytecode, Effect, Operation, Query, Response, SystemEffect, UserApplicationId,
+    Bytecode, Effect, Operation, Query, Response, SystemEffect, SystemQuery, SystemResponse,
+    UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -1129,6 +1130,35 @@ where
         Ok(response)
     }
 
+    /// Queries a system application.
+    pub async fn query_system_application(&mut self, query: SystemQuery) -> Result<SystemResponse> {
+        let response = self
+            .node_client
+            .query_application(self.chain_id, &Query::System(query))
+            .await?;
+        match response {
+            Response::System(response) => Ok(response),
+            _ => bail!("Unexpected response for system query"),
+        }
+    }
+
+    /// Queries a user application.
+    pub async fn query_user_application<A: Abi>(
+        &mut self,
+        application_id: UserApplicationId<A>,
+        query: &A::Query,
+    ) -> Result<A::QueryResponse> {
+        let query = Query::user(application_id, query)?;
+        let response = self
+            .node_client
+            .query_application(self.chain_id, &query)
+            .await?;
+        match response {
+            Response::User(response) => Ok(serde_json::from_slice(&response)?),
+            _ => bail!("Unexpected response for user query"),
+        }
+    }
+
     pub async fn local_balance(&mut self) -> Result<Amount> {
         ensure!(
             self.chain_info().await?.next_block_height == self.next_block_height,
@@ -1317,27 +1347,29 @@ where
             .value
             .nth_last_effect_id(1)
             .ok_or_else(|| anyhow!("Failed to publish bytecode"))?;
-        let id = BytecodeId(effect_id);
+        let id = BytecodeId::new(effect_id);
         Ok((id, certificate))
     }
 
     /// Creates an application by instantiating some bytecode.
-    pub async fn create_application<A: ContractAbi>(
+    pub async fn create_application<A: Abi>(
         &mut self,
-        bytecode_id: BytecodeId,
-        parameters: &A::Parameters,
+        bytecode_id: BytecodeId<A>,
+        parameters: &<A as ContractAbi>::Parameters,
         initialization_argument: &A::InitializationArgument,
         required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<(UserApplicationId, Certificate)> {
+    ) -> Result<(UserApplicationId<A>, Certificate)> {
         let initialization_argument = serde_json::to_vec(initialization_argument)?;
         let parameters = serde_json::to_vec(parameters)?;
-        self.create_application_untyped(
-            bytecode_id,
-            parameters,
-            initialization_argument,
-            required_application_ids,
-        )
-        .await
+        let (app_id, cert) = self
+            .create_application_untyped(
+                bytecode_id.forget_abi(),
+                parameters,
+                initialization_argument,
+                required_application_ids,
+            )
+            .await?;
+        Ok((app_id.with_abi(), cert))
     }
 
     /// Creates an application by instantiating some bytecode.
