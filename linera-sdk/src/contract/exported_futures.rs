@@ -138,11 +138,7 @@ pub struct Initialize<Application: Contract> {
 
 impl<Application> Initialize<Application>
 where
-    Application: Contract + Send,
-    Application::Error: 'static,
-    Application::Storage: ContractStateStorage<Application> + Send + 'static,
-    Application::Effect: 'static,
-    Application::Response: 'static,
+    Application: Contract,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -183,11 +179,7 @@ pub struct ExecuteOperation<Application: Contract> {
 
 impl<Application> ExecuteOperation<Application>
 where
-    Application: Contract + Send,
-    Application::Error: 'static,
-    Application::Storage: ContractStateStorage<Application> + Send + 'static,
-    Application::Effect: 'static,
-    Application::Response: 'static,
+    Application: Contract,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -230,11 +222,7 @@ pub struct ExecuteEffect<Application: Contract> {
 
 impl<Application> ExecuteEffect<Application>
 where
-    Application: Contract + Send,
-    Application::Error: 'static,
-    Application::Storage: ContractStateStorage<Application> + Send + 'static,
-    Application::Effect: 'static,
-    Application::Response: 'static,
+    Application: Contract,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -285,12 +273,7 @@ pub struct HandleApplicationCall<Application: Contract> {
 
 impl<Application> HandleApplicationCall<Application>
 where
-    Application: Contract + Send,
-    Application::Error: 'static,
-    Application::Storage: ContractStateStorage<Application> + Send + 'static,
-    Application::Effect: 'static,
-    Application::Response: 'static,
-    Application::SessionState: 'static,
+    Application: Contract,
 {
     /// Creates the exported future that the host can poll.
     ///
@@ -352,12 +335,7 @@ pub struct HandleSessionCall<Application: Contract> {
 
 impl<Application> HandleSessionCall<Application>
 where
-    Application: Contract + Send,
-    Application::Error: 'static,
-    Application::Storage: ContractStateStorage<Application> + Send + 'static,
-    Application::Effect: 'static,
-    Application::Response: 'static,
-    Application::SessionState: 'static,
+    Application: Contract,
 {
     /// Creates the exported future that the host can poll.
     ///

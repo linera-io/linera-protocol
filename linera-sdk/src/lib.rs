@@ -86,13 +86,13 @@ pub struct ViewStateStorage<A>(std::marker::PhantomData<A>);
 /// Below we use the word "transaction" to refer to the current operation or effect being
 /// executed.
 #[async_trait]
-pub trait Contract: ContractAbi + Sized {
+pub trait Contract: ContractAbi + Send + Sized {
     /// The type used to report errors to the execution environment.
     ///
     /// Errors are not recoverable and always interrupt the current transaction. To return
     /// recoverable errors in the case of application calls and session calls, you may use
     /// the response types.
-    type Error: Error + From<serde_json::Error> + From<bcs::Error>;
+    type Error: Error + From<serde_json::Error> + From<bcs::Error> + 'static;
 
     /// The desired storage backend used to store the application's state.
     ///
@@ -103,7 +103,7 @@ pub trait Contract: ContractAbi + Sized {
     /// The first deployment on other chains will use the [`Default`] implementation of the application
     /// state if [`SimpleStateStorage`] is used, or the [`Default`] value of all sub-views in the
     /// state if the [`ViewStateStorage`] is used.
-    type Storage: ContractStateStorage<Self>;
+    type Storage: ContractStateStorage<Self> + Send + 'static;
 
     /// Initializes the application on the chain that created it.
     ///
