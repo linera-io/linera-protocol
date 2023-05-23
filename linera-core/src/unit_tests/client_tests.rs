@@ -19,7 +19,7 @@ use linera_base::{
 };
 use linera_execution::{
     committee::Epoch,
-    fees::Pricing,
+    pricing::Pricing,
     system::{Account, Recipient, SystemOperation, UserData},
     Operation, SystemQuery, SystemResponse,
 };

@@ -16,7 +16,7 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, RoundNumber, Timestamp},
     identifiers::ChainId,
 };
-use linera_execution::{fees::PricingError, ExecutionError};
+use linera_execution::{pricing::PricingError, ExecutionError};
 use linera_views::views::ViewError;
 pub use manager::{ChainManager, ChainManagerInfo, Outcome as ChainManagerOutcome};
 use thiserror::Error;

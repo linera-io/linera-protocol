@@ -28,7 +28,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
-    fees::Pricing,
+    pricing::Pricing,
     system::{Account, Recipient, SystemChannel, SystemOperation, UserData},
     Bytecode, Effect, Operation, Query, Response, SystemEffect, SystemQuery, SystemResponse,
     UserApplicationId,
