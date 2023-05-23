@@ -71,14 +71,13 @@ impl Export for ValidatorServerConfig {}
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct CommitteeConfig {
     pub validators: Vec<ValidatorConfig>,
-    pub pricing: Pricing,
 }
 
 impl Import for CommitteeConfig {}
 impl Export for CommitteeConfig {}
 
 impl CommitteeConfig {
-    pub fn into_committee(self) -> Committee {
+    pub fn into_committee(self, pricing: Pricing) -> Committee {
         let validators = self
             .validators
             .into_iter()
@@ -92,7 +91,7 @@ impl CommitteeConfig {
                 )
             })
             .collect();
-        Committee::new(validators, self.pricing)
+        Committee::new(validators, pricing)
     }
 }
 
@@ -394,17 +393,19 @@ pub struct GenesisConfig {
     pub committee: CommitteeConfig,
     pub admin_id: ChainId,
     pub chains: Vec<(ChainDescription, PublicKey, Amount, Timestamp)>,
+    pub pricing: Pricing,
 }
 
 impl Import for GenesisConfig {}
 impl Export for GenesisConfig {}
 
 impl GenesisConfig {
-    pub fn new(committee: CommitteeConfig, admin_id: ChainId) -> Self {
+    pub fn new(committee: CommitteeConfig, admin_id: ChainId, pricing: Pricing) -> Self {
         Self {
             committee,
             admin_id,
             chains: Vec::new(),
+            pricing,
         }
     }
 
@@ -416,7 +417,7 @@ impl GenesisConfig {
         for (description, public_key, balance, timestamp) in &self.chains {
             store
                 .create_chain(
-                    self.committee.clone().into_committee(),
+                    self.create_committee(),
                     self.admin_id,
                     *description,
                     *public_key,
@@ -426,5 +427,9 @@ impl GenesisConfig {
                 .await?;
         }
         Ok(())
+    }
+
+    pub fn create_committee(&self) -> Committee {
+        self.committee.clone().into_committee(self.pricing.clone())
     }
 }
