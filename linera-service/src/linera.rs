@@ -22,6 +22,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{ValidatorName, ValidatorState},
+    pricing::Pricing,
     system::{Account, UserData},
     Bytecode, UserApplicationId, WasmRuntime, WithWasmDefault,
 };
@@ -283,12 +284,7 @@ impl ClientContext {
     /// Tries to aggregate votes into certificates.
     #[cfg(feature = "benchmark")]
     fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<Certificate> {
-        let committee = self
-            .wallet_state
-            .genesis_config()
-            .committee
-            .clone()
-            .into_committee();
+        let committee = self.wallet_state.genesis_config().create_committee();
         let mut aggregators = HashMap::new();
         let mut certificates = Vec::new();
         let mut done_senders = HashSet::new();
@@ -703,6 +699,22 @@ enum ClientCommand {
 
         /// Number of additional chains to create
         num: u32,
+
+        /// Set the base price for each certificate.
+        #[structopt(long, default_value = "0")]
+        certificate_price: Amount,
+
+        /// Set the price per unit of fuel when executing user effects and operations.
+        #[structopt(long, default_value = "0")]
+        fuel_price: Amount,
+
+        /// Set the price per byte to store a block's operations, incoming and outgoing messages.
+        #[structopt(long, default_value = "0")]
+        storage_price: Amount,
+
+        /// Set the price per byte to store and send outgoing cross-chain messages.
+        #[structopt(long, default_value = "0")]
+        messages_price: Amount,
     },
 
     /// Watch the network for notifications.
@@ -1394,11 +1406,21 @@ async fn main() -> Result<(), anyhow::Error> {
             initial_funding,
             start_timestamp,
             num,
+            certificate_price,
+            fuel_price,
+            storage_price,
+            messages_price,
         } => {
             let committee_config = CommitteeConfig::read(committee_config_path)
                 .expect("Unable to read committee config file");
+            let pricing = Pricing {
+                certificate: *certificate_price,
+                fuel: *fuel_price,
+                storage: *storage_price,
+                messages: *messages_price,
+            };
             let mut genesis_config =
-                GenesisConfig::new(committee_config, ChainId::root(*admin_root));
+                GenesisConfig::new(committee_config, ChainId::root(*admin_root), pricing);
             let timestamp = start_timestamp
                 .map(|st| {
                     Timestamp::from(
