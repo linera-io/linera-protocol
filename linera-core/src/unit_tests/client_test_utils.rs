@@ -17,6 +17,7 @@ use linera_base::{
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_execution::{
     committee::{Committee, ValidatorName},
+    pricing::Pricing,
     WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
@@ -368,6 +369,11 @@ where
             validator_stores,
             chain_client_stores: Vec::new(),
         })
+    }
+
+    pub fn with_pricing(mut self, pricing: Pricing) -> Self {
+        self.initial_committee.pricing = pricing;
+        self
     }
 
     pub async fn set_fault_type<I>(&mut self, range: I, fault_type: FaultType)
