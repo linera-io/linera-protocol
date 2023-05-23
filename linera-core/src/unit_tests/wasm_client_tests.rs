@@ -11,6 +11,7 @@
 use crate::client::client_tests::{
     MakeMemoryStoreClient, MakeRocksdbStoreClient, StoreBuilder, TestBuilder, ROCKSDB_SEMAPHORE,
 };
+use async_graphql::Request;
 use linera_base::{
     data_types::Amount,
     identifiers::{ChainDescription, ChainId, Destination, Owner},
@@ -95,25 +96,34 @@ where
         .unwrap();
 
     let increment = 5_u64;
-    let bytes = bcs::to_bytes(&increment)?;
+    let operation_bytes = bcs::to_bytes(&increment)?;
     creator
         .execute_operation(Operation::User {
             application_id,
-            bytes,
-        })
-        .await
-        .unwrap();
-    let response = creator
-        .query_application(&Query::User {
-            application_id,
-            bytes: vec![],
+            bytes: operation_bytes,
         })
         .await
         .unwrap();
 
-    let expected = 15_u64;
-    let expected_bytes = bcs::to_bytes(&expected)?;
-    assert!(matches!(response, Response::User(bytes) if bytes == expected_bytes));
+    let query_bytes = serde_json::to_vec(&Request::new("{ value }")).unwrap();
+    let response = creator
+        .query_application(&Query::User {
+            application_id,
+            bytes: query_bytes,
+        })
+        .await
+        .unwrap();
+
+    let expected = async_graphql::Response::new(
+        async_graphql::Value::from_json(json!({"value": 15})).unwrap(),
+    );
+
+    let actual = match response {
+        Response::System(_) => panic!("should be Response::User"),
+        Response::User(bytes) => serde_json::from_slice(&bytes).unwrap(),
+    };
+
+    assert_eq!(expected, actual);
     Ok(())
 }
 
@@ -237,17 +247,25 @@ where
 
     receiver.receive_certificate(cert).await.unwrap();
     receiver.process_inbox().await.unwrap();
+
+    let query_bytes = serde_json::to_vec(&Request::new("{ value }")).unwrap();
     let response = receiver
         .query_application(&Query::User {
             application_id: application_id2,
-            bytes: vec![],
+            bytes: query_bytes,
         })
         .await
         .unwrap();
 
-    let expected = 5_u64;
-    let expected_bytes = bcs::to_bytes(&expected)?;
-    assert!(matches!(response, Response::User(bytes) if bytes == expected_bytes));
+    let expected =
+        async_graphql::Response::new(async_graphql::Value::from_json(json!({"value": 5})).unwrap());
+
+    let actual = match response {
+        Response::System(_) => panic!("should be Response::User"),
+        Response::User(bytes) => serde_json::from_slice(&bytes).unwrap(),
+    };
+
+    assert_eq!(expected, actual);
     Ok(())
 }
 
@@ -323,7 +341,7 @@ where
     // Creator receives the bytecodes then creates the app.
     creator.synchronize_from_validators().await.unwrap();
     creator.process_inbox().await.unwrap();
-    let initial_value = 100_u128;
+    let initial_value = 100_u64;
     let (application_id, _) = creator
         .create_application::<reentrant_counter::ReentrantCounterAbi>(
             bytecode_id,
@@ -334,7 +352,7 @@ where
         .await
         .unwrap();
 
-    let increment = 51_u128;
+    let increment = 51_u64;
     let bytes = bcs::to_bytes(&increment)?;
     let certificate = creator
         .execute_operation(Operation::User {
@@ -348,13 +366,13 @@ where
     let response = creator
         .query_application(&Query::User {
             application_id,
-            bytes: vec![],
+            bytes: serde_json::to_vec(&()).unwrap(),
         })
         .await
         .unwrap();
 
-    let expected = 151_u128;
-    let expected_bytes = bcs::to_bytes(&expected)?;
+    let expected = 151_u64;
+    let expected_bytes = serde_json::to_vec(&expected)?;
     assert!(matches!(response, Response::User(bytes) if bytes == expected_bytes));
     Ok(())
 }
