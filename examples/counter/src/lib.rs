@@ -1,7 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_sdk::base::ContractAbi;
+use async_graphql::{Request, Response};
+use linera_sdk::base::{ContractAbi, ServiceAbi};
 
 pub struct CounterAbi;
 
@@ -14,4 +15,10 @@ impl ContractAbi for CounterAbi {
     type SessionCall = ();
     type Response = u64;
     type SessionState = ();
+}
+
+impl ServiceAbi for CounterAbi {
+    type Query = Request;
+    type QueryResponse = Response;
+    type Parameters = ();
 }

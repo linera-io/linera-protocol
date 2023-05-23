@@ -5,9 +5,12 @@
 
 mod state;
 
-use async_graphql::{EmptySubscription, Object, Schema};
+use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use async_trait::async_trait;
-use linera_sdk::{base::ChainId, QueryContext, Service, ViewStateStorage};
+use linera_sdk::{
+    base::{ChainId, WithServiceAbi},
+    QueryContext, Service, ViewStateStorage,
+};
 use linera_views::views::ViewError;
 use social::Operation;
 use state::Social;
@@ -15,6 +18,10 @@ use std::sync::Arc;
 use thiserror::Error;
 
 linera_sdk::service!(Social);
+
+impl WithServiceAbi for Social {
+    type Abi = social::SocialAbi;
+}
 
 #[async_trait]
 impl Service for Social {
@@ -24,13 +31,11 @@ impl Service for Social {
     async fn query_application(
         self: Arc<Self>,
         _context: &QueryContext,
-        argument: &[u8],
-    ) -> Result<Vec<u8>, Self::Error> {
-        let graphql_request: async_graphql::Request =
-            serde_json::from_slice(argument).map_err(Error::InvalidQuery)?;
+        request: Request,
+    ) -> Result<Response, Self::Error> {
         let schema = Schema::build(self.clone(), MutationRoot, EmptySubscription).finish();
-        let res = schema.execute(graphql_request).await;
-        Ok(serde_json::to_vec(&res).unwrap())
+        let response = schema.execute(request).await;
+        Ok(response)
     }
 }
 
@@ -56,7 +61,7 @@ impl MutationRoot {
 pub enum Error {
     /// Invalid query.
     #[error("Invalid query")]
-    InvalidQuery(serde_json::Error),
+    InvalidQuery(#[from] serde_json::Error),
 
     /// Serialization error.
     #[error(transparent)]

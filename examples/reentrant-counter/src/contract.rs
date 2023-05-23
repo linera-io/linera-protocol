@@ -29,7 +29,7 @@ impl Contract for ReentrantCounter {
     async fn initialize(
         &mut self,
         _context: &OperationContext,
-        value: u128,
+        value: u64,
     ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         self.value.set(value);
         Ok(ExecutionResult::default())
@@ -38,7 +38,7 @@ impl Contract for ReentrantCounter {
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
-        increment: u128,
+        increment: u64,
     ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         let first_half = increment / 2;
         let second_half = increment - first_half;
@@ -68,7 +68,7 @@ impl Contract for ReentrantCounter {
     async fn handle_application_call(
         &mut self,
         _context: &CalleeContext,
-        increment: u128,
+        increment: u64,
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
     {

@@ -6,14 +6,21 @@
 mod state;
 
 use self::state::FungibleToken;
-use async_graphql::{EmptySubscription, Object, Schema};
+use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use async_trait::async_trait;
 use fungible::{Account, AccountOwner, Operation};
-use linera_sdk::{base::Amount, QueryContext, Service, ViewStateStorage};
+use linera_sdk::{
+    base::{Amount, WithServiceAbi},
+    QueryContext, Service, ViewStateStorage,
+};
 use std::sync::Arc;
 use thiserror::Error;
 
 linera_sdk::service!(FungibleToken);
+
+impl WithServiceAbi for FungibleToken {
+    type Abi = fungible::FungibleTokenAbi;
+}
 
 #[async_trait]
 impl Service for FungibleToken {
@@ -23,13 +30,11 @@ impl Service for FungibleToken {
     async fn query_application(
         self: Arc<Self>,
         _context: &QueryContext,
-        argument: &[u8],
-    ) -> Result<Vec<u8>, Self::Error> {
-        let graphql_request: async_graphql::Request =
-            serde_json::from_slice(argument).map_err(|_| Error::InvalidQuery)?;
+        request: Request,
+    ) -> Result<Response, Self::Error> {
         let schema = Schema::build(self.clone(), MutationRoot {}, EmptySubscription).finish();
-        let res = schema.execute(graphql_request).await;
-        Ok(serde_json::to_vec(&res).unwrap())
+        let response = schema.execute(request).await;
+        Ok(response)
     }
 }
 
@@ -67,11 +72,11 @@ impl MutationRoot {
 }
 
 /// An error that can occur during the contract execution.
-#[derive(Debug, Error, Eq, PartialEq)]
+#[derive(Debug, Error)]
 pub enum Error {
     /// Invalid query argument; could not deserialize GraphQL request.
     #[error(
         "Invalid query argument; Fungible application only supports JSON encoded GraphQL queries"
     )]
-    InvalidQuery,
+    InvalidQuery(#[from] serde_json::Error),
 }

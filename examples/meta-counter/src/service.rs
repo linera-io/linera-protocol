@@ -8,7 +8,9 @@ mod state;
 use self::state::MetaCounter;
 use async_trait::async_trait;
 use linera_sdk::{
-    base::ApplicationId, service::system_api, QueryContext, Service, SimpleStateStorage,
+    base::{ApplicationId, WithServiceAbi},
+    service::system_api,
+    QueryContext, Service, SimpleStateStorage,
 };
 use std::sync::Arc;
 use thiserror::Error;
@@ -22,6 +24,10 @@ impl MetaCounter {
     }
 }
 
+impl WithServiceAbi for MetaCounter {
+    type Abi = meta_counter::MetaCounterAbi;
+}
+
 #[async_trait]
 impl Service for MetaCounter {
     type Error = Error;
@@ -30,9 +36,9 @@ impl Service for MetaCounter {
     async fn query_application(
         self: Arc<Self>,
         _context: &QueryContext,
-        argument: &[u8],
+        argument: Vec<u8>,
     ) -> Result<Vec<u8>, Self::Error> {
-        let value = system_api::query_application(Self::counter_id()?, argument)
+        let value = system_api::query_application(Self::counter_id()?, &argument)
             .await
             .map_err(|_| Error::InternalQuery)?;
         Ok(value)
@@ -40,11 +46,15 @@ impl Service for MetaCounter {
 }
 
 /// An error that can occur during the contract execution.
-#[derive(Debug, Error, Eq, PartialEq)]
+#[derive(Debug, Error)]
 pub enum Error {
     #[error("Internal query failed")]
     InternalQuery,
 
     #[error("Invalid application parameters")]
     Parameters,
+
+    /// Invalid query argument in meta-counter app: could not deserialize GraphQL request.
+    #[error("Invalid query argument in meta-counter app: could not deserialize GraphQL request.")]
+    InvalidQuery(#[from] serde_json::Error),
 }

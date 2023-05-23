@@ -8,5 +8,5 @@ use linera_views::views::RootView;
 #[derive(RootView)]
 #[view(context = "ViewStorageContext")]
 pub struct ReentrantCounter {
-    pub value: RegisterView<u128>,
+    pub value: RegisterView<u64>,
 }
