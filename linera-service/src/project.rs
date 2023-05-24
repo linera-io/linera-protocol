@@ -20,13 +20,12 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1.52"
 futures = "0.3.17"
-linera-sdk = { path = "../../linera-sdk" }
-linera-views = { path = "../../linera-views" }
+{linera-sdk-dep}
 serde = { version = "1.0.130", features = ["derive"] }
 thiserror = "1.0.31"
 
 [dev-dependencies]
-linera-sdk = { path = "../../linera-sdk", features = ["test"] }
+{linera-sdk-dev-dep}
 webassembly-test = "0.1.0"
 
 [[bin]]
@@ -268,6 +267,7 @@ impl Project {
             .ok_or_else(|| anyhow!("path specified cannot terminate in . or .."))?;
         let toml_path = project_root.join("Cargo.toml");
         let toml_contents = CARGO_TOML.replace("{project-name}", &project_name);
+        let toml_contents = Self::add_linera_sdk_dependency(&toml_contents);
         Self::write_string_to_file(&toml_path, &toml_contents)
     }
 
@@ -297,5 +297,54 @@ impl Project {
         let mut file = File::create(path)?;
         file.write_all(content.as_bytes())?;
         Ok(())
+    }
+
+    /// Adds ['linera-sdk'] dependencies in `debug` mode.
+    ///
+    /// Uses the directory of `linera-service` at compile time to figure out
+    /// where `linera-sdk` is.
+    #[cfg(debug_assertions)]
+    fn add_linera_sdk_dependency(cargo_toml: &str) -> String {
+        let linera_service_path: PathBuf = env!("CARGO_MANIFEST_DIR")
+            .parse()
+            .expect("the CARGO_MANIFEST_DIR should always be a valid path");
+        let linera_sdk_path = linera_service_path
+            .join("..")
+            .join("linera-sdk")
+            .canonicalize()
+            .expect("the linera-sdk crate should always exist");
+        let linera_sdk_dep = format!(
+            "linera-sdk = {{ path = \"{}\" }}",
+            linera_sdk_path.display()
+        );
+        let with_sdk_dependency = cargo_toml.replace("{linera-sdk-dep}", &linera_sdk_dep);
+        let linera_sdk_dev_dep = format!(
+            "linera-sdk = {{ path = \"{}\", features = [\"test\"] }}",
+            linera_sdk_path.display()
+        );
+        with_sdk_dependency.replace("{linera-sdk-dev-dep}", &linera_sdk_dev_dep)
+    }
+
+    /// Adds ['linera-sdk'] dependencies in `release` mode.
+    ///
+    /// Includes the contents of `linera-sdk`'s `Cargo.toml` at compile time
+    /// to figure out the latest version.
+    #[cfg(not(debug_assertions))]
+    fn add_linera_sdk_dependency(cargo_toml: &str) -> String {
+        let content = include_str!("../../linera-sdk/Cargo.toml");
+        let sdk_cargo_toml: toml::Value = toml::from_str(content)
+            .expect("there was an error parsing a TOML file included at compile-time - this should never happen.");
+        let version = sdk_cargo_toml["package"]["version"].as_str()
+            .expect("there was an error finding the version in a TOML file included at compile-time - this should never happen.");
+        let with_sdk_dependency =
+            cargo_toml.replace("{linera-sdk-dep}", &format!("linera-sdk = \"{}\"", version));
+        let with_sdk_dev_dependency = with_sdk_dependency.replace(
+            "{linera-sdk-dev-dep}",
+            &format!(
+                "linera-sdk = {{ version = \"{}\", features = [\"test\"] }}",
+                version
+            ),
+        );
+        with_sdk_dev_dependency
     }
 }
