@@ -78,13 +78,6 @@ pub trait Store: Sized {
     /// Writes several values
     async fn write_values(&self, values: &[HashedValue]) -> Result<(), ViewError>;
 
-    /// Writes several values in a batch
-    fn write_values_batch(
-        &self,
-        values: &[HashedValue],
-        batch: &mut Batch,
-    ) -> Result<(), ViewError>;
-
     /// Reads the certificate with the given hash.
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError>;
 
@@ -93,9 +86,6 @@ pub trait Store: Sized {
 
     /// Writes a vector of certficates.
     async fn write_certificates(&self, certificate: &[Certificate]) -> Result<(), ViewError>;
-
-    /// Writes the batch
-    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
     async fn load_active_chain(
@@ -289,33 +279,17 @@ where
     }
 
     async fn write_value(&self, value: &HashedValue) -> Result<(), ViewError> {
-        let id = value.block().chain_id.to_string();
-        increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
-        let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         let mut batch = Batch::new();
-        batch.put_key_value(value_key.to_vec(), value)?;
-        self.client.client.write_batch(batch, &[]).await?;
-        Ok(())
+        self.write_value_batch(value, &mut batch)?;
+        self.write_batch(batch).await
     }
 
     async fn write_values(&self, values: &[HashedValue]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        self.write_values_batch(values, &mut batch)?;
-        self.write_batch(batch).await
-    }
-
-    fn write_values_batch(
-        &self,
-        values: &[HashedValue],
-        batch: &mut Batch,
-    ) -> Result<(), ViewError> {
         for value in values {
-            let id = value.block().chain_id.to_string();
-            increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
-            let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
-            batch.put_key_value(value_key.to_vec(), value)?;
+            self.write_value_batch(value, &mut batch)?;
         }
-        Ok(())
+        self.write_batch(batch).await
     }
 
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
@@ -355,11 +329,6 @@ where
         self.write_batch(batch).await
     }
 
-    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        self.client.client.write_batch(batch, &[]).await?;
-        Ok(())
-    }
-
     fn wasm_runtime(&self) -> Option<WasmRuntime> {
         self.client.wasm_runtime
     }
@@ -371,6 +340,13 @@ where
     ViewError: From<<CL as KeyValueStoreClient>::Error>,
     <CL as KeyValueStoreClient>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
+    fn write_value_batch(&self, value: &HashedValue, batch: &mut Batch) -> Result<(), ViewError> {
+        let id = value.block().chain_id.to_string();
+        increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
+        let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
+        batch.put_key_value(value_key.to_vec(), value)?;
+        Ok(())
+    }
 
     fn write_certificate_batch(
         &self,
@@ -384,6 +360,11 @@ where
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         batch.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
         batch.put_key_value(value_key.to_vec(), &certificate.value)?;
+        Ok(())
+    }
+
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
+        self.client.client.write_batch(batch, &[]).await?;
         Ok(())
     }
 }
