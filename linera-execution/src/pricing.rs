@@ -8,7 +8,7 @@ use linera_base::data_types::{Amount, ArithmeticError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// A list of prices for different cost categories that each block causes for the validators.
+/// A collection of costs associated with blocks in validators.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Serialize, Deserialize, InputObject)]
 pub struct Pricing {
     /// The base price for each certificate, to compensate for the communication and signing
@@ -56,7 +56,7 @@ impl Pricing {
     pub fn only_fuel() -> Self {
         Pricing {
             certificate: Amount::ZERO,
-            fuel: "0.0000001".parse().unwrap(),
+            fuel: "0.000_001".parse().unwrap(),
             storage: Amount::ZERO,
             messages: Amount::ZERO,
         }
