@@ -634,11 +634,10 @@ where
         // Check that the chain is active and ready for this confirmation.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        let epoch = chain
+        let (epoch, committee) = chain
             .execution_state
             .system
-            .epoch
-            .get()
+            .current_committee()
             .expect("chain is active");
         ensure!(
             block.epoch == epoch,
@@ -647,19 +646,13 @@ where
                 epoch: block.epoch,
             }
         );
-        let committee = chain
-            .execution_state
-            .system
-            .committees
-            .get()
-            .get(&epoch)
-            .expect("chain is active");
         certificate.check(committee)?;
-        if chain.manager.get_mut().check_validated_block(
-            chain.tip_state.get().next_block_height,
-            block,
-            round,
-        )? == ChainManagerOutcome::Skip
+        if chain.tip_state.get().already_validated_block(block)?
+            || chain
+                .manager
+                .get_mut()
+                .check_validated_block(block, round)?
+                == ChainManagerOutcome::Skip
         {
             // If we just processed the same pending block, return the chain info
             // unchanged.
@@ -875,13 +868,8 @@ where
         }
         // Check if the chain is ready for this new block proposal.
         // This should always pass for nodes without voting key.
-        if chain.manager.get().check_proposed_block(
-            chain.tip_state.get().block_hash,
-            chain.tip_state.get().next_block_height,
-            block,
-            *round,
-        )? == ChainManagerOutcome::Skip
-        {
+        chain.tip_state.get().verify_block_chaining(block)?;
+        if chain.manager.get().check_proposed_block(block, *round)? == ChainManagerOutcome::Skip {
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok((
                 ChainInfoResponse::new(&chain, self.key_pair()),
