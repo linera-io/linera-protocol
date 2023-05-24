@@ -350,7 +350,7 @@ where
     async fn write_certificates(&self, certificates: &[Certificate]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for certificate in certificates {
-            self.write_certificate_batch(&certificate, &mut batch)?;
+            self.write_certificate_batch(certificate, &mut batch)?;
         }
         self.write_batch(batch).await
     }
