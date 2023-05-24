@@ -72,6 +72,37 @@ pub struct ChainTipState {
     pub next_block_height: BlockHeight,
 }
 
+impl ChainTipState {
+    /// Checks that the proposed block is suitable, i.e. at the expected height and with the
+    /// expected parent.
+    pub fn verify_block_chaining(&self, new_block: &Block) -> Result<(), ChainError> {
+        ensure!(
+            new_block.height == self.next_block_height,
+            ChainError::UnexpectedBlockHeight {
+                expected_block_height: self.next_block_height,
+                found_block_height: new_block.height
+            }
+        );
+        ensure!(
+            new_block.previous_block_hash == self.block_hash,
+            ChainError::UnexpectedPreviousBlockHash
+        );
+        Ok(())
+    }
+
+    /// Returns `true` if the validated block's height is below the tip height. Returns an error if
+    /// it is higher than the tip.
+    pub fn already_validated_block(&self, new_block: &Block) -> Result<bool, ChainError> {
+        ensure!(
+            self.next_block_height >= new_block.height,
+            ChainError::MissingEarlierBlocks {
+                current_block_height: self.next_block_height,
+            }
+        );
+        Ok(self.next_block_height > new_block.height)
+    }
+}
+
 /// The state of a channel followed by subscribers.
 #[derive(Debug, View, GraphQLView)]
 pub struct ChannelStateView<C> {

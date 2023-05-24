@@ -432,6 +432,13 @@ where
             && self.admin_id.get().is_some()
     }
 
+    /// Returns the current committee, if any.
+    pub fn current_committee(&self) -> Option<(Epoch, &Committee)> {
+        let epoch = self.epoch.get().as_ref()?;
+        let committee = self.committees.get().get(epoch)?;
+        Some((*epoch, committee))
+    }
+
     /// Executes the sender's side of an operation and returns a list of actions to be
     /// taken.
     pub async fn execute_operation(
