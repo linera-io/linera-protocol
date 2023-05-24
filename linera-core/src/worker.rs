@@ -525,8 +525,12 @@ where
         for value in blobs {
             self.cache_recent_value(value.clone());
         }
-        self.storage.write_values(blobs).await?;
-        self.storage.write_certificate(&certificate).await?;
+        let (result_blob, result_certificate) = tokio::join!(
+            self.storage.write_values(blobs),
+            self.storage.write_certificate(&certificate)
+        );
+        result_blob?;
+        result_certificate?;
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
         let verified_effects = chain.execute_block(block).await?;
