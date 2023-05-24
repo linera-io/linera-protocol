@@ -17,7 +17,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     env, fs,
     ops::RangeInclusive,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Stdio,
     rc::Rc,
     str::FromStr,
@@ -179,6 +179,24 @@ impl Client {
         }
     }
 
+    async fn project_new(&self, project_name: &str) -> TempDir {
+        let tmp = TempDir::new().unwrap();
+        let mut command = self.run().await;
+        assert!(command
+            .current_dir(tmp.path().canonicalize().unwrap())
+            .kill_on_drop(true)
+            .arg("project")
+            .arg("new")
+            .arg(project_name)
+            .spawn()
+            .unwrap()
+            .wait()
+            .await
+            .unwrap()
+            .success());
+        tmp
+    }
+
     async fn run(&self) -> Command {
         let path = cargo_build_binary("linera").await;
         let mut command = Command::new(path);
@@ -219,7 +237,7 @@ impl Client {
             .success());
     }
 
-    async fn init(&self, chain_ids: &[ChainId]) {
+    async fn wallet_init(&self, chain_ids: &[ChainId]) {
         let mut command = self.run().await;
         command
             .args(["wallet", "init"])
@@ -764,15 +782,25 @@ impl TestRunner {
         }
     }
 
-    async fn build_application(&self, name: &str) -> (PathBuf, PathBuf) {
+    async fn build_example(&self, name: &str) -> (PathBuf, PathBuf) {
         let examples_dir = env::current_dir().unwrap().join("../examples/");
+        self.build_application(examples_dir.join(name).as_path(), name, true)
+            .await
+    }
+
+    async fn build_application(
+        &self,
+        path: &Path,
+        name: &str,
+        is_workspace: bool,
+    ) -> (PathBuf, PathBuf) {
         assert!(Command::new("cargo")
             .current_dir(self.tmp_dir.path().canonicalize().unwrap())
             .arg("build")
             .arg("--release")
             .args(["--target", "wasm32-unknown-unknown"])
             .arg("--manifest-path")
-            .arg(examples_dir.join(name).join("Cargo.toml"))
+            .arg(path.join("Cargo.toml"))
             .stdout(Stdio::piped())
             .spawn()
             .unwrap()
@@ -781,7 +809,11 @@ impl TestRunner {
             .unwrap()
             .success());
 
-        let release_dir = examples_dir.join("target/wasm32-unknown-unknown/release");
+        let release_dir = match is_workspace {
+            true => path.join("../target/wasm32-unknown-unknown/release"),
+            false => path.join("target/wasm32-unknown-unknown/release"),
+        };
+
         let contract = release_dir.join(format!("{}_contract.wasm", name.replace('-', "_")));
         let service = release_dir.join(format!("{}_service.wasm", name.replace('-', "_")));
 
@@ -979,7 +1011,7 @@ async fn test_end_to_end_counter() {
     runner.generate_initial_validator_config().await;
     client.create_genesis_config().await;
     runner.run_local_net().await;
-    let (contract, service) = runner.build_application("counter").await;
+    let (contract, service) = runner.build_example("counter").await;
 
     let application_id = client
         .publish_and_create::<CounterAbi>(
@@ -1023,7 +1055,7 @@ async fn test_end_to_end_counter_publish_create() {
     runner.generate_initial_validator_config().await;
     client.create_genesis_config().await;
     runner.run_local_net().await;
-    let (contract, service) = runner.build_application("counter").await;
+    let (contract, service) = runner.build_example("counter").await;
 
     let bytecode_id = client.publish_bytecode(contract, service, None).await;
     let application_id = client
@@ -1057,7 +1089,7 @@ async fn test_end_to_end_multiple_wallets() {
     // Create initial server and client config.
     runner.generate_initial_validator_config().await;
     client_1.create_genesis_config().await;
-    client_2.init(&[]).await;
+    client_2.wallet_init(&[]).await;
 
     // Start local network.
     runner.run_local_net().await;
@@ -1117,7 +1149,7 @@ async fn test_reconfiguration(network: Network) {
 
     let servers = runner.generate_initial_validator_config().await;
     client.create_genesis_config().await;
-    client_2.init(&[]).await;
+    client_2.wallet_init(&[]).await;
     runner.run_local_net().await;
 
     let chain_1 = client.get_wallet().default_chain().unwrap();
@@ -1225,11 +1257,11 @@ async fn test_end_to_end_social_user_pub_sub() {
     // Create initial server and client config.
     runner.generate_initial_validator_config().await;
     client1.create_genesis_config().await;
-    client2.init(&[]).await;
+    client2.wallet_init(&[]).await;
 
     // Start local network.
     runner.run_local_net().await;
-    let (contract, service) = runner.build_application("social").await;
+    let (contract, service) = runner.build_example("social").await;
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await;
@@ -1293,7 +1325,7 @@ async fn test_end_to_end_retry_notification_stream() {
     client1.create_genesis_config().await;
     let chain = ChainId::root(0);
     let mut height = 0;
-    client2.init(&[chain]).await;
+    client2.wallet_init(&[chain]).await;
 
     // Start local network.
     runner.run_local_net().await;
@@ -1346,11 +1378,11 @@ async fn test_end_to_end_fungible() {
 
     runner.generate_initial_validator_config().await;
     client1.create_genesis_config().await;
-    client2.init(&[]).await;
+    client2.wallet_init(&[]).await;
 
     // Create initial server and client config.
     runner.run_local_net().await;
-    let (contract, service) = runner.build_application("fungible").await;
+    let (contract, service) = runner.build_example("fungible").await;
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await;
@@ -1464,11 +1496,11 @@ async fn test_end_to_end_crowd_funding() {
 
     runner.generate_initial_validator_config().await;
     client1.create_genesis_config().await;
-    client2.init(&[]).await;
+    client2.wallet_init(&[]).await;
 
     // Create initial server and client config.
     runner.run_local_net().await;
-    let (contract_fungible, service_fungible) = runner.build_application("fungible").await;
+    let (contract_fungible, service_fungible) = runner.build_example("fungible").await;
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await;
@@ -1502,7 +1534,7 @@ async fn test_end_to_end_crowd_funding() {
         deadline,
         target,
     };
-    let (contract_crowd, service_crowd) = runner.build_application("crowd-funding").await;
+    let (contract_crowd, service_crowd) = runner.build_example("crowd-funding").await;
     let application_id_crowd = client1
         .publish_and_create::<CrowdFundingAbi>(
             contract_crowd,
@@ -1567,4 +1599,17 @@ async fn test_end_to_end_crowd_funding() {
 
     node_service1.assert_is_running();
     node_service2.assert_is_running();
+}
+
+#[test_log::test(tokio::test)]
+async fn test_project_new() {
+    let network = Network::Grpc;
+    let mut runner = TestRunner::new(network, 0);
+    let client = runner.make_client(network);
+
+    let tmp_dir = client.project_new("init-test").await;
+    let project_dir = tmp_dir.path().join("init-test");
+    runner
+        .build_application(project_dir.as_path(), "init-test", false)
+        .await;
 }
