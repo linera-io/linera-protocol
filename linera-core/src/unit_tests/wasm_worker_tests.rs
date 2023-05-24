@@ -16,7 +16,7 @@ use linera_base::{
     identifiers::{BytecodeId, ChainDescription, ChainId, Destination, EffectId},
 };
 use linera_chain::data_types::{
-    ChannelFullName, Event, HashedValue, Message, Origin, OutgoingEffect,
+    ChannelFullName, Event, ExecutedBlock, HashedValue, Message, Origin, OutgoingEffect,
 };
 use linera_execution::{
     committee::Epoch,
@@ -146,15 +146,15 @@ where
         registry: ApplicationRegistry::default(),
     };
     let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
-    let publish_block_proposal = HashedValue::new_confirmed(
-        publish_block,
-        vec![OutgoingEffect {
+    let publish_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
+        block: publish_block,
+        effects: vec![OutgoingEffect {
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
             effect: Effect::System(publish_effect.clone()),
         }],
-        publisher_state_hash,
-    );
+        state_hash: publisher_state_hash,
+    });
     let publish_certificate = make_certificate(&committee, &worker, publish_block_proposal);
 
     let info = worker
@@ -166,14 +166,14 @@ where
     assert_eq!(Amount::ZERO, info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Timestamp::from(1), info.timestamp);
-    assert_eq!(Some(publish_certificate.value.hash()), info.block_hash);
+    assert_eq!(Some(publish_certificate.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
 
     // Produce one more block to broadcast the bytecode ID.
     let broadcast_message = Message {
         origin: Origin::chain(publisher_chain.into()),
         event: Event {
-            certificate_hash: publish_certificate.value.hash(),
+            certificate_hash: publish_certificate.hash(),
             height: publish_block_height,
             index: 0,
             authenticated_signer: None,
@@ -196,7 +196,7 @@ where
         index: 0,
     });
     let bytecode_location = BytecodeLocation {
-        certificate_hash: publish_certificate.value.hash(),
+        certificate_hash: publish_certificate.hash(),
         operation_index: 0,
     };
     let broadcast_effect = SystemEffect::BytecodeLocations {
@@ -209,15 +209,15 @@ where
         .published_bytecodes
         .insert(bytecode_id, bytecode_location);
     let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
-    let broadcast_block_proposal = HashedValue::new_confirmed(
-        broadcast_block,
-        vec![OutgoingEffect {
+    let broadcast_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
+        block: broadcast_block,
+        effects: vec![OutgoingEffect {
             destination: broadcast_channel,
             authenticated_signer: None,
             effect: Effect::System(broadcast_effect.clone()),
         }],
-        publisher_state_hash,
-    );
+        state_hash: publisher_state_hash,
+    });
     let broadcast_certificate = make_certificate(&committee, &worker, broadcast_block_proposal);
 
     let info = worker
@@ -229,7 +229,7 @@ where
     assert_eq!(Amount::ZERO, info.system_balance);
     assert_eq!(BlockHeight::from(2), info.next_block_height);
     assert_eq!(Timestamp::from(1), info.timestamp);
-    assert_eq!(Some(broadcast_certificate.value.hash()), info.block_hash);
+    assert_eq!(Some(broadcast_certificate.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
 
     // Subscribe to get the bytecode ID.
@@ -268,15 +268,15 @@ where
         registry: ApplicationRegistry::default(),
     };
     let creator_state = ExecutionStateView::from_system_state(creator_system_state.clone()).await;
-    let subscribe_block_proposal = HashedValue::new_confirmed(
-        subscribe_block,
-        vec![OutgoingEffect {
+    let subscribe_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
+        block: subscribe_block,
+        effects: vec![OutgoingEffect {
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
             effect: Effect::System(subscribe_effect.clone()),
         }],
-        creator_state.crypto_hash().await?,
-    );
+        state_hash: creator_state.crypto_hash().await?,
+    });
     let subscribe_certificate = make_certificate(&committee, &worker, subscribe_block_proposal);
 
     let info = worker
@@ -288,14 +288,14 @@ where
     assert_eq!(Amount::ZERO, info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Timestamp::from(2), info.timestamp);
-    assert_eq!(Some(subscribe_certificate.value.hash()), info.block_hash);
+    assert_eq!(Some(subscribe_certificate.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
 
     // Accept subscription
     let accept_message = Message {
         origin: Origin::chain(creator_chain.into()),
         event: Event {
-            certificate_hash: subscribe_certificate.value.hash(),
+            certificate_hash: subscribe_certificate.hash(),
             height: subscribe_block_height,
             index: 0,
             authenticated_signer: None,
@@ -314,17 +314,17 @@ where
     );
     publisher_system_state.timestamp = Timestamp::from(3);
     let publisher_state_hash = make_state_hash(publisher_system_state).await;
-    let accept_block_proposal = HashedValue::new_confirmed(
-        accept_block,
-        vec![OutgoingEffect {
+    let accept_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
+        block: accept_block,
+        effects: vec![OutgoingEffect {
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
             effect: Effect::System(SystemEffect::Notify {
                 id: creator_chain.into(),
             }),
         }],
-        publisher_state_hash,
-    );
+        state_hash: publisher_state_hash,
+    });
     let accept_certificate = make_certificate(&committee, &worker, accept_block_proposal);
 
     let info = worker
@@ -336,7 +336,7 @@ where
     assert_eq!(Amount::ZERO, info.system_balance);
     assert_eq!(BlockHeight::from(3), info.next_block_height);
     assert_eq!(Timestamp::from(3), info.timestamp);
-    assert_eq!(Some(accept_certificate.value.hash()), info.block_hash);
+    assert_eq!(Some(accept_certificate.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
 
     // Create an application.
@@ -374,7 +374,7 @@ where
         vec![Message {
             origin: Origin::channel(publisher_chain.into(), publish_admin_channel),
             event: Event {
-                certificate_hash: broadcast_certificate.value.hash(),
+                certificate_hash: broadcast_certificate.hash(),
                 height: broadcast_block_height,
                 index: 0,
                 authenticated_signer: None,
@@ -403,15 +403,15 @@ where
             initial_value_bytes.clone(),
         )
         .await?;
-    let create_block_proposal = HashedValue::new_confirmed(
-        create_block,
-        vec![OutgoingEffect {
+    let create_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
+        block: create_block,
+        effects: vec![OutgoingEffect {
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
             effect: Effect::System(SystemEffect::ApplicationCreated),
         }],
-        creator_state.crypto_hash().await?,
-    );
+        state_hash: creator_state.crypto_hash().await?,
+    });
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
     let info = worker
@@ -423,7 +423,7 @@ where
     assert_eq!(Amount::ZERO, info.system_balance);
     assert_eq!(BlockHeight::from(2), info.next_block_height);
     assert_eq!(Timestamp::from(4), info.timestamp);
-    assert_eq!(Some(create_certificate.value.hash()), info.block_hash);
+    assert_eq!(Some(create_certificate.hash()), info.block_hash);
     assert!(info.manager.pending().is_none());
 
     // Execute an application operation
@@ -459,8 +459,11 @@ where
         )
         .await?;
     creator_state.system.timestamp.set(Timestamp::from(5));
-    let run_block_proposal =
-        HashedValue::new_confirmed(run_block, vec![], creator_state.crypto_hash().await?);
+    let run_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
+        block: run_block,
+        effects: vec![],
+        state_hash: creator_state.crypto_hash().await?,
+    });
     let run_certificate = make_certificate(&committee, &worker, run_block_proposal);
 
     let info = worker
@@ -471,7 +474,7 @@ where
     assert_eq!(ChainId::root(2), info.chain_id);
     assert_eq!(Amount::ZERO, info.system_balance);
     assert_eq!(BlockHeight::from(3), info.next_block_height);
-    assert_eq!(Some(run_certificate.value.hash()), info.block_hash);
+    assert_eq!(Some(run_certificate.hash()), info.block_hash);
     assert_eq!(Timestamp::from(5), info.timestamp);
     assert!(info.manager.pending().is_none());
     Ok(())

@@ -230,7 +230,7 @@ impl TryFrom<grpc::Certificate> for HandleCertificateRequest {
     fn try_from(cert_request: grpc::Certificate) -> Result<Self, Self::Error> {
         let value: HashedValue = bincode::deserialize(&cert_request.value)?;
         ensure!(
-            Some(value.chain_id().into()) == cert_request.chain_id,
+            Some(value.inner().chain_id().into()) == cert_request.chain_id,
             ProtoConversionError::InconsistentChainId
         );
         let signatures = bincode::deserialize(&cert_request.signatures)?;
@@ -248,7 +248,7 @@ impl TryFrom<HandleCertificateRequest> for grpc::Certificate {
 
     fn try_from(request: HandleCertificateRequest) -> Result<Self, Self::Error> {
         Ok(Self {
-            chain_id: Some(request.certificate.value.chain_id().into()),
+            chain_id: Some(request.certificate.value().chain_id().into()),
             value: bincode::serialize(&request.certificate.value)?,
             signatures: bincode::serialize(&request.certificate.signatures)?,
             blobs: bincode::serialize(&request.blobs)?,
@@ -435,7 +435,7 @@ impl TryFrom<grpc::Owner> for Owner {
 pub mod tests {
     use super::*;
     use linera_base::crypto::{BcsSignable, CryptoHash, KeyPair};
-    use linera_chain::data_types::{Block, BlockAndRound, HashedValue};
+    use linera_chain::data_types::{Block, BlockAndRound, ExecutedBlock, HashedValue};
     use linera_core::data_types::ChainInfo;
     use serde::{Deserialize, Serialize};
     use std::{borrow::Cow, fmt::Debug};
@@ -593,9 +593,11 @@ pub mod tests {
         let key_pair = KeyPair::generate();
         let certificate = Certificate::new(
             HashedValue::new_validated(
-                get_block(),
-                vec![],
-                CryptoHash::new(&Foo("test".into())),
+                ExecutedBlock {
+                    block: get_block(),
+                    effects: vec![],
+                    state_hash: CryptoHash::new(&Foo("test".into())),
+                },
                 Default::default(),
             ),
             vec![(
@@ -604,9 +606,11 @@ pub mod tests {
             )],
         );
         let blobs = vec![HashedValue::new_validated(
-            get_block(),
-            vec![],
-            CryptoHash::new(&Foo("also test".into())),
+            ExecutedBlock {
+                block: get_block(),
+                effects: vec![],
+                state_hash: CryptoHash::new(&Foo("also test".into())),
+            },
             Default::default(),
         )];
         let request = HandleCertificateRequest {
@@ -651,11 +655,11 @@ pub mod tests {
             },
             owner: Owner::from(KeyPair::generate().public()),
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
-            blobs: vec![HashedValue::new_confirmed(
-                get_block(),
-                vec![],
-                CryptoHash::new(&Foo("execution state".into())),
-            )],
+            blobs: vec![HashedValue::new_confirmed(ExecutedBlock {
+                block: get_block(),
+                effects: vec![],
+                state_hash: CryptoHash::new(&Foo("execution state".into())),
+            })],
         };
 
         round_trip_check::<_, grpc::BlockProposal>(block_proposal);

@@ -153,10 +153,7 @@ where
         let mut client = self.client.lock().await;
         client.synchronize_from_validators().await?;
         let certificates = client.process_inbox().await?;
-        let hashes = certificates
-            .into_iter()
-            .map(|cert| cert.value.hash())
-            .collect();
+        let hashes = certificates.into_iter().map(|cert| cert.hash()).collect();
         Ok(hashes)
     }
 
@@ -175,7 +172,7 @@ where
         let certificate = client
             .transfer(owner, amount, recipient, user_data.unwrap_or_default())
             .await?;
-        Ok(certificate.value.hash())
+        Ok(certificate.hash())
     }
 
     /// Claims `amount` units of value from the given owner's account in
@@ -201,7 +198,7 @@ where
                 user_data.unwrap_or_default(),
             )
             .await?;
-        Ok(certificate.value.hash())
+        Ok(certificate.hash())
     }
 
     /// Creates (or activates) a new chain by installing the given authentication key.
@@ -220,7 +217,7 @@ where
         client.synchronize_from_validators().await?;
         client.process_inbox().await?;
         let certificate = client.close_chain().await?;
-        Ok(certificate.value.hash())
+        Ok(certificate.hash())
     }
 
     /// Changes the authentication key of the chain.
@@ -331,7 +328,7 @@ where
         let certificate = client
             .request_application(application_id, target_chain_id)
             .await?;
-        Ok(certificate.value.hash())
+        Ok(certificate.hash())
     }
 }
 

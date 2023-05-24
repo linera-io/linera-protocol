@@ -43,13 +43,12 @@ impl BlockBuilder {
         previous_block: Option<&Certificate>,
         validator: TestValidator,
     ) -> Self {
-        let previous_block_hash = previous_block.map(|certificate| certificate.value.hash());
+        let previous_block_hash = previous_block.map(|certificate| certificate.hash());
         let height = previous_block
             .map(|certificate| {
                 certificate
-                    .value
-                    .block()
-                    .height
+                    .value()
+                    .height()
                     .try_add_one()
                     .expect("Block height limit reached")
             })
@@ -121,16 +120,14 @@ impl BlockBuilder {
     pub(crate) async fn sign(mut self) -> Certificate {
         self.collect_incoming_messages().await;
 
-        let (effects, info) = self
+        let (executed, _) = self
             .validator
             .worker()
             .await
-            .stage_block_execution(&self.block)
+            .stage_block_execution(self.block)
             .await
             .expect("Failed to execute block");
-        let state_hash = info.info.state_hash.expect("Missing execution state hash");
-
-        let value = HashedValue::new_confirmed(self.block, effects, state_hash);
+        let value = HashedValue::new_confirmed(executed);
         let vote = LiteVote::new(value.lite(), self.validator.key_pair());
         let mut builder = SignatureAggregator::new(value, self.validator.committee());
         builder

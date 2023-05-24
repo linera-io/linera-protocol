@@ -13,8 +13,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, HashedValue, LiteCertificate, Medium,
-        Message, Origin, OutgoingEffect, Target, ValueKind,
+        Block, BlockAndRound, BlockProposal, Certificate, ExecutedBlock, HashedValue,
+        LiteCertificate, Medium, Message, Origin, Target, Value,
     },
     ChainManagerOutcome, ChainStateView,
 };
@@ -37,7 +37,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::sync::{oneshot, Mutex};
-use tracing::{info, instrument, trace, warn};
+use tracing::{error, info, instrument, trace, warn};
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -337,13 +337,18 @@ where
     /// Tries to execute a block proposal without any verification other than block execution.
     pub async fn stage_block_execution(
         &mut self,
-        block: &Block,
-    ) -> Result<(Vec<OutgoingEffect>, ChainInfoResponse), WorkerError> {
+        block: Block,
+    ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        let effects = chain.execute_block(block).await?;
-        let info = ChainInfoResponse::new(&chain, None);
+        let (effects, state_hash) = chain.execute_block(&block).await?;
+        let response = ChainInfoResponse::new(&chain, None);
+        let executed = ExecutedBlock {
+            block,
+            effects,
+            state_hash,
+        };
         // Do not save the new state.
-        Ok((effects, info))
+        Ok((executed, response))
     }
 
     // Schedule a notification when cross-chain messages are delivered up to the given height.
@@ -466,11 +471,14 @@ where
         blobs: &[HashedValue],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        assert!(
-            certificate.value.is_confirmed(),
-            "Expecting a confirmation certificate"
-        );
-        let block = certificate.value.block();
+        let Value::ConfirmedBlock { executed } = certificate.value() else {
+            panic!("Expecting a confirmation certificate");
+        };
+        let ExecutedBlock {
+            block,
+            effects,
+            state_hash,
+        } = executed;
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         // Check that the chain is active and ready for this confirmation.
         let tip = chain.tip_state.get();
@@ -533,21 +541,18 @@ where
         result_certificate?;
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
-        let verified_effects = chain.execute_block(block).await?;
+        // We should always agree on the effects and state hash.
+        let (verified_effects, verified_state_hash) = chain.execute_block(block).await?;
+        ensure!(*effects == verified_effects, WorkerError::IncorrectEffects);
         ensure!(
-            *certificate.value.effects() == verified_effects,
-            WorkerError::IncorrectEffects
+            *state_hash == verified_state_hash,
+            WorkerError::IncorrectStateHash
         );
         // Advance to next block height.
         let tip = chain.tip_state.get_mut();
-        tip.block_hash = Some(certificate.value.hash());
+        tip.block_hash = Some(certificate.hash());
         tip.next_block_height.try_add_assign_one()?;
-        chain.confirmed_log.push(certificate.value.hash());
-        // We should always agree on the state hash.
-        ensure!(
-            *chain.execution_state_hash.get() == Some(certificate.value.state_hash()),
-            WorkerError::IncorrectStateHash
-        );
+        chain.confirmed_log.push(certificate.hash());
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         let mut actions = self.create_network_actions(&mut chain).await?;
         actions.notifications.push(Notification {
@@ -626,11 +631,10 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let round = match certificate.value.kind() {
-            ValueKind::ValidatedBlock { round } => round,
-            ValueKind::ConfirmedBlock => panic!("Expecting a validation certificate"),
+        let (block, round) = match certificate.value() {
+            Value::ValidatedBlock { executed, round } => (&executed.block, *round),
+            Value::ConfirmedBlock { .. } => panic!("Expecting a validation certificate"),
         };
-        let block = certificate.value.block();
         // Check that the chain is active and ready for this confirmation.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
@@ -691,23 +695,23 @@ where
             certificates,
         )?;
         let Some(last_updated_height) =
-            certificates.last().map(|cert| cert.value.block().height) else {
+            certificates.last().map(|cert| cert.value().height()) else {
             return Ok(None);
         };
         // Process the received messages in certificates.
         self.storage.write_certificates(&certificates).await?;
         for certificate in certificates {
-            let block = certificate.value.block();
-            // Update the staged chain state with the received block.
-            chain
-                .receive_block(
-                    origin,
-                    block.height,
-                    block.timestamp,
-                    certificate.value.effects().clone(),
-                    certificate.value.hash(),
-                )
-                .await?;
+            let hash = certificate.hash();
+            match certificate.value.into_inner() {
+                Value::ConfirmedBlock { executed } => {
+                    // Update the staged chain state with the received block.
+                    chain.receive_block(origin, executed, hash).await?
+                }
+                value => {
+                    error!(?value, "Unexpected value in cross-chain message");
+                    continue;
+                }
+            }
         }
         if !self.allow_inactive_chains && !chain.is_active() {
             // Refuse to create a chain state if the chain is still inactive by
@@ -730,7 +734,7 @@ where
         if self.recent_values.contains(&hash) {
             return;
         }
-        if value.is_validated() {
+        if value.inner().is_validated() {
             // Cache the corresponding confirmed block, too, in case we get a certificate.
             let conf_value = value.clone().into_confirmed();
             let conf_hash = conf_value.hash();
@@ -782,7 +786,7 @@ where
             else { return Ok(None) };
 
         let index = usize::try_from(effect_id.index).map_err(|_| ArithmeticError::Overflow)?;
-        let Some(outgoing_effect) = certificate.value.effects().get(index).cloned()
+        let Some(outgoing_effect) = certificate.value().effects().get(index).cloned()
             else { return Ok(None) };
 
         let application_id = outgoing_effect.effect.application_id();
@@ -800,7 +804,7 @@ where
         let mut chain = self.storage.load_active_chain(chain_id).await?;
         let mut inbox = chain.inboxes.try_load_entry_mut(&origin).await?;
 
-        let certificate_hash = certificate.value.hash();
+        let certificate_hash = certificate.hash();
         let Some(event) =
             inbox
                 .added_events
@@ -892,14 +896,12 @@ where
             tokio::time::sleep(Duration::from_micros(time_till_block)).await;
         }
         let (effects, state_hash) = {
-            let effects = chain.execute_block(block).await?;
-            let hash = chain.execution_state_hash.get().expect("was just computed");
-            // Verify that the resulting chain would have no unconfirmed incoming
-            // messages.
+            let (effects, state_hash) = chain.execute_block(block).await?;
+            // Verify that the resulting chain would have no unconfirmed incoming messages.
             chain.validate_incoming_messages().await?;
             // Reset all the staged changes as we were only validating things.
             chain.rollback();
-            (effects, hash)
+            (effects, state_hash)
         };
         // Create the vote and store it in the chain state.
         let manager = chain.manager.get_mut();
@@ -933,8 +935,8 @@ where
     /// Processes a certificate.
     #[instrument(skip_all, fields(
         nick = self.nickname,
-        chain_id = format!("{:.8}", certificate.value.block().chain_id),
-        height = %certificate.value.block().height,
+        chain_id = format!("{:.8}", certificate.value().chain_id()),
+        height = %certificate.value().height(),
     ))]
     async fn handle_certificate(
         &mut self,
@@ -944,19 +946,19 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
         ensure!(
-            certificate.value.is_confirmed() || blobs.is_empty(),
+            certificate.value().is_confirmed() || blobs.is_empty(),
             WorkerError::UnneededValue {
                 value_hash: blobs[0].hash(),
             }
         );
-        let (info, actions) = match certificate.value.kind() {
-            ValueKind::ValidatedBlock { .. } => {
+        let (info, actions) = match certificate.value() {
+            Value::ValidatedBlock { .. } => {
                 // Confirm the validated block.
                 self.process_validated_block(certificate.clone())
                     .await
                     .map(|info| (info, NetworkActions::default()))?
             }
-            ValueKind::ConfirmedBlock => {
+            Value::ConfirmedBlock { .. } => {
                 // Execute the confirmed block.
                 self.process_confirmed_block(
                     certificate.clone(),
@@ -1059,7 +1061,7 @@ where
                     let origin = Origin { sender, medium };
                     let app_certificates = certificates
                         .iter()
-                        .filter(|cert| heights.binary_search(&cert.value.block().height).is_ok())
+                        .filter(|cert| heights.binary_search(&cert.value().height()).is_ok())
                         .cloned()
                         .collect();
                     if let Some(height) = self
@@ -1166,48 +1168,49 @@ impl<'a> CrossChainUpdateHelper<'a> {
         let mut skipped_len = 0;
         let mut trusted_len = 0;
         for (i, certificate) in certificates.iter().enumerate() {
+            let value = certificate.value();
             // Certificates are confirming blocks.
-            if !certificate.value.is_confirmed() {
-                return Err(WorkerError::InvalidCrossChainRequest);
-            };
-            let block = certificate.value.block();
+            ensure!(value.is_confirmed(), WorkerError::InvalidCrossChainRequest);
             // Make sure that the chain_id is correct.
             ensure!(
-                origin.sender == block.chain_id,
+                origin.sender == value.chain_id(),
                 WorkerError::InvalidCrossChainRequest
             );
             // Make sure that heights are increasing.
             ensure!(
-                latest_height < Some(block.height),
+                latest_height < Some(value.height()),
                 WorkerError::InvalidCrossChainRequest
             );
-            latest_height = Some(block.height);
+            latest_height = Some(value.height());
             // Check if the block has been received already.
-            if block.height < next_height_to_receive {
+            if value.height() < next_height_to_receive {
                 skipped_len = i + 1;
             }
             // Check if the height is trusted or the epoch is trusted.
             if self.allow_messages_from_deprecated_epochs
-                || Some(block.height) <= last_anticipated_block_height
-                || Some(block.epoch) >= self.current_epoch
-                || self.committees.contains_key(&block.epoch)
+                || Some(value.height()) <= last_anticipated_block_height
+                || Some(value.epoch()) >= self.current_epoch
+                || self.committees.contains_key(&value.epoch())
             {
                 trusted_len = i + 1;
             }
         }
         if skipped_len > 0 {
-            let sample_block = certificates[skipped_len - 1].value.block();
+            let sample_value = certificates[skipped_len - 1].value();
             info!(
                 "[{}] Ignoring repeated messages to {recipient:?} from {origin:?} at height {}",
-                self.nickname, sample_block.height,
+                self.nickname,
+                sample_value.height(),
             );
         }
         if skipped_len < certificates.len() && trusted_len < certificates.len() {
-            let sample_block = certificates[trusted_len].value.block();
+            let sample_value = certificates[trusted_len].value();
             warn!(
                 "[{}] Refusing messages to {recipient:?} from {origin:?} at height {} \
                  because the epoch {:?} is not trusted any more",
-                self.nickname, sample_block.height, sample_block.epoch,
+                self.nickname,
+                sample_value.height(),
+                sample_value.epoch(),
             );
         }
         let certificates = if skipped_len < trusted_len {

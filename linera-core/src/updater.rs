@@ -11,7 +11,7 @@ use linera_base::{
     data_types::BlockHeight,
     identifiers::{ChainDescription, ChainId, EffectId},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, LiteVote};
+use linera_chain::data_types::{BlockProposal, Certificate, LiteVote, Value};
 use linera_execution::committee::{Committee, ValidatorName};
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -140,7 +140,11 @@ where
                 Err(err) => Err(err),
             };
             if let Err(NodeError::ApplicationBytecodesNotFound(locations)) = &result {
-                let required = certificate.value.block().bytecode_locations();
+                let required = match certificate.value() {
+                    Value::ConfirmedBlock { executed } | Value::ValidatedBlock { executed, .. } => {
+                        executed.block.bytecode_locations()
+                    }
+                };
                 for location in locations {
                     if !required.contains_key(location) {
                         let hash = location.certificate_hash;
@@ -369,7 +373,7 @@ where
             | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
                 proposal.content.block.height
             }
-            CommunicateAction::FinalizeBlock(certificate) => certificate.value.block().height,
+            CommunicateAction::FinalizeBlock(certificate) => certificate.value().height(),
             CommunicateAction::AdvanceToNextBlockHeight(seq) => *seq,
         };
         // Update the validator with missing information, if needed.

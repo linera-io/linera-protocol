@@ -16,7 +16,7 @@ use linera_base::{
     data_types::Amount,
     identifiers::{ChainDescription, ChainId, Destination, Owner},
 };
-use linera_chain::data_types::OutgoingEffect;
+use linera_chain::data_types::{OutgoingEffect, Value};
 use linera_execution::{
     pricing::Pricing, Bytecode, Effect, Operation, SystemEffect, UserApplicationDescription,
     WasmRuntime,
@@ -442,7 +442,7 @@ where
         .await?;
 
     assert!(cert
-        .value
+        .value()
         .effects()
         .iter()
         .any(|OutgoingEffect { destination, effect, .. }| {
@@ -456,11 +456,14 @@ where
     receiver.receive_certificate(cert).await.unwrap();
     let certs = receiver.process_inbox().await.unwrap();
     assert_eq!(certs.len(), 1);
-    let messages = &certs[0].value.block().incoming_messages;
+    let messages = match certs[0].value() {
+        Value::ConfirmedBlock { executed } => &executed.block.incoming_messages,
+        Value::ValidatedBlock { .. } => panic!("Unexpected value"),
+    };
     assert!(messages.iter().any(|msg| matches!(
         &msg.event.effect,
         Effect::System(SystemEffect::RegisterApplications { applications })
-        if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.value.hash())
+        if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.hash())
     )));
     assert!(messages
         .iter()
@@ -482,13 +485,16 @@ where
     receiver.receive_certificate(cert).await?;
     let certs = receiver.process_inbox().await?;
     assert_eq!(certs.len(), 1);
-    let messages = &certs[0].value.block().incoming_messages;
+    let messages = match certs[0].value() {
+        Value::ConfirmedBlock { executed } => &executed.block.incoming_messages,
+        Value::ValidatedBlock { .. } => panic!("Unexpected value"),
+    };
     // The new block should _not_ contain another `RegisterApplications` effect, because the
     // application is already registered.
     assert!(!messages.iter().any(|msg| matches!(
         &msg.event.effect,
         Effect::System(SystemEffect::RegisterApplications { applications })
-        if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.value.hash())
+        if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.hash())
     )));
     assert!(messages
         .iter()
@@ -614,10 +620,11 @@ where
     assert_eq!(certs.len(), 1);
 
     // There should be a message receiving the new post.
-    assert!(certs[0]
-        .value
-        .block()
-        .incoming_messages
+    let messages = match certs[0].value() {
+        Value::ConfirmedBlock { executed } => &executed.block.incoming_messages,
+        Value::ValidatedBlock { .. } => panic!("Unexpected value"),
+    };
+    assert!(messages
         .iter()
         .any(|msg| matches!(&msg.event.effect, Effect::User { .. })));
 

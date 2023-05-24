@@ -290,6 +290,15 @@ Event:
         TYPENAME: Timestamp
     - effect:
         TYPENAME: Effect
+ExecutedBlock:
+  STRUCT:
+    - block:
+        TYPENAME: Block
+    - effects:
+        SEQ:
+          TYPENAME: OutgoingEffect
+    - state_hash:
+        TYPENAME: CryptoHash
 HandleCertificateRequest:
   STRUCT:
     - certificate:
@@ -803,23 +812,17 @@ ValidatorState:
     - network_address: STR
     - votes: U64
 Value:
-  STRUCT:
-    - block:
-        TYPENAME: Block
-    - effects:
-        SEQ:
-          TYPENAME: OutgoingEffect
-    - state_hash:
-        TYPENAME: CryptoHash
-    - kind:
-        TYPENAME: ValueKind
-ValueKind:
   ENUM:
     0:
       ValidatedBlock:
         STRUCT:
+          - executed:
+              TYPENAME: ExecutedBlock
           - round:
               TYPENAME: RoundNumber
     1:
-      ConfirmedBlock: UNIT
+      ConfirmedBlock:
+        STRUCT:
+          - executed:
+              TYPENAME: ExecutedBlock
 

@@ -16,7 +16,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, HashedValue, LiteCertificate, Origin, OutgoingEffect,
+        Block, BlockProposal, Certificate, ExecutedBlock, HashedValue, LiteCertificate, Origin,
     },
     ChainError, ChainManagerInfo,
 };
@@ -343,11 +343,11 @@ where
 {
     pub(crate) async fn stage_block_execution(
         &self,
-        block: &Block,
-    ) -> Result<(Vec<OutgoingEffect>, ChainInfoResponse), NodeError> {
+        block: Block,
+    ) -> Result<(ExecutedBlock, ChainInfoResponse), NodeError> {
         let mut node = self.node.lock().await;
-        let (effects, info) = node.state.stage_block_execution(block).await?;
-        Ok((effects, info))
+        let (executed, info) = node.state.stage_block_execution(block).await?;
+        Ok((executed, info))
     }
 
     async fn try_process_certificates<A>(
@@ -362,15 +362,15 @@ where
     {
         let mut info = None;
         for certificate in certificates {
-            let hash = certificate.value.hash();
-            if !certificate.value.is_confirmed() || certificate.value.block().chain_id != chain_id {
+            let hash = certificate.hash();
+            if !certificate.value().is_confirmed() || certificate.value().chain_id() != chain_id {
                 // The certificate is not as expected. Give up.
                 tracing::warn!("Failed to process network certificate {}", hash);
                 return info;
             }
             let mut result = self.handle_certificate(certificate.clone(), vec![]).await;
             if let Err(NodeError::ApplicationBytecodesNotFound(locations)) = &result {
-                let chain_id = certificate.value.chain_id();
+                let chain_id = certificate.value().chain_id();
                 let mut blobs = Vec::new();
                 for maybe_blob in future::join_all(locations.iter().map(|location| {
                     let mut client = client.clone();
@@ -664,8 +664,8 @@ where
                 }
             }
             if let Some(cert) = manager.requested_locked {
-                if cert.value.is_validated() && cert.value.block().chain_id == chain_id {
-                    let hash = cert.value.hash();
+                if cert.value().is_validated() && cert.value().chain_id() == chain_id {
+                    let hash = cert.hash();
                     if let Err(error) = self.handle_certificate(cert, vec![]).await {
                         tracing::warn!("Skipping certificate {}: {}", hash, error);
                     }

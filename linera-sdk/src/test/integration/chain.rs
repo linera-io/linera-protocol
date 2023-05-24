@@ -212,9 +212,8 @@ impl ActiveChain {
             .await
             .as_ref()
             .expect("Block was not successfully added")
-            .value
-            .block()
-            .height
+            .value()
+            .height()
     }
 
     /// Subscribes this microchain to the bytecodes published on the `publisher_id` microchain.
@@ -339,7 +338,7 @@ impl ActiveChain {
                 .expect("Failed to load certificate to search for bytecode location")
                 .expect("Bytecode location not found");
 
-            let effect_index = certificate.value.effects().iter().position(|effect| {
+            let effect_index = certificate.value().effects().iter().position(|effect| {
                 matches!(
                     &effect.effect,
                     Effect::System(SystemEffect::BytecodeLocations { locations })
