@@ -37,7 +37,7 @@ use linera_execution::{
 };
 use linera_views::{
     batch::Batch,
-    common::{Context, ContextFromDb, KeyValueStoreClient},
+    common::{Context, ContextFromDb, DatabaseConsistencyError, KeyValueStoreClient},
     views::{CryptoHashView, RootView, View, ViewError},
 };
 use metrics::increment_counter;
@@ -253,7 +253,8 @@ impl<CL> Store for DbStoreClient<CL>
 where
     CL: KeyValueStoreClient + Clone + Send + Sync + 'static,
     ViewError: From<<CL as KeyValueStoreClient>::Error>,
-    <CL as KeyValueStoreClient>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
+    <CL as KeyValueStoreClient>::Error:
+        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     type Context = ContextFromDb<ChainRuntimeContext<Self>, CL>;
     type ContextError = <CL as KeyValueStoreClient>::Error;
@@ -365,7 +366,7 @@ where
     ) -> Result<(), ViewError> {
         let id = certificate.value.inner().chain_id().to_string();
         increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id)]);
-        let hash = certificate.hash();
+        let hash = certificate.value.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         batch.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;

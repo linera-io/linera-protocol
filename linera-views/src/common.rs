@@ -10,18 +10,23 @@
 //! [trait1]: common::KeyValueStoreClient
 //! [trait2]: common::Context
 
-use crate::{batch::Batch, views::ViewError};
+use crate::{
+    batch::{Batch, WriteOperation},
+    views::ViewError,
+};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     fmt::{Debug, Display},
     future::Future,
+    mem,
     ops::{
         Bound,
         Bound::{Excluded, Included, Unbounded},
     },
     time::{Duration, Instant},
 };
+use thiserror::Error;
 
 #[cfg(test)]
 #[path = "unit_tests/common_tests.rs"]
@@ -40,6 +45,39 @@ pub(crate) enum Update<T> {
 
 /// The minimum value for the view tags. Values in 0..MIN_VIEW_TAG are used for other purposes.
 pub(crate) const MIN_VIEW_TAG: u8 = 1;
+
+/// Data type indicating that the database is not consistent
+#[derive(Error, Debug)]
+pub enum DatabaseConsistencyError {
+    /// The key is of length 0 so we cannot extract the first byte
+    #[error("key of length 0, so we cannot extract the first byte")]
+    ZeroLengthKey,
+
+    /// When using the splitting scheme the first byte gives the status. So, the value should have non-zero length
+    #[error("value of length 0, so we cannot extract the first byte")]
+    ZeroLengthValue,
+
+    /// When using thr splitting scheme, the first byte value indicates the nature. 0 is classic, 1 is split. Any other
+    /// value is an error
+    #[error("first value is different from 0 and 1")]
+    FirstValueDifferentZeroOne,
+
+    /// Last byte of key different from 0 or 1
+    #[error("last byte of key is different from 0 and 1")]
+    LastByteOfKeyDifferentZeroOne,
+
+    /// In the splitting scheme a certain number of segments was specified, but some are missing
+    #[error("segment is missing from the database")]
+    MissingSegment,
+
+    /// We expect that the segments arrive sequentially
+    #[error("segment index is not what was expected")]
+    IncorrectIndexEntry,
+
+    /// In the value, we should have a count entry.
+    #[error("no count of size u32 is available in the value")]
+    NoCountAvailable,
+}
 
 /// When wanting to find the entries in a BTreeMap with a specific prefix,
 /// one option is to iterate over all keys. Another is to select an interval
@@ -60,7 +98,9 @@ pub(crate) fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
     Unbounded
 }
 
-pub(crate) fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
+/// Compute an interval so that a vector has key_prefix as a prefix
+/// if and only if it belongs to the range.
+pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     let upper_bound = get_upper_bound(&key_prefix);
     (Included(key_prefix), upper_bound)
 }
@@ -114,6 +154,9 @@ pub trait KeyValueStoreClient {
     /// Maximum number of simultaneous connections
     const MAX_CONNECTIONS: usize;
 
+    /// The maximal size of values that can be stored
+    const MAX_VALUE_SIZE: usize;
+
     /// The error type.
     type Error: Debug;
 
@@ -148,7 +191,7 @@ pub trait KeyValueStoreClient {
     /// The journal is located at the `base_key`.
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error>;
 
-    /// Reads a single `key` and deserialize the result if present.
+    /// Reads a single `key` and deserializes the result if present.
     async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
     where
         Self::Error: From<bcs::Error>,
@@ -169,6 +212,321 @@ pub trait KeyValueStoreClient {
             values.push(from_bytes_opt(entry)?);
         }
         Ok(values)
+    }
+}
+
+/// Implement a reader of data that splits the big values into multiple keys.
+/// Some databases have a design with relatively small size for values (like 400 kB)
+/// which forces us to split the value into several small block.
+/// Design is the following:
+/// ---We have classic key, named 'logical key" which contains the nature
+///    of the value and a part of the value.
+///    logical key are of the form [key , 0]
+///    logical value are of the form [0, value] if classic
+///                               or [0, * * * * first_segment] if segmented
+///        the [* * * *] represent the size of the block
+/// ---The remaining segment keys are of the form [key * * * * 1]
+///    with [* * * *] the index of the segment in question.
+///
+/// The effective working of the system relies on a number of design choices.
+/// ---In the retrieval by the "find_keys_by_prefix" and similar, the keys are
+///    returned in lexicographic order.
+/// ---The count and indices are serialized as u32 and the serialization is done
+///    so that the u32 ordering is the same as the lexicographic ordering. So, we
+///    get first the logical key and then the segment keys one by one in the correct
+///    order.
+/// ---Suppose that we have written a (key,value1) with several segments and then
+///    we replace by a (key,value2) which has less segment or uses just a logical key.
+///    Our choice is to leave the old segments in the database. Same with delete:
+///    we just delete the logical key.
+/// ---We avoid the overflowing of the system by the following trick: When we delete
+///    a view, we do a delete by prefix, which thus deletes the old segments if present.
+#[derive(Clone)]
+pub struct KeyValueStoreClientBigValue<K> {
+    client: K,
+}
+
+#[async_trait]
+impl<K> KeyValueStoreClient for KeyValueStoreClientBigValue<K>
+where
+    K: KeyValueStoreClient + Send + Sync,
+    K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
+{
+    const MAX_CONNECTIONS: usize = K::MAX_CONNECTIONS;
+    const MAX_VALUE_SIZE: usize = usize::MAX;
+    type Error = K::Error;
+    type Keys = Vec<Vec<u8>>;
+    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        let mut big_key = key.to_vec();
+        big_key.extend(&[0]);
+        let value = self.client.read_key_bytes(&big_key).await?;
+        let Some(value) = value else {
+            return Ok(None);
+        };
+        let first_value = value.first();
+        if first_value.is_none() {
+            return Err(DatabaseConsistencyError::ZeroLengthValue.into());
+        }
+        let first_value = *first_value.unwrap();
+        if first_value != 0 && first_value != 1 {
+            return Err(DatabaseConsistencyError::FirstValueDifferentZeroOne.into());
+        }
+        if first_value == 0 {
+            return Ok(Some(value[1..].to_vec()));
+        }
+        let count = Self::read_count_from_value(&value)?;
+        let mut big_value = value[5..].to_vec();
+        let mut big_keys = Vec::new();
+        for i in 1..count {
+            let big_key_segment = Self::get_segment_key(key, i)?;
+            big_keys.push(big_key_segment);
+        }
+        let segments = self.client.read_multi_key_bytes(big_keys).await?;
+        for segment in segments {
+            match segment {
+                None => {
+                    return Err(DatabaseConsistencyError::MissingSegment.into());
+                }
+                Some(segment) => {
+                    big_value.extend(segment);
+                }
+            }
+        }
+        Ok(Some(big_value))
+    }
+
+    async fn read_multi_key_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
+        let mut big_keys = Vec::new();
+        for key in &keys {
+            let mut big_key = key.clone();
+            big_key.extend(&[0]);
+            big_keys.push(big_key);
+        }
+        let values = self.client.read_multi_key_bytes(big_keys).await?;
+        let mut big_values = Vec::<Option<Vec<u8>>>::new();
+        let mut keys_add = Vec::new();
+        let mut n_blocks = Vec::new();
+        for (key, value) in keys.iter().zip(values) {
+            match value {
+                None => {
+                    n_blocks.push(0);
+                    big_values.push(None);
+                }
+                Some(value) => {
+                    let Some(&first_byte) = value.first() else {
+                        return Err(DatabaseConsistencyError::ZeroLengthValue.into());
+                    };
+                    if first_byte != 0 && first_byte != 1 {
+                        return Err(DatabaseConsistencyError::FirstValueDifferentZeroOne.into());
+                    }
+                    if first_byte == 0 {
+                        n_blocks.push(0);
+                        big_values.push(Some(value[1..].to_vec()));
+                    } else {
+                        let count = Self::read_count_from_value(&value)?;
+                        for i in 1..count {
+                            let big_key_segment = Self::get_segment_key(key, i)?;
+                            keys_add.push(big_key_segment);
+                        }
+                        n_blocks.push(count);
+                        big_values.push(Some(value[5..].to_vec()));
+                    }
+                }
+            }
+        }
+        if !keys_add.is_empty() {
+            let segments: Vec<Option<Vec<u8>>> = self.client.read_multi_key_bytes(keys_add).await?;
+            let mut pos = 0;
+            for (idx, count) in n_blocks.iter().enumerate() {
+                if count > &0 {
+                    let value: &mut Option<Vec<u8>> = big_values.get_mut(idx).unwrap();
+                    if let Some(ref mut value) = value {
+                        for _ in 1..*count {
+                            let segment: Vec<u8> = segments.get(pos).unwrap().clone().unwrap();
+                            value.extend(segment);
+                            pos += 1;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(big_values)
+    }
+
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+        let mut keys = Vec::new();
+        for big_key in self
+            .client
+            .find_keys_by_prefix(key_prefix)
+            .await?
+            .iterator()
+        {
+            let big_key = big_key?;
+            let len = big_key.len();
+            if len == 0 {
+                return Err(DatabaseConsistencyError::ZeroLengthKey.into());
+            }
+            let last_byte = big_key.get(len - 1).unwrap();
+            if last_byte == &0 {
+                let key = big_key[0..len - 1].to_vec();
+                keys.push(key);
+            } else if last_byte != &1 {
+                return Err(DatabaseConsistencyError::LastByteOfKeyDifferentZeroOne.into());
+            }
+        }
+        Ok(keys)
+    }
+
+    async fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValues, Self::Error> {
+        let mut key_values = Vec::new();
+        let mut key = Vec::new();
+        let mut big_value = Vec::new();
+        let mut count = 0;
+        let mut pos = 0;
+        for result in self
+            .client
+            .find_key_values_by_prefix(key_prefix)
+            .await?
+            .iterator()
+        {
+            let (big_key, value) = result?;
+            let len = big_key.len();
+            let last_byte = big_key.get(len - 1).unwrap();
+            if last_byte == &0 {
+                let first_value = value.first();
+                if first_value.is_none() {
+                    return Err(DatabaseConsistencyError::ZeroLengthValue.into());
+                }
+                let first_value = *first_value.unwrap();
+                if first_value != 0 && first_value != 1 {
+                    return Err(DatabaseConsistencyError::FirstValueDifferentZeroOne.into());
+                }
+                if first_value == 0 {
+                    let big_value = value[1..].to_vec();
+                    let key_loc = big_key[0..len - 1].to_vec();
+                    key_values.push((key_loc, big_value));
+                } else {
+                    count = Self::read_count_from_value(value)?;
+                    big_value.extend(value[5..].to_vec());
+                    key = big_key[0..len - 1].to_vec();
+                    pos = 1;
+                }
+            } else {
+                if last_byte != &1 {
+                    return Err(DatabaseConsistencyError::LastByteOfKeyDifferentZeroOne.into());
+                }
+                if big_key[..len - 5] == key {
+                    // key is matching so we might consider including it
+                    let idx = Self::read_index_from_key(big_key)?;
+                    if idx == pos && idx < count {
+                        big_value.extend(value);
+                        pos += 1;
+                        if pos == count {
+                            key_values.push((mem::take(&mut key), mem::take(&mut big_value)));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(key_values)
+    }
+
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
+        let mut batch_new = Batch::new();
+        for operation in batch.operations {
+            match operation {
+                WriteOperation::Delete { key } => {
+                    let mut big_key = key.to_vec();
+                    big_key.extend(&[0]);
+                    batch_new.delete_key(big_key);
+                }
+                WriteOperation::Put { key, value } => {
+                    let mut big_key = key.clone();
+                    big_key.extend(&[0]);
+                    if value.len() <= K::MAX_VALUE_SIZE {
+                        let mut value_ext = vec![0];
+                        value_ext.extend(&value);
+                        batch_new.put_key_value_bytes(big_key, value_ext);
+                    } else {
+                        let mut first_chunk = Vec::new();
+                        let mut pos: u32 = 0;
+                        for value_chunk in value.chunks(K::MAX_VALUE_SIZE) {
+                            if pos == 0 {
+                                first_chunk = value_chunk.to_vec();
+                            } else {
+                                let big_key_segment = Self::get_segment_key(&key, pos)?;
+                                batch_new
+                                    .put_key_value_bytes(big_key_segment, value_chunk.to_vec());
+                            }
+                            pos += 1;
+                        }
+                        let value_ext = Self::get_initial_count_first_chunk(pos, &first_chunk)?;
+                        batch_new.put_key_value_bytes(big_key, value_ext);
+                    }
+                }
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    batch_new.delete_key_prefix(key_prefix);
+                }
+            }
+        }
+        self.client.write_batch(batch_new, base_key).await
+    }
+
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
+        self.client.clear_journal(base_key).await
+    }
+}
+
+impl<K> KeyValueStoreClientBigValue<K>
+where
+    K: KeyValueStoreClient + Send + Sync,
+    K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
+{
+    /// Create a new client that deals with big values from one that does not.
+    pub fn new(client: K) -> Self {
+        KeyValueStoreClientBigValue { client }
+    }
+
+    fn read_count_from_value(value: &[u8]) -> Result<u32, K::Error> {
+        if value.len() < 5 {
+            return Err(DatabaseConsistencyError::NoCountAvailable.into());
+        }
+        let mut bytes = value[1..5].to_vec();
+        bytes.reverse();
+        Ok(bcs::from_bytes::<u32>(&bytes)?)
+    }
+
+    fn get_segment_key(key: &[u8], index: u32) -> Result<Vec<u8>, K::Error> {
+        let mut big_key_segment = key.to_vec();
+        let mut bytes = bcs::to_bytes(&index)?;
+        bytes.reverse();
+        big_key_segment.extend(bytes);
+        big_key_segment.extend(&[1]);
+        Ok(big_key_segment)
+    }
+
+    fn read_index_from_key(key: &[u8]) -> Result<u32, K::Error> {
+        let len = key.len();
+        let mut bytes = key[len - 5..len - 1].to_vec();
+        bytes.reverse();
+        Ok(bcs::from_bytes::<u32>(&bytes)?)
+    }
+
+    fn get_initial_count_first_chunk(count: u32, first_chunk: &[u8]) -> Result<Vec<u8>, K::Error> {
+        let mut bytes = bcs::to_bytes(&count)?;
+        bytes.reverse();
+        let mut value_ext = vec![1];
+        value_ext.extend(bytes);
+        value_ext.extend(first_chunk);
+        Ok(value_ext)
     }
 }
 
@@ -280,7 +638,7 @@ pub trait Context {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
 
-    /// Finds keys matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
+    /// Finds the keys matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error>;
 
     /// Finds the `(key,value)` pairs matching the `key_prefix`. The `key_prefix` is not included in the returned keys.

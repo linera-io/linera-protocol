@@ -111,7 +111,6 @@ where
 
             tweaked_test_case.insert(commit_location + 1, CommitAndReload);
             tweaked_test_case.push(CommitAndReload);
-
             run_test_queue_operations(tweaked_test_case, contexts.new_context().await?).await?;
         }
     }
@@ -131,7 +130,6 @@ where
     let mut queue = QueueView::load(context.clone()).await?;
 
     check_queue_state(&mut queue, &expected_state).await?;
-
     for operation in operations {
         match operation {
             Operation::PushBack(new_item) => {

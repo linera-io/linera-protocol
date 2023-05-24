@@ -1674,7 +1674,6 @@ dependencies = [
 name = "linera-storage"
 version = "0.2.0"
 dependencies = [
- "async-lock",
  "async-trait",
  "bcs",
  "dashmap",
@@ -1709,6 +1708,7 @@ dependencies = [
  "serde",
  "sha3",
  "static_assertions",
+ "tempfile",
  "thiserror",
  "tokio",
  "tokio-test",

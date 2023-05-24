@@ -3,8 +3,11 @@
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_upper_bound, ContextFromDb, KeyValueStoreClient},
-    lru_caching::LruCachingKeyValueClient,
+    common::{
+        get_upper_bound, ContextFromDb, DatabaseConsistencyError, KeyValueStoreClient,
+        KeyValueStoreClientBigValue,
+    },
+    lru_caching::{LruCachingKeyValueClient, TEST_CACHE_SIZE},
 };
 use async_trait::async_trait;
 use std::{
@@ -12,6 +15,7 @@ use std::{
     path::Path,
     sync::Arc,
 };
+use tempfile::TempDir;
 use thiserror::Error;
 
 /// The RocksDb client in use.
@@ -20,31 +24,12 @@ pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 /// The internal client
 pub type DbInternal = Arc<DB>;
 
-/// A shared DB client for RocksDB implementing LruCaching
-#[derive(Clone)]
-pub struct RocksdbClient {
-    client: LruCachingKeyValueClient<DbInternal>,
-}
-
-impl RocksdbClient {
-    /// Creates a rocksdb database from a specified path
-    pub fn new<P: AsRef<Path>>(path: P, cache_size: usize) -> RocksdbClient {
-        let mut options = rocksdb::Options::default();
-        options.create_if_missing(true);
-        let db = DB::open(&options, path).unwrap();
-        let client = Arc::new(db);
-        Self {
-            client: LruCachingKeyValueClient::new(client, cache_size),
-        }
-    }
-}
-
-/// An implementation of [`crate::common::Context`] based on Rocksdb
-pub type RocksdbContext<E> = ContextFromDb<E, RocksdbClient>;
-
 #[async_trait]
 impl KeyValueStoreClient for DbInternal {
     const MAX_CONNECTIONS: usize = 1;
+    // The maximum size of values in RocksDB is 3 GB
+    // That is 3221225472 and so for offset reason we decrease by 400
+    const MAX_VALUE_SIZE: usize = 3221225072;
     type Error = RocksdbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -170,9 +155,41 @@ impl KeyValueStoreClient for DbInternal {
     }
 }
 
+/// A shared DB client for RocksDB implementing LruCaching
+#[derive(Clone)]
+pub struct RocksdbClient {
+    client: LruCachingKeyValueClient<KeyValueStoreClientBigValue<DbInternal>>,
+}
+
+impl RocksdbClient {
+    /// Creates a rocksdb database from a specified path
+    pub fn new<P: AsRef<Path>>(path: P, cache_size: usize) -> RocksdbClient {
+        let mut options = rocksdb::Options::default();
+        options.create_if_missing(true);
+        let db = DB::open(&options, path).unwrap();
+        let client = Arc::new(db);
+        let client = KeyValueStoreClientBigValue::new(client);
+        Self {
+            client: LruCachingKeyValueClient::new(client, cache_size),
+        }
+    }
+}
+
+/// Create a rocksdb database client to be used for tests.
+pub fn create_rocksdb_test_client() -> RocksdbClient {
+    let dir = TempDir::new().unwrap();
+    RocksdbClient::new(dir, TEST_CACHE_SIZE)
+}
+
+/// An implementation of [`crate::common::Context`] based on Rocksdb
+pub type RocksdbContext<E> = ContextFromDb<E, RocksdbClient>;
+
 #[async_trait]
 impl KeyValueStoreClient for RocksdbClient {
     const MAX_CONNECTIONS: usize = 1;
+    // The maximum size of values in RocksDB is 3G
+    // That is 3221225472 and so for offset reason we decrease by 40
+    const MAX_VALUE_SIZE: usize = 3221225432;
     type Error = RocksdbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -236,6 +253,10 @@ pub enum RocksdbContextError {
     /// BCS serialization error.
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
+
+    /// The database is not coherent
+    #[error(transparent)]
+    DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 }
 
 impl From<RocksdbContextError> for crate::views::ViewError {

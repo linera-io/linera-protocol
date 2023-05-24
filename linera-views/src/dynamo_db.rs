@@ -3,7 +3,10 @@
 
 use crate::{
     batch::{Batch, DeletePrefixExpander, SimpleUnorderedBatch},
-    common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient, MIN_VIEW_TAG},
+    common::{
+        ContextFromDb, DatabaseConsistencyError, KeyIterable, KeyValueIterable,
+        KeyValueStoreClient, KeyValueStoreClientBigValue, MIN_VIEW_TAG,
+    },
     localstack,
     lru_caching::LruCachingKeyValueClient,
 };
@@ -69,6 +72,11 @@ const MAX_BATCH_WRITE_ITEM_BYTES: usize = 16777216;
 /// Fundamental constant of DynamoDB: The maximum number of simultaneous connections is 50.
 /// See https://stackoverflow.com/questions/13128613/amazon-dynamo-db-max-client-connections
 const MAX_CONNECTIONS: usize = 50;
+
+/// The limit on size is 400 kB for DynamoDb
+/// Which is 409600 bytes. To be safe, we remove 600 bytes. This is a lot actually.
+/// In theory, we just need to remove 1 + 4 bytes
+const MAX_VALUE_SIZE: usize = 409000;
 
 /// Builds the key attributes for a table item.
 ///
@@ -644,6 +652,7 @@ impl DynamoDbClientInternal {
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClientInternal {
     const MAX_CONNECTIONS: usize = MAX_CONNECTIONS;
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
@@ -723,15 +732,16 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
 /// A shared DB client for DynamoDb implementing LruCaching
 #[derive(Clone)]
 pub struct DynamoDbClient {
-    client: LruCachingKeyValueClient<DynamoDbClientInternal>,
+    client: LruCachingKeyValueClient<KeyValueStoreClientBigValue<DynamoDbClientInternal>>,
 }
 
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClient {
     const MAX_CONNECTIONS: usize = MAX_CONNECTIONS;
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     type Error = DynamoDbContextError;
-    type Keys = DynamoDbKeys;
-    type KeyValues = DynamoDbKeyValues;
+    type Keys = Vec<Vec<u8>>;
+    type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
         self.client.read_key_bytes(key).await
@@ -775,6 +785,7 @@ impl DynamoDbClient {
         cache_size: usize,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let (client, table_name) = DynamoDbClientInternal::from_config(config, table).await?;
+        let client = KeyValueStoreClientBigValue::new(client);
         Ok((
             Self {
                 client: LruCachingKeyValueClient::new(client, cache_size),
@@ -967,6 +978,10 @@ pub enum DynamoDbContextError {
     /// The recovery failed.
     #[error("The DynamoDB database recovery failed")]
     DatabaseRecoveryFailed,
+
+    /// The database is not coherent
+    #[error(transparent)]
+    DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 
     /// The length of the value should be at most 400KB.
     #[error("The DynamoDB value should be less than 400KB")]

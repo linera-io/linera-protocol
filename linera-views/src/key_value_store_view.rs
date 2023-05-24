@@ -748,6 +748,9 @@ where
     ViewError: From<C::Error>,
 {
     const MAX_CONNECTIONS: usize = C::MAX_CONNECTIONS;
+    // Since the KeyValueStoreClient is based on another context
+    // the splitting is done by the lower ranked context
+    const MAX_VALUE_SIZE: usize = usize::MAX;
     type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;

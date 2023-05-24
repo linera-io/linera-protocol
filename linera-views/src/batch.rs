@@ -17,7 +17,7 @@
 
 use crate::{
     common::{Context, KeyIterable},
-    memory::{MemoryContext, MemoryContextError},
+    memory::{MemoryContextError, MemoryContextInternal},
     views::ViewError,
 };
 use async_trait::async_trait;
@@ -72,6 +72,20 @@ pub struct SimpleUnorderedBatch {
     pub insertions: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
+impl SimpleUnorderedBatch {
+    /// Printing the simple unordered batch
+    pub fn print(&self) {
+        println!("deletions");
+        for deletion in &self.deletions {
+            println!("  key={:?}", deletion);
+        }
+        println!("insertions");
+        for insertion in &self.insertions {
+            println!("  key={:?} value={:?}", insertion.0, insertion.1);
+        }
+    }
+}
+
 /// An unordered batch of deletes/puts and a collection of key prefix deletions.
 #[derive(Default)]
 pub struct UnorderedBatch {
@@ -82,6 +96,16 @@ pub struct UnorderedBatch {
 }
 
 impl UnorderedBatch {
+    /// Printing the unordered batch
+    pub fn print(&self) {
+        println!("key_prefix_deletions");
+        for key_prefix in &self.key_prefix_deletions {
+            println!("  key_prefix={:?}", key_prefix);
+        }
+        println!("simple_unordered_batch");
+        self.simple_unordered_batch.print();
+    }
+
     /// From an `UnorderedBatch`, creates a [`SimpleUnorderedBatch`] that does not contain the
     /// `key_prefix_deletions`. This requires accessing the database to eliminate them.
     pub async fn expand_delete_prefixes<DB: DeletePrefixExpander>(
@@ -136,6 +160,23 @@ impl Batch {
         let mut batch = Batch::new();
         builder(&mut batch).await?;
         Ok(batch)
+    }
+
+    /// Print the batch
+    pub fn print(&self) {
+        for op in &self.operations {
+            match op {
+                WriteOperation::Delete { key } => {
+                    println!("Delete key={:?}", key);
+                }
+                WriteOperation::Put { key, value } => {
+                    println!("Put key={:?} value={:?}", key, value);
+                }
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    println!("DeletePrefix key_prefix={:?}", key_prefix);
+                }
+            }
+        }
     }
 
     /// Simplifies the batch by removing operations that are overwritten by others.
@@ -208,7 +249,7 @@ impl Batch {
         }
     }
 
-    /// Inserts the insertion of a `(key,value)` pair into the batch with a serializable value.
+    /// Adds the insertion of a `(key,value)` pair into the batch with a serializable value.
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
@@ -225,7 +266,7 @@ impl Batch {
         Ok(())
     }
 
-    /// Inserts the insertion of a `(key,value)` pair into the batch with value a vector of `u8`.
+    /// Adds the insertion of a `(key,value)` pair into the batch with value a vector of `u8`.
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
@@ -273,7 +314,7 @@ pub trait DeletePrefixExpander {
 }
 
 #[async_trait]
-impl DeletePrefixExpander for MemoryContext<()> {
+impl DeletePrefixExpander for MemoryContextInternal<()> {
     type Error = MemoryContextError;
     async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
         let mut vector_list = Vec::new();
@@ -288,7 +329,7 @@ impl DeletePrefixExpander for MemoryContext<()> {
 
 #[cfg(test)]
 mod tests {
-    use linera_views::{batch::Batch, common::Context, memory::create_test_context};
+    use linera_views::{batch::Batch, common::Context, memory::create_test_context_internal};
 
     #[test]
     fn test_simplify_batch1() {
@@ -320,7 +361,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_simplify_batch3() {
-        let context = create_test_context();
+        let context = create_test_context_internal();
         let mut batch = Batch::new();
         batch.put_key_value_bytes(vec![1, 2, 3], vec![]);
         batch.put_key_value_bytes(vec![1, 2, 4], vec![]);

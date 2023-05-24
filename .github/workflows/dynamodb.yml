@@ -32,6 +32,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
+        target: wasm32-unknown-unknown
     - uses: Swatinem/rust-cache@v2
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
@@ -39,7 +40,7 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build
       run: |
-        cargo build --locked --no-default-features --features aws
+        cargo build --locked --features aws
     - name: Setup local DynamoDB instance
       run: |
         docker run --rm -d --name local-dynamodb -p 8000:8000/tcp amazon/dynamodb-local
@@ -50,4 +51,4 @@ jobs:
         AWS_SECRET_ACCESS_KEY: test
         LOCALSTACK_ENDPOINT: http://localhost:8000
       run: |
-        cargo test --locked --no-default-features --features aws -- dynamo
+        cargo test --locked --features aws -- dynamo

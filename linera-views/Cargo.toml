@@ -35,6 +35,7 @@ serde = { workspace = true }
 sha3 = { workspace = true }
 thiserror = { workspace = true }
 linked-hash-map = { workspace = true }
+tempfile = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync"] }
@@ -52,4 +53,3 @@ tokio-test = { workspace = true }
 
 [dev-dependencies]
 linera-views = { path = ".", features = ["test"] }
-tempfile = { workspace = true }
