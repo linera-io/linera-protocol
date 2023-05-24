@@ -13,7 +13,7 @@ pub type MemoryStoreClient = DbStoreClient<MemoryClient>;
 
 impl MemoryStoreClient {
     pub fn new(wasm_runtime: Option<WasmRuntime>) -> Self {
-        DbStoreClient {
+        Self {
             client: Arc::new(MemoryStore::new(wasm_runtime)),
         }
     }
