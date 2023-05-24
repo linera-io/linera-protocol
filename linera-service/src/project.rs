@@ -19,9 +19,11 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1.52"
+bcs = "0.1.3"
 futures = "0.3.17"
 {linera-sdk-dep}
 serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.93"
 thiserror = "1.0.31"
 
 [dev-dependencies]
@@ -47,6 +49,29 @@ pub struct State {
 }
 "#;
 
+const LIB: &str = r#"
+use linera_sdk::base::{ContractAbi, ServiceAbi};
+
+pub struct StateAbi;
+
+impl ContractAbi for StateAbi {
+    type InitializationArgument = ();
+    type Parameters = ();
+    type Operation = ();
+    type ApplicationCall = ();
+    type Effect = ();
+    type SessionCall = ();
+    type Response = ();
+    type SessionState = ();
+}
+
+impl ServiceAbi for StateAbi {
+    type Query = ();
+    type QueryResponse = ();
+    type Parameters = ();
+}
+"#;
+
 const CONTRACT: &str = r#"
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
@@ -55,12 +80,17 @@ mod state;
 use self::state::State;
 use async_trait::async_trait;
 use linera_sdk::{
-    base::SessionId, ApplicationCallResult, CalleeContext, Contract, EffectContext,
-    ExecutionResult, OperationContext, Session, SessionCallResult, SimpleStateStorage,
+    base::{SessionId, WithContractAbi},
+    ApplicationCallResult, CalleeContext, Contract, EffectContext,
+    ExecutionResult, OperationContext, SessionCallResult, SimpleStateStorage,
 };
 use thiserror::Error;
 
 linera_sdk::contract!(State);
+
+impl WithContractAbi for State {
+    type Abi = {project-name}::StateAbi;
+}
 
 #[async_trait]
 impl Contract for State {
@@ -70,43 +100,43 @@ impl Contract for State {
     async fn initialize(
         &mut self,
         _context: &OperationContext,
-        _argument: &[u8],
-    ) -> Result<ExecutionResult, Self::Error> {
+        _argument: (),
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         Ok(ExecutionResult::default())
     }
 
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
-        _operation: &[u8],
-    ) -> Result<ExecutionResult, Self::Error> {
+        _operation: (),
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         Ok(ExecutionResult::default())
     }
 
     async fn execute_effect(
         &mut self,
         _context: &EffectContext,
-        _effect: &[u8],
-    ) -> Result<ExecutionResult, Self::Error> {
+        _effect: (),
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
         Ok(ExecutionResult::default())
     }
 
     async fn handle_application_call(
         &mut self,
         _context: &CalleeContext,
-        _argument: &[u8],
+        _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult, Self::Error> {
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error> {
         Ok(ApplicationCallResult::default())
     }
 
     async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
-        _session: Session,
-        _argument: &[u8],
+        _session: (),
+        _argument: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error> {
         Ok(SessionCallResult::default())
     }
 }
@@ -114,7 +144,15 @@ impl Contract for State {
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    // Add error variants here.
+    /// Failed to deserialize BCS bytes
+    #[error("Failed to deserialize BCS bytes")]
+    BcsError(#[from] bcs::Error),
+
+    /// Failed to deserialize JSON string
+    #[error("Failed to deserialize JSON string")]
+    JsonError(#[from] serde_json::Error),
+
+    // Add more error variants here.
 }
 "#;
 
@@ -125,11 +163,15 @@ mod state;
 
 use self::state::State;
 use async_trait::async_trait;
-use linera_sdk::{QueryContext, Service, SimpleStateStorage};
+use linera_sdk::{base::WithServiceAbi, QueryContext, Service, SimpleStateStorage};
 use std::sync::Arc;
 use thiserror::Error;
 
 linera_sdk::service!(State);
+
+impl WithServiceAbi for State {
+    type Abi = {project-name}::StateAbi;
+}
 
 #[async_trait]
 impl Service for State {
@@ -139,18 +181,24 @@ impl Service for State {
     async fn query_application(
         self: Arc<Self>,
         _context: &QueryContext,
-        _argument: &[u8],
-    ) -> Result<Vec<u8>, Self::Error> {
+        _argument: (),
+    ) -> Result<(), Self::Error> {
         Err(Error::QueriesNotSupported)
     }
 }
 
 /// An error that can occur while querying the service.
-#[derive(Debug, Error, Eq, PartialEq)]
+#[derive(Debug, Error)]
 pub enum Error {
-    /// Add error variants here.
+    /// Query not supported by the application.
     #[error("Queries not supported by application")]
-    QueriesNotSupported
+    QueriesNotSupported,
+
+    /// Invalid query argument; could not deserialize request.
+    #[error("Invalid query argument; could not deserialize request")]
+    InvalidQuery(#[from] serde_json::Error),
+
+    // Add error variants here.
 }
 "#;
 
@@ -177,17 +225,26 @@ impl Project {
         debug!("creating the source directory");
         let source_directory = Self::create_source_directory(&root)?;
 
+        let project_name = root
+            .file_name()
+            .and_then(OsStr::to_str)
+            .map(|s| s.to_string())
+            .ok_or_else(|| anyhow!("path specified cannot terminate in . or .."))?;
+
         debug!("writing Cargo.toml");
-        Self::create_cargo_toml(&root)?;
+        Self::create_cargo_toml(&root, &project_name)?;
 
         debug!("writing state.rs");
         Self::create_state_file(&source_directory)?;
 
+        debug!("writing lib.rs");
+        Self::create_lib_file(&source_directory)?;
+
         debug!("writing contract.rs");
-        Self::create_contract_file(&source_directory)?;
+        Self::create_contract_file(&source_directory, &project_name)?;
 
         debug!("writing service.rs");
-        Self::create_service_file(&source_directory)?;
+        Self::create_service_file(&source_directory, &project_name)?;
 
         debug!("creating cargo config");
         Self::create_cargo_config(&root)?;
@@ -259,14 +316,9 @@ impl Project {
         Ok(source_directory)
     }
 
-    fn create_cargo_toml(project_root: &Path) -> Result<()> {
-        let project_name = project_root
-            .file_name()
-            .and_then(OsStr::to_str)
-            .map(|s| s.to_string())
-            .ok_or_else(|| anyhow!("path specified cannot terminate in . or .."))?;
+    fn create_cargo_toml(project_root: &Path, project_name: &str) -> Result<()> {
         let toml_path = project_root.join("Cargo.toml");
-        let toml_contents = CARGO_TOML.replace("{project-name}", &project_name);
+        let toml_contents = CARGO_TOML.replace("{project-name}", project_name);
         let toml_contents = Self::add_linera_sdk_dependency(&toml_contents);
         Self::write_string_to_file(&toml_path, &toml_contents)
     }
@@ -276,14 +328,23 @@ impl Project {
         Self::write_string_to_file(&state_path, STATE)
     }
 
-    fn create_contract_file(source_directory: &Path) -> Result<()> {
-        let contract_path = source_directory.join("contract.rs");
-        Self::write_string_to_file(&contract_path, CONTRACT)
+    fn create_lib_file(source_directory: &Path) -> Result<()> {
+        let state_path = source_directory.join("lib.rs");
+        Self::write_string_to_file(&state_path, LIB)
     }
 
-    fn create_service_file(source_directory: &Path) -> Result<()> {
+    fn create_contract_file(source_directory: &Path, project_name: &str) -> Result<()> {
+        let project_name = project_name.replace('-', "_");
+        let contract_path = source_directory.join("contract.rs");
+        let contract_contents = CONTRACT.replace("{project-name}", &project_name);
+        Self::write_string_to_file(&contract_path, &contract_contents)
+    }
+
+    fn create_service_file(source_directory: &Path, project_name: &str) -> Result<()> {
+        let project_name = project_name.replace('-', "_");
         let service_path = source_directory.join("service.rs");
-        Self::write_string_to_file(&service_path, SERVICE)
+        let service_contents = SERVICE.replace("{project-name}", &project_name);
+        Self::write_string_to_file(&service_path, &service_contents)
     }
 
     fn create_cargo_config(project_root: &Path) -> Result<()> {
