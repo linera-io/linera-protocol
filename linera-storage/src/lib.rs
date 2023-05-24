@@ -84,7 +84,7 @@ pub trait Store: Sized {
     /// Writes the given certificate.
     async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError>;
 
-    /// Writes a vector of certficates.
+    /// Writes a vector of certificates.
     async fn write_certificates(&self, certificate: &[Certificate]) -> Result<(), ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
@@ -280,14 +280,14 @@ where
 
     async fn write_value(&self, value: &HashedValue) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        self.write_value_batch(value, &mut batch)?;
+        self.add_value_to_batch(value, &mut batch)?;
         self.write_batch(batch).await
     }
 
     async fn write_values(&self, values: &[HashedValue]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for value in values {
-            self.write_value_batch(value, &mut batch)?;
+            self.add_value_to_batch(value, &mut batch)?;
         }
         self.write_batch(batch).await
     }
@@ -317,14 +317,14 @@ where
 
     async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        self.write_certificate_batch(certificate, &mut batch)?;
+        self.add_certificate_to_batch(certificate, &mut batch)?;
         self.write_batch(batch).await
     }
 
     async fn write_certificates(&self, certificates: &[Certificate]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for certificate in certificates {
-            self.write_certificate_batch(certificate, &mut batch)?;
+            self.add_certificate_to_batch(certificate, &mut batch)?;
         }
         self.write_batch(batch).await
     }
@@ -340,7 +340,7 @@ where
     ViewError: From<<CL as KeyValueStoreClient>::Error>,
     <CL as KeyValueStoreClient>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
-    fn write_value_batch(&self, value: &HashedValue, batch: &mut Batch) -> Result<(), ViewError> {
+    fn add_value_to_batch(&self, value: &HashedValue, batch: &mut Batch) -> Result<(), ViewError> {
         let id = value.block().chain_id.to_string();
         increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
@@ -348,7 +348,7 @@ where
         Ok(())
     }
 
-    fn write_certificate_batch(
+    fn add_certificate_to_batch(
         &self,
         certificate: &Certificate,
         batch: &mut Batch,
