@@ -20,7 +20,7 @@ use linera_base::{
 use linera_execution::{
     committee::Epoch,
     system::{Account, Recipient, SystemOperation, UserData},
-    Operation, Query, Response, SystemQuery, SystemResponse,
+    Operation, SystemQuery, SystemResponse,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -755,14 +755,11 @@ where
         .await?;
     assert_eq!(client1.local_balance().await.unwrap(), Amount::from(3));
     assert_eq!(
-        client1
-            .query_application(&Query::System(SystemQuery))
-            .await
-            .unwrap(),
-        Response::System(SystemResponse {
+        client1.query_system_application(SystemQuery).await.unwrap(),
+        SystemResponse {
             chain_id: ChainId::root(1),
             balance: Amount::from(3),
-        })
+        }
     );
 
     let certificate = client1
@@ -779,14 +776,11 @@ where
     assert!(client1.pending_block.is_none());
     assert_eq!(client1.local_balance().await.unwrap(), Amount::from(0));
     assert_eq!(
-        client1
-            .query_application(&Query::System(SystemQuery))
-            .await
-            .unwrap(),
-        Response::System(SystemResponse {
+        client1.query_system_application(SystemQuery).await.unwrap(),
+        SystemResponse {
             chain_id: ChainId::root(1),
             balance: Amount::from(0),
-        })
+        }
     );
 
     assert_eq!(
@@ -808,14 +802,11 @@ where
     // The local balance from the client is reflecting incoming messages but the
     // SystemResponse only reads the ChainState.
     assert_eq!(
-        client2
-            .query_application(&Query::System(SystemQuery))
-            .await
-            .unwrap(),
-        Response::System(SystemResponse {
+        client2.query_system_application(SystemQuery).await.unwrap(),
+        SystemResponse {
             chain_id: ChainId::root(2),
             balance: Amount::from(0),
-        })
+        }
     );
 
     // Send back some money.
@@ -838,14 +829,11 @@ where
     );
     // Local balance from client2 is now consolidated.
     assert_eq!(
-        client2
-            .query_application(&Query::System(SystemQuery))
-            .await
-            .unwrap(),
-        Response::System(SystemResponse {
+        client2.query_system_application(SystemQuery).await.unwrap(),
+        SystemResponse {
             chain_id: ChainId::root(2),
             balance: Amount::from(2),
-        })
+        }
     );
     Ok(())
 }
