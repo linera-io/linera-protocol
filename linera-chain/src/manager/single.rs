@@ -4,7 +4,8 @@
 use super::Outcome;
 use crate::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, HashedValue, LiteVote, OutgoingEffect, Vote,
+        Block, BlockAndRound, BlockProposal, ExecutedBlock, HashedValue, LiteVote, OutgoingEffect,
+        Value, Vote,
     },
     ChainError,
 };
@@ -51,13 +52,16 @@ impl SingleOwnerManager {
             ChainError::InvalidBlockProposal
         );
         if let Some(vote) = &self.pending {
-            ensure!(vote.value.is_confirmed(), ChainError::InvalidBlockProposal);
-            if vote.value.block() == new_block {
+            let block = match &vote.value.inner() {
+                Value::ConfirmedBlock { executed } => &executed.block,
+                Value::ValidatedBlock { .. } => return Err(ChainError::InvalidBlockProposal),
+            };
+            if block == new_block {
                 return Ok(Outcome::Skip);
             } else {
                 tracing::error!(
                     "Attempting to sign a different block at the same height:\n{:?}\n{:?}",
-                    vote.value.block(),
+                    block,
                     new_block
                 );
                 return Err(ChainError::PreviousBlockMustBeConfirmedFirst);
@@ -76,8 +80,12 @@ impl SingleOwnerManager {
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
             let BlockAndRound { block, .. } = proposal.content;
-            let value = HashedValue::new_confirmed(block, effects, state_hash);
-            let vote = Vote::new(value, key_pair);
+            let executed = ExecutedBlock {
+                block,
+                effects,
+                state_hash,
+            };
+            let vote = Vote::new(HashedValue::new_confirmed(executed), key_pair);
             self.pending = Some(vote);
         }
     }

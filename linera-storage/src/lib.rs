@@ -168,8 +168,8 @@ pub trait Store: Sized {
     /// Selects the WebAssembly runtime to use for applications (if any).
     fn wasm_runtime(&self) -> Option<WasmRuntime>;
 
-    /// Creates a [`linera-sdk::UserApplication`] instance using the bytecode in storage referenced by the
-    /// `application_description`.
+    /// Creates a [`linera-sdk::UserApplication`] instance using the bytecode in storage referenced
+    /// by the `application_description`.
     #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
     async fn load_application(
         &self,
@@ -191,8 +191,14 @@ pub trait Store: Sized {
                     application_description.clone(),
                 )),
                 _ => error.into(),
-            })?;
-        let operations = &value.block().operations;
+            })?
+            .into_inner();
+        let operations = match value {
+            Value::ConfirmedBlock { executed } => executed.block.operations,
+            Value::ValidatedBlock { .. } => {
+                return Err(ExecutionError::InvalidBytecodeId(*bytecode_id));
+            }
+        };
         let index = usize::try_from(bytecode_location.operation_index)
             .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?;
         match operations.get(index) {
@@ -270,7 +276,7 @@ where
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let maybe_value: Option<Value> = self.client.client.read_key(&value_key).await?;
         let id = match &maybe_value {
-            Some(value) => value.block.chain_id.to_string(),
+            Some(value) => value.chain_id().to_string(),
             None => "not found".to_string(),
         };
         increment_counter!(READ_VALUE_COUNTER, &[("chain_id", id)]);
@@ -301,7 +307,7 @@ where
         );
         if let Ok(maybe_value) = &value_result {
             let id = match maybe_value {
-                Some(value) => value.block.chain_id.to_string(),
+                Some(value) => value.chain_id().to_string(),
                 None => "not found".to_string(),
             };
             increment_counter!(READ_CERTIFICATE_COUNTER, &[("chain_id", id)]);
@@ -341,7 +347,7 @@ where
     <CL as KeyValueStoreClient>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
     fn add_value_to_batch(&self, value: &HashedValue, batch: &mut Batch) -> Result<(), ViewError> {
-        let id = value.block().chain_id.to_string();
+        let id = value.inner().chain_id().to_string();
         increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         batch.put_key_value(value_key.to_vec(), value)?;
@@ -353,9 +359,9 @@ where
         certificate: &Certificate,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
-        let id = certificate.value.block().chain_id.to_string();
+        let id = certificate.value.inner().chain_id().to_string();
         increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id)]);
-        let hash = certificate.value.hash();
+        let hash = certificate.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         batch.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;

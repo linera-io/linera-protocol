@@ -3,7 +3,8 @@
 
 use crate::{
     data_types::{
-        Block, ChainAndHeight, ChannelFullName, Event, Medium, Origin, OutgoingEffect, Target,
+        Block, ChainAndHeight, ChannelFullName, Event, ExecutedBlock, Medium, Origin,
+        OutgoingEffect, Target,
     },
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
@@ -250,11 +251,11 @@ where
     pub async fn receive_block(
         &mut self,
         origin: &Origin,
-        height: BlockHeight,
-        timestamp: Timestamp,
-        effects: Vec<OutgoingEffect>,
+        executed: ExecutedBlock,
         certificate_hash: CryptoHash,
     ) -> Result<(), ChainError> {
+        let height = executed.block.height;
+        let timestamp = executed.block.timestamp;
         let chain_id = self.chain_id();
         ensure!(
             height >= self.next_block_height_to_receive(origin).await?,
@@ -268,7 +269,7 @@ where
         );
         // Process immediate effects and create inbox events.
         let mut events = Vec::new();
-        for (index, outgoing_effect) in effects.into_iter().enumerate() {
+        for (index, outgoing_effect) in executed.effects.into_iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let OutgoingEffect {
                 destination,
@@ -420,7 +421,7 @@ where
     pub async fn execute_block(
         &mut self,
         block: &Block,
-    ) -> Result<Vec<OutgoingEffect>, ChainError> {
+    ) -> Result<(Vec<OutgoingEffect>, CryptoHash), ChainError> {
         assert_eq!(block.chain_id, self.chain_id());
         let chain_id = self.chain_id();
         ensure!(
@@ -502,13 +503,13 @@ where
         Self::sub_assign_fees(balance, pricing.messages_price(&effects)?)?;
 
         // Recompute the state hash.
-        let hash = self.execution_state.crypto_hash().await?;
-        self.execution_state_hash.set(Some(hash));
+        let state_hash = self.execution_state.crypto_hash().await?;
+        self.execution_state_hash.set(Some(state_hash));
         // Last, reset the consensus state based on the current ownership.
         self.manager
             .get_mut()
             .reset(self.execution_state.system.ownership.get());
-        Ok(effects)
+        Ok((effects, state_hash))
     }
 
     async fn process_execution_results(

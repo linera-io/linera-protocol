@@ -503,9 +503,9 @@ where
                         ..
                     } = response.info;
                     if let Some(cert) = requested_sent_certificates.pop() {
-                        if cert.value.is_confirmed()
-                            && cert.value.block().chain_id == chain_id
-                            && cert.value.block().height == block_height
+                        if cert.value().is_confirmed()
+                            && cert.value().chain_id() == chain_id
+                            && cert.value().height() == block_height
                         {
                             cert.check(&self.initial_committee).unwrap();
                             count += 1;

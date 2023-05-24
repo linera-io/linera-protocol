@@ -22,7 +22,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, HashedValue, LiteVote, Message,
+        Block, BlockAndRound, BlockProposal, Certificate, HashedValue, LiteVote, Message, Value,
     },
     ChainManagerInfo, ChainStateView,
 };
@@ -605,12 +605,9 @@ where
             .collect();
         match action {
             CommunicateAction::SubmitBlockForConfirmation(proposal) => {
-                let (effects, response) = self
-                    .node_client
-                    .stage_block_execution(&proposal.content.block)
-                    .await?;
-                let state_hash = response.info.state_hash.expect("was just computed");
-                let value = HashedValue::new_confirmed(proposal.content.block, effects, state_hash);
+                let block = proposal.content.block;
+                let (executed, _) = self.node_client.stage_block_execution(block).await?;
+                let value = HashedValue::new_confirmed(executed);
                 let certificate = Certificate::new(value, signatures);
                 // Certificate is valid because
                 // * `communicate_with_quorum` ensured a sufficient "weight" of
@@ -619,13 +616,9 @@ where
                 Ok(Some(certificate))
             }
             CommunicateAction::SubmitBlockForValidation(proposal) => {
-                let (effects, response) = self
-                    .node_client
-                    .stage_block_execution(&proposal.content.block)
-                    .await?;
-                let state_hash = response.info.state_hash.expect("was just computed");
                 let BlockAndRound { block, round } = proposal.content;
-                let value = HashedValue::new_validated(block, effects, state_hash, round);
+                let (executed, _) = self.node_client.stage_block_execution(block).await?;
+                let value = HashedValue::new_validated(executed, round);
                 let certificate = Certificate::new(value, signatures);
                 Ok(Some(certificate))
             }
@@ -642,11 +635,10 @@ where
         certificate: Certificate,
         mode: ReceiveCertificateMode,
     ) -> Result<()> {
-        ensure!(
-            certificate.value.is_confirmed(),
-            "Was expecting a confirmed chain operation"
-        );
-        let block = certificate.value.block();
+        let Value::ConfirmedBlock { executed } = certificate.value() else {
+            bail!("Was expecting a confirmed chain operation");
+        };
+        let block = &executed.block;
         // Verify the certificate before doing any expensive networking.
         let (committees, max_epoch) = self.known_committees().await?;
         ensure!(
@@ -726,10 +718,10 @@ where
                 .requested_sent_certificates.pop() else {
                 break;
             };
-            if !certificate.value.is_confirmed() {
+            let Value::ConfirmedBlock { executed } = certificate.value() else {
                 return Err(NodeError::InvalidChainInfoResponse);
             };
-            let block = certificate.value.block();
+            let block = &executed.block;
             // Check that certificates are valid w.r.t one of our trusted committees.
             if block.epoch > max_epoch {
                 // We don't accept a certificate from a committee in the future.
@@ -774,7 +766,7 @@ where
         certificates: Vec<Certificate>,
     ) {
         for certificate in certificates {
-            let hash = certificate.value.hash();
+            let hash = certificate.hash();
             if let Err(e) = self
                 .receive_certificate_internal(certificate, ReceiveCertificateMode::AlreadyChecked)
                 .await
@@ -1020,8 +1012,11 @@ where
                     )
                     .await?
                     .expect("a certificate");
-                assert!(certificate.value.is_validated());
-                assert_eq!(*certificate.value.block(), proposal.content.block);
+                assert!(matches!(
+                    certificate.value(),
+                    Value::ValidatedBlock { executed, .. }
+                        if executed.block == proposal.content.block
+                ));
                 self.communicate_chain_updates(
                     &committee,
                     self.chain_id,
@@ -1044,8 +1039,10 @@ where
         };
         // By now the block should be final.
         ensure!(
-            final_certificate.value.is_confirmed()
-                && *final_certificate.value.block() == proposal.content.block,
+            matches!(
+                final_certificate.value(),
+                Value::ConfirmedBlock { executed } if executed.block == proposal.content.block
+            ),
             "A different operation was executed in parallel (consider retrying the operation)"
         );
         // Since `handle_block_proposal` succeeded, we have the needed bytecode.
@@ -1176,7 +1173,7 @@ where
             authenticated_signer: None,
             timestamp,
         };
-        let (_, response) = self.node_client.stage_block_execution(&block).await?;
+        let (_, response) = self.node_client.stage_block_execution(block).await?;
         Ok(response.info.system_balance)
     }
 

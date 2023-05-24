@@ -17,6 +17,7 @@ use linera_base::{
     data_types::*,
     identifiers::{ChainDescription, ChainId, EffectId, Owner},
 };
+use linera_chain::data_types::Value;
 use linera_execution::{
     committee::{Committee, Epoch},
     pricing::Pricing,
@@ -555,10 +556,12 @@ where
             .value,
         certificate.value
     );
-    assert!(certificate.value.is_confirmed());
     assert!(matches!(
-        &certificate.value.block().operations[open_chain_effect_id.index as usize],
-        &Operation::System(SystemOperation::OpenChain { .. })
+        &certificate.value(),
+        Value::ConfirmedBlock { executed } if matches!(
+            executed.block.operations[open_chain_effect_id.index as usize],
+            Operation::System(SystemOperation::OpenChain { .. }),
+        ),
     ));
     // Make a client to try the new chain.
     let mut client = builder
@@ -688,10 +691,12 @@ where
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
     let certificate = sender.close_chain().await.unwrap();
-    assert!(certificate.value.is_confirmed());
     assert!(matches!(
-        &certificate.value.block().operations[..],
-        &[Operation::System(SystemOperation::CloseChain)]
+        &certificate.value(),
+        Value::ConfirmedBlock { executed } if matches!(
+            &executed.block.operations[..],
+            &[Operation::System(SystemOperation::CloseChain)]
+        ),
     ));
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());

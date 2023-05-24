@@ -37,7 +37,7 @@ impl RpcMessage {
         let chain_id = match self {
             RpcMessage::BlockProposal(proposal) => proposal.content.block.chain_id,
             RpcMessage::LiteCertificate(request) => request.certificate.value.chain_id,
-            RpcMessage::Certificate(request) => request.certificate.value.chain_id(),
+            RpcMessage::Certificate(request) => request.certificate.value().chain_id(),
             RpcMessage::ChainInfoQuery(query) => query.chain_id,
             RpcMessage::CrossChainRequest(request) => request.target_chain_id(),
             RpcMessage::Vote(_) | RpcMessage::Error(_) | RpcMessage::ChainInfoResponse(_) => {

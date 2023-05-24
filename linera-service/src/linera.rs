@@ -12,7 +12,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{BytecodeId, ChainDescription, ChainId, EffectId},
 };
-use linera_chain::data_types::Certificate;
+use linera_chain::data_types::{Certificate, Value as LineraValue};
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
     data_types::ChainInfoQuery,
@@ -290,7 +290,7 @@ impl ClientContext {
         let mut done_senders = HashSet::new();
         for vote in votes {
             // We aggregate votes indexed by sender.
-            let chain_id = vote.value.chain_id();
+            let chain_id = vote.value.inner().chain_id();
             if done_senders.contains(&chain_id) {
                 continue;
             }
@@ -947,7 +947,12 @@ where
                 info!("{:#?}", certificate);
                 context.update_wallet_from_client(&mut chain_client).await;
                 let id = ChainId::child(effect_id);
-                let timestamp = certificate.value.block().timestamp;
+                let timestamp = match certificate.value() {
+                    LineraValue::ConfirmedBlock { executed } => executed.block.timestamp,
+                    LineraValue::ValidatedBlock { .. } => {
+                        panic!("Unexpected certificate.")
+                    }
+                };
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
                 // Print the new chain ID and effect ID on stdout for scripting purposes.
                 println!("{}", effect_id);
@@ -1022,7 +1027,10 @@ where
                     .await
                     .unwrap()
                     .into_iter()
-                    .map(|c| c.value.effects().len())
+                    .map(|c| match c.value() {
+                        LineraValue::ConfirmedBlock { executed } => executed.effects.len(),
+                        LineraValue::ValidatedBlock { .. } => 0,
+                    })
                     .sum::<usize>();
                 info!("Subscribed {} chains to new committees", n);
 
@@ -1126,13 +1134,11 @@ where
 
                 for rpc_msg in &proposals {
                     if let RpcMessage::BlockProposal(proposal) = rpc_msg {
-                        let block = proposal.content.block.clone();
-                        let (effects, response) =
+                        let (executed, _) =
                             WorkerState::new("staging".to_string(), None, storage.clone())
-                                .stage_block_execution(&block)
+                                .stage_block_execution(proposal.content.block.clone())
                                 .await?;
-                        let state_hash = response.info.state_hash.expect("state was just computed");
-                        let value = HashedValue::new_confirmed(block, effects, state_hash);
+                        let value = HashedValue::new_confirmed(executed);
                         values.insert(value.hash(), value);
                     }
                 }
@@ -1371,7 +1377,10 @@ where
                     .certificate_for(&effect_id)
                     .await
                     .context("could not find OpenChain effect")?;
-                let timestamp = certificate.value.block().timestamp;
+                let timestamp = match certificate.value() {
+                    LineraValue::ConfirmedBlock { executed } => executed.block.timestamp,
+                    LineraValue::ValidatedBlock { .. } => panic!("Unexpected certificate."),
+                };
                 let chain_id = ChainId::child(effect_id);
                 context
                     .wallet_state

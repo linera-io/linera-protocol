@@ -171,23 +171,24 @@ pub struct OutgoingEffect {
     pub effect: Effect,
 }
 
-/// The type of a value: whether it's a validated block in a particular round, or already
-/// confirmed.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
-pub enum ValueKind {
-    /// The block was validated but confirmation will require additional steps.
-    ValidatedBlock { round: RoundNumber },
-    /// The block is validated and confirmed (i.e. ready to be published).
-    ConfirmedBlock,
+/// A block, together with the effects and the state hash resulting from its execution.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ExecutedBlock {
+    pub block: Block,
+    pub effects: Vec<OutgoingEffect>,
+    pub state_hash: CryptoHash,
 }
 
 /// A statement to be certified by the validators.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
-pub struct Value {
-    pub block: Block,
-    pub effects: Vec<OutgoingEffect>,
-    pub state_hash: CryptoHash,
-    pub kind: ValueKind,
+pub enum Value {
+    ValidatedBlock {
+        executed: ExecutedBlock,
+        round: RoundNumber,
+    },
+    ConfirmedBlock {
+        executed: ExecutedBlock,
+    },
 }
 
 /// A statement to be certified by the validators, with its hash.
@@ -281,7 +282,8 @@ impl<'a> LiteCertificate<'a> {
 
     /// Returns the `Certificate` with the specified value, if it matches.
     pub fn with_value(self, value: HashedValue) -> Option<Certificate> {
-        if self.value.chain_id != value.chain_id() || self.value.value_hash != value.hash() {
+        if self.value.chain_id != value.inner().chain_id() || self.value.value_hash != value.hash()
+        {
             return None;
         }
         Some(Certificate {
@@ -373,6 +375,18 @@ impl From<HashedValue> for Value {
 }
 
 impl Value {
+    pub fn chain_id(&self) -> ChainId {
+        self.executed().block.chain_id
+    }
+
+    pub fn height(&self) -> BlockHeight {
+        self.executed().block.height
+    }
+
+    pub fn epoch(&self) -> Epoch {
+        self.executed().block.epoch
+    }
+
     /// Creates a `HashedValue` without checking that this is the correct hash!
     pub fn with_hash_unchecked(self, hash: CryptoHash) -> HashedValue {
         HashedValue { value: self, hash }
@@ -380,9 +394,10 @@ impl Value {
 
     /// Returns whether this value contains the effect with the specified ID.
     pub fn has_effect(&self, effect_id: &EffectId) -> bool {
-        self.block.height == effect_id.height
-            && self.block.chain_id == effect_id.chain_id
-            && self.effects.len() > usize::try_from(effect_id.index).unwrap_or(usize::MAX)
+        self.height() == effect_id.height
+            && self.chain_id() == effect_id.chain_id
+            && self.executed().effects.len()
+                > usize::try_from(effect_id.index).unwrap_or(usize::MAX)
     }
 
     /// Skip `n-1` effects from the end of the block and return the effect ID, if any.
@@ -391,83 +406,68 @@ impl Value {
             return None;
         }
         Some(EffectId {
-            chain_id: self.block.chain_id,
-            height: self.block.height,
-            index: u32::try_from(self.effects.len()).ok()?.checked_sub(n)?,
+            chain_id: self.chain_id(),
+            height: self.height(),
+            index: u32::try_from(self.executed().effects.len())
+                .ok()?
+                .checked_sub(n)?,
         })
+    }
+
+    pub fn is_confirmed(&self) -> bool {
+        matches!(self, Value::ConfirmedBlock { .. })
+    }
+
+    pub fn is_validated(&self) -> bool {
+        matches!(self, Value::ValidatedBlock { .. })
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    pub fn effects(&self) -> &Vec<OutgoingEffect> {
+        &self.executed().effects
+    }
+
+    fn executed(&self) -> &ExecutedBlock {
+        match self {
+            Value::ConfirmedBlock { executed } | Value::ValidatedBlock { executed, .. } => executed,
+        }
     }
 }
 
 impl HashedValue {
-    pub fn new_confirmed(
-        block: Block,
-        effects: Vec<OutgoingEffect>,
-        state_hash: CryptoHash,
-    ) -> HashedValue {
-        Value {
-            block,
-            effects,
-            state_hash,
-            kind: ValueKind::ConfirmedBlock,
-        }
-        .into()
-    }
-    pub fn new_validated(
-        block: Block,
-        effects: Vec<OutgoingEffect>,
-        state_hash: CryptoHash,
-        round: RoundNumber,
-    ) -> HashedValue {
-        Value {
-            block,
-            effects,
-            state_hash,
-            kind: ValueKind::ValidatedBlock { round },
-        }
-        .into()
+    pub fn new_confirmed(executed: ExecutedBlock) -> HashedValue {
+        Value::ConfirmedBlock { executed }.into()
     }
 
-    pub fn chain_id(&self) -> ChainId {
-        self.value.block.chain_id
-    }
-
-    pub fn block(&self) -> &Block {
-        &self.value.block
-    }
-
-    pub fn state_hash(&self) -> CryptoHash {
-        self.value.state_hash
-    }
-
-    pub fn effects(&self) -> &Vec<OutgoingEffect> {
-        &self.value.effects
-    }
-
-    pub fn kind(&self) -> ValueKind {
-        self.value.kind
+    pub fn new_validated(executed: ExecutedBlock, round: RoundNumber) -> HashedValue {
+        Value::ValidatedBlock { executed, round }.into()
     }
 
     pub fn hash(&self) -> CryptoHash {
         self.hash
     }
 
-    pub fn is_confirmed(&self) -> bool {
-        matches!(self.value.kind, ValueKind::ConfirmedBlock)
-    }
-
-    pub fn is_validated(&self) -> bool {
-        matches!(self.value.kind, ValueKind::ValidatedBlock { .. })
-    }
-
     pub fn lite(&self) -> LiteValue {
         LiteValue {
             value_hash: self.hash(),
-            chain_id: self.chain_id(),
+            chain_id: self.value.chain_id(),
         }
     }
 
     pub fn into_confirmed(self) -> HashedValue {
-        Self::new_confirmed(self.value.block, self.value.effects, self.value.state_hash)
+        match self.value {
+            Value::ConfirmedBlock { executed } | Value::ValidatedBlock { executed, .. } => {
+                Self::new_confirmed(executed)
+            }
+        }
+    }
+
+    pub fn inner(&self) -> &Value {
+        &self.value
+    }
+
+    pub fn into_inner(self) -> Value {
+        self.value
     }
 
     /// Returns whether this value contains the effect with the specified ID.
@@ -581,11 +581,22 @@ impl Certificate {
         }
     }
 
+    /// Returns the `LiteValue` corresponding to the certified value.
     pub fn lite_value(&self) -> LiteValue {
         LiteValue {
-            value_hash: self.value.hash(),
-            chain_id: self.value.chain_id(),
+            value_hash: self.hash(),
+            chain_id: self.value().chain_id(),
         }
+    }
+
+    /// Returns the certified value.
+    pub fn value(&self) -> &Value {
+        &self.value.value
+    }
+
+    /// Returns the certified value's hash.
+    pub fn hash(&self) -> CryptoHash {
+        self.value.hash
     }
 }
 
