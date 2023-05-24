@@ -91,12 +91,8 @@ pub trait Store: Sized {
     /// Writes the given certificate.
     async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError>;
 
-    /// Writes the given certificate to the batch
-    fn write_certificate_batch(
-        &self,
-        certificate: &Certificate,
-        batch: &mut Batch,
-    ) -> Result<(), ViewError>;
+    /// Writes a vector of certficates.
+    async fn write_certificates(&self, certificate: &[Certificate]) -> Result<(), ViewError>;
 
     /// Writes the batch
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError>;
@@ -346,17 +342,35 @@ where
     }
 
     async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError> {
-        let id = certificate.value.block().chain_id.to_string();
-        increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id)]);
-        let hash = certificate.value.hash();
-        let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let mut batch = Batch::new();
-        batch.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
-        batch.put_key_value(value_key.to_vec(), &certificate.value)?;
+        self.write_certificate_batch(certificate, &mut batch)?;
+        self.write_batch(batch).await
+    }
+
+    async fn write_certificates(&self, certificates: &[Certificate]) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        for certificate in certificates {
+            self.write_certificate_batch(&certificate, &mut batch)?;
+        }
+        self.write_batch(batch).await
+    }
+
+    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
         self.client.client.write_batch(batch, &[]).await?;
         Ok(())
     }
+
+    fn wasm_runtime(&self) -> Option<WasmRuntime> {
+        self.client.wasm_runtime
+    }
+}
+
+impl<CL> DbStoreClient<CL>
+where
+    CL: KeyValueStoreClient + Clone + Send + Sync + 'static,
+    ViewError: From<<CL as KeyValueStoreClient>::Error>,
+    <CL as KeyValueStoreClient>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
+{
 
     fn write_certificate_batch(
         &self,
@@ -371,15 +385,6 @@ where
         batch.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
         batch.put_key_value(value_key.to_vec(), &certificate.value)?;
         Ok(())
-    }
-
-    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        self.client.client.write_batch(batch, &[]).await?;
-        Ok(())
-    }
-
-    fn wasm_runtime(&self) -> Option<WasmRuntime> {
-        self.client.wasm_runtime
     }
 }
 

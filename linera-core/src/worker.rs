@@ -24,7 +24,6 @@ use linera_execution::{
 };
 use linera_storage::Store;
 use linera_views::{
-    batch::Batch,
     log_view::LogView,
     views::{RootView, View, ViewError},
 };
@@ -526,11 +525,8 @@ where
         for value in blobs {
             self.cache_recent_value(value.clone());
         }
-        let mut batch = Batch::new();
-        self.storage.write_values_batch(blobs, &mut batch)?;
-        self.storage
-            .write_certificate_batch(&certificate, &mut batch)?;
-        self.storage.write_batch(batch).await?;
+        self.storage.write_values(blobs).await?;
+        self.storage.write_certificate(&certificate).await?;
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
         let verified_effects = chain.execute_block(block).await?;
@@ -702,7 +698,7 @@ where
             return Ok(None);
         };
         // Process the received messages in certificates.
-        let mut batch = Batch::new();
+        self.storage.write_certificates(&certificates).await?;
         for certificate in certificates {
             let block = certificate.value.block();
             // Update the staged chain state with the received block.
@@ -715,10 +711,7 @@ where
                     certificate.value.hash(),
                 )
                 .await?;
-            self.storage
-                .write_certificate_batch(&certificate, &mut batch)?;
         }
-        self.storage.write_batch(batch).await?;
         if !self.allow_inactive_chains && !chain.is_active() {
             // Refuse to create a chain state if the chain is still inactive by
             // now. Accordingly, do not send a confirmation, so that the
