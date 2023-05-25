@@ -296,7 +296,8 @@ impl ClientContext {
             }
             trace!(
                 "Processing vote on {:?}'s block by {:?}",
-                chain_id, vote.validator,
+                chain_id,
+                vote.validator,
             );
             let aggregator = aggregators
                 .entry(chain_id)

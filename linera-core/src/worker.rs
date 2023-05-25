@@ -37,7 +37,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::sync::{oneshot, Mutex};
-use tracing::{error, debug, instrument, trace, warn};
+use tracing::{debug, error, instrument, trace, warn};
 
 #[cfg(any(test, feature = "test"))]
 use {

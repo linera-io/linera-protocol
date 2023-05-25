@@ -838,7 +838,7 @@ impl NodeService {
     }
 
     async fn process_inbox(&self) {
-        self.query("mutation { processInbox }").await;
+        self.query_node("mutation { processInbox }").await;
     }
 
     async fn make_application(&self, application_id: &str) -> Application {
@@ -859,7 +859,7 @@ impl NodeService {
     }
 
     async fn try_get_applications_uri(&self) -> HashMap<String, String> {
-        let query_string = if let Some(chain_id) = self.chain_id {
+        let query = if let Some(chain_id) = self.chain_id {
             format!(
                 "query {{ applications(chainId: \"{}\") {{ id link }}}}",
                 chain_id
@@ -867,7 +867,7 @@ impl NodeService {
         } else {
             "query { applications { id link }}".to_string()
         };
-        let data = self.query(&query_string).await;
+        let data = self.query_node(&query).await;
         data["applications"]
             .as_array()
             .unwrap()
@@ -883,24 +883,28 @@ impl NodeService {
     async fn publish_bytecode(&self, contract: PathBuf, service: PathBuf) -> String {
         let contract_code = Bytecode::load_from_file(&contract).await.unwrap();
         let service_code = Bytecode::load_from_file(&service).await.unwrap();
-        let query_string = format!(
+        let query = format!(
             "mutation {{ publishBytecode(contract: {}, service: {}) }}",
             contract_code.to_value(),
             service_code.to_value(),
         );
-        let data = self.query(&query_string).await;
+        let data = self.query_node(&query).await;
         serde_json::from_value(data["publishBytecode"].clone()).unwrap()
     }
 
-    async fn query(&self, query_string: &str) -> Value {
-        let query = json!({ "query": query_string });
+    async fn query_node(&self, query: &str) -> Value {
         let url = format!("http://localhost:{}/", self.port);
         let client = reqwest::Client::new();
-        let response = client.post(url).json(&query).send().await.unwrap();
+        let response = client
+            .post(url)
+            .json(&json!({ "query": query }))
+            .send()
+            .await
+            .unwrap();
         if !response.status().is_success() {
             panic!(
                 "Query \"{}\" failed: {}",
-                query_string.get(..200).unwrap_or(query_string),
+                query.get(..200).unwrap_or(query),
                 response.text().await.unwrap()
             );
         }
@@ -908,7 +912,7 @@ impl NodeService {
         if let Some(errors) = value.get("errors") {
             panic!(
                 "Query \"{}\" failed: {}",
-                query_string.get(..200).unwrap_or(query_string),
+                query.get(..200).unwrap_or(query),
                 errors
             );
         }
@@ -916,7 +920,7 @@ impl NodeService {
     }
 
     async fn create_application(&self, bytecode_id: &str) -> String {
-        let query_string = format!(
+        let query = format!(
             "mutation {{ createApplication(\
                 bytecodeId: \"{bytecode_id}\", \
                 parameters: \"null\", \
@@ -924,14 +928,13 @@ impl NodeService {
                 requiredApplicationIds: []) \
             }}"
         );
-        let data = self.query(&query_string).await;
+        let data = self.query_node(&query).await;
         serde_json::from_value(data["createApplication"].clone()).unwrap()
     }
 
     async fn request_application(&self, application_id: &str) -> String {
-        let query_string =
-            format!("mutation {{ requestApplication(applicationId: {application_id}) }}");
-        let data = self.query(&query_string).await;
+        let query = format!("mutation {{ requestApplication(applicationId: {application_id}) }}");
+        let data = self.query_node(&query).await;
         serde_json::from_value(data["requestApplication"].clone()).unwrap()
     }
 }
@@ -969,14 +972,18 @@ impl Application {
         serde_json::from_value(data["value"].clone()).unwrap()
     }
 
-    async fn query_application(&self, query_string: &str) -> Value {
-        let query = json!({ "query": query_string });
+    async fn query_application(&self, query: &str) -> Value {
         let client = reqwest::Client::new();
-        let response = client.post(&self.uri).json(&query).send().await.unwrap();
+        let response = client
+            .post(&self.uri)
+            .json(&json!({ "query": query }))
+            .send()
+            .await
+            .unwrap();
         if !response.status().is_success() {
             panic!(
                 "Query \"{}\" failed: {}",
-                query_string.get(..200).unwrap_or(query_string),
+                query.get(..200).unwrap_or(query),
                 response.text().await.unwrap()
             );
         }
@@ -984,7 +991,7 @@ impl Application {
         if let Some(errors) = value.get("errors") {
             panic!(
                 "Query \"{}\" failed: {}",
-                query_string.get(..200).unwrap_or(query_string),
+                query.get(..200).unwrap_or(query),
                 errors
             );
         }
@@ -992,8 +999,8 @@ impl Application {
     }
 
     async fn increment_counter_value(&self, increment: u64) {
-        let query_string = format!("mutation {{ increment(value: {})}}", increment);
-        self.query_application(&query_string).await;
+        let query = format!("mutation {{ increment(value: {})}}", increment);
+        self.query_application(&query).await;
     }
 }
 
@@ -1237,7 +1244,7 @@ async fn test_reconfiguration(network: Network) {
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let response = node_service_2
-                .query("query { chain { executionState { system { balance } } } }")
+                .query_node("query { chain { executionState { system { balance } } } }")
                 .await;
             if response["chain"]["executionState"]["system"]["balance"].as_str() == Some("8.") {
                 return;
@@ -1285,7 +1292,7 @@ async fn test_end_to_end_social_user_pub_sub() {
 
     // The returned hash should now be the latest one.
     let query = format!("query {{ chain(chainId: \"{chain2}\") {{ tipState {{ blockHash }} }} }}");
-    let response = node_service2.query(&query).await;
+    let response = node_service2.query_node(&query).await;
     assert_eq!(hash, response["chain"]["tipState"]["blockHash"]);
 
     let app1 = node_service1.make_application(&application_id).await;
@@ -1337,7 +1344,7 @@ async fn test_end_to_end_retry_notification_stream() {
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
     let mut node_service2 = client2.run_node_service(chain, 8081).await;
     let response = node_service2
-        .query("query { chain { tipState { nextBlockHeight } } }")
+        .query_node("query { chain { tipState { nextBlockHeight } } }")
         .await;
     assert_eq!(
         response["chain"]["tipState"]["nextBlockHeight"].as_u64(),
@@ -1356,7 +1363,7 @@ async fn test_end_to_end_retry_notification_stream() {
             tokio::time::sleep(Duration::from_secs(i)).await;
             height += 1;
             let response = node_service2
-                .query("query { chain { tipState { nextBlockHeight } } }")
+                .query_node("query { chain { tipState { nextBlockHeight } } }")
                 .await;
             if response["chain"]["tipState"]["nextBlockHeight"].as_u64() == Some(height) {
                 break 'success;
@@ -1423,13 +1430,13 @@ async fn test_end_to_end_fungible() {
         owner: account_owner2,
     };
     let amount_transfer = Amount::ONE;
-    let query_string = format!(
+    let query = format!(
         "mutation {{ transfer(owner: {}, amount: \"{}\", targetAccount: {}) }}",
         account_owner1.to_value(),
         amount_transfer,
         destination.to_value(),
     );
-    app1.query_application(&query_string).await;
+    app1.query_application(&query).await;
 
     // Checking the final values on chain1 and chain2.
     app1.assert_fungible_account_balances([
@@ -1457,13 +1464,13 @@ async fn test_end_to_end_fungible() {
         owner: account_owner2,
     };
     let amount_transfer: Amount = Amount::from_tokens(2);
-    let query_string = format!(
+    let query = format!(
         "mutation {{ claim(sourceAccount: {}, amount: \"{}\", targetAccount: {}) }}",
         source.to_value(),
         amount_transfer,
         destination.to_value()
     );
-    app2.query_application(&query_string).await;
+    app2.query_application(&query).await;
 
     // Make sure that the cross-chain communication happens fast enough.
     node_service1.process_inbox().await;
@@ -1569,13 +1576,13 @@ async fn test_end_to_end_crowd_funding() {
         owner: account_owner2,
     };
     let amount_transfer = Amount::ONE;
-    let query_string = format!(
+    let query = format!(
         "mutation {{ transfer(owner: {}, amount: \"{}\", targetAccount: {}) }}",
         account_owner1.to_value(),
         amount_transfer,
         destination.to_value(),
     );
-    app_fungible1.query_application(&query_string).await;
+    app_fungible1.query_application(&query).await;
 
     // Register the campaign on chain2.
     node_service2
@@ -1586,12 +1593,12 @@ async fn test_end_to_end_crowd_funding() {
 
     // Transferring
     let amount_transfer = Amount::ONE;
-    let query_string = format!(
+    let query = format!(
         "mutation {{ pledgeWithTransfer(owner: {}, amount: \"{}\") }}",
         account_owner2.to_value(),
         amount_transfer,
     );
-    app_crowd2.query_application(&query_string).await;
+    app_crowd2.query_application(&query).await;
 
     // Make sure that the pledge is processed fast enough by client1.
     node_service1.process_inbox().await;
