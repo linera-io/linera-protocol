@@ -362,7 +362,7 @@ fn generate_graphql_code_for_field(
         _ => panic!(),
     };
 
-    let (field_name_underscore,field_name_str) = get_graphql_pair_for_underscore(&field_name);
+    let (field_name_underscore, field_name_str) = get_graphql_pair_for_underscore(&field_name);
 
     let view_name = view_type.to_string();
     match view_type.to_string().as_str() {
@@ -434,8 +434,10 @@ fn generate_graphql_code_for_field(
                 .as_ref()
                 .map(|_| quote! { <#lifetime #context> })
                 .unwrap_or_else(|| quote! { <#lifetime> });
-            let (index_name_underscore,index_name_str) = get_graphql_pair_for_underscore(&index_name);
-            let (generic_underscore,generic_str) = get_graphql_pair_for_underscore(&generic_method_name);
+            let (index_name_underscore, index_name_str) =
+                get_graphql_pair_for_underscore(&index_name);
+            let (generic_underscore, generic_str) =
+                get_graphql_pair_for_underscore(&generic_method_name);
 
             let r#struct = quote! {
                 pub struct #entry_name #context_generics_with_lifetime
@@ -565,7 +567,8 @@ fn generate_graphql_code_for_field(
 
             let index_name = snakify(index_ident);
             let field_keys = concat(&field_name, "_keys");
-            let (field_keys_underscore,field_keys_str) = get_graphql_pair_for_underscore(&field_keys);
+            let (field_keys_underscore, field_keys_str) =
+                get_graphql_pair_for_underscore(&field_keys);
 
             let r#impl = quote! {
                 #[graphql(derived(name = #field_name_str))]
