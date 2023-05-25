@@ -18,7 +18,7 @@ use linera_base::{
     abi::{Abi, ContractAbi},
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, RoundNumber, Timestamp},
-    identifiers::{BytecodeId, ChainId, EffectId, Owner},
+    identifiers::{ApplicationId, BytecodeId, ChainId, EffectId, Owner},
 };
 use linera_chain::{
     data_types::{
@@ -30,7 +30,6 @@ use linera_execution::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
     system::{Account, Recipient, SystemChannel, SystemOperation, UserData},
     Bytecode, Effect, Operation, Query, Response, SystemEffect, SystemQuery, SystemResponse,
-    UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -1145,7 +1144,7 @@ where
     /// Queries a user application.
     pub async fn query_user_application<A: Abi>(
         &mut self,
-        application_id: UserApplicationId<A>,
+        application_id: ApplicationId<A>,
         query: &A::Query,
     ) -> Result<A::QueryResponse> {
         let query = Query::user(application_id, query)?;
@@ -1197,7 +1196,7 @@ where
     /// on this one.
     pub async fn request_application(
         &mut self,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         chain_id: Option<ChainId>,
     ) -> Result<Certificate> {
         let chain_id = chain_id.unwrap_or(application_id.creation.chain_id);
@@ -1357,8 +1356,8 @@ where
         bytecode_id: BytecodeId<A>,
         parameters: &<A as ContractAbi>::Parameters,
         initialization_argument: &A::InitializationArgument,
-        required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<(UserApplicationId<A>, Certificate)> {
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<(ApplicationId<A>, Certificate)> {
         let initialization_argument = serde_json::to_vec(initialization_argument)?;
         let parameters = serde_json::to_vec(parameters)?;
         let (app_id, cert) = self
@@ -1378,8 +1377,8 @@ where
         bytecode_id: BytecodeId,
         parameters: Vec<u8>,
         initialization_argument: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<(UserApplicationId, Certificate)> {
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<(ApplicationId, Certificate)> {
         self.prepare_chain().await?;
         let messages = self.pending_messages().await?;
         let certificate = self
@@ -1398,7 +1397,7 @@ where
             .value
             .nth_last_effect_id(1)
             .ok_or_else(|| anyhow!("Failed to create application"))?;
-        let id = UserApplicationId {
+        let id = ApplicationId {
             bytecode_id,
             creation,
         };

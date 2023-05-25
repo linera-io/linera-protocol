@@ -32,8 +32,7 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{Recipient, SystemChannel, UserData},
-    Bytecode, Operation, Query, Response, SystemOperation, UserApplicationDescription,
-    UserApplicationId,
+    ApplicationDescription, Bytecode, Operation, Query, Response, SystemOperation,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -302,7 +301,7 @@ where
         bytecode_id: BytecodeId,
         parameters: String,
         initialization_argument: String,
-        required_application_ids: Vec<UserApplicationId>,
+        required_application_ids: Vec<ApplicationId>,
     ) -> Result<ApplicationId, Error> {
         let mut client = self.client.lock().await;
         client.synchronize_from_validators().await?;
@@ -322,7 +321,7 @@ where
     /// on this one.
     async fn request_application(
         &self,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         target_chain_id: Option<ChainId>,
     ) -> Result<CryptoHash, Error> {
         let mut client = self.client.lock().await;
@@ -406,17 +405,13 @@ where
 
 #[derive(SimpleObject)]
 pub struct ApplicationOverview {
-    id: UserApplicationId,
-    description: UserApplicationDescription,
+    id: ApplicationId,
+    description: ApplicationDescription,
     link: String,
 }
 
 impl ApplicationOverview {
-    fn new(
-        id: UserApplicationId,
-        description: UserApplicationDescription,
-        port: NonZeroU16,
-    ) -> Self {
+    fn new(id: ApplicationId, description: ApplicationDescription, port: NonZeroU16) -> Self {
         Self {
             id,
             description,
@@ -579,7 +574,7 @@ where
     /// Handles queries for user applications.
     async fn user_application_query(
         &self,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         request: &Request,
     ) -> Result<async_graphql::Response, NodeServiceError> {
         let bytes = serde_json::to_vec(&request)?;
@@ -598,7 +593,7 @@ where
     /// Handles mutations for user applications.
     async fn user_application_mutation(
         &self,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         request: &Request,
     ) -> Result<async_graphql::Response, NodeServiceError> {
         let graphql_response = self.user_application_query(application_id, request).await?;
@@ -644,7 +639,7 @@ where
         let parsed_query = request.parsed_query()?;
         let operation_type = operation_type(parsed_query)?;
 
-        let application_id: UserApplicationId = application_id.parse()?;
+        let application_id: ApplicationId = application_id.parse()?;
 
         let response = match operation_type {
             OperationType::Query => {

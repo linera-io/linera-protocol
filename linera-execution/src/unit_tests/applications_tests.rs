@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    ApplicationRegistry, ApplicationRegistryView, BytecodeLocation, UserApplicationDescription,
-    UserApplicationId,
+    ApplicationDescription, ApplicationId, ApplicationRegistry, ApplicationRegistryView,
+    BytecodeLocation,
 };
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
@@ -24,15 +24,15 @@ fn bytecode_id(index: u32) -> BytecodeId {
     BytecodeId::new(effect_id(index))
 }
 
-fn app_id(index: u32) -> UserApplicationId {
-    UserApplicationId {
+fn app_id(index: u32) -> ApplicationId {
+    ApplicationId {
         bytecode_id: bytecode_id(0),
         creation: effect_id(index),
     }
 }
 
-fn app_description(index: u32, deps: Vec<u32>) -> UserApplicationDescription {
-    UserApplicationDescription {
+fn app_description(index: u32, deps: Vec<u32>) -> ApplicationDescription {
+    ApplicationDescription {
         bytecode_id: bytecode_id(0),
         bytecode_location: location(0),
         creation: effect_id(index),

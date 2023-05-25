@@ -14,12 +14,12 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{ArithmeticError, BlockHeight, Timestamp},
     ensure,
-    identifiers::{ChainId, Destination, EffectId},
+    identifiers::{ApplicationId, ChainId, Destination, EffectId},
 };
 use linera_execution::{
-    system::SystemEffect, ApplicationId, Effect, EffectContext, ExecutionResult,
+    system::SystemEffect, ApplicationDescription, Effect, EffectContext, ExecutionResult,
     ExecutionRuntimeContext, ExecutionStateView, OperationContext, Query, QueryContext,
-    RawExecutionResult, Response, UserApplicationDescription, UserApplicationId,
+    RawExecutionResult, Response, SystemOrApplicationId,
 };
 use linera_views::{
     common::Context,
@@ -104,8 +104,8 @@ where
 
     pub async fn describe_application(
         &mut self,
-        application_id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, ChainError> {
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, ChainError> {
         self.execution_state
             .system
             .registry
@@ -456,7 +456,7 @@ where
             match result {
                 ExecutionResult::System(result) => {
                     self.process_raw_execution_result(
-                        ApplicationId::System,
+                        SystemOrApplicationId::System,
                         Effect::System,
                         effects,
                         height,
@@ -466,7 +466,7 @@ where
                 }
                 ExecutionResult::User(application_id, result) => {
                     self.process_raw_execution_result(
-                        ApplicationId::User(application_id),
+                        SystemOrApplicationId::User(application_id),
                         |bytes| Effect::User {
                             application_id,
                             bytes,
@@ -484,7 +484,7 @@ where
 
     async fn process_raw_execution_result<E, F>(
         &mut self,
-        application_id: ApplicationId,
+        application_id: SystemOrApplicationId,
         lift: F,
         effects: &mut Vec<OutgoingEffect>,
         height: BlockHeight,

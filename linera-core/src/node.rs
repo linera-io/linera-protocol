@@ -12,7 +12,7 @@ use futures::{future, lock::Mutex, Stream};
 use linera_base::{
     crypto::CryptoError,
     data_types::{ArithmeticError, BlockHeight},
-    identifiers::{ChainId, EffectId},
+    identifiers::{ApplicationId, ChainId, EffectId},
 };
 use linera_chain::{
     data_types::{
@@ -21,8 +21,7 @@ use linera_chain::{
     ChainError, ChainManagerInfo,
 };
 use linera_execution::{
-    committee::ValidatorName, BytecodeLocation, Query, Response, UserApplicationDescription,
-    UserApplicationId,
+    committee::ValidatorName, ApplicationDescription, BytecodeLocation, Query, Response,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -424,8 +423,8 @@ where
     pub async fn describe_application(
         &self,
         chain_id: ChainId,
-        application_id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, NodeError> {
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, NodeError> {
         let mut node = self.node.lock().await;
         let response = node
             .state

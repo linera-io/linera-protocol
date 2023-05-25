@@ -27,8 +27,8 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{Account, Recipient, SystemChannel, SystemEffect, SystemOperation, UserData},
-    ApplicationId, ApplicationRegistry, ChainOwnership, ChannelSubscription, Effect,
-    ExecutionStateView, Operation, Query, Response, SystemExecutionState, SystemQuery,
+    ApplicationRegistry, ChainOwnership, ChannelSubscription, Effect, ExecutionStateView,
+    Operation, Query, Response, SystemExecutionState, SystemOrApplicationId, SystemQuery,
     SystemResponse,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
@@ -2496,7 +2496,7 @@ where
         name: SystemChannel::Admin.name(),
     };
     let admin_channel_full_name = ChannelFullName {
-        application_id: ApplicationId::System,
+        application_id: SystemOrApplicationId::System,
         name: SystemChannel::Admin.name(),
     };
     let admin_channel_origin = Origin::channel(admin_id, admin_channel_full_name.clone());

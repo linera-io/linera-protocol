@@ -46,7 +46,6 @@ pub struct EffectId {
 /// A unique identifier for a user application.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
-#[serde(rename = "UserApplicationId")]
 pub struct ApplicationId<A = ()> {
     /// The bytecode to use for the application.
     pub bytecode_id: BytecodeId<A>,

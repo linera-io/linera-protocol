@@ -13,8 +13,7 @@ pub mod system;
 mod wasm;
 
 pub use applications::{
-    ApplicationId, ApplicationRegistryView, BytecodeLocation, UserApplicationDescription,
-    UserApplicationId,
+    ApplicationDescription, ApplicationRegistryView, BytecodeLocation, SystemOrApplicationId,
 };
 pub use execution::ExecutionStateView;
 pub use ownership::ChainOwnership;
@@ -42,7 +41,9 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     hex_debug,
-    identifiers::{BytecodeId, ChainId, ChannelName, Destination, EffectId, Owner, SessionId},
+    identifiers::{
+        ApplicationId, BytecodeId, ChainId, ChannelName, Destination, EffectId, Owner, SessionId,
+    },
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -92,7 +93,7 @@ pub enum ExecutionError {
     #[error("Bytecode ID {0:?} is invalid")]
     InvalidBytecodeId(BytecodeId),
     #[error("Failed to load bytecode from storage {0:?}")]
-    ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
+    ApplicationBytecodeNotFound(Box<ApplicationDescription>),
 }
 
 impl From<ViewError> for ExecutionError {
@@ -192,11 +193,11 @@ pub struct SessionCallResult {
 pub trait ExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId;
 
-    fn user_applications(&self) -> &Arc<DashMap<UserApplicationId, UserApplicationCode>>;
+    fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>>;
 
     async fn get_user_application(
         &self,
-        description: &UserApplicationDescription,
+        description: &ApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError>;
 }
 
@@ -237,7 +238,7 @@ pub struct CalleeContext {
     pub authenticated_signer: Option<Owner>,
     /// `None` if the caller doesn't want this particular call to be authenticated (e.g.
     /// for safety reasons).
-    pub authenticated_caller_id: Option<UserApplicationId>,
+    pub authenticated_caller_id: Option<ApplicationId>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -252,7 +253,7 @@ pub trait BaseRuntime: Send + Sync {
     fn chain_id(&self) -> ChainId;
 
     /// The current application id.
-    fn application_id(&self) -> UserApplicationId;
+    fn application_id(&self) -> ApplicationId;
 
     /// The current application parameters.
     fn application_parameters(&self) -> Vec<u8>;
@@ -293,7 +294,7 @@ pub trait ServiceRuntime: BaseRuntime {
     /// Queries another application.
     async fn try_query_application(
         &self,
-        queried_id: UserApplicationId,
+        queried_id: ApplicationId,
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError>;
 }
@@ -331,7 +332,7 @@ pub trait ContractRuntime: BaseRuntime {
     async fn try_call_application(
         &self,
         authenticated: bool,
-        callee_id: UserApplicationId,
+        callee_id: ApplicationId,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError>;
@@ -354,7 +355,7 @@ pub enum Operation {
     System(SystemOperation),
     /// A user operation (in serialized form).
     User {
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -368,7 +369,7 @@ pub enum Effect {
     System(SystemEffect),
     /// A user effect (in serialized form).
     User {
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -382,7 +383,7 @@ pub enum Query {
     System(SystemQuery),
     /// A user query (in serialized form).
     User {
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -435,14 +436,14 @@ pub struct ChannelSubscription {
 #[allow(clippy::large_enum_variant)]
 pub enum ExecutionResult {
     System(RawExecutionResult<SystemEffect>),
-    User(UserApplicationId, RawExecutionResult<Vec<u8>>),
+    User(ApplicationId, RawExecutionResult<Vec<u8>>),
 }
 
 impl ExecutionResult {
-    pub fn application_id(&self) -> ApplicationId {
+    pub fn application_id(&self) -> SystemOrApplicationId {
         match self {
-            ExecutionResult::System(_) => ApplicationId::System,
-            ExecutionResult::User(app_id, _) => ApplicationId::User(*app_id),
+            ExecutionResult::System(_) => SystemOrApplicationId::System,
+            ExecutionResult::User(app_id, _) => SystemOrApplicationId::User(*app_id),
         }
     }
 }
@@ -479,7 +480,7 @@ impl OperationContext {
 #[derive(Clone)]
 pub struct TestExecutionRuntimeContext {
     chain_id: ChainId,
-    user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
+    user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -499,13 +500,13 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         self.chain_id
     }
 
-    fn user_applications(&self) -> &Arc<DashMap<UserApplicationId, UserApplicationCode>> {
+    fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>> {
         &self.user_applications
     }
 
     async fn get_user_application(
         &self,
-        description: &UserApplicationDescription,
+        description: &ApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError> {
         let application_id = description.into();
         Ok(self
@@ -530,7 +531,7 @@ impl Operation {
     }
 
     pub fn user<A: Abi>(
-        application_id: UserApplicationId<A>,
+        application_id: ApplicationId<A>,
         operation: &A::Operation,
     ) -> Result<Self, bcs::Error> {
         let application_id = application_id.forget_abi();
@@ -541,10 +542,10 @@ impl Operation {
         })
     }
 
-    pub fn application_id(&self) -> ApplicationId {
+    pub fn application_id(&self) -> SystemOrApplicationId {
         match self {
-            Self::System(_) => ApplicationId::System,
-            Self::User { application_id, .. } => ApplicationId::User(*application_id),
+            Self::System(_) => SystemOrApplicationId::System,
+            Self::User { application_id, .. } => SystemOrApplicationId::User(*application_id),
         }
     }
 }
@@ -561,7 +562,7 @@ impl Effect {
     }
 
     pub fn user<A: Abi>(
-        application_id: UserApplicationId<A>,
+        application_id: ApplicationId<A>,
         effect: &A::Effect,
     ) -> Result<Self, bcs::Error> {
         let application_id = application_id.forget_abi();
@@ -572,10 +573,10 @@ impl Effect {
         })
     }
 
-    pub fn application_id(&self) -> ApplicationId {
+    pub fn application_id(&self) -> SystemOrApplicationId {
         match self {
-            Self::System(_) => ApplicationId::System,
-            Self::User { application_id, .. } => ApplicationId::User(*application_id),
+            Self::System(_) => SystemOrApplicationId::System,
+            Self::User { application_id, .. } => SystemOrApplicationId::User(*application_id),
         }
     }
 }
@@ -592,7 +593,7 @@ impl Query {
     }
 
     pub fn user<A: Abi>(
-        application_id: UserApplicationId<A>,
+        application_id: ApplicationId<A>,
         query: &A::Query,
     ) -> Result<Self, serde_json::Error> {
         let application_id = application_id.forget_abi();
@@ -603,10 +604,10 @@ impl Query {
         })
     }
 
-    pub fn application_id(&self) -> ApplicationId {
+    pub fn application_id(&self) -> SystemOrApplicationId {
         match self {
-            Self::System(_) => ApplicationId::System,
-            Self::User { application_id, .. } => ApplicationId::User(*application_id),
+            Self::System(_) => SystemOrApplicationId::System,
+            Self::User { application_id, .. } => SystemOrApplicationId::User(*application_id),
         }
     }
 }

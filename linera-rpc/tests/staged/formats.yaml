@@ -8,14 +8,24 @@ Account:
           TYPENAME: Owner
 Amount:
   NEWTYPESTRUCT: U128
+ApplicationDescription:
+  STRUCT:
+    - bytecode_id:
+        TYPENAME: BytecodeId
+    - bytecode_location:
+        TYPENAME: BytecodeLocation
+    - creation:
+        TYPENAME: EffectId
+    - parameters: BYTES
+    - required_application_ids:
+        SEQ:
+          TYPENAME: ApplicationId
 ApplicationId:
-  ENUM:
-    0:
-      System: UNIT
-    1:
-      User:
-        NEWTYPE:
-          TYPENAME: UserApplicationId
+  STRUCT:
+    - bytecode_id:
+        TYPENAME: BytecodeId
+    - creation:
+        TYPENAME: EffectId
 Block:
   STRUCT:
     - chain_id:
@@ -186,7 +196,7 @@ ChainManagerInfo:
 ChannelFullName:
   STRUCT:
     - application_id:
-        TYPENAME: ApplicationId
+        TYPENAME: SystemOrApplicationId
     - name:
         TYPENAME: ChannelName
 ChannelName:
@@ -263,7 +273,7 @@ Effect:
       User:
         STRUCT:
           - application_id:
-              TYPENAME: UserApplicationId
+              TYPENAME: ApplicationId
           - bytes: BYTES
 EffectId:
   STRUCT:
@@ -467,7 +477,7 @@ Operation:
       User:
         STRUCT:
           - application_id:
-              TYPENAME: UserApplicationId
+              TYPENAME: ApplicationId
           - bytes: BYTES
 Origin:
   STRUCT:
@@ -638,7 +648,7 @@ SystemEffect:
         STRUCT:
           - applications:
               SEQ:
-                TYPENAME: UserApplicationDescription
+                TYPENAME: ApplicationDescription
     10:
       Notify:
         STRUCT:
@@ -647,7 +657,7 @@ SystemEffect:
     11:
       RequestApplication:
         NEWTYPE:
-          TYPENAME: UserApplicationId
+          TYPENAME: ApplicationId
 SystemOperation:
   ENUM:
     0:
@@ -749,34 +759,24 @@ SystemOperation:
           - initialization_argument: BYTES
           - required_application_ids:
               SEQ:
-                TYPENAME: UserApplicationId
+                TYPENAME: ApplicationId
     12:
       RequestApplication:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - application_id:
-              TYPENAME: UserApplicationId
+              TYPENAME: ApplicationId
+SystemOrApplicationId:
+  ENUM:
+    0:
+      System: UNIT
+    1:
+      User:
+        NEWTYPE:
+          TYPENAME: ApplicationId
 Timestamp:
   NEWTYPESTRUCT: U64
-UserApplicationDescription:
-  STRUCT:
-    - bytecode_id:
-        TYPENAME: BytecodeId
-    - bytecode_location:
-        TYPENAME: BytecodeLocation
-    - creation:
-        TYPENAME: EffectId
-    - parameters: BYTES
-    - required_application_ids:
-        SEQ:
-          TYPENAME: UserApplicationId
-UserApplicationId:
-  STRUCT:
-    - bytecode_id:
-        TYPENAME: BytecodeId
-    - creation:
-        TYPENAME: EffectId
 UserData:
   NEWTYPESTRUCT:
     OPTION:

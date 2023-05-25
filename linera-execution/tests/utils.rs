@@ -6,13 +6,13 @@ use linera_base::{
     data_types::BlockHeight,
     identifiers::{BytecodeId, ChainId, EffectId},
 };
-use linera_execution::{BytecodeLocation, UserApplicationDescription};
+use linera_execution::{ApplicationDescription, BytecodeLocation};
 use serde::{Deserialize, Serialize};
 
-pub fn create_dummy_user_application_description() -> UserApplicationDescription {
+pub fn create_dummy_user_application_description() -> ApplicationDescription {
     let chain_id = ChainId::root(1);
     let certificate_hash = CryptoHash::new(&FakeCertificate);
-    UserApplicationDescription {
+    ApplicationDescription {
         bytecode_id: BytecodeId::new(EffectId {
             chain_id,
             height: BlockHeight(1),

@@ -13,7 +13,7 @@ use super::{init_worker_with_chains, make_block, make_certificate, make_state_ha
 use linera_base::{
     crypto::KeyPair,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{BytecodeId, ChainDescription, ChainId, Destination, EffectId},
+    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, Destination, EffectId},
 };
 use linera_chain::data_types::{
     ChannelFullName, Event, HashedValue, Message, Origin, OutgoingEffect,
@@ -21,10 +21,9 @@ use linera_chain::data_types::{
 use linera_execution::{
     committee::Epoch,
     system::{SystemChannel, SystemEffect, SystemOperation},
-    ApplicationId, ApplicationRegistry, Bytecode, BytecodeLocation, ChainOwnership,
+    ApplicationDescription, ApplicationRegistry, Bytecode, BytecodeLocation, ChainOwnership,
     ChannelSubscription, Effect, ExecutionStateView, Operation, OperationContext,
-    SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmApplication,
-    WasmRuntime,
+    SystemExecutionState, SystemOrApplicationId, WasmApplication, WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::{
@@ -354,7 +353,7 @@ where
         initialization_argument: initial_value_bytes.clone(),
         required_application_ids: vec![],
     };
-    let application_id = UserApplicationId {
+    let application_id = ApplicationId {
         bytecode_id,
         creation: EffectId {
             chain_id: creator_chain.into(),
@@ -362,7 +361,7 @@ where
             index: 0,
         },
     };
-    let application_description = UserApplicationDescription {
+    let application_description = ApplicationDescription {
         bytecode_id,
         bytecode_location,
         creation: application_id.creation,
@@ -370,7 +369,7 @@ where
         parameters: vec![],
     };
     let publish_admin_channel = ChannelFullName {
-        application_id: ApplicationId::System,
+        application_id: SystemOrApplicationId::System,
         name: SystemChannel::PublishedBytecodes.name(),
     };
     let create_block = make_block(

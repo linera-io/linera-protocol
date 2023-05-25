@@ -10,7 +10,7 @@ use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{BytecodeId, ChainDescription, ChainId, EffectId},
+    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, EffectId},
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{
@@ -23,7 +23,7 @@ use linera_core::{
 use linera_execution::{
     committee::{ValidatorName, ValidatorState},
     system::{Account, UserData},
-    Bytecode, UserApplicationId, WasmRuntime, WithWasmDefault,
+    Bytecode, WasmRuntime, WithWasmDefault,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
@@ -749,7 +749,7 @@ enum ClientCommand {
 
         /// The list of required dependencies of application, if any.
         #[structopt(long)]
-        required_application_ids: Option<Vec<UserApplicationId>>,
+        required_application_ids: Option<Vec<ApplicationId>>,
     },
 
     /// Create an application, and publish the required bytecode.
@@ -782,13 +782,13 @@ enum ClientCommand {
 
         /// The list of required dependencies of application, if any.
         #[structopt(long)]
-        required_application_ids: Option<Vec<UserApplicationId>>,
+        required_application_ids: Option<Vec<ApplicationId>>,
     },
 
     /// Request an application from another chain, so it can be used on this one.
     RequestApplication {
         /// The ID of the application to request.
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
 
         /// The target chain on which the application is already registered.
         /// If not specified, the chain on which the application was created is used.

@@ -4,13 +4,13 @@
 use crate::{
     runtime::{ApplicationStatus, ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
-    ContractRuntime, Effect, EffectContext, ExecutionError, ExecutionResult,
-    ExecutionRuntimeContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
-    Response, SystemEffect, UserApplicationDescription, UserApplicationId,
+    ApplicationDescription, ContractRuntime, Effect, EffectContext, ExecutionError,
+    ExecutionResult, ExecutionRuntimeContext, Operation, OperationContext, Query, QueryContext,
+    RawExecutionResult, Response, SystemEffect,
 };
 use linera_base::{
     ensure,
-    identifiers::{ChainId, Owner},
+    identifiers::{ApplicationId, ChainId, Owner},
 };
 use linera_views::{
     common::Context,
@@ -36,9 +36,9 @@ pub struct ExecutionStateView<C> {
     /// System application.
     pub system: SystemExecutionStateView<C>,
     /// User applications (Simple based).
-    pub simple_users: ReentrantCollectionView<C, UserApplicationId, RegisterView<C, Vec<u8>>>,
+    pub simple_users: ReentrantCollectionView<C, ApplicationId, RegisterView<C, Vec<u8>>>,
     /// User applications (View based).
-    pub view_users: ReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
+    pub view_users: ReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
     /// Fuel available for running applications.
     pub available_fuel: RegisterView<C, u64>,
 }
@@ -110,7 +110,7 @@ where
     pub async fn simulate_initialization(
         &mut self,
         application: UserApplicationCode,
-        application_description: UserApplicationDescription,
+        application_description: ApplicationDescription,
         initialization_argument: Vec<u8>,
     ) -> Result<(), ExecutionError> {
         let chain_id = application_description.creation.chain_id;
@@ -173,7 +173,7 @@ where
 
     async fn run_user_action(
         &mut self,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         chain_id: ChainId,
         action: UserAction<'_>,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
@@ -379,7 +379,7 @@ where
 
     pub async fn list_applications(
         &self,
-    ) -> Result<Vec<(UserApplicationId, UserApplicationDescription)>, ExecutionError> {
+    ) -> Result<Vec<(ApplicationId, ApplicationDescription)>, ExecutionError> {
         let mut applications = vec![];
         for index in self.system.registry.known_applications.indices().await? {
             let application_description =

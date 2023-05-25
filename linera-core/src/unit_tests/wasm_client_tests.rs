@@ -18,7 +18,7 @@ use linera_base::{
 };
 use linera_chain::data_types::OutgoingEffect;
 use linera_execution::{
-    Bytecode, Effect, Operation, SystemEffect, UserApplicationDescription, WasmRuntime,
+    ApplicationDescription, Bytecode, Effect, Operation, SystemEffect, WasmRuntime,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -429,7 +429,7 @@ where
             matches!(
                 effect,
                 Effect::System(SystemEffect::RegisterApplications { applications })
-                if matches!(applications[0], UserApplicationDescription{ bytecode_id: b_id, .. } if b_id == bytecode_id.forget_abi())
+                if matches!(applications[0], ApplicationDescription{ bytecode_id: b_id, .. } if b_id == bytecode_id.forget_abi())
             ) && *destination == Destination::Recipient(receiver.chain_id())
         }));
     receiver.synchronize_from_validators().await.unwrap();

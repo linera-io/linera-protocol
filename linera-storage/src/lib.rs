@@ -21,7 +21,7 @@ use futures::future;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, Timestamp},
-    identifiers::{ChainDescription, ChainId},
+    identifiers::{ApplicationId, ChainDescription, ChainId},
 };
 use linera_chain::{
     data_types::{Certificate, HashedValue, LiteCertificate, Value},
@@ -29,8 +29,8 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    ChainOwnership, ExecutionError, ExecutionRuntimeContext, UserApplicationCode,
-    UserApplicationDescription, UserApplicationId, WasmRuntime,
+    ApplicationDescription, ChainOwnership, ExecutionError, ExecutionRuntimeContext,
+    UserApplicationCode, WasmRuntime,
 };
 use linera_views::{
     batch::Batch,
@@ -173,12 +173,12 @@ pub trait Store: Sized {
     #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
     async fn load_application(
         &self,
-        application_description: &UserApplicationDescription,
+        application_description: &ApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError> {
         let Some(wasm_runtime) = self.wasm_runtime() else {
             panic!("A WASM runtime is required to load user applications.");
         };
-        let UserApplicationDescription {
+        let ApplicationDescription {
             bytecode_id,
             bytecode_location,
             ..
@@ -210,7 +210,7 @@ pub trait Store: Sized {
     #[cfg(not(any(feature = "wasmer", feature = "wasmtime")))]
     async fn load_application(
         &self,
-        _application_description: &UserApplicationDescription,
+        _application_description: &ApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError> {
         panic!(
             "A WASM runtime is required to load user applications. \
@@ -224,7 +224,7 @@ pub trait Store: Sized {
 pub struct DbStore<CL> {
     client: CL,
     guards: ChainGuards,
-    user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
+    user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
     wasm_runtime: Option<WasmRuntime>,
 }
 
@@ -373,7 +373,7 @@ where
 pub struct ChainRuntimeContext<StoreClient> {
     store: StoreClient,
     pub chain_id: ChainId,
-    pub user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
+    pub user_applications: Arc<DashMap<ApplicationId, UserApplicationCode>>,
     pub chain_guard: Option<Arc<ChainGuard>>,
 }
 
@@ -386,13 +386,13 @@ where
         self.chain_id
     }
 
-    fn user_applications(&self) -> &Arc<DashMap<UserApplicationId, UserApplicationCode>> {
+    fn user_applications(&self) -> &Arc<DashMap<ApplicationId, UserApplicationCode>> {
         &self.user_applications
     }
 
     async fn get_user_application(
         &self,
-        description: &UserApplicationDescription,
+        description: &ApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError> {
         match self.user_applications.entry(description.into()) {
             Entry::Occupied(entry) => Ok(entry.get().clone()),

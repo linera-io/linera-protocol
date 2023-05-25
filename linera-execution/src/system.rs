@@ -4,9 +4,9 @@
 
 use crate::{
     committee::{Committee, Epoch},
-    ApplicationRegistryView, Bytecode, BytecodeLocation, ChainOwnership, ChannelName,
-    ChannelSubscription, Destination, EffectContext, OperationContext, QueryContext,
-    RawExecutionResult, UserApplicationDescription, UserApplicationId,
+    ApplicationDescription, ApplicationId, ApplicationRegistryView, Bytecode, BytecodeLocation,
+    ChainOwnership, ChannelName, ChannelSubscription, Destination, EffectContext, OperationContext,
+    QueryContext, RawExecutionResult,
 };
 use async_graphql::Enum;
 use custom_debug_derive::Debug;
@@ -150,12 +150,12 @@ pub enum SystemOperation {
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         initialization_argument: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
+        required_application_ids: Vec<ApplicationId>,
     },
     /// Requests a message from another chain to register a user application on this chain.
     RequestApplication {
         chain_id: ChainId,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
     },
 }
 
@@ -207,13 +207,13 @@ pub enum SystemEffect {
     /// Shares information about some applications to help the recipient use them.
     /// Applications must be registered after their dependencies.
     RegisterApplications {
-        applications: Vec<UserApplicationDescription>,
+        applications: Vec<ApplicationDescription>,
     },
     /// Does nothing. Used to debug the intended recipients of a block.
     Notify { id: ChainId },
     /// Requests a `RegisterApplication` message from the target chain to register the specified
     /// application on the sender chain.
-    RequestApplication(UserApplicationId),
+    RequestApplication(ApplicationId),
 }
 
 impl SystemEffect {
@@ -412,7 +412,7 @@ pub enum SystemExecutionError {
     #[error("Attempt to create an application using unregistered bytecode identifier {0:?}")]
     UnknownBytecodeId(BytecodeId),
     #[error("Application {0:?} is not registered by the chain")]
-    UnknownApplicationId(Box<UserApplicationId>),
+    UnknownApplicationId(Box<ApplicationId>),
 }
 
 impl<C> SystemExecutionStateView<C>
@@ -441,7 +441,7 @@ where
     ) -> Result<
         (
             RawExecutionResult<SystemEffect>,
-            Option<(UserApplicationId, Vec<u8>)>,
+            Option<(ApplicationId, Vec<u8>)>,
         ),
         SystemExecutionError,
     > {
@@ -706,7 +706,7 @@ where
                 initialization_argument,
                 required_application_ids,
             } => {
-                let id = UserApplicationId {
+                let id = ApplicationId {
                     bytecode_id: *bytecode_id,
                     creation: context.next_effect_id(),
                 };

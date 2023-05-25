@@ -11,12 +11,12 @@
 use super::{contract, contract_system_api, service_system_api};
 use crate::{
     ApplicationCallResult, ChannelName, Destination, RawExecutionResult, SessionCallResult,
-    SessionId, UserApplicationId,
+    SessionId,
 };
 use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
-    identifiers::{BytecodeId, ChainId, EffectId},
+    identifiers::{ApplicationId, BytecodeId, ChainId, EffectId},
 };
 
 impl From<contract::SessionCallResult> for (SessionCallResult, Vec<u8>) {
@@ -116,9 +116,9 @@ impl From<contract_system_api::SessionId> for SessionId {
     }
 }
 
-impl From<contract_system_api::ApplicationId> for UserApplicationId {
+impl From<contract_system_api::ApplicationId> for ApplicationId {
     fn from(guest: contract_system_api::ApplicationId) -> Self {
-        UserApplicationId {
+        ApplicationId {
             bytecode_id: guest.bytecode_id.into(),
             creation: guest.creation.into(),
         }
@@ -160,9 +160,9 @@ impl From<contract_system_api::CryptoHash> for CryptoHash {
     }
 }
 
-impl From<service_system_api::ApplicationId> for UserApplicationId {
+impl From<service_system_api::ApplicationId> for ApplicationId {
     fn from(guest: service_system_api::ApplicationId) -> Self {
-        UserApplicationId {
+        ApplicationId {
             bytecode_id: guest.bytecode_id.into(),
             creation: guest.creation.into(),
         }

@@ -11,9 +11,12 @@
 use super::{contract, contract_system_api, service, service_system_api};
 use crate::{
     CallResult, CalleeContext, EffectContext, EffectId, OperationContext, QueryContext, SessionId,
-    UserApplicationId,
 };
-use linera_base::{crypto::CryptoHash, data_types::Amount, identifiers::ChainId};
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::Amount,
+    identifiers::{ApplicationId, ChainId},
+};
 
 impl From<OperationContext> for contract::OperationContext {
     fn from(host: OperationContext) -> Self {
@@ -105,8 +108,8 @@ impl From<SessionId> for contract_system_api::SessionId {
     }
 }
 
-impl From<UserApplicationId> for contract::ApplicationId {
-    fn from(host: UserApplicationId) -> Self {
+impl From<ApplicationId> for contract::ApplicationId {
+    fn from(host: ApplicationId) -> Self {
         contract::ApplicationId {
             bytecode_id: host.bytecode_id.effect_id.into(),
             creation: host.creation.into(),
@@ -114,8 +117,8 @@ impl From<UserApplicationId> for contract::ApplicationId {
     }
 }
 
-impl From<UserApplicationId> for service_system_api::ApplicationId {
-    fn from(host: UserApplicationId) -> Self {
+impl From<ApplicationId> for service_system_api::ApplicationId {
+    fn from(host: ApplicationId) -> Self {
         service_system_api::ApplicationId {
             bytecode_id: host.bytecode_id.effect_id.into(),
             creation: host.creation.into(),
@@ -123,8 +126,8 @@ impl From<UserApplicationId> for service_system_api::ApplicationId {
     }
 }
 
-impl From<UserApplicationId> for contract_system_api::ApplicationId {
-    fn from(host: UserApplicationId) -> Self {
+impl From<ApplicationId> for contract_system_api::ApplicationId {
+    fn from(host: ApplicationId) -> Self {
         contract_system_api::ApplicationId {
             bytecode_id: host.bytecode_id.effect_id.into(),
             creation: host.creation.into(),

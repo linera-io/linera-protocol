@@ -3,8 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use linera_base::crypto::{BcsSignable, CryptoHash};
-use linera_execution::{Effect, UserApplicationId};
+use linera_base::{
+    crypto::{BcsSignable, CryptoHash},
+    identifiers::ApplicationId,
+};
+use linera_execution::Effect;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -28,7 +31,7 @@ fn make_event(
         authenticated_signer: None,
         timestamp: Default::default(),
         effect: Effect::User {
-            application_id: UserApplicationId::default(),
+            application_id: ApplicationId::default(),
             bytes: effect.into(),
         },
     }

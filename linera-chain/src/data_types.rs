@@ -12,7 +12,7 @@ use linera_base::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    ApplicationId, BytecodeLocation, Effect, Operation,
+    BytecodeLocation, Effect, Operation, SystemOrApplicationId,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -137,7 +137,7 @@ pub struct Target {
 /// A channel name together with its application id.
 pub struct ChannelFullName {
     /// The application owning the channel.
-    pub application_id: ApplicationId,
+    pub application_id: SystemOrApplicationId,
     /// The name of the channel.
     pub name: ChannelName,
 }

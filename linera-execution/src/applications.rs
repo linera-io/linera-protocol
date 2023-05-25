@@ -6,7 +6,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     hex_debug,
-    identifiers::{BytecodeId, EffectId},
+    identifiers::{ApplicationId, BytecodeId, EffectId},
 };
 use linera_views::{
     common::Context,
@@ -26,33 +26,19 @@ use {
 #[path = "unit_tests/applications_tests.rs"]
 mod applications_tests;
 
-/// A unique identifier for an application.
+/// A unique identifier for either a user application or the system.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub enum ApplicationId {
-    /// The system application.
+pub enum SystemOrApplicationId {
+    /// The system.
     System,
     /// A user application.
-    User(UserApplicationId),
+    User(ApplicationId),
 }
-
-impl ApplicationId {
-    pub fn user_application_id(&self) -> Option<&UserApplicationId> {
-        if let ApplicationId::User(app_id) = self {
-            Some(app_id)
-        } else {
-            None
-        }
-    }
-}
-
-/// Alias for `linera_base::identifiers::ApplicationId`. Use this alias in the core
-/// protocol where the distinction with the more general enum [`ApplicationId`] matters.
-pub type UserApplicationId<A = ()> = linera_base::identifiers::ApplicationId<A>;
 
 /// Description of the necessary information to run a user application.
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
-pub struct UserApplicationDescription {
+pub struct ApplicationDescription {
     /// The unique ID of the bytecode to use for the application.
     pub bytecode_id: BytecodeId,
     /// The location of the bytecode to use for the application.
@@ -64,21 +50,21 @@ pub struct UserApplicationDescription {
     #[debug(with = "hex_debug")]
     pub parameters: Vec<u8>,
     /// Required dependencies.
-    pub required_application_ids: Vec<UserApplicationId>,
+    pub required_application_ids: Vec<ApplicationId>,
 }
 
-impl From<&UserApplicationDescription> for UserApplicationId {
-    fn from(description: &UserApplicationDescription) -> Self {
-        UserApplicationId {
+impl From<&ApplicationDescription> for ApplicationId {
+    fn from(description: &ApplicationDescription) -> Self {
+        ApplicationId {
             bytecode_id: description.bytecode_id,
             creation: description.creation,
         }
     }
 }
 
-impl From<UserApplicationId> for ApplicationId {
-    fn from(user_application_id: UserApplicationId) -> Self {
-        ApplicationId::User(user_application_id)
+impl From<ApplicationId> for SystemOrApplicationId {
+    fn from(user_application_id: ApplicationId) -> Self {
+        SystemOrApplicationId::User(user_application_id)
     }
 }
 
@@ -96,14 +82,14 @@ pub struct ApplicationRegistryView<C> {
     /// The application bytecodes that have been published.
     pub published_bytecodes: MapView<C, BytecodeId, BytecodeLocation>,
     /// The applications that are known by the chain.
-    pub known_applications: MapView<C, UserApplicationId, UserApplicationDescription>,
+    pub known_applications: MapView<C, ApplicationId, ApplicationDescription>,
 }
 
 #[cfg(any(test, feature = "test"))]
 #[derive(Default, Eq, PartialEq, Debug, Clone)]
 pub struct ApplicationRegistry {
     pub published_bytecodes: BTreeMap<BytecodeId, BytecodeLocation>,
-    pub known_applications: BTreeMap<UserApplicationId, UserApplicationDescription>,
+    pub known_applications: BTreeMap<ApplicationId, ApplicationDescription>,
 }
 
 impl<C> ApplicationRegistryView<C>
@@ -161,13 +147,13 @@ where
     /// Keeps track of an existing application that the current chain is seeing for the first time.
     pub async fn register_application(
         &mut self,
-        application: UserApplicationDescription,
-    ) -> Result<UserApplicationId, SystemExecutionError> {
+        application: ApplicationDescription,
+    ) -> Result<ApplicationId, SystemExecutionError> {
         // Make sure that referenced applications ids have been registered.
         for required_id in &application.required_application_ids {
             self.describe_application(*required_id).await?;
         }
-        let id = UserApplicationId::from(&application);
+        let id = ApplicationId::from(&application);
         self.known_applications.insert(&id, application)?;
         Ok(id)
     }
@@ -175,16 +161,16 @@ where
     /// Registers a newly created application.
     pub async fn register_new_application(
         &mut self,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         parameters: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
+        required_application_ids: Vec<ApplicationId>,
     ) -> Result<(), SystemExecutionError> {
         // Make sure that referenced applications ids have been registered.
         for required_id in &required_application_ids {
             self.describe_application(*required_id).await?;
         }
         // Create description and register it.
-        let UserApplicationId {
+        let ApplicationId {
             bytecode_id,
             creation,
         } = application_id;
@@ -193,7 +179,7 @@ where
             .get(&bytecode_id)
             .await?
             .ok_or(SystemExecutionError::UnknownBytecodeId(bytecode_id))?;
-        let description = UserApplicationDescription {
+        let description = ApplicationDescription {
             bytecode_location,
             bytecode_id,
             parameters,
@@ -208,8 +194,8 @@ where
     /// Retrieves an application's description.
     pub async fn describe_application(
         &self,
-        id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, SystemExecutionError> {
+        id: ApplicationId,
+    ) -> Result<ApplicationDescription, SystemExecutionError> {
         self.known_applications
             .get(&id)
             .await?
@@ -219,9 +205,9 @@ where
     /// Retrieves the recursive dependencies of applications and apply a topological sort.
     pub async fn find_dependencies(
         &self,
-        mut stack: Vec<UserApplicationId>,
-        registered_apps: &HashMap<UserApplicationId, UserApplicationDescription>,
-    ) -> Result<Vec<UserApplicationId>, SystemExecutionError> {
+        mut stack: Vec<ApplicationId>,
+        registered_apps: &HashMap<ApplicationId, ApplicationDescription>,
+    ) -> Result<Vec<ApplicationId>, SystemExecutionError> {
         // What we return at the end.
         let mut result = Vec::new();
         // The entries already inserted in `result`.
@@ -262,9 +248,9 @@ where
     /// Retrieves applications' descriptions preceded by their recursive dependencies.
     pub async fn describe_applications_with_dependencies(
         &self,
-        ids: Vec<UserApplicationId>,
-        extra_registered_apps: &HashMap<UserApplicationId, UserApplicationDescription>,
-    ) -> Result<Vec<UserApplicationDescription>, SystemExecutionError> {
+        ids: Vec<ApplicationId>,
+        extra_registered_apps: &HashMap<ApplicationId, ApplicationDescription>,
+    ) -> Result<Vec<ApplicationDescription>, SystemExecutionError> {
         let ids_with_deps = self.find_dependencies(ids, extra_registered_apps).await?;
         let mut result = Vec::new();
         for id in ids_with_deps {

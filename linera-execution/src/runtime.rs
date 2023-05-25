@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution::ExecutionStateView, BaseRuntime, CallResult, ContractRuntime, ExecutionError,
-    ExecutionResult, ExecutionRuntimeContext, ServiceRuntime, SessionId, UserApplicationCode,
-    UserApplicationDescription, UserApplicationId,
+    execution::ExecutionStateView, ApplicationDescription, ApplicationId, BaseRuntime, CallResult,
+    ContractRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeContext, ServiceRuntime,
+    SessionId, UserApplicationCode,
 };
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
@@ -57,23 +57,22 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
 #[derive(Debug, Clone)]
 pub(crate) struct ApplicationStatus {
     /// The application id.
-    pub(crate) id: UserApplicationId,
+    pub(crate) id: ApplicationId,
     /// The parameters from the application description.
     pub(crate) parameters: Vec<u8>,
     /// The authenticated signer for the execution thread, if any.
     pub(crate) signer: Option<Owner>,
 }
 
-type ActiveViewUserStates<C> =
-    BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<KeyValueStoreView<C>>>;
+type ActiveViewUserStates<C> = BTreeMap<ApplicationId, OwnedRwLockWriteGuard<KeyValueStoreView<C>>>;
 type ActiveSimpleUserStates<C> =
-    BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<RegisterView<C, Vec<u8>>>>;
+    BTreeMap<ApplicationId, OwnedRwLockWriteGuard<RegisterView<C, Vec<u8>>>>;
 type ActiveSessions = BTreeMap<SessionId, OwnedMutexGuard<SessionState>>;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SessionManager {
     /// Track the next session index to be used for each application.
-    pub(crate) counters: BTreeMap<UserApplicationId, u64>,
+    pub(crate) counters: BTreeMap<ApplicationId, u64>,
     /// Track the current state (owner and data) of each session.
     pub(crate) states: BTreeMap<SessionId, Arc<Mutex<SessionState>>>,
 }
@@ -81,7 +80,7 @@ pub(crate) struct SessionManager {
 #[derive(Debug, Clone)]
 pub(crate) struct SessionState {
     /// Track which application can call into the session.
-    owner: UserApplicationId,
+    owner: ApplicationId,
     /// The internal state of the session.
     #[debug(with = "hex_debug")]
     data: Vec<u8>,
@@ -157,8 +156,8 @@ where
 
     async fn load_application(
         &self,
-        id: UserApplicationId,
-    ) -> Result<(UserApplicationCode, UserApplicationDescription), ExecutionError> {
+        id: ApplicationId,
+    ) -> Result<(UserApplicationCode, ApplicationDescription), ExecutionError> {
         let description = self
             .execution_state_mut()
             .system
@@ -177,8 +176,8 @@ where
     fn forward_sessions(
         &self,
         session_ids: &[SessionId],
-        from_id: UserApplicationId,
-        to_id: UserApplicationId,
+        from_id: ApplicationId,
+        to_id: ApplicationId,
     ) -> Result<(), ExecutionError> {
         let states = &self.session_manager_mut().states;
         for id in session_ids {
@@ -199,8 +198,8 @@ where
     fn make_sessions(
         &self,
         new_sessions: Vec<Vec<u8>>,
-        creator_id: UserApplicationId,
-        receiver_id: UserApplicationId,
+        creator_id: ApplicationId,
+        receiver_id: ApplicationId,
     ) -> Vec<SessionId> {
         let mut manager = self.session_manager_mut();
         let manager = manager.deref_mut();
@@ -226,7 +225,7 @@ where
     fn try_load_session(
         &self,
         session_id: SessionId,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
     ) -> Result<Vec<u8>, ExecutionError> {
         let guard = self
             .session_manager_mut()
@@ -250,7 +249,7 @@ where
     fn try_save_session(
         &self,
         session_id: SessionId,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
         state: Vec<u8>,
     ) -> Result<(), ExecutionError> {
         // Remove the guard.
@@ -272,7 +271,7 @@ where
     fn try_close_session(
         &self,
         session_id: SessionId,
-        application_id: UserApplicationId,
+        application_id: ApplicationId,
     ) -> Result<(), ExecutionError> {
         if let btree_map::Entry::Occupied(guard) = self.active_sessions_mut().entry(session_id) {
             // Verify ownership.
@@ -303,7 +302,7 @@ where
         self.chain_id
     }
 
-    fn application_id(&self) -> UserApplicationId {
+    fn application_id(&self) -> ApplicationId {
         self.applications_mut()
             .last()
             .expect("at least one application description should be present in the stack")
@@ -414,7 +413,7 @@ where
     /// Note that queries are not available from writable contexts.
     async fn try_query_application(
         &self,
-        queried_id: UserApplicationId,
+        queried_id: ApplicationId,
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
         // Load the application.
@@ -499,7 +498,7 @@ where
     async fn try_call_application(
         &self,
         authenticated: bool,
-        callee_id: UserApplicationId,
+        callee_id: ApplicationId,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<CallResult, ExecutionError> {

@@ -9,7 +9,7 @@ use linera_base::{
     crypto::{CryptoHash, KeyPair},
     data_types::{ArithmeticError, BlockHeight, Timestamp},
     doc_scalar, ensure,
-    identifiers::{ChainId, Owner},
+    identifiers::{ApplicationId, ChainId, Owner},
 };
 use linera_chain::{
     data_types::{
@@ -20,7 +20,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    BytecodeLocation, Query, Response, UserApplicationDescription, UserApplicationId,
+    ApplicationDescription, BytecodeLocation, Query, Response,
 };
 use linera_storage::Store;
 use linera_views::{
@@ -392,8 +392,8 @@ where
     pub(crate) async fn describe_application(
         &mut self,
         chain_id: ChainId,
-        application_id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, WorkerError> {
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, WorkerError> {
         let mut chain = self.storage.load_active_chain(chain_id).await?;
         let response = chain.describe_application(application_id).await?;
         Ok(response)
