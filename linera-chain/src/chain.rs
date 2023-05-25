@@ -421,12 +421,6 @@ where
         &mut self,
         block: &Block,
     ) -> Result<Vec<OutgoingEffect>, ChainError> {
-        fn sub_assign_fees(balance: &mut Amount, fees: Amount) -> Result<(), ChainError> {
-            balance
-                .try_sub_assign(fees)
-                .map_err(|_| ChainError::InsufficientBalance)
-        }
-
         assert_eq!(block.chain_id, self.chain_id());
         let chain_id = self.chain_id();
         ensure!(
@@ -454,9 +448,9 @@ where
         let balance = self.execution_state.system.balance.get_mut();
 
         balance.try_add_assign(credit)?;
-        sub_assign_fees(balance, pricing.certificate_price())?;
-        sub_assign_fees(balance, pricing.storage_price(&block.incoming_messages)?)?;
-        sub_assign_fees(balance, pricing.storage_price(&block.operations)?)?;
+        Self::sub_assign_fees(balance, pricing.certificate_price())?;
+        Self::sub_assign_fees(balance, pricing.storage_price(&block.incoming_messages)?)?;
+        Self::sub_assign_fees(balance, pricing.storage_price(&block.operations)?)?;
 
         let mut effects = Vec::new();
         let available_fuel = pricing.remaining_fuel(*balance);
@@ -503,9 +497,9 @@ where
         let used_fuel = available_fuel.saturating_sub(remaining_fuel);
 
         let balance = self.execution_state.system.balance.get_mut();
-        sub_assign_fees(balance, credit)?;
-        sub_assign_fees(balance, pricing.fuel_price(used_fuel))?;
-        sub_assign_fees(balance, pricing.messages_price(&effects)?)?;
+        Self::sub_assign_fees(balance, credit)?;
+        Self::sub_assign_fees(balance, pricing.fuel_price(used_fuel))?;
+        Self::sub_assign_fees(balance, pricing.messages_price(&effects)?)?;
 
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash().await?;
@@ -668,5 +662,11 @@ where
             }
         }
         Ok(())
+    }
+
+    fn sub_assign_fees(balance: &mut Amount, fees: Amount) -> Result<(), ChainError> {
+        balance
+            .try_sub_assign(fees)
+            .map_err(|_| ChainError::InsufficientBalance)
     }
 }

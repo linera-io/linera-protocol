@@ -128,7 +128,7 @@ impl From<wit_system_api::CryptoHash> for CryptoHash {
 impl From<wit_system_api::Amount> for Amount {
     fn from(balance: wit_system_api::Amount) -> Self {
         let value = ((balance.upper_half as u128) << 64) | (balance.lower_half as u128);
-        Amount::from(value)
+        Amount::from_atto(value)
     }
 }
 

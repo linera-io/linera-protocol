@@ -1397,8 +1397,8 @@ async fn test_end_to_end_fungible() {
     let account_owner2 = AccountOwner::User(owner2);
     // The initial accounts on chain1
     let accounts = BTreeMap::from([
-        (account_owner1, "5".parse().unwrap()),
-        (account_owner2, "2".parse().unwrap()),
+        (account_owner1, Amount::from_tokens(5)),
+        (account_owner2, Amount::from_tokens(2)),
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
@@ -1411,8 +1411,8 @@ async fn test_end_to_end_fungible() {
 
     let app1 = node_service1.make_application(&application_id).await;
     app1.assert_fungible_account_balances([
-        (account_owner1, "5".parse().unwrap()),
-        (account_owner2, "2".parse().unwrap()),
+        (account_owner1, Amount::from_tokens(5)),
+        (account_owner2, Amount::from_tokens(2)),
     ])
     .await;
 
@@ -1432,8 +1432,8 @@ async fn test_end_to_end_fungible() {
 
     // Checking the final values on chain1 and chain2.
     app1.assert_fungible_account_balances([
-        (account_owner1, "4".parse().unwrap()),
-        (account_owner2, "2".parse().unwrap()),
+        (account_owner1, Amount::from_tokens(4)),
+        (account_owner2, Amount::from_tokens(2)),
     ])
     .await;
 
@@ -1455,7 +1455,7 @@ async fn test_end_to_end_fungible() {
         chain_id: chain2,
         owner: account_owner2,
     };
-    let amount_transfer: Amount = "2".parse().unwrap();
+    let amount_transfer: Amount = Amount::from_tokens(2);
     let query_string = format!(
         "mutation {{ claim(sourceAccount: {}, amount: \"{}\", targetAccount: {}) }}",
         source.to_value(),
@@ -1470,13 +1470,13 @@ async fn test_end_to_end_fungible() {
 
     // Checking the final value
     app1.assert_fungible_account_balances([
-        (account_owner1, "4".parse().unwrap()),
+        (account_owner1, Amount::from_tokens(4)),
         (account_owner2, Amount::ZERO),
     ])
     .await;
     app2.assert_fungible_account_balances([
         (account_owner1, Amount::ZERO),
-        (account_owner2, "3".parse().unwrap()),
+        (account_owner2, Amount::from_tokens(3)),
     ])
     .await;
 
@@ -1514,7 +1514,7 @@ async fn test_end_to_end_crowd_funding() {
     let owner2 = client2.get_owner().unwrap();
     let account_owner2 = AccountOwner::User(owner2);
     // The initial accounts on chain1
-    let accounts = BTreeMap::from([(account_owner1, "6".parse().unwrap())]);
+    let accounts = BTreeMap::from([(account_owner1, Amount::from_tokens(6))]);
     let state_fungible = InitialState { accounts };
 
     // Setting up the application fungible
@@ -1600,7 +1600,7 @@ async fn test_end_to_end_crowd_funding() {
 
     // The rich gets their money back.
     app_fungible1
-        .assert_fungible_account_balances([(account_owner1, "6".parse().unwrap())])
+        .assert_fungible_account_balances([(account_owner1, Amount::from_tokens(6))])
         .await;
 
     node_service1.assert_is_running();
