@@ -1,8 +1,8 @@
 use linera_sdk::base::{ContractAbi, ServiceAbi};
 
-pub struct StateAbi;
+pub struct ApplicationAbi;
 
-impl ContractAbi for StateAbi {
+impl ContractAbi for ApplicationAbi {
     type InitializationArgument = ();
     type Parameters = ();
     type Operation = ();
@@ -13,7 +13,7 @@ impl ContractAbi for StateAbi {
     type SessionState = ();
 }
 
-impl ServiceAbi for StateAbi {
+impl ServiceAbi for ApplicationAbi {
     type Query = ();
     type QueryResponse = ();
     type Parameters = ();
