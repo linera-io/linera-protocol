@@ -697,9 +697,7 @@ pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(GraphQLView, attributes(view))]
 pub fn derive_graphql_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    let result = generate_graphql_code(input).into();
-    println!("result={}", result);
-    result
+    generate_graphql_code(input).into()
 }
 
 #[cfg(test)]
