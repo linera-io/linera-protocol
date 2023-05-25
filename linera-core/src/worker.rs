@@ -37,7 +37,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::sync::{oneshot, Mutex};
-use tracing::{error, info, instrument, trace, warn};
+use tracing::{error, debug, instrument, trace, warn};
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -1204,7 +1204,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
         }
         if skipped_len > 0 {
             let sample_value = certificates[skipped_len - 1].value();
-            info!(
+            debug!(
                 "[{}] Ignoring repeated messages to {recipient:?} from {origin:?} at height {}",
                 self.nickname,
                 sample_value.height(),

@@ -309,7 +309,8 @@ where
         match reply {
             Ok(x) => x,
             Err(error) => {
-                warn!(
+                // TODO(#459): Make it a warning or an error again.
+                debug!(
                     "[{}] User query failed: {}",
                     self.server.state.nickname(),
                     error
