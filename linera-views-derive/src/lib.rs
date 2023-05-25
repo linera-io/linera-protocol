@@ -988,10 +988,12 @@ pub mod tests {
                     impl #generics_with_lifetime TestViewCollectionEntry #generics_with_lifetime
                     #constraints
                     {
-                        async fn string(&self) -> &String {
+                        #[graphql(derived(name = "string"))]
+                        async fn _string(&self) -> &String {
                             &self.string
                         }
-                        async fn some_other_view(&self) -> &SomeOtherView<#context> {
+                        #[graphql(derived(name = "some_other_view"))]
+                        async fn _some_other_view(&self) -> &SomeOtherView<#context> {
                             use std::ops::Deref;
                             self.guard.deref()
                         }
@@ -1000,15 +1002,18 @@ pub mod tests {
                     impl #generics TestView #generics
                     #constraints
                     {
-                        async fn raw(&self) -> &String {
+                        #[graphql(derived(name = "raw"))]
+                        async fn _raw(&self) -> &String {
                             &self.raw
                         }
 
-                        async fn register(&self) -> &Option<usize> {
+                        #[graphql(derived(name = "register"))]
+                        async fn _register(&self) -> &Option<usize> {
                             self.register.get()
                         }
 
-                        async fn collection(
+                        #[graphql(derived(name = "collection"))]
+                        async fn _collection(
                             &self,
                             string: String,
                         ) -> Result<TestViewCollectionEntry #generics, async_graphql::Error> {
@@ -1018,11 +1023,13 @@ pub mod tests {
                             })
                         }
 
-                        async fn set(&self) -> Result<Vec<HashSet<usize>>, async_graphql::Error> {
+                        #[graphql(derived(name = "set"))]
+                        async fn _set(&self) -> Result<Vec<HashSet<usize>>, async_graphql::Error> {
                             Ok(self.set.indices().await?)
                         }
 
-                        async fn log(
+                        #[graphql(derived(name = "log"))]
+                        async fn _log(
                             &self,
                             start: Option<usize>,
                             end: Option<usize>
@@ -1034,7 +1041,8 @@ pub mod tests {
                             Ok(self.log.read(range).await?)
                         }
 
-                        async fn queue(
+                        #[graphql(derived(name = "queue"))]
+                        async fn _queue(
                             &self,
                             count: Option<usize>
                         ) -> Result<Vec<usize>, async_graphql::Error> {
@@ -1042,14 +1050,16 @@ pub mod tests {
                             Ok(self.queue.read_front(count).await?)
                         }
 
-                        async fn map(
+                        #[graphql(derived(name = "map"))]
+                        async fn _map(
                             &self,
                             string: String
                         ) -> Result<Option<usize>, async_graphql::Error> {
                             Ok(self.map.get(&string).await?)
                         }
 
-                        async fn map_keys(
+                        #[graphql(derived(name = "map_keys"))]
+                        async fn _map_keys(
                             &self,
                             count: Option<u64>
                         ) -> Result<Vec<String>, async_graphql::Error> {

@@ -59,7 +59,8 @@ impl<C: Send + Sync + Context> ExecutionStateView<C>
 where
     ViewError: From<C::Error>,
 {
-    async fn system(&self) -> &SystemExecutionStateView<C> {
+    #[graphql(derived(name = "system"))]
+    async fn _system(&self) -> &SystemExecutionStateView<C> {
         &self.system
     }
 }
@@ -69,35 +70,43 @@ impl<C: Send + Sync + Context> SystemExecutionStateView<C>
 where
     ViewError: From<C::Error>,
 {
-    async fn description(&self) -> &Option<ChainDescription> {
+    #[graphql(derived(name = "description"))]
+    async fn _description(&self) -> &Option<ChainDescription> {
         self.description.get()
     }
 
-    async fn epoch(&self) -> &Option<Epoch> {
+    #[graphql(derived(name = "epoch"))]
+    async fn _epoch(&self) -> &Option<Epoch> {
         self.epoch.get()
     }
 
-    async fn admin_id(&self) -> &Option<ChainId> {
+    #[graphql(derived(name = "admin_id"))]
+    async fn _admin_id(&self) -> &Option<ChainId> {
         self.admin_id.get()
     }
 
-    async fn subscriptions(&self) -> Result<Vec<ChannelSubscription>, Error> {
+    #[graphql(derived(name = "subscription"))]
+    async fn _subscriptions(&self) -> Result<Vec<ChannelSubscription>, Error> {
         Ok(self.subscriptions.indices().await?)
     }
 
-    async fn committees(&self) -> &BTreeMap<Epoch, Committee> {
+    #[graphql(derived(name = "committees"))]
+    async fn _committees(&self) -> &BTreeMap<Epoch, Committee> {
         self.committees.get()
     }
 
-    async fn ownership(&self) -> &ChainOwnership {
+    #[graphql(derived(name = "ownership"))]
+    async fn _ownership(&self) -> &ChainOwnership {
         self.ownership.get()
     }
 
-    async fn balance(&self) -> &Amount {
+    #[graphql(derived(name = "balance"))]
+    async fn _balance(&self) -> &Amount {
         self.balance.get()
     }
 
-    async fn timestamp(&self) -> &Timestamp {
+    #[graphql(derived(name = "timestamp"))]
+    async fn _timestamp(&self) -> &Timestamp {
         self.timestamp.get()
     }
 }
