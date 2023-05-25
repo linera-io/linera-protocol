@@ -1288,6 +1288,7 @@ async fn test_end_to_end_social_user_pub_sub() {
     let mut node_service2 = client2.run_node_service(chain2, 8081).await;
 
     let bytecode_id = node_service1.publish_bytecode(contract, service).await;
+    node_service1.process_inbox().await;
     let application_id = node_service1.create_application(&bytecode_id).await;
 
     // Request the application so chain 2 has it, too.

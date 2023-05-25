@@ -135,8 +135,6 @@ where
     ) -> Result<CryptoHash, Error> {
         let operation = Operation::System(system_operation);
         let mut client = self.client.lock().await;
-        client.synchronize_from_validators().await?;
-        client.process_inbox().await?;
         Ok(client.execute_operation(operation).await?.value.hash())
     }
 }
@@ -167,8 +165,6 @@ where
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
         let mut client = self.client.lock().await;
-        client.synchronize_from_validators().await?;
-        client.process_inbox().await?;
         let certificate = client
             .transfer(owner, amount, recipient, user_data.unwrap_or_default())
             .await?;
@@ -187,8 +183,6 @@ where
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
         let mut client = self.client.lock().await;
-        client.synchronize_from_validators().await?;
-        client.process_inbox().await?;
         let certificate = client
             .claim(
                 owner,
@@ -205,8 +199,6 @@ where
     /// This will automatically subscribe to the future committees created by `admin_id`.
     async fn open_chain(&self, public_key: PublicKey) -> Result<ChainId, Error> {
         let mut client = self.client.lock().await;
-        client.synchronize_from_validators().await?;
-        client.process_inbox().await?;
         let (effect_id, _) = client.open_chain(public_key).await?;
         Ok(ChainId::child(effect_id))
     }
@@ -214,8 +206,6 @@ where
     /// Closes the chain.
     async fn close_chain(&self) -> Result<CryptoHash, Error> {
         let mut client = self.client.lock().await;
-        client.synchronize_from_validators().await?;
-        client.process_inbox().await?;
         let certificate = client.close_chain().await?;
         Ok(certificate.hash())
     }
@@ -287,8 +277,6 @@ where
         service: Bytecode,
     ) -> Result<BytecodeId, Error> {
         let mut client = self.client.lock().await;
-        client.synchronize_from_validators().await?;
-        client.process_inbox().await?;
         let (bytecode_id, _) = client.publish_bytecode(contract, service).await?;
         Ok(bytecode_id)
     }
@@ -302,8 +290,6 @@ where
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ApplicationId, Error> {
         let mut client = self.client.lock().await;
-        client.synchronize_from_validators().await?;
-        client.process_inbox().await?;
         let (application_id, _) = client
             .create_application_untyped(
                 bytecode_id,
@@ -323,8 +309,6 @@ where
         target_chain_id: Option<ChainId>,
     ) -> Result<CryptoHash, Error> {
         let mut client = self.client.lock().await;
-        client.synchronize_from_validators().await?;
-        client.process_inbox().await?;
         let certificate = client
             .request_application(application_id, target_chain_id)
             .await?;
@@ -612,8 +596,6 @@ where
             .collect();
 
         let mut client = self.client.lock().await;
-        client.synchronize_from_validators().await?;
-        client.process_inbox().await?;
         let hash = client.execute_operations(operations).await?.value.hash();
         Ok(async_graphql::Response::new(hash.to_value()))
     }
