@@ -64,7 +64,7 @@ use {
         HandleCertificateRequest, RpcMessage,
     },
     std::collections::{HashMap, HashSet},
-    tracing::error,
+    tracing::{error, trace},
 };
 
 struct ClientContext {
@@ -144,9 +144,9 @@ impl ClientContext {
         })?;
         config_dir.push("linera");
         if !config_dir.exists() {
-            info!("{} does not exist, creating...", config_dir.display());
+            debug!("{} does not exist, creating...", config_dir.display());
             fs::create_dir(&config_dir)?;
-            info!("{} created.", config_dir.display());
+            debug!("{} created.", config_dir.display());
         }
         config_dir.push("wallet.json");
         Ok(config_dir)
@@ -263,7 +263,7 @@ impl ClientContext {
                 authenticated_signer: None,
                 timestamp: chain.timestamp.max(Timestamp::now()),
             };
-            debug!("Preparing block proposal: {:?}", block);
+            trace!("Preparing block proposal: {:?}", block);
             let proposal = BlockProposal::new(
                 BlockAndRound {
                     block: block.clone(),
@@ -294,7 +294,7 @@ impl ClientContext {
             if done_senders.contains(&chain_id) {
                 continue;
             }
-            debug!(
+            trace!(
                 "Processing vote on {:?}'s block by {:?}",
                 chain_id, vote.validator,
             );
@@ -303,12 +303,12 @@ impl ClientContext {
                 .or_insert_with(|| SignatureAggregator::new(vote.value, &committee));
             match aggregator.append(vote.validator, vote.signature) {
                 Ok(Some(certificate)) => {
-                    debug!("Found certificate: {:?}", certificate);
+                    trace!("Found certificate: {:?}", certificate);
                     certificates.push(certificate);
                     done_senders.insert(chain_id);
                 }
                 Ok(None) => {
-                    debug!("Added one vote");
+                    trace!("Added one vote");
                 }
                 Err(error) => {
                     error!("Failed to aggregate vote: {}", error);
@@ -332,9 +332,9 @@ impl ClientContext {
         for mut client in self.make_validator_mass_clients(max_in_flight) {
             let proposals = proposals.clone();
             handles.push(tokio::spawn(async move {
-                info!("Sending {} requests", proposals.len());
+                debug!("Sending {} requests", proposals.len());
                 let responses = client.send(proposals).await.unwrap_or_default();
-                info!("Done sending requests");
+                debug!("Done sending requests");
                 responses
             }));
         }
@@ -345,12 +345,12 @@ impl ClientContext {
             .flatten()
             .collect::<Vec<RpcMessage>>();
         let time_elapsed = time_start.elapsed();
-        warn!(
+        info!(
             "Received {} responses in {} ms.",
             responses.len(),
             time_elapsed.as_millis()
         );
-        warn!(
+        info!(
             "Estimated server throughput: {} {} per sec",
             (proposals.len() as u128) * 1_000_000 / time_elapsed.as_micros(),
             phase
@@ -428,7 +428,7 @@ impl ClientContext {
         for chain_id in self.wallet_state.chain_ids() {
             let mut chain_client = self.make_chain_client(storage.clone(), chain_id);
             if let Ok(cert) = chain_client.subscribe_to_new_committees().await {
-                info!(
+                debug!(
                     "Subscribed {:?} to the admin chain {:?}",
                     chain_id,
                     self.wallet_state.genesis_admin_chain(),
@@ -453,7 +453,7 @@ impl ClientContext {
                 .unwrap();
             chain_client.process_inbox().await.unwrap();
             let epochs = chain_client.epochs().await.unwrap();
-            info!("{:?} accepts epochs {:?}", chain_id, epochs);
+            debug!("{:?} accepts epochs {:?}", chain_id, epochs);
             self.update_wallet_from_client(&mut chain_client).await;
         }
     }
@@ -486,7 +486,7 @@ impl ClientContext {
 
         info!("{}", "Bytecode published successfully!".green().bold());
 
-        info!("Synchronizing...");
+        debug!("Synchronizing...");
         chain_client.synchronize_from_validators().await?;
         chain_client.process_inbox().await?;
         Ok(bytecode_id)
@@ -1131,7 +1131,7 @@ where
                 // the client library. We update the wallet storage at the end using a local node.
                 let max_proposals =
                     max_proposals.unwrap_or_else(|| context.wallet_state.num_chains());
-                warn!("Starting benchmark phase 1 (block proposals)");
+                info!("Starting benchmark phase 1 (block proposals)");
                 let proposals = context.make_benchmark_block_proposals(max_proposals);
                 let num_proposal = proposals.len();
                 let mut values = HashMap::new();
@@ -1161,9 +1161,9 @@ where
                         })
                     })
                     .collect();
-                warn!("Received {} valid votes.", votes.len());
+                info!("Received {} valid votes.", votes.len());
 
-                warn!("Starting benchmark phase 2 (certified blocks)");
+                info!("Starting benchmark phase 2 (certified blocks)");
                 let certificates = context.make_benchmark_certificates_from_votes(votes);
                 assert_eq!(
                     num_proposal,
@@ -1194,13 +1194,13 @@ where
                         None => acc,
                     }
                 });
-                warn!(
+                info!(
                     "Confirmed {} valid certificates for {} block proposals.",
                     num_valid,
                     confirmed.len()
                 );
 
-                warn!("Updating local state of user chains");
+                info!("Updating local state of user chains");
                 context
                     .update_wallet_from_certificates(storage, certificates)
                     .await;
@@ -1210,7 +1210,7 @@ where
             Watch { chain_id, raw } => {
                 let chain_client = context.make_chain_client(storage, chain_id);
                 let chain_id = chain_client.chain_id();
-                debug!("Watching for notifications for chain {:?}", chain_id);
+                info!("Watching for notifications for chain {:?}", chain_id);
                 let mut tracker = NotificationTracker::default();
                 let mut notification_stream =
                     ChainClient::listen(Arc::new(Mutex::new(chain_client))).await?;
@@ -1219,7 +1219,7 @@ where
                         println!("{:?}", notification);
                     }
                 }
-                warn!("Notification stream ended.");
+                info!("Notification stream ended.");
                 // Not saving the wallet because `listen()` does not create blocks.
             }
 
