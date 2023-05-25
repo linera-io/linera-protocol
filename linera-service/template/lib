@@ -1,0 +1,20 @@
+use linera_sdk::base::{ContractAbi, ServiceAbi};
+
+pub struct StateAbi;
+
+impl ContractAbi for StateAbi {
+    type InitializationArgument = ();
+    type Parameters = ();
+    type Operation = ();
+    type ApplicationCall = ();
+    type Effect = ();
+    type SessionCall = ();
+    type Response = ();
+    type SessionState = ();
+}
+
+impl ServiceAbi for StateAbi {
+    type Query = ();
+    type QueryResponse = ();
+    type Parameters = ();
+}
