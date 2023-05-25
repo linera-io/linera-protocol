@@ -2,6 +2,6 @@ use serde::{Deserialize, Serialize};
 
 /// The application state.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
-pub struct State {
+pub struct Application {
     // Add fields here.
 }

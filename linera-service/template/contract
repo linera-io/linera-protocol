@@ -2,7 +2,7 @@
 
 mod state;
 
-use self::state::State;
+use self::state::Application;
 use async_trait::async_trait;
 use linera_sdk::{{
     base::{{SessionId, WithContractAbi}},
@@ -11,14 +11,14 @@ use linera_sdk::{{
 }};
 use thiserror::Error;
 
-linera_sdk::contract!(State);
+linera_sdk::contract!(Application);
 
-impl WithContractAbi for State {{
-    type Abi = {project_name}::StateAbi;
+impl WithContractAbi for Application {{
+    type Abi = {project_name}::ApplicationAbi;
 }}
 
 #[async_trait]
-impl Contract for State {{
+impl Contract for Application {{
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
 

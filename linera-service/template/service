@@ -3,20 +3,20 @@
 
 mod state;
 
-use self::state::State;
+use self::state::Application;
 use async_trait::async_trait;
 use linera_sdk::{{base::WithServiceAbi, QueryContext, Service, SimpleStateStorage}};
 use std::sync::Arc;
 use thiserror::Error;
 
-linera_sdk::service!(State);
+linera_sdk::service!(Application);
 
-impl WithServiceAbi for State {{
-    type Abi = {project_name}::StateAbi;
+impl WithServiceAbi for Application {{
+    type Abi = {project_name}::ApplicationAbi;
 }}
 
 #[async_trait]
-impl Service for State {{
+impl Service for Application {{
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
 
