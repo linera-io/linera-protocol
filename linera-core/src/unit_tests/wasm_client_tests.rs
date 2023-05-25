@@ -62,7 +62,7 @@ where
         .await?
         .with_pricing(Pricing::all_categories());
     let mut publisher = builder
-        .add_initial_chain(ChainDescription::Root(0), "3".parse().unwrap())
+        .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
         .await?;
     let mut creator = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
@@ -95,7 +95,7 @@ where
     // No fuel was used so far, but some storage for messages and operations in three blocks.
     assert_eq!(
         Amount::ONE.saturating_sub(creator.local_balance().await?),
-        "0.003_000_000_000_333_105".parse().unwrap()
+        Amount::from_atto(3_000_000_000_333_105),
     );
 
     let initial_value = 10_u64;
@@ -124,7 +124,7 @@ where
     // Creating the application used fuel because of the `initialize` call.
     assert_eq!(
         Amount::ONE.saturating_sub(creator.local_balance().await?),
-        "0.005_016_479_000_578_143".parse().unwrap()
+        Amount::from_atto(5_016_479_000_578_143),
     );
     Ok(())
 }
@@ -175,7 +175,7 @@ where
         .with_pricing(Pricing::all_categories());
     // Will publish the bytecodes.
     let mut publisher = builder
-        .add_initial_chain(ChainDescription::Root(0), "3".parse().unwrap())
+        .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
         .await?;
     // Will create the apps and use them to send a message.
     let mut creator = builder
@@ -304,7 +304,7 @@ where
         .with_pricing(Pricing::all_categories());
     // Will publish the bytecodes.
     let mut publisher = builder
-        .add_initial_chain(ChainDescription::Root(0), "3".parse().unwrap())
+        .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
         .await?;
     // Will create the apps and use them to send a message.
     let mut creator = builder
@@ -395,7 +395,7 @@ where
         .await?
         .with_pricing(Pricing::all_categories());
     let mut sender = builder
-        .add_initial_chain(ChainDescription::Root(0), "3".parse().unwrap())
+        .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
         .await?;
     let mut receiver = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
@@ -422,7 +422,7 @@ where
     let receiver_owner =
         fungible::AccountOwner::User(Owner::from(receiver.key_pair().await?.public()));
 
-    let accounts = BTreeMap::from_iter([(sender_owner, "1_000_000".parse().unwrap())]);
+    let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
     let state = fungible::InitialState { accounts };
     let (application_id, _cert) = sender
         .create_application(bytecode_id, &(), &state, vec![])

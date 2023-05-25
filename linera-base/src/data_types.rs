@@ -366,6 +366,22 @@ impl Amount {
     pub const DECIMAL_PLACES: u8 = 18;
     pub const ONE: Amount = Amount(10u128.pow(Amount::DECIMAL_PLACES as u32));
     pub const ZERO: Amount = Amount(0);
+    pub const MAX: Amount = Amount(u128::MAX);
+
+    /// Returns an `Amount` corresponding to that many tokens, or `Amount::MAX` if saturated.
+    pub fn from_tokens(tokens: u128) -> Amount {
+        Self::ONE.saturating_mul(tokens)
+    }
+
+    /// Returns an `Amount` corresponding to that many millitokens, or `Amount::MAX` if saturated.
+    pub fn from_milli(millitokens: u128) -> Amount {
+        Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 3)).saturating_mul(millitokens)
+    }
+
+    /// Returns an `Amount` corresponding to that many attotokens.
+    pub fn from_atto(attotokens: u128) -> Amount {
+        Amount(attotokens)
+    }
 
     /// Helper function to obtain the 64 most significant bits of the balance.
     pub fn upper_half(self) -> u64 {

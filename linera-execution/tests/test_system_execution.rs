@@ -21,13 +21,13 @@ use serde::{Deserialize, Serialize};
 async fn test_simple_system_operation() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
-    state.balance = "4".parse().unwrap();
+    state.balance = Amount::from_tokens(4);
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
     let operation = SystemOperation::Transfer {
         owner: None,
-        amount: "4".parse().unwrap(),
+        amount: Amount::from_tokens(4),
         recipient: Recipient::Burn,
         user_data: UserData::default(),
     };
@@ -63,7 +63,7 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
     let effect = SystemEffect::Credit {
-        amount: "4".parse().unwrap(),
+        amount: Amount::from_tokens(4),
         account: Account::chain(ChainId::root(0)),
     };
     let context = EffectContext {
@@ -81,7 +81,7 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
         .execute_effect(&context, &Effect::System(effect), &mut 10_000_000)
         .await
         .unwrap();
-    assert_eq!(view.system.balance.get(), &"4".parse().unwrap());
+    assert_eq!(view.system.balance.get(), &Amount::from_tokens(4));
     assert_eq!(
         results,
         vec![ExecutionResult::System(RawExecutionResult::default())]
@@ -93,7 +93,7 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
 async fn test_simple_system_query() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
-    state.balance = "4".parse().unwrap();
+    state.balance = Amount::from_tokens(4);
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
@@ -108,7 +108,7 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
         response,
         Response::System(SystemResponse {
             chain_id: ChainId::root(0),
-            balance: "4".parse().unwrap()
+            balance: Amount::from_tokens(4)
         })
     );
     Ok(())

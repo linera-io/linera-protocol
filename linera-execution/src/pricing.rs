@@ -56,7 +56,7 @@ impl Pricing {
     pub fn only_fuel() -> Self {
         Pricing {
             certificate: Amount::ZERO,
-            fuel: "0.000_001".parse().unwrap(),
+            fuel: Amount::from_atto(1_000_000_000_000),
             storage: Amount::ZERO,
             messages: Amount::ZERO,
         }
@@ -69,8 +69,8 @@ impl Pricing {
     /// how many certificates were created.
     pub fn fuel_and_certificate() -> Self {
         Pricing {
-            certificate: "0.001".parse().unwrap(),
-            fuel: "0.000_001".parse().unwrap(),
+            certificate: Amount::from_milli(1),
+            fuel: Amount::from_atto(1_000_000_000_000),
             storage: Amount::ZERO,
             messages: Amount::ZERO,
         }
@@ -80,10 +80,10 @@ impl Pricing {
     /// Creates a pricing where all categories have a small non-zero cost.
     pub fn all_categories() -> Self {
         Pricing {
-            certificate: "0.001".parse().unwrap(),
-            fuel: "0.000_000_001".parse().unwrap(),
-            storage: "0.000_000_000_000_001".parse().unwrap(),
-            messages: "0.000_000_000_000_000_001".parse().unwrap(),
+            certificate: Amount::from_milli(1),
+            fuel: Amount::from_atto(1_000_000_000),
+            storage: Amount::from_atto(1_000),
+            messages: Amount::from_atto(1),
         }
     }
 }
