@@ -1002,8 +1002,7 @@ pub mod tests {
                     impl #generics TestView #generics
                     #constraints
                     {
-                        #[graphql(derived(name = "raw"))]
-                        async fn _raw(&self) -> &String {
+                        async fn raw(&self) -> &String {
                             &self.raw
                         }
 
