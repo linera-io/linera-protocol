@@ -1,0 +1,81 @@
+#![cfg_attr(target_arch = "wasm32", no_main)]
+
+mod state;
+
+use self::state::State;
+use async_trait::async_trait;
+use linera_sdk::{{
+    base::{{SessionId, WithContractAbi}},
+    ApplicationCallResult, CalleeContext, Contract, EffectContext,
+    ExecutionResult, OperationContext, SessionCallResult, SimpleStateStorage,
+}};
+use thiserror::Error;
+
+linera_sdk::contract!(State);
+
+impl WithContractAbi for State {{
+    type Abi = {project_name}::StateAbi;
+}}
+
+#[async_trait]
+impl Contract for State {{
+    type Error = Error;
+    type Storage = SimpleStateStorage<Self>;
+
+    async fn initialize(
+        &mut self,
+        _context: &OperationContext,
+        _argument: (),
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {{
+        Ok(ExecutionResult::default())
+    }}
+
+    async fn execute_operation(
+        &mut self,
+        _context: &OperationContext,
+        _operation: (),
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {{
+        Ok(ExecutionResult::default())
+    }}
+
+    async fn execute_effect(
+        &mut self,
+        _context: &EffectContext,
+        _effect: (),
+    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {{
+        Ok(ExecutionResult::default())
+    }}
+
+    async fn handle_application_call(
+        &mut self,
+        _context: &CalleeContext,
+        _argument: (),
+        _forwarded_sessions: Vec<SessionId>,
+    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error> {{
+        Ok(ApplicationCallResult::default())
+    }}
+
+    async fn handle_session_call(
+        &mut self,
+        _context: &CalleeContext,
+        _session: (),
+        _argument: (),
+        _forwarded_sessions: Vec<SessionId>,
+    ) -> Result<SessionCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error> {{
+        Ok(SessionCallResult::default())
+    }}
+}}
+
+/// An error that can occur during the contract execution.
+#[derive(Debug, Error)]
+pub enum Error {{
+    /// Failed to deserialize BCS bytes
+    #[error("Failed to deserialize BCS bytes")]
+    BcsError(#[from] bcs::Error),
+
+    /// Failed to deserialize JSON string
+    #[error("Failed to deserialize JSON string")]
+    JsonError(#[from] serde_json::Error),
+
+    // Add more error variants here.
+}}
