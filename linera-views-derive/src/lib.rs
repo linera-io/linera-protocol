@@ -8,7 +8,7 @@ pub(crate) mod util;
 extern crate heck;
 extern crate proc_macro;
 extern crate syn;
-use crate::util::{concat, snakify, string_to_ident};
+use crate::util::{concat, get_graphql_identifiers, snakify, string_to_ident};
 use heck::AsUpperCamelCase;
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
@@ -362,6 +362,8 @@ fn generate_graphql_code_for_field(
         _ => panic!(),
     };
 
+    let (field_name_underscore, field_name_str) = get_graphql_identifiers(&field_name);
+
     let view_name = view_type.to_string();
     match view_type.to_string().as_str() {
         "RegisterView" => {
@@ -372,7 +374,8 @@ fn generate_graphql_code_for_field(
                 .get(generic_types_offset)
                 .expect("no generic specified for 'RegisterView'");
             let r#impl = quote! {
-                async fn #field_name(&self) -> &#generic_ident {
+                #[graphql(derived(name = #field_name_str))]
+                async fn #field_name_underscore(&self) -> &#generic_ident {
                     self.#field_name.get()
                 }
             };
@@ -401,7 +404,8 @@ fn generate_graphql_code_for_field(
             let context_generics = context_constraints.as_ref().map(|_| quote! { <#context> });
 
             let r#impl = quote! {
-                async fn #field_name(
+                #[graphql(derived(name = #field_name_str))]
+                async fn #field_name_underscore(
                     &self,
                     #index_name: #index_ident,
                 ) -> Result<#entry_name #context_generics, async_graphql::Error> {
@@ -430,6 +434,9 @@ fn generate_graphql_code_for_field(
                 .as_ref()
                 .map(|_| quote! { <#lifetime #context> })
                 .unwrap_or_else(|| quote! { <#lifetime> });
+            let (index_name_underscore, index_name_str) = get_graphql_identifiers(&index_name);
+            let (generic_underscore, generic_str) = get_graphql_identifiers(&generic_method_name);
+
             let r#struct = quote! {
                 pub struct #entry_name #context_generics_with_lifetime
                 #context_constraints
@@ -442,11 +449,13 @@ fn generate_graphql_code_for_field(
                 impl #context_generics_with_lifetime #entry_name #context_generics_with_lifetime
                 #context_constraints
                 {
-                    async fn #index_name(&self) -> &#index_ident {
+                    #[graphql(derived(name = #index_name_str))]
+                    async fn #index_name_underscore(&self) -> &#index_ident {
                         &self.#index_name
                     }
 
-                    async fn #generic_method_name(&self) -> &#generic_ident {
+                    #[graphql(derived(name = #generic_str))]
+                    async fn #generic_underscore(&self) -> &#generic_ident {
                         use std::ops::Deref;
                         self.guard.deref()
                     }
@@ -464,7 +473,8 @@ fn generate_graphql_code_for_field(
                 .unwrap_or_else(|| panic!("no generic type specified for '{}'", view_name));
 
             let r#impl = quote! {
-                async fn #field_name(&self) -> Result<Vec<#generic_ident>, async_graphql::Error> {
+                #[graphql(derived(name = #field_name_str))]
+                async fn #field_name_underscore(&self) -> Result<Vec<#generic_ident>, async_graphql::Error> {
                     Ok(self.#field_name.indices().await?)
                 }
             };
@@ -479,7 +489,8 @@ fn generate_graphql_code_for_field(
                 .expect("no generic type specified for 'LogView'");
 
             let r#impl = quote! {
-                async fn #field_name(&self,
+                #[graphql(derived(name = #field_name_str))]
+                async fn #field_name_underscore(&self,
                     start: Option<usize>,
                     end: Option<usize>
                 ) -> Result<Vec<#generic_ident>, async_graphql::Error> {
@@ -500,7 +511,8 @@ fn generate_graphql_code_for_field(
                 .get(generic_types_offset)
                 .expect("no generic specified for 'WrappedHashableContainerView'");
             let r#impl = quote! {
-                async fn #field_name(&self) -> &#generic_ident {
+                #[graphql(derived(name = #field_name_str))]
+                async fn #field_name_underscore(&self) -> &#generic_ident {
                     use std::ops::Deref;
                     self.#field_name.deref()
                 }
@@ -516,7 +528,8 @@ fn generate_graphql_code_for_field(
                 .expect("no generic type specified for 'QueueView'");
 
             let r#impl = quote! {
-                async fn #field_name(&self, count: Option<usize>) -> Result<Vec<#generic_ident>, async_graphql::Error> {
+                #[graphql(derived(name = #field_name_str))]
+                async fn #field_name_underscore(&self, count: Option<usize>) -> Result<Vec<#generic_ident>, async_graphql::Error> {
                     let count = count.unwrap_or_else(|| self.#field_name.count());
                     Ok(self.#field_name.read_front(count).await?)
                 }
@@ -532,7 +545,8 @@ fn generate_graphql_code_for_field(
                 .expect("no generic type specified for 'ByteMapView'");
 
             let r#impl = quote! {
-                async fn #field_name(&self, short_key: Vec<u8>) -> Result<Option<#generic_ident>, async_graphql::Error> {
+                #[graphql(derived(name = #field_name_str))]
+                async fn #field_name_underscore(&self, short_key: Vec<u8>) -> Result<Option<#generic_ident>, async_graphql::Error> {
                     Ok(self.#field_name.get(&short_key).await?)
                 }
             };
@@ -551,12 +565,15 @@ fn generate_graphql_code_for_field(
 
             let index_name = snakify(index_ident);
             let field_keys = concat(&field_name, "_keys");
+            let (field_keys_underscore, field_keys_str) = get_graphql_identifiers(&field_keys);
 
             let r#impl = quote! {
-                async fn #field_name(&self, #index_name: #index_ident) -> Result<Option<#generic_ident>, async_graphql::Error> {
+                #[graphql(derived(name = #field_name_str))]
+                async fn #field_name_underscore(&self, #index_name: #index_ident) -> Result<Option<#generic_ident>, async_graphql::Error> {
                     Ok(self.#field_name.get(&#index_name).await?)
                 }
-                async fn #field_keys(&self, count: Option<u64>)
+                #[graphql(derived(name = #field_keys_str))]
+                async fn #field_keys_underscore(&self, count: Option<u64>)
                     -> Result<Vec<#index_ident>, async_graphql::Error>
                 {
                     let count = count.unwrap_or(u64::MAX).try_into().unwrap_or(usize::MAX);
@@ -968,10 +985,12 @@ pub mod tests {
                     impl #generics_with_lifetime TestViewCollectionEntry #generics_with_lifetime
                     #constraints
                     {
-                        async fn string(&self) -> &String {
+                        #[graphql(derived(name = "string"))]
+                        async fn _string(&self) -> &String {
                             &self.string
                         }
-                        async fn some_other_view(&self) -> &SomeOtherView<#context> {
+                        #[graphql(derived(name = "some_other_view"))]
+                        async fn _some_other_view(&self) -> &SomeOtherView<#context> {
                             use std::ops::Deref;
                             self.guard.deref()
                         }
@@ -984,11 +1003,13 @@ pub mod tests {
                             &self.raw
                         }
 
-                        async fn register(&self) -> &Option<usize> {
+                        #[graphql(derived(name = "register"))]
+                        async fn _register(&self) -> &Option<usize> {
                             self.register.get()
                         }
 
-                        async fn collection(
+                        #[graphql(derived(name = "collection"))]
+                        async fn _collection(
                             &self,
                             string: String,
                         ) -> Result<TestViewCollectionEntry #generics, async_graphql::Error> {
@@ -998,11 +1019,13 @@ pub mod tests {
                             })
                         }
 
-                        async fn set(&self) -> Result<Vec<HashSet<usize>>, async_graphql::Error> {
+                        #[graphql(derived(name = "set"))]
+                        async fn _set(&self) -> Result<Vec<HashSet<usize>>, async_graphql::Error> {
                             Ok(self.set.indices().await?)
                         }
 
-                        async fn log(
+                        #[graphql(derived(name = "log"))]
+                        async fn _log(
                             &self,
                             start: Option<usize>,
                             end: Option<usize>
@@ -1014,7 +1037,8 @@ pub mod tests {
                             Ok(self.log.read(range).await?)
                         }
 
-                        async fn queue(
+                        #[graphql(derived(name = "queue"))]
+                        async fn _queue(
                             &self,
                             count: Option<usize>
                         ) -> Result<Vec<usize>, async_graphql::Error> {
@@ -1022,14 +1046,16 @@ pub mod tests {
                             Ok(self.queue.read_front(count).await?)
                         }
 
-                        async fn map(
+                        #[graphql(derived(name = "map"))]
+                        async fn _map(
                             &self,
                             string: String
                         ) -> Result<Option<usize>, async_graphql::Error> {
                             Ok(self.map.get(&string).await?)
                         }
 
-                        async fn map_keys(
+                        #[graphql(derived(name = "map_keys"))]
+                        async fn _map_keys(
                             &self,
                             count: Option<u64>
                         ) -> Result<Vec<String>, async_graphql::Error> {

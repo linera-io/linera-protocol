@@ -37,7 +37,7 @@ impl Contract for CrowdFunding {
         self.initialization_argument.set(Some(argument));
 
         ensure!(
-            self.get_initialization_argument().deadline > system_api::current_system_time(),
+            self.initialization_argument().deadline > system_api::current_system_time(),
             Error::DeadlineInThePast
         );
 
@@ -256,7 +256,7 @@ impl CrowdFunding {
                 Ok(())
             }
             Status::Complete => {
-                self.send_to(amount, self.get_initialization_argument().owner)
+                self.send_to(amount, self.initialization_argument().owner)
                     .await
             }
             Status::Cancelled => Err(Error::Cancelled),
@@ -270,7 +270,7 @@ impl CrowdFunding {
         match self.status.get() {
             Status::Active => {
                 ensure!(
-                    total >= self.get_initialization_argument().target,
+                    total >= self.initialization_argument().target,
                     Error::TargetNotReached
                 );
             }
@@ -278,7 +278,7 @@ impl CrowdFunding {
             Status::Cancelled => return Err(Error::Cancelled),
         }
 
-        self.send_to(total, self.get_initialization_argument().owner)
+        self.send_to(total, self.initialization_argument().owner)
             .await?;
         self.pledges.clear();
         self.status.set(Status::Complete);
@@ -293,7 +293,7 @@ impl CrowdFunding {
         // TODO(#728): Remove this.
         #[cfg(not(any(test, feature = "test")))]
         ensure!(
-            system_api::current_system_time() >= self.get_initialization_argument().deadline,
+            system_api::current_system_time() >= self.initialization_argument().deadline,
             Error::DeadlineNotReached
         );
 
@@ -310,7 +310,7 @@ impl CrowdFunding {
         }
 
         let balance = self.balance().await?;
-        self.send_to(balance, self.get_initialization_argument().owner)
+        self.send_to(balance, self.initialization_argument().owner)
             .await?;
         self.status.set(Status::Cancelled);
 
@@ -388,8 +388,7 @@ impl CrowdFunding {
         Ok(())
     }
 
-    // TODO(#719): rename into `initialization_argument()` after `#[derive(GraphQLView)]` is fixed.
-    fn get_initialization_argument(&self) -> &InitializationArgument {
+    fn initialization_argument(&self) -> &InitializationArgument {
         self.initialization_argument
             .get()
             .as_ref()
