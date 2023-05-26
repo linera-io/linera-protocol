@@ -3,8 +3,7 @@
 
 use crate::{
     data_types::{
-        Block, ChainAndHeight, ChannelFullName, Event, ExecutedBlock, Medium, Origin,
-        OutgoingEffect, Target,
+        Block, ChainAndHeight, ChannelFullName, Event, Medium, Origin, OutgoingEffect, Target,
     },
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
@@ -251,11 +250,11 @@ where
     pub async fn receive_block(
         &mut self,
         origin: &Origin,
-        executed: ExecutedBlock,
+        height: BlockHeight,
+        timestamp: Timestamp,
+        effects: Vec<OutgoingEffect>,
         certificate_hash: CryptoHash,
     ) -> Result<(), ChainError> {
-        let height = executed.block.height;
-        let timestamp = executed.block.timestamp;
         let chain_id = self.chain_id();
         ensure!(
             height >= self.next_block_height_to_receive(origin).await?,
@@ -269,7 +268,7 @@ where
         );
         // Process immediate effects and create inbox events.
         let mut events = Vec::new();
-        for (index, outgoing_effect) in executed.effects.into_iter().enumerate() {
+        for (index, outgoing_effect) in effects.into_iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let OutgoingEffect {
                 destination,

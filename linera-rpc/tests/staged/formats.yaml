@@ -816,13 +816,13 @@ Value:
     0:
       ValidatedBlock:
         STRUCT:
-          - executed:
+          - executed_block:
               TYPENAME: ExecutedBlock
           - round:
               TYPENAME: RoundNumber
     1:
       ConfirmedBlock:
         STRUCT:
-          - executed:
+          - executed_block:
               TYPENAME: ExecutedBlock
 

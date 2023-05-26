@@ -194,7 +194,7 @@ pub trait Store: Sized {
             })?
             .into_inner();
         let operations = match value {
-            Value::ConfirmedBlock { executed } => executed.block.operations,
+            Value::ConfirmedBlock { executed_block } => executed_block.block.operations,
             Value::ValidatedBlock { .. } => {
                 return Err(ExecutionError::InvalidBytecodeId(*bytecode_id));
             }

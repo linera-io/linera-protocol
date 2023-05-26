@@ -606,8 +606,8 @@ where
         match action {
             CommunicateAction::SubmitBlockForConfirmation(proposal) => {
                 let block = proposal.content.block;
-                let (executed, _) = self.node_client.stage_block_execution(block).await?;
-                let value = HashedValue::new_confirmed(executed);
+                let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
+                let value = HashedValue::new_confirmed(executed_block);
                 let certificate = Certificate::new(value, signatures);
                 // Certificate is valid because
                 // * `communicate_with_quorum` ensured a sufficient "weight" of
@@ -617,8 +617,8 @@ where
             }
             CommunicateAction::SubmitBlockForValidation(proposal) => {
                 let BlockAndRound { block, round } = proposal.content;
-                let (executed, _) = self.node_client.stage_block_execution(block).await?;
-                let value = HashedValue::new_validated(executed, round);
+                let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
+                let value = HashedValue::new_validated(executed_block, round);
                 let certificate = Certificate::new(value, signatures);
                 Ok(Some(certificate))
             }
@@ -635,10 +635,10 @@ where
         certificate: Certificate,
         mode: ReceiveCertificateMode,
     ) -> Result<()> {
-        let Value::ConfirmedBlock { executed } = certificate.value() else {
+        let Value::ConfirmedBlock { executed_block } = certificate.value() else {
             bail!("Was expecting a confirmed chain operation");
         };
-        let block = &executed.block;
+        let block = &executed_block.block;
         // Verify the certificate before doing any expensive networking.
         let (committees, max_epoch) = self.known_committees().await?;
         ensure!(
@@ -718,10 +718,10 @@ where
                 .requested_sent_certificates.pop() else {
                 break;
             };
-            let Value::ConfirmedBlock { executed } = certificate.value() else {
+            let Value::ConfirmedBlock { executed_block } = certificate.value() else {
                 return Err(NodeError::InvalidChainInfoResponse);
             };
-            let block = &executed.block;
+            let block = &executed_block.block;
             // Check that certificates are valid w.r.t one of our trusted committees.
             if block.epoch > max_epoch {
                 // We don't accept a certificate from a committee in the future.
@@ -1014,8 +1014,8 @@ where
                     .expect("a certificate");
                 assert!(matches!(
                     certificate.value(),
-                    Value::ValidatedBlock { executed, .. }
-                        if executed.block == proposal.content.block
+                    Value::ValidatedBlock { executed_block, .. }
+                        if executed_block.block == proposal.content.block
                 ));
                 self.communicate_chain_updates(
                     &committee,
@@ -1040,8 +1040,8 @@ where
         // By now the block should be final.
         ensure!(
             matches!(
-                final_certificate.value(),
-                Value::ConfirmedBlock { executed } if executed.block == proposal.content.block
+                final_certificate.value(), Value::ConfirmedBlock { executed_block }
+                    if executed_block.block == proposal.content.block
             ),
             "A different operation was executed in parallel (consider retrying the operation)"
         );

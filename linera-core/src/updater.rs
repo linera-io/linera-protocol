@@ -141,8 +141,9 @@ where
             };
             if let Err(NodeError::ApplicationBytecodesNotFound(locations)) = &result {
                 let required = match certificate.value() {
-                    Value::ConfirmedBlock { executed } | Value::ValidatedBlock { executed, .. } => {
-                        executed.block.bytecode_locations()
+                    Value::ConfirmedBlock { executed_block }
+                    | Value::ValidatedBlock { executed_block, .. } => {
+                        executed_block.block.bytecode_locations()
                     }
                 };
                 for location in locations {

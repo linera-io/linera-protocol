@@ -120,14 +120,14 @@ impl BlockBuilder {
     pub(crate) async fn sign(mut self) -> Certificate {
         self.collect_incoming_messages().await;
 
-        let (executed, _) = self
+        let (executed_block, _) = self
             .validator
             .worker()
             .await
             .stage_block_execution(self.block)
             .await
             .expect("Failed to execute block");
-        let value = HashedValue::new_confirmed(executed);
+        let value = HashedValue::new_confirmed(executed_block);
         let vote = LiteVote::new(value.lite(), self.validator.key_pair());
         let mut builder = SignatureAggregator::new(value, self.validator.committee());
         builder

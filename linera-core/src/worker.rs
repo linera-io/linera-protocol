@@ -342,13 +342,13 @@ where
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         let (effects, state_hash) = chain.execute_block(&block).await?;
         let response = ChainInfoResponse::new(&chain, None);
-        let executed = ExecutedBlock {
+        let executed_block = ExecutedBlock {
             block,
             effects,
             state_hash,
         };
         // Do not save the new state.
-        Ok((executed, response))
+        Ok((executed_block, response))
     }
 
     // Schedule a notification when cross-chain messages are delivered up to the given height.
@@ -471,14 +471,14 @@ where
         blobs: &[HashedValue],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let Value::ConfirmedBlock { executed } = certificate.value() else {
+        let Value::ConfirmedBlock { executed_block } = certificate.value() else {
             panic!("Expecting a confirmation certificate");
         };
         let ExecutedBlock {
             block,
             effects,
             state_hash,
-        } = executed;
+        } = executed_block;
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         // Check that the chain is active and ready for this confirmation.
         let tip = chain.tip_state.get();
@@ -632,7 +632,10 @@ where
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let (block, round) = match certificate.value() {
-            Value::ValidatedBlock { executed, round } => (&executed.block, *round),
+            Value::ValidatedBlock {
+                executed_block: ExecutedBlock { block, .. },
+                round,
+            } => (block, *round),
             Value::ConfirmedBlock { .. } => panic!("Expecting a validation certificate"),
         };
         // Check that the chain is active and ready for this confirmation.
@@ -703,9 +706,13 @@ where
         for certificate in certificates {
             let hash = certificate.hash();
             match certificate.value.into_inner() {
-                Value::ConfirmedBlock { executed } => {
+                Value::ConfirmedBlock {
+                    executed_block: ExecutedBlock { block, effects, .. },
+                } => {
                     // Update the staged chain state with the received block.
-                    chain.receive_block(origin, executed, hash).await?
+                    chain
+                        .receive_block(origin, block.height, block.timestamp, effects, hash)
+                        .await?
                 }
                 value => {
                     error!(?value, "Unexpected value in cross-chain message");

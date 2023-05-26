@@ -183,11 +183,11 @@ pub struct ExecutedBlock {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
 pub enum Value {
     ValidatedBlock {
-        executed: ExecutedBlock,
+        executed_block: ExecutedBlock,
         round: RoundNumber,
     },
     ConfirmedBlock {
-        executed: ExecutedBlock,
+        executed_block: ExecutedBlock,
     },
 }
 
@@ -376,15 +376,15 @@ impl From<HashedValue> for Value {
 
 impl Value {
     pub fn chain_id(&self) -> ChainId {
-        self.executed().block.chain_id
+        self.executed_block().block.chain_id
     }
 
     pub fn height(&self) -> BlockHeight {
-        self.executed().block.height
+        self.executed_block().block.height
     }
 
     pub fn epoch(&self) -> Epoch {
-        self.executed().block.epoch
+        self.executed_block().block.epoch
     }
 
     /// Creates a `HashedValue` without checking that this is the correct hash!
@@ -396,7 +396,7 @@ impl Value {
     pub fn has_effect(&self, effect_id: &EffectId) -> bool {
         self.height() == effect_id.height
             && self.chain_id() == effect_id.chain_id
-            && self.executed().effects.len()
+            && self.executed_block().effects.len()
                 > usize::try_from(effect_id.index).unwrap_or(usize::MAX)
     }
 
@@ -408,7 +408,7 @@ impl Value {
         Some(EffectId {
             chain_id: self.chain_id(),
             height: self.height(),
-            index: u32::try_from(self.executed().effects.len())
+            index: u32::try_from(self.executed_block().effects.len())
                 .ok()?
                 .checked_sub(n)?,
         })
@@ -424,23 +424,28 @@ impl Value {
 
     #[cfg(any(test, feature = "test"))]
     pub fn effects(&self) -> &Vec<OutgoingEffect> {
-        &self.executed().effects
+        &self.executed_block().effects
     }
 
-    fn executed(&self) -> &ExecutedBlock {
+    fn executed_block(&self) -> &ExecutedBlock {
         match self {
-            Value::ConfirmedBlock { executed } | Value::ValidatedBlock { executed, .. } => executed,
+            Value::ConfirmedBlock { executed_block }
+            | Value::ValidatedBlock { executed_block, .. } => executed_block,
         }
     }
 }
 
 impl HashedValue {
-    pub fn new_confirmed(executed: ExecutedBlock) -> HashedValue {
-        Value::ConfirmedBlock { executed }.into()
+    pub fn new_confirmed(executed_block: ExecutedBlock) -> HashedValue {
+        Value::ConfirmedBlock { executed_block }.into()
     }
 
-    pub fn new_validated(executed: ExecutedBlock, round: RoundNumber) -> HashedValue {
-        Value::ValidatedBlock { executed, round }.into()
+    pub fn new_validated(executed_block: ExecutedBlock, round: RoundNumber) -> HashedValue {
+        Value::ValidatedBlock {
+            executed_block,
+            round,
+        }
+        .into()
     }
 
     pub fn hash(&self) -> CryptoHash {
@@ -456,9 +461,8 @@ impl HashedValue {
 
     pub fn into_confirmed(self) -> HashedValue {
         match self.value {
-            Value::ConfirmedBlock { executed } | Value::ValidatedBlock { executed, .. } => {
-                Self::new_confirmed(executed)
-            }
+            Value::ConfirmedBlock { executed_block }
+            | Value::ValidatedBlock { executed_block, .. } => Self::new_confirmed(executed_block),
         }
     }
 

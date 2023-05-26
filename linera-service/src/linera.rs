@@ -12,7 +12,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{BytecodeId, ChainDescription, ChainId, EffectId},
 };
-use linera_chain::data_types::{Certificate, Value as LineraValue};
+use linera_chain::data_types::{Certificate, ExecutedBlock, Value as LineraValue};
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
     data_types::ChainInfoQuery,
@@ -948,7 +948,9 @@ where
                 context.update_wallet_from_client(&mut chain_client).await;
                 let id = ChainId::child(effect_id);
                 let timestamp = match certificate.value() {
-                    LineraValue::ConfirmedBlock { executed } => executed.block.timestamp,
+                    LineraValue::ConfirmedBlock {
+                        executed_block: ExecutedBlock { block, .. },
+                    } => block.timestamp,
                     LineraValue::ValidatedBlock { .. } => {
                         panic!("Unexpected certificate.")
                     }
@@ -1028,7 +1030,9 @@ where
                     .unwrap()
                     .into_iter()
                     .map(|c| match c.value() {
-                        LineraValue::ConfirmedBlock { executed } => executed.effects.len(),
+                        LineraValue::ConfirmedBlock { executed_block } => {
+                            executed_block.effects.len()
+                        }
                         LineraValue::ValidatedBlock { .. } => 0,
                     })
                     .sum::<usize>();
@@ -1134,11 +1138,11 @@ where
 
                 for rpc_msg in &proposals {
                     if let RpcMessage::BlockProposal(proposal) = rpc_msg {
-                        let (executed, _) =
+                        let (executed_block, _) =
                             WorkerState::new("staging".to_string(), None, storage.clone())
                                 .stage_block_execution(proposal.content.block.clone())
                                 .await?;
-                        let value = HashedValue::new_confirmed(executed);
+                        let value = HashedValue::new_confirmed(executed_block);
                         values.insert(value.hash(), value);
                     }
                 }
@@ -1378,7 +1382,9 @@ where
                     .await
                     .context("could not find OpenChain effect")?;
                 let timestamp = match certificate.value() {
-                    LineraValue::ConfirmedBlock { executed } => executed.block.timestamp,
+                    LineraValue::ConfirmedBlock {
+                        executed_block: ExecutedBlock { block, .. },
+                    } => block.timestamp,
                     LineraValue::ValidatedBlock { .. } => panic!("Unexpected certificate."),
                 };
                 let chain_id = ChainId::child(effect_id);
