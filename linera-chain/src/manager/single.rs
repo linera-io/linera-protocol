@@ -53,7 +53,7 @@ impl SingleOwnerManager {
         );
         if let Some(vote) = &self.pending {
             let block = match &vote.value.inner() {
-                Value::ConfirmedBlock { executed } => &executed.block,
+                Value::ConfirmedBlock { executed_block } => &executed_block.block,
                 Value::ValidatedBlock { .. } => return Err(ChainError::InvalidBlockProposal),
             };
             if block == new_block {
@@ -80,12 +80,12 @@ impl SingleOwnerManager {
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
             let BlockAndRound { block, .. } = proposal.content;
-            let executed = ExecutedBlock {
+            let executed_block = ExecutedBlock {
                 block,
                 effects,
                 state_hash,
             };
-            let vote = Vote::new(HashedValue::new_confirmed(executed), key_pair);
+            let vote = Vote::new(HashedValue::new_confirmed(executed_block), key_pair);
             self.pending = Some(vote);
         }
     }

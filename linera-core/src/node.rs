@@ -346,8 +346,8 @@ where
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), NodeError> {
         let mut node = self.node.lock().await;
-        let (executed, info) = node.state.stage_block_execution(block).await?;
-        Ok((executed, info))
+        let (executed_block, info) = node.state.stage_block_execution(block).await?;
+        Ok((executed_block, info))
     }
 
     async fn try_process_certificates<A>(

@@ -77,11 +77,15 @@ impl MultiOwnerManager {
             }
         }
         if let Some(certificate) = &self.locked {
-            if let Value::ValidatedBlock { round, executed } = certificate.value() {
+            if let Value::ValidatedBlock {
+                round,
+                executed_block: ExecutedBlock { block, .. },
+            } = certificate.value()
+            {
                 ensure!(new_round > *round, ChainError::InsufficientRound(*round));
                 ensure!(
-                    *new_block == executed.block,
-                    ChainError::HasLockedBlock(executed.block.height, *round)
+                    *new_block == *block,
+                    ChainError::HasLockedBlock(block.height, *round)
                 );
             }
         }
@@ -95,8 +99,8 @@ impl MultiOwnerManager {
     ) -> Result<Outcome, ChainError> {
         if let Some(Vote { value, .. }) = &self.pending {
             match value.inner() {
-                Value::ConfirmedBlock { executed } => {
-                    if executed.block == *new_block {
+                Value::ConfirmedBlock { executed_block } => {
+                    if executed_block.block == *new_block {
                         return Ok(Outcome::Skip);
                     }
                 }
@@ -130,12 +134,12 @@ impl MultiOwnerManager {
         if let Some(key_pair) = key_pair {
             // Vote to validate.
             let BlockAndRound { block, round } = proposal.content;
-            let executed = ExecutedBlock {
+            let executed_block = ExecutedBlock {
                 block,
                 effects,
                 state_hash,
             };
-            let vote = Vote::new(HashedValue::new_validated(executed, round), key_pair);
+            let vote = Vote::new(HashedValue::new_validated(executed_block, round), key_pair);
             self.pending = Some(vote);
         }
     }
