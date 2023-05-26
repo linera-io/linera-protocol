@@ -388,7 +388,6 @@ impl CrowdFunding {
         Ok(())
     }
 
-    // TODO(#719): rename into `initialization_argument()` after `#[derive(GraphQLView)]` is fixed.
     fn initialization_argument(&self) -> &InitializationArgument {
         self.initialization_argument
             .get()

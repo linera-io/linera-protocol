@@ -15,7 +15,7 @@ pub fn string_to_ident(s: &str) -> Ident {
     syn::Ident::new(s, Span::call_site())
 }
 
-pub fn get_graphql_pair_for_underscore(id: &Ident) -> (Ident, String) {
+pub fn get_graphql_identifiers(id: &Ident) -> (Ident, String) {
     let id_str = format!("{}", id);
     let id_underscore = format!("_{}", id);
     (string_to_ident(&id_underscore), id_str)
