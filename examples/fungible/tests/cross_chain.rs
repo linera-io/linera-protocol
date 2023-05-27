@@ -69,8 +69,8 @@ async fn test_cross_chain_transfer() {
 }
 
 /// Query the balance of an account owned by `account_owner` on a specific `chain`.
-async fn query_account(
-    application_id: ApplicationId,
+async fn query_account<Abi>(
+    application_id: ApplicationId<Abi>,
     chain: ActiveChain,
     account_owner: AccountOwner,
 ) -> Option<Amount> {

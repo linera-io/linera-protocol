@@ -80,13 +80,13 @@ impl BlockBuilder {
     ///
     /// The operation is serialized using [`bcs`] and added to the block, marked to be executed by
     /// `application`.
-    pub fn with_operation(
+    pub fn with_operation<Abi>(
         &mut self,
-        application_id: ApplicationId,
+        application_id: ApplicationId<Abi>,
         operation: impl ToBcsBytes,
     ) -> &mut Self {
         self.block.operations.push(Operation::User {
-            application_id,
+            application_id: application_id.forget_abi(),
             bytes: operation
                 .to_bcs_bytes()
                 .expect("Failed to serialize operation"),

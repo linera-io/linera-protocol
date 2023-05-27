@@ -83,7 +83,7 @@ impl TestValidator {
     /// calling this method published on it.
     ///
     /// Returns the new [`TestValidator`] and the [`BytecodeId`] of the published bytecode.
-    pub async fn with_current_bytecode() -> (TestValidator, BytecodeId) {
+    pub async fn with_current_bytecode<Abi>() -> (TestValidator, BytecodeId<Abi>) {
         let validator = TestValidator::default();
         let publisher = validator.new_chain().await;
 
@@ -102,7 +102,7 @@ impl TestValidator {
     pub async fn with_current_application<A>(
         parameters: A::Parameters,
         initialization_argument: A::InitializationArgument,
-    ) -> (TestValidator, ApplicationId)
+    ) -> (TestValidator, ApplicationId<A>)
     where
         A: ContractAbi,
     {

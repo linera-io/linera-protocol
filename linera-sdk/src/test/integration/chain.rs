@@ -124,7 +124,7 @@ impl ActiveChain {
     /// Searches the Cargo manifest for binaries that end with `contract` and `service`, builds
     /// them for WebAssembly and uses the generated binaries as the contract and service bytecodes
     /// to be published on this chain. Returns the bytecode ID to reference the published bytecode.
-    pub async fn publish_current_bytecode(&self) -> BytecodeId {
+    pub async fn publish_current_bytecode<Abi>(&self) -> BytecodeId<Abi> {
         self.publish_bytecodes_in(".").await
     }
 
@@ -133,7 +133,10 @@ impl ActiveChain {
     /// Searches the Cargo manifest for binaries that end with `contract` and `service`, builds
     /// them for WebAssembly and uses the generated binaries as the contract and service bytecodes
     /// to be published on this chain. Returns the bytecode ID to reference the published bytecode.
-    pub async fn publish_bytecodes_in(&self, repository_path: impl AsRef<Path>) -> BytecodeId {
+    pub async fn publish_bytecodes_in<Abi>(
+        &self,
+        repository_path: impl AsRef<Path>,
+    ) -> BytecodeId<Abi> {
         let repository_path = fs::canonicalize(repository_path)
             .await
             .expect("Failed to obtain absolute application repository path");
@@ -156,7 +159,7 @@ impl ActiveChain {
         })
         .await;
 
-        BytecodeId::new(publish_effect_id)
+        BytecodeId::new(publish_effect_id).with_abi()
     }
 
     /// Compiles the crate in the `repository` path.
@@ -278,11 +281,11 @@ impl ActiveChain {
     /// `required_application_ids` of the applications that the new application will depend on.
     pub async fn create_application<A>(
         &mut self,
-        bytecode_id: BytecodeId,
+        bytecode_id: BytecodeId<A>,
         parameters: A::Parameters,
         initialization_argument: A::InitializationArgument,
         required_application_ids: Vec<ApplicationId>,
-    ) -> ApplicationId
+    ) -> ApplicationId<A>
     where
         A: ContractAbi,
     {
@@ -303,7 +306,7 @@ impl ActiveChain {
             }
 
             block.with_system_operation(SystemOperation::CreateApplication {
-                bytecode_id,
+                bytecode_id: bytecode_id.forget_abi(),
                 parameters,
                 initialization_argument,
                 required_application_ids,
@@ -324,7 +327,7 @@ impl ActiveChain {
     }
 
     /// Checks if the `bytecode_id` is missing from this microchain.
-    async fn needs_bytecode_location(&self, bytecode_id: BytecodeId) -> bool {
+    async fn needs_bytecode_location<Abi>(&self, bytecode_id: BytecodeId<Abi>) -> bool {
         let applications = self
             .validator
             .worker()
@@ -334,14 +337,14 @@ impl ActiveChain {
             .expect("Failed to load application registry");
 
         applications
-            .bytecode_locations_for([bytecode_id])
+            .bytecode_locations_for([bytecode_id.forget_abi()])
             .await
             .expect("Failed to check known bytecode locations")
             .is_empty()
     }
 
     /// Finds the effect that sends the message with the bytecode location of `bytecode_id`.
-    async fn find_bytecode_location(&self, bytecode_id: BytecodeId) -> EffectId {
+    async fn find_bytecode_location<Abi>(&self, bytecode_id: BytecodeId<Abi>) -> EffectId {
         for height in bytecode_id.effect_id.height.0.. {
             let certificate = self
                 .validator
@@ -356,7 +359,7 @@ impl ActiveChain {
                 matches!(
                     &effect.effect,
                     Effect::System(SystemEffect::BytecodeLocations { locations })
-                        if locations.iter().any(|(id, _)| id == &bytecode_id)
+                        if locations.iter().any(|(id, _)| id == &bytecode_id.forget_abi())
                 )
             });
 
@@ -378,9 +381,9 @@ impl ActiveChain {
     /// Executes a `query` on an `application`'s state on this microchain.
     ///
     /// Returns the deserialized `Output` response from the `application`.
-    pub async fn query<Output>(
+    pub async fn query<Abi, Output>(
         &self,
-        application_id: ApplicationId,
+        application_id: ApplicationId<Abi>,
         query: impl AsRef<str>,
     ) -> Output
     where
@@ -396,7 +399,7 @@ impl ActiveChain {
             .query_application(
                 self.id(),
                 &Query::User {
-                    application_id,
+                    application_id: application_id.forget_abi(),
                     bytes: query_bytes,
                 },
             )
