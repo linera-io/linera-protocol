@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
+[features]
+test = []
+
 [dependencies]
 async-graphql = { workspace = true }
 async-trait = { workspace = true }
@@ -15,6 +18,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+fungible = { workspace = true, features = ["test"] }
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 tokio = { workspace = true }
 

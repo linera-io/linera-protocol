@@ -5,6 +5,8 @@ use async_graphql::{scalar, InputObject, Request, Response};
 use linera_sdk::base::{Amount, ApplicationId, ChainId, ContractAbi, Owner, ServiceAbi};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::BTreeMap, str::FromStr};
+#[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
+use {async_graphql::InputType, linera_sdk::test::ActiveChain};
 
 // TODO(#768): Remove the derive macros.
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
@@ -220,5 +222,35 @@ impl InitialStateBuilder {
         InitialState {
             accounts: self.account_balances.clone(),
         }
+    }
+}
+
+#[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
+impl FungibleTokenAbi {
+    /// Queries the balance of an account owned by `account_owner` on a specific `chain`.
+    pub async fn query_account(
+        application_id: ApplicationId<FungibleTokenAbi>,
+        chain: &ActiveChain,
+        account_owner: AccountOwner,
+    ) -> Option<Amount> {
+        let query = format!(
+            "query {{ accounts(accountOwner: {} ) }}",
+            account_owner.to_value()
+        );
+
+        let value: serde_json::Value = chain.query(application_id, query).await;
+
+        let balance = value
+            .as_object()?
+            .get("data")?
+            .as_object()?
+            .get("accounts")?
+            .as_str()?;
+
+        Some(
+            balance
+                .parse()
+                .expect("Account balance cannot be parsed as a number"),
+        )
     }
 }
