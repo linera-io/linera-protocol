@@ -16,7 +16,7 @@ use linera_base::{
 use linera_chain::data_types::Certificate;
 use linera_core::{data_types::ChainInfoQuery, worker::ValidatorWorker};
 use linera_execution::{
-    system::{SystemChannel, SystemEffect, SystemOperation},
+    system::{SystemChannel, SystemEffect, SystemExecutionError, SystemOperation},
     Bytecode, Effect, Query, Response,
 };
 use serde::de::DeserializeOwned;
@@ -376,6 +376,61 @@ impl ActiveChain {
         }
 
         panic!("Bytecode not found in the chain it was supposed to be published on");
+    }
+
+    /// Registers on this chain an application created on another chain.
+    pub async fn register_application<Abi>(&self, application_id: ApplicationId<Abi>) {
+        if self.needs_application_description(application_id).await {
+            let source_chain = self.validator.get_chain(&application_id.creation.chain_id);
+
+            self.add_block(|block| {
+                block.with_request_for_application(application_id);
+            })
+            .await;
+
+            let request = EffectId {
+                chain_id: self.id(),
+                height: self.tip_height().await,
+                index: 0,
+            };
+
+            source_chain
+                .add_block(|block| {
+                    block.with_incoming_message(request);
+                })
+                .await;
+
+            let response = EffectId {
+                chain_id: source_chain.id(),
+                height: source_chain.tip_height().await,
+                index: 0,
+            };
+
+            self.add_block(|block| {
+                block.with_incoming_message(response);
+            })
+            .await;
+        }
+    }
+
+    /// Checks if the `application_id` is missing from this microchain.
+    async fn needs_application_description<Abi>(&self, application_id: ApplicationId<Abi>) -> bool {
+        let applications = self
+            .validator
+            .worker()
+            .await
+            .load_application_registry(self.id())
+            .await
+            .expect("Failed to load application registry");
+
+        match applications
+            .describe_application(application_id.forget_abi())
+            .await
+        {
+            Ok(_) => false,
+            Err(SystemExecutionError::UnknownApplicationId(_)) => true,
+            Err(_) => panic!("Failed to check known bytecode locations"),
+        }
     }
 
     /// Executes a `query` on an `application`'s state on this microchain.

@@ -76,6 +76,17 @@ impl BlockBuilder {
         self
     }
 
+    /// Adds a request to register an application on this chain.
+    pub fn with_request_for_application<Abi>(
+        &mut self,
+        application: ApplicationId<Abi>,
+    ) -> &mut Self {
+        self.with_system_operation(SystemOperation::RequestApplication {
+            chain_id: application.creation.chain_id,
+            application_id: application.forget_abi(),
+        })
+    }
+
     /// Adds a user `operation` to this block.
     ///
     /// The operation is serialized using [`bcs`] and added to the block, marked to be executed by
