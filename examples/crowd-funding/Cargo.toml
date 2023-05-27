@@ -15,6 +15,11 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+fungible = { workspace = true, features = ["test"] }
+linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+tokio = { workspace = true }
+
 [[bin]]
 name = "crowd_funding_contract"
 path = "src/contract.rs"
