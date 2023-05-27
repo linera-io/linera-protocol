@@ -300,6 +300,10 @@ impl ActiveChain {
         let parameters = serde_json::to_vec(&parameters).unwrap();
         let initialization_argument = serde_json::to_vec(&initialization_argument).unwrap();
 
+        for &dependency in &required_application_ids {
+            self.register_application(dependency).await;
+        }
+
         self.add_block(|block| {
             if let Some(effect_id) = bytecode_location_effect {
                 block.with_incoming_message(effect_id);
