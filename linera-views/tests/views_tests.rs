@@ -842,7 +842,7 @@ where
             subview.push(value_usize as u32);
         }
         //
-        let thr = rng.gen_range(0, 20);
+        let thr = rng.gen_range(0..20);
         if thr == 0 {
             view.save().await.unwrap();
         }
@@ -886,7 +886,7 @@ where
             DeletePrefix { key_prefix: _ } => {}
         }
         //
-        let thr = rng.gen_range(0, 10);
+        let thr = rng.gen_range(0..10);
         if thr == 0 {
             view.save().await.unwrap();
         }
@@ -911,7 +911,7 @@ where
         view.log.push(value_usize as u32);
         view.queue.push_back(value_usize as u64);
         //
-        let thr = rng.gen_range(0, 20);
+        let thr = rng.gen_range(0..20);
         if thr == 0 {
             view.save().await.unwrap();
         }
@@ -978,7 +978,7 @@ async fn check_hash_memoization_persistence<S>(
         let str1 = format!("{:?}", &pair.1);
         let pair0_first_u8 = *pair.0.first().unwrap();
         let pair1_first_u8 = *pair.1.first().unwrap();
-        let thr = rng.gen_range(0, 7);
+        let thr = rng.gen_range(0..7);
         if thr < 3 {
             let mut view = store.load(1).await.unwrap();
             view.x1.set(pair0_first_u8 as u64);
@@ -1030,9 +1030,9 @@ async fn check_hash_memoization_persistence<S>(
         if thr == 6 {
             let mut view = store.load(1).await.unwrap();
             let indices = view.collection.indices().await.unwrap();
-            let siz = indices.len();
-            if siz > 0 {
-                let pos = rng.gen_range(0, siz);
+            let size = indices.len();
+            if size > 0 {
+                let pos = rng.gen_range(0..size);
                 let x = &indices[pos];
                 view.collection.remove_entry(x).unwrap();
                 let hash_new = view.hash().await.unwrap();

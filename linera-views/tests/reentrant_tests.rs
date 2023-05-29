@@ -26,13 +26,13 @@ async fn reentrant_collection_view_check() {
         let mut view = StateView::load(context.clone()).await.unwrap();
         let save = rng.gen::<bool>();
         //
-        let count_oper = rng.gen_range(0, 25);
+        let count_oper = rng.gen_range(0..25);
         let mut new_map = map.clone();
         for _ in 0..count_oper {
-            let thr = rng.gen_range(0, 5);
+            let thr = rng.gen_range(0..5);
             if thr == 0 {
                 // deleting random stuff
-                let pos = rng.gen_range(0, nmax);
+                let pos = rng.gen_range(0..nmax);
                 view.v.remove_entry(&pos).unwrap();
                 new_map.remove(&pos);
             }
@@ -41,9 +41,9 @@ async fn reentrant_collection_view_check() {
                 let mut indices = Vec::new();
                 let mut set_indices = BTreeSet::new();
                 let mut values = Vec::new();
-                let n_ins = rng.gen_range(0, 5);
+                let n_ins = rng.gen_range(0..5);
                 for _i in 0..n_ins {
-                    let pos = rng.gen_range(0, nmax);
+                    let pos = rng.gen_range(0..nmax);
                     indices.push(pos);
                     set_indices.insert(pos);
                     let value = rng.gen::<u32>();
@@ -62,9 +62,9 @@ async fn reentrant_collection_view_check() {
             }
             if thr == 2 {
                 // changing some random entries
-                let n_ins = rng.gen_range(0, 5);
+                let n_ins = rng.gen_range(0..5);
                 for _i in 0..n_ins {
-                    let pos = rng.gen_range(0, nmax);
+                    let pos = rng.gen_range(0..nmax);
                     let value = rng.gen::<u32>();
                     let mut subview = view.v.try_load_entry_mut(&pos).await.unwrap();
                     *subview.get_mut() = value;

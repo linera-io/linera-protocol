@@ -163,8 +163,8 @@ pub async fn list_tables(client: &aws_sdk_dynamodb::Client) -> Result<Vec<String
 pub fn random_shuffle<R: RngCore, T: Clone>(rng: &mut R, values: &mut Vec<T>) {
     let n = values.len();
     for _ in 0..4 * n {
-        let index1: usize = rng.gen_range(0, n);
-        let index2: usize = rng.gen_range(0, n);
+        let index1: usize = rng.gen_range(0..n);
+        let index2: usize = rng.gen_range(0..n);
         if index1 != index2 {
             let val1 = values.get(index1).unwrap().clone();
             let val2 = values.get(index2).unwrap().clone();
@@ -178,7 +178,7 @@ pub fn random_shuffle<R: RngCore, T: Clone>(rng: &mut R, values: &mut Vec<T>) {
 pub fn get_random_byte_vector<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
     let mut v = key_prefix.to_vec();
     for _ in 0..n {
-        let val = rng.gen_range(0, 256) as u8;
+        let val = rng.gen_range(0..256) as u8;
         v.push(val);
     }
     v
@@ -256,7 +256,7 @@ pub fn span_random_reordering_put_delete<R: RngCore>(
     }
     let mut pos_remove_vector = vec![Vec::new(); n];
     for (i, pos) in indices_rev.iter().enumerate().take(k) {
-        let idx = rng.gen_range(*pos, n);
+        let idx = rng.gen_range(*pos..n);
         pos_remove_vector[idx].push(i);
     }
     let mut operations = Vec::new();
