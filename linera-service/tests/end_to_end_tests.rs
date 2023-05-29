@@ -200,6 +200,21 @@ impl Client {
         tmp
     }
 
+    async fn test_project(&self, path: &Path) {
+        let mut command = self.run().await;
+        assert!(command
+            .current_dir(path)
+            .kill_on_drop(true)
+            .arg("project")
+            .arg("test")
+            .spawn()
+            .unwrap()
+            .wait()
+            .await
+            .unwrap()
+            .success());
+    }
+
     async fn run(&self) -> Command {
         let path = cargo_build_binary("linera").await;
         let mut command = Command::new(path);
@@ -1617,5 +1632,15 @@ async fn test_project_new() {
     let project_dir = tmp_dir.path().join("init-test");
     runner
         .build_application(project_dir.as_path(), "init-test", false)
+        .await;
+}
+
+#[test_log::test(tokio::test)]
+async fn test_project_test() {
+    let network = Network::Grpc;
+    let mut runner = TestRunner::new(network, 0);
+    let client = runner.make_client(network);
+    client
+        .test_project(&PathBuf::from_str("../examples/counter").unwrap())
         .await;
 }
