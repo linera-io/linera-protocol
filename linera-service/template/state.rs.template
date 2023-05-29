@@ -1,7 +1,9 @@
-use serde::{Deserialize, Serialize};
+use linera_sdk::views::{ViewStorageContext, RegisterView};
+use linera_views::views::{GraphQLView, RootView};
 
-/// The application state.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[derive(RootView, GraphQLView)]
+#[view(context = "ViewStorageContext")]
 pub struct Application {
+    pub value: RegisterView<u64>,
     // Add fields here.
 }

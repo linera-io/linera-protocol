@@ -4,10 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+async-graphql = {{ version = "5.0.7", default-features = false }}
 async-trait = "0.1.52"
 bcs = "0.1.3"
 futures = "0.3.17"
 {linera_sdk_dep}
+{linera_views_dep}
 serde = {{ version = "1.0.130", features = ["derive"] }}
 serde_json = "1.0.93"
 thiserror = "1.0.31"
