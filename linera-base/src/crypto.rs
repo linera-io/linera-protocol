@@ -2,11 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use ed25519_dalek as dalek;
-use ed25519_dalek::{Signer, Verifier};
+use ed25519_dalek::{self as dalek, Signer, Verifier};
 use generic_array::typenum::Unsigned;
-#[cfg(not(target_arch = "wasm32"))]
-use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::{num::ParseIntError, str::FromStr};
 use thiserror::Error;
@@ -75,7 +72,7 @@ impl KeyPair {
     /// Generates a new key-pair.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn generate() -> Self {
-        let mut csprng = OsRng;
+        let mut csprng = rand07::rngs::OsRng;
         let keypair = dalek::Keypair::generate(&mut csprng);
         KeyPair(keypair)
     }
