@@ -122,12 +122,14 @@ impl Project {
 
     fn create_cargo_toml(project_root: &Path, project_name: &str) -> Result<()> {
         let toml_path = project_root.join("Cargo.toml");
-        let (linera_sdk_dep, linera_sdk_dev_dep) = Self::linera_sdk_dependencies();
+        let (linera_sdk_dep, linera_sdk_dev_dep, linera_views_dep) =
+            Self::linera_sdk_dependencies();
         let toml_contents = format!(
             include_str!("../template/Cargo.toml"),
             project_name = project_name,
             linera_sdk_dep = linera_sdk_dep,
-            linera_sdk_dev_dep = linera_sdk_dev_dep
+            linera_sdk_dev_dep = linera_sdk_dev_dep,
+            linera_views_dep = linera_views_dep
         );
         Self::write_string_to_file(&toml_path, &toml_contents)
     }
@@ -175,18 +177,23 @@ impl Project {
         Ok(())
     }
 
-    /// Adds ['linera-sdk'] dependencies in `debug` mode.
+    /// Resolves ['linera-sdk'] and [`linera-views`] dependencies in `debug` mode.
     ///
     /// Uses the directory of `linera-service` at compile time to figure out
-    /// where `linera-sdk` is.
+    /// where `linera-sdk` and `linera-views' is.
     #[cfg(debug_assertions)]
-    fn linera_sdk_dependencies() -> (String, String) {
+    fn linera_sdk_dependencies() -> (String, String, String) {
         let linera_service_path: PathBuf = env!("CARGO_MANIFEST_DIR")
             .parse()
             .expect("the CARGO_MANIFEST_DIR should always be a valid path");
         let linera_sdk_path = linera_service_path
             .join("..")
             .join("linera-sdk")
+            .canonicalize()
+            .expect("the linera-sdk crate should always exist");
+        let linera_views_path = linera_service_path
+            .join("..")
+            .join("linera-views")
             .canonicalize()
             .expect("the linera-sdk crate should always exist");
         let linera_sdk_dep = format!(
@@ -197,7 +204,11 @@ impl Project {
             "linera-sdk = {{ path = \"{}\", features = [\"test\"] }}",
             linera_sdk_path.display()
         );
-        (linera_sdk_dep, linera_sdk_dev_dep)
+        let linera_views_dep = format!(
+            "linera-views = {{ path = \"{}\" }}",
+            linera_views_path.display()
+        );
+        (linera_sdk_dep, linera_sdk_dev_dep, linera_views_dep)
     }
 
     /// Adds ['linera-sdk'] dependencies in `release` mode.
@@ -205,17 +216,26 @@ impl Project {
     /// Includes the contents of `linera-sdk`'s `Cargo.toml` at compile time
     /// to figure out the latest version.
     #[cfg(not(debug_assertions))]
-    fn linera_sdk_dependencies() -> (String, String) {
-        let content = include_str!("../../linera-sdk/Cargo.toml");
-        let sdk_cargo_toml: toml::Value = toml::from_str(content)
-            .expect("there was an error parsing a TOML file included at compile-time - this should never happen.");
-        let version = sdk_cargo_toml["package"]["version"].as_str()
-            .expect("there was an error finding the version in a TOML file included at compile-time - this should never happen.");
-        let linera_sdk_dep = format!("linera-sdk = \"{}\"", version);
+    fn linera_sdk_dependencies() -> (String, String, String) {
+        let sdk_toml_contents = include_str!("../../linera-sdk/Cargo.toml");
+        let views_toml_contents = include_str!("../../linera-views/Cargo.toml");
+        let sdk_version = Self::crate_version(sdk_toml_contents);
+        let views_version = Self::crate_version(views_toml_contents);
+        let linera_sdk_dep = format!("linera-sdk = \"{}\"", sdk_version);
         let linera_sdk_dev_dep = format!(
             "linera-sdk = {{ version = \"{}\", features = [\"test\"] }}",
-            version
+            sdk_version
         );
-        (linera_sdk_dep, linera_sdk_dev_dep)
+        let linera_views_dep = format!("linera-views = \"{}\"", views_version);
+        (linera_sdk_dep, linera_sdk_dev_dep, linera_views_dep)
+    }
+
+    #[cfg(not(debug_assertions))]
+    fn crate_version(toml_contents: &'static str) -> String {
+        let cargo_toml: toml::Value = toml::from_str(toml_contents)
+            .expect("there was an error parsing a TOML file included at compile-time - this should never happen.");
+        let sdk_version = cargo_toml["package"]["version"].as_str()
+            .expect("there was an error finding the version in a TOML file included at compile-time - this should never happen.");
+        sdk_version.to_string()
     }
 }

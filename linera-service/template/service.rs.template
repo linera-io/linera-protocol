@@ -5,7 +5,7 @@ mod state;
 
 use self::state::Application;
 use async_trait::async_trait;
-use linera_sdk::{{base::WithServiceAbi, QueryContext, Service, SimpleStateStorage}};
+use linera_sdk::{{base::WithServiceAbi, QueryContext, Service, ViewStateStorage}};
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -18,7 +18,7 @@ impl WithServiceAbi for Application {{
 #[async_trait]
 impl Service for Application {{
     type Error = Error;
-    type Storage = SimpleStateStorage<Self>;
+    type Storage = ViewStateStorage<Self>;
 
     async fn query_application(
         self: Arc<Self>,
