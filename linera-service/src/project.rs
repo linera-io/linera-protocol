@@ -9,11 +9,13 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use tracing::debug;
+use tracing::{debug, info};
 
 pub struct Project {
     root: PathBuf,
 }
+
+const RUNNER_BIN_NAME: &str = "test-runner";
 
 impl Project {
     pub fn new(root: PathBuf) -> Result<Self> {
@@ -89,19 +91,20 @@ impl Project {
     }
 
     fn install_test_runner() -> Result<()> {
-        println!("installing test runner...");
+        info!("installing test runner...");
         let cargo_install = Command::new("cargo")
-            .args(["install", "linera-test-runner"])
+            .args(["install", "linera-sdk"])
+            .args(["--bin", RUNNER_BIN_NAME])
             .spawn()?
             .wait()?;
         if !cargo_install.success() {
-            bail!("failed to install linera-test-runner")
+            bail!("failed to install {}", &RUNNER_BIN_NAME)
         }
         Ok(())
     }
 
     fn runner_path() -> Result<PathBuf> {
-        Self::cargo_home().map(|cargo_home| cargo_home.join("bin").join("linera-test-runner"))
+        Self::cargo_home().map(|cargo_home| cargo_home.join("bin").join(RUNNER_BIN_NAME))
     }
 
     fn cargo_home() -> Result<PathBuf> {
