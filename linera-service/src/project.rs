@@ -137,19 +137,19 @@ impl Project {
 
     fn create_state_file(source_directory: &Path) -> Result<()> {
         let state_path = source_directory.join("state.rs");
-        Self::write_string_to_file(&state_path, include_str!("../template/state"))
+        Self::write_string_to_file(&state_path, include_str!("../template/state.rs.template"))
     }
 
     fn create_lib_file(source_directory: &Path) -> Result<()> {
         let state_path = source_directory.join("lib.rs");
-        Self::write_string_to_file(&state_path, include_str!("../template/lib"))
+        Self::write_string_to_file(&state_path, include_str!("../template/lib.rs.template"))
     }
 
     fn create_contract_file(source_directory: &Path, project_name: &str) -> Result<()> {
         let project_name = project_name.replace('-', "_");
         let contract_path = source_directory.join("contract.rs");
         let contract_contents = format!(
-            include_str!("../template/contract"),
+            include_str!("../template/contract.rs.template"),
             project_name = project_name
         );
         Self::write_string_to_file(&contract_path, &contract_contents)
@@ -159,7 +159,7 @@ impl Project {
         let project_name = project_name.replace('-', "_");
         let service_path = source_directory.join("service.rs");
         let service_contents = format!(
-            include_str!("../template/service"),
+            include_str!("../template/service.rs.template"),
             project_name = project_name
         );
         Self::write_string_to_file(&service_path, &service_contents)
