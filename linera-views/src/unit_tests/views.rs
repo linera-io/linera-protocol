@@ -4,10 +4,8 @@
 use crate::{
     batch::Batch,
     common::Context,
-    lru_caching::TEST_CACHE_SIZE,
     memory::MemoryContext,
     queue_view::QueueView,
-    rocksdb::{RocksdbClient, RocksdbContext},
     views::{View, ViewError},
 };
 use async_lock::Mutex;
@@ -16,23 +14,32 @@ use std::{
     collections::{BTreeMap, VecDeque},
     sync::Arc,
 };
-use tempfile::TempDir;
+
+#[cfg(feature = "rocksdb")]
+use {
+    crate::rocksdb::{RocksdbClient, RocksdbContext},
+    tempfile::TempDir,
+};
 
 #[cfg(feature = "aws")]
 use crate::{dynamo_db::DynamoDbContext, test_utils::LocalStackTestContext};
+
+#[cfg(any(feature = "rocksdb", feature = "aws"))]
+use crate::lru_caching::TEST_CACHE_SIZE;
 
 #[tokio::test]
 async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error> {
     run_test_queue_operations_test_cases(MemoryContextFactory).await
 }
 
+#[cfg(feature = "rocksdb")]
 #[tokio::test]
 async fn test_queue_operations_with_rocksdb_context() -> Result<(), anyhow::Error> {
     run_test_queue_operations_test_cases(RocksdbContextFactory::default()).await
 }
 
-#[tokio::test]
 #[cfg(feature = "aws")]
+#[tokio::test]
 async fn test_queue_operations_with_dynamodb_context() -> Result<(), anyhow::Error> {
     run_test_queue_operations_test_cases(DynamoDbContextFactory::default()).await
 }
@@ -193,11 +200,13 @@ impl TestContextFactory for MemoryContextFactory {
     }
 }
 
+#[cfg(feature = "rocksdb")]
 #[derive(Default)]
 struct RocksdbContextFactory {
     temporary_directories: Vec<TempDir>,
 }
 
+#[cfg(feature = "rocksdb")]
 #[async_trait]
 impl TestContextFactory for RocksdbContextFactory {
     type Context = RocksdbContext<()>;

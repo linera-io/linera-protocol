@@ -26,7 +26,7 @@ futures = { workspace = true }
 linera-base = { workspace = true }
 linera-chain = { workspace = true }
 linera-execution = { workspace = true }
-linera-views = { workspace = true, features = ["metrics"] }
+linera-views = { workspace = true, features = ["metrics", "rocksdb"] }
 metrics = { workspace = true }
 tracing = { workspace = true }
 rocksdb = { workspace = true }

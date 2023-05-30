@@ -7,7 +7,6 @@ use linera_views::{
     common::{KeyIterable, KeyValueStoreClient},
     key_value_store_view::ViewContainer,
     memory::MemoryContext,
-    rocksdb::DB,
     test_utils::get_random_key_value_vec_prefix,
 };
 use rand::SeedableRng;
@@ -15,6 +14,9 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
 };
+
+#[cfg(feature = "rocksdb")]
+use linera_views::rocksdb::DB;
 
 #[cfg(feature = "aws")]
 use linera_views::{
@@ -91,6 +93,7 @@ async fn test_ordering_memory() {
     test_ordering_keys(key_value_operation).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[tokio::test]
 async fn test_ordering_rocksdb() {
     let dir = tempfile::TempDir::new().unwrap();

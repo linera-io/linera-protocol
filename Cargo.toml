@@ -109,7 +109,7 @@ linera-core = { version = "0.1.0", path = "./linera-core", default-features = fa
 linera-execution = { version = "0.1.0", path = "./linera-execution", default-features = false }
 linera-rpc = { version = "0.1.0", path = "./linera-rpc" }
 linera-storage = { version = "0.1.0", path = "./linera-storage", default-features = false }
-linera-views = { version = "0.1.0", path = "./linera-views" }
+linera-views = { version = "0.1.0", path = "./linera-views", default-features = false }
 linera-views-derive = { version = "0.1.0", path = "./linera-views-derive" }
 
 counter = { path = "./examples/counter" }
