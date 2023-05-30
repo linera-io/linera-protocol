@@ -145,23 +145,20 @@ impl ActiveChain {
         Self::build_bytecodes_in(&repository_path).await;
         let (contract, service) = self.find_bytecodes_in(&repository_path).await;
 
+        let publish_effects = self
+            .add_block(|block| {
+                block.with_system_operation(SystemOperation::PublishBytecode { contract, service });
+            })
+            .await;
+
+        assert_eq!(publish_effects.len(), 1);
+
         self.add_block(|block| {
-            block.with_system_operation(SystemOperation::PublishBytecode { contract, service });
+            block.with_incoming_message(publish_effects[0]);
         })
         .await;
 
-        let publish_effect_id = EffectId {
-            chain_id: self.description.into(),
-            height: self.tip_height().await,
-            index: 0,
-        };
-
-        self.add_block(|block| {
-            block.with_incoming_message(publish_effect_id);
-        })
-        .await;
-
-        BytecodeId::new(publish_effect_id).with_abi()
+        BytecodeId::new(publish_effects[0]).with_abi()
     }
 
     /// Compiles the crate in the `repository` path.
@@ -239,34 +236,27 @@ impl ActiveChain {
     pub async fn subscribe_to_published_bytecodes_from(&mut self, publisher_id: ChainId) {
         let publisher = self.validator.get_chain(&publisher_id);
 
-        self.add_block(|block| {
-            block.with_system_operation(SystemOperation::Subscribe {
-                chain_id: publisher.id(),
-                channel: SystemChannel::PublishedBytecodes,
-            });
-        })
-        .await;
-
-        let effect_id = EffectId {
-            chain_id: self.description.into(),
-            height: self.tip_height().await,
-            index: 0,
-        };
-
-        publisher
+        let request_effects = self
             .add_block(|block| {
-                block.with_incoming_message(effect_id);
+                block.with_system_operation(SystemOperation::Subscribe {
+                    chain_id: publisher.id(),
+                    channel: SystemChannel::PublishedBytecodes,
+                });
             })
             .await;
 
-        let effect_id = EffectId {
-            chain_id: publisher.id(),
-            height: publisher.tip_height().await,
-            index: 0,
-        };
+        assert_eq!(request_effects.len(), 1);
+
+        let accept_effects = publisher
+            .add_block(|block| {
+                block.with_incoming_message(request_effects[0]);
+            })
+            .await;
+
+        assert_eq!(accept_effects.len(), 1);
 
         self.add_block(|block| {
-            block.with_incoming_message(effect_id);
+            block.with_incoming_message(accept_effects[0]);
         })
         .await;
     }
@@ -306,29 +296,26 @@ impl ActiveChain {
             self.register_application(dependency).await;
         }
 
-        self.add_block(|block| {
-            if let Some(effect_id) = bytecode_location_effect {
-                block.with_incoming_message(effect_id);
-            }
+        let creation_effects = self
+            .add_block(|block| {
+                if let Some(effect_id) = bytecode_location_effect {
+                    block.with_incoming_message(effect_id);
+                }
 
-            block.with_system_operation(SystemOperation::CreateApplication {
-                bytecode_id: bytecode_id.forget_abi(),
-                parameters,
-                initialization_argument,
-                required_application_ids,
-            });
-        })
-        .await;
+                block.with_system_operation(SystemOperation::CreateApplication {
+                    bytecode_id: bytecode_id.forget_abi(),
+                    parameters,
+                    initialization_argument,
+                    required_application_ids,
+                });
+            })
+            .await;
 
-        let creation_effect_id = EffectId {
-            chain_id: self.description.into(),
-            height: self.tip_height().await,
-            index: 0,
-        };
+        assert_eq!(creation_effects.len(), 1);
 
         ApplicationId {
             bytecode_id,
-            creation: creation_effect_id,
+            creation: creation_effects[0],
         }
     }
 
@@ -389,33 +376,29 @@ impl ActiveChain {
         if self.needs_application_description(application_id).await {
             let source_chain = self.validator.get_chain(&application_id.creation.chain_id);
 
-            self.add_block(|block| {
-                block.with_request_for_application(application_id);
-            })
-            .await;
-
-            let request = EffectId {
-                chain_id: self.id(),
-                height: self.tip_height().await,
-                index: 0,
-            };
-
-            source_chain
+            let request_effects = self
                 .add_block(|block| {
-                    block.with_incoming_message(request);
+                    block.with_request_for_application(application_id);
                 })
                 .await;
 
-            let response = EffectId {
-                chain_id: source_chain.id(),
-                height: source_chain.tip_height().await,
-                index: 0,
-            };
+            assert_eq!(request_effects.len(), 1);
 
-            self.add_block(|block| {
-                block.with_incoming_message(response);
-            })
-            .await;
+            let register_effects = source_chain
+                .add_block(|block| {
+                    block.with_incoming_message(request_effects[0]);
+                })
+                .await;
+
+            assert_eq!(register_effects.len(), 1);
+
+            let final_effects = self
+                .add_block(|block| {
+                    block.with_incoming_message(register_effects[0]);
+                })
+                .await;
+
+            assert_eq!(final_effects.len(), 0);
         }
     }
 
