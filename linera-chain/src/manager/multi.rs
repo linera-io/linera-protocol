@@ -23,7 +23,7 @@ use std::collections::HashMap;
 pub struct MultiOwnerManager {
     /// The co-owners of the chain.
     pub owners: HashMap<Owner, PublicKey>,
-    /// Latest authenticated block that we have received.
+    /// Latest authenticated block that we have received (and voted to validate).
     pub proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have seen (and voted to confirm).
     pub locked: Option<Certificate>,
@@ -62,7 +62,7 @@ impl MultiOwnerManager {
         self.pending.as_ref()
     }
 
-    /// Verify the safety of the block w.r.t. voting rules.
+    /// Verifies the safety of the block w.r.t. voting rules.
     pub fn check_proposed_block(
         &self,
         new_block: &Block,
@@ -99,8 +99,11 @@ impl MultiOwnerManager {
     ) -> Result<Outcome, ChainError> {
         if let Some(Vote { value, .. }) = &self.pending {
             match value.inner() {
-                Value::ConfirmedBlock { executed_block } => {
-                    if executed_block.block == *new_block {
+                Value::ConfirmedBlock {
+                    executed_block,
+                    round,
+                } => {
+                    if executed_block.block == *new_block && *round == new_round {
                         return Ok(Outcome::Skip);
                     }
                 }

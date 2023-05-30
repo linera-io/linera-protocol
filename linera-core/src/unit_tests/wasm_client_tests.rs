@@ -457,7 +457,7 @@ where
     let certs = receiver.process_inbox().await.unwrap();
     assert_eq!(certs.len(), 1);
     let messages = match certs[0].value() {
-        Value::ConfirmedBlock { executed_block } => &executed_block.block.incoming_messages,
+        Value::ConfirmedBlock { executed_block, .. } => &executed_block.block.incoming_messages,
         Value::ValidatedBlock { .. } => panic!("Unexpected value"),
     };
     assert!(messages.iter().any(|msg| matches!(
@@ -486,7 +486,7 @@ where
     let certs = receiver.process_inbox().await?;
     assert_eq!(certs.len(), 1);
     let messages = match certs[0].value() {
-        Value::ConfirmedBlock { executed_block } => &executed_block.block.incoming_messages,
+        Value::ConfirmedBlock { executed_block, .. } => &executed_block.block.incoming_messages,
         Value::ValidatedBlock { .. } => panic!("Unexpected value"),
     };
     // The new block should _not_ contain another `RegisterApplications` effect, because the
@@ -621,7 +621,7 @@ where
 
     // There should be a message receiving the new post.
     let messages = match certs[0].value() {
-        Value::ConfirmedBlock { executed_block } => &executed_block.block.incoming_messages,
+        Value::ConfirmedBlock { executed_block, .. } => &executed_block.block.incoming_messages,
         Value::ValidatedBlock { .. } => panic!("Unexpected value"),
     };
     assert!(messages

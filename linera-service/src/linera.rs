@@ -951,10 +951,9 @@ where
                 let timestamp = match certificate.value() {
                     LineraValue::ConfirmedBlock {
                         executed_block: ExecutedBlock { block, .. },
+                        ..
                     } => block.timestamp,
-                    LineraValue::ValidatedBlock { .. } => {
-                        panic!("Unexpected certificate.")
-                    }
+                    _ => panic!("Unexpected certificate."),
                 };
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
                 // Print the new chain ID and effect ID on stdout for scripting purposes.
@@ -1031,7 +1030,7 @@ where
                     .unwrap()
                     .into_iter()
                     .map(|c| match c.value() {
-                        LineraValue::ConfirmedBlock { executed_block } => {
+                        LineraValue::ConfirmedBlock { executed_block, .. } => {
                             executed_block.effects.len()
                         }
                         LineraValue::ValidatedBlock { .. } => 0,
@@ -1385,8 +1384,9 @@ where
                 let timestamp = match certificate.value() {
                     LineraValue::ConfirmedBlock {
                         executed_block: ExecutedBlock { block, .. },
+                        ..
                     } => block.timestamp,
-                    LineraValue::ValidatedBlock { .. } => panic!("Unexpected certificate."),
+                    _ => panic!("Unexpected certificate."),
                 };
                 let chain_id = ChainId::child(effect_id);
                 context
