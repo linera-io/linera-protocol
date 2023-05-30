@@ -7,12 +7,16 @@
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 
-/// A trait that includes all the types exported by a Linera application (both contract and service).
+// ANCHOR: abi
+/// A trait that includes all the types exported by a Linera application (both contract
+/// and service).
 pub trait Abi: ContractAbi + ServiceAbi {}
+// ANCHOR_END: abi
 
 // T::Parameters is duplicated for simplicity but it must match.
 impl<T> Abi for T where T: ContractAbi + ServiceAbi<Parameters = <T as ContractAbi>::Parameters> {}
 
+// ANCHOR: contract_abi
 /// A trait that includes all the types exported by a Linera application contract.
 pub trait ContractAbi {
     /// Immutable parameters specific to this application (e.g. the name of a token).
@@ -54,7 +58,9 @@ pub trait ContractAbi {
     /// The response type of an application call.
     type Response: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 }
+// ANCHOR_END: contract_abi
 
+// ANCHOR: service_abi
 /// A trait that includes all the types exported by a Linera application service.
 pub trait ServiceAbi {
     /// Immutable parameters specific to this application (e.g. the name of a token).
@@ -66,6 +72,7 @@ pub trait ServiceAbi {
     /// The response type of the application's service.
     type QueryResponse: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 }
+// ANCHOR_END: service_abi
 
 /// Marker trait to help importing contract types.
 pub trait WithContractAbi {

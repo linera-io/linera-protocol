@@ -27,6 +27,15 @@ use std::sync::{
 use tokio::sync::{Mutex, MutexGuard};
 
 /// A minimal validator implementation suited for tests.
+///
+/// ```rust
+/// # use linera_sdk::test::*;
+/// # use linera_base::identifiers::ChainId;
+/// # tokio_test::block_on(async {
+/// let validator = TestValidator::default();
+/// assert_eq!(validator.new_chain().await.id(), ChainId::root(0));
+/// # });
+/// ```
 pub struct TestValidator {
     key_pair: KeyPair,
     committee: Committee,
