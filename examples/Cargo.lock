@@ -1167,6 +1167,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "fungible",
+ "futures",
  "linera-sdk",
  "linera-views",
  "serde",

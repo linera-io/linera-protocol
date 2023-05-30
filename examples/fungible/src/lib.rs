@@ -6,7 +6,14 @@ use linera_sdk::base::{Amount, ApplicationId, ChainId, ContractAbi, Owner, Servi
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::BTreeMap, str::FromStr};
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
-use {async_graphql::InputType, linera_sdk::test::ActiveChain};
+use {
+    async_graphql::InputType,
+    futures::{stream, StreamExt},
+    linera_sdk::{
+        base::BytecodeId,
+        test::{ActiveChain, TestValidator},
+    },
+};
 
 // TODO(#768): Remove the derive macros.
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
@@ -227,6 +234,79 @@ impl InitialStateBuilder {
 
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 impl FungibleTokenAbi {
+    /// Creates a fungible token application and distributes `initial_amounts` to new individual
+    /// chains.
+    pub async fn create_with_accounts(
+        validator: &TestValidator,
+        bytecode_id: BytecodeId<Self>,
+        initial_amounts: impl IntoIterator<Item = Amount>,
+    ) -> (
+        ApplicationId<Self>,
+        Vec<(ActiveChain, AccountOwner, Amount)>,
+    ) {
+        let mut token_chain = validator.new_chain().await;
+        let mut initial_state = InitialStateBuilder::default();
+
+        let accounts = stream::iter(initial_amounts)
+            .then(|initial_amount| async move {
+                let chain = validator.new_chain().await;
+                let account = AccountOwner::from(chain.public_key());
+
+                (chain, account, initial_amount)
+            })
+            .collect::<Vec<_>>()
+            .await;
+
+        for (_chain, account, initial_amount) in &accounts {
+            initial_state = initial_state.with_account(*account, *initial_amount);
+        }
+
+        let application_id = token_chain
+            .create_application(bytecode_id, (), initial_state.build(), vec![])
+            .await;
+
+        for (chain, account, initial_amount) in &accounts {
+            chain.register_application(application_id).await;
+
+            let claim_effects = chain
+                .add_block(|block| {
+                    block.with_operation(
+                        application_id,
+                        Operation::Claim {
+                            source_account: Account {
+                                chain_id: token_chain.id(),
+                                owner: *account,
+                            },
+                            amount: *initial_amount,
+                            target_account: Account {
+                                chain_id: chain.id(),
+                                owner: *account,
+                            },
+                        },
+                    );
+                })
+                .await;
+
+            assert_eq!(claim_effects.len(), 2);
+
+            let transfer_effects = token_chain
+                .add_block(|block| {
+                    block.with_incoming_message(claim_effects[1]);
+                })
+                .await;
+
+            assert_eq!(transfer_effects.len(), 2);
+
+            chain
+                .add_block(|block| {
+                    block.with_incoming_message(transfer_effects[1]);
+                })
+                .await;
+        }
+
+        (application_id, accounts)
+    }
+
     /// Queries the balance of an account owned by `account_owner` on a specific `chain`.
     pub async fn query_account(
         application_id: ApplicationId<FungibleTokenAbi>,

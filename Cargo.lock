@@ -1873,6 +1873,7 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "bcs",
+ "futures",
  "linera-sdk",
  "linera-views",
  "serde",
