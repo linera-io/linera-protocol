@@ -75,7 +75,7 @@ impl ActiveChain {
     ///
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
     /// to provide the block's contents.
-    pub async fn add_block(&self, block_builder: impl FnOnce(&mut BlockBuilder)) {
+    pub async fn add_block(&self, block_builder: impl FnOnce(&mut BlockBuilder)) -> Vec<EffectId> {
         let mut tip = self.tip.lock().await;
         let mut block = BlockBuilder::new(
             self.description.into(),
@@ -86,7 +86,7 @@ impl ActiveChain {
 
         block_builder(&mut block);
 
-        let certificate = block.sign().await;
+        let (certificate, effect_ids) = block.sign().await;
 
         self.validator
             .worker()
@@ -96,6 +96,8 @@ impl ActiveChain {
             .expect("Rejected certificate");
 
         *tip = Some(certificate);
+
+        effect_ids
     }
 
     /// Receives all queued messages in all inboxes of this microchain.
