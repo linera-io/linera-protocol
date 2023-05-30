@@ -183,6 +183,7 @@ impl From<linera_chain::ChainError> for WorkerError {
 const DEFAULT_VALUE_CACHE_SIZE: usize = 1000;
 
 /// State of a worker in a validator or a local node.
+#[derive(Clone)]
 pub struct WorkerState<StorageClient> {
     /// A name used for logging
     nickname: String,
@@ -199,7 +200,7 @@ pub struct WorkerState<StorageClient> {
     /// will wait until that timestamp before voting.
     grace_period_micros: u64,
     /// Cached values by hash.
-    recent_values: LruCache<CryptoHash, HashedValue>,
+    recent_values: Arc<Mutex<LruCache<CryptoHash, HashedValue>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
@@ -207,27 +208,11 @@ pub struct WorkerState<StorageClient> {
 
 type DeliveryNotifiers = HashMap<ChainId, BTreeMap<BlockHeight, Vec<oneshot::Sender<()>>>>;
 
-impl<Client: Clone> Clone for WorkerState<Client> {
-    fn clone(&self) -> Self {
-        let mut recent_values = LruCache::new(self.recent_values.cap());
-        for (k, v) in &self.recent_values {
-            recent_values.push(*k, v.clone());
-        }
-        WorkerState {
-            nickname: self.nickname.clone(),
-            key_pair: self.key_pair.clone(),
-            storage: self.storage.clone(),
-            allow_inactive_chains: self.allow_inactive_chains,
-            allow_messages_from_deprecated_epochs: self.allow_messages_from_deprecated_epochs,
-            grace_period_micros: self.grace_period_micros,
-            recent_values,
-            delivery_notifiers: self.delivery_notifiers.clone(),
-        }
-    }
-}
-
 impl<Client> WorkerState<Client> {
     pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: Client) -> Self {
+        let recent_values = Arc::new(Mutex::new(LruCache::new(
+            NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap(),
+        )));
         WorkerState {
             nickname,
             key_pair: key_pair.map(Arc::new),
@@ -235,7 +220,7 @@ impl<Client> WorkerState<Client> {
             allow_inactive_chains: false,
             allow_messages_from_deprecated_epochs: false,
             grace_period_micros: 0,
-            recent_values: LruCache::new(NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap()),
+            recent_values,
             delivery_notifiers: Arc::default(),
         }
     }
@@ -247,11 +232,6 @@ impl<Client> WorkerState<Client> {
 
     pub fn with_allow_messages_from_deprecated_epochs(mut self, value: bool) -> Self {
         self.allow_messages_from_deprecated_epochs = value;
-        self
-    }
-
-    pub fn with_value_cache_size(mut self, size: NonZeroUsize) -> Self {
-        self.recent_values.resize(size);
         self
     }
 
@@ -281,8 +261,8 @@ impl<Client> WorkerState<Client> {
         &self.storage
     }
 
-    pub(crate) fn recent_value(&mut self, hash: &CryptoHash) -> Option<&HashedValue> {
-        self.recent_values.get(hash)
+    pub(crate) async fn recent_value(&mut self, hash: &CryptoHash) -> Option<HashedValue> {
+        self.recent_values.lock().await.get(hash).cloned()
     }
 }
 
@@ -518,7 +498,7 @@ where
         self.check_no_missing_bytecode(block, blobs).await?;
         // Persist certificate and blobs.
         for value in blobs {
-            self.cache_recent_value(value.clone());
+            self.cache_recent_value(value).await;
         }
         let (result_blob, result_certificate) = tokio::join!(
             self.storage.write_values(blobs),
@@ -582,11 +562,11 @@ where
             );
         }
         let blob_hashes: HashSet<_> = blobs.iter().map(|blob| blob.hash()).collect();
-
+        let recent_values = self.recent_values.lock().await;
         let tasks: Vec<_> = required_locations
             .into_keys()
             .filter(|location| {
-                !self.recent_values.contains(&location.certificate_hash)
+                !recent_values.contains(&location.certificate_hash)
                     && !blob_hashes.contains(&location.certificate_hash)
             })
             .map(|location| {
@@ -723,19 +703,20 @@ where
         Ok(Some(last_updated_height))
     }
 
-    pub fn cache_recent_value(&mut self, value: HashedValue) {
+    pub async fn cache_recent_value(&mut self, value: &HashedValue) {
         let hash = value.hash();
-        if self.recent_values.contains(&hash) {
+        let mut recent_values = self.recent_values.lock().await;
+        if recent_values.contains(&hash) {
             return;
         }
         if value.inner().is_validated() {
             // Cache the corresponding confirmed block, too, in case we get a certificate.
             let conf_value = value.clone().into_confirmed();
             let conf_hash = conf_value.hash();
-            self.recent_values.push(conf_hash, conf_value);
+            recent_values.push(conf_hash, conf_value);
         }
         // Cache the certificate so that clients don't have to send the value again.
-        self.recent_values.push(hash, value);
+        recent_values.push(hash, value.clone());
     }
 
     /// Returns a stored [`Certificate`] for a chain's block.
@@ -822,7 +803,8 @@ where
         certificate: LiteCertificate<'_>,
     ) -> Result<Certificate, WorkerError> {
         let hash = certificate.value.value_hash;
-        let value = match self.recent_value(&hash) {
+        let mut recent_values = self.recent_values.lock().await;
+        let value = match recent_values.get(&hash) {
             Some(value) => value.clone(),
             None => self
                 .storage
@@ -923,9 +905,7 @@ where
         manager.create_vote(proposal, effects, state_hash, self.key_pair());
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some(vote) = manager.pending() {
-            if !self.recent_values.contains(&vote.value.hash()) {
-                self.cache_recent_value(vote.value.clone());
-            }
+            self.cache_recent_value(&vote.value).await;
         }
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
@@ -983,7 +963,7 @@ where
                 .await?
             }
         };
-        self.cache_recent_value(certificate.value);
+        self.cache_recent_value(&certificate.value).await;
         Ok((info, actions))
     }
 
