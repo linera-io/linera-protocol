@@ -46,3 +46,6 @@ serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 wasmtime = { workspace = true }
 wit-bindgen-host-wasmtime-rust = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio-test = { workspace = true }
