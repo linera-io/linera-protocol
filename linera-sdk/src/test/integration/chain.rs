@@ -222,7 +222,7 @@ impl ActiveChain {
     }
 
     /// Returns the height of the tip of this microchain.
-    async fn tip_height(&self) -> BlockHeight {
+    pub async fn get_tip_height(&self) -> BlockHeight {
         self.tip
             .lock()
             .await
