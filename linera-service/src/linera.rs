@@ -1142,7 +1142,10 @@ where
                             WorkerState::new("staging".to_string(), None, storage.clone())
                                 .stage_block_execution(proposal.content.block.clone())
                                 .await?;
-                        let value = HashedValue::new_confirmed(executed_block);
+                        let value = HashedValue::from(LineraValue::ConfirmedBlock {
+                            executed_block,
+                            round: RoundNumber(0),
+                        });
                         values.insert(value.hash(), value);
                     }
                 }

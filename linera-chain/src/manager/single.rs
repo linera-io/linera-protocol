@@ -85,7 +85,11 @@ impl SingleOwnerManager {
                 effects,
                 state_hash,
             };
-            let vote = Vote::new(HashedValue::new_confirmed(executed_block), key_pair);
+            let value = HashedValue::from(Value::ConfirmedBlock {
+                executed_block,
+                round: RoundNumber(0),
+            });
+            let vote = Vote::new(value, key_pair);
             self.pending = Some(vote);
         }
     }
