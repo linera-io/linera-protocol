@@ -135,10 +135,6 @@ where
                 {
                     Ok(response) => Ok(response),
                     Err(NodeError::MissingCertificateValue) => {
-                        warn!(
-                            name = %self.name,
-                            "Validator doesn't have certificate it signed; resending"
-                        );
                         self.client
                             .handle_certificate(certificate.clone(), vec![])
                             .await
