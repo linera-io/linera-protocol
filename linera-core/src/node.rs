@@ -546,7 +546,7 @@ where
         let certificate = info
             .requested_sent_certificates
             .into_iter()
-            .find(|certificate| certificate.value.has_effect(effect_id))
+            .find(|certificate| certificate.value().has_effect(effect_id))
             .ok_or_else(|| {
                 ViewError::not_found("could not find certificate with effect {}", effect_id)
             })?;

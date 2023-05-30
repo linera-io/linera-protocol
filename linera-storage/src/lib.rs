@@ -194,10 +194,8 @@ pub trait Store: Sized {
             })?
             .into_inner();
         let operations = match value {
-            Value::ConfirmedBlock { executed_block } => executed_block.block.operations,
-            Value::ValidatedBlock { .. } => {
-                return Err(ExecutionError::InvalidBytecodeId(*bytecode_id));
-            }
+            Value::ConfirmedBlock { executed_block, .. } => executed_block.block.operations,
+            _ => return Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
         };
         let index = usize::try_from(bytecode_location.operation_index)
             .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?;

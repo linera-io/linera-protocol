@@ -825,4 +825,6 @@ Value:
         STRUCT:
           - executed_block:
               TYPENAME: ExecutedBlock
+          - round:
+              TYPENAME: RoundNumber
 

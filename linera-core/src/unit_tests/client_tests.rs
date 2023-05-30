@@ -558,7 +558,7 @@ where
     );
     assert!(matches!(
         &certificate.value(),
-        Value::ConfirmedBlock { executed_block: ExecutedBlock { block, .. } } if matches!(
+        Value::ConfirmedBlock { executed_block: ExecutedBlock { block, .. }, .. } if matches!(
             block.operations[open_chain_effect_id.index as usize],
             Operation::System(SystemOperation::OpenChain { .. }),
         ),
@@ -693,7 +693,7 @@ where
     let certificate = sender.close_chain().await.unwrap();
     assert!(matches!(
         &certificate.value(),
-        Value::ConfirmedBlock { executed_block: ExecutedBlock { block, .. } } if matches!(
+        Value::ConfirmedBlock { executed_block: ExecutedBlock { block, .. }, .. } if matches!(
             &block.operations[..], &[Operation::System(SystemOperation::CloseChain)]
         ),
     ));

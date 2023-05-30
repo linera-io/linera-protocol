@@ -188,6 +188,7 @@ pub enum Value {
     },
     ConfirmedBlock {
         executed_block: ExecutedBlock,
+        round: RoundNumber,
     },
 }
 
@@ -429,7 +430,7 @@ impl Value {
 
     fn executed_block(&self) -> &ExecutedBlock {
         match self {
-            Value::ConfirmedBlock { executed_block }
+            Value::ConfirmedBlock { executed_block, .. }
             | Value::ValidatedBlock { executed_block, .. } => executed_block,
         }
     }
@@ -437,7 +438,11 @@ impl Value {
 
 impl HashedValue {
     pub fn new_confirmed(executed_block: ExecutedBlock) -> HashedValue {
-        Value::ConfirmedBlock { executed_block }.into()
+        Value::ConfirmedBlock {
+            executed_block,
+            round: RoundNumber(0),
+        }
+        .into()
     }
 
     pub fn new_validated(executed_block: ExecutedBlock, round: RoundNumber) -> HashedValue {
@@ -461,8 +466,18 @@ impl HashedValue {
 
     pub fn into_confirmed(self) -> HashedValue {
         match self.value {
-            Value::ConfirmedBlock { executed_block }
-            | Value::ValidatedBlock { executed_block, .. } => Self::new_confirmed(executed_block),
+            value @ Value::ConfirmedBlock { .. } => HashedValue {
+                hash: self.hash,
+                value,
+            },
+            Value::ValidatedBlock {
+                executed_block,
+                round,
+            } => Value::ConfirmedBlock {
+                executed_block,
+                round,
+            }
+            .into(),
         }
     }
 
@@ -472,11 +487,6 @@ impl HashedValue {
 
     pub fn into_inner(self) -> Value {
         self.value
-    }
-
-    /// Returns whether this value contains the effect with the specified ID.
-    pub fn has_effect(&self, effect_id: &EffectId) -> bool {
-        self.value.has_effect(effect_id)
     }
 
     /// Skip `n-1` effects from the end of the block and return the effect ID, if any.

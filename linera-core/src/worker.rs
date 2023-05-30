@@ -471,7 +471,7 @@ where
         blobs: &[HashedValue],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let Value::ConfirmedBlock { executed_block } = certificate.value() else {
+        let Value::ConfirmedBlock { executed_block, .. } = certificate.value() else {
             panic!("Expecting a confirmation certificate");
         };
         let ExecutedBlock {
@@ -708,6 +708,7 @@ where
             match certificate.value.into_inner() {
                 Value::ConfirmedBlock {
                     executed_block: ExecutedBlock { block, effects, .. },
+                    ..
                 } => {
                     // Update the staged chain state with the received block.
                     chain

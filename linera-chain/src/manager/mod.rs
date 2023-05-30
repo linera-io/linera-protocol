@@ -97,7 +97,7 @@ impl ChainManager {
         }
     }
 
-    /// Verify the safety of the block w.r.t. voting rules.
+    /// Verifies the safety of the block w.r.t. voting rules.
     pub fn check_proposed_block(
         &self,
         new_block: &Block,

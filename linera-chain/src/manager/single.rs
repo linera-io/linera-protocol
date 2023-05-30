@@ -41,7 +41,7 @@ impl SingleOwnerManager {
         self.pending.as_ref()
     }
 
-    /// Verify the safety of the block w.r.t. voting rules.
+    /// Verifies the safety of the block w.r.t. voting rules.
     pub fn check_proposed_block(
         &self,
         new_block: &Block,
@@ -53,7 +53,7 @@ impl SingleOwnerManager {
         );
         if let Some(vote) = &self.pending {
             let block = match &vote.value.inner() {
-                Value::ConfirmedBlock { executed_block } => &executed_block.block,
+                Value::ConfirmedBlock { executed_block, .. } => &executed_block.block,
                 Value::ValidatedBlock { .. } => return Err(ChainError::InvalidBlockProposal),
             };
             if block == new_block {
