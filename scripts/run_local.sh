@@ -35,7 +35,7 @@ done
 # * Private chain states are stored in one local wallet `wallet.json`.
 # * `genesis.json` will contain the initial balances of chains as well as the initial committee.
 
-./linera --wallet wallet.json create-genesis-config 10 --genesis genesis.json --initial-funding 10 --committee committee.json
+./linera create-genesis-config 10 --genesis genesis.json --initial-funding 10 --committee committee.json
 
 # Initialize the second wallet.
 ./linera --wallet wallet_2.json wallet init --genesis genesis.json
@@ -57,7 +57,7 @@ sleep 3;
 KEY=$(./linera --wallet wallet_2.json keygen)
 
 # Open chain on behalf of wallet 2.
-EFFECT_AND_CHAIN=$(./linera --wallet wallet.json open-chain --to-public-key "$KEY")
+EFFECT_AND_CHAIN=$(./linera open-chain --to-public-key "$KEY")
 EFFECT=$(echo "$EFFECT_AND_CHAIN" | sed -n '1 p')
 
 # Assign newly created chain to unassigned key.
