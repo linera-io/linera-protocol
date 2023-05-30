@@ -70,6 +70,12 @@ impl BlockBuilder {
         }
     }
 
+    /// Configures the timestamp of this block.
+    pub fn with_timestamp(&mut self, timestamp: Timestamp) -> &mut Self {
+        self.block.timestamp = timestamp;
+        self
+    }
+
     /// Adds a [`SystemOperation`] to this block.
     pub(crate) fn with_system_operation(&mut self, operation: SystemOperation) -> &mut Self {
         self.block.operations.push(operation.into());
