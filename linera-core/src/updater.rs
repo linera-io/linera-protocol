@@ -21,6 +21,7 @@ use std::{
     ops::Range,
     time::Duration,
 };
+use tracing::{error, info, warn};
 
 /// Used for `communicate_chain_updates`
 #[allow(clippy::large_enum_variant)]
@@ -126,18 +127,28 @@ where
     ) -> Result<ChainInfo, NodeError> {
         let mut count = 0;
         loop {
-            let mut result = match self
-                .client
-                .handle_lite_certificate(certificate.lite_certificate())
-                .await
-            {
-                Ok(response) => Ok(response),
-                Err(NodeError::MissingCertificateValue) => {
-                    self.client
-                        .handle_certificate(certificate.clone(), vec![])
-                        .await
+            let mut result = if certificate.is_signed_by(&self.name) {
+                match self
+                    .client
+                    .handle_lite_certificate(certificate.lite_certificate())
+                    .await
+                {
+                    Ok(response) => Ok(response),
+                    Err(NodeError::MissingCertificateValue) => {
+                        warn!(
+                            name = %self.name,
+                            "Validator doesn't have certificate it signed; resending"
+                        );
+                        self.client
+                            .handle_certificate(certificate.clone(), vec![])
+                            .await
+                    }
+                    Err(err) => Err(err),
                 }
-                Err(err) => Err(err),
+            } else {
+                self.client
+                    .handle_certificate(certificate.clone(), vec![])
+                    .await
             };
             if let Err(NodeError::ApplicationBytecodesNotFound(locations)) = &result {
                 let required = match certificate.value() {
@@ -149,13 +160,13 @@ where
                 for location in locations {
                     if !required.contains_key(location) {
                         let hash = location.certificate_hash;
-                        tracing::warn!("validator requested {:?} but it is not required", hash);
+                        warn!("validator requested {:?} but it is not required", hash);
                         return Err(NodeError::InvalidChainInfoResponse);
                     }
                 }
                 let unique_locations: HashSet<_> = locations.iter().cloned().collect();
                 if locations.len() > unique_locations.len() {
-                    tracing::warn!("locations requested by validator contain duplicates");
+                    warn!("locations requested by validator contain duplicates");
                     return Err(NodeError::InvalidChainInfoResponse);
                 }
                 let blobs = future::join_all(
@@ -237,7 +248,7 @@ where
                         tokio::time::sleep(self.delay).await;
                         count += 1;
                     } else {
-                        tracing::info!("Missing cross-chain updates: {:?}", e);
+                        info!("Missing cross-chain updates: {:?}", e);
                         return Err(NodeError::ProposedBlockWithLaggingMessages {
                             chain_id,
                             retries: self.retries,
@@ -310,11 +321,9 @@ where
                     }
                 }
                 Err(e) => {
-                    tracing::error!(
+                    error!(
                         "Failed to query validator {:?} for information about chain {:?}: {}",
-                        self.name,
-                        chain_id,
-                        e
+                        self.name, chain_id, e
                     );
                     return Err(e);
                 }
