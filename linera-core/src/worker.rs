@@ -281,19 +281,6 @@ impl<Client> WorkerState<Client> {
         &self.storage
     }
 
-    pub fn full_certificate(
-        &mut self,
-        certificate: LiteCertificate<'_>,
-    ) -> Result<Certificate, WorkerError> {
-        let value = self
-            .recent_value(&certificate.value.value_hash)
-            .ok_or(WorkerError::MissingCertificateValue)?
-            .clone();
-        certificate
-            .with_value(value)
-            .ok_or(WorkerError::InvalidLiteCertificate)
-    }
-
     pub(crate) fn recent_value(&mut self, hash: &CryptoHash) -> Option<&HashedValue> {
         self.recent_values.get(hash)
     }
@@ -829,6 +816,27 @@ where
 
         Ok(Some(Message { origin, event }))
     }
+
+    pub(crate) async fn full_certificate(
+        &mut self,
+        certificate: LiteCertificate<'_>,
+    ) -> Result<Certificate, WorkerError> {
+        let hash = certificate.value.value_hash;
+        let value = match self.recent_value(&hash) {
+            Some(value) => value.clone(),
+            None => self
+                .storage
+                .read_value(hash)
+                .await
+                .map_err(|err| match err {
+                    ViewError::NotFound(_) => WorkerError::MissingCertificateValue,
+                    err => WorkerError::ViewError(err),
+                })?,
+        };
+        certificate
+            .with_value(value)
+            .ok_or(WorkerError::InvalidLiteCertificate)
+    }
 }
 
 #[async_trait]
@@ -934,7 +942,7 @@ where
         certificate: LiteCertificate<'a>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let full_cert = self.full_certificate(certificate)?;
+        let full_cert = self.full_certificate(certificate).await?;
         self.handle_certificate(full_cert, vec![], notify_when_messages_are_delivered)
             .await
     }
