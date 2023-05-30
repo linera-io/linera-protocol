@@ -5,7 +5,7 @@ use crate::{
     client::{ChainClient, ValidatorNodeProvider},
     data_types::*,
     node::{NodeError, NotificationStream, ValidatorNode},
-    worker::{ValidatorWorker, WorkerError, WorkerState},
+    worker::{ValidatorWorker, WorkerState},
 };
 use async_trait::async_trait;
 use futures::{lock::Mutex, Future};
@@ -183,18 +183,12 @@ where
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.client.lock().await;
-        let result = match validator.state.recent_value(&certificate.value.value_hash) {
-            None => Err(NodeError::MissingCertificateValue),
-            Some(value) => match certificate.with_value(value.clone()) {
-                None => Err(WorkerError::InvalidLiteCertificate.into()),
-                Some(full_cert) => validator
-                    .state
-                    .fully_handle_certificate(full_cert, vec![])
-                    .await
-                    .map_err(NodeError::from),
-            },
-        };
-        sender.send(result)
+        let result = async move {
+            let cert = validator.state.full_certificate(certificate).await?;
+            validator.state.fully_handle_certificate(cert, vec![]).await
+        }
+        .await;
+        sender.send(result.map_err(Into::into))
     }
 
     async fn do_handle_certificate(

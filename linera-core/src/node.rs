@@ -485,8 +485,8 @@ where
         let mut tasks = vec![];
         let mut node = self.node.lock().await;
         for (location, chain_id) in blob_locations {
-            if let Some(blob) = node.state.recent_value(&location.certificate_hash) {
-                blobs.push(blob.clone());
+            if let Some(blob) = node.state.recent_value(&location.certificate_hash).await {
+                blobs.push(blob);
             } else {
                 let validators = validators.clone();
                 let storage = node.state.storage_client().clone();
@@ -503,9 +503,7 @@ where
         let mut node = self.node.lock().await;
         for result in results {
             if let Some(blob) = result? {
-                if node.state.recent_value(&blob.hash()).is_none() {
-                    node.state.cache_recent_value(blob.clone());
-                }
+                node.state.cache_recent_value(&blob).await;
                 blobs.push(blob);
             }
         }
