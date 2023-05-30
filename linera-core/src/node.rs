@@ -262,7 +262,7 @@ where
     ) -> Result<ChainInfoResponse, NodeError> {
         let mut node = self.node.lock().await;
         let mut notifications = Vec::new();
-        let full_cert = node.state.full_certificate(certificate)?;
+        let full_cert = node.state.full_certificate(certificate).await?;
         let response = node
             .state
             .fully_handle_certificate_with_notifications(
