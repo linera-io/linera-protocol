@@ -606,8 +606,12 @@ where
         match action {
             CommunicateAction::SubmitBlockForConfirmation(proposal) => {
                 let block = proposal.content.block;
+                let round = proposal.content.round;
                 let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
-                let value = HashedValue::new_confirmed(executed_block);
+                let value = HashedValue::from(Value::ConfirmedBlock {
+                    executed_block,
+                    round,
+                });
                 let certificate = Certificate::new(value, signatures);
                 // Certificate is valid because
                 // * `communicate_with_quorum` ensured a sufficient "weight" of
