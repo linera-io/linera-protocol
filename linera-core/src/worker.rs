@@ -261,6 +261,20 @@ impl<Client> WorkerState<Client> {
         &self.storage
     }
 
+    pub(crate) async fn full_certificate(
+        &mut self,
+        certificate: LiteCertificate<'_>,
+    ) -> Result<Certificate, WorkerError> {
+        let hash = certificate.value.value_hash;
+        let mut recent_values = self.recent_values.lock().await;
+        let value = recent_values
+            .get(&hash)
+            .ok_or(WorkerError::MissingCertificateValue)?;
+        certificate
+            .with_value(value.clone())
+            .ok_or(WorkerError::InvalidLiteCertificate)
+    }
+
     pub(crate) async fn recent_value(&mut self, hash: &CryptoHash) -> Option<HashedValue> {
         self.recent_values.lock().await.get(hash).cloned()
     }
@@ -796,28 +810,6 @@ where
         assert_eq!(event.effect, outgoing_effect.effect);
 
         Ok(Some(Message { origin, event }))
-    }
-
-    pub(crate) async fn full_certificate(
-        &mut self,
-        certificate: LiteCertificate<'_>,
-    ) -> Result<Certificate, WorkerError> {
-        let hash = certificate.value.value_hash;
-        let mut recent_values = self.recent_values.lock().await;
-        let value = match recent_values.get(&hash) {
-            Some(value) => value.clone(),
-            None => self
-                .storage
-                .read_value(hash)
-                .await
-                .map_err(|err| match err {
-                    ViewError::NotFound(_) => WorkerError::MissingCertificateValue,
-                    err => WorkerError::ViewError(err),
-                })?,
-        };
-        certificate
-            .with_value(value)
-            .ok_or(WorkerError::InvalidLiteCertificate)
     }
 }
 
