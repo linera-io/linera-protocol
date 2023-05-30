@@ -120,6 +120,18 @@ impl BlockBuilder {
         self
     }
 
+    /// Adds multiple messages sent by the effects referenced by the [`EffectId`]s to this block.
+    ///
+    /// The blocks that produce the effects must have already been executed by the test validator,
+    /// so that the messages are already in the inbox of the microchain this block belongs to.
+    pub fn with_incoming_messages(
+        &mut self,
+        effect_ids: impl IntoIterator<Item = EffectId>,
+    ) -> &mut Self {
+        self.incoming_messages.extend(effect_ids);
+        self
+    }
+
     /// Adds the `messages` directly to this block.
     ///
     /// This is an internal method that bypasses the check to see if the messages are already
