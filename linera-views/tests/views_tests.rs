@@ -12,13 +12,12 @@ use linera_views::{
     common::Context,
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
     log_view::LogView,
-    lru_caching::{LruCachingMemoryContext, TEST_CACHE_SIZE},
+    lru_caching::LruCachingMemoryContext,
     map_view::MapView,
     memory::{MemoryContext, MemoryStoreMap},
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
-    rocksdb::{RocksdbClient, RocksdbContext},
     set_view::SetView,
     test_utils::{
         get_random_byte_vector, get_random_key_value_operations, get_random_key_value_vec,
@@ -28,12 +27,18 @@ use linera_views::{
 };
 use rand::{Rng, RngCore, SeedableRng};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, HashMap},
     sync::Arc,
 };
 
+#[cfg(feature = "rocksdb")]
+use linera_views::rocksdb::{RocksdbClient, RocksdbContext};
+
 #[cfg(feature = "aws")]
 use linera_views::{dynamo_db::DynamoDbContext, test_utils::LocalStackTestContext};
+
+#[cfg(any(feature = "aws", feature = "rocksdb"))]
+use {linera_views::lru_caching::TEST_CACHE_SIZE, std::collections::BTreeSet};
 
 #[allow(clippy::type_complexity)]
 #[derive(CryptoHashRootView)]
@@ -123,11 +128,13 @@ impl StateStore for LruMemoryStore {
     }
 }
 
+#[cfg(feature = "rocksdb")]
 pub struct RocksdbTestStore {
     db: RocksdbClient,
     accessed_chains: BTreeSet<usize>,
 }
 
+#[cfg(feature = "rocksdb")]
 impl RocksdbTestStore {
     fn new(db: RocksdbClient) -> Self {
         Self {
@@ -137,6 +144,7 @@ impl RocksdbTestStore {
     }
 }
 
+#[cfg(feature = "rocksdb")]
 #[async_trait]
 impl StateStore for RocksdbTestStore {
     type Context = RocksdbContext<usize>;
@@ -629,6 +637,7 @@ async fn test_views_in_key_value_store_view_memory() {
     }
 }
 
+#[cfg(feature = "rocksdb")]
 #[cfg(test)]
 async fn test_views_in_rocksdb_param(config: &TestConfig) {
     tracing::warn!("Testing config {:?} with rocksdb", config);
@@ -644,6 +653,7 @@ async fn test_views_in_rocksdb_param(config: &TestConfig) {
     assert_eq!(hash, hash2);
 }
 
+#[cfg(feature = "rocksdb")]
 #[tokio::test]
 async fn test_views_in_rocksdb() {
     for config in TestConfig::samples() {
@@ -666,6 +676,7 @@ async fn test_views_in_dynamo_db() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[cfg(feature = "rocksdb")]
 #[cfg(test)]
 async fn test_store_rollback_kernel<S>(store: &mut S)
 where
@@ -708,6 +719,7 @@ where
     };
 }
 
+#[cfg(feature = "rocksdb")]
 #[tokio::test]
 async fn test_store_rollback() {
     let mut store = MemoryTestStore::default();

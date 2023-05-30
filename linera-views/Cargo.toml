@@ -11,7 +11,8 @@ license = "Apache-2.0"
 edition = "2021"
 
 [package.metadata.docs.rs]
-features = ["aws", "test"]
+default = ["rocksdb"]
+features = ["rocksdb", "aws", "test"]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [features]
@@ -42,7 +43,7 @@ anyhow = { workspace = true, optional = true }
 tracing = { workspace = true }
 http = { workspace = true }
 rand = { workspace = true }
-rocksdb = { workspace = true }
+rocksdb = { workspace = true, optional = true }
 aws-config = { workspace = true, optional = true }
 aws-sdk-dynamodb = { workspace = true, optional = true }
 aws-sdk-s3 = { workspace = true, optional = true }

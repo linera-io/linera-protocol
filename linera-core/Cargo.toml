@@ -52,6 +52,7 @@ meta-counter = { workspace = true }
 reentrant-counter = { workspace = true }
 fungible = { workspace = true }
 linera-core = { workspace = true, features = ["test"] }
+linera-views = { workspace = true, features = ["rocksdb"] }
 metrics = { workspace = true }
 metrics-util = { workspace = true }
 portable-atomic = { workspace = true }

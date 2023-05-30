@@ -55,15 +55,18 @@ pub mod key_value_store_view;
 pub mod hashable_wrapper;
 
 /// Helper definitions for Rocksdb storage.
+#[cfg(feature = "rocksdb")]
 #[cfg(not(target_arch = "wasm32"))]
 pub mod rocksdb;
 
 /// Helper definitions for DynamoDB storage.
 #[cfg(feature = "aws")]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod dynamo_db;
 
 /// Helper types for interfacing with a LocalStack instance.
 #[cfg(feature = "aws")]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod localstack;
 
 /// Helper types for tests.
