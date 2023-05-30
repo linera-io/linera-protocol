@@ -602,6 +602,13 @@ impl Certificate {
     pub fn hash(&self) -> CryptoHash {
         self.value.hash
     }
+
+    /// Returns whether the validator is among the signatories of this certificate.
+    pub fn is_signed_by(&self, validator_name: &ValidatorName) -> bool {
+        self.signatures
+            .iter()
+            .any(|(name, _)| name == validator_name)
+    }
 }
 
 /// Verifies certificate signatures.
