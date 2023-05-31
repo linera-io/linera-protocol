@@ -21,7 +21,7 @@ use linera_core::{
     worker::WorkerState,
 };
 use linera_execution::{
-    committee::{ValidatorName, ValidatorState},
+    committee::{Committee, ValidatorName, ValidatorState},
     pricing::Pricing,
     system::{Account, UserData},
     Bytecode, UserApplicationId, WasmRuntime, WithWasmDefault,
@@ -1008,7 +1008,7 @@ where
                 let committee = chain_client.local_committee().await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Validators obtained after {} us", time_total);
-                info!("{:?}", committee.validators);
+                info!("{:?}", committee.validators());
                 context.update_wallet_from_client(&mut chain_client).await;
                 context.save_wallet();
             }
@@ -1040,13 +1040,15 @@ where
 
                 // Create the new committee.
                 let mut committee = chain_client.local_committee().await.unwrap();
+                let mut pricing = committee.pricing().clone();
+                let mut validators = committee.validators().clone();
                 match command {
                     SetValidator {
                         name,
                         address,
                         votes,
                     } => {
-                        committee.validators.insert(
+                        validators.insert(
                             name,
                             ValidatorState {
                                 network_address: address,
@@ -1055,7 +1057,7 @@ where
                         );
                     }
                     RemoveValidator { name } => {
-                        if committee.validators.remove(&name).is_none() {
+                        if validators.remove(&name).is_none() {
                             warn!("Skipping removal of nonexistent validator");
                             return Ok(());
                         }
@@ -1067,16 +1069,16 @@ where
                         messages,
                     } => {
                         if let Some(certificate) = certificate {
-                            committee.pricing.certificate = certificate;
+                            pricing.certificate = certificate;
                         }
                         if let Some(fuel) = fuel {
-                            committee.pricing.fuel = fuel;
+                            pricing.fuel = fuel;
                         }
                         if let Some(storage) = storage {
-                            committee.pricing.storage = storage;
+                            pricing.storage = storage;
                         }
                         if let Some(messages) = messages {
-                            committee.pricing.messages = messages;
+                            pricing.messages = messages;
                         }
                         println!(
                             "Pricing:\n\
@@ -1084,10 +1086,7 @@ where
                             {:.2} per unit of fuel used in executing user operations and effects\n\
                             {:.2} per byte of operations and incoming messages\n\
                             {:.2} per byte of outgoing messages",
-                            committee.pricing.certificate,
-                            committee.pricing.fuel,
-                            committee.pricing.storage,
-                            committee.pricing.messages
+                            pricing.certificate, pricing.fuel, pricing.storage, pricing.messages
                         );
                         if certificate.is_none()
                             && fuel.is_none()
@@ -1099,6 +1098,7 @@ where
                     }
                     _ => unreachable!(),
                 }
+                committee = Committee::new(validators, pricing);
                 let certificate = chain_client.stage_new_committee(committee).await.unwrap();
                 context.update_wallet_from_client(&mut chain_client).await;
                 info!("Staging committee:\n{:?}", certificate);

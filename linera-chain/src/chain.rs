@@ -432,7 +432,7 @@ where
             return Err(ChainError::InactiveChain(chain_id));
         };
 
-        let pricing = committee.pricing.clone();
+        let pricing = committee.pricing().clone();
         let credit: Amount = block
             .incoming_messages
             .iter()
