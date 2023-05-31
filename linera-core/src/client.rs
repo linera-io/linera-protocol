@@ -51,6 +51,10 @@ pub mod client_test_utils;
 #[path = "unit_tests/client_tests.rs"]
 mod client_tests;
 
+/// The amount of time we wait for additional validators to contribute to the result, as a fraction
+/// of how long it took to reach a quorum.
+const QUORUM_GRACE_PERIOD: f64 = 0.2;
+
 /// Client to operate a chain by interacting with validators and the given local storage
 /// implementation.
 /// * The chain being operated is called the "local chain" or just the "chain".
@@ -577,6 +581,7 @@ where
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(chain_id, action).await })
             },
+            QUORUM_GRACE_PERIOD,
         )
         .await;
         let votes = match result {
@@ -826,6 +831,7 @@ where
                     chain_id, name, tracker, committees, max_epoch, client,
                 ))
             },
+            QUORUM_GRACE_PERIOD,
         )
         .await;
         let responses = match result {
