@@ -23,6 +23,12 @@ use std::{
 };
 use tracing::{error, info, warn};
 
+/// The amount of time we wait for additional validators to contribute to the result, as a fraction
+/// of how long it took to reach a quorum.
+const GRACE_PERIOD: f64 = 0.2;
+/// The maximum timeout for `communicate_with_quorum` if no quorum is reached.
+const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
+
 /// Used for `communicate_chain_updates`
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
@@ -61,7 +67,6 @@ pub async fn communicate_with_quorum<'a, A, V, K, F, G>(
     committee: &Committee,
     group_by: G,
     execute: F,
-    grace_period: f64,
 ) -> Result<(K, Vec<V>), CommunicationError<NodeError>>
 where
     A: ValidatorNode + Send + Sync + 'static + Clone,
@@ -86,32 +91,26 @@ where
         .collect();
 
     let start_time = Instant::now();
+    let mut end_time: Option<Instant> = None;
+    let mut remaining_votes = committee.total_votes();
+    let mut highest_key_score = 0;
     let mut value_scores = HashMap::new();
     let mut error_scores = HashMap::new();
-    while let Some((name, result)) = responses.next().await {
+
+    while let Ok(Some((name, result))) = tokio::time::timeout(
+        end_time.map_or(MAX_TIMEOUT, |t| t.saturating_duration_since(Instant::now())),
+        responses.next(),
+    )
+    .await
+    {
+        remaining_votes -= committee.weight(&name);
         match result {
             Ok(value) => {
                 let key = group_by(&value);
                 let entry = value_scores.entry(key.clone()).or_insert((0, Vec::new()));
                 entry.0 += committee.weight(&name);
                 entry.1.push(value);
-                if entry.0 >= committee.quorum_threshold() {
-                    // Success! Now give remaining validators a chance to contribute.
-                    let end_time = Instant::now() + start_time.elapsed().mul_f64(grace_period);
-                    while let Ok(Some((_, result))) = tokio::time::timeout(
-                        end_time.saturating_duration_since(Instant::now()),
-                        responses.next(),
-                    )
-                    .await
-                    {
-                        if let Ok(value) = result {
-                            if key == group_by(&value) {
-                                entry.1.push(value);
-                            }
-                        }
-                    }
-                    return Ok((key, std::mem::take(&mut entry.1)));
-                }
+                highest_key_score = highest_key_score.max(entry.0);
             }
             Err(err) => {
                 let entry = error_scores.entry(err.clone()).or_insert(0);
@@ -123,6 +122,22 @@ where
                 }
             }
         }
+        // If a key reaches a quorum or it becomes clear that no key can, wait for the grace
+        // period to collect more values or error information and then stop.
+        if end_time.is_none()
+            && (highest_key_score >= committee.quorum_threshold()
+                || highest_key_score + remaining_votes < committee.quorum_threshold())
+        {
+            end_time = Some(Instant::now() + start_time.elapsed().mul_f64(GRACE_PERIOD));
+        }
+    }
+
+    // If a key has a quorum, return it with its values.
+    if let Some((key, (_, values))) = value_scores
+        .into_iter()
+        .find(|(_, (score, _))| *score >= committee.quorum_threshold())
+    {
+        return Ok((key, values));
     }
 
     // No specific error is available to report reliably.

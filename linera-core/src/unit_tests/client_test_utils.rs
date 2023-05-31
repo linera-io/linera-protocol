@@ -366,7 +366,8 @@ where
     }
 
     pub fn with_pricing(mut self, pricing: Pricing) -> Self {
-        self.initial_committee.pricing = pricing;
+        let validators = self.initial_committee.validators().clone();
+        self.initial_committee = Committee::new(validators, pricing);
         self
     }
 

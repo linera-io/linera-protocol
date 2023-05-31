@@ -32,17 +32,81 @@ pub struct ValidatorState {
 
 /// A set of validators (identified by their public keys) and their voting rights.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Serialize, Deserialize, InputObject)]
+#[serde(try_from = "CommitteeSerde", into = "CommitteeSerde")]
 pub struct Committee {
     /// The validators in the committee.
-    pub validators: BTreeMap<ValidatorName, ValidatorState>,
+    validators: BTreeMap<ValidatorName, ValidatorState>,
     /// The sum of all voting rights.
-    pub total_votes: u64,
+    total_votes: u64,
     /// The threshold to form a quorum.
-    pub quorum_threshold: u64,
+    quorum_threshold: u64,
     /// The threshold to prove the validity of a statement.
-    pub validity_threshold: u64,
+    validity_threshold: u64,
     /// The pricing agreed on for this epoch.
-    pub pricing: Pricing,
+    pricing: Pricing,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "Committee")]
+struct CommitteeSerde {
+    validators: BTreeMap<ValidatorName, ValidatorState>,
+    total_votes: u64,
+    quorum_threshold: u64,
+    validity_threshold: u64,
+    pricing: Pricing,
+}
+
+impl TryFrom<CommitteeSerde> for Committee {
+    type Error = String;
+
+    fn try_from(committee_serde: CommitteeSerde) -> Result<Committee, Self::Error> {
+        let CommitteeSerde {
+            validators,
+            total_votes,
+            quorum_threshold,
+            validity_threshold,
+            pricing,
+        } = committee_serde;
+        let committee = Committee::new(validators, pricing);
+        if total_votes != committee.total_votes {
+            Err(format!(
+                "invalid committee: total_votes is {}; should be {}",
+                total_votes, committee.total_votes,
+            ))
+        } else if quorum_threshold != committee.quorum_threshold && total_votes > 0 {
+            // Don't fail if total_votes is 0, so generate-format.sh succeeds.
+            Err(format!(
+                "invalid committee: quorum_threshold is {}; should be {}",
+                quorum_threshold, committee.quorum_threshold,
+            ))
+        } else if validity_threshold != committee.validity_threshold {
+            Err(format!(
+                "invalid committee: validity_threshold is {}; should be {}",
+                validity_threshold, committee.validity_threshold,
+            ))
+        } else {
+            Ok(committee)
+        }
+    }
+}
+
+impl From<Committee> for CommitteeSerde {
+    fn from(committee: Committee) -> CommitteeSerde {
+        let Committee {
+            validators,
+            total_votes,
+            quorum_threshold,
+            validity_threshold,
+            pricing,
+        } = committee;
+        CommitteeSerde {
+            validators,
+            total_votes,
+            quorum_threshold,
+            validity_threshold,
+            pricing,
+        }
+    }
 }
 
 impl std::fmt::Display for ValidatorName {
@@ -153,6 +217,18 @@ impl Committee {
 
     pub fn validity_threshold(&self) -> u64 {
         self.validity_threshold
+    }
+
+    pub fn validators(&self) -> &BTreeMap<ValidatorName, ValidatorState> {
+        &self.validators
+    }
+
+    pub fn total_votes(&self) -> u64 {
+        self.total_votes
+    }
+
+    pub fn pricing(&self) -> &Pricing {
+        &self.pricing
     }
 
     /// Finds the highest value than is supported by a certain subset of validators.

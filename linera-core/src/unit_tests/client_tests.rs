@@ -1099,7 +1099,7 @@ where
         .await?;
 
     // Create a new committee.
-    let validators = builder.initial_committee.validators;
+    let validators = builder.initial_committee.validators().clone();
     let committee = Committee::new(validators, Pricing::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
     assert_eq!(admin.next_block_height, BlockHeight::from(1));
