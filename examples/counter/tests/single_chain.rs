@@ -29,17 +29,12 @@ async fn single_chain_test() {
         .await;
 
     let final_value = initial_state + increment;
-    let value: serde_json::Value = chain.query(application_id, "query { value }").await;
-    let state_value = value
-        .as_object()
-        .expect("Failed to obtain the first object")
-        .get("data")
-        .expect("Failed to obtain \"data\"")
-        .as_object()
-        .expect("Failed to obtain the second object")
-        .get("value")
-        .expect("Failed to obtain \"value\"")
-        .as_u64()
-        .expect("Failed to get the u64");
+    let response = chain
+        .query(application_id, "query { value }".into())
+        .await
+        .data
+        .into_json()
+        .expect("Unexpected non-JSON query response");
+    let state_value = response["value"].as_u64().expect("Failed to get the u64");
     assert_eq!(state_value, final_value);
 }

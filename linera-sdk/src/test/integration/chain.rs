@@ -6,7 +6,7 @@
 //! This allows manipulating a test microchain.
 
 use super::{BlockBuilder, TestValidator};
-use crate::ContractAbi;
+use crate::{ContractAbi, ServiceAbi};
 use cargo_toml::Manifest;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
@@ -19,8 +19,6 @@ use linera_execution::{
     system::{SystemChannel, SystemEffect, SystemExecutionError, SystemOperation},
     Bytecode, Effect, Query, Response,
 };
-use serde::de::DeserializeOwned;
-use serde_json::json;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -424,17 +422,16 @@ impl ActiveChain {
 
     /// Executes a `query` on an `application`'s state on this microchain.
     ///
-    /// Returns the deserialized `Output` response from the `application`.
-    pub async fn query<Abi, Output>(
+    /// Returns the deserialized response from the `application`.
+    pub async fn query<Abi>(
         &self,
         application_id: ApplicationId<Abi>,
-        query: impl AsRef<str>,
-    ) -> Output
+        query: Abi::Query,
+    ) -> Abi::QueryResponse
     where
-        Output: DeserializeOwned,
+        Abi: ServiceAbi,
     {
-        let query_bytes = serde_json::to_vec(&json!({ "query": query.as_ref() }))
-            .expect("Failed to serialize query");
+        let query_bytes = serde_json::to_vec(&query).expect("Failed to serialize query");
 
         let response = self
             .validator
