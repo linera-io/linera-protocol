@@ -19,7 +19,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     hash::Hash,
     ops::Range,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tracing::{error, info, warn};
 
@@ -52,12 +52,16 @@ pub enum CommunicationError<E> {
 }
 
 /// Executes a sequence of actions in parallel for all validators.
-/// Tries to stop early when a quorum is reached.
+///
+/// Tries to stop early when a quorum is reached. If `grace_period` is not zero, other validators
+/// are given this much additional time to contribute to the result, as a fraction of how long it
+/// took to reach the quorum.
 pub async fn communicate_with_quorum<'a, A, V, K, F, G>(
     validator_clients: &'a [(ValidatorName, A)],
     committee: &Committee,
     group_by: G,
     execute: F,
+    grace_period: f64,
 ) -> Result<(K, Vec<V>), CommunicationError<NodeError>>
 where
     A: ValidatorNode + Send + Sync + 'static + Clone,
@@ -81,6 +85,7 @@ where
         })
         .collect();
 
+    let start_time = Instant::now();
     let mut value_scores = HashMap::new();
     let mut error_scores = HashMap::new();
     while let Some((name, result)) = responses.next().await {
@@ -91,7 +96,20 @@ where
                 entry.0 += committee.weight(&name);
                 entry.1.push(value);
                 if entry.0 >= committee.quorum_threshold() {
-                    // Success!
+                    // Success! Now give remaining validators a chance to contribute.
+                    let end_time = Instant::now() + start_time.elapsed().mul_f64(grace_period);
+                    while let Ok(Some((_, result))) = tokio::time::timeout(
+                        end_time.saturating_duration_since(Instant::now()),
+                        responses.next(),
+                    )
+                    .await
+                    {
+                        if let Ok(value) = result {
+                            if key == group_by(&value) {
+                                entry.1.push(value);
+                            }
+                        }
+                    }
                     return Ok((key, std::mem::take(&mut entry.1)));
                 }
             }
