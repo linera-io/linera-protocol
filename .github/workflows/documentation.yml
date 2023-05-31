@@ -48,7 +48,6 @@ jobs:
         deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
         publish_branch: gh-pages
         publish_dir: ./target/doc
-        destination_dir: 364a04086bc8f2bf91ec3406a2aac5f7e4e675b9
 
   docsrs:
     runs-on: ubuntu-latest

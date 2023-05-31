@@ -13,23 +13,23 @@ the Linera protocol functions refer to the [whitepaper](https://linera.io/whitep
 
 The Linera protocol repository is broken down into the following crates and subdirectories: (from low-level to high-level in the dependency graph)
 
-1. [`linera-base`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_base/index.html) Base definitions, including cryptography.
+1. [`linera-base`](https://linera-io.github.io/linera-protocol/linera_base/index.html) Base definitions, including cryptography.
 
-2. [`linera-views`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_views/index.html) A library mapping complex data structures onto a key-value store. The corresponding procedural macros are implemented in `linera-view-derive`.
+2. [`linera-views`](https://linera-io.github.io/linera-protocol/linera_views/index.html) A library mapping complex data structures onto a key-value store. The corresponding procedural macros are implemented in `linera-view-derive`.
 
-3. [`linera-execution`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_execution/index.html) Persistent data and the corresponding logics for runtime and execution of smart contracts / applications.
+3. [`linera-execution`](https://linera-io.github.io/linera-protocol/linera_execution/index.html) Persistent data and the corresponding logics for runtime and execution of smart contracts / applications.
 
-4. [`linera-chain`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_chain/index.html) Persistent data and the corresponding logics for chains of blocks, certificates, and cross-chain messaging.
+4. [`linera-chain`](https://linera-io.github.io/linera-protocol/linera_chain/index.html) Persistent data and the corresponding logics for chains of blocks, certificates, and cross-chain messaging.
 
-5. [`linera-storage`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_storage/index.html) Defines the storage abstractions for the protocol on top of `linera-chain`.
+5. [`linera-storage`](https://linera-io.github.io/linera-protocol/linera_storage/index.html) Defines the storage abstractions for the protocol on top of `linera-chain`.
 
-6. [`linera-core`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_core/index.html) The core Linera protocol, including client and server logic, node synchronization, etc.
+6. [`linera-core`](https://linera-io.github.io/linera-protocol/linera_core/index.html) The core Linera protocol, including client and server logic, node synchronization, etc.
 
-7. [`linera-rpc`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_rpc/index.html) Defines the data-type for RPC messages (currently all client<->proxy<->chain<->chain interactions), and track the corresponding data schemas.
+7. [`linera-rpc`](https://linera-io.github.io/linera-protocol/linera_rpc/index.html) Defines the data-type for RPC messages (currently all client<->proxy<->chain<->chain interactions), and track the corresponding data schemas.
 
-8. [`linera-service`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_service/index.html) Executable for clients (aka CLI wallets), proxy (aka validator frontend) and servers.
+8. [`linera-service`](https://linera-io.github.io/linera-protocol/linera_service/index.html) Executable for clients (aka CLI wallets), proxy (aka validator frontend) and servers.
 
-9. [`linera-sdk`](https://linera-io.github.io/linera-protocol/364a04086bc8f2bf91ec3406a2aac5f7e4e675b9/linera_sdk/index.html) The library to develop Linera applications written in Rust for the WASM virtual machine.
+9. [`linera-sdk`](https://linera-io.github.io/linera-protocol/linera_sdk/index.html) The library to develop Linera applications written in Rust for the WASM virtual machine.
 
 10. [`examples`](./examples) Examples of Linera applications written in Rust.
 
