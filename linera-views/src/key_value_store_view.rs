@@ -747,6 +747,7 @@ where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
 {
+    const MAX_CONNECTIONS: usize = C::MAX_CONNECTIONS;
     type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;

@@ -94,6 +94,7 @@ impl<K> KeyValueStoreClient for LruCachingKeyValueClient<K>
 where
     K: KeyValueStoreClient + Send + Sync,
 {
+    const MAX_CONNECTIONS: usize = K::MAX_CONNECTIONS;
     type Error = K::Error;
     type Keys = K::Keys;
     type KeyValues = K::KeyValues;
