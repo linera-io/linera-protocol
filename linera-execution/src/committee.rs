@@ -9,7 +9,7 @@ use linera_base::{
     data_types::ArithmeticError,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::{borrow::Cow, collections::BTreeMap};
 
 /// A number identifying the configuration of the chain (aka the committee).
 #[derive(
@@ -31,8 +31,7 @@ pub struct ValidatorState {
 }
 
 /// A set of validators (identified by their public keys) and their voting rights.
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Serialize, Deserialize, InputObject)]
-#[serde(try_from = "CommitteeSerde", into = "CommitteeSerde")]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Default, InputObject)]
 pub struct Committee {
     /// The validators in the committee.
     validators: BTreeMap<ValidatorName, ValidatorState>,
@@ -46,35 +45,69 @@ pub struct Committee {
     pricing: Pricing,
 }
 
+impl Serialize for Committee {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        if serializer.is_human_readable() {
+            CommitteeFull::from(self).serialize(serializer)
+        } else {
+            CommitteeMinimal::from(self).serialize(serializer)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Committee {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let committee_full = CommitteeFull::deserialize(deserializer)?;
+            Committee::try_from(committee_full).map_err(serde::de::Error::custom)
+        } else {
+            let committee_minimal = CommitteeMinimal::deserialize(deserializer)?;
+            Ok(Committee::from(committee_minimal))
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "Committee")]
-struct CommitteeSerde {
-    validators: BTreeMap<ValidatorName, ValidatorState>,
+struct CommitteeFull<'a> {
+    validators: Cow<'a, BTreeMap<ValidatorName, ValidatorState>>,
     total_votes: u64,
     quorum_threshold: u64,
     validity_threshold: u64,
-    pricing: Pricing,
+    pricing: Cow<'a, Pricing>,
 }
 
-impl TryFrom<CommitteeSerde> for Committee {
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "Committee")]
+struct CommitteeMinimal<'a> {
+    validators: Cow<'a, BTreeMap<ValidatorName, ValidatorState>>,
+    pricing: Cow<'a, Pricing>,
+}
+
+impl TryFrom<CommitteeFull<'static>> for Committee {
     type Error = String;
 
-    fn try_from(committee_serde: CommitteeSerde) -> Result<Committee, Self::Error> {
-        let CommitteeSerde {
+    fn try_from(committee_full: CommitteeFull) -> Result<Committee, Self::Error> {
+        let CommitteeFull {
             validators,
             total_votes,
             quorum_threshold,
             validity_threshold,
             pricing,
-        } = committee_serde;
-        let committee = Committee::new(validators, pricing);
+        } = committee_full;
+        let committee = Committee::new(validators.into_owned(), pricing.into_owned());
         if total_votes != committee.total_votes {
             Err(format!(
                 "invalid committee: total_votes is {}; should be {}",
                 total_votes, committee.total_votes,
             ))
-        } else if quorum_threshold != committee.quorum_threshold && total_votes > 0 {
-            // Don't fail if total_votes is 0, so generate-format.sh succeeds.
+        } else if quorum_threshold != committee.quorum_threshold {
             Err(format!(
                 "invalid committee: quorum_threshold is {}; should be {}",
                 quorum_threshold, committee.quorum_threshold,
@@ -90,8 +123,8 @@ impl TryFrom<CommitteeSerde> for Committee {
     }
 }
 
-impl From<Committee> for CommitteeSerde {
-    fn from(committee: Committee) -> CommitteeSerde {
+impl<'a> From<&'a Committee> for CommitteeFull<'a> {
+    fn from(committee: &'a Committee) -> CommitteeFull<'a> {
         let Committee {
             validators,
             total_votes,
@@ -99,12 +132,38 @@ impl From<Committee> for CommitteeSerde {
             validity_threshold,
             pricing,
         } = committee;
-        CommitteeSerde {
+        CommitteeFull {
+            validators: Cow::Borrowed(validators),
+            total_votes: *total_votes,
+            quorum_threshold: *quorum_threshold,
+            validity_threshold: *validity_threshold,
+            pricing: Cow::Borrowed(pricing),
+        }
+    }
+}
+
+impl From<CommitteeMinimal<'static>> for Committee {
+    fn from(committee_min: CommitteeMinimal) -> Committee {
+        let CommitteeMinimal {
             validators,
-            total_votes,
-            quorum_threshold,
-            validity_threshold,
             pricing,
+        } = committee_min;
+        Committee::new(validators.into_owned(), pricing.into_owned())
+    }
+}
+
+impl<'a> From<&'a Committee> for CommitteeMinimal<'a> {
+    fn from(committee: &'a Committee) -> CommitteeMinimal<'a> {
+        let Committee {
+            validators,
+            total_votes: _,
+            quorum_threshold: _,
+            validity_threshold: _,
+            pricing,
+        } = committee;
+        CommitteeMinimal {
+            validators: Cow::Borrowed(validators),
+            pricing: Cow::Borrowed(pricing),
         }
     }
 }
