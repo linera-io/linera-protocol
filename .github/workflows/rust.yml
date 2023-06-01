@@ -116,6 +116,8 @@ jobs:
     - name: Check for outdated README.md
       run: |
         (set -e; for I in linera-*; do echo $I; cargo rdme --check --no-fail-on-warnings -w $I; done)
+        cd examples
+        cargo rdme --check --no-fail-on-warnings -w social
     - name: Run WASM application lints
       run: |
         cd examples
