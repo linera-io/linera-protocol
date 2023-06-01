@@ -138,7 +138,7 @@ impl ClientContext {
         }
     }
 
-    fn create_default_wallet_path() -> Result<PathBuf, anyhow::Error> {
+    fn create_default_config_path() -> Result<PathBuf, anyhow::Error> {
         let mut config_dir = dirs::config_dir().ok_or_else(|| {
             anyhow!("Default configuration directory not supported. Please specify a path.")
         })?;
@@ -148,8 +148,20 @@ impl ClientContext {
             fs::create_dir(&config_dir)?;
             debug!("{} created.", config_dir.display());
         }
-        config_dir.push("wallet.json");
         Ok(config_dir)
+    }
+
+    fn create_default_wallet_path() -> Result<PathBuf, anyhow::Error> {
+        Ok(Self::create_default_config_path()?.join("wallet.json"))
+    }
+
+    fn storage_config(options: &ClientOptions) -> Result<StorageConfig, anyhow::Error> {
+        match &options.storage_config {
+            None => Ok(StorageConfig::Rocksdb {
+                path: Self::create_default_config_path()?.join("wallet.db"),
+            }),
+            Some(config) => config.parse(),
+        }
     }
 
     #[cfg(feature = "benchmark")]
@@ -520,8 +532,8 @@ struct ClientOptions {
     wallet_state_path: Option<PathBuf>,
 
     /// Storage configuration for the blockchain history.
-    #[structopt(long = "storage", default_value = "memory")]
-    storage_config: StorageConfig,
+    #[structopt(long = "storage")]
+    storage_config: Option<String>,
 
     /// Timeout for sending queries (us)
     #[structopt(long, default_value = "4000000")]
@@ -1530,9 +1542,9 @@ async fn main() -> Result<(), anyhow::Error> {
                 let genesis_config = context.wallet_state.genesis_config().clone();
                 let wasm_runtime = options.wasm_runtime.with_wasm_default();
                 let cache_size = options.cache_size;
+                let storage_config = ClientContext::storage_config(&options)?;
 
-                options
-                    .storage_config
+                storage_config
                     .run_with_storage(
                         &genesis_config,
                         wasm_runtime,
