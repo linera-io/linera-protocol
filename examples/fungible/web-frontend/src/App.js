@@ -61,7 +61,7 @@ function App({ owner }) {
     { data: balanceData, called: balanceCalled, error: balanceError },
   ] = useLazyQuery(GET_BALANCE, {
     fetchPolicy: "network-only",
-    variables: { owner: { User: owner } },
+    variables: { owner: `User:${owner}` },
   });
   const [makePayment, { loading: paymentLoading }] = useMutation(MAKE_PAYMENT, {
     onError: (error) => setError("Error: " + error.networkError.result),
@@ -96,15 +96,11 @@ function App({ owner }) {
     event.preventDefault();
     makePayment({
         variables: {
-            owner: {
-                User: owner,
-            },
+            owner: `User:${owner}`,
             amount: parseInt(amount),
             targetAccount: {
                 chainId: targetChain,
-                owner: {
-                    User: recipient,
-                 },
+                owner: `User:${recipient}`,
             },
         },
     }).then(r => console.log("payment made: " + r));
