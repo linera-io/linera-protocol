@@ -2,7 +2,7 @@
 name = "linera-explorer"
 version = "0.1.0"
 edition = "2021"
-description = "Block explorer for linera chain"
+description = "Block explorer for the Linera network"
 readme = "README.md"
 repository = "https://github.com/linera-io/linera-protocol"
 homepage = "https://linera.io"

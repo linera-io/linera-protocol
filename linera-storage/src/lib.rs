@@ -75,7 +75,7 @@ pub trait Store: Sized {
     /// Reads the value with the given hash.
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError>;
 
-    /// Reads the value with the given hash.
+    /// Reads the values in descending order from the given hash.
     async fn read_values(
         &self,
         from: CryptoHash,
@@ -300,15 +300,15 @@ where
         from: CryptoHash,
         limit: u32,
     ) -> Result<Vec<HashedValue>, ViewError> {
-        let mut limit_ref = limit;
-        let mut hash = Option::Some(from);
+        let mut hash = Some(from);
         let mut result = Vec::new();
-        while limit_ref > 0 && hash.is_some() {
-            let hv = self.read_value(hash.unwrap()).await?;
-            let v: CertificateValue = hv.clone().into();
-            hash = v.executed_block().block.previous_block_hash;
-            result.push(hv);
-            limit_ref -= 1;
+        for _ in 0..limit {
+            let Some(next_hash) = hash else {
+                break;
+            };
+            let value = self.read_value(next_hash).await?;
+            hash = value.inner().executed_block().block.previous_block_hash;
+            result.push(value);
         }
         Ok(result)
     }
