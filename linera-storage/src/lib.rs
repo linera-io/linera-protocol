@@ -255,17 +255,20 @@ where
     type Context = ContextFromDb<ChainRuntimeContext<Self>, CL>;
     type ContextError = <CL as KeyValueStoreClient>::Error;
 
-    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError> {
-        tracing::trace!("Acquiring lock on {:?}", id);
-        let guard = self.client.guards.guard(id).await;
+    async fn load_chain(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainStateView<Self::Context>, ViewError> {
+        tracing::trace!("Acquiring lock on {:?}", chain_id);
+        let guard = self.client.guards.guard(chain_id).await;
         let runtime_context = ChainRuntimeContext {
             store: self.clone(),
-            chain_id: id,
+            chain_id,
             user_applications: self.client.user_applications.clone(),
             chain_guard: Some(Arc::new(guard)),
         };
         let client = self.client.client.clone();
-        let base_key = bcs::to_bytes(&BaseKey::ChainState(id))?;
+        let base_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
         let context = ContextFromDb::create(client, base_key, runtime_context).await?;
         ChainStateView::load(context).await
     }
