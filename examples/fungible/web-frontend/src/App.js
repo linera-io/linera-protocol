@@ -97,7 +97,7 @@ function App({ owner }) {
     makePayment({
         variables: {
             owner: `User:${owner}`,
-            amount: parseInt(amount),
+            amount,
             targetAccount: {
                 chainId: targetChain,
                 owner: `User:${recipient}`,
