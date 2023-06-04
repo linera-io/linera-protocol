@@ -117,7 +117,7 @@ jobs:
       run: |
         (set -e; for I in linera-*; do echo $I; cargo rdme --check --no-fail-on-warnings -w $I; done)
         cd examples
-        cargo rdme --check --no-fail-on-warnings -w social
+        (set -e; for I in fungible social; do echo $I; cargo rdme --check --no-fail-on-warnings -w $I; done)
     - name: Run WASM application lints
       run: |
         cd examples
