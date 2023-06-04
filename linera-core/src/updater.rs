@@ -11,7 +11,7 @@ use linera_base::{
     data_types::BlockHeight,
     identifiers::{ChainDescription, ChainId, EffectId},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, LiteVote, Value};
+use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
 use linera_execution::committee::{Committee, ValidatorName};
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -181,8 +181,8 @@ where
             };
             if let Err(NodeError::ApplicationBytecodesNotFound(locations)) = &result {
                 let required = match certificate.value() {
-                    Value::ConfirmedBlock { executed_block, .. }
-                    | Value::ValidatedBlock { executed_block, .. } => {
+                    CertificateValue::ConfirmedBlock { executed_block, .. }
+                    | CertificateValue::ValidatedBlock { executed_block, .. } => {
                         executed_block.block.bytecode_locations()
                     }
                 };

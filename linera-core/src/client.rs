@@ -22,7 +22,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, HashedValue, LiteVote, Message, Value,
+        Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, HashedValue, LiteVote,
+        Message,
     },
     ChainManagerInfo, ChainStateView,
 };
@@ -608,7 +609,7 @@ where
                 let block = proposal.content.block;
                 let round = proposal.content.round;
                 let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
-                let value = HashedValue::from(Value::ConfirmedBlock {
+                let value = HashedValue::from(CertificateValue::ConfirmedBlock {
                     executed_block,
                     round,
                 });
@@ -639,7 +640,7 @@ where
         certificate: Certificate,
         mode: ReceiveCertificateMode,
     ) -> Result<()> {
-        let Value::ConfirmedBlock { executed_block, .. } = certificate.value() else {
+        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
             bail!("Was expecting a confirmed chain operation");
         };
         let block = &executed_block.block;
@@ -722,7 +723,7 @@ where
                 .requested_sent_certificates.pop() else {
                 break;
             };
-            let Value::ConfirmedBlock { executed_block, .. } = certificate.value() else {
+            let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
                 return Err(NodeError::InvalidChainInfoResponse);
             };
             let block = &executed_block.block;
@@ -1018,7 +1019,7 @@ where
                     .expect("a certificate");
                 assert!(matches!(
                     certificate.value(),
-                    Value::ValidatedBlock { executed_block, .. }
+                    CertificateValue::ValidatedBlock { executed_block, .. }
                         if executed_block.block == proposal.content.block
                 ));
                 self.communicate_chain_updates(
@@ -1044,7 +1045,7 @@ where
         // By now the block should be final.
         ensure!(
             matches!(
-                final_certificate.value(), Value::ConfirmedBlock { executed_block, .. }
+                final_certificate.value(), CertificateValue::ConfirmedBlock { executed_block, .. }
                     if executed_block.block == proposal.content.block
             ),
             "A different operation was executed in parallel (consider retrying the operation)"

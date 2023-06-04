@@ -4,8 +4,8 @@
 use super::Outcome;
 use crate::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, ExecutedBlock, HashedValue, LiteVote, OutgoingEffect,
-        Value, Vote,
+        Block, BlockAndRound, BlockProposal, CertificateValue, ExecutedBlock, HashedValue,
+        LiteVote, OutgoingEffect, Vote,
     },
     ChainError,
 };
@@ -53,8 +53,10 @@ impl SingleOwnerManager {
         );
         if let Some(vote) = &self.pending {
             let block = match &vote.value.inner() {
-                Value::ConfirmedBlock { executed_block, .. } => &executed_block.block,
-                Value::ValidatedBlock { .. } => return Err(ChainError::InvalidBlockProposal),
+                CertificateValue::ConfirmedBlock { executed_block, .. } => &executed_block.block,
+                CertificateValue::ValidatedBlock { .. } => {
+                    return Err(ChainError::InvalidBlockProposal)
+                }
             };
             if block == new_block {
                 return Ok(Outcome::Skip);
@@ -85,7 +87,7 @@ impl SingleOwnerManager {
                 effects,
                 state_hash,
             };
-            let value = HashedValue::from(Value::ConfirmedBlock {
+            let value = HashedValue::from(CertificateValue::ConfirmedBlock {
                 executed_block,
                 round: RoundNumber(0),
             });

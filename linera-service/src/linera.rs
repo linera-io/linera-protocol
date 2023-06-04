@@ -12,7 +12,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{BytecodeId, ChainDescription, ChainId, EffectId},
 };
-use linera_chain::data_types::{Certificate, ExecutedBlock, Value as LineraValue};
+use linera_chain::data_types::{Certificate, CertificateValue, ExecutedBlock};
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
     data_types::ChainInfoQuery,
@@ -961,7 +961,7 @@ where
                 context.update_wallet_from_client(&mut chain_client).await;
                 let id = ChainId::child(effect_id);
                 let timestamp = match certificate.value() {
-                    LineraValue::ConfirmedBlock {
+                    CertificateValue::ConfirmedBlock {
                         executed_block: ExecutedBlock { block, .. },
                         ..
                     } => block.timestamp,
@@ -1042,10 +1042,10 @@ where
                     .unwrap()
                     .into_iter()
                     .map(|c| match c.value() {
-                        LineraValue::ConfirmedBlock { executed_block, .. } => {
+                        CertificateValue::ConfirmedBlock { executed_block, .. } => {
                             executed_block.effects.len()
                         }
-                        LineraValue::ValidatedBlock { .. } => 0,
+                        CertificateValue::ValidatedBlock { .. } => 0,
                     })
                     .sum::<usize>();
                 info!("Subscribed {} chains to new committees", n);
@@ -1154,7 +1154,7 @@ where
                             WorkerState::new("staging".to_string(), None, storage.clone())
                                 .stage_block_execution(proposal.content.block.clone())
                                 .await?;
-                        let value = HashedValue::from(LineraValue::ConfirmedBlock {
+                        let value = HashedValue::from(CertificateValue::ConfirmedBlock {
                             executed_block,
                             round: RoundNumber(0),
                         });
@@ -1397,7 +1397,7 @@ where
                     .await
                     .context("could not find OpenChain effect")?;
                 let timestamp = match certificate.value() {
-                    LineraValue::ConfirmedBlock {
+                    CertificateValue::ConfirmedBlock {
                         executed_block: ExecutedBlock { block, .. },
                         ..
                     } => block.timestamp,

@@ -16,7 +16,7 @@ use linera_base::{
     data_types::Amount,
     identifiers::{ChainDescription, ChainId, Destination, Owner},
 };
-use linera_chain::data_types::{OutgoingEffect, Value};
+use linera_chain::data_types::{CertificateValue, OutgoingEffect};
 use linera_execution::{
     pricing::Pricing, Bytecode, Effect, Operation, SystemEffect, UserApplicationDescription,
     WasmRuntime,
@@ -457,8 +457,10 @@ where
     let certs = receiver.process_inbox().await.unwrap();
     assert_eq!(certs.len(), 1);
     let messages = match certs[0].value() {
-        Value::ConfirmedBlock { executed_block, .. } => &executed_block.block.incoming_messages,
-        Value::ValidatedBlock { .. } => panic!("Unexpected value"),
+        CertificateValue::ConfirmedBlock { executed_block, .. } => {
+            &executed_block.block.incoming_messages
+        }
+        CertificateValue::ValidatedBlock { .. } => panic!("Unexpected value"),
     };
     assert!(messages.iter().any(|msg| matches!(
         &msg.event.effect,
@@ -486,8 +488,10 @@ where
     let certs = receiver.process_inbox().await?;
     assert_eq!(certs.len(), 1);
     let messages = match certs[0].value() {
-        Value::ConfirmedBlock { executed_block, .. } => &executed_block.block.incoming_messages,
-        Value::ValidatedBlock { .. } => panic!("Unexpected value"),
+        CertificateValue::ConfirmedBlock { executed_block, .. } => {
+            &executed_block.block.incoming_messages
+        }
+        CertificateValue::ValidatedBlock { .. } => panic!("Unexpected value"),
     };
     // The new block should _not_ contain another `RegisterApplications` effect, because the
     // application is already registered.
@@ -621,8 +625,10 @@ where
 
     // There should be a message receiving the new post.
     let messages = match certs[0].value() {
-        Value::ConfirmedBlock { executed_block, .. } => &executed_block.block.incoming_messages,
-        Value::ValidatedBlock { .. } => panic!("Unexpected value"),
+        CertificateValue::ConfirmedBlock { executed_block, .. } => {
+            &executed_block.block.incoming_messages
+        }
+        CertificateValue::ValidatedBlock { .. } => panic!("Unexpected value"),
     };
     assert!(messages
         .iter()

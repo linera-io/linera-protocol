@@ -62,7 +62,7 @@ BlockProposal:
         TYPENAME: Signature
     - blobs:
         SEQ:
-          TYPENAME: Value
+          TYPENAME: CertificateValue
 Bytecode:
   STRUCT:
     - bytes: BYTES
@@ -78,12 +78,28 @@ BytecodeLocation:
 Certificate:
   STRUCT:
     - value:
-        TYPENAME: Value
+        TYPENAME: CertificateValue
     - signatures:
         SEQ:
           TUPLE:
             - TYPENAME: ValidatorName
             - TYPENAME: Signature
+CertificateValue:
+  ENUM:
+    0:
+      ValidatedBlock:
+        STRUCT:
+          - executed_block:
+              TYPENAME: ExecutedBlock
+          - round:
+              TYPENAME: RoundNumber
+    1:
+      ConfirmedBlock:
+        STRUCT:
+          - executed_block:
+              TYPENAME: ExecutedBlock
+          - round:
+              TYPENAME: RoundNumber
 ChainAndHeight:
   STRUCT:
     - chain_id:
@@ -145,7 +161,7 @@ ChainInfo:
           TYPENAME: ChainAndHeight
     - requested_blob:
         OPTION:
-          TYPENAME: Value
+          TYPENAME: CertificateValue
 ChainInfoQuery:
   STRUCT:
     - chain_id:
@@ -303,7 +319,7 @@ HandleCertificateRequest:
     - wait_for_outgoing_messages: BOOL
     - blobs:
         SEQ:
-          TYPENAME: Value
+          TYPENAME: CertificateValue
 HandleLiteCertificateRequest:
   STRUCT:
     - certificate:
@@ -365,7 +381,7 @@ MultiOwnerManagerInfo:
           TYPENAME: LiteVote
     - requested_pending_value:
         OPTION:
-          TYPENAME: Value
+          TYPENAME: CertificateValue
     - round:
         TYPENAME: RoundNumber
 NodeError:
@@ -568,7 +584,7 @@ SingleOwnerManagerInfo:
           TYPENAME: LiteVote
     - requested_pending_value:
         OPTION:
-          TYPENAME: Value
+          TYPENAME: CertificateValue
 SystemChannel:
   ENUM:
     0:
@@ -808,20 +824,4 @@ ValidatorState:
   STRUCT:
     - network_address: STR
     - votes: U64
-Value:
-  ENUM:
-    0:
-      ValidatedBlock:
-        STRUCT:
-          - executed_block:
-              TYPENAME: ExecutedBlock
-          - round:
-              TYPENAME: RoundNumber
-    1:
-      ConfirmedBlock:
-        STRUCT:
-          - executed_block:
-              TYPENAME: ExecutedBlock
-          - round:
-              TYPENAME: RoundNumber
 

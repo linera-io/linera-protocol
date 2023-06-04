@@ -13,8 +13,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, ExecutedBlock, HashedValue,
-        LiteCertificate, Medium, Message, Origin, Target, Value,
+        Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
+        HashedValue, LiteCertificate, Medium, Message, Origin, Target,
     },
     ChainManagerOutcome, ChainStateView,
 };
@@ -452,7 +452,7 @@ where
         blobs: &[HashedValue],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let Value::ConfirmedBlock { executed_block, .. } = certificate.value() else {
+        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
             panic!("Expecting a confirmation certificate");
         };
         let ExecutedBlock {
@@ -613,11 +613,11 @@ where
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let (block, round) = match certificate.value() {
-            Value::ValidatedBlock {
+            CertificateValue::ValidatedBlock {
                 executed_block: ExecutedBlock { block, .. },
                 round,
             } => (block, *round),
-            Value::ConfirmedBlock { .. } => panic!("Expecting a validation certificate"),
+            CertificateValue::ConfirmedBlock { .. } => panic!("Expecting a validation certificate"),
         };
         // Check that the chain is active and ready for this confirmation.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
@@ -687,7 +687,7 @@ where
         for certificate in certificates {
             let hash = certificate.hash();
             match certificate.value.into_inner() {
-                Value::ConfirmedBlock {
+                CertificateValue::ConfirmedBlock {
                     executed_block: ExecutedBlock { block, effects, .. },
                     ..
                 } => {
@@ -940,13 +940,13 @@ where
             }
         );
         let (info, actions) = match certificate.value() {
-            Value::ValidatedBlock { .. } => {
+            CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
                 self.process_validated_block(certificate.clone())
                     .await
                     .map(|info| (info, NetworkActions::default()))?
             }
-            Value::ConfirmedBlock { .. } => {
+            CertificateValue::ConfirmedBlock { .. } => {
                 // Execute the confirmed block.
                 self.process_confirmed_block(
                     certificate.clone(),
