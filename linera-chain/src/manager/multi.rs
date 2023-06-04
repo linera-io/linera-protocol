@@ -4,8 +4,8 @@
 use super::Outcome;
 use crate::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, ExecutedBlock, HashedValue, LiteVote,
-        OutgoingEffect, Value, Vote,
+        Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
+        HashedValue, LiteVote, OutgoingEffect, Vote,
     },
     ChainError,
 };
@@ -49,7 +49,7 @@ impl MultiOwnerManager {
             }
         }
         if let Some(cert) = &self.locked {
-            if let Value::ValidatedBlock { round, .. } = cert.value() {
+            if let CertificateValue::ValidatedBlock { round, .. } = cert.value() {
                 if current_round < *round {
                     current_round = *round;
                 }
@@ -77,7 +77,7 @@ impl MultiOwnerManager {
             }
         }
         if let Some(certificate) = &self.locked {
-            if let Value::ValidatedBlock {
+            if let CertificateValue::ValidatedBlock {
                 round,
                 executed_block: ExecutedBlock { block, .. },
             } = certificate.value()
@@ -99,7 +99,7 @@ impl MultiOwnerManager {
     ) -> Result<Outcome, ChainError> {
         if let Some(Vote { value, .. }) = &self.pending {
             match value.inner() {
-                Value::ConfirmedBlock {
+                CertificateValue::ConfirmedBlock {
                     executed_block,
                     round,
                 } => {
@@ -107,14 +107,14 @@ impl MultiOwnerManager {
                         return Ok(Outcome::Skip);
                     }
                 }
-                Value::ValidatedBlock { round, .. } => ensure!(
+                CertificateValue::ValidatedBlock { round, .. } => ensure!(
                     new_round >= *round,
                     ChainError::InsufficientRound(round.try_sub_one().unwrap())
                 ),
             }
         }
         if let Some(Certificate { value, .. }) = &self.locked {
-            if let Value::ValidatedBlock { round, .. } = value.inner() {
+            if let CertificateValue::ValidatedBlock { round, .. } = value.inner() {
                 ensure!(
                     new_round >= *round,
                     ChainError::InsufficientRound(round.try_sub_one().unwrap())

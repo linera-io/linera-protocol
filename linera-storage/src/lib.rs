@@ -24,7 +24,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId},
 };
 use linera_chain::{
-    data_types::{Certificate, HashedValue, LiteCertificate, Value},
+    data_types::{Certificate, CertificateValue, HashedValue, LiteCertificate},
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -194,7 +194,9 @@ pub trait Store: Sized {
             })?
             .into_inner();
         let operations = match value {
-            Value::ConfirmedBlock { executed_block, .. } => executed_block.block.operations,
+            CertificateValue::ConfirmedBlock { executed_block, .. } => {
+                executed_block.block.operations
+            }
             _ => return Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
         };
         let index = usize::try_from(bytecode_location.operation_index)
@@ -272,7 +274,7 @@ where
 
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
-        let maybe_value: Option<Value> = self.client.client.read_key(&value_key).await?;
+        let maybe_value: Option<CertificateValue> = self.client.client.read_key(&value_key).await?;
         let id = match &maybe_value {
             Some(value) => value.chain_id().to_string(),
             None => "not found".to_string(),
@@ -301,7 +303,7 @@ where
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;
         let (cert_result, value_result) = tokio::join!(
             self.client.client.read_key::<LiteCertificate>(&cert_key),
-            self.client.client.read_key::<Value>(&value_key)
+            self.client.client.read_key::<CertificateValue>(&value_key)
         );
         if let Ok(maybe_value) = &value_result {
             let id = match maybe_value {
@@ -310,7 +312,7 @@ where
             };
             increment_counter!(READ_CERTIFICATE_COUNTER, &[("chain_id", id)]);
         };
-        let value: Value =
+        let value: CertificateValue =
             value_result?.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         let cert: LiteCertificate =
             cert_result?.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;

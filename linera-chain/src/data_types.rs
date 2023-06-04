@@ -181,7 +181,7 @@ pub struct ExecutedBlock {
 
 /// A statement to be certified by the validators.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
-pub enum Value {
+pub enum CertificateValue {
     ValidatedBlock {
         executed_block: ExecutedBlock,
         round: RoundNumber,
@@ -195,12 +195,12 @@ pub enum Value {
 /// A statement to be certified by the validators, with its hash.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct HashedValue {
-    value: Value,
+    value: CertificateValue,
     /// Hash of the value (used as key for storage).
     hash: CryptoHash,
 }
 
-/// The hash and chain ID of a `Value`.
+/// The hash and chain ID of a `CertificateValue`.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct LiteValue {
     pub value_hash: CryptoHash,
@@ -358,24 +358,24 @@ impl<'a> Deserialize<'a> for HashedValue {
     where
         D: serde::de::Deserializer<'a>,
     {
-        Ok(Value::deserialize(deserializer)?.into())
+        Ok(CertificateValue::deserialize(deserializer)?.into())
     }
 }
 
-impl From<Value> for HashedValue {
-    fn from(value: Value) -> HashedValue {
+impl From<CertificateValue> for HashedValue {
+    fn from(value: CertificateValue) -> HashedValue {
         let hash = CryptoHash::new(&value);
         HashedValue { value, hash }
     }
 }
 
-impl From<HashedValue> for Value {
-    fn from(hv: HashedValue) -> Value {
+impl From<HashedValue> for CertificateValue {
+    fn from(hv: HashedValue) -> CertificateValue {
         hv.value
     }
 }
 
-impl Value {
+impl CertificateValue {
     pub fn chain_id(&self) -> ChainId {
         self.executed_block().block.chain_id
     }
@@ -416,11 +416,11 @@ impl Value {
     }
 
     pub fn is_confirmed(&self) -> bool {
-        matches!(self, Value::ConfirmedBlock { .. })
+        matches!(self, CertificateValue::ConfirmedBlock { .. })
     }
 
     pub fn is_validated(&self) -> bool {
-        matches!(self, Value::ValidatedBlock { .. })
+        matches!(self, CertificateValue::ValidatedBlock { .. })
     }
 
     #[cfg(any(test, feature = "test"))]
@@ -430,8 +430,8 @@ impl Value {
 
     fn executed_block(&self) -> &ExecutedBlock {
         match self {
-            Value::ConfirmedBlock { executed_block, .. }
-            | Value::ValidatedBlock { executed_block, .. } => executed_block,
+            CertificateValue::ConfirmedBlock { executed_block, .. }
+            | CertificateValue::ValidatedBlock { executed_block, .. } => executed_block,
         }
     }
 }
@@ -440,7 +440,7 @@ impl HashedValue {
     /// Creates a `ConfirmedBlock` with round 0.
     #[cfg(any(test, feature = "test"))]
     pub fn new_confirmed(executed_block: ExecutedBlock) -> HashedValue {
-        Value::ConfirmedBlock {
+        CertificateValue::ConfirmedBlock {
             executed_block,
             round: RoundNumber(0),
         }
@@ -448,7 +448,7 @@ impl HashedValue {
     }
 
     pub fn new_validated(executed_block: ExecutedBlock, round: RoundNumber) -> HashedValue {
-        Value::ValidatedBlock {
+        CertificateValue::ValidatedBlock {
             executed_block,
             round,
         }
@@ -468,14 +468,14 @@ impl HashedValue {
 
     pub fn into_confirmed(self) -> HashedValue {
         match self.value {
-            value @ Value::ConfirmedBlock { .. } => HashedValue {
+            value @ CertificateValue::ConfirmedBlock { .. } => HashedValue {
                 hash: self.hash,
                 value,
             },
-            Value::ValidatedBlock {
+            CertificateValue::ValidatedBlock {
                 executed_block,
                 round,
-            } => Value::ConfirmedBlock {
+            } => CertificateValue::ConfirmedBlock {
                 executed_block,
                 round,
             }
@@ -483,11 +483,11 @@ impl HashedValue {
         }
     }
 
-    pub fn inner(&self) -> &Value {
+    pub fn inner(&self) -> &CertificateValue {
         &self.value
     }
 
-    pub fn into_inner(self) -> Value {
+    pub fn into_inner(self) -> CertificateValue {
         self.value
     }
 
@@ -606,7 +606,7 @@ impl Certificate {
     }
 
     /// Returns the certified value.
-    pub fn value(&self) -> &Value {
+    pub fn value(&self) -> &CertificateValue {
         &self.value.value
     }
 
@@ -655,7 +655,7 @@ fn check_signatures(
 
 impl BcsSignable for BlockAndRound {}
 
-impl BcsHashable for Value {}
+impl BcsHashable for CertificateValue {}
 
 impl BcsSignable for LiteValue {}
 
