@@ -8,7 +8,7 @@ mod wasm;
 use crate::{
     data_types::*,
     worker::{
-        CrossChainUpdateHelper, Notification, Reason, Reason::NewMessage, ValidatorWorker,
+        CrossChainUpdateHelper, Notification, Reason, Reason::NewIncomingMessage, ValidatorWorker,
         WorkerError, WorkerState,
     },
 };
@@ -919,14 +919,14 @@ where
         vec![
             Notification {
                 chain_id: ChainId::root(2),
-                reason: NewMessage {
+                reason: NewIncomingMessage {
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight(0)
                 }
             },
             Notification {
                 chain_id: ChainId::root(2),
-                reason: NewMessage {
+                reason: NewIncomingMessage {
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight(1)
                 }
@@ -2134,7 +2134,7 @@ where
         actions.notifications,
         vec![Notification {
             chain_id: ChainId::root(2),
-            reason: Reason::NewMessage {
+            reason: Reason::NewIncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
                 height: BlockHeight::from(0),
             }
