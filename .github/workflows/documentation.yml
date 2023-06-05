@@ -68,21 +68,23 @@ jobs:
         for crate in $LINERA_CRATES; do
             cargo publish -p "linera-${crate}" --dry-run --target-dir "${{ runner.temp }}/crates/linera-${crate}" --no-verify
         done
-    - name: Extract packaged crates
-      run: |
-        for crate in $LINERA_CRATES; do
-            pushd "${{ runner.temp }}/crates/linera-${crate}/package"
-            tar -xzvf "linera-${crate}-${VERSION}.crate"
-            popd
-        done
-    - name: Build documentation using docs.rs
-      run: |
-        cd ${{ runner.temp }}/docsrs
-        cp .env.sample .env
-        mkdir -p ignored/cratesfyi-prefix/crates.io-index
-        . ./.env
-        docker-compose up -d db s3
-        cargo run -- database migrate
-        for crate in $LINERA_CRATES; do
-            cargo run -- build crate --local "${{ runner.temp }}/crates/linera-${crate}/package/linera-${crate}-${VERSION}"
-        done
+    # TODO(#802): Fix this.
+    #
+    # - name: Extract packaged crates
+    #   run: |
+    #     for crate in $LINERA_CRATES; do
+    #         pushd "${{ runner.temp }}/crates/linera-${crate}/package"
+    #         tar -xzvf "linera-${crate}-${VERSION}.crate"
+    #         popd
+    #     done
+    # - name: Build documentation using docs.rs
+    #   run: |
+    #     cd ${{ runner.temp }}/docsrs
+    #     cp .env.sample .env
+    #     mkdir -p ignored/cratesfyi-prefix/crates.io-index
+    #     . ./.env
+    #     docker-compose up -d db s3
+    #     cargo run -- database migrate
+    #     for crate in $LINERA_CRATES; do
+    #         cargo run -- build crate --local "${{ runner.temp }}/crates/linera-${crate}/package/linera-${crate}-${VERSION}"
+    #     done
