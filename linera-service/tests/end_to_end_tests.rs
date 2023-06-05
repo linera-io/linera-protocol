@@ -204,7 +204,31 @@ impl Client {
         tmp
     }
 
-    async fn test_project(&self, path: &Path) {
+    async fn project_publish(
+        &self,
+        path: PathBuf,
+        required_application_ids: Vec<String>,
+        publisher: impl Into<Option<ChainId>>,
+    ) -> String {
+        let json_parameters = serde_json::to_string(&()).unwrap();
+        let json_argument = serde_json::to_string(&()).unwrap();
+        let mut command = self.run_with_storage().await;
+        command
+            .arg("project")
+            .arg("publish-and-create")
+            .arg(path)
+            .args(publisher.into().iter().map(ChainId::to_string))
+            .args(["--json-parameters", &json_parameters])
+            .args(["--json-argument", &json_argument]);
+        if !required_application_ids.is_empty() {
+            command.arg("--required-application-ids");
+            command.args(required_application_ids);
+        }
+        let stdout = Self::run_command(&mut command).await;
+        stdout.trim().to_string()
+    }
+
+    async fn project_test(&self, path: &Path) {
         let mut command = self.run().await;
         assert!(command
             .current_dir(path)
@@ -805,9 +829,12 @@ impl TestRunner {
     }
 
     async fn build_example(&self, name: &str) -> (PathBuf, PathBuf) {
-        let examples_dir = env::current_dir().unwrap().join("../examples/");
-        self.build_application(examples_dir.join(name).as_path(), name, true)
+        self.build_application(Self::example_path(name).as_path(), name, true)
             .await
+    }
+
+    fn example_path(name: &str) -> PathBuf {
+        env::current_dir().unwrap().join("../examples/").join(name)
     }
 
     async fn build_application(
@@ -1653,6 +1680,28 @@ async fn test_project_test() {
     let mut runner = TestRunner::new(network, 0);
     let client = runner.make_client(network);
     client
-        .test_project(&PathBuf::from_str("../examples/counter").unwrap())
+        .project_test(&TestRunner::example_path("counter"))
         .await;
+}
+
+#[test_log::test(tokio::test)]
+async fn test_project_publish() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let network = Network::Grpc;
+    let mut runner = TestRunner::new(network, 1);
+    let client = runner.make_client(network);
+
+    runner.generate_initial_validator_config().await;
+    client.create_genesis_config().await;
+    runner.run_local_net().await;
+
+    let tmp_dir = client.project_new("init-test").await;
+    let project_dir = tmp_dir.path().join("init-test");
+
+    client.project_publish(project_dir, vec![], None).await;
+
+    let node_service = client.run_node_service(None, None).await;
+
+    assert_eq!(node_service.try_get_applications_uri().await.len(), 1)
 }
