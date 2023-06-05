@@ -52,6 +52,7 @@ tracing-subscriber = { workspace = true, features = ["fmt"] }
 comfy-table = { workspace = true }
 dirs = { workspace = true }
 file-lock = "2.1.9"
+current_platform = "0.2.0"
 
 [dev-dependencies]
 linera-base = { workspace = true, features = ["test"] }

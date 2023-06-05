@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, bail, Result};
+use current_platform::CURRENT_PLATFORM;
 use std::{
     ffi::OsStr,
     fs::File,
@@ -70,7 +71,7 @@ impl Project {
             debug!("Linera test runner not found");
             Self::install_test_runner()?;
         }
-        let cargo_test = Command::new("cargo")
+        let unit_tests = Command::new("cargo")
             .env(
                 "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER",
                 Self::runner_path()?.display().to_string().as_str(),
@@ -80,8 +81,17 @@ impl Project {
             .current_dir(&self.root)
             .spawn()?
             .wait()?;
-        if !cargo_test.success() {
-            bail!("tests failed")
+        if !unit_tests.success() {
+            bail!("unit tests failed")
+        }
+        let integration_tests = Command::new("cargo")
+            .arg("test")
+            .args(["--target", CURRENT_PLATFORM])
+            .current_dir(&self.root)
+            .spawn()?
+            .wait()?;
+        if !integration_tests.success() {
+            bail!("integration tests failed")
         }
         Ok(())
     }
