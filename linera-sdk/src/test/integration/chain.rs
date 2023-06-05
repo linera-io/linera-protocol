@@ -454,4 +454,22 @@ impl ActiveChain {
             Response::System(_) => unreachable!("User query returned a system response"),
         }
     }
+
+    /// Executes a GraphQL `query` on an `application`'s state on this microchain.
+    ///
+    /// Returns the deserialized GraphQL JSON response from the `application`.
+    pub async fn graphql_query<Abi>(
+        &self,
+        application_id: ApplicationId<Abi>,
+        query: impl Into<async_graphql::Request>,
+    ) -> serde_json::Value
+    where
+        Abi: ServiceAbi<Query = async_graphql::Request, QueryResponse = async_graphql::Response>,
+    {
+        self.query(application_id, query.into())
+            .await
+            .data
+            .into_json()
+            .expect("Unexpected non-JSON query response")
+    }
 }

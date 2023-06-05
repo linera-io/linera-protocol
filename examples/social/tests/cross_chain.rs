@@ -49,23 +49,13 @@ async fn test_cross_chain_posting() {
 
     // Querying the own posts
     let query = "query { ownPosts(start: 0, end: 1) { timestamp, text } }";
-    let response = chain2
-        .query(application_id, query.into())
-        .await
-        .data
-        .into_json()
-        .expect("Unexpected non-JSON query response");
+    let response = chain2.graphql_query(application_id, query).await;
     let value = response["ownPosts"][0]["text"].clone();
     assert_eq!(value, "Linera is the new Mastodon".to_string());
 
     // Now handling the received messages
     let query = "query { receivedPostsKeys { timestamp, author, index } }";
-    let response = chain1
-        .query(application_id, query.into())
-        .await
-        .data
-        .into_json()
-        .expect("Unexpected non-JSON query response");
+    let response = chain1.graphql_query(application_id, query).await;
     let author = response["receivedPostsKeys"][0]["author"].clone();
     assert_eq!(author, chain2.id().to_string());
 }

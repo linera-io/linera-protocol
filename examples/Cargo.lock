@@ -1746,6 +1746,7 @@ name = "linera-sdk"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-graphql",
  "async-trait",
  "bcs",
  "cargo_toml",

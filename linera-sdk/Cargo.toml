@@ -34,6 +34,7 @@ linera-views = { workspace = true }
 wit-bindgen-guest-rust = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+async-graphql = { workspace = true }
 anyhow = { workspace = true }
 cargo_toml = { workspace = true }
 dashmap = { workspace = true }
