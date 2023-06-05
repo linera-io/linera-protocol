@@ -1,7 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
+use cargo_toml::Manifest;
 use current_platform::CURRENT_PLATFORM;
 use std::{
     ffi::OsStr,
@@ -253,5 +254,39 @@ impl Project {
         let sdk_version = cargo_toml["package"]["version"].as_str()
             .expect("there was an error finding the version in a TOML file included at compile-time - this should never happen.");
         sdk_version.to_string()
+    }
+
+    pub fn build(&self, name: Option<String>) -> Result<(PathBuf, PathBuf), anyhow::Error> {
+        let name = name.unwrap_or(self.project_package_name()?);
+        let contract_name = format!("{}_contract", name);
+        let service_name = format!("{}_service", name);
+        let cargo_build = Command::new("cargo")
+            .arg("build")
+            .arg("--release")
+            .args(["--target", "wasm32-unknown-unknown"])
+            .current_dir(&self.root)
+            .spawn()?
+            .wait()?;
+        if !cargo_build.success() {
+            bail!("build failed")
+        }
+        let build_path = self.root.join("target/wasm32-unknown-unknown/release");
+        Ok((
+            build_path.join(contract_name).with_extension("wasm"),
+            build_path.join(service_name).with_extension("wasm"),
+        ))
+    }
+
+    fn project_package_name(&self) -> Result<String> {
+        let manifest = Manifest::from_path(self.cargo_toml_path())?;
+        let name = manifest
+            .package
+            .context("Cargo.toml is missing `[package]`")?
+            .name;
+        Ok(name)
+    }
+
+    fn cargo_toml_path(&self) -> PathBuf {
+        self.root.join("Cargo.toml")
     }
 }

@@ -54,6 +54,7 @@ comfy-table = { workspace = true }
 dirs = { workspace = true }
 file-lock = "2.1.9"
 current_platform = "0.2.0"
+cargo_toml = "0.15.3"
 
 [dev-dependencies]
 linera-base = { workspace = true, features = ["test"] }
