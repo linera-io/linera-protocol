@@ -595,7 +595,7 @@ pub mod tests {
             HashedValue::new_validated(
                 ExecutedBlock {
                     block: get_block(),
-                    effects: vec![],
+                    messages: vec![],
                     state_hash: CryptoHash::new(&Foo("test".into())),
                 },
                 Default::default(),
@@ -608,7 +608,7 @@ pub mod tests {
         let blobs = vec![HashedValue::new_validated(
             ExecutedBlock {
                 block: get_block(),
-                effects: vec![],
+                messages: vec![],
                 state_hash: CryptoHash::new(&Foo("also test".into())),
             },
             Default::default(),
@@ -657,7 +657,7 @@ pub mod tests {
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
             blobs: vec![HashedValue::new_confirmed(ExecutedBlock {
                 block: get_block(),
-                effects: vec![],
+                messages: vec![],
                 state_hash: CryptoHash::new(&Foo("execution state".into())),
             })],
         };

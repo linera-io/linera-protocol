@@ -25,9 +25,9 @@ mod wasmtime;
 
 use self::sanitizer::sanitize;
 use crate::{
-    ApplicationCallResult, Bytecode, CalleeContext, ContractRuntime, EffectContext, ExecutionError,
-    OperationContext, QueryContext, RawExecutionResult, ServiceRuntime, SessionCallResult,
-    SessionId, UserApplication, WasmRuntime,
+    ApplicationCallResult, Bytecode, CalleeContext, ContractRuntime, ExecutionError,
+    MessageContext, OperationContext, QueryContext, RawExecutionResult, ServiceRuntime,
+    SessionCallResult, SessionId, UserApplication, WasmRuntime,
 };
 use async_trait::async_trait;
 use std::path::Path;
@@ -194,11 +194,11 @@ impl UserApplication for WasmApplication {
         Ok(result)
     }
 
-    async fn execute_effect(
+    async fn execute_message(
         &self,
-        context: &EffectContext,
+        context: &MessageContext,
         runtime: &dyn ContractRuntime,
-        effect: &[u8],
+        message: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         let result = match self {
             #[cfg(feature = "wasmtime")]
@@ -212,7 +212,7 @@ impl UserApplication for WasmApplication {
                     contract_module,
                     runtime,
                 )?
-                .execute_effect(context, effect)
+                .execute_message(context, message)
                 .await?
             }
             #[cfg(feature = "wasmer")]
@@ -226,7 +226,7 @@ impl UserApplication for WasmApplication {
                     contract_module,
                     runtime,
                 )?
-                .execute_effect(context, effect)
+                .execute_message(context, message)
                 .await?
             }
         };

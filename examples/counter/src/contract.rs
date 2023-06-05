@@ -9,7 +9,7 @@ use self::state::Counter;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{SessionId, WithContractAbi},
-    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
     OperationContext, SessionCallResult, SimpleStateStorage,
 };
 use thiserror::Error;
@@ -29,7 +29,7 @@ impl Contract for Counter {
         &mut self,
         _context: &OperationContext,
         value: u64,
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
         self.value = value;
         Ok(ExecutionResult::default())
     }
@@ -38,17 +38,17 @@ impl Contract for Counter {
         &mut self,
         _context: &OperationContext,
         operation: u64,
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
         self.value += operation;
         Ok(ExecutionResult::default())
     }
 
-    async fn execute_effect(
+    async fn execute_message(
         &mut self,
-        _context: &EffectContext,
-        _effect: (),
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
-        Err(Error::EffectsNotSupported)
+        _context: &MessageContext,
+        _message: (),
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+        Err(Error::MessagesNotSupported)
     }
 
     async fn handle_application_call(
@@ -56,7 +56,7 @@ impl Contract for Counter {
         _context: &CalleeContext,
         increment: u64,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {
         log::error!("incrementing by {:?}", increment);
         self.value += increment;
@@ -72,7 +72,7 @@ impl Contract for Counter {
         _state: Self::SessionState,
         _call: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {
         Err(Error::SessionsNotSupported)
     }
@@ -81,9 +81,9 @@ impl Contract for Counter {
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// Counter application doesn't support any cross-chain effects.
-    #[error("Counter application doesn't support any cross-chain effects")]
-    EffectsNotSupported,
+    /// Counter application doesn't support any cross-chain messages.
+    #[error("Counter application doesn't support any cross-chain messages")]
+    MessagesNotSupported,
 
     /// Counter application doesn't support any cross-application sessions.
     #[error("Counter application doesn't support any cross-application sessions")]
@@ -103,8 +103,8 @@ mod tests {
     use super::{Counter, Error};
     use futures::FutureExt;
     use linera_sdk::{
-        base::{BlockHeight, ChainId, EffectId},
-        ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+        base::{BlockHeight, ChainId, MessageId},
+        ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
         OperationContext,
     };
     use webassembly_test::webassembly_test;
@@ -127,16 +127,16 @@ mod tests {
     }
 
     #[webassembly_test]
-    fn effect() {
+    fn message() {
         let initial_value = 72_u64;
         let mut counter = create_and_initialize_counter(initial_value);
 
         let result = counter
-            .execute_effect(&dummy_effect_context(), ())
+            .execute_message(&dummy_message_context(), ())
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
-        assert!(matches!(result, Err(Error::EffectsNotSupported)));
+        assert!(matches!(result, Err(Error::MessagesNotSupported)));
         assert_eq!(counter.value, initial_value);
     }
 
@@ -202,12 +202,12 @@ mod tests {
         }
     }
 
-    fn dummy_effect_context() -> EffectContext {
-        EffectContext {
+    fn dummy_message_context() -> MessageContext {
+        MessageContext {
             chain_id: ChainId([0; 4].into()),
             authenticated_signer: None,
             height: BlockHeight(0),
-            effect_id: EffectId {
+            message_id: MessageId {
                 chain_id: ChainId([1; 4].into()),
                 height: BlockHeight(1),
                 index: 1,

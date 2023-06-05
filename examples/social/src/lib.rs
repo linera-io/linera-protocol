@@ -153,7 +153,7 @@ impl ContractAbi for SocialAbi {
     type Parameters = ();
     type Operation = Operation;
     type ApplicationCall = ();
-    type Effect = Effect;
+    type Message = Message;
     type SessionCall = ();
     type Response = ();
     type SessionState = ();
@@ -176,9 +176,9 @@ pub enum Operation {
     Post(String),
 }
 
-/// An effect of the application on one chain, to be handled on another chain.
+/// A message of the application on one chain, to be handled on another chain.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub enum Effect {
+pub enum Message {
     /// The origin chain wants to subscribe to the target chain.
     RequestSubscribe,
     /// The origin chain wants to unsubscribe from the target chain.

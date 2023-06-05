@@ -27,7 +27,7 @@ macro_rules! contract {
         impl $crate::contract::wit_types::Contract for $application {
             type Initialize = Initialize;
             type ExecuteOperation = ExecuteOperation;
-            type ExecuteEffect = ExecuteEffect;
+            type ExecuteMessage = ExecuteMessage;
             type HandleApplicationCall = HandleApplicationCall;
             type HandleSessionCall = HandleSessionCall;
         }
@@ -47,9 +47,9 @@ macro_rules! contract {
         }
 
         $crate::instance_exported_future! {
-            contract::ExecuteEffect<$application>(
-                context: $crate::contract::wit_types::EffectContext,
-                effect: Vec<u8>,
+            contract::ExecuteMessage<$application>(
+                context: $crate::contract::wit_types::MessageContext,
+                message: Vec<u8>,
             ) -> PollExecutionResult
         }
 

@@ -9,7 +9,7 @@ use super::{
     ExecutionError,
 };
 use crate::{
-    ApplicationCallResult, CalleeContext, EffectContext, OperationContext, QueryContext,
+    ApplicationCallResult, CalleeContext, MessageContext, OperationContext, QueryContext,
     RawExecutionResult, SessionCallResult, SessionId,
 };
 use futures::future::{self, TryFutureExt};
@@ -43,8 +43,8 @@ pub trait Contract: ApplicationRuntimeContext {
         + Unpin;
 
     /// The WIT type for the resource representing the guest future
-    /// [`execute_effect`][crate::Contract::execute_effect] method.
-    type ExecuteEffect: GuestFutureInterface<Self, Output = RawExecutionResult<Vec<u8>>>
+    /// [`execute_message`][crate::Contract::execute_message] method.
+    type ExecuteMessage: GuestFutureInterface<Self, Output = RawExecutionResult<Vec<u8>>>
         + Send
         + Unpin;
 
@@ -63,8 +63,8 @@ pub trait Contract: ApplicationRuntimeContext {
     /// The WIT type equivalent for the [`OperationContext`].
     type OperationContext: From<OperationContext>;
 
-    /// The WIT type equivalent for the [`EffectContext`].
-    type EffectContext: From<EffectContext>;
+    /// The WIT type equivalent for the [`MessageContext`].
+    type MessageContext: From<MessageContext>;
 
     /// The WIT type equivalent for the [`CalleeContext`].
     type CalleeContext: From<CalleeContext>;
@@ -111,19 +111,19 @@ pub trait Contract: ApplicationRuntimeContext {
         future: &Self::ExecuteOperation,
     ) -> Result<Self::PollExecutionResult, Self::Error>;
 
-    /// Creates a new future for the user contract to execute an effect.
-    fn execute_effect_new(
+    /// Creates a new future for the user contract to execute a message.
+    fn execute_message_new(
         &self,
         store: &mut Self::Store,
-        context: Self::EffectContext,
-        effect: &[u8],
-    ) -> Result<Self::ExecuteEffect, Self::Error>;
+        context: Self::MessageContext,
+        message: &[u8],
+    ) -> Result<Self::ExecuteMessage, Self::Error>;
 
-    /// Polls a user contract future that's executing an effect.
-    fn execute_effect_poll(
+    /// Polls a user contract future that's executing a message.
+    fn execute_message_poll(
         &self,
         store: &mut Self::Store,
-        future: &Self::ExecuteEffect,
+        future: &Self::ExecuteMessage,
     ) -> Result<Self::PollExecutionResult, Self::Error>;
 
     /// Creates a new future for the user contract to handle a call from another contract.
@@ -265,25 +265,25 @@ where
     }
 
     /// Calls the guest WASM module's implementation of
-    /// [`UserApplication::execute_effect`][`linera_execution::UserApplication::execute_effect`].
+    /// [`UserApplication::execute_message`][`linera_execution::UserApplication::execute_message`].
     ///
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
     ///
     /// ```ignore
-    /// pub async fn execute_effect(
+    /// pub async fn execute_message(
     ///     mut self,
-    ///     context: &EffectContext,
-    ///     effect: &[u8],
+    ///     context: &MessageContext,
+    ///     message: &[u8],
     /// ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>
     /// ```
-    pub fn execute_effect(
+    pub fn execute_message(
         mut self,
-        context: &EffectContext,
-        effect: &[u8],
-    ) -> GuestFuture<'context, A::ExecuteEffect, A> {
+        context: &MessageContext,
+        message: &[u8],
+    ) -> GuestFuture<'context, A::ExecuteMessage, A> {
         let future =
             self.application
-                .execute_effect_new(&mut self.store, (*context).into(), effect);
+                .execute_message_new(&mut self.store, (*context).into(), message);
 
         GuestFuture::new(future, self)
     }

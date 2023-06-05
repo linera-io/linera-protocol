@@ -8,12 +8,12 @@ use super::{
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::BlockHeight,
-    identifiers::{BytecodeId, ChainId, EffectId},
+    identifiers::{BytecodeId, ChainId, MessageId},
 };
 use serde::{Deserialize, Serialize};
 
-fn effect_id(index: u32) -> EffectId {
-    EffectId {
+fn message_id(index: u32) -> MessageId {
+    MessageId {
         chain_id: ChainId::root(0),
         height: BlockHeight::from(0),
         index,
@@ -21,13 +21,13 @@ fn effect_id(index: u32) -> EffectId {
 }
 
 fn bytecode_id(index: u32) -> BytecodeId {
-    BytecodeId::new(effect_id(index))
+    BytecodeId::new(message_id(index))
 }
 
 fn app_id(index: u32) -> UserApplicationId {
     UserApplicationId {
         bytecode_id: bytecode_id(0),
-        creation: effect_id(index),
+        creation: message_id(index),
     }
 }
 
@@ -35,7 +35,7 @@ fn app_description(index: u32, deps: Vec<u32>) -> UserApplicationDescription {
     UserApplicationDescription {
         bytecode_id: bytecode_id(0),
         bytecode_location: location(0),
-        creation: effect_id(index),
+        creation: message_id(index),
         parameters: vec![],
         required_application_ids: deps.into_iter().map(app_id).collect(),
     }

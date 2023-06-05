@@ -6,12 +6,12 @@
 mod state;
 
 use async_trait::async_trait;
-use crowd_funding::{ApplicationCall, Effect, InitializationArgument, Operation};
+use crowd_funding::{ApplicationCall, InitializationArgument, Message, Operation};
 use fungible::{Account, AccountOwner, Destination, FungibleTokenAbi};
 use linera_sdk::{
     base::{Amount, ApplicationId, SessionId, WithContractAbi},
     contract::system_api,
-    ensure, ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    ensure, ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
     OperationContext, SessionCallResult, ViewStateStorage,
 };
 use linera_views::views::View;
@@ -33,7 +33,7 @@ impl Contract for CrowdFunding {
         &mut self,
         _context: &OperationContext,
         argument: InitializationArgument,
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
         self.initialization_argument.set(Some(argument));
 
         ensure!(
@@ -48,7 +48,7 @@ impl Contract for CrowdFunding {
         &mut self,
         context: &OperationContext,
         operation: Operation,
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
         let mut result = ExecutionResult::default();
 
         match operation {
@@ -67,13 +67,13 @@ impl Contract for CrowdFunding {
         Ok(result)
     }
 
-    async fn execute_effect(
+    async fn execute_message(
         &mut self,
-        context: &EffectContext,
-        effect: Effect,
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
-        match effect {
-            Effect::PledgeWithAccount { owner, amount } => {
+        context: &MessageContext,
+        message: Message,
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+        match message {
+            Message::PledgeWithAccount { owner, amount } => {
                 ensure!(
                     context.chain_id == system_api::current_application_id().creation.chain_id,
                     Error::CampaignChainOnly
@@ -89,7 +89,7 @@ impl Contract for CrowdFunding {
         context: &CalleeContext,
         call: ApplicationCall,
         sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {
         let mut result = ApplicationCallResult::default();
         match call {
@@ -120,7 +120,7 @@ impl Contract for CrowdFunding {
         _state: Self::SessionState,
         _call: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {
         Err(Error::SessionsNotSupported)
     }
@@ -136,7 +136,7 @@ impl CrowdFunding {
     /// Adds a pledge from a local account to the remote campaign chain.
     async fn execute_pledge_with_transfer(
         &mut self,
-        result: &mut ExecutionResult<Effect>,
+        result: &mut ExecutionResult<Message>,
         owner: AccountOwner,
         amount: Amount,
     ) -> Result<(), Error> {
@@ -145,7 +145,7 @@ impl CrowdFunding {
         let chain_id = system_api::current_application_id().creation.chain_id;
         // First, move the funds to the campaign chain (under the same owner).
         // TODO(#589): Simplify this when the messaging system guarantees atomic delivery
-        // of all messages created in the same operation/effect.
+        // of all messages created in the same operation/message.
         let destination = fungible::Destination::Account(Account { chain_id, owner });
         let call = fungible::ApplicationCall::Transfer {
             owner,
@@ -160,11 +160,11 @@ impl CrowdFunding {
         )
         .await?;
         // Second, schedule the attribution of the funds to the (remote) campaign.
-        let effect = Effect::PledgeWithAccount { owner, amount };
-        result.effects.push((
+        let message = Message::PledgeWithAccount { owner, amount };
+        result.messages.push((
             chain_id.into(),
             /* authenticated by owner */ true,
-            effect,
+            message,
         ));
         Ok(())
     }

@@ -16,11 +16,11 @@ resource execute-operation {
     poll: func() -> poll-execution-result
 }
 
-resource execute-effect {
+resource execute-message {
     static new: func(
-        context: effect-context,
-        effect: list<u8>,
-    ) -> execute-effect
+        context: message-context,
+        message: list<u8>,
+    ) -> execute-message
 
     poll: func() -> poll-execution-result
 }
@@ -53,14 +53,14 @@ record operation-context {
     index: u32,
 }
 
-record effect-context {
+record message-context {
     chain-id: chain-id,
     authenticated-signer: option<owner>,
     height: block-height,
-    effect-id: effect-id,
+    message-id: message-id,
 }
 
-record effect-id {
+record message-id {
     chain-id: chain-id,
     height: block-height,
     index: u32,
@@ -74,13 +74,13 @@ record callee-context {
 
 record application-id {
     bytecode-id: bytecode-id,
-    creation: effect-id,
+    creation: message-id,
 }
 
 type chain-id = crypto-hash
 type owner = crypto-hash
 type block-height = u64
-type bytecode-id = effect-id
+type bytecode-id = message-id
 
 variant poll-execution-result {
     pending,
@@ -114,7 +114,7 @@ record session-call-result {
 }
 
 record execution-result {
-    effects: list<tuple<destination, bool, effect>>,
+    messages: list<tuple<destination, bool, message>>,
     subscribe: list<tuple<channel-name, chain-id>>,
     unsubscribe: list<tuple<channel-name, chain-id>>,
 }
@@ -129,7 +129,7 @@ record channel-name {
 }
 
 type session-state = list<u8>
-type effect = list<u8>
+type message = list<u8>
 
 record crypto-hash {
     part1: u64,

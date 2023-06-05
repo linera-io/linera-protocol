@@ -7,7 +7,7 @@ use super::wit;
 use linera_base::{
     crypto::CryptoHash,
     data_types::Amount,
-    identifiers::{ApplicationId, ChainId, EffectId},
+    identifiers::{ApplicationId, ChainId, MessageId},
 };
 
 impl From<ChainId> for wit::CryptoHash {
@@ -32,18 +32,18 @@ impl From<CryptoHash> for wit::CryptoHash {
 impl From<ApplicationId> for wit::ApplicationId {
     fn from(application_id: ApplicationId) -> Self {
         wit::ApplicationId {
-            bytecode_id: application_id.bytecode_id.effect_id.into(),
+            bytecode_id: application_id.bytecode_id.message_id.into(),
             creation: application_id.creation.into(),
         }
     }
 }
 
-impl From<EffectId> for wit::EffectId {
-    fn from(effect_id: EffectId) -> Self {
-        wit::EffectId {
-            chain_id: effect_id.chain_id.0.into(),
-            height: effect_id.height.0,
-            index: effect_id.index,
+impl From<MessageId> for wit::MessageId {
+    fn from(message_id: MessageId) -> Self {
+        wit::MessageId {
+            chain_id: message_id.chain_id.0.into(),
+            height: message_id.height.0,
+            index: message_id.index,
         }
     }
 }

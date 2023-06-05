@@ -15,22 +15,21 @@ use crate::{
 use linera_base::{
     crypto::{BcsSignable, CryptoHash, *},
     data_types::*,
-    identifiers::{ChainDescription, ChainId, ChannelName, Destination, EffectId, Owner},
+    identifiers::{ChainDescription, ChainId, ChannelName, Destination, MessageId, Owner},
 };
 use linera_chain::{
     data_types::{
         Block, BlockAndRound, BlockProposal, Certificate, ChainAndHeight, ChannelFullName, Event,
-        ExecutedBlock, HashedValue, IncomingMessage, LiteVote, Medium, Origin, OutgoingEffect,
+        ExecutedBlock, HashedValue, IncomingMessage, LiteVote, Medium, Origin, OutgoingMessage,
         SignatureAggregator,
     },
     ChainError,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    system::{Account, Recipient, SystemChannel, SystemEffect, SystemOperation, UserData},
-    ApplicationId, ApplicationRegistry, ChainOwnership, ChannelSubscription, Effect,
-    ExecutionStateView, Operation, Query, Response, SystemExecutionState, SystemQuery,
-    SystemResponse,
+    system::{Account, Recipient, SystemChannel, SystemMessage, SystemOperation, UserData},
+    ApplicationId, ApplicationRegistry, ChainOwnership, ChannelSubscription, ExecutionStateView,
+    Message, Operation, Query, Response, SystemExecutionState, SystemQuery, SystemResponse,
 };
 use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
 use linera_views::{
@@ -253,35 +252,35 @@ async fn make_transfer_certificate_for_epoch<S>(
         None,
         Timestamp::from(0),
     );
-    let effects = match recipient {
-        Recipient::Account(account) => vec![direct_outgoing_effect(
+    let messages = match recipient {
+        Recipient::Account(account) => vec![direct_outgoing_message(
             account.chain_id,
-            SystemEffect::Credit { account, amount },
+            SystemMessage::Credit { account, amount },
         )],
         Recipient::Burn => Vec::new(),
     };
     let state_hash = make_state_hash(system_state).await;
     let value = HashedValue::new_confirmed(ExecutedBlock {
         block,
-        effects,
+        messages,
         state_hash,
     });
     make_certificate(committee, worker, value)
 }
 
-fn direct_outgoing_effect(recipient: ChainId, effect: SystemEffect) -> OutgoingEffect {
-    OutgoingEffect {
+fn direct_outgoing_message(recipient: ChainId, message: SystemMessage) -> OutgoingMessage {
+    OutgoingMessage {
         destination: Destination::Recipient(recipient),
         authenticated_signer: None,
-        effect: Effect::System(effect),
+        message: Message::System(message),
     }
 }
 
-fn channel_outgoing_effect(name: ChannelName, effect: SystemEffect) -> OutgoingEffect {
-    OutgoingEffect {
+fn channel_outgoing_message(name: ChannelName, message: SystemMessage) -> OutgoingMessage {
+    OutgoingMessage {
         destination: Destination::Subscribers(name),
         authenticated_signer: None,
-        effect: Effect::System(effect),
+        message: Message::System(message),
     }
 }
 
@@ -523,7 +522,7 @@ where
         let state_hash = make_state_hash(system_state).await;
         let value = HashedValue::new_confirmed(ExecutedBlock {
             block,
-            effects: vec![],
+            messages: vec![],
             state_hash,
         });
         make_certificate(&committee, &worker, value)
@@ -817,17 +816,17 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![
-                direct_outgoing_effect(
+            messages: vec![
+                direct_outgoing_message(
                     ChainId::root(2),
-                    SystemEffect::Credit {
+                    SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::ONE,
                     },
                 ),
-                direct_outgoing_effect(
+                direct_outgoing_message(
                     ChainId::root(2),
-                    SystemEffect::Credit {
+                    SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::from_tokens(2),
                     },
@@ -868,9 +867,9 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![direct_outgoing_effect(
+            messages: vec![direct_outgoing_message(
                 ChainId::root(2),
-                SystemEffect::Credit {
+                SystemMessage::Credit {
                     account: Account::chain(ChainId::root(2)),
                     amount: Amount::from_tokens(3),
                 },
@@ -960,7 +959,7 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        effect: Effect::System(SystemEffect::Credit {
+                        message: Message::System(SystemMessage::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::ONE,
                         }),
@@ -974,7 +973,7 @@ where
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        effect: Effect::System(SystemEffect::Credit {
+                        message: Message::System(SystemMessage::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from_tokens(2),
                         }),
@@ -988,7 +987,7 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        effect: Effect::System(SystemEffect::Credit {
+                        message: Message::System(SystemMessage::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from_tokens(2), // wrong
                         }),
@@ -1019,7 +1018,7 @@ where
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        effect: Effect::System(SystemEffect::Credit {
+                        message: Message::System(SystemMessage::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from_tokens(2),
                         }),
@@ -1033,7 +1032,7 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        effect: Effect::System(SystemEffect::Credit {
+                        message: Message::System(SystemMessage::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::ONE,
                         }),
@@ -1047,7 +1046,7 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        effect: Effect::System(SystemEffect::Credit {
+                        message: Message::System(SystemMessage::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from_tokens(3),
                         }),
@@ -1078,7 +1077,7 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        effect: Effect::System(SystemEffect::Credit {
+                        message: Message::System(SystemMessage::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from_tokens(3),
                         }),
@@ -1092,7 +1091,7 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        effect: Effect::System(SystemEffect::Credit {
+                        message: Message::System(SystemMessage::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::ONE,
                         }),
@@ -1106,7 +1105,7 @@ where
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        effect: Effect::System(SystemEffect::Credit {
+                        message: Message::System(SystemMessage::Credit {
                             account: Account::chain(ChainId::root(2)),
                             amount: Amount::from_tokens(2),
                         }),
@@ -1136,7 +1135,7 @@ where
                     index: 0,
                     authenticated_signer: None,
                     timestamp: Timestamp::from(0),
-                    effect: Effect::System(SystemEffect::Credit {
+                    message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::ONE,
                     }),
@@ -1154,9 +1153,9 @@ where
             &worker,
             HashedValue::new_confirmed(ExecutedBlock {
                 block: block_proposal.content.block,
-                effects: vec![direct_outgoing_effect(
+                messages: vec![direct_outgoing_message(
                     ChainId::root(3),
-                    SystemEffect::Credit {
+                    SystemMessage::Credit {
                         account: Account::chain(ChainId::root(3)),
                         amount: Amount::ONE,
                     },
@@ -1194,7 +1193,7 @@ where
                     index: 0,
                     authenticated_signer: None,
                     timestamp: Timestamp::from(0),
-                    effect: Effect::System(SystemEffect::Credit {
+                    message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
                         amount: Amount::from_tokens(3),
                     }),
@@ -1615,7 +1614,7 @@ where
                 index: 0,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
-                effect: Effect::System(SystemEffect::Credit {
+                message: Message::System(SystemMessage::Credit {
                     account: Account::chain(ChainId::root(1)),
                     amount: Amount::from_tokens(995),
                 }),
@@ -1678,7 +1677,7 @@ where
             index: 0,
             authenticated_signer: None,
             timestamp,
-            effect: Effect::System(SystemEffect::Credit { amount, .. }),
+            message: Message::System(SystemMessage::Credit { amount, .. }),
         } if certificate_hash == CryptoHash::new(&Dummy)
             && height == BlockHeight::from(0)
             && timestamp == Timestamp::from(0)
@@ -1879,7 +1878,7 @@ where
             index: 0,
             authenticated_signer: None,
             timestamp,
-            effect: Effect::System(SystemEffect::Credit { amount, .. })
+            message: Message::System(SystemMessage::Credit { amount, .. })
         } if certificate_hash == certificate.hash()
             && height == BlockHeight::from(0)
             && timestamp == Timestamp::from(0)
@@ -1991,7 +1990,7 @@ where
             index: 0,
             authenticated_signer: None,
             timestamp,
-            effect: Effect::System(SystemEffect::Credit { amount, .. })
+            message: Message::System(SystemMessage::Credit { amount, .. })
         } if certificate_hash == certificate.hash()
             && height == BlockHeight::from(0)
             && timestamp == Timestamp::from(0)
@@ -2265,7 +2264,7 @@ where
                 index: 0,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
-                effect: Effect::System(SystemEffect::Credit {
+                message: Message::System(SystemMessage::Credit {
                     account: Account::chain(ChainId::root(2)),
                     amount: Amount::from_tokens(5),
                 }),
@@ -2455,12 +2454,12 @@ where
     };
     let admin_channel_origin = Origin::channel(admin_id, admin_channel_full_name.clone());
     // Have the admin chain create a user chain.
-    let user_id = ChainId::child(EffectId {
+    let user_id = ChainId::child(MessageId {
         chain_id: admin_id,
         height: BlockHeight::from(0),
         index: 0,
     });
-    let user_description = ChainDescription::Child(EffectId {
+    let user_description = ChainDescription::Child(MessageId {
         chain_id: admin_id,
         height: BlockHeight::from(0),
         index: 0,
@@ -2484,19 +2483,19 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![
-                direct_outgoing_effect(
+            messages: vec![
+                direct_outgoing_message(
                     user_id,
-                    SystemEffect::OpenChain {
+                    SystemMessage::OpenChain {
                         public_key: key_pair.public(),
                         epoch: Epoch::from(0),
                         committees: committees.clone(),
                         admin_id,
                     },
                 ),
-                direct_outgoing_effect(
+                direct_outgoing_message(
                     admin_id,
-                    SystemEffect::Subscribe {
+                    SystemMessage::Subscribe {
                         id: user_id,
                         subscription: admin_channel_subscription.clone(),
                     },
@@ -2573,18 +2572,18 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![
-                channel_outgoing_effect(
+            messages: vec![
+                channel_outgoing_message(
                     SystemChannel::Admin.name(),
-                    SystemEffect::SetCommittees {
+                    SystemMessage::SetCommittees {
                         admin_id,
                         epoch: Epoch::from(1),
                         committees: committees2.clone(),
                     },
                 ),
-                direct_outgoing_effect(
+                direct_outgoing_message(
                     user_id,
-                    SystemEffect::Credit {
+                    SystemMessage::Credit {
                         account: Account::chain(user_id),
                         amount: Amount::from_tokens(2),
                     },
@@ -2627,7 +2626,7 @@ where
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        effect: Effect::System(SystemEffect::Subscribe {
+                        message: Message::System(SystemMessage::Subscribe {
                             id: user_id,
                             subscription: admin_channel_subscription.clone(),
                         }),
@@ -2639,9 +2638,9 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![direct_outgoing_effect(
+            messages: vec![direct_outgoing_message(
                 user_id,
-                SystemEffect::Notify { id: user_id },
+                SystemMessage::Notify { id: user_id },
             )],
             state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
@@ -2716,15 +2715,15 @@ where
                 .unwrap()[..],
             [
                 Event {
-                    effect: Effect::System(SystemEffect::OpenChain { .. }),
+                    message: Message::System(SystemMessage::OpenChain { .. }),
                     ..
                 },
                 Event {
-                    effect: Effect::System(SystemEffect::Credit { .. }),
+                    message: Message::System(SystemMessage::Credit { .. }),
                     ..
                 },
                 Event {
-                    effect: Effect::System(SystemEffect::Notify { .. }),
+                    message: Message::System(SystemMessage::Notify { .. }),
                     ..
                 }
             ]
@@ -2740,7 +2739,7 @@ where
                 .await
                 .unwrap()[..],
             [Event {
-                effect: Effect::System(SystemEffect::SetCommittees { .. }),
+                message: Message::System(SystemMessage::SetCommittees { .. }),
                 ..
             }]
         );
@@ -2773,7 +2772,7 @@ where
                             index: 0,
                             authenticated_signer: None,
                             timestamp: Timestamp::from(0),
-                            effect: Effect::System(SystemEffect::SetCommittees {
+                            message: Message::System(SystemMessage::SetCommittees {
                                 admin_id,
                                 epoch: Epoch::from(1),
                                 committees: committees2.clone(),
@@ -2788,7 +2787,7 @@ where
                             index: 1,
                             authenticated_signer: None,
                             timestamp: Timestamp::from(0),
-                            effect: Effect::System(SystemEffect::Credit {
+                            message: Message::System(SystemMessage::Credit {
                                 account: Account::chain(user_id),
                                 amount: Amount::from_tokens(2),
                             }),
@@ -2802,7 +2801,7 @@ where
                             index: 0,
                             authenticated_signer: None,
                             timestamp: Timestamp::from(0),
-                            effect: Effect::System(SystemEffect::Notify { id: user_id }),
+                            message: Message::System(SystemMessage::Notify { id: user_id }),
                         },
                     },
                 ],
@@ -2812,7 +2811,7 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: Vec::new(),
+            messages: Vec::new(),
             state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(user_description),
@@ -2963,9 +2962,9 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![direct_outgoing_effect(
+            messages: vec![direct_outgoing_message(
                 admin_id,
-                SystemEffect::Credit {
+                SystemMessage::Credit {
                     account: Account::chain(admin_id),
                     amount: Amount::ONE,
                 },
@@ -3008,9 +3007,9 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![channel_outgoing_effect(
+            messages: vec![channel_outgoing_message(
                 SystemChannel::Admin.name(),
-                SystemEffect::SetCommittees {
+                SystemMessage::SetCommittees {
                     admin_id,
                     epoch: Epoch::from(1),
                     committees: committees2.clone(),
@@ -3071,7 +3070,7 @@ where
             .await
             .unwrap()[..],
         [Event {
-            effect: Effect::System(SystemEffect::Credit { .. }),
+            message: Message::System(SystemMessage::Credit { .. }),
             ..
         }]
     );
@@ -3150,9 +3149,9 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![direct_outgoing_effect(
+            messages: vec![direct_outgoing_message(
                 admin_id,
-                SystemEffect::Credit {
+                SystemMessage::Credit {
                     account: Account::chain(admin_id),
                     amount: Amount::ONE,
                 },
@@ -3202,18 +3201,18 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: vec![
-                channel_outgoing_effect(
+            messages: vec![
+                channel_outgoing_message(
                     SystemChannel::Admin.name(),
-                    SystemEffect::SetCommittees {
+                    SystemMessage::SetCommittees {
                         admin_id,
                         epoch: Epoch::from(1),
                         committees: committees2.clone(),
                     },
                 ),
-                channel_outgoing_effect(
+                channel_outgoing_message(
                     SystemChannel::Admin.name(),
-                    SystemEffect::SetCommittees {
+                    SystemMessage::SetCommittees {
                         admin_id,
                         epoch: Epoch::from(1),
                         committees: committees3.clone(),
@@ -3283,7 +3282,7 @@ where
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
-                        effect: Effect::System(SystemEffect::Credit {
+                        message: Message::System(SystemMessage::Credit {
                             account: Account::chain(admin_id),
                             amount: Amount::ONE,
                         }),
@@ -3295,7 +3294,7 @@ where
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
-            effects: Vec::new(),
+            messages: Vec::new(),
             state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),

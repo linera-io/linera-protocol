@@ -12,7 +12,7 @@ use futures::{future, lock::Mutex, Stream};
 use linera_base::{
     crypto::CryptoError,
     data_types::{ArithmeticError, BlockHeight},
-    identifiers::{ChainId, EffectId},
+    identifiers::{ChainId, MessageId},
 };
 use linera_chain::{
     data_types::{
@@ -533,20 +533,20 @@ where
         }
     }
 
-    /// Obtains the certificate containing the specified effect.
+    /// Obtains the certificate containing the specified message.
     pub async fn certificate_for(
         &mut self,
-        effect_id: &EffectId,
+        message_id: &MessageId,
     ) -> Result<Certificate, NodeError> {
-        let query = ChainInfoQuery::new(effect_id.chain_id)
-            .with_sent_certificates_in_range(BlockHeightRange::single(effect_id.height));
+        let query = ChainInfoQuery::new(message_id.chain_id)
+            .with_sent_certificates_in_range(BlockHeightRange::single(message_id.height));
         let info = self.handle_chain_info_query(query).await?.info;
         let certificate = info
             .requested_sent_certificates
             .into_iter()
-            .find(|certificate| certificate.value().has_effect(effect_id))
+            .find(|certificate| certificate.value().has_message(message_id))
             .ok_or_else(|| {
-                ViewError::not_found("could not find certificate with effect {}", effect_id)
+                ViewError::not_found("could not find certificate with message {}", message_id)
             })?;
         Ok(certificate)
     }

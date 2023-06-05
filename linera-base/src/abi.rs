@@ -36,11 +36,11 @@ pub trait ContractAbi {
     /// application on their own chain.
     type Operation: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
-    /// The type of effect executed by the application.
+    /// The type of message executed by the application.
     ///
-    /// Effects are executed when a message created by the same application is received
+    /// Messages are executed when a message created by the same application is received
     /// from another chain and accepted in a block.
-    type Effect: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
+    type Message: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
 
     /// The argument type when this application is called from another application on the same chain.
     type ApplicationCall: Serialize + DeserializeOwned + Send + Sync + Debug + 'static;
@@ -89,7 +89,7 @@ where
     type Parameters = <<A as WithContractAbi>::Abi as ContractAbi>::Parameters;
     type Operation = <<A as WithContractAbi>::Abi as ContractAbi>::Operation;
     type ApplicationCall = <<A as WithContractAbi>::Abi as ContractAbi>::ApplicationCall;
-    type Effect = <<A as WithContractAbi>::Abi as ContractAbi>::Effect;
+    type Message = <<A as WithContractAbi>::Abi as ContractAbi>::Message;
     type SessionCall = <<A as WithContractAbi>::Abi as ContractAbi>::SessionCall;
     type Response = <<A as WithContractAbi>::Abi as ContractAbi>::Response;
     type SessionState = <<A as WithContractAbi>::Abi as ContractAbi>::SessionState;

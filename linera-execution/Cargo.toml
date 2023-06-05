@@ -47,6 +47,7 @@ wit-bindgen-host-wasmtime-rust = { workspace = true, optional = true }
 [dev-dependencies]
 anyhow = { workspace = true }
 bcs = { workspace = true }
+counter = { workspace = true }
 linera-base = { workspace = true, features = ["test"] }
 linera-execution = { path = ".", features = ["test"] }
 test-case = { workspace = true }

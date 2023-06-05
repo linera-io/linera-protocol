@@ -29,7 +29,7 @@ mod inbox_tests;
 
 /// The state of a inbox.
 /// * An inbox is used to track events received and executed locally.
-/// * An `Event` consists of a logical cursor `(height, index)` and some message content `effect`.
+/// * An `Event` consists of a logical cursor `(height, index)` and some message content `message`.
 /// * On the surface, an inbox looks like a FIFO queue: the main APIs are `add_event` and
 /// `remove_event`.
 /// * However, events can also be removed before they are added. When this happens,

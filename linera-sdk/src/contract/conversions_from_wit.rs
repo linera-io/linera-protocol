@@ -10,10 +10,10 @@ use super::{
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight},
-    identifiers::{ApplicationId, BytecodeId, ChainId, EffectId, Owner, SessionId},
+    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner, SessionId},
 };
 
-use crate::{CalleeContext, EffectContext, OperationContext};
+use crate::{CalleeContext, MessageContext, OperationContext};
 use std::task::Poll;
 
 impl From<wit_types::OperationContext> for OperationContext {
@@ -27,23 +27,23 @@ impl From<wit_types::OperationContext> for OperationContext {
     }
 }
 
-impl From<wit_types::EffectContext> for EffectContext {
-    fn from(application_context: wit_types::EffectContext) -> Self {
-        EffectContext {
+impl From<wit_types::MessageContext> for MessageContext {
+    fn from(application_context: wit_types::MessageContext) -> Self {
+        MessageContext {
             chain_id: ChainId(application_context.chain_id.into()),
             authenticated_signer: application_context.authenticated_signer.map(Owner::from),
             height: BlockHeight(application_context.height),
-            effect_id: application_context.effect_id.into(),
+            message_id: application_context.message_id.into(),
         }
     }
 }
 
-impl From<wit_types::EffectId> for EffectId {
-    fn from(effect_id: wit_types::EffectId) -> Self {
-        EffectId {
-            chain_id: ChainId(effect_id.chain_id.into()),
-            height: BlockHeight(effect_id.height),
-            index: effect_id.index,
+impl From<wit_types::MessageId> for MessageId {
+    fn from(message_id: wit_types::MessageId) -> Self {
+        MessageId {
+            chain_id: ChainId(message_id.chain_id.into()),
+            height: BlockHeight(message_id.height),
+            index: message_id.index,
         }
     }
 }
@@ -95,12 +95,12 @@ impl From<wit_types::CryptoHash> for CryptoHash {
     }
 }
 
-impl From<wit_system_api::EffectId> for EffectId {
-    fn from(effect_id: wit_system_api::EffectId) -> Self {
-        EffectId {
-            chain_id: ChainId(effect_id.chain_id.into()),
-            height: BlockHeight(effect_id.height),
-            index: effect_id.index,
+impl From<wit_system_api::MessageId> for MessageId {
+    fn from(message_id: wit_system_api::MessageId) -> Self {
+        MessageId {
+            chain_id: ChainId(message_id.chain_id.into()),
+            height: BlockHeight(message_id.height),
+            index: message_id.index,
         }
     }
 }

@@ -41,7 +41,7 @@ use tracing::{debug, error, instrument, trace, warn};
 
 #[cfg(any(test, feature = "test"))]
 use {
-    linera_base::identifiers::{Destination, EffectId},
+    linera_base::identifiers::{Destination, MessageId},
     linera_chain::data_types::ChannelFullName,
     linera_execution::ApplicationRegistryView,
 };
@@ -160,8 +160,8 @@ pub enum WorkerError {
     InvalidBlockChaining,
     #[error("The given state hash is not what we computed after executing the block")]
     IncorrectStateHash,
-    #[error("The given effects are not what we computed after executing the block")]
-    IncorrectEffects,
+    #[error("The given messages are not what we computed after executing the block")]
+    IncorrectMessages,
     #[error("The timestamp of a Tick operation is in the future.")]
     InvalidTimestamp,
     #[error("We don't have the value for the certificate.")]
@@ -321,11 +321,11 @@ where
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        let (effects, state_hash) = chain.execute_block(&block).await?;
+        let (messages, state_hash) = chain.execute_block(&block).await?;
         let response = ChainInfoResponse::new(&chain, None);
         let executed_block = ExecutedBlock {
             block,
-            effects,
+            messages,
             state_hash,
         };
         // Do not save the new state.
@@ -457,7 +457,7 @@ where
         };
         let ExecutedBlock {
             block,
-            effects,
+            messages,
             state_hash,
         } = executed_block;
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
@@ -522,9 +522,12 @@ where
         result_certificate?;
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
-        // We should always agree on the effects and state hash.
-        let (verified_effects, verified_state_hash) = chain.execute_block(block).await?;
-        ensure!(*effects == verified_effects, WorkerError::IncorrectEffects);
+        // We should always agree on the messages and state hash.
+        let (verified_messages, verified_state_hash) = chain.execute_block(block).await?;
+        ensure!(
+            *messages == verified_messages,
+            WorkerError::IncorrectMessages
+        );
         ensure!(
             *state_hash == verified_state_hash,
             WorkerError::IncorrectStateHash
@@ -688,12 +691,15 @@ where
             let hash = certificate.hash();
             match certificate.value.into_inner() {
                 CertificateValue::ConfirmedBlock {
-                    executed_block: ExecutedBlock { block, effects, .. },
+                    executed_block:
+                        ExecutedBlock {
+                            block, messages, ..
+                        },
                     ..
                 } => {
                     // Update the staged chain state with the received block.
                     chain
-                        .receive_block(origin, block.height, block.timestamp, effects, hash)
+                        .receive_block(origin, block.height, block.timestamp, messages, hash)
                         .await?
                 }
                 value => {
@@ -770,19 +776,19 @@ where
     pub async fn find_incoming_message(
         &self,
         chain_id: ChainId,
-        effect_id: EffectId,
+        message_id: MessageId,
     ) -> Result<Option<IncomingMessage>, WorkerError> {
-        let Some(certificate) = self.read_certificate(effect_id.chain_id, effect_id.height).await?
+        let Some(certificate) = self.read_certificate(message_id.chain_id, message_id.height).await?
             else { return Ok(None) };
 
-        let index = usize::try_from(effect_id.index).map_err(|_| ArithmeticError::Overflow)?;
-        let Some(outgoing_effect) = certificate.value().effects().get(index).cloned()
+        let index = usize::try_from(message_id.index).map_err(|_| ArithmeticError::Overflow)?;
+        let Some(outgoing_message) = certificate.value().messages().get(index).cloned()
             else { return Ok(None) };
 
-        let application_id = outgoing_effect.effect.application_id();
+        let application_id = outgoing_message.message.application_id();
         let origin = Origin {
-            sender: effect_id.chain_id,
-            medium: match outgoing_effect.destination {
+            sender: message_id.chain_id,
+            medium: match outgoing_message.destination {
                 Destination::Recipient(_) => Medium::Direct,
                 Destination::Subscribers(name) => Medium::Channel(ChannelFullName {
                     application_id,
@@ -802,13 +808,13 @@ where
                 .await?
                 .find(|event| {
                     event.certificate_hash == certificate_hash
-                        && event.height == effect_id.height
-                        && event.index == effect_id.index
+                        && event.height == message_id.height
+                        && event.index == message_id.index
                 })
                 .cloned()
             else { return Ok(None) };
 
-        assert_eq!(event.effect, outgoing_effect.effect);
+        assert_eq!(event.message, outgoing_message.message);
 
         Ok(Some(IncomingMessage { origin, event }))
     }
@@ -885,17 +891,17 @@ where
         if time_till_block > 0 {
             tokio::time::sleep(Duration::from_micros(time_till_block)).await;
         }
-        let (effects, state_hash) = {
-            let (effects, state_hash) = chain.execute_block(block).await?;
+        let (messages, state_hash) = {
+            let (messages, state_hash) = chain.execute_block(block).await?;
             // Verify that the resulting chain would have no unconfirmed incoming messages.
             chain.validate_incoming_messages().await?;
             // Reset all the staged changes as we were only validating things.
             chain.rollback();
-            (effects, state_hash)
+            (messages, state_hash)
         };
         // Create the vote and store it in the chain state.
         let manager = chain.manager.get_mut();
-        manager.create_vote(proposal, effects, state_hash, self.key_pair());
+        manager.create_vote(proposal, messages, state_hash, self.key_pair());
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some(vote) = manager.pending() {
             self.cache_recent_value(&vote.value).await;
@@ -1139,7 +1145,7 @@ impl<'a> CrossChainUpdateHelper<'a> {
     /// * Returns a range of certificates that are both new to us and not relying on an
     /// untrusted set of validators.
     /// * In the case of validators, if the epoch(s) of the highest certificates are not
-    /// trusted, we only accept certificates that contain effects that were already
+    /// trusted, we only accept certificates that contain messages that were already
     /// executed by anticipation (i.e. received in certified blocks).
     /// * Basic invariants are checked for good measure. We still crucially trust
     /// the worker of the sending chain to have verified and executed the blocks

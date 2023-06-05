@@ -9,7 +9,7 @@ use super::TestValidator;
 use crate::ToBcsBytes;
 use linera_base::{
     data_types::Timestamp,
-    identifiers::{ApplicationId, ChainId, EffectId, Owner},
+    identifiers::{ApplicationId, ChainId, MessageId, Owner},
 };
 use linera_chain::data_types::{
     Block, Certificate, HashedValue, IncomingMessage, LiteVote, SignatureAggregator,
@@ -21,7 +21,7 @@ use std::mem;
 /// [`Certificate`]s using a [`TestValidator`].
 pub struct BlockBuilder {
     block: Block,
-    incoming_messages: Vec<EffectId>,
+    incoming_messages: Vec<MessageId>,
     validator: TestValidator,
 }
 
@@ -111,28 +111,28 @@ impl BlockBuilder {
         self
     }
 
-    /// Adds a message sent by the effect referenced by the [`EffectId`] to this block.
+    /// Receives an incoming message referenced by the [`MessageId`].
     ///
-    /// The block that produces the effect must have already been executed by the test validator,
+    /// The block that produces the message must have already been executed by the test validator,
     /// so that the message is already in the inbox of the microchain this block belongs to.
-    pub fn with_incoming_message(&mut self, effect_id: EffectId) -> &mut Self {
-        self.incoming_messages.push(effect_id);
+    pub fn with_incoming_message(&mut self, message_id: MessageId) -> &mut Self {
+        self.incoming_messages.push(message_id);
         self
     }
 
-    /// Adds multiple messages sent by the effects referenced by the [`EffectId`]s to this block.
+    /// Receives multiple incoming messages referenced by the [`MessageId`]s.
     ///
-    /// The blocks that produce the effects must have already been executed by the test validator,
+    /// The blocks that produce the messages must have already been executed by the test validator,
     /// so that the messages are already in the inbox of the microchain this block belongs to.
     pub fn with_incoming_messages(
         &mut self,
-        effect_ids: impl IntoIterator<Item = EffectId>,
+        message_ids: impl IntoIterator<Item = MessageId>,
     ) -> &mut Self {
-        self.incoming_messages.extend(effect_ids);
+        self.incoming_messages.extend(message_ids);
         self
     }
 
-    /// Adds the `messages` directly to this block.
+    /// Receives incoming messages by specifying them directly.
     ///
     /// This is an internal method that bypasses the check to see if the messages are already
     /// present in the inboxes of the microchain that owns this block.
@@ -146,7 +146,7 @@ impl BlockBuilder {
 
     /// Signs the prepared [`Block`] with the [`TestValidator`]'s keys and returns the resulting
     /// [`Certificate`].
-    pub(crate) async fn sign(mut self) -> (Certificate, Vec<EffectId>) {
+    pub(crate) async fn sign(mut self) -> (Certificate, Vec<MessageId>) {
         self.collect_incoming_messages().await;
 
         let (executed_block, _) = self
@@ -157,8 +157,8 @@ impl BlockBuilder {
             .await
             .expect("Failed to execute block");
 
-        let effect_ids = (0..executed_block.effects.len() as u32)
-            .map(|index| EffectId {
+        let message_ids = (0..executed_block.messages.len() as u32)
+            .map(|index| MessageId {
                 chain_id: executed_block.block.chain_id,
                 height: executed_block.block.height,
                 index,
@@ -173,7 +173,7 @@ impl BlockBuilder {
             .expect("Failed to sign block")
             .expect("Committee has more than one test validator");
 
-        (certificate, effect_ids)
+        (certificate, message_ids)
     }
 
     /// Collects and adds the previously requested messages to this block.
@@ -183,12 +183,12 @@ impl BlockBuilder {
     async fn collect_incoming_messages(&mut self) {
         let chain_id = self.block.chain_id;
 
-        for effect_id in mem::take(&mut self.incoming_messages) {
+        for message_id in mem::take(&mut self.incoming_messages) {
             let message = self
                 .validator
                 .worker()
                 .await
-                .find_incoming_message(chain_id, effect_id)
+                .find_incoming_message(chain_id, message_id)
                 .await
                 .expect("Failed to find message to receive in block")
                 .expect("Message that block should consume has not been emitted");

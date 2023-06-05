@@ -8,7 +8,7 @@ use super::{contract_system_api as wit_system_api, wit_types};
 use crate::{ApplicationCallResult, ExecutionResult, SessionCallResult};
 use linera_base::{
     crypto::CryptoHash,
-    identifiers::{ApplicationId, ChannelName, Destination, EffectId, SessionId},
+    identifiers::{ApplicationId, ChannelName, Destination, MessageId, SessionId},
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::{fmt::Debug, task::Poll};
@@ -42,7 +42,7 @@ impl From<CryptoHash> for wit_types::CryptoHash {
 impl From<ApplicationId> for wit_system_api::ApplicationId {
     fn from(application_id: ApplicationId) -> wit_system_api::ApplicationId {
         wit_system_api::ApplicationId {
-            bytecode_id: application_id.bytecode_id.effect_id.into(),
+            bytecode_id: application_id.bytecode_id.message_id.into(),
             creation: application_id.creation.into(),
         }
     }
@@ -57,12 +57,12 @@ impl From<SessionId> for wit_system_api::SessionId {
     }
 }
 
-impl From<EffectId> for wit_system_api::EffectId {
-    fn from(effect_id: EffectId) -> Self {
-        wit_system_api::EffectId {
-            chain_id: effect_id.chain_id.0.into(),
-            height: effect_id.height.0,
-            index: effect_id.index,
+impl From<MessageId> for wit_system_api::MessageId {
+    fn from(message_id: MessageId) -> Self {
+        wit_system_api::MessageId {
+            chain_id: message_id.chain_id.0.into(),
+            height: message_id.height.0,
+            index: message_id.index,
         }
     }
 }
@@ -79,14 +79,14 @@ impl From<log::Level> for wit_system_api::LogLevel {
     }
 }
 
-impl<Effect, Value, SessionState> From<ApplicationCallResult<Effect, Value, SessionState>>
+impl<Message, Value, SessionState> From<ApplicationCallResult<Message, Value, SessionState>>
     for wit_types::ApplicationCallResult
 where
-    Effect: Serialize + DeserializeOwned + Debug,
+    Message: Serialize + DeserializeOwned + Debug,
     Value: Serialize,
     SessionState: Serialize,
 {
-    fn from(result: ApplicationCallResult<Effect, Value, SessionState>) -> Self {
+    fn from(result: ApplicationCallResult<Message, Value, SessionState>) -> Self {
         // TODO(#743): Do we need explicit error handling?
         let value = bcs::to_bytes(&result.value)
             .expect("failed to serialize Value for ApplicationCallResult");
@@ -108,14 +108,14 @@ where
     }
 }
 
-impl<Effect, Value, SessionState> From<SessionCallResult<Effect, Value, SessionState>>
+impl<Message, Value, SessionState> From<SessionCallResult<Message, Value, SessionState>>
     for wit_types::SessionCallResult
 where
-    Effect: Serialize + DeserializeOwned + Debug,
+    Message: Serialize + DeserializeOwned + Debug,
     Value: Serialize,
     SessionState: Serialize,
 {
-    fn from(result: SessionCallResult<Effect, Value, SessionState>) -> Self {
+    fn from(result: SessionCallResult<Message, Value, SessionState>) -> Self {
         let new_state = result.new_state.as_ref().map(|state| {
             // TODO(#743): Do we need explicit error handling?
             bcs::to_bytes(state).expect("session type serialization failed")
@@ -127,20 +127,20 @@ where
     }
 }
 
-impl<Effect> From<ExecutionResult<Effect>> for wit_types::ExecutionResult
+impl<Message> From<ExecutionResult<Message>> for wit_types::ExecutionResult
 where
-    Effect: Debug + Serialize + DeserializeOwned,
+    Message: Debug + Serialize + DeserializeOwned,
 {
-    fn from(result: ExecutionResult<Effect>) -> Self {
-        let effects = result
-            .effects
+    fn from(result: ExecutionResult<Message>) -> Self {
+        let messages = result
+            .messages
             .into_iter()
-            .map(|(destination, authenticated, effect)| {
+            .map(|(destination, authenticated, message)| {
                 (
                     destination.into(),
                     authenticated,
                     // TODO(#743): Do we need explicit error handling?
-                    bcs::to_bytes(&effect).expect("effect serialization failed"),
+                    bcs::to_bytes(&message).expect("message serialization failed"),
                 )
             })
             .collect();
@@ -158,7 +158,7 @@ where
             .collect();
 
         wit_types::ExecutionResult {
-            effects,
+            messages,
             subscribe,
             unsubscribe,
         }
@@ -186,11 +186,12 @@ impl From<ChannelName> for wit_types::ChannelName {
     }
 }
 
-impl<Effect> From<Poll<Result<ExecutionResult<Effect>, String>>> for wit_types::PollExecutionResult
+impl<Message> From<Poll<Result<ExecutionResult<Message>, String>>>
+    for wit_types::PollExecutionResult
 where
-    Effect: DeserializeOwned + Serialize + Debug,
+    Message: DeserializeOwned + Serialize + Debug,
 {
-    fn from(poll: Poll<Result<ExecutionResult<Effect>, String>>) -> Self {
+    fn from(poll: Poll<Result<ExecutionResult<Message>, String>>) -> Self {
         use wit_types::PollExecutionResult;
         match poll {
             Poll::Pending => PollExecutionResult::Pending,
@@ -200,16 +201,16 @@ where
     }
 }
 
-impl<Effect, Value, SessionState>
-    From<Poll<Result<ApplicationCallResult<Effect, Value, SessionState>, String>>>
+impl<Message, Value, SessionState>
+    From<Poll<Result<ApplicationCallResult<Message, Value, SessionState>, String>>>
     for wit_types::PollCallApplication
 where
-    Effect: Serialize + DeserializeOwned + Debug,
+    Message: Serialize + DeserializeOwned + Debug,
     Value: Serialize,
     SessionState: Serialize,
 {
     fn from(
-        poll: Poll<Result<ApplicationCallResult<Effect, Value, SessionState>, String>>,
+        poll: Poll<Result<ApplicationCallResult<Message, Value, SessionState>, String>>,
     ) -> Self {
         use wit_types::PollCallApplication;
         match poll {
@@ -220,15 +221,15 @@ where
     }
 }
 
-impl<Effect, Value, SessionState>
-    From<Poll<Result<SessionCallResult<Effect, Value, SessionState>, String>>>
+impl<Message, Value, SessionState>
+    From<Poll<Result<SessionCallResult<Message, Value, SessionState>, String>>>
     for wit_types::PollCallSession
 where
-    Effect: Serialize + DeserializeOwned + Debug,
+    Message: Serialize + DeserializeOwned + Debug,
     Value: Serialize,
     SessionState: Serialize,
 {
-    fn from(poll: Poll<Result<SessionCallResult<Effect, Value, SessionState>, String>>) -> Self {
+    fn from(poll: Poll<Result<SessionCallResult<Message, Value, SessionState>, String>>) -> Self {
         use wit_types::PollCallSession;
         match poll {
             Poll::Pending => PollCallSession::Pending,

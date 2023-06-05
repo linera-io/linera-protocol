@@ -3,7 +3,7 @@
 
 use crate::{
     data_types::{
-        Block, ChainAndHeight, ChannelFullName, Event, Medium, Origin, OutgoingEffect, Target,
+        Block, ChainAndHeight, ChannelFullName, Event, Medium, Origin, OutgoingMessage, Target,
     },
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
@@ -14,12 +14,12 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     ensure,
-    identifiers::{ChainId, Destination, EffectId},
+    identifiers::{ChainId, Destination, MessageId},
 };
 use linera_execution::{
-    system::{Account, SystemEffect},
-    ApplicationId, Effect, EffectContext, ExecutionResult, ExecutionRuntimeContext,
-    ExecutionStateView, OperationContext, Query, QueryContext, RawExecutionResult, Response,
+    system::{Account, SystemMessage},
+    ApplicationId, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, Message,
+    MessageContext, OperationContext, Query, QueryContext, RawExecutionResult, Response,
     UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
@@ -258,7 +258,7 @@ where
         origin: &Origin,
         height: BlockHeight,
         timestamp: Timestamp,
-        effects: Vec<OutgoingEffect>,
+        messages: Vec<OutgoingMessage>,
         certificate_hash: CryptoHash,
     ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
@@ -272,15 +272,15 @@ where
             origin,
             height
         );
-        // Process immediate effects and create inbox events.
+        // Process immediate messages and create inbox events.
         let mut events = Vec::new();
-        for (index, outgoing_effect) in effects.into_iter().enumerate() {
+        for (index, outgoing_message) in messages.into_iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
-            let OutgoingEffect {
+            let OutgoingMessage {
                 destination,
                 authenticated_signer,
-                effect,
-            } = outgoing_effect;
+                message,
+            } = outgoing_message;
             // Skip events that do not belong to this origin OR have no effect on this
             // recipient.
             match destination {
@@ -291,7 +291,7 @@ where
                 }
                 Destination::Subscribers(name) => {
                     let expected_medium = Medium::Channel(ChannelFullName {
-                        application_id: effect.application_id(),
+                        application_id: message.application_id(),
                         name,
                     });
                     if origin.medium != expected_medium {
@@ -299,14 +299,14 @@ where
                     }
                 }
             }
-            if let Effect::System(_) = effect {
-                // Handle special effects to be executed immediately.
-                let effect_id = EffectId {
+            if let Message::System(_) = message {
+                // Handle special messages to be executed immediately.
+                let message_id = MessageId {
                     chain_id: origin.sender,
                     height,
                     index,
                 };
-                self.execute_immediate_effect(effect_id, &effect, timestamp)
+                self.execute_immediate_message(message_id, &message, timestamp)
                     .await?;
             }
             // Record the inbox event to process it below.
@@ -316,7 +316,7 @@ where
                 index,
                 authenticated_signer,
                 timestamp,
-                effect,
+                message,
             });
         }
         // There should be inbox events. Otherwise, this means the cross-chain request was
@@ -335,7 +335,7 @@ where
             inbox.add_event(event).await.map_err(|error| match error {
                 InboxError::ViewError(error) => ChainError::ViewError(error),
                 error => ChainError::InternalError(format!(
-                    "while processing effects in certified block: {error}"
+                    "while processing messages in certified block: {error}"
                 )),
             })?;
         }
@@ -347,22 +347,22 @@ where
         Ok(())
     }
 
-    async fn execute_immediate_effect(
+    async fn execute_immediate_message(
         &mut self,
-        effect_id: EffectId,
-        effect: &Effect,
+        message_id: MessageId,
+        message: &Message,
         timestamp: Timestamp,
     ) -> Result<(), ChainError> {
-        if let Effect::System(SystemEffect::OpenChain {
+        if let Message::System(SystemMessage::OpenChain {
             public_key,
             epoch,
             committees,
             admin_id,
-        }) = effect
+        }) = message
         {
             // Initialize ourself.
             self.execution_state.system.open_chain(
-                effect_id,
+                message_id,
                 *public_key,
                 *epoch,
                 committees.clone(),
@@ -422,11 +422,11 @@ where
     /// * Modifies the state of inboxes, outboxes, and channels, if needed.
     /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown
     ///   away.
-    /// * Returns the list of effects caused by the block being executed.
+    /// * Returns the list of messages caused by the block being executed.
     pub async fn execute_block(
         &mut self,
         block: &Block,
-    ) -> Result<(Vec<OutgoingEffect>, CryptoHash), ChainError> {
+    ) -> Result<(Vec<OutgoingMessage>, CryptoHash), ChainError> {
         assert_eq!(block.chain_id, self.chain_id());
         let chain_id = self.chain_id();
         ensure!(
@@ -442,8 +442,8 @@ where
         let credit: Amount = block
             .incoming_messages
             .iter()
-            .filter_map(|msg| match &msg.event.effect {
-                Effect::System(SystemEffect::Credit { account, amount })
+            .filter_map(|msg| match &msg.event.message {
+                Message::System(SystemMessage::Credit { account, amount })
                     if *account == Account::chain(chain_id) =>
                 {
                     Some(amount)
@@ -458,16 +458,16 @@ where
         Self::sub_assign_fees(balance, pricing.storage_price(&block.incoming_messages)?)?;
         Self::sub_assign_fees(balance, pricing.storage_price(&block.operations)?)?;
 
-        let mut effects = Vec::new();
+        let mut messages = Vec::new();
         let available_fuel = pricing.remaining_fuel(*balance);
         let mut remaining_fuel = available_fuel;
         for message in &block.incoming_messages {
-            // Execute the received effect.
-            let context = EffectContext {
+            // Execute the received message.
+            let context = MessageContext {
                 chain_id,
                 height: block.height,
                 certificate_hash: message.event.certificate_hash,
-                effect_id: EffectId {
+                message_id: MessageId {
                     chain_id: message.origin.sender,
                     height: message.event.height,
                     index: message.event.index,
@@ -476,28 +476,28 @@ where
             };
             let results = self
                 .execution_state
-                .execute_effect(&context, &message.event.effect, &mut remaining_fuel)
+                .execute_message(&context, &message.event.message, &mut remaining_fuel)
                 .await?;
-            self.process_execution_results(&mut effects, context.height, results)
+            self.process_execution_results(&mut messages, context.height, results)
                 .await?;
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
-            let next_effect_index =
-                u32::try_from(effects.len()).map_err(|_| ArithmeticError::Overflow)?;
+            let next_message_index =
+                u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?;
             let context = OperationContext {
                 chain_id,
                 height: block.height,
                 index,
                 authenticated_signer: block.authenticated_signer,
-                next_effect_index,
+                next_message_index,
             };
             let results = self
                 .execution_state
                 .execute_operation(&context, operation, &mut remaining_fuel)
                 .await?;
-            self.process_execution_results(&mut effects, context.height, results)
+            self.process_execution_results(&mut messages, context.height, results)
                 .await?;
         }
         let used_fuel = available_fuel.saturating_sub(remaining_fuel);
@@ -505,7 +505,7 @@ where
         let balance = self.execution_state.system.balance.get_mut();
         Self::sub_assign_fees(balance, credit)?;
         Self::sub_assign_fees(balance, pricing.fuel_price(used_fuel))?;
-        Self::sub_assign_fees(balance, pricing.messages_price(&effects)?)?;
+        Self::sub_assign_fees(balance, pricing.messages_price(&messages)?)?;
 
         // Recompute the state hash.
         let state_hash = self.execution_state.crypto_hash().await?;
@@ -514,12 +514,12 @@ where
         self.manager
             .get_mut()
             .reset(self.execution_state.system.ownership.get());
-        Ok((effects, state_hash))
+        Ok((messages, state_hash))
     }
 
     async fn process_execution_results(
         &mut self,
-        effects: &mut Vec<OutgoingEffect>,
+        messages: &mut Vec<OutgoingMessage>,
         height: BlockHeight,
         results: Vec<ExecutionResult>,
     ) -> Result<(), ChainError> {
@@ -528,8 +528,8 @@ where
                 ExecutionResult::System(result) => {
                     self.process_raw_execution_result(
                         ApplicationId::System,
-                        Effect::System,
-                        effects,
+                        Message::System,
+                        messages,
                         height,
                         result,
                     )
@@ -538,11 +538,11 @@ where
                 ExecutionResult::User(application_id, result) => {
                     self.process_raw_execution_result(
                         ApplicationId::User(application_id),
-                        |bytes| Effect::User {
+                        |bytes| Message::User {
                             application_id,
                             bytes,
                         },
-                        effects,
+                        messages,
                         height,
                         result,
                     )
@@ -557,18 +557,18 @@ where
         &mut self,
         application_id: ApplicationId,
         lift: F,
-        effects: &mut Vec<OutgoingEffect>,
+        messages: &mut Vec<OutgoingMessage>,
         height: BlockHeight,
         raw_result: RawExecutionResult<E>,
     ) -> Result<(), ChainError>
     where
-        F: Fn(E) -> Effect,
+        F: Fn(E) -> Message,
     {
-        // Record the effects of the execution. Effects are understood within an
+        // Record the messages of the execution. Messages are understood within an
         // application.
         let mut recipients = HashSet::new();
         let mut channel_broadcasts = HashSet::new();
-        for (destination, authenticated, effect) in raw_result.effects {
+        for (destination, authenticated, message) in raw_result.messages {
             match &destination {
                 Destination::Recipient(id) => {
                     recipients.insert(*id);
@@ -582,10 +582,10 @@ where
             } else {
                 None
             };
-            effects.push(OutgoingEffect {
+            messages.push(OutgoingMessage {
                 destination,
                 authenticated_signer,
-                effect: lift(effect),
+                message: lift(message),
             });
         }
 

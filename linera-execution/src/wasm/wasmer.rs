@@ -235,11 +235,11 @@ impl WasmApplication {
 impl<'runtime> common::Contract for Contract<'runtime> {
     type Initialize = contract::Initialize;
     type ExecuteOperation = contract::ExecuteOperation;
-    type ExecuteEffect = contract::ExecuteEffect;
+    type ExecuteMessage = contract::ExecuteMessage;
     type HandleApplicationCall = contract::HandleApplicationCall;
     type HandleSessionCall = contract::HandleSessionCall;
     type OperationContext = contract::OperationContext;
-    type EffectContext = contract::EffectContext;
+    type MessageContext = contract::MessageContext;
     type CalleeContext = contract::CalleeContext;
     type SessionId = contract::SessionId;
     type PollExecutionResult = contract::PollExecutionResult;
@@ -280,21 +280,21 @@ impl<'runtime> common::Contract for Contract<'runtime> {
         contract::Contract::execute_operation_poll(&self.contract, store, future)
     }
 
-    fn execute_effect_new(
+    fn execute_message_new(
         &self,
         store: &mut Store,
-        context: contract::EffectContext,
-        effect: &[u8],
-    ) -> Result<contract::ExecuteEffect, RuntimeError> {
-        contract::Contract::execute_effect_new(&self.contract, store, context, effect)
+        context: contract::MessageContext,
+        message: &[u8],
+    ) -> Result<contract::ExecuteMessage, RuntimeError> {
+        contract::Contract::execute_message_new(&self.contract, store, context, message)
     }
 
-    fn execute_effect_poll(
+    fn execute_message_poll(
         &self,
         store: &mut Store,
-        future: &contract::ExecuteEffect,
+        future: &contract::ExecuteMessage,
     ) -> Result<contract::PollExecutionResult, RuntimeError> {
-        contract::Contract::execute_effect_poll(&self.contract, store, future)
+        contract::Contract::execute_message_poll(&self.contract, store, future)
     }
 
     fn handle_application_call_new(

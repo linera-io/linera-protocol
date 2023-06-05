@@ -199,8 +199,8 @@ where
     /// This will automatically subscribe to the future committees created by `admin_id`.
     async fn open_chain(&self, public_key: PublicKey) -> Result<ChainId, Error> {
         let mut client = self.client.lock().await;
-        let (effect_id, _) = client.open_chain(public_key).await?;
-        Ok(ChainId::child(effect_id))
+        let (message_id, _) = client.open_chain(public_key).await?;
+        Ok(ChainId::child(message_id))
     }
 
     /// Closes the chain.
@@ -301,7 +301,7 @@ where
         Ok(application_id)
     }
 
-    /// Requests a `RegisterApplications` effect from another chain so the application can be used
+    /// Requests a `RegisterApplications` message from another chain so the application can be used
     /// on this one.
     async fn request_application(
         &self,

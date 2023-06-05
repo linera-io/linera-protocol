@@ -6,7 +6,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     hex_debug,
-    identifiers::{BytecodeId, EffectId},
+    identifiers::{BytecodeId, MessageId},
 };
 use linera_views::{
     common::Context,
@@ -58,7 +58,7 @@ pub struct UserApplicationDescription {
     /// The location of the bytecode to use for the application.
     pub bytecode_location: BytecodeLocation,
     /// The unique ID of the application's creation.
-    pub creation: EffectId,
+    pub creation: MessageId,
     /// The parameters of the application.
     #[serde(with = "serde_bytes")]
     #[debug(with = "hex_debug")]
@@ -87,7 +87,7 @@ impl From<UserApplicationId> for ApplicationId {
 pub struct BytecodeLocation {
     /// The certificate that published the bytecode.
     pub certificate_hash: CryptoHash,
-    /// The index in the certificate of the operation that published the bytecode (not the effect!).
+    /// The index in the certificate of the operation that published the bytecode (not the message!).
     pub operation_index: u32,
 }
 

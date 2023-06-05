@@ -9,7 +9,7 @@ use self::state::MetaCounter;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{ApplicationId, ChainId, SessionId, WithContractAbi},
-    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
     OperationContext, SessionCallResult, SimpleStateStorage,
 };
 use thiserror::Error;
@@ -35,7 +35,7 @@ impl Contract for MetaCounter {
         &mut self,
         _context: &OperationContext,
         _argument: (),
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
         Self::counter_id()?;
         Ok(ExecutionResult::default())
     }
@@ -44,18 +44,18 @@ impl Contract for MetaCounter {
         &mut self,
         _context: &OperationContext,
         (recipient_id, operation): (ChainId, u64),
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
-        log::trace!("effect: {:?}", operation);
-        Ok(ExecutionResult::default().with_effect(recipient_id, operation))
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+        log::trace!("message: {:?}", operation);
+        Ok(ExecutionResult::default().with_message(recipient_id, operation))
     }
 
-    async fn execute_effect(
+    async fn execute_message(
         &mut self,
-        _context: &EffectContext,
-        effect: u64,
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
-        log::trace!("executing {:?} via {:?}", effect, Self::counter_id()?);
-        self.call_application(true, Self::counter_id()?, &effect, vec![])
+        _context: &MessageContext,
+        message: u64,
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+        log::trace!("executing {:?} via {:?}", message, Self::counter_id()?);
+        self.call_application(true, Self::counter_id()?, &message, vec![])
             .await?;
         Ok(ExecutionResult::default())
     }
@@ -65,7 +65,7 @@ impl Contract for MetaCounter {
         _context: &CalleeContext,
         _call: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {
         Err(Error::CallsNotSupported)
     }
@@ -76,7 +76,7 @@ impl Contract for MetaCounter {
         _state: Self::SessionState,
         _call: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {
         Err(Error::SessionsNotSupported)
     }
@@ -85,8 +85,8 @@ impl Contract for MetaCounter {
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("MetaCounter application doesn't support any cross-chain effects")]
-    EffectsNotSupported,
+    #[error("MetaCounter application doesn't support any cross-chain messages")]
+    MessagesNotSupported,
 
     #[error("MetaCounter application doesn't support any cross-application calls")]
     CallsNotSupported,

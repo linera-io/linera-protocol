@@ -6,7 +6,7 @@
 use super::wit;
 use linera_base::{
     crypto::CryptoHash,
-    identifiers::{ApplicationId, BytecodeId, ChainId, EffectId},
+    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
 };
 use linera_views::batch::WriteOperation;
 
@@ -31,18 +31,18 @@ impl From<wit::ApplicationId> for ApplicationId {
     }
 }
 
-impl From<wit::EffectId> for BytecodeId {
-    fn from(effect_id: wit::EffectId) -> Self {
-        BytecodeId::new(EffectId::from(effect_id))
+impl From<wit::MessageId> for BytecodeId {
+    fn from(message_id: wit::MessageId) -> Self {
+        BytecodeId::new(MessageId::from(message_id))
     }
 }
 
-impl From<wit::EffectId> for EffectId {
-    fn from(effect_id: wit::EffectId) -> Self {
-        EffectId {
-            chain_id: effect_id.chain_id.into(),
-            height: effect_id.height.into(),
-            index: effect_id.index,
+impl From<wit::MessageId> for MessageId {
+    fn from(message_id: wit::MessageId) -> Self {
+        MessageId {
+            chain_id: message_id.chain_id.into(),
+            height: message_id.height.into(),
+            index: message_id.index,
         }
     }
 }

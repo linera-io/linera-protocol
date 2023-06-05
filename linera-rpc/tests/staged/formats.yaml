@@ -68,8 +68,8 @@ Bytecode:
     - bytes: BYTES
 BytecodeId:
   STRUCT:
-    - effect_id:
-        TYPENAME: EffectId
+    - message_id:
+        TYPENAME: MessageId
 BytecodeLocation:
   STRUCT:
     - certificate_hash:
@@ -114,7 +114,7 @@ ChainDescription:
     1:
       Child:
         NEWTYPE:
-          TYPENAME: EffectId
+          TYPENAME: MessageId
 ChainId:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
@@ -268,25 +268,6 @@ Destination:
       Subscribers:
         NEWTYPE:
           TYPENAME: ChannelName
-Effect:
-  ENUM:
-    0:
-      System:
-        NEWTYPE:
-          TYPENAME: SystemEffect
-    1:
-      User:
-        STRUCT:
-          - application_id:
-              TYPENAME: UserApplicationId
-          - bytes: BYTES
-EffectId:
-  STRUCT:
-    - chain_id:
-        TYPENAME: ChainId
-    - height:
-        TYPENAME: BlockHeight
-    - index: U32
 Epoch:
   NEWTYPESTRUCT: U64
 Event:
@@ -301,15 +282,15 @@ Event:
           TYPENAME: Owner
     - timestamp:
         TYPENAME: Timestamp
-    - effect:
-        TYPENAME: Effect
+    - message:
+        TYPENAME: Message
 ExecutedBlock:
   STRUCT:
     - block:
         TYPENAME: Block
-    - effects:
+    - messages:
         SEQ:
-          TYPENAME: OutgoingEffect
+          TYPENAME: OutgoingMessage
     - state_hash:
         TYPENAME: CryptoHash
 HandleCertificateRequest:
@@ -362,6 +343,25 @@ Medium:
       Channel:
         NEWTYPE:
           TYPENAME: ChannelFullName
+Message:
+  ENUM:
+    0:
+      System:
+        NEWTYPE:
+          TYPENAME: SystemMessage
+    1:
+      User:
+        STRUCT:
+          - application_id:
+              TYPENAME: UserApplicationId
+          - bytes: BYTES
+MessageId:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - height:
+        TYPENAME: BlockHeight
+    - index: U32
 MultiOwnerManagerInfo:
   STRUCT:
     - owners:
@@ -499,15 +499,15 @@ Origin:
         TYPENAME: ChainId
     - medium:
         TYPENAME: Medium
-OutgoingEffect:
+OutgoingMessage:
   STRUCT:
     - destination:
         TYPENAME: Destination
     - authenticated_signer:
         OPTION:
           TYPENAME: Owner
-    - effect:
-        TYPENAME: Effect
+    - message:
+        TYPENAME: Message
 Owner:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
@@ -591,7 +591,7 @@ SystemChannel:
       Admin: UNIT
     1:
       PublishedBytecodes: UNIT
-SystemEffect:
+SystemMessage:
   ENUM:
     0:
       Credit:
@@ -800,7 +800,7 @@ UserApplicationDescription:
     - bytecode_location:
         TYPENAME: BytecodeLocation
     - creation:
-        TYPENAME: EffectId
+        TYPENAME: MessageId
     - parameters: BYTES
     - required_application_ids:
         SEQ:
@@ -810,7 +810,7 @@ UserApplicationId:
     - bytecode_id:
         TYPENAME: BytecodeId
     - creation:
-        TYPENAME: EffectId
+        TYPENAME: MessageId
 UserData:
   NEWTYPESTRUCT:
     OPTION:

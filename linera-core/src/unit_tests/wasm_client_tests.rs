@@ -16,9 +16,9 @@ use linera_base::{
     data_types::Amount,
     identifiers::{ChainDescription, ChainId, Destination, Owner},
 };
-use linera_chain::data_types::{CertificateValue, OutgoingEffect};
+use linera_chain::data_types::{CertificateValue, OutgoingMessage};
 use linera_execution::{
-    pricing::Pricing, Bytecode, Effect, Operation, SystemEffect, UserApplicationDescription,
+    pricing::Pricing, Bytecode, Message, Operation, SystemMessage, UserApplicationDescription,
     WasmRuntime,
 };
 use linera_storage::Store;
@@ -443,12 +443,12 @@ where
 
     assert!(cert
         .value()
-        .effects()
+        .messages()
         .iter()
-        .any(|OutgoingEffect { destination, effect, .. }| {
+        .any(|OutgoingMessage { destination, message, .. }| {
             matches!(
-                effect,
-                Effect::System(SystemEffect::RegisterApplications { applications })
+                message,
+                Message::System(SystemMessage::RegisterApplications { applications })
                 if matches!(applications[0], UserApplicationDescription{ bytecode_id: b_id, .. } if b_id == bytecode_id.forget_abi())
             ) && *destination == Destination::Recipient(receiver.chain_id())
         }));
@@ -463,13 +463,13 @@ where
         CertificateValue::ValidatedBlock { .. } => panic!("Unexpected value"),
     };
     assert!(messages.iter().any(|msg| matches!(
-        &msg.event.effect,
-        Effect::System(SystemEffect::RegisterApplications { applications })
+        &msg.event.message,
+        Message::System(SystemMessage::RegisterApplications { applications })
         if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.hash())
     )));
     assert!(messages
         .iter()
-        .any(|msg| matches!(&msg.event.effect, Effect::User { .. })));
+        .any(|msg| matches!(&msg.event.message, Message::User { .. })));
 
     // Make another transfer.
     let transfer = fungible::Operation::Transfer {
@@ -493,16 +493,16 @@ where
         }
         CertificateValue::ValidatedBlock { .. } => panic!("Unexpected value"),
     };
-    // The new block should _not_ contain another `RegisterApplications` effect, because the
+    // The new block should _not_ contain another `RegisterApplications` message, because the
     // application is already registered.
     assert!(!messages.iter().any(|msg| matches!(
-        &msg.event.effect,
-        Effect::System(SystemEffect::RegisterApplications { applications })
+        &msg.event.message,
+        Message::System(SystemMessage::RegisterApplications { applications })
         if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.hash())
     )));
     assert!(messages
         .iter()
-        .any(|msg| matches!(&msg.event.effect, Effect::User { .. })));
+        .any(|msg| matches!(&msg.event.message, Message::User { .. })));
 
     // Try another transfer in the other direction except that the amount is too large.
     let transfer = fungible::Operation::Transfer {
@@ -632,7 +632,7 @@ where
     };
     assert!(messages
         .iter()
-        .any(|msg| matches!(&msg.event.effect, Effect::User { .. })));
+        .any(|msg| matches!(&msg.event.message, Message::User { .. })));
 
     let query = async_graphql::Request::new("{ receivedPostsKeys(count: 5) { author, index } }");
     let posts = receiver

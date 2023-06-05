@@ -13,16 +13,16 @@ use super::{init_worker_with_chains, make_block, make_certificate, make_state_ha
 use linera_base::{
     crypto::KeyPair,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{BytecodeId, ChainDescription, ChainId, Destination, EffectId},
+    identifiers::{BytecodeId, ChainDescription, ChainId, Destination, MessageId},
 };
 use linera_chain::data_types::{
-    ChannelFullName, Event, ExecutedBlock, HashedValue, IncomingMessage, Origin, OutgoingEffect,
+    ChannelFullName, Event, ExecutedBlock, HashedValue, IncomingMessage, Origin, OutgoingMessage,
 };
 use linera_execution::{
     committee::Epoch,
-    system::{SystemChannel, SystemEffect, SystemOperation},
+    system::{SystemChannel, SystemMessage, SystemOperation},
     ApplicationId, ApplicationRegistry, Bytecode, BytecodeLocation, ChainOwnership,
-    ChannelSubscription, Effect, ExecutionStateView, Operation, OperationContext,
+    ChannelSubscription, ExecutionStateView, Message, Operation, OperationContext,
     SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmApplication,
     WasmRuntime,
 };
@@ -122,7 +122,7 @@ where
         contract: contract_bytecode,
         service: service_bytecode,
     };
-    let publish_effect = SystemEffect::BytecodePublished { operation_index: 0 };
+    let publish_message = SystemMessage::BytecodePublished { operation_index: 0 };
     let publish_block = make_block(
         Epoch::from(0),
         publisher_chain.into(),
@@ -148,10 +148,10 @@ where
     let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
     let publish_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
         block: publish_block,
-        effects: vec![OutgoingEffect {
+        messages: vec![OutgoingMessage {
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
-            effect: Effect::System(publish_effect.clone()),
+            message: Message::System(publish_message.clone()),
         }],
         state_hash: publisher_state_hash,
     });
@@ -178,7 +178,7 @@ where
             index: 0,
             authenticated_signer: None,
             timestamp: Timestamp::from(1),
-            effect: Effect::System(publish_effect),
+            message: Message::System(publish_message),
         },
     };
     let broadcast_block = make_block(
@@ -190,7 +190,7 @@ where
         None,
         Timestamp::from(1),
     );
-    let bytecode_id = BytecodeId::new(EffectId {
+    let bytecode_id = BytecodeId::new(MessageId {
         chain_id: publisher_chain.into(),
         height: publish_block_height,
         index: 0,
@@ -199,7 +199,7 @@ where
         certificate_hash: publish_certificate.hash(),
         operation_index: 0,
     };
-    let broadcast_effect = SystemEffect::BytecodeLocations {
+    let broadcast_message = SystemMessage::BytecodeLocations {
         locations: vec![(bytecode_id, bytecode_location)],
     };
     let broadcast_channel = Destination::Subscribers(SystemChannel::PublishedBytecodes.name());
@@ -211,10 +211,10 @@ where
     let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
     let broadcast_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
         block: broadcast_block,
-        effects: vec![OutgoingEffect {
+        messages: vec![OutgoingMessage {
             destination: broadcast_channel,
             authenticated_signer: None,
-            effect: Effect::System(broadcast_effect.clone()),
+            message: Message::System(broadcast_message.clone()),
         }],
         state_hash: publisher_state_hash,
     });
@@ -241,7 +241,7 @@ where
         chain_id: publisher_chain.into(),
         name: SystemChannel::PublishedBytecodes.name(),
     };
-    let subscribe_effect = SystemEffect::Subscribe {
+    let subscribe_message = SystemMessage::Subscribe {
         id: creator_chain.into(),
         subscription: publisher_channel.clone(),
     };
@@ -270,10 +270,10 @@ where
     let creator_state = ExecutionStateView::from_system_state(creator_system_state.clone()).await;
     let subscribe_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
         block: subscribe_block,
-        effects: vec![OutgoingEffect {
+        messages: vec![OutgoingMessage {
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
-            effect: Effect::System(subscribe_effect.clone()),
+            message: Message::System(subscribe_message.clone()),
         }],
         state_hash: creator_state.crypto_hash().await?,
     });
@@ -300,7 +300,7 @@ where
             index: 0,
             authenticated_signer: None,
             timestamp: Timestamp::from(2),
-            effect: subscribe_effect.into(),
+            message: subscribe_message.into(),
         },
     };
     let accept_block = make_block(
@@ -316,10 +316,10 @@ where
     let publisher_state_hash = make_state_hash(publisher_system_state).await;
     let accept_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
         block: accept_block,
-        effects: vec![OutgoingEffect {
+        messages: vec![OutgoingMessage {
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
-            effect: Effect::System(SystemEffect::Notify {
+            message: Message::System(SystemMessage::Notify {
                 id: creator_chain.into(),
             }),
         }],
@@ -350,7 +350,7 @@ where
     };
     let application_id = UserApplicationId {
         bytecode_id,
-        creation: EffectId {
+        creation: MessageId {
             chain_id: creator_chain.into(),
             height: BlockHeight::from(1),
             index: 0,
@@ -379,7 +379,7 @@ where
                 index: 0,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(1),
-                effect: Effect::System(broadcast_effect),
+                message: Message::System(broadcast_message),
             },
         }],
         Some(&subscribe_certificate),
@@ -405,10 +405,10 @@ where
         .await?;
     let create_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
         block: create_block,
-        effects: vec![OutgoingEffect {
+        messages: vec![OutgoingMessage {
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
-            effect: Effect::System(SystemEffect::ApplicationCreated),
+            message: Message::System(SystemMessage::ApplicationCreated),
         }],
         state_hash: creator_state.crypto_hash().await?,
     });
@@ -446,7 +446,7 @@ where
         authenticated_signer: None,
         height: run_block.height,
         index: 0,
-        next_effect_index: 0,
+        next_message_index: 0,
     };
     creator_state
         .execute_operation(
@@ -461,7 +461,7 @@ where
     creator_state.system.timestamp.set(Timestamp::from(5));
     let run_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
         block: run_block,
-        effects: vec![],
+        messages: vec![],
         state_hash: creator_state.crypto_hash().await?,
     });
     let run_certificate = make_certificate(&committee, &worker, run_block_proposal);

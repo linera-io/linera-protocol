@@ -10,7 +10,7 @@
 
 use futures::FutureExt;
 use linera_sdk::{
-    base::{Amount, ApplicationId, BlockHeight, BytecodeId, ChainId, EffectId, Timestamp},
+    base::{Amount, ApplicationId, BlockHeight, BytecodeId, ChainId, MessageId, Timestamp},
     contract, service, test, ContractLogger, ServiceLogger,
 };
 use linera_views::{
@@ -36,12 +36,12 @@ fn mock_chain_id() {
 #[webassembly_test]
 fn mock_application_id() {
     let application_id = ApplicationId {
-        bytecode_id: BytecodeId(EffectId {
+        bytecode_id: BytecodeId(MessageId {
             chain_id: ChainId([0, 1, 2, 3].into()),
             height: BlockHeight::from(4),
             index: 5,
         }),
-        creation: EffectId {
+        creation: MessageId {
             chain_id: ChainId([6, 7, 8, 9].into()),
             height: BlockHeight::from(10),
             index: 11,
@@ -425,12 +425,12 @@ fn mock_query() {
     });
 
     let application_id = ApplicationId {
-        bytecode_id: BytecodeId(EffectId {
+        bytecode_id: BytecodeId(MessageId {
             chain_id: ChainId([0, 1, 2, 3].into()),
             height: BlockHeight::from(4),
             index: 5,
         }),
-        creation: EffectId {
+        creation: MessageId {
             chain_id: ChainId([6, 7, 8, 9].into()),
             height: BlockHeight::from(10),
             index: 11,

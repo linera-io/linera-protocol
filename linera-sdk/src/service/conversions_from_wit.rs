@@ -11,7 +11,7 @@ use crate::QueryContext;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight},
-    identifiers::{ApplicationId, BytecodeId, ChainId, EffectId},
+    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
 };
 use linera_views::views::ViewError;
 use std::task::Poll;
@@ -55,12 +55,12 @@ impl From<wit_system_api::ApplicationId> for ApplicationId {
     }
 }
 
-impl From<wit_system_api::EffectId> for EffectId {
-    fn from(effect_id: wit_system_api::EffectId) -> Self {
-        EffectId {
-            chain_id: ChainId(effect_id.chain_id.into()),
-            height: BlockHeight(effect_id.height),
-            index: effect_id.index,
+impl From<wit_system_api::MessageId> for MessageId {
+    fn from(message_id: wit_system_api::MessageId) -> Self {
+        MessageId {
+            chain_id: ChainId(message_id.chain_id.into()),
+            height: BlockHeight(message_id.height),
+            index: message_id.index,
         }
     }
 }

@@ -9,7 +9,7 @@ use self::state::ReentrantCounter;
 use async_trait::async_trait;
 use linera_sdk::{
     base::{SessionId, WithContractAbi},
-    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
     OperationContext, SessionCallResult, ViewStateStorage,
 };
 use thiserror::Error;
@@ -29,7 +29,7 @@ impl Contract for ReentrantCounter {
         &mut self,
         _context: &OperationContext,
         value: u64,
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
         self.value.set(value);
         Ok(ExecutionResult::default())
     }
@@ -38,7 +38,7 @@ impl Contract for ReentrantCounter {
         &mut self,
         _context: &OperationContext,
         increment: u64,
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
         let first_half = increment / 2;
         let second_half = increment - first_half;
 
@@ -51,12 +51,12 @@ impl Contract for ReentrantCounter {
         Ok(ExecutionResult::default())
     }
 
-    async fn execute_effect(
+    async fn execute_message(
         &mut self,
-        _context: &EffectContext,
-        _effect: (),
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
-        Err(Error::EffectsNotSupported)
+        _context: &MessageContext,
+        _message: (),
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+        Err(Error::MessagesNotSupported)
     }
 
     async fn handle_application_call(
@@ -64,7 +64,7 @@ impl Contract for ReentrantCounter {
         _context: &CalleeContext,
         increment: u64,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {
         let value = self.value.get_mut();
         *value += increment;
@@ -80,7 +80,7 @@ impl Contract for ReentrantCounter {
         _state: Self::SessionState,
         _call: (),
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {
         Err(Error::SessionsNotSupported)
     }
@@ -89,9 +89,9 @@ impl Contract for ReentrantCounter {
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// Counter application doesn't support any cross-chain effects.
-    #[error("Counter application doesn't support any cross-chain effects")]
-    EffectsNotSupported,
+    /// Counter application doesn't support any cross-chain messages.
+    #[error("Counter application doesn't support any cross-chain messages")]
+    MessagesNotSupported,
 
     /// Counter application doesn't support any cross-application sessions.
     #[error("Counter application doesn't support any cross-application sessions")]

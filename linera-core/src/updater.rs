@@ -9,7 +9,7 @@ use crate::{
 use futures::{future, StreamExt};
 use linera_base::{
     data_types::BlockHeight,
-    identifiers::{ChainDescription, ChainId, EffectId},
+    identifiers::{ChainDescription, ChainId, MessageId},
 };
 use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
 use linera_execution::committee::{Committee, ValidatorName};
@@ -335,7 +335,7 @@ where
                         .description
                         .get();
                     match description {
-                        Some(ChainDescription::Child(EffectId {
+                        Some(ChainDescription::Child(MessageId {
                             chain_id: parent_id,
                             height,
                             index: _,

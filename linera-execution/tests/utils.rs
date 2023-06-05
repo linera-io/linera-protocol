@@ -4,7 +4,7 @@
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::BlockHeight,
-    identifiers::{BytecodeId, ChainId, EffectId},
+    identifiers::{BytecodeId, ChainId, MessageId},
 };
 use linera_execution::{BytecodeLocation, UserApplicationDescription};
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,7 @@ pub fn create_dummy_user_application_description() -> UserApplicationDescription
     let chain_id = ChainId::root(1);
     let certificate_hash = CryptoHash::new(&FakeCertificate);
     UserApplicationDescription {
-        bytecode_id: BytecodeId::new(EffectId {
+        bytecode_id: BytecodeId::new(MessageId {
             chain_id,
             height: BlockHeight(1),
             index: 0,
@@ -22,7 +22,7 @@ pub fn create_dummy_user_application_description() -> UserApplicationDescription
             certificate_hash,
             operation_index: 0,
         },
-        creation: EffectId {
+        creation: MessageId {
             chain_id,
             height: BlockHeight(1),
             index: 1,

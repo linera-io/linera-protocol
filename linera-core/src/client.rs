@@ -18,7 +18,7 @@ use linera_base::{
     abi::{Abi, ContractAbi},
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, RoundNumber, Timestamp},
-    identifiers::{BytecodeId, ChainId, EffectId, Owner},
+    identifiers::{BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_chain::{
     data_types::{
@@ -30,7 +30,7 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{Account, Recipient, SystemChannel, SystemOperation, UserData},
-    Bytecode, Effect, Operation, Query, Response, SystemEffect, SystemQuery, SystemResponse,
+    Bytecode, Message, Operation, Query, Response, SystemMessage, SystemQuery, SystemResponse,
     UserApplicationId,
 };
 use linera_storage::Store;
@@ -212,7 +212,7 @@ where
 
     /// Obtains up to `self.max_pending_messages` pending messages for the local chain.
     ///
-    /// Messages known to be redundant are filtered out: A `RegisterApplications` effect whose
+    /// Messages known to be redundant are filtered out: A `RegisterApplications` message whose
     /// entries are already known never needs to be included in a block.
     async fn pending_messages(&mut self) -> Result<Vec<IncomingMessage>, NodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
@@ -227,8 +227,8 @@ where
                 );
                 break;
             }
-            if let Effect::System(SystemEffect::RegisterApplications { applications }) =
-                &message.event.effect
+            if let Message::System(SystemMessage::RegisterApplications { applications }) =
+                &message.event.message
             {
                 let chain_id = self.chain_id;
                 if applications
@@ -241,7 +241,7 @@ where
                     .all(|result| async move { result.is_ok() })
                     .await
                 {
-                    continue; // These applications are already registered; skip register effect.
+                    continue; // These applications are already registered; skip register message.
                 }
             }
             pending_messages.push(message);
@@ -1194,7 +1194,7 @@ where
         Ok(())
     }
 
-    /// Requests a `RegisterApplications` effect from another chain so the application can be used
+    /// Requests a `RegisterApplications` message from another chain so the application can be used
     /// on this one.
     pub async fn request_application(
         &mut self,
@@ -1296,7 +1296,7 @@ where
     }
 
     /// Opens a new chain with a derived UID.
-    pub async fn open_chain(&mut self, public_key: PublicKey) -> Result<(EffectId, Certificate)> {
+    pub async fn open_chain(&mut self, public_key: PublicKey) -> Result<(MessageId, Certificate)> {
         self.prepare_chain().await?;
         let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         let epoch = epoch.ok_or(NodeError::InactiveLocalChain(self.chain_id))?;
@@ -1312,12 +1312,12 @@ where
                 })],
             )
             .await?;
-        // The second last effect created the new chain.
-        let effect_id = certificate
+        // The second last message created the new chain.
+        let message_id = certificate
             .value
-            .nth_last_effect_id(2)
+            .nth_last_message_id(2)
             .ok_or_else(|| anyhow!("Failed to open a new chain"))?;
-        Ok((effect_id, certificate))
+        Ok((message_id, certificate))
     }
 
     /// Closes the chain (and loses everything in it!!).
@@ -1343,12 +1343,12 @@ where
                 })],
             )
             .await?;
-        // The last effect published the bytecode.
-        let effect_id = certificate
+        // The last message published the bytecode.
+        let message_id = certificate
             .value
-            .nth_last_effect_id(1)
+            .nth_last_message_id(1)
             .ok_or_else(|| anyhow!("Failed to publish bytecode"))?;
-        let id = BytecodeId::new(effect_id);
+        let id = BytecodeId::new(message_id);
         Ok((id, certificate))
     }
 
@@ -1394,10 +1394,10 @@ where
                 })],
             )
             .await?;
-        // The last effect created the application.
+        // The last message created the application.
         let creation = certificate
             .value
-            .nth_last_effect_id(1)
+            .nth_last_message_id(1)
             .ok_or_else(|| anyhow!("Failed to create application"))?;
         let id = UserApplicationId {
             bytecode_id,

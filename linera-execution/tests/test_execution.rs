@@ -42,7 +42,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         height: BlockHeight(0),
         index: 0,
         authenticated_signer: None,
-        next_effect_index: 0,
+        next_message_index: 0,
     };
 
     let result = view
@@ -122,11 +122,11 @@ impl UserApplication for TestApplication {
     }
 
     /// Attempts to call ourself while the state is locked.
-    async fn execute_effect(
+    async fn execute_message(
         &self,
-        context: &EffectContext,
+        context: &MessageContext,
         runtime: &dyn ContractRuntime,
-        _effect: &[u8],
+        _message: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         // Who we are.
         assert_eq!(context.authenticated_signer, Some(self.owner));
@@ -211,7 +211,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         height: BlockHeight(0),
         index: 0,
         authenticated_signer: Some(owner),
-        next_effect_index: 0,
+        next_message_index: 0,
     };
     let result = view
         .execute_operation(
@@ -281,7 +281,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
         height: BlockHeight(0),
         index: 0,
         authenticated_signer: Some(owner),
-        next_effect_index: 0,
+        next_message_index: 0,
     };
 
     let result = view

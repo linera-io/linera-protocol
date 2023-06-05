@@ -60,7 +60,7 @@ async fn collect_pledges() {
     for (backer_chain, backer_account, _balance) in &backers {
         backer_chain.register_application(campaign_id).await;
 
-        let pledge_effects = backer_chain
+        let pledge_messages = backer_chain
             .add_block(|block| {
                 block.with_operation(
                     campaign_id,
@@ -72,8 +72,8 @@ async fn collect_pledges() {
             })
             .await;
 
-        assert_eq!(pledge_effects.len(), 3);
-        pledges_and_transfers.extend(pledge_effects);
+        assert_eq!(pledge_messages.len(), 3);
+        pledges_and_transfers.extend(pledge_messages);
     }
 
     campaign_chain
@@ -157,7 +157,7 @@ async fn cancel_successful_campaign() {
     for (backer_chain, backer_account, _balance) in &backers {
         backer_chain.register_application(campaign_id).await;
 
-        let pledge_effects = backer_chain
+        let pledge_messages = backer_chain
             .add_block(|block| {
                 block.with_operation(
                     campaign_id,
@@ -169,8 +169,8 @@ async fn cancel_successful_campaign() {
             })
             .await;
 
-        assert_eq!(pledge_effects.len(), 3);
-        pledges_and_transfers.extend(pledge_effects);
+        assert_eq!(pledge_messages.len(), 3);
+        pledges_and_transfers.extend(pledge_messages);
     }
 
     campaign_chain

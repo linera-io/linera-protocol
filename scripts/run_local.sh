@@ -61,7 +61,7 @@ EFFECT_AND_CHAIN=$(./linera --wallet wallet.json open-chain --to-public-key "$KE
 EFFECT=$(echo "$EFFECT_AND_CHAIN" | sed -n '1 p')
 
 # Assign newly created chain to unassigned key.
-./linera --wallet wallet_2.json --storage rocksdb:linera_2.db assign --key "$KEY" --effect-id "$EFFECT"
+./linera --wallet wallet_2.json --storage rocksdb:linera_2.db assign --key "$KEY" --message-id "$EFFECT"
 
 read
 

@@ -24,8 +24,8 @@ pub struct Owner(pub CryptoHash);
 pub enum ChainDescription {
     /// The chain was created by the genesis configuration.
     Root(u32),
-    /// The chain was created by an effect from another chain.
-    Child(EffectId),
+    /// The chain was created by a message from another chain.
+    Child(MessageId),
 }
 
 /// The unique identifier (UID) of a chain. This is currently computed as the hash value
@@ -34,10 +34,10 @@ pub enum ChainDescription {
 #[cfg_attr(any(test, feature = "test"), derive(Arbitrary, Default))]
 pub struct ChainId(pub CryptoHash);
 
-/// The index of an effect in a chain.
+/// The index of a message in a chain.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
-pub struct EffectId {
+pub struct MessageId {
     pub chain_id: ChainId,
     pub height: BlockHeight,
     pub index: u32,
@@ -51,14 +51,14 @@ pub struct ApplicationId<A = ()> {
     /// The bytecode to use for the application.
     pub bytecode_id: BytecodeId<A>,
     /// The unique ID of the application's creation.
-    pub creation: EffectId,
+    pub creation: MessageId,
 }
 
 /// A unique identifier for an application bytecode.
 #[derive(Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct BytecodeId<A = ()> {
-    pub effect_id: EffectId,
+    pub message_id: MessageId,
     #[serde(skip)]
     _phantom: std::marker::PhantomData<A>,
 }
@@ -113,7 +113,7 @@ impl ChannelName {
 impl<A> Clone for BytecodeId<A> {
     fn clone(&self) -> Self {
         Self {
-            effect_id: self.effect_id,
+            message_id: self.message_id,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -122,16 +122,16 @@ impl<A> Clone for BytecodeId<A> {
 impl<A> Copy for BytecodeId<A> {}
 
 impl BytecodeId {
-    pub fn new(effect_id: EffectId) -> Self {
+    pub fn new(message_id: MessageId) -> Self {
         BytecodeId {
-            effect_id,
+            message_id,
             _phantom: std::marker::PhantomData,
         }
     }
 
     pub fn with_abi<A>(self) -> BytecodeId<A> {
         BytecodeId {
-            effect_id: self.effect_id,
+            message_id: self.message_id,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -140,7 +140,7 @@ impl BytecodeId {
 impl<A> BytecodeId<A> {
     pub fn forget_abi(self) -> BytecodeId {
         BytecodeId {
-            effect_id: self.effect_id,
+            message_id: self.message_id,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -271,7 +271,7 @@ impl ChainId {
         Self(CryptoHash::new(&ChainDescription::Root(index)))
     }
 
-    pub fn child(id: EffectId) -> Self {
+    pub fn child(id: MessageId) -> Self {
         Self(CryptoHash::new(&ChainDescription::Child(id)))
     }
 }
@@ -290,7 +290,7 @@ doc_scalar!(
     ChainDescription."
 );
 doc_scalar!(ChannelName, "The name of a subscription channel");
-bcs_scalar!(EffectId, "The index of an effect in a chain");
+bcs_scalar!(MessageId, "The index of a message in a chain");
 doc_scalar!(
     Owner,
     "The owner of a chain. This is currently the hash of the owner's public key used to verify \
