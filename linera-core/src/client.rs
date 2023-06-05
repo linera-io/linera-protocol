@@ -22,8 +22,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, HashedValue, LiteVote,
-        Message,
+        Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, HashedValue,
+        IncomingMessage, LiteVote,
     },
     ChainManagerInfo, ChainStateView,
 };
@@ -214,7 +214,7 @@ where
     ///
     /// Messages known to be redundant are filtered out: A `RegisterApplications` effect whose
     /// entries are already known never needs to be included in a block.
-    async fn pending_messages(&mut self) -> Result<Vec<Message>, NodeError> {
+    async fn pending_messages(&mut self) -> Result<Vec<IncomingMessage>, NodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_pending_messages();
         let response = self.node_client.handle_chain_info_query(query).await?;
         let mut pending_messages = vec![];
@@ -1092,7 +1092,7 @@ where
     /// Executes a new block
     async fn execute_block(
         &mut self,
-        incoming_messages: Vec<Message>,
+        incoming_messages: Vec<IncomingMessage>,
         operations: Vec<Operation>,
     ) -> Result<Certificate> {
         let timestamp = self.next_timestamp(&incoming_messages);
@@ -1114,7 +1114,7 @@ where
     ///
     /// This will usually be the current time according to the local clock, but may be slightly
     /// ahead to make sure it's not earlier than the incoming messages or the previous block.
-    fn next_timestamp(&self, incoming_messages: &[Message]) -> Timestamp {
+    fn next_timestamp(&self, incoming_messages: &[IncomingMessage]) -> Timestamp {
         incoming_messages
             .iter()
             .map(|msg| msg.event.timestamp)

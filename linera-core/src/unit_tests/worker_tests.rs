@@ -20,7 +20,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockAndRound, BlockProposal, Certificate, ChainAndHeight, ChannelFullName, Event,
-        ExecutedBlock, HashedValue, LiteVote, Medium, Message, Origin, OutgoingEffect,
+        ExecutedBlock, HashedValue, IncomingMessage, LiteVote, Medium, Origin, OutgoingEffect,
         SignatureAggregator,
     },
     ChainError,
@@ -119,7 +119,7 @@ fn make_block(
     epoch: Epoch,
     chain_id: ChainId,
     operations: Vec<impl Into<Operation>>,
-    incoming_messages: Vec<Message>,
+    incoming_messages: Vec<IncomingMessage>,
     previous_confirmed_block: Option<&Certificate>,
     authenticated_signer: Option<Owner>,
     timestamp: Timestamp,
@@ -146,7 +146,7 @@ fn make_transfer_block_proposal(
     key_pair: &KeyPair,
     recipient: Recipient,
     amount: Amount,
-    incoming_messages: Vec<Message>,
+    incoming_messages: Vec<IncomingMessage>,
     previous_confirmed_block: Option<&Certificate>,
 ) -> BlockProposal {
     let block = make_block(
@@ -192,7 +192,7 @@ async fn make_transfer_certificate<S>(
     key_pair: &KeyPair,
     recipient: Recipient,
     amount: Amount,
-    incoming_messages: Vec<Message>,
+    incoming_messages: Vec<IncomingMessage>,
     committee: &Committee,
     balance: Amount,
     worker: &WorkerState<S>,
@@ -219,7 +219,7 @@ async fn make_transfer_certificate_for_epoch<S>(
     key_pair: &KeyPair,
     recipient: Recipient,
     amount: Amount,
-    incoming_messages: Vec<Message>,
+    incoming_messages: Vec<IncomingMessage>,
     epoch: Epoch,
     committee: &Committee,
     balance: Amount,
@@ -952,7 +952,7 @@ where
             Recipient::Account(Account::chain(ChainId::root(3))),
             Amount::from_tokens(5),
             vec![
-                Message {
+                IncomingMessage {
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -966,7 +966,7 @@ where
                         }),
                     },
                 },
-                Message {
+                IncomingMessage {
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -980,7 +980,7 @@ where
                         }),
                     },
                 },
-                Message {
+                IncomingMessage {
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate1.value.hash(),
@@ -1011,7 +1011,7 @@ where
             Recipient::Account(Account::chain(ChainId::root(3))),
             Amount::from_tokens(6),
             vec![
-                Message {
+                IncomingMessage {
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -1025,7 +1025,7 @@ where
                         }),
                     },
                 },
-                Message {
+                IncomingMessage {
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -1039,7 +1039,7 @@ where
                         }),
                     },
                 },
-                Message {
+                IncomingMessage {
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -1070,7 +1070,7 @@ where
             Recipient::Account(Account::chain(ChainId::root(3))),
             Amount::from_tokens(6),
             vec![
-                Message {
+                IncomingMessage {
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate1.value.hash(),
@@ -1084,7 +1084,7 @@ where
                         }),
                     },
                 },
-                Message {
+                IncomingMessage {
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -1098,7 +1098,7 @@ where
                         }),
                     },
                 },
-                Message {
+                IncomingMessage {
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -1128,7 +1128,7 @@ where
             &recipient_key_pair,
             Recipient::Account(Account::chain(ChainId::root(3))),
             Amount::ONE,
-            vec![Message {
+            vec![IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate0.value.hash(),
@@ -1186,7 +1186,7 @@ where
             &recipient_key_pair,
             Recipient::Account(Account::chain(ChainId::root(3))),
             Amount::from_tokens(3),
-            vec![Message {
+            vec![IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate1.value.hash(),
@@ -1607,7 +1607,7 @@ where
         &key_pair,
         Recipient::Account(Account::chain(ChainId::root(2))),
         Amount::from_tokens(1000),
-        vec![Message {
+        vec![IncomingMessage {
             origin: Origin::chain(ChainId::root(3)),
             event: Event {
                 certificate_hash: CryptoHash::new(&Dummy),
@@ -2257,7 +2257,7 @@ where
         &recipient_key_pair,
         Recipient::Account(Account::chain(ChainId::root(3))),
         Amount::ONE,
-        vec![Message {
+        vec![IncomingMessage {
             origin: Origin::chain(ChainId::root(1)),
             event: Event {
                 certificate_hash: certificate.hash(),
@@ -2619,7 +2619,7 @@ where
             block: Block {
                 epoch: Epoch::from(1),
                 chain_id: admin_id,
-                incoming_messages: vec![Message {
+                incoming_messages: vec![IncomingMessage {
                     origin: Origin::chain(admin_id),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
@@ -2765,7 +2765,7 @@ where
                 epoch: Epoch::from(0),
                 chain_id: user_id,
                 incoming_messages: vec![
-                    Message {
+                    IncomingMessage {
                         origin: admin_channel_origin.clone(),
                         event: Event {
                             certificate_hash: certificate1.value.hash(),
@@ -2780,7 +2780,7 @@ where
                             }),
                         },
                     },
-                    Message {
+                    IncomingMessage {
                         origin: Origin::chain(admin_id),
                         event: Event {
                             certificate_hash: certificate1.value.hash(),
@@ -2794,7 +2794,7 @@ where
                             }),
                         },
                     },
-                    Message {
+                    IncomingMessage {
                         origin: Origin::chain(admin_id),
                         event: Event {
                             certificate_hash: certificate2.value.hash(),
@@ -3275,7 +3275,7 @@ where
             block: Block {
                 epoch: Epoch::from(1),
                 chain_id: admin_id,
-                incoming_messages: vec![Message {
+                incoming_messages: vec![IncomingMessage {
                     origin: Origin::chain(user_id),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),

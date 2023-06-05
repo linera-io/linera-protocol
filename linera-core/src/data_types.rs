@@ -9,7 +9,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId},
 };
 use linera_chain::{
-    data_types::{Certificate, ChainAndHeight, HashedValue, Medium, Message},
+    data_types::{Certificate, ChainAndHeight, HashedValue, IncomingMessage, Medium},
     ChainManagerInfo, ChainStateView,
 };
 use linera_execution::{
@@ -42,7 +42,7 @@ impl BlockHeightRange {
     }
 }
 
-/// Message to obtain information on a chain.
+/// Request information about a chain.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Arbitrary, Eq, PartialEq))]
 pub struct ChainInfoQuery {
@@ -138,7 +138,7 @@ pub struct ChainInfo {
     /// The current committees.
     pub requested_committees: Option<BTreeMap<Epoch, Committee>>,
     /// The received messages that are waiting be picked in the next block (if requested).
-    pub requested_pending_messages: Vec<Message>,
+    pub requested_pending_messages: Vec<IncomingMessage>,
     /// The response to `request_sent_certificates_in_range`
     pub requested_sent_certificates: Vec<Certificate>,
     /// The current number of received certificates (useful for `request_received_log_excluding_first_nth`)
@@ -157,7 +157,7 @@ pub struct ChainInfoResponse {
     pub signature: Option<Signature>,
 }
 
-/// An internal message between chains within a validator.
+/// An internal request between chains within a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub enum CrossChainRequest {

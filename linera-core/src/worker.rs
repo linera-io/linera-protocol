@@ -14,7 +14,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
-        HashedValue, LiteCertificate, Medium, Message, Origin, Target,
+        HashedValue, IncomingMessage, LiteCertificate, Medium, Origin, Target,
     },
     ChainManagerOutcome, ChainStateView,
 };
@@ -765,13 +765,13 @@ where
         Ok(chain.execution_state.system.registry)
     }
 
-    /// Returns a [`Message`] that's awaiting to be received by the chain specified by `chain_id`.
+    /// Returns a [`IncomingMessage`] that's awaiting to be received by the chain specified by `chain_id`.
     #[cfg(any(test, feature = "test"))]
     pub async fn find_incoming_message(
         &self,
         chain_id: ChainId,
         effect_id: EffectId,
-    ) -> Result<Option<Message>, WorkerError> {
+    ) -> Result<Option<IncomingMessage>, WorkerError> {
         let Some(certificate) = self.read_certificate(effect_id.chain_id, effect_id.height).await?
             else { return Ok(None) };
 
@@ -810,7 +810,7 @@ where
 
         assert_eq!(event.effect, outgoing_effect.effect);
 
-        Ok(Some(Message { origin, event }))
+        Ok(Some(IncomingMessage { origin, event }))
     }
 }
 
@@ -989,7 +989,7 @@ where
             let inboxes = chain.inboxes.try_load_entries(&origins).await?;
             for (origin, inbox) in origins.into_iter().zip(inboxes) {
                 for event in inbox.added_events.elements().await? {
-                    messages.push(Message {
+                    messages.push(IncomingMessage {
                         origin: origin.clone(),
                         event: event.clone(),
                     });

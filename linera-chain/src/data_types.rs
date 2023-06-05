@@ -39,7 +39,7 @@ pub struct Block {
     pub epoch: Epoch,
     /// A selection of incoming messages to be executed first. Successive messages of same
     /// sender and height are grouped together for conciseness.
-    pub incoming_messages: Vec<Message>,
+    pub incoming_messages: Vec<IncomingMessage>,
     /// The operations to execute.
     pub operations: Vec<Operation>,
     /// The block height.
@@ -89,7 +89,7 @@ pub struct BlockAndRound {
 
 /// A message received from a block of another chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct Message {
+pub struct IncomingMessage {
     /// The origin of the message (chain and channel if any).
     pub origin: Origin,
     /// The content of the message to be delivered to the inbox identified by

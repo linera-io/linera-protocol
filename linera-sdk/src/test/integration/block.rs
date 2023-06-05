@@ -12,7 +12,7 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, EffectId, Owner},
 };
 use linera_chain::data_types::{
-    Block, Certificate, HashedValue, LiteVote, Message, SignatureAggregator,
+    Block, Certificate, HashedValue, IncomingMessage, LiteVote, SignatureAggregator,
 };
 use linera_execution::{system::SystemOperation, Operation};
 use std::mem;
@@ -109,7 +109,7 @@ impl BlockBuilder {
     /// present in the inboxes of the microchain that owns this block.
     pub(crate) fn with_raw_messages(
         &mut self,
-        messages: impl IntoIterator<Item = Message>,
+        messages: impl IntoIterator<Item = IncomingMessage>,
     ) -> &mut Self {
         self.block.incoming_messages.extend(messages);
         self

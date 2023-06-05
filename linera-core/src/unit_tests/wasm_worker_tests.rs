@@ -16,7 +16,7 @@ use linera_base::{
     identifiers::{BytecodeId, ChainDescription, ChainId, Destination, EffectId},
 };
 use linera_chain::data_types::{
-    ChannelFullName, Event, ExecutedBlock, HashedValue, Message, Origin, OutgoingEffect,
+    ChannelFullName, Event, ExecutedBlock, HashedValue, IncomingMessage, Origin, OutgoingEffect,
 };
 use linera_execution::{
     committee::Epoch,
@@ -170,7 +170,7 @@ where
     assert!(info.manager.pending().is_none());
 
     // Produce one more block to broadcast the bytecode ID.
-    let broadcast_message = Message {
+    let broadcast_message = IncomingMessage {
         origin: Origin::chain(publisher_chain.into()),
         event: Event {
             certificate_hash: publish_certificate.hash(),
@@ -292,7 +292,7 @@ where
     assert!(info.manager.pending().is_none());
 
     // Accept subscription
-    let accept_message = Message {
+    let accept_message = IncomingMessage {
         origin: Origin::chain(creator_chain.into()),
         event: Event {
             certificate_hash: subscribe_certificate.hash(),
@@ -371,7 +371,7 @@ where
         Epoch::from(0),
         creator_chain.into(),
         vec![create_operation],
-        vec![Message {
+        vec![IncomingMessage {
             origin: Origin::channel(publisher_chain.into(), publish_admin_channel),
             event: Event {
                 certificate_hash: broadcast_certificate.hash(),
