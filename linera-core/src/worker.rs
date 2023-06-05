@@ -765,7 +765,7 @@ where
         Ok(chain.execution_state.system.registry)
     }
 
-    /// Returns a [`IncomingMessage`] that's awaiting to be received by the chain specified by `chain_id`.
+    /// Returns an [`IncomingMessage`] that's awaiting to be received by the chain specified by `chain_id`.
     #[cfg(any(test, feature = "test"))]
     pub async fn find_incoming_message(
         &self,
