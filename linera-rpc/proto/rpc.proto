@@ -70,7 +70,7 @@ message ChainInfoResult {
   }
 }
 
-// An internal message between chains within a validator.
+// An internal request between chains within a validator.
 message CrossChainRequest {
   oneof inner {
     UpdateRecipient update_recipient = 1;
@@ -94,7 +94,7 @@ message ConfirmUpdatedRecipient {
   bytes latest_heights = 3;
 }
 
-// Message to obtain information on a chain.
+// Request information on a chain.
 message ChainInfoQuery {
   // The chain id
   ChainId chain_id = 1;

@@ -24,7 +24,7 @@ Block:
         TYPENAME: Epoch
     - incoming_messages:
         SEQ:
-          TYPENAME: Message
+          TYPENAME: IncomingMessage
     - operations:
         SEQ:
           TYPENAME: Operation
@@ -151,7 +151,7 @@ ChainInfo:
               TYPENAME: Committee
     - requested_pending_messages:
         SEQ:
-          TYPENAME: Message
+          TYPENAME: IncomingMessage
     - requested_sent_certificates:
         SEQ:
           TYPENAME: Certificate
@@ -325,6 +325,12 @@ HandleLiteCertificateRequest:
     - certificate:
         TYPENAME: LiteCertificate
     - wait_for_outgoing_messages: BOOL
+IncomingMessage:
+  STRUCT:
+    - origin:
+        TYPENAME: Origin
+    - event:
+        TYPENAME: Event
 LiteCertificate:
   STRUCT:
     - value:
@@ -356,12 +362,6 @@ Medium:
       Channel:
         NEWTYPE:
           TYPENAME: ChannelFullName
-Message:
-  STRUCT:
-    - origin:
-        TYPENAME: Origin
-    - event:
-        TYPENAME: Event
 MultiOwnerManagerInfo:
   STRUCT:
     - owners:
