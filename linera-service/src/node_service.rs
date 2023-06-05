@@ -31,7 +31,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::{Recipient, SystemChannel, UserData},
+    system::{AdminOperation, Recipient, SystemChannel, UserData},
     Bytecode, Operation, Query, Response, SystemOperation, UserApplicationDescription,
     UserApplicationId,
 };
@@ -230,15 +230,11 @@ where
     /// notification as an "incoming message" in a next block).
     async fn create_committee(
         &self,
-        admin_id: ChainId,
         epoch: Epoch,
         committee: Committee,
     ) -> Result<CryptoHash, Error> {
-        let operation = SystemOperation::CreateCommittee {
-            admin_id,
-            epoch,
-            committee,
-        };
+        let operation =
+            SystemOperation::Admin(AdminOperation::CreateCommittee { epoch, committee });
         self.execute_system_operation(operation).await
     }
 
@@ -265,8 +261,8 @@ where
     /// (admin chain only) Removes a committee. Once this message is accepted by a chain,
     /// blocks from the retired epoch will not be accepted until they are followed (hence
     /// re-certified) by a block certified by a recent committee.
-    async fn remove_committee(&self, admin_id: ChainId, epoch: Epoch) -> Result<CryptoHash, Error> {
-        let operation = SystemOperation::RemoveCommittee { admin_id, epoch };
+    async fn remove_committee(&self, epoch: Epoch) -> Result<CryptoHash, Error> {
+        let operation = SystemOperation::Admin(AdminOperation::RemoveCommittee { epoch });
         self.execute_system_operation(operation).await
     }
 

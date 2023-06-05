@@ -27,7 +27,9 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    system::{Account, Recipient, SystemChannel, SystemMessage, SystemOperation, UserData},
+    system::{
+        Account, AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation, UserData,
+    },
     ApplicationId, ApplicationRegistry, ChainOwnership, ChannelSubscription, ExecutionStateView,
     Message, Operation, Query, Response, SystemExecutionState, SystemQuery, SystemResponse,
 };
@@ -2555,11 +2557,10 @@ where
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
                 operations: vec![
-                    Operation::System(SystemOperation::CreateCommittee {
-                        admin_id,
+                    Operation::System(SystemOperation::Admin(AdminOperation::CreateCommittee {
                         epoch: Epoch::from(1),
                         committee: committee.clone(),
-                    }),
+                    })),
                     Operation::System(SystemOperation::Transfer {
                         owner: None,
                         recipient: Recipient::Account(Account::chain(user_id)),
@@ -2576,7 +2577,6 @@ where
                 channel_outgoing_message(
                     SystemChannel::Admin.name(),
                     SystemMessage::SetCommittees {
-                        admin_id,
                         epoch: Epoch::from(1),
                         committees: committees2.clone(),
                     },
@@ -2773,7 +2773,6 @@ where
                             authenticated_signer: None,
                             timestamp: Timestamp::from(0),
                             message: Message::System(SystemMessage::SetCommittees {
-                                admin_id,
                                 epoch: Epoch::from(1),
                                 committees: committees2.clone(),
                             }),
@@ -2997,11 +2996,12 @@ where
                 epoch: Epoch::from(0),
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
-                operations: vec![Operation::System(SystemOperation::CreateCommittee {
-                    admin_id,
-                    epoch: Epoch::from(1),
-                    committee: committee.clone(),
-                })],
+                operations: vec![Operation::System(SystemOperation::Admin(
+                    AdminOperation::CreateCommittee {
+                        epoch: Epoch::from(1),
+                        committee: committee.clone(),
+                    },
+                ))],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
                 authenticated_signer: None,
@@ -3010,7 +3010,6 @@ where
             messages: vec![channel_outgoing_message(
                 SystemChannel::Admin.name(),
                 SystemMessage::SetCommittees {
-                    admin_id,
                     epoch: Epoch::from(1),
                     committees: committees2.clone(),
                 },
@@ -3186,15 +3185,13 @@ where
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
                 operations: vec![
-                    Operation::System(SystemOperation::CreateCommittee {
-                        admin_id,
+                    Operation::System(SystemOperation::Admin(AdminOperation::CreateCommittee {
                         epoch: Epoch::from(1),
                         committee: committee.clone(),
-                    }),
-                    Operation::System(SystemOperation::RemoveCommittee {
-                        admin_id,
+                    })),
+                    Operation::System(SystemOperation::Admin(AdminOperation::RemoveCommittee {
                         epoch: Epoch::from(0),
-                    }),
+                    })),
                 ],
                 previous_block_hash: None,
                 height: BlockHeight::from(0),
@@ -3205,7 +3202,6 @@ where
                 channel_outgoing_message(
                     SystemChannel::Admin.name(),
                     SystemMessage::SetCommittees {
-                        admin_id,
                         epoch: Epoch::from(1),
                         committees: committees2.clone(),
                     },
@@ -3213,7 +3209,6 @@ where
                 channel_outgoing_message(
                     SystemChannel::Admin.name(),
                     SystemMessage::SetCommittees {
-                        admin_id,
                         epoch: Epoch::from(1),
                         committees: committees3.clone(),
                     },

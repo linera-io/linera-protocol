@@ -114,14 +114,6 @@ pub enum SystemOperation {
     ChangeOwner { new_public_key: PublicKey },
     /// Changes the authentication key of the chain.
     ChangeMultipleOwners { new_public_keys: Vec<PublicKey> },
-    /// (admin chain only) Registers a new committee. This will notify the subscribers of
-    /// the admin chain so that they can migrate to the new epoch (by accepting the
-    /// notification as an "incoming message" in a next block).
-    CreateCommittee {
-        admin_id: ChainId,
-        epoch: Epoch,
-        committee: Committee,
-    },
     /// Subscribes to a system channel.
     Subscribe {
         chain_id: ChainId,
@@ -132,10 +124,6 @@ pub enum SystemOperation {
         chain_id: ChainId,
         channel: SystemChannel,
     },
-    /// (admin chain only) Removes a committee. Once this message is accepted by a chain,
-    /// blocks from the retired epoch will not be accepted until they are followed (hence
-    /// re-certified) by a block certified by a recent committee.
-    RemoveCommittee { admin_id: ChainId, epoch: Epoch },
     /// Publishes a new application bytecode.
     PublishBytecode {
         contract: Bytecode,
@@ -157,6 +145,21 @@ pub enum SystemOperation {
         chain_id: ChainId,
         application_id: UserApplicationId,
     },
+    /// Operations that are only allowed on the admin chain.
+    Admin(AdminOperation),
+}
+
+/// Operations that are only allowed on the admin chain.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum AdminOperation {
+    /// Registers a new committee. This will notify the subscribers of the admin chain so that they
+    /// can migrate to the new epoch by accepting the resulting `SetCommittees` as an incoming
+    /// message in a block.
+    CreateCommittee { epoch: Epoch, committee: Committee },
+    /// Removes a committee. Once the resulting `SetCommittees` message is accepted by a chain,
+    /// blocks from the retired epoch will not be accepted until they are followed (hence
+    /// re-certified) by a block certified by a recent committee.
+    RemoveCommittee { epoch: Epoch },
 }
 
 /// A system message meant to be executed on a remote chain.
@@ -182,7 +185,6 @@ pub enum SystemMessage {
     },
     /// Sets the current epoch and the recognized committees.
     SetCommittees {
-        admin_id: ChainId,
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
     },
@@ -383,6 +385,8 @@ pub enum SystemExecutionError {
     IncorrectClaimAmount,
     #[error("Claim must be authenticated by the right signer")]
     UnauthenticatedClaimOwner,
+    #[error("Admin operations are only allowed on the admin chain.")]
+    AdminOperationOnNonAdminChain,
     #[error("Failed to create new committee")]
     InvalidCommitteeCreation,
     #[error("Failed to remove committee")]
@@ -594,59 +598,43 @@ where
                     },
                 ));
             }
-            CreateCommittee {
-                admin_id,
-                epoch,
-                committee,
-            } => {
-                // We are the admin chain and want to create a committee.
+            Admin(admin_operation) => {
                 ensure!(
-                    *admin_id == context.chain_id,
-                    SystemExecutionError::InvalidCommitteeCreation
+                    *self.admin_id.get() == Some(context.chain_id),
+                    SystemExecutionError::AdminOperationOnNonAdminChain
                 );
-                ensure!(
-                    Some(admin_id) == self.admin_id.get().as_ref(),
-                    SystemExecutionError::InvalidCommitteeCreation
-                );
-                ensure!(
-                    *epoch == self.epoch.get().expect("chain is active").try_add_one()?,
-                    SystemExecutionError::InvalidCommitteeCreation
-                );
-                self.committees.get_mut().insert(*epoch, committee.clone());
-                self.epoch.set(Some(*epoch));
-                result.messages.push((
-                    Destination::Subscribers(SystemChannel::Admin.name()),
-                    false,
-                    SystemMessage::SetCommittees {
-                        admin_id: *admin_id,
-                        epoch: self.epoch.get().expect("chain is active"),
-                        committees: self.committees.get().clone(),
-                    },
-                ));
-            }
-            RemoveCommittee { admin_id, epoch } => {
-                // We are the admin chain and want to remove a committee.
-                ensure!(
-                    *admin_id == context.chain_id,
-                    SystemExecutionError::InvalidCommitteeRemoval
-                );
-                ensure!(
-                    Some(admin_id) == self.admin_id.get().as_ref(),
-                    SystemExecutionError::InvalidCommitteeRemoval
-                );
-                ensure!(
-                    self.committees.get_mut().remove(epoch).is_some(),
-                    SystemExecutionError::InvalidCommitteeRemoval
-                );
-                result.messages.push((
-                    Destination::Subscribers(SystemChannel::Admin.name()),
-                    false,
-                    SystemMessage::SetCommittees {
-                        admin_id: *admin_id,
-                        epoch: self.epoch.get().expect("chain is active"),
-                        committees: self.committees.get().clone(),
-                    },
-                ));
+                match admin_operation {
+                    AdminOperation::CreateCommittee { epoch, committee } => {
+                        ensure!(
+                            *epoch == self.epoch.get().expect("chain is active").try_add_one()?,
+                            SystemExecutionError::InvalidCommitteeCreation
+                        );
+                        self.committees.get_mut().insert(*epoch, committee.clone());
+                        self.epoch.set(Some(*epoch));
+                        result.messages.push((
+                            Destination::Subscribers(SystemChannel::Admin.name()),
+                            false,
+                            SystemMessage::SetCommittees {
+                                epoch: self.epoch.get().expect("chain is active"),
+                                committees: self.committees.get().clone(),
+                            },
+                        ));
+                    }
+                    AdminOperation::RemoveCommittee { epoch } => {
+                        ensure!(
+                            self.committees.get_mut().remove(epoch).is_some(),
+                            SystemExecutionError::InvalidCommitteeRemoval
+                        );
+                        result.messages.push((
+                            Destination::Subscribers(SystemChannel::Admin.name()),
+                            false,
+                            SystemMessage::SetCommittees {
+                                epoch: self.epoch.get().expect("chain is active"),
+                                committees: self.committees.get().clone(),
+                            },
+                        ));
+                    }
+                }
             }
             Subscribe { chain_id, channel } => {
                 ensure!(
@@ -802,11 +790,7 @@ where
                     tracing::info!("Withdrawal request was skipped due to lack of funds.");
                 }
             }
-            SetCommittees {
-                admin_id,
-                epoch,
-                committees,
-            } if self.admin_id.get().as_ref() == Some(admin_id) => {
+            SetCommittees { epoch, committees } => {
                 ensure!(
                     *epoch >= self.epoch.get().expect("chain is active"),
                     SystemExecutionError::CannotRewindEpoch

@@ -6,6 +6,20 @@ Account:
     - owner:
         OPTION:
           TYPENAME: Owner
+AdminOperation:
+  ENUM:
+    0:
+      CreateCommittee:
+        STRUCT:
+          - epoch:
+              TYPENAME: Epoch
+          - committee:
+              TYPENAME: Committee
+    1:
+      RemoveCommittee:
+        STRUCT:
+          - epoch:
+              TYPENAME: Epoch
 Amount:
   NEWTYPESTRUCT: U128
 ApplicationId:
@@ -629,8 +643,6 @@ SystemMessage:
     3:
       SetCommittees:
         STRUCT:
-          - admin_id:
-              TYPENAME: ChainId
           - epoch:
               TYPENAME: Epoch
           - committees:
@@ -738,43 +750,27 @@ SystemOperation:
               SEQ:
                 TYPENAME: PublicKey
     6:
-      CreateCommittee:
-        STRUCT:
-          - admin_id:
-              TYPENAME: ChainId
-          - epoch:
-              TYPENAME: Epoch
-          - committee:
-              TYPENAME: Committee
-    7:
       Subscribe:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - channel:
               TYPENAME: SystemChannel
-    8:
+    7:
       Unsubscribe:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - channel:
               TYPENAME: SystemChannel
-    9:
-      RemoveCommittee:
-        STRUCT:
-          - admin_id:
-              TYPENAME: ChainId
-          - epoch:
-              TYPENAME: Epoch
-    10:
+    8:
       PublishBytecode:
         STRUCT:
           - contract:
               TYPENAME: Bytecode
           - service:
               TYPENAME: Bytecode
-    11:
+    9:
       CreateApplication:
         STRUCT:
           - bytecode_id:
@@ -784,13 +780,17 @@ SystemOperation:
           - required_application_ids:
               SEQ:
                 TYPENAME: UserApplicationId
-    12:
+    10:
       RequestApplication:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - application_id:
               TYPENAME: UserApplicationId
+    11:
+      Admin:
+        NEWTYPE:
+          TYPENAME: AdminOperation
 Timestamp:
   NEWTYPESTRUCT: U64
 UserApplicationDescription:

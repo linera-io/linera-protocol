@@ -29,7 +29,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    system::{Account, Recipient, SystemChannel, SystemOperation, UserData},
+    system::{Account, AdminOperation, Recipient, SystemChannel, SystemOperation, UserData},
     Bytecode, Message, Operation, Query, Response, SystemMessage, SystemQuery, SystemResponse,
     UserApplicationId,
 };
@@ -1413,11 +1413,12 @@ where
         let messages = self.pending_messages().await?;
         self.execute_block(
             messages,
-            vec![Operation::System(SystemOperation::CreateCommittee {
-                admin_id: self.chain_id,
-                epoch: epoch.try_add_one()?,
-                committee,
-            })],
+            vec![Operation::System(SystemOperation::Admin(
+                AdminOperation::CreateCommittee {
+                    epoch: epoch.try_add_one()?,
+                    committee,
+                },
+            ))],
         )
         .await
     }
@@ -1493,10 +1494,9 @@ where
             .keys()
             .filter_map(|epoch| {
                 if *epoch != current_epoch {
-                    Some(Operation::System(SystemOperation::RemoveCommittee {
-                        admin_id: self.admin_id,
-                        epoch: *epoch,
-                    }))
+                    Some(Operation::System(SystemOperation::Admin(
+                        AdminOperation::RemoveCommittee { epoch: *epoch },
+                    )))
                 } else {
                     None
                 }
