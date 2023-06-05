@@ -68,7 +68,7 @@ where
                                 );
                             }
                         }
-                        Reason::NewMessage { .. } => {
+                        Reason::NewIncomingMessage { .. } => {
                             if let Err(e) = client.process_inbox().await {
                                 warn!(
                                     "Failed to process inbox after receiving new message: {:?} \

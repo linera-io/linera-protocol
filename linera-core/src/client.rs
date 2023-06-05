@@ -395,7 +395,7 @@ where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
         match notification.reason {
-            Reason::NewMessage { origin, height } => {
+            Reason::NewIncomingMessage { origin, height } => {
                 if Self::get_local_next_block_height(this.clone(), origin.sender, &mut local_node)
                     .await
                     > Some(height)

@@ -21,7 +21,7 @@ impl NotificationTracker {
     pub fn insert(&mut self, notification: Notification) -> bool {
         match notification.reason {
             Reason::NewBlock { height } => self.insert_new_block(notification.chain_id, height),
-            Reason::NewMessage { height, origin } => {
+            Reason::NewIncomingMessage { height, origin } => {
                 self.insert_new_message(notification.chain_id, origin, height)
             }
         }
@@ -130,11 +130,11 @@ pub mod tests {
 
     #[test]
     fn test_application_origin() {
-        let reason_0 = Reason::NewMessage {
+        let reason_0 = Reason::NewIncomingMessage {
             origin: Origin::chain(ChainId::root(0)),
             height: BlockHeight::from(0),
         };
-        let reason_1 = Reason::NewMessage {
+        let reason_1 = Reason::NewIncomingMessage {
             origin: Origin::chain(ChainId::root(0)),
             height: BlockHeight::from(1),
         };

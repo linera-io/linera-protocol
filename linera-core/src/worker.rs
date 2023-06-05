@@ -118,7 +118,7 @@ doc_scalar!(
 /// Reason for the notification.
 pub enum Reason {
     NewBlock { height: BlockHeight },
-    NewMessage { origin: Origin, height: BlockHeight },
+    NewIncomingMessage { origin: Origin, height: BlockHeight },
 }
 
 /// Error type for [`ValidatorWorker`].
@@ -1068,7 +1068,7 @@ where
                     latest_heights.push((origin.medium.clone(), height));
                     notifications.push(Notification {
                         chain_id: recipient,
-                        reason: Reason::NewMessage { origin, height },
+                        reason: Reason::NewIncomingMessage { origin, height },
                     });
                 }
                 let cross_chain_requests = vec![CrossChainRequest::ConfirmUpdatedRecipient {
