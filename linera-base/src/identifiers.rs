@@ -13,7 +13,6 @@ use std::{
     hash::{Hash, Hasher},
     str::FromStr,
 };
-use wasm_bindgen::prelude::*;
 
 #[cfg(any(test, feature = "test"))]
 use test_strategy::Arbitrary;
@@ -37,7 +36,6 @@ pub enum ChainDescription {
 /// of a [`ChainDescription`].
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Arbitrary, Default))]
-#[wasm_bindgen]
 pub struct ChainId(pub CryptoHash);
 
 /// The index of a message in a chain.

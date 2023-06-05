@@ -8,6 +8,7 @@
   },
   "devDependencies": {
     "@wasm-tool/wasm-pack-plugin": "^1",
-    "copy-webpack-plugin": "^11"
+    "copy-webpack-plugin": "^11",
+    "vue-json-pretty": "^2"
   }
 }

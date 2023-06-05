@@ -36,7 +36,7 @@ type Block {
   A selection of incoming messages to be executed first. Successive messages of same
   sender and height are grouped together for conciseness.
   """
-  incomingMessages: [Message!]!
+  incomingMessages: [IncomingMessage!]!
 
   """The operations to execute."""
   operations: [Operation!]!
@@ -71,6 +71,12 @@ scalar Bytecode
 
 """A unique identifier for an application bytecode"""
 scalar BytecodeId
+
+type CertificateValue {
+  executedBlock: ExecutedBlock!
+  round: RoundNumber!
+  status: String!
+}
 
 """A chain ID with a block height."""
 type ChainAndHeight {
@@ -181,25 +187,22 @@ type Cursor {
 """The destination of a message, relative to a particular application."""
 scalar Destination
 
-"""An effect to be sent and possibly executed in the receiver's block."""
-scalar Effect
-
 """
 A number identifying the configuration of the chain (aka the committee)
 """
 scalar Epoch
 
 """
-An effect together with non replayable information to ensure uniqueness in a particular inbox
+A message together with non replayable information to ensure uniqueness in a particular inbox
 """
 scalar Event
 
 """
-A block, together with the effects and the state hash resulting from its execution.
+A block, together with the messages and the state hash resulting from its execution.
 """
 type ExecutedBlock {
   block: Block!
-  effects: [OutgoingEffect!]!
+  messages: [OutgoingMessage!]!
   stateHash: CryptoHash!
 }
 
@@ -209,7 +212,7 @@ type ExecutionStateView {
 
 type HashedValue {
   hash: CryptoHash!
-  value: Value!
+  value: CertificateValue!
 }
 
 type InboxStateView {
@@ -219,11 +222,8 @@ type InboxStateView {
   removedEvents(count: Int): [Event!]!
 }
 
-"""A scalar that can represent any JSON Object value."""
-scalar JSONObject
-
 """A message received from a block of another chain."""
-type Message {
+type IncomingMessage {
   """The origin of the message (chain and channel if any)."""
   origin: Origin!
 
@@ -233,6 +233,12 @@ type Message {
   """
   event: Event!
 }
+
+"""A scalar that can represent any JSON Object value."""
+scalar JSONObject
+
+"""An message to be sent and possibly executed in the receiver's block."""
+scalar Message
 
 type MutationRoot {
   """
@@ -295,7 +301,7 @@ type MutationRoot {
   createApplication(bytecodeId: BytecodeId!, parameters: String!, initializationArgument: String!, requiredApplicationIds: [ApplicationId!]!): ApplicationId!
 
   """
-  Requests a `RegisterApplications` effect from another chain so the application can be used
+  Requests a `RegisterApplications` message from another chain so the application can be used
   on this one.
   """
   requestApplication(applicationId: ApplicationId!, targetChainId: ChainId): CryptoHash!
@@ -317,11 +323,11 @@ type OutboxStateView {
   queue(count: Int): [BlockHeight!]!
 }
 
-"""An effect together with routing information."""
-type OutgoingEffect {
+"""A message together with routing information."""
+type OutgoingMessage {
   destination: Destination!
   authenticatedSigner: Owner
-  effect: Effect!
+  message: Message!
 }
 
 """
@@ -338,7 +344,7 @@ input Pricing {
   certificate: Amount!
 
   """
-  The price per unit of fuel used when executing effects and operations for user applications.
+  The price per unit of fuel used when executing messages and operations for user applications.
   """
   fuel: Amount!
 
@@ -408,10 +414,4 @@ scalar UserApplicationDescription
 
 """Optional user message attached to a transfer"""
 scalar UserData
-
-type Value {
-  executedBlock: ExecutedBlock!
-  round: RoundNumber!
-  status: String!
-}
 

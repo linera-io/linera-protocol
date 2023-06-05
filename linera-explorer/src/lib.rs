@@ -5,15 +5,16 @@ use linera_base::{
     identifiers::{ChainId, Destination, Owner},
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
 use serde_wasm_bindgen::to_value;
 use wasm_bindgen::prelude::*;
-// use linera_execution::{
-//     committee::{Epoch},
-//     Effect, Operation
-// };
-// use linera_chain::data_types::{
-//     Event, Origin
-// };
+
+type Epoch = Value;
+type Message = Value;
+type Operation = Value;
+type Event = Value;
+type Origin = Value;
 
 #[derive(Serialize, Deserialize)]
 enum Page {
@@ -32,6 +33,13 @@ pub struct Data {
     page: Page,
     chains: Vec<ChainId>,
     chain: Option<ChainId>,
+}
+
+pub struct Context {
+    chain: Option<ChainId>,
+    node: String,
+    path: String,
+    page: Page,
 }
 
 #[wasm_bindgen(start)]
@@ -91,7 +99,7 @@ pub fn log_str(s: &str) {
     web_sys::console::log_1(&JsValue::from_str(s))
 }
 
-pub fn set_default_chain(app: &JsValue, data: &Data, l: &[blocks_query::BlocksQueryBlocks]) {
+pub fn set_default_chain(app: &JsValue, data: &Context, l: &[blocks_query::BlocksQueryBlocks]) {
     match (l.get(0), data.chain) {
         (None, _) | (_, Some(_)) => (),
         (Some(b), _) => {
@@ -101,7 +109,7 @@ pub fn set_default_chain(app: &JsValue, data: &Data, l: &[blocks_query::BlocksQu
     }
 }
 
-pub async fn get_blocks(app: &JsValue, data: &Data, from: &Option<CryptoHash>) {
+pub async fn get_blocks(app: &JsValue, data: &Context, from: &Option<CryptoHash>) {
     let variables = blocks_query::Variables {
         from: *from,
         chain_id: data.chain,
@@ -117,7 +125,7 @@ pub async fn get_blocks(app: &JsValue, data: &Data, from: &Option<CryptoHash>) {
     setf(app, "blocks", &res_js);
 }
 
-pub async fn get_block(app: &JsValue, data: &Data, hash: &Option<CryptoHash>) {
+pub async fn get_block(app: &JsValue, data: &Context, hash: &Option<CryptoHash>) {
     let variables = block_query::Variables {
         hash: *hash,
         chain_id: data.chain,
@@ -131,7 +139,7 @@ pub async fn get_block(app: &JsValue, data: &Data, hash: &Option<CryptoHash>) {
     setf(app, "page", &page_js);
 }
 
-pub async fn get_chains(app: &JsValue, data: &Data) {
+pub async fn get_chains(app: &JsValue, data: &Context) {
     let variables = chains_query::Variables;
     let client = reqwest::Client::new();
     let res = post_graphql::<ChainsQuery, _>(&client, &data.node, variables)
@@ -144,12 +152,12 @@ pub async fn get_chains(app: &JsValue, data: &Data) {
 
 async fn route_aux(
     app: &JsValue,
-    data: &Data,
+    data: &Context,
     path: &Option<String>,
     args: Vec<(String, CryptoHash)>,
     _refresh: bool,
 ) {
-    // log_str(&format!("route: {}", path.unwrap_or("none".to_string())));
+    log_str(&format!("route: {}", path.clone().unwrap_or("none".to_string())));
     let path = path.clone().unwrap_or(data.path.clone());
     match path.as_str() {
         "" => {
@@ -161,18 +169,7 @@ async fn route_aux(
             let hash = args.into_iter().find(|(k, _)| k == "hash");
             match hash {
                 None => log_str("no hash given"),
-                Some((_, hash)) => {
-                    let b = data.blocks.iter().find(|b| b.hash == hash);
-                    match b {
-                        None => get_block(app, data, &Some(hash)).await,
-                        Some(b) => {
-                            let page_js = js_sys::Object::new();
-                            let b_js = serde_wasm_bindgen::to_value(&b).unwrap();
-                            setf(&page_js, "block", &b_js);
-                            setf(app, "page", &page_js);
-                        }
-                    }
-                }
+                Some((_, hash)) => get_block(app, data, &Some(hash)).await
             }
         }
         _ => (),
@@ -199,12 +196,21 @@ async fn route_aux(
         .expect("failed pushstate");
 }
 
+fn context_from_app(app: &JsValue) -> Context {
+    Context {
+        chain: serde_wasm_bindgen::from_value::<Option<ChainId>>(getf(app, "chain")).unwrap(),
+        node: serde_wasm_bindgen::from_value::<String>(getf(app, "node")).unwrap(),
+        path: serde_wasm_bindgen::from_value::<String>(getf(app, "path")).unwrap(),
+        page: serde_wasm_bindgen::from_value::<Page>(getf(app, "page")).unwrap(),
+    }
+}
+
 #[wasm_bindgen]
 pub async fn route(app: JsValue, path: JsValue, args: JsValue, refresh: Option<bool>) {
     let path = path.as_string();
-    let data = serde_wasm_bindgen::from_value::<Data>(app.clone()).unwrap();
+    let context = context_from_app(&app);
     let args = serde_wasm_bindgen::from_value::<Vec<(String, CryptoHash)>>(args).unwrap_or(vec![]);
-    route_aux(&app, &data, &path, args, refresh.unwrap_or(true)).await
+    route_aux(&app, &context, &path, args, refresh.unwrap_or(true)).await
 }
 
 #[wasm_bindgen]
@@ -230,6 +236,6 @@ fn set_onpopstate(app: JsValue) {
 pub async fn init(app: JsValue) {
     console_error_panic_hook::set_once();
     set_onpopstate(app.clone());
-    let data = serde_wasm_bindgen::from_value::<Data>(app.clone()).unwrap();
-    route_aux(&app, &data, &None, Vec::new(), true).await
+    let context = context_from_app(&app);
+    route_aux(&app, &context, &None, Vec::new(), true).await
 }

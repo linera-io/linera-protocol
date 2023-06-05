@@ -2611,7 +2611,6 @@ dependencies = [
  "sha3",
  "test-strategy",
  "thiserror",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -2722,6 +2721,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde-wasm-bindgen",
+ "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",

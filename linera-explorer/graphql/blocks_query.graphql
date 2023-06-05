@@ -7,21 +7,21 @@ query BlocksQuery($from: CryptoHash, $chainId: ChainId, $limit: Int) {
       executedBlock {
         block {
           chainId
-          # epoch
+          epoch
           height
           timestamp
           authenticatedSigner
           previousBlockHash
-          # incomingMessages {
-          #   origin
-          #   event
-          # }
-          # operations
+          incomingMessages {
+            origin
+            event
+          }
+          operations
         }
-        effects {
+        messages {
           destination
           authenticatedSigner
-          # effect
+          message
         }
         stateHash
       }

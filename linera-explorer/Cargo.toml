@@ -16,7 +16,8 @@ crate-type = ["cdylib"]
 wasm-bindgen = { workspace = true }
 web-sys = { version = "0.3.63", features = [ "console", "Window", "History" ] }
 js-sys = "0.3.63"
-serde = { version = "1.0.152", features = [ "derive" ] }
+serde = { workspace = true, features = [ "derive" ] }
+serde_json = { workspace = true }
 serde-wasm-bindgen = "0.4"
 graphql_client = { version = "0.13", features = [ "reqwest" ] }
 linera-base = { workspace = true }

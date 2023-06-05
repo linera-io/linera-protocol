@@ -7,7 +7,6 @@ use generic_array::typenum::Unsigned;
 use serde::{Deserialize, Serialize};
 use std::{num::ParseIntError, str::FromStr};
 use thiserror::Error;
-use wasm_bindgen::prelude::*;
 
 use crate::doc_scalar;
 
@@ -34,7 +33,6 @@ type HasherOutput = generic_array::GenericArray<u8, HasherOutputSize>;
 /// A Sha3-256 value.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
-#[wasm_bindgen]
 pub struct CryptoHash(HasherOutput);
 
 /// A signature value.

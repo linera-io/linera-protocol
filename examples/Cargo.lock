@@ -1564,7 +1564,6 @@ dependencies = [
  "sha3",
  "test-strategy",
  "thiserror",
- "wasm-bindgen",
 ]
 
 [[package]]
