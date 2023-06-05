@@ -60,7 +60,7 @@ linera-core = { workspace = true, features = ["test"] }
 linera-execution = { workspace = true, features = ["test"] }
 linera-rpc = { workspace = true, features = ["test"] }
 linera-storage = { workspace = true, features = ["test"] }
-linera-views = { workspace = true, features = ["rocksdb", "test"] }
+linera-views = { workspace = true, features = ["test"] }
 once_cell = { workspace = true }
 proptest = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
