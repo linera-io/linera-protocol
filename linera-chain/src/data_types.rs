@@ -8,11 +8,11 @@ use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
     data_types::{BlockHeight, RoundNumber, Timestamp},
     doc_scalar, ensure,
-    identifiers::{ChainId, ChannelName, Destination, EffectId, Owner},
+    identifiers::{ChainId, ChannelName, Destination, MessageId, Owner},
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    ApplicationId, BytecodeLocation, Effect, Operation,
+    ApplicationId, BytecodeLocation, Message, Operation,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -61,9 +61,9 @@ impl Block {
     pub fn bytecode_locations(&self) -> HashMap<BytecodeLocation, ChainId> {
         let mut locations = HashMap::new();
         for message in &self.incoming_messages {
-            if let Effect::System(sys_effect) = &message.event.effect {
+            if let Message::System(sys_message) = &message.event.message {
                 locations.extend(
-                    sys_effect
+                    sys_message
                         .bytecode_locations(message.event.certificate_hash)
                         .map(|location| (location, message.origin.sender)),
                 );
@@ -97,7 +97,7 @@ pub struct IncomingMessage {
     pub event: Event,
 }
 
-/// An effect together with non replayable information to ensure uniqueness in a
+/// A message together with non replayable information to ensure uniqueness in a
 /// particular inbox.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Event {
@@ -105,14 +105,14 @@ pub struct Event {
     pub certificate_hash: CryptoHash,
     /// The height of the block that created the event.
     pub height: BlockHeight,
-    /// The index of the effect.
+    /// The index of the message.
     pub index: u32,
     /// The authenticated signer for the operation that created the event, if any
     pub authenticated_signer: Option<Owner>,
-    /// The timestamp of the block that caused the effect.
+    /// The timestamp of the block that caused the message.
     pub timestamp: Timestamp,
-    /// The effect of the event (i.e. the actual payload of a message).
-    pub effect: Effect,
+    /// The message of the event (i.e. the actual payload of a message).
+    pub message: Message,
 }
 
 /// The origin of a message, relative to a particular application. Used to identify each inbox.
@@ -163,19 +163,19 @@ pub struct BlockProposal {
     pub blobs: Vec<HashedValue>,
 }
 
-/// An effect together with routing information.
+/// A message together with routing information.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct OutgoingEffect {
+pub struct OutgoingMessage {
     pub destination: Destination,
     pub authenticated_signer: Option<Owner>,
-    pub effect: Effect,
+    pub message: Message,
 }
 
-/// A block, together with the effects and the state hash resulting from its execution.
+/// A block, together with the messages and the state hash resulting from its execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ExecutedBlock {
     pub block: Block,
-    pub effects: Vec<OutgoingEffect>,
+    pub messages: Vec<OutgoingMessage>,
     pub state_hash: CryptoHash,
 }
 
@@ -393,23 +393,23 @@ impl CertificateValue {
         HashedValue { value: self, hash }
     }
 
-    /// Returns whether this value contains the effect with the specified ID.
-    pub fn has_effect(&self, effect_id: &EffectId) -> bool {
-        self.height() == effect_id.height
-            && self.chain_id() == effect_id.chain_id
-            && self.executed_block().effects.len()
-                > usize::try_from(effect_id.index).unwrap_or(usize::MAX)
+    /// Returns whether this value contains the message with the specified ID.
+    pub fn has_message(&self, message_id: &MessageId) -> bool {
+        self.height() == message_id.height
+            && self.chain_id() == message_id.chain_id
+            && self.executed_block().messages.len()
+                > usize::try_from(message_id.index).unwrap_or(usize::MAX)
     }
 
-    /// Skip `n-1` effects from the end of the block and return the effect ID, if any.
-    pub fn nth_last_effect_id(&self, n: u32) -> Option<EffectId> {
+    /// Skip `n-1` messages from the end of the block and return the message ID, if any.
+    pub fn nth_last_message_id(&self, n: u32) -> Option<MessageId> {
         if n == 0 {
             return None;
         }
-        Some(EffectId {
+        Some(MessageId {
             chain_id: self.chain_id(),
             height: self.height(),
-            index: u32::try_from(self.executed_block().effects.len())
+            index: u32::try_from(self.executed_block().messages.len())
                 .ok()?
                 .checked_sub(n)?,
         })
@@ -424,8 +424,8 @@ impl CertificateValue {
     }
 
     #[cfg(any(test, feature = "test"))]
-    pub fn effects(&self) -> &Vec<OutgoingEffect> {
-        &self.executed_block().effects
+    pub fn messages(&self) -> &Vec<OutgoingMessage> {
+        &self.executed_block().messages
     }
 
     fn executed_block(&self) -> &ExecutedBlock {
@@ -491,9 +491,9 @@ impl HashedValue {
         self.value
     }
 
-    /// Skip `n-1` effects from the end of the block and return the effect ID, if any.
-    pub fn nth_last_effect_id(&self, n: u32) -> Option<EffectId> {
-        self.value.nth_last_effect_id(n)
+    /// Skip `n-1` messages from the end of the block and return the message ID, if any.
+    pub fn nth_last_message_id(&self, n: u32) -> Option<MessageId> {
+        self.value.nth_last_message_id(n)
     }
 }
 
@@ -665,7 +665,7 @@ doc_scalar!(
 );
 doc_scalar!(
     Event,
-    "An effect together with non replayable information to ensure uniqueness in a particular inbox"
+    "A message together with non replayable information to ensure uniqueness in a particular inbox"
 );
 doc_scalar!(
     Medium,

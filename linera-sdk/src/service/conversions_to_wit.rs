@@ -6,7 +6,7 @@
 use super::{service_system_api as wit_system_api, wit_types};
 use linera_base::{
     crypto::CryptoHash,
-    identifiers::{ApplicationId, EffectId},
+    identifiers::{ApplicationId, MessageId},
 };
 use std::task::Poll;
 
@@ -62,18 +62,18 @@ impl From<Poll<Result<Vec<u8>, String>>> for wit_types::PollQuery {
 impl From<ApplicationId> for wit_system_api::ApplicationId {
     fn from(application_id: ApplicationId) -> wit_system_api::ApplicationId {
         wit_system_api::ApplicationId {
-            bytecode_id: application_id.bytecode_id.effect_id.into(),
+            bytecode_id: application_id.bytecode_id.message_id.into(),
             creation: application_id.creation.into(),
         }
     }
 }
 
-impl From<EffectId> for wit_system_api::EffectId {
-    fn from(effect_id: EffectId) -> Self {
-        wit_system_api::EffectId {
-            chain_id: effect_id.chain_id.0.into(),
-            height: effect_id.height.0,
-            index: effect_id.index,
+impl From<MessageId> for wit_system_api::MessageId {
+    fn from(message_id: MessageId) -> Self {
+        wit_system_api::MessageId {
+            chain_id: message_id.chain_id.0.into(),
+            height: message_id.height.0,
+            index: message_id.index,
         }
     }
 }

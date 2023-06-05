@@ -10,8 +10,8 @@
 
 use super::{contract, contract_system_api, service, service_system_api};
 use crate::{
-    CallResult, CalleeContext, EffectContext, EffectId, OperationContext, QueryContext, SessionId,
-    UserApplicationId,
+    CallResult, CalleeContext, MessageContext, MessageId, OperationContext, QueryContext,
+    SessionId, UserApplicationId,
 };
 use linera_base::{crypto::CryptoHash, data_types::Amount, identifiers::ChainId};
 
@@ -26,20 +26,20 @@ impl From<OperationContext> for contract::OperationContext {
     }
 }
 
-impl From<EffectContext> for contract::EffectContext {
-    fn from(host: EffectContext) -> Self {
-        contract::EffectContext {
+impl From<MessageContext> for contract::MessageContext {
+    fn from(host: MessageContext) -> Self {
+        contract::MessageContext {
             chain_id: host.chain_id.into(),
             authenticated_signer: host.authenticated_signer.map(|owner| owner.0.into()),
             height: host.height.0,
-            effect_id: host.effect_id.into(),
+            message_id: host.message_id.into(),
         }
     }
 }
 
-impl From<EffectId> for service_system_api::EffectId {
-    fn from(host: EffectId) -> Self {
-        service_system_api::EffectId {
+impl From<MessageId> for service_system_api::MessageId {
+    fn from(host: MessageId) -> Self {
+        service_system_api::MessageId {
             chain_id: host.chain_id.into(),
             height: host.height.0,
             index: host.index,
@@ -47,9 +47,9 @@ impl From<EffectId> for service_system_api::EffectId {
     }
 }
 
-impl From<EffectId> for contract_system_api::EffectId {
-    fn from(host: EffectId) -> Self {
-        contract_system_api::EffectId {
+impl From<MessageId> for contract_system_api::MessageId {
+    fn from(host: MessageId) -> Self {
+        contract_system_api::MessageId {
             chain_id: host.chain_id.into(),
             height: host.height.0,
             index: host.index,
@@ -57,9 +57,9 @@ impl From<EffectId> for contract_system_api::EffectId {
     }
 }
 
-impl From<EffectId> for contract::EffectId {
-    fn from(host: EffectId) -> Self {
-        contract::EffectId {
+impl From<MessageId> for contract::MessageId {
+    fn from(host: MessageId) -> Self {
+        contract::MessageId {
             chain_id: host.chain_id.into(),
             height: host.height.0,
             index: host.index,
@@ -108,7 +108,7 @@ impl From<SessionId> for contract_system_api::SessionId {
 impl From<UserApplicationId> for contract::ApplicationId {
     fn from(host: UserApplicationId) -> Self {
         contract::ApplicationId {
-            bytecode_id: host.bytecode_id.effect_id.into(),
+            bytecode_id: host.bytecode_id.message_id.into(),
             creation: host.creation.into(),
         }
     }
@@ -117,7 +117,7 @@ impl From<UserApplicationId> for contract::ApplicationId {
 impl From<UserApplicationId> for service_system_api::ApplicationId {
     fn from(host: UserApplicationId) -> Self {
         service_system_api::ApplicationId {
-            bytecode_id: host.bytecode_id.effect_id.into(),
+            bytecode_id: host.bytecode_id.message_id.into(),
             creation: host.creation.into(),
         }
     }
@@ -126,7 +126,7 @@ impl From<UserApplicationId> for service_system_api::ApplicationId {
 impl From<UserApplicationId> for contract_system_api::ApplicationId {
     fn from(host: UserApplicationId) -> Self {
         contract_system_api::ApplicationId {
-            bytecode_id: host.bytecode_id.effect_id.into(),
+            bytecode_id: host.bytecode_id.message_id.into(),
             creation: host.creation.into(),
         }
     }

@@ -20,7 +20,7 @@ pub use applications::{
 pub use execution::ExecutionStateView;
 pub use ownership::ChainOwnership;
 pub use system::{
-    SystemEffect, SystemExecutionError, SystemExecutionStateView, SystemOperation, SystemQuery,
+    SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery,
     SystemResponse,
 };
 #[cfg(all(
@@ -43,7 +43,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     hex_debug,
-    identifiers::{BytecodeId, ChainId, ChannelName, Destination, EffectId, Owner, SessionId},
+    identifiers::{BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId},
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -71,8 +71,8 @@ pub enum ExecutionError {
     SessionWasNotClosed,
     #[error("Invalid operation for this application")]
     InvalidOperation,
-    #[error("Invalid effect for this application")]
-    InvalidEffect,
+    #[error("Invalid message for this application")]
+    InvalidMessage,
     #[error("Invalid query for this application")]
     InvalidQuery,
     #[error("Can't call another application during a query")]
@@ -124,17 +124,17 @@ pub trait UserApplication {
         operation: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
-    /// Applies an effect originating from a cross-chain message.
-    async fn execute_effect(
+    /// Applies a message originating from a cross-chain message.
+    async fn execute_message(
         &self,
-        context: &EffectContext,
+        context: &MessageContext,
         runtime: &dyn ContractRuntime,
-        effect: &[u8],
+        message: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>;
 
     /// Executes a call from another application.
     ///
-    /// When an application is executing an operation or an effect it may call other applications,
+    /// When an application is executing an operation or a message it may call other applications,
     /// which can in turn call other applications.
     async fn handle_application_call(
         &self,
@@ -211,23 +211,23 @@ pub struct OperationContext {
     pub height: BlockHeight,
     /// The current index of the operation.
     pub index: u32,
-    /// The index of the next effect to be created.
-    pub next_effect_index: u32,
+    /// The index of the next message to be created.
+    pub next_message_index: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct EffectContext {
+pub struct MessageContext {
     /// The current chain id.
     pub chain_id: ChainId,
-    /// The authenticated signer of the operation that created the effect, if any.
+    /// The authenticated signer of the operation that created the message, if any.
     pub authenticated_signer: Option<Owner>,
     /// The current block height.
     pub height: BlockHeight,
-    /// The hash of the remote certificate that created the effect.
+    /// The hash of the remote certificate that created the message.
     pub certificate_hash: CryptoHash,
-    /// The id of the effect (based on the operation height and index in the remote
+    /// The id of the message (based on the operation height and index in the remote
     /// certificate).
-    pub effect_id: EffectId,
+    pub message_id: MessageId,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -362,12 +362,12 @@ pub enum Operation {
     },
 }
 
-/// An effect to be sent and possibly executed in the receiver's block.
+/// A message to be sent and possibly executed in the receiver's block.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum Effect {
-    /// A system effect.
-    System(SystemEffect),
-    /// A user effect (in serialized form).
+pub enum Message {
+    /// A system message.
+    System(SystemMessage),
+    /// A user message (in serialized form).
     User {
         application_id: UserApplicationId,
         #[serde(with = "serde_bytes")]
@@ -407,12 +407,12 @@ pub enum Response {
 /// the application that created them.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct RawExecutionResult<Effect> {
-    /// The signer who created the effects.
+pub struct RawExecutionResult<Message> {
+    /// The signer who created the messages.
     pub authenticated_signer: Option<Owner>,
     /// Sends messages to the given destinations, possibly forwarding the authenticated
     /// signer.
-    pub effects: Vec<(Destination, bool, Effect)>,
+    pub messages: Vec<(Destination, bool, Message)>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(ChannelName, ChainId)>,
     /// Unsubscribe chains to channels.
@@ -435,7 +435,7 @@ pub struct ChannelSubscription {
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 #[allow(clippy::large_enum_variant)]
 pub enum ExecutionResult {
-    System(RawExecutionResult<SystemEffect>),
+    System(RawExecutionResult<SystemMessage>),
     User(UserApplicationId, RawExecutionResult<Vec<u8>>),
 }
 
@@ -448,18 +448,18 @@ impl ExecutionResult {
     }
 }
 
-impl<Effect> RawExecutionResult<Effect> {
+impl<Message> RawExecutionResult<Message> {
     pub fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
         self.authenticated_signer = authenticated_signer;
         self
     }
 }
 
-impl<Effect> Default for RawExecutionResult<Effect> {
+impl<Message> Default for RawExecutionResult<Message> {
     fn default() -> Self {
         Self {
             authenticated_signer: None,
-            effects: Vec::new(),
+            messages: Vec::new(),
             subscribe: Vec::new(),
             unsubscribe: Vec::new(),
         }
@@ -467,11 +467,11 @@ impl<Effect> Default for RawExecutionResult<Effect> {
 }
 
 impl OperationContext {
-    fn next_effect_id(&self) -> EffectId {
-        EffectId {
+    fn next_message_id(&self) -> MessageId {
+        MessageId {
             chain_id: self.chain_id,
             height: self.height,
-            index: self.next_effect_index,
+            index: self.next_message_index,
         }
     }
 }
@@ -550,24 +550,24 @@ impl Operation {
     }
 }
 
-impl From<SystemEffect> for Effect {
-    fn from(effect: SystemEffect) -> Self {
-        Effect::System(effect)
+impl From<SystemMessage> for Message {
+    fn from(message: SystemMessage) -> Self {
+        Message::System(message)
     }
 }
 
-impl Effect {
-    pub fn system(effect: SystemEffect) -> Self {
-        Effect::System(effect)
+impl Message {
+    pub fn system(message: SystemMessage) -> Self {
+        Message::System(message)
     }
 
     pub fn user<A: Abi>(
         application_id: UserApplicationId<A>,
-        effect: &A::Effect,
+        message: &A::Message,
     ) -> Result<Self, bcs::Error> {
         let application_id = application_id.forget_abi();
-        let bytes = bcs::to_bytes(&effect)?;
-        Ok(Effect::User {
+        let bytes = bcs::to_bytes(&message)?;
+        Ok(Message::User {
             application_id,
             bytes,
         })

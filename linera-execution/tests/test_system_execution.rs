@@ -6,12 +6,12 @@
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::{Amount, BlockHeight},
-    identifiers::{ChainDescription, ChainId, EffectId},
+    identifiers::{ChainDescription, ChainId, MessageId},
 };
 use linera_execution::{
     system::{Account, Recipient, UserData},
-    Effect, EffectContext, ExecutionResult, ExecutionStateView, Operation, OperationContext, Query,
-    QueryContext, RawExecutionResult, Response, SystemEffect, SystemExecutionState,
+    ExecutionResult, ExecutionStateView, Message, MessageContext, Operation, OperationContext,
+    Query, QueryContext, RawExecutionResult, Response, SystemExecutionState, SystemMessage,
     SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
 };
 use linera_views::memory::MemoryContext;
@@ -36,7 +36,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         height: BlockHeight(0),
         index: 0,
         authenticated_signer: None,
-        next_effect_index: 0,
+        next_message_index: 0,
     };
     let results = view
         .execute_operation(&context, &Operation::System(operation), &mut 10_000_000)
@@ -56,21 +56,21 @@ struct Dummy;
 impl BcsSignable for Dummy {}
 
 #[tokio::test]
-async fn test_simple_system_effect() -> anyhow::Result<()> {
+async fn test_simple_system_message() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
     state.description = Some(ChainDescription::Root(0));
     let mut view =
         ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(state)
             .await;
-    let effect = SystemEffect::Credit {
+    let message = SystemMessage::Credit {
         amount: Amount::from_tokens(4),
         account: Account::chain(ChainId::root(0)),
     };
-    let context = EffectContext {
+    let context = MessageContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
         certificate_hash: CryptoHash::new(&Dummy),
-        effect_id: EffectId {
+        message_id: MessageId {
             chain_id: ChainId::root(1),
             height: BlockHeight(0),
             index: 0,
@@ -78,7 +78,7 @@ async fn test_simple_system_effect() -> anyhow::Result<()> {
         authenticated_signer: None,
     };
     let results = view
-        .execute_effect(&context, &Effect::System(effect), &mut 10_000_000)
+        .execute_message(&context, &Message::System(message), &mut 10_000_000)
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::from_tokens(4));

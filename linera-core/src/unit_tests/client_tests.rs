@@ -15,7 +15,7 @@ use crate::client::{
 use linera_base::{
     crypto::*,
     data_types::*,
-    identifiers::{ChainDescription, ChainId, EffectId, Owner},
+    identifiers::{ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_chain::data_types::{CertificateValue, ExecutedBlock};
 use linera_execution::{
@@ -475,12 +475,12 @@ where
         .await?;
     let new_key_pair = KeyPair::generate();
     // Open the new chain.
-    let (effect_id, certificate) = sender.open_chain(new_key_pair.public()).await.unwrap();
+    let (message_id, certificate) = sender.open_chain(new_key_pair.public()).await.unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
     // Make a client to try the new chain.
-    let new_id = ChainId::child(effect_id);
+    let new_id = ChainId::child(message_id);
     let mut client = builder
         .make_client(new_id, new_key_pair, None, BlockHeight::from(0))
         .await?;
@@ -525,7 +525,7 @@ where
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
     let new_key_pair = KeyPair::generate();
-    let new_id = ChainId::child(EffectId {
+    let new_id = ChainId::child(MessageId {
         chain_id: ChainId::root(1),
         height: BlockHeight::from(1),
         index: 0,
@@ -541,9 +541,9 @@ where
         .await
         .unwrap();
     // Open the new chain.
-    let (open_chain_effect_id, certificate) =
+    let (open_chain_message_id, certificate) =
         sender.open_chain(new_key_pair.public()).await.unwrap();
-    let new_id2 = ChainId::child(open_chain_effect_id);
+    let new_id2 = ChainId::child(open_chain_message_id);
     assert_eq!(new_id, new_id2);
     assert_eq!(sender.next_block_height, BlockHeight::from(2));
     assert!(sender.pending_block.is_none());
@@ -559,7 +559,7 @@ where
     assert!(matches!(
         &certificate.value(),
         CertificateValue::ConfirmedBlock { executed_block: ExecutedBlock { block, .. }, .. } if matches!(
-            block.operations[open_chain_effect_id.index as usize],
+            block.operations[open_chain_message_id.index as usize],
             Operation::System(SystemOperation::OpenChain { .. }),
         ),
     ));
@@ -616,8 +616,9 @@ where
         .await?;
     let new_key_pair = KeyPair::generate();
     // Open the new chain.
-    let (effect_id, creation_certificate) = sender.open_chain(new_key_pair.public()).await.unwrap();
-    let new_id = ChainId::child(effect_id);
+    let (message_id, creation_certificate) =
+        sender.open_chain(new_key_pair.public()).await.unwrap();
+    let new_id = ChainId::child(message_id);
     // Transfer after creating the chain.
     let transfer_certificate = sender
         .transfer_to_account(

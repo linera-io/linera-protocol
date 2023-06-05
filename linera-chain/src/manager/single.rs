@@ -5,7 +5,7 @@ use super::Outcome;
 use crate::{
     data_types::{
         Block, BlockAndRound, BlockProposal, CertificateValue, ExecutedBlock, HashedValue,
-        LiteVote, OutgoingEffect, Vote,
+        LiteVote, OutgoingMessage, Vote,
     },
     ChainError,
 };
@@ -75,7 +75,7 @@ impl SingleOwnerManager {
     pub fn create_vote(
         &mut self,
         proposal: BlockProposal,
-        effects: Vec<OutgoingEffect>,
+        messages: Vec<OutgoingMessage>,
         state_hash: CryptoHash,
         key_pair: Option<&KeyPair>,
     ) {
@@ -84,7 +84,7 @@ impl SingleOwnerManager {
             let BlockAndRound { block, .. } = proposal.content;
             let executed_block = ExecutedBlock {
                 block,
-                effects,
+                messages,
                 state_hash,
             };
             let value = HashedValue::from(CertificateValue::ConfirmedBlock {

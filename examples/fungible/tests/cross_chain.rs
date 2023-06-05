@@ -56,7 +56,7 @@ async fn test_cross_chain_transfer() {
         Some(initial_amount.saturating_sub(transfer_amount)),
     );
 
-    receiver_chain.handle_received_effects().await;
+    receiver_chain.handle_received_messages().await;
 
     assert_eq!(
         FungibleTokenAbi::query_account(application_id, &receiver_chain, receiver_account).await,

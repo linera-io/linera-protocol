@@ -4,7 +4,7 @@
 
 use super::*;
 use linera_base::crypto::{BcsSignable, CryptoHash};
-use linera_execution::{Effect, UserApplicationId};
+use linera_execution::{Message, UserApplicationId};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -19,7 +19,7 @@ fn make_event(
     certificate_hash: CryptoHash,
     height: u64,
     index: u32,
-    effect: impl Into<Vec<u8>>,
+    message: impl Into<Vec<u8>>,
 ) -> Event {
     Event {
         certificate_hash,
@@ -27,9 +27,9 @@ fn make_event(
         index,
         authenticated_signer: None,
         timestamp: Default::default(),
-        effect: Effect::User {
+        message: Message::User {
             application_id: UserApplicationId::default(),
-            bytes: effect.into(),
+            bytes: message.into(),
         },
     }
 }

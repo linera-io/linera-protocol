@@ -7,7 +7,7 @@
 use async_graphql::InputType;
 use linera_base::{
     abi::ContractAbi,
-    identifiers::{ChainId, EffectId, Owner},
+    identifiers::{ChainId, MessageId, Owner},
 };
 use linera_execution::Bytecode;
 use linera_service::config::WalletState;
@@ -437,7 +437,7 @@ impl Client {
         &self,
         from: ChainId,
         to_owner: Option<Owner>,
-    ) -> anyhow::Result<(EffectId, ChainId)> {
+    ) -> anyhow::Result<(MessageId, ChainId)> {
         let mut command = self.run_with_storage().await;
         command
             .arg("open-chain")
@@ -449,17 +449,17 @@ impl Client {
 
         let stdout = Self::run_command(&mut command).await;
         let mut split = stdout.split('\n');
-        let effect_id: EffectId = split.next().unwrap().parse()?;
+        let message_id: MessageId = split.next().unwrap().parse()?;
         let chain_id = ChainId::from_str(split.next().unwrap())?;
 
-        Ok((effect_id, chain_id))
+        Ok((message_id, chain_id))
     }
 
     async fn open_and_assign(&self, client: &Client) -> ChainId {
         let our_chain = self.get_wallet().default_chain().unwrap();
         let key = client.keygen().await.unwrap();
-        let (effect_id, new_chain) = self.open_chain(our_chain, Some(key)).await.unwrap();
-        assert_eq!(new_chain, client.assign(key, effect_id).await.unwrap());
+        let (message_id, new_chain) = self.open_chain(our_chain, Some(key)).await.unwrap();
+        assert_eq!(new_chain, client.assign(key, message_id).await.unwrap());
         new_chain
     }
 
@@ -506,13 +506,13 @@ impl Client {
         Ok(Owner::from_str(stdout.trim())?)
     }
 
-    async fn assign(&self, owner: Owner, effect_id: EffectId) -> anyhow::Result<ChainId> {
+    async fn assign(&self, owner: Owner, message_id: MessageId) -> anyhow::Result<ChainId> {
         let stdout = Self::run_command(
             self.run_with_storage()
                 .await
                 .arg("assign")
                 .args(["--key", &owner.to_string()])
-                .args(["--effect-id", &effect_id.to_string()]),
+                .args(["--message-id", &message_id.to_string()]),
         )
         .await;
 
@@ -1126,7 +1126,7 @@ async fn test_end_to_end_multiple_wallets() {
     let client_2_key = client_2.keygen().await.unwrap();
 
     // Open chain on behalf of Client 2.
-    let (effect_id, chain_2) = client_1
+    let (message_id, chain_2) = client_1
         .open_chain(chain_1, Some(client_2_key))
         .await
         .unwrap();
@@ -1134,7 +1134,7 @@ async fn test_end_to_end_multiple_wallets() {
     // Assign chain_2 to client_2_key.
     assert_eq!(
         chain_2,
-        client_2.assign(client_2_key, effect_id).await.unwrap()
+        client_2.assign(client_2_key, message_id).await.unwrap()
     );
 
     // Check initial balance of Chain 1.

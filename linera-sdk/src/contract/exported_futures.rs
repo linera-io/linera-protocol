@@ -132,7 +132,7 @@ where
 ///
 /// Loads the `Application` state and calls its [`initialize`][Contract::initialize] method.
 pub struct Initialize<Application: Contract> {
-    future: ExportedFuture<Result<ExecutionResult<Application::Effect>, String>>,
+    future: ExportedFuture<Result<ExecutionResult<Application::Message>, String>>,
     _application: PhantomData<Application>,
 }
 
@@ -173,7 +173,7 @@ where
 /// Loads the `Application` state and calls its
 /// [`execute_operation`][Contract::execute_operation] method.
 pub struct ExecuteOperation<Application: Contract> {
-    future: ExportedFuture<Result<ExecutionResult<Application::Effect>, String>>,
+    future: ExportedFuture<Result<ExecutionResult<Application::Message>, String>>,
     _application: PhantomData<Application>,
 }
 
@@ -211,30 +211,30 @@ where
 }
 
 /// Future implementation exported from the guest to allow the host to call
-/// [`Contract::execute_effect`].
+/// [`Contract::execute_message`].
 ///
-/// Loads the `Application` state and calls its [`execute_effect`][Contract::execute_effect]
+/// Loads the `Application` state and calls its [`execute_message`][Contract::execute_message]
 /// method.
-pub struct ExecuteEffect<Application: Contract> {
-    future: ExportedFuture<Result<ExecutionResult<Application::Effect>, String>>,
+pub struct ExecuteMessage<Application: Contract> {
+    future: ExportedFuture<Result<ExecutionResult<Application::Message>, String>>,
     _application: PhantomData<Application>,
 }
 
-impl<Application> ExecuteEffect<Application>
+impl<Application> ExecuteMessage<Application>
 where
     Application: Contract,
 {
     /// Creates the exported future that the host can poll.
     ///
     /// This is called from the host.
-    pub fn new(context: wit_types::EffectContext, effect: Vec<u8>) -> Self {
+    pub fn new(context: wit_types::MessageContext, message: Vec<u8>) -> Self {
         ContractLogger::install();
-        ExecuteEffect {
+        ExecuteMessage {
             future: ExportedFuture::new(Application::Storage::execute_with_state(
                 move |application| {
                     async move {
-                        let effect: Application::Effect = bcs::from_bytes(&effect)?;
-                        application.execute_effect(&context.into(), effect).await
+                        let message: Application::Message = bcs::from_bytes(&message)?;
+                        application.execute_message(&context.into(), message).await
                     }
                     .boxed()
                 },
@@ -261,7 +261,7 @@ pub struct HandleApplicationCall<Application: Contract> {
     future: ExportedFuture<
         Result<
             ApplicationCallResult<
-                Application::Effect,
+                Application::Message,
                 Application::Response,
                 Application::SessionState,
             >,
@@ -323,7 +323,7 @@ pub struct HandleSessionCall<Application: Contract> {
     future: ExportedFuture<
         Result<
             SessionCallResult<
-                Application::Effect,
+                Application::Message,
                 Application::Response,
                 Application::SessionState,
             >,

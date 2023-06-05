@@ -4,9 +4,9 @@
 use crate::{
     runtime::{ApplicationStatus, ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
-    ContractRuntime, Effect, EffectContext, ExecutionError, ExecutionResult,
-    ExecutionRuntimeContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
-    Response, SystemEffect, UserApplicationDescription, UserApplicationId,
+    ContractRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Message,
+    MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response,
+    SystemMessage, UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
     ensure,
@@ -112,7 +112,7 @@ where
             authenticated_signer: None,
             height: application_description.creation.height,
             index: application_description.creation.index,
-            next_effect_index: 0,
+            next_message_index: 0,
         };
 
         let action = UserAction::Initialize(&context, initialization_argument);
@@ -138,7 +138,7 @@ where
 enum UserAction<'a> {
     Initialize(&'a OperationContext, Vec<u8>),
     Operation(&'a OperationContext, &'a [u8]),
-    Effect(&'a EffectContext, &'a [u8]),
+    Message(&'a MessageContext, &'a [u8]),
 }
 
 impl<'a> UserAction<'a> {
@@ -147,7 +147,7 @@ impl<'a> UserAction<'a> {
         match self {
             Initialize(context, _) => context.authenticated_signer,
             Operation(context, _) => context.authenticated_signer,
-            Effect(context, _) => context.authenticated_signer,
+            Message(context, _) => context.authenticated_signer,
         }
     }
 }
@@ -204,15 +204,17 @@ where
                     .execute_operation(context, &runtime, operation)
                     .await
             }
-            UserAction::Effect(context, effect) => {
-                application.execute_effect(context, &runtime, effect).await
+            UserAction::Message(context, message) => {
+                application
+                    .execute_message(context, &runtime, message)
+                    .await
             }
         };
         if let Err(ExecutionError::UserError(message)) = &call_result {
             tracing::error!("User application reported an error: {message}");
         }
         let mut result = call_result?;
-        // Set the authenticated signer to be used in outgoing effects.
+        // Set the authenticated signer to be used in outgoing messages.
         result.authenticated_signer = signer;
         *remaining_fuel = runtime.remaining_fuel();
 
@@ -227,16 +229,16 @@ where
             .registry
             .describe_applications_with_dependencies(vec![application_id], &Default::default())
             .await?;
-        for effect in &result.effects {
-            system_result.effects.push((
-                effect.0.clone(),
+        for message in &result.messages {
+            system_result.messages.push((
+                message.0.clone(),
                 false,
-                SystemEffect::RegisterApplications {
+                SystemMessage::RegisterApplications {
                     applications: applications.clone(),
                 },
             ));
         }
-        if !system_result.effects.is_empty() {
+        if !system_result.messages.is_empty() {
             results.push(ExecutionResult::System(system_result));
         }
         // Update externally-visible results.
@@ -291,26 +293,26 @@ where
         }
     }
 
-    pub async fn execute_effect(
+    pub async fn execute_message(
         &mut self,
-        context: &EffectContext,
-        effect: &Effect,
+        context: &MessageContext,
+        message: &Message,
         remaining_fuel: &mut u64,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
-        match effect {
-            Effect::System(effect) => {
-                let result = self.system.execute_effect(context, effect).await?;
+        match message {
+            Message::System(message) => {
+                let result = self.system.execute_message(context, message).await?;
                 Ok(vec![ExecutionResult::System(result)])
             }
-            Effect::User {
+            Message::User {
                 application_id,
                 bytes,
             } => {
                 self.run_user_action(
                     *application_id,
                     context.chain_id,
-                    UserAction::Effect(context, bytes),
+                    UserAction::Message(context, bytes),
                     remaining_fuel,
                 )
                 .await

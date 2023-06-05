@@ -5,7 +5,7 @@
 use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChainOwnership, ChannelName,
-    ChannelSubscription, Destination, EffectContext, OperationContext, QueryContext,
+    ChannelSubscription, Destination, MessageContext, OperationContext, QueryContext,
     RawExecutionResult, UserApplicationDescription, UserApplicationId,
 };
 use async_graphql::Enum;
@@ -14,7 +14,7 @@ use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, ArithmeticError, Timestamp},
     ensure, hex_debug,
-    identifiers::{BytecodeId, ChainDescription, ChainId, EffectId, Owner},
+    identifiers::{BytecodeId, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_views::{
     common::Context,
@@ -159,13 +159,13 @@ pub enum SystemOperation {
     },
 }
 
-/// The effect of a system operation to be performed on a remote chain.
+/// A system message meant to be executed on a remote chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum SystemEffect {
+pub enum SystemMessage {
     /// Credits `amount` units of value to the account.
     Credit { account: Account, amount: Amount },
     /// Withdraws `amount` units of value from the account and starts a transfer to credit
-    /// the recipient. The effect must be properly authenticated. Receiver chains may
+    /// the recipient. The message must be properly authenticated. Receiver chains may
     /// refuse it depending on their configuration.
     Withdraw {
         account: Account,
@@ -216,35 +216,35 @@ pub enum SystemEffect {
     RequestApplication(UserApplicationId),
 }
 
-impl SystemEffect {
-    /// Returns an iterator over all bytecode locations this effect introduces to the receiving
+impl SystemMessage {
+    /// Returns an iterator over all bytecode locations this message introduces to the receiving
     /// chain, given the hash of the certificate that it originates from.
     pub fn bytecode_locations(
         &self,
         certificate_hash: CryptoHash,
     ) -> Box<dyn Iterator<Item = BytecodeLocation> + '_> {
         match self {
-            SystemEffect::BytecodePublished { operation_index } => {
+            SystemMessage::BytecodePublished { operation_index } => {
                 Box::new(iter::once(BytecodeLocation {
                     certificate_hash,
                     operation_index: *operation_index,
                 }))
             }
-            SystemEffect::BytecodeLocations {
+            SystemMessage::BytecodeLocations {
                 locations: new_locations,
             } => Box::new(new_locations.iter().map(|(_id, location)| *location)),
-            SystemEffect::RegisterApplications { applications } => {
+            SystemMessage::RegisterApplications { applications } => {
                 Box::new(applications.iter().map(|app| app.bytecode_location))
             }
-            SystemEffect::Credit { .. }
-            | SystemEffect::Withdraw { .. }
-            | SystemEffect::OpenChain { .. }
-            | SystemEffect::SetCommittees { .. }
-            | SystemEffect::Subscribe { .. }
-            | SystemEffect::Unsubscribe { .. }
-            | SystemEffect::ApplicationCreated { .. }
-            | SystemEffect::Notify { .. }
-            | SystemEffect::RequestApplication(_) => Box::new(iter::empty()),
+            SystemMessage::Credit { .. }
+            | SystemMessage::Withdraw { .. }
+            | SystemMessage::OpenChain { .. }
+            | SystemMessage::SetCommittees { .. }
+            | SystemMessage::Subscribe { .. }
+            | SystemMessage::Unsubscribe { .. }
+            | SystemMessage::ApplicationCreated { .. }
+            | SystemMessage::Notify { .. }
+            | SystemMessage::RequestApplication(_) => Box::new(iter::empty()),
         }
     }
 }
@@ -447,7 +447,7 @@ where
         operation: &SystemOperation,
     ) -> Result<
         (
-            RawExecutionResult<SystemEffect>,
+            RawExecutionResult<SystemMessage>,
             Option<(UserApplicationId, Vec<u8>)>,
         ),
         SystemExecutionError,
@@ -462,7 +462,7 @@ where
                 admin_id,
                 epoch,
             } => {
-                let child_id = ChainId::child(context.next_effect_id());
+                let child_id = ChainId::child(context.next_message_id());
                 ensure!(
                     self.admin_id.get().as_ref() == Some(admin_id),
                     SystemExecutionError::InvalidNewChainAdminId(child_id)
@@ -481,7 +481,7 @@ where
                 let e1 = (
                     Destination::Recipient(child_id),
                     false,
-                    SystemEffect::OpenChain {
+                    SystemMessage::OpenChain {
                         public_key: *public_key,
                         committees: committees.clone(),
                         admin_id: *admin_id,
@@ -495,12 +495,12 @@ where
                 let e2 = (
                     Destination::Recipient(*admin_id),
                     false,
-                    SystemEffect::Subscribe {
+                    SystemMessage::Subscribe {
                         id: child_id,
                         subscription,
                     },
                 );
-                result.effects.extend([e1, e2]);
+                result.messages.extend([e1, e2]);
             }
             ChangeOwner { new_public_key } => {
                 self.ownership.set(ChainOwnership::single(*new_public_key));
@@ -514,10 +514,10 @@ where
                 // Unsubscribe to all channels.
                 self.subscriptions
                     .for_each_index(|subscription| {
-                        result.effects.push((
+                        result.messages.push((
                             Destination::Recipient(subscription.chain_id),
                             false,
-                            SystemEffect::Unsubscribe {
+                            SystemMessage::Unsubscribe {
                                 id: context.chain_id,
                                 subscription,
                             },
@@ -555,10 +555,10 @@ where
                 );
                 balance.try_sub_assign(*amount)?;
                 if let Recipient::Account(account) = recipient {
-                    result.effects.push((
+                    result.messages.push((
                         Destination::Recipient(account.chain_id),
                         false,
-                        SystemEffect::Credit {
+                        SystemMessage::Credit {
                             amount: *amount,
                             account: *account,
                         },
@@ -580,10 +580,10 @@ where
                     *amount > Amount::zero(),
                     SystemExecutionError::IncorrectClaimAmount
                 );
-                result.effects.push((
+                result.messages.push((
                     Destination::Recipient(*target),
                     true,
-                    SystemEffect::Withdraw {
+                    SystemMessage::Withdraw {
                         amount: *amount,
                         account: Account {
                             chain_id: *target,
@@ -614,10 +614,10 @@ where
                 );
                 self.committees.get_mut().insert(*epoch, committee.clone());
                 self.epoch.set(Some(*epoch));
-                result.effects.push((
+                result.messages.push((
                     Destination::Subscribers(SystemChannel::Admin.name()),
                     false,
-                    SystemEffect::SetCommittees {
+                    SystemMessage::SetCommittees {
                         admin_id: *admin_id,
                         epoch: self.epoch.get().expect("chain is active"),
                         committees: self.committees.get().clone(),
@@ -638,10 +638,10 @@ where
                     self.committees.get_mut().remove(epoch).is_some(),
                     SystemExecutionError::InvalidCommitteeRemoval
                 );
-                result.effects.push((
+                result.messages.push((
                     Destination::Subscribers(SystemChannel::Admin.name()),
                     false,
-                    SystemEffect::SetCommittees {
+                    SystemMessage::SetCommittees {
                         admin_id: *admin_id,
                         epoch: self.epoch.get().expect("chain is active"),
                         committees: self.committees.get().clone(),
@@ -668,10 +668,10 @@ where
                     SystemExecutionError::NoSuchChannel(context.chain_id, *channel)
                 );
                 self.subscriptions.insert(&subscription)?;
-                result.effects.push((
+                result.messages.push((
                     Destination::Recipient(*chain_id),
                     false,
-                    SystemEffect::Subscribe {
+                    SystemMessage::Subscribe {
                         id: context.chain_id,
                         subscription,
                     },
@@ -687,22 +687,22 @@ where
                     SystemExecutionError::InvalidUnsubscription(context.chain_id, *channel)
                 );
                 self.subscriptions.remove(&subscription)?;
-                result.effects.push((
+                result.messages.push((
                     Destination::Recipient(*chain_id),
                     false,
-                    SystemEffect::Unsubscribe {
+                    SystemMessage::Unsubscribe {
                         id: context.chain_id,
                         subscription,
                     },
                 ));
             }
             PublishBytecode { .. } => {
-                // Send a `BytecodePublished` effect to ourself so that we can broadcast
+                // Send a `BytecodePublished` message to ourself so that we can broadcast
                 // the bytecode-id next.
-                result.effects.push((
+                result.messages.push((
                     Destination::Recipient(context.chain_id),
                     false,
-                    SystemEffect::BytecodePublished {
+                    SystemMessage::BytecodePublished {
                         operation_index: context.index,
                     },
                 ));
@@ -715,7 +715,7 @@ where
             } => {
                 let id = UserApplicationId {
                     bytecode_id: *bytecode_id,
-                    creation: context.next_effect_id(),
+                    creation: context.next_message_id(),
                 };
                 self.registry
                     .register_new_application(
@@ -724,44 +724,44 @@ where
                         required_application_ids.clone(),
                     )
                     .await?;
-                // Send an effect to ourself to increment the effect ID.
-                result.effects.push((
+                // Send a message to ourself to increment the message ID.
+                result.messages.push((
                     Destination::Recipient(context.chain_id),
                     false,
-                    SystemEffect::ApplicationCreated,
+                    SystemMessage::ApplicationCreated,
                 ));
                 new_application = Some((id, initialization_argument.clone()));
             }
             RequestApplication {
                 chain_id,
                 application_id,
-            } => result.effects.push((
+            } => result.messages.push((
                 Destination::Recipient(*chain_id),
                 false,
-                SystemEffect::RequestApplication(*application_id),
+                SystemMessage::RequestApplication(*application_id),
             )),
         }
 
         Ok((result, new_application))
     }
 
-    /// Executes the recipient's side of an operation, aka a "remote effect".
+    /// Executes a cross-chain message that represents the recipient's side of an operation.
     ///
-    /// * Effects should not return an error unless it is a temporary failure (e.g.
+    /// * Messages should not return an error unless it is a temporary failure (e.g.
     /// storage) or a global system failure. An error will fail the entire cross-chain
     /// request, allowing it to be retried later.
     ///
     /// * If execution is impossible for a deterministic reason (e.g. insufficient
-    /// funds), effects should fail silently and be skipped (similar to a transaction in
+    /// funds), messages should fail silently and be skipped (similar to a transaction in
     /// traditional blockchains).
-    pub async fn execute_effect(
+    pub async fn execute_message(
         &mut self,
-        context: &EffectContext,
-        effect: &SystemEffect,
-    ) -> Result<RawExecutionResult<SystemEffect>, SystemExecutionError> {
+        context: &MessageContext,
+        message: &SystemMessage,
+    ) -> Result<RawExecutionResult<SystemMessage>, SystemExecutionError> {
         let mut result = RawExecutionResult::default();
-        use SystemEffect::*;
-        match effect {
+        use SystemMessage::*;
+        match message {
             Credit { amount, account } if context.chain_id == account.chain_id => {
                 match &account.owner {
                     None => {
@@ -789,10 +789,10 @@ where
                 let balance = self.balances.get_mut_or_default(owner).await?;
                 if balance.try_sub_assign(*amount).is_ok() {
                     if let Recipient::Account(account) = recipient {
-                        result.effects.push((
+                        result.messages.push((
                             Destination::Recipient(account.chain_id),
                             false,
-                            SystemEffect::Credit {
+                            SystemMessage::Credit {
                                 amount: *amount,
                                 account: *account,
                             },
@@ -817,23 +817,23 @@ where
             Subscribe { id, subscription } if subscription.chain_id == context.chain_id => {
                 // Notify the subscriber about this block, so that it is included in the
                 // receive_log of the subscriber and correctly synchronized.
-                result.effects.push((
+                result.messages.push((
                     Destination::Recipient(*id),
                     false,
-                    SystemEffect::Notify { id: *id },
+                    SystemMessage::Notify { id: *id },
                 ));
                 result.subscribe.push((subscription.name.clone(), *id));
             }
             Unsubscribe { id, subscription } if subscription.chain_id == context.chain_id => {
-                result.effects.push((
+                result.messages.push((
                     Destination::Recipient(*id),
                     false,
-                    SystemEffect::Notify { id: *id },
+                    SystemMessage::Notify { id: *id },
                 ));
                 result.unsubscribe.push((subscription.name.clone(), *id));
             }
             BytecodePublished { operation_index } => {
-                let bytecode_id = BytecodeId::new(context.effect_id);
+                let bytecode_id = BytecodeId::new(context.message_id);
                 let bytecode_location = BytecodeLocation {
                     certificate_hash: context.certificate_hash,
                     operation_index: *operation_index,
@@ -841,10 +841,10 @@ where
                 self.registry
                     .register_published_bytecode(bytecode_id, bytecode_location)?;
                 let locations = self.registry.bytecode_locations().await?;
-                result.effects.push((
+                result.messages.push((
                     Destination::Subscribers(SystemChannel::PublishedBytecodes.name()),
                     false,
-                    SystemEffect::BytecodeLocations { locations },
+                    SystemMessage::BytecodeLocations { locations },
                 ));
             }
             BytecodeLocations { locations } => {
@@ -854,7 +854,7 @@ where
             }
             ApplicationCreated { .. } | Notify { .. } => (),
             OpenChain { .. } => {
-                // This special effect is executed immediately when cross-chain requests are received.
+                // This special message is executed immediately when cross-chain requests are received.
             }
             RegisterApplications { applications } => {
                 for application in applications {
@@ -871,15 +871,15 @@ where
                         &Default::default(),
                     )
                     .await?;
-                result.effects.push((
-                    Destination::Recipient(context.effect_id.chain_id),
+                result.messages.push((
+                    Destination::Recipient(context.message_id.chain_id),
                     false,
-                    SystemEffect::RegisterApplications { applications },
+                    SystemMessage::RegisterApplications { applications },
                 ));
             }
             _ => {
                 tracing::error!(
-                    "Skipping unexpected received effect: {effect:?} with context: {context:?}"
+                    "Skipping unexpected received message: {message:?} with context: {context:?}"
                 );
             }
         }
@@ -890,7 +890,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn open_chain(
         &mut self,
-        effect_id: EffectId,
+        message_id: MessageId,
         public_key: PublicKey,
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
@@ -901,7 +901,7 @@ where
         assert!(self.description.get().is_none());
         assert!(!self.ownership.get().is_active());
         assert!(self.committees.get().is_empty());
-        let description = ChainDescription::Child(effect_id);
+        let description = ChainDescription::Child(message_id);
         self.description.set(Some(description));
         self.epoch.set(Some(epoch));
         self.committees.set(committees);

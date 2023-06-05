@@ -14,7 +14,7 @@ pub struct Pricing {
     /// The base price for each certificate, to compensate for the communication and signing
     /// overhead.
     pub certificate: Amount,
-    /// The price per unit of fuel used when executing effects and operations for user applications.
+    /// The price per unit of fuel used when executing messages and operations for user applications.
     pub fuel: Amount,
     /// The cost to store a block's operations and incoming messages, per byte.
     pub storage: Amount,

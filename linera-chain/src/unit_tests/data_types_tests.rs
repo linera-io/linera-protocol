@@ -29,7 +29,7 @@ fn test_signed_values() {
     };
     let executed_block = ExecutedBlock {
         block,
-        effects: Vec::new(),
+        messages: Vec::new(),
         state_hash: CryptoHash::new(&Dummy),
     };
     let value = HashedValue::new_confirmed(executed_block);
@@ -69,7 +69,7 @@ fn test_certificates() {
     };
     let executed_block = ExecutedBlock {
         block,
-        effects: Vec::new(),
+        messages: Vec::new(),
         state_hash: CryptoHash::new(&Dummy),
     };
     let value = HashedValue::new_confirmed(executed_block);

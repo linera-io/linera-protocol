@@ -8,12 +8,12 @@ mod state;
 use self::state::FungibleToken;
 use async_trait::async_trait;
 use fungible::{
-    Account, AccountOwner, ApplicationCall, Destination, Effect, Operation, SessionCall,
+    Account, AccountOwner, ApplicationCall, Destination, Message, Operation, SessionCall,
 };
 use linera_sdk::{
     base::{Amount, ApplicationId, Owner, SessionId, WithContractAbi},
     contract::system_api,
-    ApplicationCallResult, CalleeContext, Contract, EffectContext, ExecutionResult,
+    ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
     OperationContext, SessionCallResult, ViewStateStorage,
 };
 use std::str::FromStr;
@@ -34,7 +34,7 @@ impl Contract for FungibleToken {
         &mut self,
         context: &OperationContext,
         mut state: Self::InitializationArgument,
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
         // If initial accounts are empty, creator gets 1M tokens to act like a faucet.
         if state.accounts.is_empty() {
             if let Some(owner) = context.authenticated_signer {
@@ -52,7 +52,7 @@ impl Contract for FungibleToken {
         &mut self,
         context: &OperationContext,
         operation: Self::Operation,
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
         match operation {
             Operation::Transfer {
                 owner,
@@ -81,17 +81,17 @@ impl Contract for FungibleToken {
         }
     }
 
-    async fn execute_effect(
+    async fn execute_message(
         &mut self,
-        context: &EffectContext,
-        effect: Effect,
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error> {
-        match effect {
-            Effect::Credit { owner, amount } => {
+        context: &MessageContext,
+        message: Message,
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+        match message {
+            Message::Credit { owner, amount } => {
                 self.credit(owner, amount).await;
                 Ok(ExecutionResult::default())
             }
-            Effect::Withdraw {
+            Message::Withdraw {
                 owner,
                 amount,
                 target_account,
@@ -110,7 +110,7 @@ impl Contract for FungibleToken {
         context: &CalleeContext,
         call: ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>
+    ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {
         match call {
             ApplicationCall::Balance { owner } => {
@@ -161,7 +161,7 @@ impl Contract for FungibleToken {
         state: Self::SessionState,
         request: SessionCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Effect, Amount, Self::SessionState>, Self::Error> {
+    ) -> Result<SessionCallResult<Self::Message, Amount, Self::SessionState>, Self::Error> {
         match request {
             SessionCall::Balance => self.handle_session_balance(state),
             SessionCall::Transfer {
@@ -193,7 +193,7 @@ impl FungibleToken {
     fn handle_session_balance(
         &self,
         balance: Amount,
-    ) -> Result<SessionCallResult<Effect, Amount, Amount>, Error> {
+    ) -> Result<SessionCallResult<Message, Amount, Amount>, Error> {
         let application_call_result = ApplicationCallResult {
             value: balance,
             execution_result: ExecutionResult::default(),
@@ -212,7 +212,7 @@ impl FungibleToken {
         mut balance: Amount,
         amount: Amount,
         destination: Destination,
-    ) -> Result<SessionCallResult<Effect, Amount, Amount>, Error> {
+    ) -> Result<SessionCallResult<Message, Amount, Amount>, Error> {
         balance
             .try_sub_assign(amount)
             .map_err(|_| Error::InsufficientSessionBalance)?;
@@ -232,20 +232,20 @@ impl FungibleToken {
         source_account: Account,
         amount: Amount,
         target_account: Account,
-    ) -> Result<ExecutionResult<Effect>, Error> {
+    ) -> Result<ExecutionResult<Message>, Error> {
         if source_account.chain_id == system_api::current_chain_id() {
             self.debit(source_account.owner, amount).await?;
             Ok(self
                 .finish_transfer_to_account(amount, target_account)
                 .await)
         } else {
-            let effect = Effect::Withdraw {
+            let message = Message::Withdraw {
                 owner: source_account.owner,
                 amount,
                 target_account,
             };
             Ok(ExecutionResult::default()
-                .with_authenticated_effect(source_account.chain_id, effect))
+                .with_authenticated_message(source_account.chain_id, message))
         }
     }
 
@@ -254,7 +254,7 @@ impl FungibleToken {
         &mut self,
         amount: Amount,
         destination: Destination,
-    ) -> ApplicationCallResult<Effect, Amount, Amount> {
+    ) -> ApplicationCallResult<Message, Amount, Amount> {
         let mut result = ApplicationCallResult::default();
         match destination {
             Destination::Account(account) => {
@@ -272,16 +272,16 @@ impl FungibleToken {
         &mut self,
         amount: Amount,
         account: Account,
-    ) -> ExecutionResult<Effect> {
+    ) -> ExecutionResult<Message> {
         if account.chain_id == system_api::current_chain_id() {
             self.credit(account.owner, amount).await;
             ExecutionResult::default()
         } else {
-            let effect = Effect::Credit {
+            let message = Message::Credit {
                 owner: account.owner,
                 amount,
             };
-            ExecutionResult::default().with_effect(account.chain_id, effect)
+            ExecutionResult::default().with_message(account.chain_id, message)
         }
     }
 }

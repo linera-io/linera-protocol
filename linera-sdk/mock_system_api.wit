@@ -38,12 +38,12 @@ variant write-operation {
 
 record application-id {
     bytecode-id: bytecode-id,
-    creation: effect-id,
+    creation: message-id,
 }
 
-type bytecode-id = effect-id
+type bytecode-id = message-id
 
-record effect-id {
+record message-id {
     chain-id: chain-id,
     height: block-height,
     index: u32,

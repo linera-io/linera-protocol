@@ -14,7 +14,7 @@ impl ContractAbi for MetaCounterAbi {
     type Parameters = ApplicationId<counter::CounterAbi>;
     type Operation = (ChainId, u64);
     type ApplicationCall = ();
-    type Effect = u64;
+    type Message = u64;
     type SessionCall = ();
     type Response = ();
     type SessionState = ();

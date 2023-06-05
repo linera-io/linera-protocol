@@ -10,7 +10,7 @@ use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{BytecodeId, ChainDescription, ChainId, EffectId},
+    identifiers::{BytecodeId, ChainDescription, ChainId, MessageId},
 };
 use linera_chain::data_types::{Certificate, CertificateValue, ExecutedBlock};
 use linera_core::{
@@ -661,7 +661,7 @@ enum ClientCommand {
         #[structopt(long)]
         certificate: Option<Amount>,
 
-        /// Set the price per unit of fuel when executing user effects and operations.
+        /// Set the price per unit of fuel when executing user messages and operations.
         #[structopt(long)]
         fuel: Option<Amount>,
 
@@ -717,7 +717,7 @@ enum ClientCommand {
         #[structopt(long, default_value = "0")]
         certificate_price: Amount,
 
-        /// Set the price per unit of fuel when executing user effects and operations.
+        /// Set the price per unit of fuel when executing user messages and operations.
         #[structopt(long, default_value = "0")]
         fuel_price: Amount,
 
@@ -853,10 +853,10 @@ enum ClientCommand {
         #[structopt(long)]
         key: PublicKey,
 
-        /// The ID of the effect that created the chain. (This uniquely describes the
+        /// The ID of the message that created the chain. (This uniquely describes the
         /// chain and where it was created.)
         #[structopt(long)]
-        effect_id: EffectId,
+        message_id: MessageId,
     },
 
     /// Show the contents of the wallet.
@@ -953,13 +953,13 @@ where
                 };
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
-                let (effect_id, certificate) =
+                let (message_id, certificate) =
                     chain_client.open_chain(new_public_key).await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
                 info!("{:#?}", certificate);
                 context.update_wallet_from_client(&mut chain_client).await;
-                let id = ChainId::child(effect_id);
+                let id = ChainId::child(message_id);
                 let timestamp = match certificate.value() {
                     CertificateValue::ConfirmedBlock {
                         executed_block: ExecutedBlock { block, .. },
@@ -968,9 +968,9 @@ where
                     _ => panic!("Unexpected certificate."),
                 };
                 context.update_wallet_for_new_chain(id, key_pair, timestamp);
-                // Print the new chain ID and effect ID on stdout for scripting purposes.
-                println!("{}", effect_id);
-                println!("{}", ChainId::child(effect_id));
+                // Print the new chain ID and message ID on stdout for scripting purposes.
+                println!("{}", message_id);
+                println!("{}", ChainId::child(message_id));
                 context.save_wallet();
             }
 
@@ -1043,7 +1043,7 @@ where
                     .into_iter()
                     .map(|c| match c.value() {
                         CertificateValue::ConfirmedBlock { executed_block, .. } => {
-                            executed_block.effects.len()
+                            executed_block.messages.len()
                         }
                         CertificateValue::ValidatedBlock { .. } => 0,
                     })
@@ -1095,7 +1095,7 @@ where
                         println!(
                             "Pricing:\n\
                             {:.2} base cost per block\n\
-                            {:.2} per unit of fuel used in executing user operations and effects\n\
+                            {:.2} per unit of fuel used in executing user operations and messages\n\
                             {:.2} per byte of operations and incoming messages\n\
                             {:.2} per byte of outgoing messages",
                             pricing.certificate, pricing.fuel, pricing.storage, pricing.messages
@@ -1369,7 +1369,7 @@ where
                 context.save_wallet();
             }
 
-            Assign { key, effect_id } => {
+            Assign { key, message_id } => {
                 let state = WorkerState::new("Local node".to_string(), None, storage)
                     .with_allow_inactive_chains(true)
                     .with_allow_messages_from_deprecated_epochs(true);
@@ -1385,17 +1385,17 @@ where
                 let nodes = context.make_node_provider().make_nodes(committee)?;
 
                 // Download the parent chain.
-                let target_height = effect_id.height.try_add_one()?;
+                let target_height = message_id.height.try_add_one()?;
                 node_client
-                    .download_certificates(nodes, effect_id.chain_id, target_height)
+                    .download_certificates(nodes, message_id.chain_id, target_height)
                     .await
                     .context("failed to download parent chain")?;
 
-                // The initial timestamp for the new chain is taken from the block with the effect.
+                // The initial timestamp for the new chain is taken from the block with the message.
                 let certificate = node_client
-                    .certificate_for(&effect_id)
+                    .certificate_for(&message_id)
                     .await
-                    .context("could not find OpenChain effect")?;
+                    .context("could not find OpenChain message")?;
                 let timestamp = match certificate.value() {
                     CertificateValue::ConfirmedBlock {
                         executed_block: ExecutedBlock { block, .. },
@@ -1403,7 +1403,7 @@ where
                     } => block.timestamp,
                     _ => panic!("Unexpected certificate."),
                 };
-                let chain_id = ChainId::child(effect_id);
+                let chain_id = ChainId::child(message_id);
                 context
                     .wallet_state
                     .assign_new_chain_to_key(key, chain_id, timestamp)

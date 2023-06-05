@@ -16,7 +16,7 @@ use crate::{
 use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
-    identifiers::{BytecodeId, ChainId, EffectId},
+    identifiers::{BytecodeId, ChainId, MessageId},
 };
 
 impl From<contract::SessionCallResult> for (SessionCallResult, Vec<u8>) {
@@ -44,10 +44,12 @@ impl From<contract::ApplicationCallResult> for ApplicationCallResult {
 
 impl From<contract::ExecutionResult> for RawExecutionResult<Vec<u8>> {
     fn from(result: contract::ExecutionResult) -> Self {
-        let effects = result
-            .effects
+        let messages = result
+            .messages
             .into_iter()
-            .map(|(destination, authenticated, effect)| (destination.into(), authenticated, effect))
+            .map(|(destination, authenticated, message)| {
+                (destination.into(), authenticated, message)
+            })
             .collect();
 
         let subscribe = result
@@ -64,7 +66,7 @@ impl From<contract::ExecutionResult> for RawExecutionResult<Vec<u8>> {
 
         RawExecutionResult {
             authenticated_signer: None,
-            effects,
+            messages,
             subscribe,
             unsubscribe,
         }
@@ -125,15 +127,15 @@ impl From<contract_system_api::ApplicationId> for UserApplicationId {
     }
 }
 
-impl From<contract_system_api::EffectId> for BytecodeId {
-    fn from(guest: contract_system_api::EffectId) -> Self {
+impl From<contract_system_api::MessageId> for BytecodeId {
+    fn from(guest: contract_system_api::MessageId) -> Self {
         BytecodeId::new(guest.into())
     }
 }
 
-impl From<contract_system_api::EffectId> for EffectId {
-    fn from(guest: contract_system_api::EffectId) -> Self {
-        EffectId {
+impl From<contract_system_api::MessageId> for MessageId {
+    fn from(guest: contract_system_api::MessageId) -> Self {
+        MessageId {
             chain_id: guest.chain_id.into(),
             height: BlockHeight(guest.height),
             index: guest.index,
@@ -169,15 +171,15 @@ impl From<service_system_api::ApplicationId> for UserApplicationId {
     }
 }
 
-impl From<service_system_api::EffectId> for BytecodeId {
-    fn from(guest: service_system_api::EffectId) -> Self {
+impl From<service_system_api::MessageId> for BytecodeId {
+    fn from(guest: service_system_api::MessageId) -> Self {
         BytecodeId::new(guest.into())
     }
 }
 
-impl From<service_system_api::EffectId> for EffectId {
-    fn from(guest: service_system_api::EffectId) -> Self {
-        EffectId {
+impl From<service_system_api::MessageId> for MessageId {
+    fn from(guest: service_system_api::MessageId) -> Self {
+        MessageId {
             chain_id: guest.chain_id.into(),
             height: BlockHeight(guest.height),
             index: guest.index,

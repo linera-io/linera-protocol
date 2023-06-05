@@ -57,7 +57,7 @@ use async_trait::async_trait;
 use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     data_types::BlockHeight,
-    identifiers::{ApplicationId, ChainId, ChannelName, Destination, EffectId, Owner, SessionId},
+    identifiers::{ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{error::Error, fmt::Debug, sync::Arc};
@@ -83,7 +83,7 @@ pub struct ViewStateStorage<A>(std::marker::PhantomData<A>);
 /// are triggered by the execution of blocks in a chain. Their execution may modify
 /// storage and is gas-metered.
 ///
-/// Below we use the word "transaction" to refer to the current operation or effect being
+/// Below we use the word "transaction" to refer to the current operation or message being
 /// executed.
 #[async_trait]
 pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
@@ -111,12 +111,12 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// created the application.
     ///
     /// Returns an [`ExecutionResult`], which can contain subscription or unsubscription requests
-    /// to channels and effects to be sent to this application on another chain.
+    /// to channels and messages to be sent to this application on another chain.
     async fn initialize(
         &mut self,
         context: &OperationContext,
         argument: Self::InitializationArgument,
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error>;
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error>;
 
     /// Applies an operation from the current block.
     ///
@@ -124,32 +124,32 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// application's execution.
     ///
     /// Returns an [`ExecutionResult`], which can contain subscription or unsubscription requests
-    /// to channels and effects to be sent to this application on another chain.
+    /// to channels and messages to be sent to this application on another chain.
     async fn execute_operation(
         &mut self,
         context: &OperationContext,
         operation: Self::Operation,
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error>;
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error>;
 
-    /// Applies an effect originating from a cross-chain message.
+    /// Applies a message originating from a cross-chain message.
     ///
-    /// Effects are messages sent across chains. These messages are created and received by
-    /// the same application. Effects can be either single-sender and single-receiver, or
+    /// Messages are messages sent across chains. These messages are created and received by
+    /// the same application. Messages can be either single-sender and single-receiver, or
     /// single-sender and multiple-receivers. The former allows sending cross-chain messages to the
     /// application on some other specific chain, while the latter uses broadcast channels to
     /// send a message to multiple other chains where the application is subscribed to a
     /// sender channel on this chain.
     ///
-    /// For an effect to be executed, a user must mark it to be received in a block of the receiver
+    /// For a message to be executed, a user must mark it to be received in a block of the receiver
     /// chain.
     ///
-    /// Returns an [`ExecutionResult`], which can contain effects to be sent to this application
+    /// Returns an [`ExecutionResult`], which can contain messages to be sent to this application
     /// on another chain and subscription or unsubscription requests to channels.
-    async fn execute_effect(
+    async fn execute_message(
         &mut self,
-        context: &EffectContext,
-        effect: Self::Effect,
-    ) -> Result<ExecutionResult<Self::Effect>, Self::Error>;
+        context: &MessageContext,
+        message: Self::Message,
+    ) -> Result<ExecutionResult<Self::Message>, Self::Error>;
 
     /// Handles a call from another application.
     ///
@@ -164,7 +164,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     ///
     /// - a return value sent to the caller application;
     /// - a list of new session states; the newly-created sessions will be owned by the caller application;
-    /// - an [`ExecutionResult`] with effects to be sent to this application on other chains
+    /// - an [`ExecutionResult`] with messages to be sent to this application on other chains
     ///   and channel subscription and unsubscription requests.
     ///
     /// See [`Self::handle_session_call`] for more information on
@@ -173,7 +173,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
         context: &CalleeContext,
         argument: Self::ApplicationCall,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>;
+    ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>;
 
     /// Handles a call into a session created by this application.
     ///
@@ -207,7 +207,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
     /// - an [`ApplicationCallResult`], which contains:
     ///   - a return value sent to the caller application;
     ///   - a list of new session states; the newly-created sessions will be owned by the caller application;
-    ///   - an [`ExecutionResult`] with effects to be sent to this application on other
+    ///   - an [`ExecutionResult`] with messages to be sent to this application on other
     ///     chains and channel subscription and unsubscription requests.
     async fn handle_session_call(
         &mut self,
@@ -215,7 +215,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
         session: Self::SessionState,
         argument: Self::SessionCall,
         forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Effect, Self::Response, Self::SessionState>, Self::Error>;
+    ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>;
 
     /// Calls another application.
     // TODO(#488): Currently, the application state is persisted before the call and restored after the call in
@@ -327,18 +327,18 @@ pub struct OperationContext {
     pub index: u32,
 }
 
-/// The context of the execution of an application's effect.
+/// The context of the execution of an application's message.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct EffectContext {
+pub struct MessageContext {
     /// The current chain id.
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
     pub authenticated_signer: Option<Owner>,
     /// The current block height.
     pub height: BlockHeight,
-    /// The id of the effect (based on the operation height and index in the remote
-    /// chain that created the effect).
-    pub effect_id: EffectId,
+    /// The id of the message (based on the operation height and index in the remote
+    /// chain that created the message).
+    pub message_id: MessageId,
 }
 
 /// The context of the execution of an application's cross-application call or session call handler.
@@ -364,40 +364,40 @@ pub struct QueryContext {
 /// the application that created them.
 #[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct ExecutionResult<Effect> {
+pub struct ExecutionResult<Message> {
     /// Sends messages to the given destinations, possibly forwarding the authenticated
     /// signer.
-    pub effects: Vec<(Destination, bool, Effect)>,
+    pub messages: Vec<(Destination, bool, Message)>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(ChannelName, ChainId)>,
     /// Unsubscribe chains to channels.
     pub unsubscribe: Vec<(ChannelName, ChainId)>,
 }
 
-impl<Effect> Default for ExecutionResult<Effect> {
+impl<Message> Default for ExecutionResult<Message> {
     fn default() -> Self {
         Self {
-            effects: vec![],
+            messages: vec![],
             subscribe: vec![],
             unsubscribe: vec![],
         }
     }
 }
 
-impl<Effect: Serialize + Debug + DeserializeOwned> ExecutionResult<Effect> {
-    /// Adds an effect to the execution result.
-    pub fn with_effect(mut self, destination: impl Into<Destination>, effect: Effect) -> Self {
-        self.effects.push((destination.into(), false, effect));
+impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
+    /// Adds a message to the execution result.
+    pub fn with_message(mut self, destination: impl Into<Destination>, message: Message) -> Self {
+        self.messages.push((destination.into(), false, message));
         self
     }
 
-    /// Adds an authenticated effect to the execution result.
-    pub fn with_authenticated_effect(
+    /// Adds an authenticated message to the execution result.
+    pub fn with_authenticated_message(
         mut self,
         destination: impl Into<Destination>,
-        effect: Effect,
+        message: Message,
     ) -> Self {
-        self.effects.push((destination.into(), true, effect));
+        self.messages.push((destination.into(), true, message));
         self
     }
 }
@@ -405,16 +405,16 @@ impl<Effect: Serialize + Debug + DeserializeOwned> ExecutionResult<Effect> {
 /// The result of calling into an application.
 #[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct ApplicationCallResult<Effect, Value, SessionState> {
+pub struct ApplicationCallResult<Message, Value, SessionState> {
     /// The return value, if any.
     pub value: Value,
     /// The externally-visible result.
-    pub execution_result: ExecutionResult<Effect>,
+    pub execution_result: ExecutionResult<Message>,
     /// New sessions were created with the following new states.
     pub create_sessions: Vec<SessionState>,
 }
 
-impl<Effect, Value, SessionState> Default for ApplicationCallResult<Effect, Value, SessionState>
+impl<Message, Value, SessionState> Default for ApplicationCallResult<Message, Value, SessionState>
 where
     Value: Default,
 {
@@ -429,9 +429,9 @@ where
 
 /// The result of calling into a session.
 #[derive(Default, Deserialize, Serialize)]
-pub struct SessionCallResult<Effect, Value, SessionState> {
+pub struct SessionCallResult<Message, Value, SessionState> {
     /// The result of the application call.
-    pub inner: ApplicationCallResult<Effect, Value, SessionState>,
+    pub inner: ApplicationCallResult<Message, Value, SessionState>,
     /// The new state of the session, if any. `None` means that the session was consumed
     /// by the call.
     pub new_state: Option<SessionState>,

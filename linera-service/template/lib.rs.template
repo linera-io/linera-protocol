@@ -7,7 +7,7 @@ impl ContractAbi for ApplicationAbi {
     type Parameters = ();
     type Operation = ();
     type ApplicationCall = ();
-    type Effect = ();
+    type Message = ();
     type SessionCall = ();
     type Response = ();
     type SessionState = ();

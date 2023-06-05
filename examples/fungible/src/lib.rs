@@ -24,7 +24,7 @@ impl ContractAbi for FungibleTokenAbi {
     type Parameters = ();
     type ApplicationCall = ApplicationCall;
     type Operation = Operation;
-    type Effect = Effect;
+    type Message = Message;
     type SessionCall = SessionCall;
     type Response = Amount;
     type SessionState = Amount;
@@ -55,9 +55,9 @@ pub enum Operation {
     },
 }
 
-/// An effect.
+/// A message.
 #[derive(Debug, Deserialize, Serialize)]
-pub enum Effect {
+pub enum Message {
     /// Credit the given account.
     Credit { owner: AccountOwner, amount: Amount },
 
@@ -268,7 +268,7 @@ impl FungibleTokenAbi {
         for (chain, account, initial_amount) in &accounts {
             chain.register_application(application_id).await;
 
-            let claim_effects = chain
+            let claim_messages = chain
                 .add_block(|block| {
                     block.with_operation(
                         application_id,
@@ -287,19 +287,19 @@ impl FungibleTokenAbi {
                 })
                 .await;
 
-            assert_eq!(claim_effects.len(), 2);
+            assert_eq!(claim_messages.len(), 2);
 
-            let transfer_effects = token_chain
+            let transfer_messages = token_chain
                 .add_block(|block| {
-                    block.with_incoming_message(claim_effects[1]);
+                    block.with_incoming_message(claim_messages[1]);
                 })
                 .await;
 
-            assert_eq!(transfer_effects.len(), 2);
+            assert_eq!(transfer_messages.len(), 2);
 
             chain
                 .add_block(|block| {
-                    block.with_incoming_message(transfer_effects[1]);
+                    block.with_incoming_message(transfer_messages[1]);
                 })
                 .await;
         }

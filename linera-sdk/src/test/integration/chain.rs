@@ -11,13 +11,13 @@ use cargo_toml::Manifest;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::BlockHeight,
-    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, EffectId},
+    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{data_types::ChainInfoQuery, worker::ValidatorWorker};
 use linera_execution::{
-    system::{SystemChannel, SystemEffect, SystemExecutionError, SystemOperation},
-    Bytecode, Effect, Query, Response,
+    system::{SystemChannel, SystemExecutionError, SystemMessage, SystemOperation},
+    Bytecode, Message, Query, Response,
 };
 use std::{
     path::{Path, PathBuf},
@@ -73,7 +73,7 @@ impl ActiveChain {
     ///
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
     /// to provide the block's contents.
-    pub async fn add_block(&self, block_builder: impl FnOnce(&mut BlockBuilder)) -> Vec<EffectId> {
+    pub async fn add_block(&self, block_builder: impl FnOnce(&mut BlockBuilder)) -> Vec<MessageId> {
         let mut tip = self.tip.lock().await;
         let mut block = BlockBuilder::new(
             self.description.into(),
@@ -84,7 +84,7 @@ impl ActiveChain {
 
         block_builder(&mut block);
 
-        let (certificate, effect_ids) = block.sign().await;
+        let (certificate, message_ids) = block.sign().await;
 
         self.validator
             .worker()
@@ -95,14 +95,14 @@ impl ActiveChain {
 
         *tip = Some(certificate);
 
-        effect_ids
+        message_ids
     }
 
     /// Receives all queued messages in all inboxes of this microchain.
     ///
     /// Adds a block to this microchain that receives all queued messages in the microchains
     /// inboxes.
-    pub async fn handle_received_effects(&self) {
+    pub async fn handle_received_messages(&self) {
         let chain_id = self.id();
         let (information, _) = self
             .validator
@@ -143,20 +143,20 @@ impl ActiveChain {
         Self::build_bytecodes_in(&repository_path).await;
         let (contract, service) = self.find_bytecodes_in(&repository_path).await;
 
-        let publish_effects = self
+        let publish_messages = self
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::PublishBytecode { contract, service });
             })
             .await;
 
-        assert_eq!(publish_effects.len(), 1);
+        assert_eq!(publish_messages.len(), 1);
 
         self.add_block(|block| {
-            block.with_incoming_message(publish_effects[0]);
+            block.with_incoming_message(publish_messages[0]);
         })
         .await;
 
-        BytecodeId::new(publish_effects[0]).with_abi()
+        BytecodeId::new(publish_messages[0]).with_abi()
     }
 
     /// Compiles the crate in the `repository` path.
@@ -234,7 +234,7 @@ impl ActiveChain {
     pub async fn subscribe_to_published_bytecodes_from(&mut self, publisher_id: ChainId) {
         let publisher = self.validator.get_chain(&publisher_id);
 
-        let request_effects = self
+        let request_messages = self
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::Subscribe {
                     chain_id: publisher.id(),
@@ -243,18 +243,18 @@ impl ActiveChain {
             })
             .await;
 
-        assert_eq!(request_effects.len(), 1);
+        assert_eq!(request_messages.len(), 1);
 
-        let accept_effects = publisher
+        let accept_messages = publisher
             .add_block(|block| {
-                block.with_incoming_message(request_effects[0]);
+                block.with_incoming_message(request_messages[0]);
             })
             .await;
 
-        assert_eq!(accept_effects.len(), 1);
+        assert_eq!(accept_messages.len(), 1);
 
         self.add_block(|block| {
-            block.with_incoming_message(accept_effects[0]);
+            block.with_incoming_message(accept_messages[0]);
         })
         .await;
     }
@@ -279,8 +279,8 @@ impl ActiveChain {
     where
         A: ContractAbi,
     {
-        let bytecode_location_effect = if self.needs_bytecode_location(bytecode_id).await {
-            self.subscribe_to_published_bytecodes_from(bytecode_id.effect_id.chain_id)
+        let bytecode_location_message = if self.needs_bytecode_location(bytecode_id).await {
+            self.subscribe_to_published_bytecodes_from(bytecode_id.message_id.chain_id)
                 .await;
             Some(self.find_bytecode_location(bytecode_id).await)
         } else {
@@ -294,10 +294,10 @@ impl ActiveChain {
             self.register_application(dependency).await;
         }
 
-        let creation_effects = self
+        let creation_messages = self
             .add_block(|block| {
-                if let Some(effect_id) = bytecode_location_effect {
-                    block.with_incoming_message(effect_id);
+                if let Some(message_id) = bytecode_location_message {
+                    block.with_incoming_message(message_id);
                 }
 
                 block.with_system_operation(SystemOperation::CreateApplication {
@@ -309,11 +309,11 @@ impl ActiveChain {
             })
             .await;
 
-        assert_eq!(creation_effects.len(), 1);
+        assert_eq!(creation_messages.len(), 1);
 
         ApplicationId {
             bytecode_id,
-            creation: creation_effects[0],
+            creation: creation_messages[0],
         }
     }
 
@@ -334,32 +334,32 @@ impl ActiveChain {
             .is_empty()
     }
 
-    /// Finds the effect that sends the message with the bytecode location of `bytecode_id`.
-    async fn find_bytecode_location<Abi>(&self, bytecode_id: BytecodeId<Abi>) -> EffectId {
-        for height in bytecode_id.effect_id.height.0.. {
+    /// Finds the message that sends the message with the bytecode location of `bytecode_id`.
+    async fn find_bytecode_location<Abi>(&self, bytecode_id: BytecodeId<Abi>) -> MessageId {
+        for height in bytecode_id.message_id.height.0.. {
             let certificate = self
                 .validator
                 .worker()
                 .await
-                .read_certificate(bytecode_id.effect_id.chain_id, height.into())
+                .read_certificate(bytecode_id.message_id.chain_id, height.into())
                 .await
                 .expect("Failed to load certificate to search for bytecode location")
                 .expect("Bytecode location not found");
 
-            let effect_index = certificate.value().effects().iter().position(|effect| {
+            let message_index = certificate.value().messages().iter().position(|message| {
                 matches!(
-                    &effect.effect,
-                    Effect::System(SystemEffect::BytecodeLocations { locations })
+                    &message.message,
+                    Message::System(SystemMessage::BytecodeLocations { locations })
                         if locations.iter().any(|(id, _)| id == &bytecode_id.forget_abi())
                 )
             });
 
-            if let Some(index) = effect_index {
-                return EffectId {
-                    chain_id: bytecode_id.effect_id.chain_id,
+            if let Some(index) = message_index {
+                return MessageId {
+                    chain_id: bytecode_id.message_id.chain_id,
                     height: BlockHeight(height),
                     index: index.try_into().expect(
-                        "Incompatible `EffectId` index types in \
+                        "Incompatible `MessageId` index types in \
                         `linera-sdk` and `linera-execution`",
                     ),
                 };
@@ -374,29 +374,29 @@ impl ActiveChain {
         if self.needs_application_description(application_id).await {
             let source_chain = self.validator.get_chain(&application_id.creation.chain_id);
 
-            let request_effects = self
+            let request_messages = self
                 .add_block(|block| {
                     block.with_request_for_application(application_id);
                 })
                 .await;
 
-            assert_eq!(request_effects.len(), 1);
+            assert_eq!(request_messages.len(), 1);
 
-            let register_effects = source_chain
+            let register_messages = source_chain
                 .add_block(|block| {
-                    block.with_incoming_message(request_effects[0]);
+                    block.with_incoming_message(request_messages[0]);
                 })
                 .await;
 
-            assert_eq!(register_effects.len(), 1);
+            assert_eq!(register_messages.len(), 1);
 
-            let final_effects = self
+            let final_messages = self
                 .add_block(|block| {
-                    block.with_incoming_message(register_effects[0]);
+                    block.with_incoming_message(register_messages[0]);
                 })
                 .await;
 
-            assert_eq!(final_effects.len(), 0);
+            assert_eq!(final_messages.len(), 0);
         }
     }
 

@@ -9,8 +9,8 @@ use linera_chain::{
 };
 use linera_core::{data_types::CrossChainRequest, node::NodeError};
 use linera_execution::{
-    system::{Recipient, SystemChannel, SystemEffect, SystemOperation},
-    ApplicationId, Effect, Operation,
+    system::{Recipient, SystemChannel, SystemMessage, SystemOperation},
+    ApplicationId, Message, Operation,
 };
 use linera_rpc::RpcMessage;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
@@ -29,9 +29,9 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<Recipient>(&samples)?;
     tracer.trace_type::<SystemChannel>(&samples)?;
     tracer.trace_type::<SystemOperation>(&samples)?;
-    tracer.trace_type::<SystemEffect>(&samples)?;
+    tracer.trace_type::<SystemMessage>(&samples)?;
     tracer.trace_type::<Operation>(&samples)?;
-    tracer.trace_type::<Effect>(&samples)?;
+    tracer.trace_type::<Message>(&samples)?;
     tracer.trace_type::<HashedValue>(&samples)?;
     tracer.trace_type::<CertificateValue>(&samples)?;
     tracer.trace_type::<Medium>(&samples)?;

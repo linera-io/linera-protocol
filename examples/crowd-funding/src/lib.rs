@@ -15,7 +15,7 @@ impl ContractAbi for CrowdFundingAbi {
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
     type Operation = Operation;
     type ApplicationCall = ApplicationCall;
-    type Effect = Effect;
+    type Message = Message;
     type SessionCall = ();
     type Response = ();
     type SessionState = ();
@@ -60,10 +60,10 @@ pub enum Operation {
     Cancel,
 }
 
-/// Effects that can be processed by the application.
+/// Messages that can be processed by the application.
 #[derive(Debug, Deserialize, Serialize)]
 #[allow(clippy::large_enum_variant)]
-pub enum Effect {
+pub enum Message {
     /// Pledge some tokens to the campaign (from an account on the receiver chain).
     PledgeWithAccount { owner: AccountOwner, amount: Amount },
 }
