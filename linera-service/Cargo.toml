@@ -11,10 +11,11 @@ license = "Apache-2.0"
 edition = "2021"
 
 [features]
-default = ["wasmer"]
+default = ["wasmer", "rocksdb"]
 benchmark = ["linera-base/test"]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
+rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb", "linera-storage/rocksdb"]
 aws = ["linera-views/aws", "linera-core/aws", "linera-storage/aws"]
 
 [dependencies]

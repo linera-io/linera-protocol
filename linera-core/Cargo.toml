@@ -11,13 +11,14 @@ license = "Apache-2.0"
 edition = "2021"
 
 [features]
-default = ["wasmer"]
+default = ["wasmer", "rocksdb"]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 test = [
     "linera-base/test", "linera-chain/test", "linera-execution/test", "linera-storage/test",
     "linera-views/test", "proptest", "tempfile", "test-log", "test-strategy", "tokio/parking_lot",
 ]
+rocksdb = ["linera-views/rocksdb", "linera-storage/rocksdb"]
 aws = ["linera-views/aws", "linera-storage/aws"]
 
 [dependencies]
@@ -52,7 +53,7 @@ meta-counter = { workspace = true }
 reentrant-counter = { workspace = true }
 fungible = { workspace = true }
 linera-core = { workspace = true, features = ["test"] }
-linera-views = { workspace = true, features = ["rocksdb"] }
+linera-views = { workspace = true }
 metrics = { workspace = true }
 metrics-util = { workspace = true }
 portable-atomic = { workspace = true }

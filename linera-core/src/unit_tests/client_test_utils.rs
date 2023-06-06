@@ -20,9 +20,7 @@ use linera_execution::{
     pricing::Pricing,
     WasmRuntime,
 };
-use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
-#[cfg(feature = "aws")]
-use linera_views::lru_caching::TEST_CACHE_SIZE;
+use linera_storage::{MemoryStoreClient, Store};
 use linera_views::views::ViewError;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -30,10 +28,16 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
-use tokio::sync::{oneshot, Semaphore};
+use tokio::sync::oneshot;
+
+#[cfg(feature = "rocksdb")]
+use {linera_storage::RocksdbStoreClient, tokio::sync::Semaphore};
 
 #[cfg(feature = "aws")]
-use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
+use {
+    linera_storage::DynamoDbStoreClient, linera_views::lru_caching::TEST_CACHE_SIZE,
+    linera_views::test_utils::LocalStackTestContext,
+};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum FaultType {
@@ -515,6 +519,7 @@ where
     }
 }
 
+#[cfg(feature = "rocksdb")]
 /// Limit concurrency for rocksdb tests to avoid "too many open files" errors.
 pub static ROCKSDB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
 
@@ -543,12 +548,14 @@ impl MakeMemoryStoreClient {
     }
 }
 
+#[cfg(feature = "rocksdb")]
 #[derive(Default)]
 pub struct MakeRocksdbStoreClient {
     temp_dirs: Vec<tempfile::TempDir>,
     wasm_runtime: Option<WasmRuntime>,
 }
 
+#[cfg(feature = "rocksdb")]
 impl MakeRocksdbStoreClient {
     /// Creates a [`MakeRocksdbStoreClient`] that uses the specified [`WasmRuntime`] to run WASM
     /// applications.
@@ -561,6 +568,7 @@ impl MakeRocksdbStoreClient {
     }
 }
 
+#[cfg(feature = "rocksdb")]
 #[async_trait]
 impl StoreBuilder for MakeRocksdbStoreClient {
     type Store = RocksdbStoreClient;

@@ -8,9 +8,7 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use crate::client::client_tests::{
-    MakeMemoryStoreClient, MakeRocksdbStoreClient, StoreBuilder, TestBuilder, ROCKSDB_SEMAPHORE,
-};
+use crate::client::client_tests::{MakeMemoryStoreClient, StoreBuilder, TestBuilder};
 use async_graphql::Request;
 use linera_base::{
     data_types::Amount,
@@ -27,6 +25,9 @@ use serde_json::json;
 use std::collections::BTreeMap;
 use test_case::test_case;
 
+#[cfg(feature = "rocksdb")]
+use crate::client::client_tests::{MakeRocksdbStoreClient, ROCKSDB_SEMAPHORE};
+
 #[cfg(feature = "aws")]
 use crate::client::client_tests::MakeDynamoDbStoreClient;
 
@@ -37,6 +38,7 @@ async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> Result<(),
     run_test_create_application(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
+#[cfg(feature = "rocksdb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -136,6 +138,7 @@ async fn test_memory_run_application_with_dependency(
         .await
 }
 
+#[cfg(feature = "rocksdb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -269,6 +272,7 @@ async fn test_memory_run_reentrant_application(
     run_test_run_reentrant_application(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
+#[cfg(feature = "rocksdb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -365,6 +369,7 @@ async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<()
     run_test_cross_chain_message(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
+#[cfg(feature = "rocksdb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -540,6 +545,7 @@ async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> Result<
     run_test_user_pub_sub_channels(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
+#[cfg(feature = "rocksdb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]

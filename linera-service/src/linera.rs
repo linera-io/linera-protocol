@@ -160,10 +160,13 @@ impl ClientContext {
 
     fn storage_config(options: &ClientOptions) -> Result<StorageConfig, anyhow::Error> {
         match &options.storage_config {
+            Some(config) => config.parse(),
+            #[cfg(feature = "rocksdb")]
             None => Ok(StorageConfig::Rocksdb {
                 path: Self::create_default_config_path()?.join("wallet.db"),
             }),
-            Some(config) => config.parse(),
+            #[cfg(not(feature = "rocksdb"))]
+            None => bail!("A storage option must be provided"),
         }
     }
 

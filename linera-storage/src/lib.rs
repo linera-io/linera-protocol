@@ -7,11 +7,14 @@ mod chain_guards;
 #[cfg(feature = "aws")]
 mod dynamo_db;
 mod memory;
+#[cfg(feature = "rocksdb")]
 mod rocksdb;
 
 #[cfg(feature = "aws")]
 pub use crate::dynamo_db::DynamoDbStoreClient;
-pub use crate::{memory::MemoryStoreClient, rocksdb::RocksdbStoreClient};
+pub use crate::memory::MemoryStoreClient;
+#[cfg(feature = "rocksdb")]
+pub use crate::rocksdb::RocksdbStoreClient;
 
 use crate::chain_guards::ChainGuards;
 use async_trait::async_trait;
