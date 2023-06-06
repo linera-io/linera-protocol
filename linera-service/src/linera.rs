@@ -111,7 +111,10 @@ impl ClientContext {
         let wallet_state = WalletState::from_file(&wallet_state_path).with_context(|| {
             format!(
                 "Unable to read wallet at {:?}:",
-                &wallet_state_path.canonicalize().unwrap()
+                &wallet_state_path.canonicalize().with_context(|| format!(
+                    "Unable to canonicalize wallet {:?}",
+                    &wallet_state_path
+                ))
             )
         })?;
         Ok(Self::configure(options, wallet_state))
@@ -577,6 +580,21 @@ struct ClientOptions {
     /// messages have been delivered.
     #[structopt(long)]
     wait_for_outgoing_messages: bool,
+}
+
+impl ClientOptions {
+    fn init() -> Result<Self, anyhow::Error> {
+        let mut client_options = ClientOptions::from_args();
+        let wallet_env_var = env::var("LINERA_WALLET").ok();
+        let storage_env_var = env::var("LINERA_STORAGE").ok();
+        if let (None, Some(wallet_path)) = (&client_options.wallet_state_path, wallet_env_var) {
+            client_options.wallet_state_path = Some(wallet_path.parse()?);
+        }
+        if let (None, Some(storage_path)) = (&client_options.storage_config, storage_env_var) {
+            client_options.storage_config = Some(storage_path.parse()?);
+        }
+        Ok(client_options)
+    }
 }
 
 #[derive(StructOpt)]
@@ -1427,7 +1445,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .with_writer(std::io::stderr)
         .with_env_filter(env_filter)
         .init();
-    let options = ClientOptions::from_args();
+    let options = ClientOptions::init()?;
 
     match &options.command {
         ClientCommand::CreateGenesisConfig {
