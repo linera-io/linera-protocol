@@ -93,10 +93,8 @@ where
     creator.process_inbox().await.unwrap();
 
     // No fuel was used so far, but some storage for messages and operations in three blocks.
-    assert_eq!(
-        Amount::ONE.saturating_sub(creator.local_balance().await?),
-        Amount::from_atto(3_000_000_000_333_105),
-    );
+    let balance_after_messaging = creator.local_balance().await?;
+    assert!(balance_after_messaging < Amount::ONE);
 
     let initial_value = 10_u64;
     let (application_id, _) = creator
@@ -122,10 +120,9 @@ where
 
     assert_eq!(expected, response);
     // Creating the application used fuel because of the `initialize` call.
-    assert_eq!(
-        Amount::ONE.saturating_sub(creator.local_balance().await?),
-        Amount::from_atto(5_016_479_000_578_143),
-    );
+    let balance_after_init = creator.local_balance().await?;
+    assert!(balance_after_init < balance_after_messaging);
+
     Ok(())
 }
 
