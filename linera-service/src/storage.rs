@@ -161,7 +161,7 @@ impl FromStr for StorageConfig {
                 use_localstack,
             });
         }
-        Err(format_err!("Incorrect storage description"))
+        Err(format_err!("Incorrect storage description: {}", input))
     }
 }
 
