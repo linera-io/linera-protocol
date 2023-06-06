@@ -98,6 +98,10 @@ fn detect_current_features() -> Vec<&'static str> {
     {
         features.push("wasmtime");
     }
+    #[cfg(rocksdb)]
+    {
+        features.push("rocksdb");
+    }
     #[cfg(aws)]
     {
         features.push("aws");

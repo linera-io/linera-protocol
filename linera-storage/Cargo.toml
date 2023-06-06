@@ -11,11 +11,12 @@ license = "Apache-2.0"
 edition = "2021"
 
 [features]
-default = ["wasmer"]
+default = ["wasmer", "rocksdb"]
 test = ["tokio/rt", "tokio/test-util", "tokio/time", "linera-execution/test", "linera-views/test"]
 wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
 aws = ["linera-views/aws"]
+rocksdb = ["linera-views/rocksdb"]
 
 [dependencies]
 async-lock = { workspace = true }
@@ -26,10 +27,9 @@ futures = { workspace = true }
 linera-base = { workspace = true }
 linera-chain = { workspace = true }
 linera-execution = { workspace = true }
-linera-views = { workspace = true, features = ["metrics", "rocksdb"] }
+linera-views = { workspace = true, features = ["metrics"] }
 metrics = { workspace = true }
 tracing = { workspace = true }
-rocksdb = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 

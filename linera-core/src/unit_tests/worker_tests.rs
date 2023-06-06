@@ -31,17 +31,20 @@ use linera_execution::{
     ApplicationId, ApplicationRegistry, ChainOwnership, ChannelSubscription, ExecutionStateView,
     Message, Operation, Query, Response, SystemExecutionState, SystemQuery, SystemResponse,
 };
-use linera_storage::{MemoryStoreClient, RocksdbStoreClient, Store};
-use linera_views::{
-    lru_caching::TEST_CACHE_SIZE,
-    views::{CryptoHashView, ViewError},
-};
+use linera_storage::{MemoryStoreClient, Store};
+use linera_views::views::{CryptoHashView, ViewError};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;
 
+#[cfg(feature = "rocksdb")]
+use linera_storage::RocksdbStoreClient;
+
 #[cfg(feature = "aws")]
 use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
+
+#[cfg(any(feature = "rocksdb", feature = "aws"))]
+use linera_views::lru_caching::TEST_CACHE_SIZE;
 
 #[derive(Serialize, Deserialize)]
 struct Dummy;
@@ -290,6 +293,7 @@ async fn test_memory_handle_block_proposal_bad_signature() {
     run_test_handle_block_proposal_bad_signature(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_bad_signature() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -365,6 +369,7 @@ async fn test_memory_handle_block_proposal_zero_amount() {
     run_test_handle_block_proposal_zero_amount(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_zero_amount() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -437,6 +442,7 @@ async fn test_memory_handle_block_proposal_ticks() {
     run_test_handle_block_proposal_ticks(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_ticks() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -546,6 +552,7 @@ async fn test_memory_handle_block_proposal_unknown_sender() {
     run_test_handle_block_proposal_unknown_sender(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_unknown_sender() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -621,6 +628,7 @@ async fn test_memory_handle_block_proposal_with_chaining() {
     run_test_handle_block_proposal_with_chaining(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_with_chaining() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -739,6 +747,7 @@ async fn test_memory_handle_block_proposal_with_incoming_messages() {
     run_test_handle_block_proposal_with_incoming_messages(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_with_incoming_messages() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -1214,6 +1223,7 @@ async fn test_memory_handle_block_proposal_exceed_balance() {
     run_test_handle_block_proposal_exceed_balance(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_exceed_balance() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -1282,6 +1292,7 @@ async fn test_memory_handle_block_proposal() {
     run_test_handle_block_proposal(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -1357,6 +1368,7 @@ async fn test_memory_handle_block_proposal_replay() {
     run_test_handle_block_proposal_replay(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_block_proposal_replay() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -1430,6 +1442,7 @@ async fn test_memory_handle_certificate_unknown_sender() {
     run_test_handle_certificate_unknown_sender(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_certificate_unknown_sender() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -1488,6 +1501,7 @@ async fn test_memory_handle_certificate_bad_block_height() {
     run_test_handle_certificate_bad_block_height(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_certificate_bad_block_height() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -1558,6 +1572,7 @@ async fn test_memory_handle_certificate_with_anticipated_incoming_message() {
     run_test_handle_certificate_with_anticipated_incoming_message(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_certificate_with_anticipated_incoming_message() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -1698,6 +1713,7 @@ async fn test_memory_handle_certificate_receiver_balance_overflow() {
     run_test_handle_certificate_receiver_balance_overflow(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_certificate_receiver_balance_overflow() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -1796,6 +1812,7 @@ async fn test_memory_handle_certificate_receiver_equal_sender() {
     run_test_handle_certificate_receiver_equal_sender(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_certificate_receiver_equal_sender() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -1898,6 +1915,7 @@ async fn test_memory_handle_cross_chain_request() {
     run_test_handle_cross_chain_request(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_cross_chain_request() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -2007,6 +2025,7 @@ async fn test_memory_handle_cross_chain_request_no_recipient_chain() {
     run_test_handle_cross_chain_request_no_recipient_chain(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_cross_chain_request_no_recipient_chain() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -2072,6 +2091,7 @@ async fn test_memory_handle_cross_chain_request_no_recipient_chain_on_client() {
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_cross_chain_request_no_recipient_chain_on_client() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -2149,6 +2169,7 @@ async fn test_memory_handle_certificate_to_active_recipient() {
     run_test_handle_certificate_to_active_recipient(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_certificate_to_active_recipient() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -2334,6 +2355,7 @@ async fn test_memory_handle_certificate_to_inactive_recipient() {
     run_test_handle_certificate_to_inactive_recipient(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_handle_certificate_to_inactive_recipient() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -2403,6 +2425,7 @@ async fn test_memory_chain_creation_with_committee_creation() {
     run_test_chain_creation_with_committee_creation(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_chain_creation_with_committee_creation() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -2895,6 +2918,7 @@ async fn test_memory_transfers_and_committee_creation() {
     run_test_transfers_and_committee_creation(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_transfers_and_committee_creation() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -3082,6 +3106,7 @@ async fn test_memory_transfers_and_committee_removal() {
     run_test_transfers_and_committee_removal(client).await;
 }
 
+#[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocksdb_transfers_and_committee_removal() {
     let dir = tempfile::TempDir::new().unwrap();

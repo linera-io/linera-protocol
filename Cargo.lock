@@ -2765,7 +2765,6 @@ dependencies = [
  "linera-storage",
  "linera-views",
  "metrics",
- "rocksdb",
  "serde",
  "tempfile",
  "tokio",

@@ -5,8 +5,11 @@ use crate::config::GenesisConfig;
 use anyhow::format_err;
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
-use linera_storage::{MemoryStoreClient, RocksdbStoreClient};
-use std::{path::PathBuf, str::FromStr};
+use linera_storage::MemoryStoreClient;
+use std::str::FromStr;
+
+#[cfg(feature = "rocksdb")]
+use {linera_storage::RocksdbStoreClient, std::path::PathBuf};
 
 #[cfg(feature = "aws")]
 use {
@@ -19,6 +22,7 @@ use {
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
 pub enum StorageConfig {
     Memory,
+    #[cfg(feature = "rocksdb")]
     Rocksdb {
         path: PathBuf,
     },
@@ -37,36 +41,37 @@ pub trait Runnable<S> {
 }
 
 #[doc(hidden)]
-#[cfg(feature = "aws")]
-pub trait RunnableJob<Output>:
-    Runnable<MemoryStoreClient, Output = Output>
-    + Runnable<RocksdbStoreClient, Output = Output>
-    + Runnable<DynamoDbStoreClient, Output = Output>
-{
-}
+#[cfg(feature = "rocksdb")]
+pub type MaybeRocksdbStoreClient = RocksdbStoreClient;
 
+#[doc(hidden)]
+#[cfg(not(feature = "rocksdb"))]
+pub type MaybeRocksdbStoreClient = MemoryStoreClient;
+
+#[doc(hidden)]
 #[cfg(feature = "aws")]
-impl<Output, T> RunnableJob<Output> for T where
-    T: Runnable<MemoryStoreClient, Output = Output>
-        + Runnable<RocksdbStoreClient, Output = Output>
-        + Runnable<DynamoDbStoreClient, Output = Output>
-{
-}
+pub type MaybeDynamoDbStoreClient = DynamoDbStoreClient;
 
 #[doc(hidden)]
 #[cfg(not(feature = "aws"))]
+pub type MaybeDynamoDbStoreClient = MemoryStoreClient;
+
 pub trait RunnableJob<Output>:
-    Runnable<MemoryStoreClient, Output = Output> + Runnable<RocksdbStoreClient, Output = Output>
+    Runnable<MemoryStoreClient, Output = Output>
+    + Runnable<MaybeRocksdbStoreClient, Output = Output>
+    + Runnable<MaybeDynamoDbStoreClient, Output = Output>
 {
 }
 
-#[cfg(not(feature = "aws"))]
 impl<Output, T> RunnableJob<Output> for T where
-    T: Runnable<MemoryStoreClient, Output = Output> + Runnable<RocksdbStoreClient, Output = Output>
+    T: Runnable<MemoryStoreClient, Output = Output>
+        + Runnable<MaybeRocksdbStoreClient, Output = Output>
+        + Runnable<MaybeDynamoDbStoreClient, Output = Output>
 {
 }
 
 impl StorageConfig {
+    #[allow(unused_variables)]
     pub async fn run_with_storage<Job, Output>(
         &self,
         config: &GenesisConfig,
@@ -84,11 +89,13 @@ impl StorageConfig {
                 config.initialize_store(&mut client).await?;
                 job.run(client).await
             }
+            #[cfg(feature = "rocksdb")]
             Rocksdb { path } if path.is_dir() => {
                 tracing::warn!("Using existing database {:?}", path);
                 let client = RocksdbStoreClient::new(path.clone(), wasm_runtime, cache_size);
                 job.run(client).await
             }
+            #[cfg(feature = "rocksdb")]
             Rocksdb { path } => {
                 std::fs::create_dir_all(path)?;
                 let mut client = RocksdbStoreClient::new(path.clone(), wasm_runtime, cache_size);
@@ -123,6 +130,7 @@ impl StorageConfig {
 }
 
 const MEMORY: &str = "memory";
+#[cfg(feature = "rocksdb")]
 const ROCKSDB: &str = "rocksdb:";
 #[cfg(feature = "aws")]
 const DYNAMO_DB: &str = "dynamodb:";
@@ -134,6 +142,7 @@ impl FromStr for StorageConfig {
         if input == MEMORY {
             return Ok(Self::Memory);
         }
+        #[cfg(feature = "rocksdb")]
         if let Some(s) = input.strip_prefix(ROCKSDB) {
             return Ok(Self::Rocksdb {
                 path: s.to_string().into(),
@@ -171,13 +180,18 @@ fn test_storage_config_from_str() {
         StorageConfig::from_str("memory").unwrap(),
         StorageConfig::Memory
     );
+    assert!(StorageConfig::from_str("memory_").is_err());
+}
+
+#[cfg(feature = "rocksdb")]
+#[test]
+fn test_rocksdb_storage_config_from_str() {
     assert_eq!(
         StorageConfig::from_str("rocksdb:foo.db").unwrap(),
         StorageConfig::Rocksdb {
             path: "foo.db".into()
         }
     );
-    assert!(StorageConfig::from_str("memory_").is_err());
     assert!(StorageConfig::from_str("rocksdb_foo.db").is_err());
 }
 

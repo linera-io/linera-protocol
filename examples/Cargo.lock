@@ -1804,7 +1804,6 @@ dependencies = [
  "linked-hash-map",
  "metrics",
  "rand 0.8.5",
- "rocksdb",
  "serde",
  "sha3",
  "static_assertions",
