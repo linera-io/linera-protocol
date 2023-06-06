@@ -39,6 +39,7 @@ use super::{
     WasmApplication, WasmExecutionError,
 };
 use crate::{Bytecode, ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
+use bytes::Bytes;
 use linera_views::{batch::Batch, views::ViewError};
 use once_cell::sync::Lazy;
 use std::{future::Future, marker::PhantomData, mem, sync::Arc, task::Poll};
@@ -57,11 +58,7 @@ static SERVICE_ENGINE: Lazy<Engine> = Lazy::new(|| {
 });
 
 /// A cache of compiled contract modules, with their respective [`Engine`] instances.
-///
-/// Each [`Module`] needs to have a separate [`Engine`] instance, otherwise Wasmer
-/// [panics](https://docs.rs/wasmer-middlewares/3.3.0/wasmer_middlewares/metering/struct.Metering.html#panic)
-/// because fuel metering is configured and used across different modules.
-static CONTRACT_CACHE: Lazy<Mutex<ModuleCache<(Engine, Module)>>> = Lazy::new(Mutex::default);
+static CONTRACT_CACHE: Lazy<Mutex<ModuleCache<CachedContractModule>>> = Lazy::new(Mutex::default);
 
 /// A cache of compiled service modules.
 static SERVICE_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::default);
@@ -120,12 +117,9 @@ impl WasmApplication {
         service_bytecode: Bytecode,
     ) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
-        let contract = contract_cache.get_or_insert_with(contract_bytecode, |bytecode| {
-            let engine = Self::create_wasmer_engine_for_a_contract();
-            let module = Module::new(&engine, bytecode)
-                .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
-            Ok::<_, WasmExecutionError>((engine, module))
-        })?;
+        let contract = contract_cache
+            .get_or_insert_with(contract_bytecode, CachedContractModule::new)?
+            .create_execution_instance()?;
 
         let mut service_cache = SERVICE_CACHE.lock().await;
         let service = service_cache.get_or_insert_with(service_bytecode, |bytecode| {
@@ -134,15 +128,6 @@ impl WasmApplication {
         })?;
 
         Ok(WasmApplication::Wasmer { contract, service })
-    }
-
-    fn create_wasmer_engine_for_a_contract() -> Engine {
-        let metering = Arc::new(Metering::new(0, WasmApplication::operation_cost));
-        let mut compiler_config = Singlepass::default();
-        compiler_config.push_middleware(metering);
-        compiler_config.canonicalize_nans(true);
-
-        EngineBuilder::new(compiler_config).into()
     }
 
     /// Prepares a runtime instance to call into the WASM contract.
@@ -704,5 +689,45 @@ impl From<wasmer::RuntimeError> for ExecutionError {
             .unwrap_or_else(|unknown_error| {
                 ExecutionError::WasmError(WasmExecutionError::ExecuteModuleInWasmer(unknown_error))
             })
+    }
+}
+
+/// Serialized bytes of a compiled contract bytecode.
+///
+/// Each [`Module`] needs to be compiled with a separate [`Engine`] instance, otherwise Wasmer
+/// [panics](https://docs.rs/wasmer-middlewares/3.3.0/wasmer_middlewares/metering/struct.Metering.html#panic)
+/// because fuel metering is configured and used across different modules.
+pub struct CachedContractModule {
+    compiled_bytecode: Bytes,
+}
+
+impl CachedContractModule {
+    /// Creates a new [`CachedContractModule`] by compiling a `contract_bytecode`.
+    pub fn new(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
+        let module = Module::new(&Self::create_compilation_engine(), contract_bytecode)
+            .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
+        let compiled_bytecode = module
+            .serialize()
+            .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
+        Ok(CachedContractModule { compiled_bytecode })
+    }
+
+    /// Creates a new [`Engine`] to compile a contract bytecode.
+    fn create_compilation_engine() -> Engine {
+        let metering = Arc::new(Metering::new(0, WasmApplication::operation_cost));
+        let mut compiler_config = Singlepass::default();
+        compiler_config.push_middleware(metering);
+        compiler_config.canonicalize_nans(true);
+
+        EngineBuilder::new(compiler_config).into()
+    }
+
+    /// Creates a [`Module`] from a compiled contract using a headless [`Engine`].
+    pub fn create_execution_instance(&self) -> Result<(Engine, Module), WasmExecutionError> {
+        let engine = Engine::headless();
+        let store = Store::new(&engine);
+        let module = unsafe { Module::deserialize(&store, &*self.compiled_bytecode) }
+            .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
+        Ok((engine, module))
     }
 }

@@ -38,7 +38,7 @@ use thiserror::Error;
 pub enum WasmApplication {
     #[cfg(feature = "wasmer")]
     Wasmer {
-        contract: Arc<(::wasmer::Engine, ::wasmer::Module)>,
+        contract: (::wasmer::Engine, ::wasmer::Module),
         service: Arc<::wasmer::Module>,
     },
     #[cfg(feature = "wasmtime")]

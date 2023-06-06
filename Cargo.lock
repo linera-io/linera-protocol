@@ -2593,6 +2593,7 @@ dependencies = [
  "async-lock",
  "async-trait",
  "bcs",
+ "bytes",
  "counter",
  "custom_debug_derive",
  "dashmap",
