@@ -37,7 +37,7 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build binaries
         run: |
-          cargo build --release --locked --no-default-features --bin linera --bin proxy --bin server
+          cargo build --release --locked --no-default-features --bin linera --bin linera-proxy --bin linera-server
       - name: Install Kind
         run: |
           curl -sL -o /tmp/kind https://kind.sigs.k8s.io/dl/v0.14.0/kind-linux-amd64
@@ -54,8 +54,8 @@ jobs:
       - name: Build and Load Docker images
         run: |
           cd docker
-          cp ../target/release/{linera,proxy,server} .
-          for image in linera proxy server setup; do
+          cp ../target/release/{linera,linera-proxy,linera-server} .
+          for image in linera linera-proxy linera-server setup; do
               docker build -t "zefchain-test-$image" --target "$image" .
               kind load docker-image "zefchain-test-$image"
           done

@@ -8,7 +8,7 @@ SHARD_ID="$(hostname | cut -f4 -d-)"
 ./fetch-config-file.sh genesis.json
 ./fetch-config-file.sh "server_${SERVER_ID}.json"
 
-./server run \
+./linera-server run \
     --storage "rocksdb:shard_data.db" \
     --server "server_${SERVER_ID}.json" \
     --shard "$SHARD_ID" \
