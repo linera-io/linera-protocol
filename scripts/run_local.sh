@@ -29,7 +29,7 @@ VALIDATOR_FILES=()
 for i in $(seq 1 $NUM_VALIDATORS); do
     VALIDATOR_FILES+=("$CONF_DIR/validator_$i.toml")
 done
-./server generate --validators "${VALIDATOR_FILES[@]}" --committee committee.json
+./linera-server generate --validators "${VALIDATOR_FILES[@]}" --committee committee.json
 
 # Create configuration files for 10 user chains.
 # * Private chain states are stored in one local wallet `wallet.json`.
@@ -43,11 +43,11 @@ done
 # Start servers and create initial chains in DB
 for I in $(seq 1 $NUM_VALIDATORS)
 do
-    ./proxy server_"$I".json &
+    ./linera-proxy server_"$I".json &
 
     for J in $(seq 0 $((SHARDS_PER_VALIDATOR - 1)))
     do
-        ./server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
+        ./linera-server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
     done
 done
 
@@ -64,4 +64,3 @@ EFFECT=$(echo "$EFFECT_AND_CHAIN" | sed -n '1 p')
 ./linera --wallet wallet_2.json --storage rocksdb:linera_2.db assign --key "$KEY" --message-id "$EFFECT"
 
 read
-

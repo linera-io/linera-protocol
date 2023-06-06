@@ -78,9 +78,9 @@ name = "linera"
 path = "src/linera.rs"
 
 [[bin]]
-name = "server"
+name = "linera-server"
 path = "src/server.rs"
 
 [[bin]]
-name = "proxy"
+name = "linera-proxy"
 path = "src/proxy.rs"

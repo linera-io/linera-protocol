@@ -666,7 +666,7 @@ impl TestRunner {
     }
 
     async fn generate_initial_validator_config(&self) -> Vec<String> {
-        let mut command = self.command_for_binary("server").await;
+        let mut command = self.command_for_binary("linera-server").await;
         command.arg("generate").arg("--validators");
         for i in 1..=self.num_initial_validators {
             command.arg(&self.configuration_string(i));
@@ -686,7 +686,7 @@ impl TestRunner {
 
     async fn generate_validator_config(&self, i: usize) -> String {
         let output = self
-            .command_for_binary("server")
+            .command_for_binary("linera-server")
             .await
             .arg("generate")
             .arg("--validators")
@@ -705,7 +705,7 @@ impl TestRunner {
 
     async fn run_proxy(&self, i: usize) -> Child {
         let child = self
-            .command_for_binary("proxy")
+            .command_for_binary("linera-proxy")
             .await
             .arg(format!("server_{}.json", i))
             .spawn()
@@ -744,7 +744,7 @@ impl TestRunner {
     }
 
     async fn run_server(&self, i: usize, j: usize) -> Child {
-        let mut command = self.command_for_binary("server").await;
+        let mut command = self.command_for_binary("linera-server").await;
         command.arg("run");
         if let Ok(var) = env::var(SERVER_ENV) {
             command.args(var.split_whitespace());

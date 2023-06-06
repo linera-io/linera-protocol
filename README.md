@@ -52,7 +52,7 @@ trap 'kill $(jobs -p)' EXIT
 # Create configuration files for 4 validators with 4 shards each.
 # * Private server states are stored in `server*.json`.
 # * `committee.json` is the public description of the Linera committee.
-./server generate --validators ../../configuration/validator_{1,2,3,4}.toml --committee committee.json
+./linera-server generate --validators ../../configuration/validator_{1,2,3,4}.toml --committee committee.json
 
 # Create configuration files for 10 user chains.
 # * Private chain states are stored in one local wallet `wallet.json`.
@@ -62,11 +62,11 @@ trap 'kill $(jobs -p)' EXIT
 # Start servers and create initial chains in DB
 for I in 1 2 3 4
 do
-    ./proxy server_"$I".json &
+    ./linera-proxy server_"$I".json &
 
     for J in $(seq 0 3)
     do
-        ./server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
+        ./linera-server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
     done
 done
 
