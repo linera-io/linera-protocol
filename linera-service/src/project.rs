@@ -138,7 +138,7 @@ impl Project {
         let (linera_sdk_dep, linera_sdk_dev_dep, linera_views_dep) =
             Self::linera_sdk_dependencies();
         let toml_contents = format!(
-            include_str!("../template/Cargo.toml"),
+            include_str!("../template/Cargo.toml.template"),
             project_name = project_name,
             linera_sdk_dep = linera_sdk_dep,
             linera_sdk_dev_dep = linera_sdk_dev_dep,
@@ -181,7 +181,10 @@ impl Project {
         let config_dir_path = project_root.join(".cargo");
         let config_file_path = config_dir_path.join("config.toml");
         std::fs::create_dir(&config_dir_path)?;
-        Self::write_string_to_file(&config_file_path, include_str!("../template/config.toml"))
+        Self::write_string_to_file(
+            &config_file_path,
+            include_str!("../template/config.toml.template"),
+        )
     }
 
     fn write_string_to_file(path: &Path, content: &str) -> Result<()> {
