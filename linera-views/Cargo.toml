@@ -1,6 +1,6 @@
 [package]
 name = "linera-views"
-version = "0.1.0"
+version = "0.2.0"
 description = "A library mapping complex data structures onto a key-value store, used by the Linera protocol"
 authors = ["Linera <contact@linera.io>"]
 readme = "README.md"

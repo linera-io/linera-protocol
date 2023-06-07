@@ -103,14 +103,14 @@ wit-bindgen-guest-rust = { version = "0.2.0", package = "linera-wit-bindgen-gues
 wit-bindgen-host-wasmer-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmer-rust" }
 wit-bindgen-host-wasmtime-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmtime-rust" }
 
-linera-base = { version = "0.1.0", path = "./linera-base" }
-linera-chain = { version = "0.1.0", path = "./linera-chain" }
-linera-core = { version = "0.1.0", path = "./linera-core", default-features = false }
-linera-execution = { version = "0.1.0", path = "./linera-execution", default-features = false }
-linera-rpc = { version = "0.1.0", path = "./linera-rpc" }
-linera-storage = { version = "0.1.0", path = "./linera-storage", default-features = false }
-linera-views = { version = "0.1.0", path = "./linera-views", default-features = false }
-linera-views-derive = { version = "0.1.0", path = "./linera-views-derive" }
+linera-base = { version = "0.2.0", path = "./linera-base" }
+linera-chain = { version = "0.2.0", path = "./linera-chain" }
+linera-core = { version = "0.2.0", path = "./linera-core", default-features = false }
+linera-execution = { version = "0.2.0", path = "./linera-execution", default-features = false }
+linera-rpc = { version = "0.2.0", path = "./linera-rpc" }
+linera-storage = { version = "0.2.0", path = "./linera-storage", default-features = false }
+linera-views = { version = "0.2.0", path = "./linera-views", default-features = false }
+linera-views-derive = { version = "0.2.0", path = "./linera-views-derive" }
 
 counter = { path = "./examples/counter" }
 meta-counter = { path = "./examples/meta-counter" }

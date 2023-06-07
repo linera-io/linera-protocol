@@ -1,6 +1,6 @@
 [package]
 name = "linera-service"
-version = "0.1.0"
+version = "0.2.0"
 description = "Executable for clients (aka CLI wallets), proxy (aka validator frontend) and servers of the Linera protocol."
 authors = ["Linera <contact@linera.io>"]
 readme = "README.md"
