@@ -28,10 +28,10 @@ function main(r) {
       get_blocks() { r.get_blocks(this) },
       route(path, refresh) { r.route(this, path, refresh) },
       sh(s) { return r.short(s) },
-      mtoo(m) { return map_to_object(m) }
     },
-  }).component('v-block', block_component).component('v-json', VueJsonPretty).mount("#app")
-  r.init(app)
+  }).component('v-block', block_component).component('v-json', VueJsonPretty)
+  app.config.globalProperties.mtoo = map_to_object
+  r.init(app.mount("#app"))
 }
 
 rust.then(r => main(r)).catch(console.error)
