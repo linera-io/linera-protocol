@@ -52,7 +52,7 @@ counter = { workspace = true }
 meta-counter = { workspace = true }
 reentrant-counter = { workspace = true }
 fungible = { workspace = true }
-linera-core = { workspace = true, features = ["test"] }
+linera-core = { path = ".", features = ["test"] }
 linera-views = { workspace = true }
 metrics = { workspace = true }
 metrics-util = { workspace = true }
