@@ -16,6 +16,7 @@ use linera_base::{
     identifiers::Owner,
 };
 use serde::{Deserialize, Serialize};
+use tracing::info;
 
 /// The specific state of a chain managed by one owner.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -81,17 +82,18 @@ impl SingleOwnerManager {
     ) {
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
-            let BlockAndRound { block, .. } = proposal.content;
+            let BlockAndRound { block, round } = proposal.content;
+            if round != RoundNumber(0) {
+                info!("Single-owner chains always have round number 0.");
+                return;
+            }
             let executed_block = ExecutedBlock {
                 block,
                 messages,
                 state_hash,
             };
-            let value = HashedValue::from(CertificateValue::ConfirmedBlock {
-                executed_block,
-                round: RoundNumber(0),
-            });
-            let vote = Vote::new(value, key_pair);
+            let value = HashedValue::from(CertificateValue::ConfirmedBlock { executed_block });
+            let vote = Vote::new(value, round, key_pair);
             self.pending = Some(vote);
         }
     }

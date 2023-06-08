@@ -609,11 +609,8 @@ where
                 let block = proposal.content.block;
                 let round = proposal.content.round;
                 let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
-                let value = HashedValue::from(CertificateValue::ConfirmedBlock {
-                    executed_block,
-                    round,
-                });
-                let certificate = Certificate::new(value, signatures);
+                let value = HashedValue::from(CertificateValue::ConfirmedBlock { executed_block });
+                let certificate = Certificate::new(value, round, signatures);
                 // Certificate is valid because
                 // * `communicate_with_quorum` ensured a sufficient "weight" of
                 // (non-error) answers were returned by validators.
@@ -623,13 +620,14 @@ where
             CommunicateAction::SubmitBlockForValidation(proposal) => {
                 let BlockAndRound { block, round } = proposal.content;
                 let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
-                let value = HashedValue::new_validated(executed_block, round);
-                let certificate = Certificate::new(value, signatures);
+                let value = HashedValue::new_validated(executed_block);
+                let certificate = Certificate::new(value, round, signatures);
                 Ok(Some(certificate))
             }
             CommunicateAction::FinalizeBlock(validity_certificate) => {
+                let round = validity_certificate.round;
                 let conf_value = validity_certificate.value.into_confirmed();
-                Ok(Some(Certificate::new(conf_value, signatures)))
+                Ok(Some(Certificate::new(conf_value, round, signatures)))
             }
             CommunicateAction::AdvanceToNextBlockHeight(_) => Ok(None),
         }

@@ -93,6 +93,8 @@ Certificate:
   STRUCT:
     - value:
         TYPENAME: CertificateValue
+    - round:
+        TYPENAME: RoundNumber
     - signatures:
         SEQ:
           TUPLE:
@@ -105,15 +107,11 @@ CertificateValue:
         STRUCT:
           - executed_block:
               TYPENAME: ExecutedBlock
-          - round:
-              TYPENAME: RoundNumber
     1:
       ConfirmedBlock:
         STRUCT:
           - executed_block:
               TYPENAME: ExecutedBlock
-          - round:
-              TYPENAME: RoundNumber
 ChainAndHeight:
   STRUCT:
     - chain_id:
@@ -330,6 +328,8 @@ LiteCertificate:
   STRUCT:
     - value:
         TYPENAME: LiteValue
+    - round:
+        TYPENAME: RoundNumber
     - signatures:
         SEQ:
           TUPLE:
@@ -345,6 +345,8 @@ LiteVote:
   STRUCT:
     - value:
         TYPENAME: LiteValue
+    - round:
+        TYPENAME: RoundNumber
     - validator:
         TYPENAME: ValidatorName
     - signature:

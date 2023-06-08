@@ -182,8 +182,12 @@ fn make_certificate<S>(
     worker: &WorkerState<S>,
     value: HashedValue,
 ) -> Certificate {
-    let vote = LiteVote::new(value.lite(), worker.key_pair.as_ref().unwrap());
-    let mut builder = SignatureAggregator::new(value, committee);
+    let vote = LiteVote::new(
+        value.lite(),
+        RoundNumber(0),
+        worker.key_pair.as_ref().unwrap(),
+    );
+    let mut builder = SignatureAggregator::new(value, RoundNumber(0), committee);
     builder
         .append(vote.validator, vote.signature)
         .unwrap()

@@ -8,7 +8,7 @@
 use super::TestValidator;
 use crate::ToBcsBytes;
 use linera_base::{
-    data_types::Timestamp,
+    data_types::{RoundNumber, Timestamp},
     identifiers::{ApplicationId, ChainId, MessageId, Owner},
 };
 use linera_chain::data_types::{
@@ -166,8 +166,9 @@ impl BlockBuilder {
             .collect();
 
         let value = HashedValue::new_confirmed(executed_block);
-        let vote = LiteVote::new(value.lite(), self.validator.key_pair());
-        let mut builder = SignatureAggregator::new(value, self.validator.committee());
+        let vote = LiteVote::new(value.lite(), RoundNumber(0), self.validator.key_pair());
+        let mut builder =
+            SignatureAggregator::new(value, RoundNumber(0), self.validator.committee());
         let certificate = builder
             .append(vote.validator, vote.signature)
             .expect("Failed to sign block")

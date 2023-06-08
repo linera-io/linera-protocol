@@ -48,11 +48,9 @@ impl MultiOwnerManager {
                 current_round = proposal.content.round;
             }
         }
-        if let Some(cert) = &self.locked {
-            if let CertificateValue::ValidatedBlock { round, .. } = cert.value() {
-                if current_round < *round {
-                    current_round = *round;
-                }
+        if let Some(Certificate { round, .. }) = &self.locked {
+            if current_round < *round {
+                current_round = *round;
             }
         }
         current_round
@@ -76,11 +74,10 @@ impl MultiOwnerManager {
                 return Err(ChainError::InsufficientRound(proposal.content.round));
             }
         }
-        if let Some(certificate) = &self.locked {
+        if let Some(Certificate { round, value, .. }) = &self.locked {
             if let CertificateValue::ValidatedBlock {
-                round,
                 executed_block: ExecutedBlock { block, .. },
-            } = certificate.value()
+            } = value.inner()
             {
                 ensure!(new_round > *round, ChainError::InsufficientRound(*round));
                 ensure!(
@@ -97,29 +94,24 @@ impl MultiOwnerManager {
         new_block: &Block,
         new_round: RoundNumber,
     ) -> Result<Outcome, ChainError> {
-        if let Some(Vote { value, .. }) = &self.pending {
+        if let Some(Vote { value, round, .. }) = &self.pending {
             match value.inner() {
-                CertificateValue::ConfirmedBlock {
-                    executed_block,
-                    round,
-                } => {
+                CertificateValue::ConfirmedBlock { executed_block } => {
                     if executed_block.block == *new_block && *round == new_round {
                         return Ok(Outcome::Skip);
                     }
                 }
-                CertificateValue::ValidatedBlock { round, .. } => ensure!(
+                CertificateValue::ValidatedBlock { .. } => ensure!(
                     new_round >= *round,
                     ChainError::InsufficientRound(round.try_sub_one().unwrap())
                 ),
             }
         }
-        if let Some(Certificate { value, .. }) = &self.locked {
-            if let CertificateValue::ValidatedBlock { round, .. } = value.inner() {
-                ensure!(
-                    new_round >= *round,
-                    ChainError::InsufficientRound(round.try_sub_one().unwrap())
-                );
-            }
+        if let Some(Certificate { round, .. }) = &self.locked {
+            ensure!(
+                new_round >= *round,
+                ChainError::InsufficientRound(round.try_sub_one().unwrap())
+            );
         }
         Ok(Outcome::Accept)
     }
@@ -142,7 +134,7 @@ impl MultiOwnerManager {
                 messages,
                 state_hash,
             };
-            let vote = Vote::new(HashedValue::new_validated(executed_block, round), key_pair);
+            let vote = Vote::new(HashedValue::new_validated(executed_block), round, key_pair);
             self.pending = Some(vote);
         }
     }
@@ -151,12 +143,12 @@ impl MultiOwnerManager {
         // Record validity certificate. This is important to keep track of rounds
         // for non-voting nodes.
         let value = certificate.value.clone().into_confirmed();
+        let round = certificate.round;
         self.locked = Some(certificate);
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
-            let vote = Vote::new(value, key_pair);
-            // Ok to overwrite validation votes with confirmation votes at equal or
-            // higher round.
+            let vote = Vote::new(value, round, key_pair);
+            // Ok to overwrite validation votes with confirmation votes at equal or higher round.
             self.pending = Some(vote);
         }
     }

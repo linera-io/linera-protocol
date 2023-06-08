@@ -147,12 +147,15 @@ message LiteCertificate {
   // The certified value's hash
   bytes hash = 2;
 
-  // Signatures on the value
-  bytes signatures = 3;
+  // The round in which the value was certified.
+  uint64 round = 3;
+
+  // Signatures on the value hash and round
+  bytes signatures = 4;
 
   // Wait until all outgoing cross-chain messages from this certificate have
   // been received by the target chains.
-  bool wait_for_outgoing_messages = 4;
+  bool wait_for_outgoing_messages = 5;
 }
 
 // A certified statement from the committee, together with other certificates
@@ -161,18 +164,21 @@ message Certificate {
   // The ID of the chain (used for routing).
   ChainId chain_id = 1;
 
-  // The certified value (BCS signable)
+  // The certified value
   bytes value = 2;
 
-  // Signatures on the value
-  bytes signatures = 3;
+  // The round in which the value was certified.
+  uint64 round = 3;
+
+  // Signatures on the value hash and round
+  bytes signatures = 4;
 
   // Other certificates containing bytecode required by the first one
-  bytes blobs = 4;
+  bytes blobs = 5;
 
   // Wait until all outgoing cross-chain messages from this certificate have
   // been received by the target chains.
-  bool wait_for_outgoing_messages = 5;
+  bool wait_for_outgoing_messages = 6;
 }
 
 message ChainId {

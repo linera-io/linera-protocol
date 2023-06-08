@@ -615,11 +615,10 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let (block, round) = match certificate.value() {
+        let block = match certificate.value() {
             CertificateValue::ValidatedBlock {
                 executed_block: ExecutedBlock { block, .. },
-                round,
-            } => (block, *round),
+            } => block,
             CertificateValue::ConfirmedBlock { .. } => panic!("Expecting a validation certificate"),
         };
         // Check that the chain is active and ready for this confirmation.
@@ -642,7 +641,7 @@ where
             || chain
                 .manager
                 .get_mut()
-                .check_validated_block(block, round)?
+                .check_validated_block(block, certificate.round)?
                 == ChainManagerOutcome::Skip
         {
             // If we just processed the same pending block, return the chain info

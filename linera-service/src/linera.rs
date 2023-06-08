@@ -317,9 +317,9 @@ impl ClientContext {
                 chain_id,
                 vote.validator,
             );
-            let aggregator = aggregators
-                .entry(chain_id)
-                .or_insert_with(|| SignatureAggregator::new(vote.value, &committee));
+            let aggregator = aggregators.entry(chain_id).or_insert_with(|| {
+                SignatureAggregator::new(vote.value, RoundNumber(0), &committee)
+            });
             match aggregator.append(vote.validator, vote.signature) {
                 Ok(Some(certificate)) => {
                     trace!("Found certificate: {:?}", certificate);
@@ -1175,10 +1175,8 @@ where
                             WorkerState::new("staging".to_string(), None, storage.clone())
                                 .stage_block_execution(proposal.content.block.clone())
                                 .await?;
-                        let value = HashedValue::from(CertificateValue::ConfirmedBlock {
-                            executed_block,
-                            round: RoundNumber(0),
-                        });
+                        let value =
+                            HashedValue::from(CertificateValue::ConfirmedBlock { executed_block });
                         values.insert(value.hash(), value);
                     }
                 }
