@@ -8,7 +8,7 @@ use crate::{
 use ed25519::signature::Signature as edSignature;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
-    data_types::BlockHeight,
+    data_types::{BlockHeight, RoundNumber},
     ensure,
     identifiers::{ChainId, Owner},
 };
@@ -205,7 +205,7 @@ impl<'a> TryFrom<grpc::LiteCertificate> for HandleLiteCertificateRequest<'a> {
         };
         let signatures = bincode::deserialize(&certificate.signatures)?;
         Ok(Self {
-            certificate: LiteCertificate::new(value, signatures),
+            certificate: LiteCertificate::new(value, RoundNumber(certificate.round), signatures),
             wait_for_outgoing_messages: certificate.wait_for_outgoing_messages,
         })
     }
@@ -217,6 +217,7 @@ impl<'a> TryFrom<HandleLiteCertificateRequest<'a>> for grpc::LiteCertificate {
     fn try_from(request: HandleLiteCertificateRequest) -> Result<Self, Self::Error> {
         Ok(Self {
             hash: request.certificate.value.value_hash.as_bytes().to_vec(),
+            round: request.certificate.round.0,
             chain_id: Some(request.certificate.value.chain_id.into()),
             signatures: bincode::serialize(&request.certificate.signatures)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
@@ -236,7 +237,7 @@ impl TryFrom<grpc::Certificate> for HandleCertificateRequest {
         let signatures = bincode::deserialize(&cert_request.signatures)?;
         let blobs = bincode::deserialize(&cert_request.blobs)?;
         Ok(HandleCertificateRequest {
-            certificate: Certificate::new(value, signatures),
+            certificate: Certificate::new(value, RoundNumber(cert_request.round), signatures),
             wait_for_outgoing_messages: cert_request.wait_for_outgoing_messages,
             blobs,
         })
@@ -250,6 +251,7 @@ impl TryFrom<HandleCertificateRequest> for grpc::Certificate {
         Ok(Self {
             chain_id: Some(request.certificate.value().chain_id().into()),
             value: bincode::serialize(&request.certificate.value)?,
+            round: request.certificate.round.0,
             signatures: bincode::serialize(&request.certificate.signatures)?,
             blobs: bincode::serialize(&request.blobs)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
@@ -575,6 +577,7 @@ pub mod tests {
                 value_hash: CryptoHash::new(&Foo("value".into())),
                 chain_id: ChainId::root(0),
             },
+            round: RoundNumber(2),
             signatures: Cow::Owned(vec![(
                 ValidatorName::from(key_pair.public()),
                 Signature::new(&Foo("test".into()), &key_pair),
@@ -592,27 +595,22 @@ pub mod tests {
     pub fn test_certificate() {
         let key_pair = KeyPair::generate();
         let certificate = Certificate::new(
-            HashedValue::new_validated(
-                ExecutedBlock {
-                    block: get_block(),
-                    messages: vec![],
-                    state_hash: CryptoHash::new(&Foo("test".into())),
-                },
-                Default::default(),
-            ),
+            HashedValue::new_validated(ExecutedBlock {
+                block: get_block(),
+                messages: vec![],
+                state_hash: CryptoHash::new(&Foo("test".into())),
+            }),
+            RoundNumber(3),
             vec![(
                 ValidatorName::from(key_pair.public()),
                 Signature::new(&Foo("test".into()), &key_pair),
             )],
         );
-        let blobs = vec![HashedValue::new_validated(
-            ExecutedBlock {
-                block: get_block(),
-                messages: vec![],
-                state_hash: CryptoHash::new(&Foo("also test".into())),
-            },
-            Default::default(),
-        )];
+        let blobs = vec![HashedValue::new_validated(ExecutedBlock {
+            block: get_block(),
+            messages: vec![],
+            state_hash: CryptoHash::new(&Foo("also test".into())),
+        })];
         let request = HandleCertificateRequest {
             certificate,
             blobs,

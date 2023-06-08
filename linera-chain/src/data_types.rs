@@ -182,14 +182,8 @@ pub struct ExecutedBlock {
 /// A statement to be certified by the validators.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
 pub enum CertificateValue {
-    ValidatedBlock {
-        executed_block: ExecutedBlock,
-        round: RoundNumber,
-    },
-    ConfirmedBlock {
-        executed_block: ExecutedBlock,
-        round: RoundNumber,
-    },
+    ValidatedBlock { executed_block: ExecutedBlock },
+    ConfirmedBlock { executed_block: ExecutedBlock },
 }
 
 /// A statement to be certified by the validators, with its hash.
@@ -207,20 +201,26 @@ pub struct LiteValue {
     pub chain_id: ChainId,
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+struct ValueHashAndRound(CryptoHash, RoundNumber);
+
 /// A vote on a statement from a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Vote {
     pub value: HashedValue,
+    pub round: RoundNumber,
     pub validator: ValidatorName,
     pub signature: Signature,
 }
 
 impl Vote {
     /// Use signing key to create a signed object.
-    pub fn new(value: HashedValue, key_pair: &KeyPair) -> Self {
-        let signature = Signature::new(&value.lite(), key_pair);
+    pub fn new(value: HashedValue, round: RoundNumber, key_pair: &KeyPair) -> Self {
+        let hash_and_round = ValueHashAndRound(value.hash, round);
+        let signature = Signature::new(&hash_and_round, key_pair);
         Self {
             value,
+            round,
             validator: ValidatorName(key_pair.public()),
             signature,
         }
@@ -230,6 +230,7 @@ impl Vote {
     pub fn lite(&self) -> LiteVote {
         LiteVote {
             value: self.value.lite(),
+            round: self.round,
             validator: self.validator,
             signature: self.signature,
         }
@@ -241,6 +242,7 @@ impl Vote {
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct LiteVote {
     pub value: LiteValue,
+    pub round: RoundNumber,
     pub validator: ValidatorName,
     pub signature: Signature,
 }
@@ -253,6 +255,7 @@ impl LiteVote {
         }
         Some(Vote {
             value,
+            round: self.round,
             validator: self.validator,
             signature: self.signature,
         })
@@ -265,19 +268,29 @@ impl LiteVote {
 pub struct LiteCertificate<'a> {
     /// Hash and chain ID of the certified value (used as key for storage).
     pub value: LiteValue,
+    /// The round in which the value was certified.
+    pub round: RoundNumber,
     /// Signatures on the value.
     pub signatures: Cow<'a, [(ValidatorName, Signature)]>,
 }
 
 impl<'a> LiteCertificate<'a> {
-    pub fn new(value: LiteValue, signatures: Vec<(ValidatorName, Signature)>) -> Self {
+    pub fn new(
+        value: LiteValue,
+        round: RoundNumber,
+        signatures: Vec<(ValidatorName, Signature)>,
+    ) -> Self {
         let signatures = Cow::Owned(signatures);
-        Self { value, signatures }
+        Self {
+            value,
+            round,
+            signatures,
+        }
     }
 
     /// Verifies the certificate.
     pub fn check(self, committee: &Committee) -> Result<LiteValue, ChainError> {
-        check_signatures(&self.value, &self.signatures, committee)?;
+        check_signatures(&self.value, self.round, &self.signatures, committee)?;
         Ok(self.value)
     }
 
@@ -289,6 +302,7 @@ impl<'a> LiteCertificate<'a> {
         }
         Some(Certificate {
             value,
+            round: self.round,
             signatures: self.signatures.into_owned(),
         })
     }
@@ -297,6 +311,7 @@ impl<'a> LiteCertificate<'a> {
     pub fn cloned(&self) -> LiteCertificate<'static> {
         LiteCertificate {
             value: self.value.clone(),
+            round: self.round,
             signatures: Cow::Owned(self.signatures.clone().into_owned()),
         }
     }
@@ -308,6 +323,8 @@ impl<'a> LiteCertificate<'a> {
 pub struct Certificate {
     /// The certified value.
     pub value: HashedValue,
+    /// The round in which the value was certified.
+    pub round: RoundNumber,
     /// Signatures on the value.
     pub signatures: Vec<(ValidatorName, Signature)>,
 }
@@ -440,19 +457,11 @@ impl HashedValue {
     /// Creates a `ConfirmedBlock` with round 0.
     #[cfg(any(test, feature = "test"))]
     pub fn new_confirmed(executed_block: ExecutedBlock) -> HashedValue {
-        CertificateValue::ConfirmedBlock {
-            executed_block,
-            round: RoundNumber(0),
-        }
-        .into()
+        CertificateValue::ConfirmedBlock { executed_block }.into()
     }
 
-    pub fn new_validated(executed_block: ExecutedBlock, round: RoundNumber) -> HashedValue {
-        CertificateValue::ValidatedBlock {
-            executed_block,
-            round,
-        }
-        .into()
+    pub fn new_validated(executed_block: ExecutedBlock) -> HashedValue {
+        CertificateValue::ValidatedBlock { executed_block }.into()
     }
 
     pub fn hash(&self) -> CryptoHash {
@@ -472,14 +481,9 @@ impl HashedValue {
                 hash: self.hash,
                 value,
             },
-            CertificateValue::ValidatedBlock {
-                executed_block,
-                round,
-            } => CertificateValue::ConfirmedBlock {
-                executed_block,
-                round,
+            CertificateValue::ValidatedBlock { executed_block } => {
+                CertificateValue::ConfirmedBlock { executed_block }.into()
             }
-            .into(),
         }
     }
 
@@ -511,10 +515,12 @@ impl BlockProposal {
 
 impl LiteVote {
     /// Uses the signing key to create a signed object.
-    pub fn new(value: LiteValue, key_pair: &KeyPair) -> Self {
-        let signature = Signature::new(&value, key_pair);
+    pub fn new(value: LiteValue, round: RoundNumber, key_pair: &KeyPair) -> Self {
+        let hash_and_round = ValueHashAndRound(value.value_hash, round);
+        let signature = Signature::new(&hash_and_round, key_pair);
         Self {
             value,
+            round,
             validator: ValidatorName(key_pair.public()),
             signature,
         }
@@ -522,7 +528,8 @@ impl LiteVote {
 
     /// Verifies the signature in the vote.
     pub fn check(&self) -> Result<(), ChainError> {
-        Ok(self.signature.check(&self.value, self.validator.0)?)
+        let hash_and_round = ValueHashAndRound(self.value.value_hash, self.round);
+        Ok(self.signature.check(&hash_and_round, self.validator.0)?)
     }
 }
 
@@ -535,13 +542,14 @@ pub struct SignatureAggregator<'a> {
 
 impl<'a> SignatureAggregator<'a> {
     /// Starts aggregating signatures for the given value into a certificate.
-    pub fn new(value: HashedValue, committee: &'a Committee) -> Self {
+    pub fn new(value: HashedValue, round: RoundNumber, committee: &'a Committee) -> Self {
         Self {
             committee,
             weight: 0,
             used_validators: HashSet::new(),
             partial: Certificate {
                 value,
+                round,
                 signatures: Vec::new(),
             },
         }
@@ -555,7 +563,8 @@ impl<'a> SignatureAggregator<'a> {
         validator: ValidatorName,
         signature: Signature,
     ) -> Result<Option<Certificate>, ChainError> {
-        signature.check(&self.partial.value.lite(), validator.0)?;
+        let hash_and_round = ValueHashAndRound(self.partial.hash(), self.partial.round);
+        signature.check(&hash_and_round, validator.0)?;
         // Check that each validator only appears once.
         ensure!(
             !self.used_validators.contains(&validator),
@@ -579,13 +588,21 @@ impl<'a> SignatureAggregator<'a> {
 }
 
 impl Certificate {
-    pub fn new(value: HashedValue, signatures: Vec<(ValidatorName, Signature)>) -> Self {
-        Self { value, signatures }
+    pub fn new(
+        value: HashedValue,
+        round: RoundNumber,
+        signatures: Vec<(ValidatorName, Signature)>,
+    ) -> Self {
+        Self {
+            value,
+            round,
+            signatures,
+        }
     }
 
     /// Verifies the certificate.
     pub fn check<'a>(&'a self, committee: &Committee) -> Result<&'a HashedValue, ChainError> {
-        check_signatures(&self.lite_value(), &self.signatures, committee)?;
+        check_signatures(&self.lite_value(), self.round, &self.signatures, committee)?;
         Ok(&self.value)
     }
 
@@ -593,6 +610,7 @@ impl Certificate {
     pub fn lite_certificate(&self) -> LiteCertificate {
         LiteCertificate {
             value: self.lite_value(),
+            round: self.round,
             signatures: Cow::Borrowed(&self.signatures),
         }
     }
@@ -626,6 +644,7 @@ impl Certificate {
 /// Verifies certificate signatures.
 fn check_signatures(
     value: &LiteValue,
+    round: RoundNumber,
     signatures: &[(ValidatorName, Signature)],
     committee: &Committee,
 ) -> Result<(), ChainError> {
@@ -649,15 +668,16 @@ fn check_signatures(
         ChainError::CertificateRequiresQuorum
     );
     // All that is left is checking signatures!
-    Signature::verify_batch(value, signatures.iter().map(|(v, s)| (&v.0, s)))?;
+    let hash_and_round = ValueHashAndRound(value.value_hash, round);
+    Signature::verify_batch(&hash_and_round, signatures.iter().map(|(v, s)| (&v.0, s)))?;
     Ok(())
 }
 
 impl BcsSignable for BlockAndRound {}
 
-impl BcsHashable for CertificateValue {}
+impl BcsSignable for ValueHashAndRound {}
 
-impl BcsSignable for LiteValue {}
+impl BcsHashable for CertificateValue {}
 
 doc_scalar!(
     ChannelFullName,
