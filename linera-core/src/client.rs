@@ -902,16 +902,12 @@ where
         user_data: UserData,
     ) -> Result<Certificate> {
         // TODO(#467): check the balance of `owner` before signing any block proposal.
-        let messages = self.pending_messages().await?;
-        self.execute_block(
-            messages,
-            vec![Operation::System(SystemOperation::Transfer {
-                owner,
-                recipient,
-                amount,
-                user_data,
-            })],
-        )
+        self.execute_operation(Operation::System(SystemOperation::Transfer {
+            owner,
+            recipient,
+            amount,
+            user_data,
+        }))
         .await
     }
 
@@ -924,17 +920,13 @@ where
         amount: Amount,
         user_data: UserData,
     ) -> Result<Certificate> {
-        let messages = self.pending_messages().await?;
-        self.execute_block(
-            messages,
-            vec![Operation::System(SystemOperation::Claim {
-                owner,
-                target,
-                recipient,
-                amount,
-                user_data,
-            })],
-        )
+        self.execute_operation(Operation::System(SystemOperation::Claim {
+            owner,
+            target,
+            recipient,
+            amount,
+            user_data,
+        }))
         .await
     }
 
@@ -1089,7 +1081,9 @@ where
         self.execute_operations(vec![operation]).await
     }
 
-    /// Executes a new block
+    /// Executes a new block.
+    ///
+    /// This must be preceded by a call to `prepare_chain()`.
     async fn execute_block(
         &mut self,
         incoming_messages: Vec<IncomingMessage>,
@@ -1202,12 +1196,11 @@ where
         chain_id: Option<ChainId>,
     ) -> Result<Certificate> {
         let chain_id = chain_id.unwrap_or(application_id.creation.chain_id);
-        let messages = self.pending_messages().await?;
-        let operations = vec![Operation::System(SystemOperation::RequestApplication {
+        self.execute_operation(Operation::System(SystemOperation::RequestApplication {
             application_id,
             chain_id,
-        })];
-        self.execute_block(messages, operations).await
+        }))
+        .await
     }
 
     /// Sends tokens to a chain.
@@ -1332,16 +1325,11 @@ where
         contract: Bytecode,
         service: Bytecode,
     ) -> Result<(BytecodeId, Certificate)> {
-        self.prepare_chain().await?;
-        let messages = self.pending_messages().await?;
         let certificate = self
-            .execute_block(
-                messages,
-                vec![Operation::System(SystemOperation::PublishBytecode {
-                    contract,
-                    service,
-                })],
-            )
+            .execute_operation(Operation::System(SystemOperation::PublishBytecode {
+                contract,
+                service,
+            }))
             .await?;
         // The last message published the bytecode.
         let message_id = certificate
@@ -1381,18 +1369,13 @@ where
         initialization_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<(UserApplicationId, Certificate)> {
-        self.prepare_chain().await?;
-        let messages = self.pending_messages().await?;
         let certificate = self
-            .execute_block(
-                messages,
-                vec![Operation::System(SystemOperation::CreateApplication {
-                    bytecode_id,
-                    parameters,
-                    initialization_argument,
-                    required_application_ids,
-                })],
-            )
+            .execute_operation(Operation::System(SystemOperation::CreateApplication {
+                bytecode_id,
+                parameters,
+                initialization_argument,
+                required_application_ids,
+            }))
             .await?;
         // The last message created the application.
         let creation = certificate
