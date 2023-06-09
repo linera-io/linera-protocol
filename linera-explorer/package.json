@@ -9,7 +9,7 @@
   "devDependencies": {
     "@wasm-tool/wasm-pack-plugin": "^1",
     "copy-webpack-plugin": "^11",
-    "vue-json-pretty": "^2",
+    "json-formatter-js": "^2",
     "webpack": "^5",
     "webpack-cli": "^5"
   }

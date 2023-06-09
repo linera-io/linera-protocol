@@ -3,7 +3,6 @@ query BlockQuery($hash: CryptoHash, $chainId: ChainId) {
     hash
     value {
       status
-      round
       executedBlock {
         block {
           chainId

@@ -74,7 +74,6 @@ scalar BytecodeId
 
 type CertificateValue {
   executedBlock: ExecutedBlock!
-  round: RoundNumber!
   status: String!
 }
 
@@ -279,7 +278,7 @@ type MutationRoot {
   the admin chain so that they can migrate to the new epoch (by accepting the
   notification as an "incoming message" in a next block).
   """
-  createCommittee(adminId: ChainId!, epoch: Epoch!, committee: Committee!): CryptoHash!
+  createCommittee(epoch: Epoch!, committee: Committee!): CryptoHash!
 
   """Subscribes to a system channel."""
   subscribe(chainId: ChainId!, channel: SystemChannel!): CryptoHash!
@@ -292,7 +291,7 @@ type MutationRoot {
   blocks from the retired epoch will not be accepted until they are followed (hence
   re-certified) by a block certified by a recent committee.
   """
-  removeCommittee(adminId: ChainId!, epoch: Epoch!): CryptoHash!
+  removeCommittee(epoch: Epoch!): CryptoHash!
 
   """Publishes a new application bytecode."""
   publishBytecode(contract: Bytecode!, service: Bytecode!): BytecodeId!
@@ -370,11 +369,6 @@ type QueryRoot {
 
 """The recipient of a transfer"""
 scalar Recipient
-
-"""
-A number to identify successive attempts to decide a value in a consensus protocol.
-"""
-scalar RoundNumber
 
 type SubscriptionRoot {
   """Subscribes to notifications from the current chain."""

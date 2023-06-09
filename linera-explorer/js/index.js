@@ -1,24 +1,22 @@
 const rust = import("../pkg/index.js")
 
-import VueJsonPretty from 'vue-json-pretty'
-
-function map_to_object(m) {
-  if (typeof(m) == 'object') {
-    if (Array.isArray(m)) {
-      return m.reduce((acc, x) => { acc.push(map_to_object(x)); return acc }, [])
-    } else {
-      let m2 = (m instanceof Map) ? Object.fromEntries(m) : m
-      return Object.keys(m2).reduce((acc, k) => { acc[k] = map_to_object(m2[k]); return acc }, {})
-    }
-  } else {
-    return m
-  }
-}
+import JSONFormatter from 'json-formatter-js'
 
 function main(r) {
   let block_component = {
     template: "#block-template",
-    props: ["block","title"]
+    props: ["block","title", "route"],
+  }
+
+  let json_component = {
+    template: '<div :id="inner_id"></div>',
+    props: ["id", "data"],
+    data() { return { inner_id: this.id + '-json' } },
+    mounted() {
+      let formatter = new JSONFormatter(this.data, Infinity)
+      let elt = document.getElementById(this.inner_id)
+      elt.appendChild(formatter.render())
+    }
   }
 
   const app = Vue.createApp({
@@ -29,8 +27,7 @@ function main(r) {
       route(path, refresh) { r.route(this, path, refresh) },
       sh(s) { return r.short(s) },
     },
-  }).component('v-block', block_component).component('v-json', VueJsonPretty)
-  app.config.globalProperties.mtoo = map_to_object
+  }).component('v-block', block_component).component('v-json', json_component)
   r.init(app.mount("#app"))
 }
 
