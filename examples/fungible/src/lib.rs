@@ -3,10 +3,12 @@
 
 //! # Fungible Token Example Application
 //!
-//! This example application implements fungible tokens, which demonstrate cross-chain messages.
-//! This application can be built and have its bytecode published on a Linera chain. The published
-//! bytecode can then be used to create multiple application instances, where each instance
-//! represents a different fungible token.
+//! This example application implements fungible tokens. This demonstrates in particular
+//! cross-chain messages and how applications are instantiated and auto-deployed.
+//!
+//! Once this application is built and its bytecode published on a Linera chain, the
+//! published bytecode can be used to create multiple application instances, where each
+//! instance represents a different fungible token.
 //!
 //! # How It Works
 //!
@@ -18,12 +20,12 @@
 //! chain where the operation is executed, while `Claim` sends a message from the current chain to
 //! another chain in order to transfer tokens from that remote chain.
 //!
-//! Tokens can be transferred from an account to different destinations, such as transfering to:
+//! Tokens can be transferred from an account to different destinations, such as:
 //!
-//! - other accounts on the same chain
-//! - the same account on another chain
-//! - other accounts on other chains
-//! - sessions so that other applications can use some tokens
+//! - other accounts on the same chain,
+//! - the same account on another chain,
+//! - other accounts on other chains,
+//! - sessions so that other applications can use some tokens.
 //!
 //! # Usage
 //!
