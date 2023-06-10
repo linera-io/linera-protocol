@@ -327,13 +327,17 @@ impl WalletState {
                 Cell::new("Latest Block").add_attribute(Attribute::Bold),
             ]);
         if let Some(chain_id) = chain_id {
-            let user_chain = self.inner.chains.get(&chain_id).unwrap();
-            Self::update_table_with_chain(
-                &mut table,
-                chain_id,
-                user_chain,
-                Some(chain_id) == self.inner.default,
-            );
+            if let Some(user_chain) = self.inner.chains.get(&chain_id) {
+                Self::update_table_with_chain(
+                    &mut table,
+                    chain_id,
+                    user_chain,
+                    Some(chain_id) == self.inner.default,
+                );
+            } else {
+                println!("Chain {} not found.", chain_id);
+                return;
+            }
         } else {
             for (chain_id, user_chain) in &self.inner.chains {
                 Self::update_table_with_chain(

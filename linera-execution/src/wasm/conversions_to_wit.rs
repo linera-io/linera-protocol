@@ -158,52 +158,48 @@ impl From<ChainId> for service::ChainId {
 
 impl From<CryptoHash> for contract::CryptoHash {
     fn from(crypto_hash: CryptoHash) -> Self {
-        let bytes = crypto_hash.as_bytes();
-
+        let [part1, part2, part3, part4]: [u64; 4] = crypto_hash.into();
         contract::CryptoHash {
-            part1: u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices")),
-            part2: u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices")),
-            part3: u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices")),
-            part4: u64::from_le_bytes(bytes[24..32].try_into().expect("incorrect indices")),
+            part1,
+            part2,
+            part3,
+            part4,
         }
     }
 }
 
 impl From<CryptoHash> for service::CryptoHash {
     fn from(crypto_hash: CryptoHash) -> Self {
-        let bytes = crypto_hash.as_bytes();
-
+        let [part1, part2, part3, part4]: [u64; 4] = crypto_hash.into();
         service::CryptoHash {
-            part1: u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices")),
-            part2: u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices")),
-            part3: u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices")),
-            part4: u64::from_le_bytes(bytes[24..32].try_into().expect("incorrect indices")),
+            part1,
+            part2,
+            part3,
+            part4,
         }
     }
 }
 
 impl From<CryptoHash> for service_system_api::CryptoHash {
     fn from(crypto_hash: CryptoHash) -> Self {
-        let bytes = crypto_hash.as_bytes();
-
+        let [part1, part2, part3, part4]: [u64; 4] = crypto_hash.into();
         service_system_api::CryptoHash {
-            part1: u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices")),
-            part2: u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices")),
-            part3: u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices")),
-            part4: u64::from_le_bytes(bytes[24..32].try_into().expect("incorrect indices")),
+            part1,
+            part2,
+            part3,
+            part4,
         }
     }
 }
 
 impl From<CryptoHash> for contract_system_api::CryptoHash {
     fn from(crypto_hash: CryptoHash) -> Self {
-        let bytes = crypto_hash.as_bytes();
-
+        let [part1, part2, part3, part4]: [u64; 4] = crypto_hash.into();
         contract_system_api::CryptoHash {
-            part1: u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect indices")),
-            part2: u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect indices")),
-            part3: u64::from_le_bytes(bytes[16..24].try_into().expect("incorrect indices")),
-            part4: u64::from_le_bytes(bytes[24..32].try_into().expect("incorrect indices")),
+            part1,
+            part2,
+            part3,
+            part4,
         }
     }
 }
