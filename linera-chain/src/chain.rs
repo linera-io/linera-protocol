@@ -31,7 +31,7 @@ use linera_views::{
     views::{CryptoHashView, GraphQLView, RootView, View, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 /// A view accessing the state of a chain.
 #[derive(Debug, RootView, GraphQLView)]
@@ -215,15 +215,13 @@ where
         let stream = origins.into_iter().zip(inboxes);
         let stream = stream::iter(stream)
             .map(|(origin, inbox)| async move {
-                let event = inbox.removed_events.front().await?;
-                ensure!(
-                    event.is_none(),
-                    ChainError::MissingCrossChainUpdate {
+                if let Some(event) = inbox.removed_events.front().await? {
+                    return Err(ChainError::MissingCrossChainUpdate {
                         chain_id,
                         origin: origin.into(),
-                        height: event.unwrap().height,
-                    }
-                );
+                        height: event.height,
+                    });
+                }
                 Ok::<(), ChainError>(())
             })
             .buffer_unordered(C::MAX_CONNECTIONS);
@@ -383,37 +381,29 @@ where
     /// Removes the incoming messages in the block from the inboxes.
     pub async fn remove_events_from_inboxes(&mut self, block: &Block) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
-        let origins = block
-            .incoming_messages
-            .iter()
-            .map(|message| message.origin.clone())
-            .collect::<HashSet<_>>();
-        let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
-        let mut map = HashMap::new();
-        for (origin, inbox) in origins.into_iter().zip(inboxes) {
-            map.insert(origin, inbox);
-        }
+        let mut events_by_origin: BTreeMap<_, Vec<_>> = Default::default();
         for message in &block.incoming_messages {
-            tracing::trace!(
-                "Updating inbox {:?} in chain {:?}",
-                message.origin,
-                chain_id
-            );
-            if message.event.timestamp > block.timestamp {
-                return Err(ChainError::IncorrectEventTimestamp {
-                    chain_id,
-                    message_timestamp: message.event.timestamp,
-                    block_timestamp: block.timestamp,
-                });
+            let events = events_by_origin.entry(&message.origin).or_default();
+            events.push(&message.event);
+        }
+        let keys = events_by_origin.keys().copied();
+        let inboxes = self.inboxes.try_load_entries_mut(keys).await?;
+        for ((origin, events), mut inbox) in events_by_origin.into_iter().zip(inboxes) {
+            tracing::trace!("Updating inbox {:?} in chain {:?}", origin, chain_id);
+            for event in events {
+                if event.timestamp > block.timestamp {
+                    return Err(ChainError::IncorrectEventTimestamp {
+                        chain_id,
+                        message_timestamp: event.timestamp,
+                        block_timestamp: block.timestamp,
+                    });
+                }
+                // Mark the message as processed in the inbox.
+                inbox
+                    .remove_event(event)
+                    .await
+                    .map_err(|error| ChainError::from((chain_id, origin.clone(), error)))?;
             }
-            // Mark the message as processed in the inbox.
-            let inbox = map
-                .get_mut(&message.origin)
-                .expect("Message origin was added to the map above");
-            inbox
-                .remove_event(&message.event)
-                .await
-                .map_err(|error| ChainError::from((chain_id, message.origin.clone(), error)))?;
         }
         Ok(())
     }

@@ -89,7 +89,7 @@ impl KeyPair {
     pub fn copy(&self) -> KeyPair {
         KeyPair(dalek::Keypair {
             secret: dalek::SecretKey::from_bytes(self.0.secret.as_bytes()).unwrap(),
-            public: dalek::PublicKey::from_bytes(self.0.public.as_bytes()).unwrap(),
+            public: self.0.public,
         })
     }
 }

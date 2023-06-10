@@ -428,11 +428,7 @@ where
     pub fn is_active(&self) -> bool {
         self.description.get().is_some()
             && self.ownership.get().is_active()
-            && self.epoch.get().is_some()
-            && self
-                .committees
-                .get()
-                .contains_key(&self.epoch.get().unwrap())
+            && self.current_committee().is_some()
             && self.admin_id.get().is_some()
     }
 
@@ -615,7 +611,7 @@ where
                             Destination::Subscribers(SystemChannel::Admin.name()),
                             false,
                             SystemMessage::SetCommittees {
-                                epoch: self.epoch.get().expect("chain is active"),
+                                epoch: *epoch,
                                 committees: self.committees.get().clone(),
                             },
                         ));

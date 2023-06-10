@@ -92,14 +92,8 @@ impl From<contract::ChannelName> for ChannelName {
 
 impl From<contract::CryptoHash> for CryptoHash {
     fn from(guest: contract::CryptoHash) -> Self {
-        let mut bytes = [0u8; 32];
-
-        bytes[0..8].copy_from_slice(&guest.part1.to_le_bytes());
-        bytes[8..16].copy_from_slice(&guest.part2.to_le_bytes());
-        bytes[16..24].copy_from_slice(&guest.part3.to_le_bytes());
-        bytes[24..32].copy_from_slice(&guest.part4.to_le_bytes());
-
-        CryptoHash::try_from(&bytes[..]).expect("Incorrect byte count for `CryptoHash`")
+        let integers = [guest.part1, guest.part2, guest.part3, guest.part4];
+        CryptoHash::from(integers)
     }
 }
 
@@ -151,14 +145,8 @@ impl From<contract_system_api::CryptoHash> for ChainId {
 
 impl From<contract_system_api::CryptoHash> for CryptoHash {
     fn from(guest: contract_system_api::CryptoHash) -> Self {
-        let mut bytes = [0u8; 32];
-
-        bytes[0..8].copy_from_slice(&guest.part1.to_le_bytes());
-        bytes[8..16].copy_from_slice(&guest.part2.to_le_bytes());
-        bytes[16..24].copy_from_slice(&guest.part3.to_le_bytes());
-        bytes[24..32].copy_from_slice(&guest.part4.to_le_bytes());
-
-        CryptoHash::try_from(&bytes[..]).expect("Incorrect byte count for `CryptoHash`")
+        let integers = [guest.part1, guest.part2, guest.part3, guest.part4];
+        CryptoHash::from(integers)
     }
 }
 
@@ -195,13 +183,7 @@ impl From<service_system_api::CryptoHash> for ChainId {
 
 impl From<service_system_api::CryptoHash> for CryptoHash {
     fn from(guest: service_system_api::CryptoHash) -> Self {
-        let mut bytes = [0u8; 32];
-
-        bytes[0..8].copy_from_slice(&guest.part1.to_le_bytes());
-        bytes[8..16].copy_from_slice(&guest.part2.to_le_bytes());
-        bytes[16..24].copy_from_slice(&guest.part3.to_le_bytes());
-        bytes[24..32].copy_from_slice(&guest.part4.to_le_bytes());
-
-        CryptoHash::try_from(&bytes[..]).expect("Incorrect byte count for `CryptoHash`")
+        let integers = [guest.part1, guest.part2, guest.part3, guest.part4];
+        CryptoHash::from(integers)
     }
 }

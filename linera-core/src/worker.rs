@@ -482,11 +482,10 @@ where
             return Ok((info, actions));
         }
         // Verify the certificate.
-        let epoch = chain
+        let (epoch, committee) = chain
             .execution_state
             .system
-            .epoch
-            .get()
+            .current_committee()
             .expect("chain is active");
         ensure!(
             block.epoch == epoch,
@@ -495,13 +494,6 @@ where
                 epoch: block.epoch,
             }
         );
-        let committee = chain
-            .execution_state
-            .system
-            .committees
-            .get()
-            .get(&epoch)
-            .expect("chain is active");
         certificate.check(committee)?;
         // This should always be true for valid certificates.
         ensure!(
