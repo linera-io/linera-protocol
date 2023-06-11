@@ -3,7 +3,8 @@
 
 use crate::{
     data_types::{
-        Block, ChainAndHeight, ChannelFullName, Event, Medium, Origin, OutgoingMessage, Target,
+        Block, ChainAndHeight, ChannelFullName, Event, IncomingMessage, Medium, Origin,
+        OutgoingMessage, Target,
     },
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
@@ -381,23 +382,24 @@ where
     /// Removes the incoming messages in the block from the inboxes.
     pub async fn remove_events_from_inboxes(&mut self, block: &Block) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
-        let mut events_by_origin: BTreeMap<_, Vec<_>> = Default::default();
-        for message in &block.incoming_messages {
-            let events = events_by_origin.entry(&message.origin).or_default();
-            events.push(&message.event);
+        let mut events_by_origin: BTreeMap<_, Vec<&Event>> = Default::default();
+        for IncomingMessage { event, origin, .. } in &block.incoming_messages {
+            ensure!(
+                event.timestamp <= block.timestamp,
+                ChainError::IncorrectEventTimestamp {
+                    chain_id,
+                    message_timestamp: event.timestamp,
+                    block_timestamp: block.timestamp,
+                }
+            );
+            let events = events_by_origin.entry(origin).or_default();
+            events.push(event);
         }
-        let keys = events_by_origin.keys().copied();
-        let inboxes = self.inboxes.try_load_entries_mut(keys).await?;
+        let origins = events_by_origin.keys().copied();
+        let inboxes = self.inboxes.try_load_entries_mut(origins).await?;
         for ((origin, events), mut inbox) in events_by_origin.into_iter().zip(inboxes) {
             tracing::trace!("Updating inbox {:?} in chain {:?}", origin, chain_id);
             for event in events {
-                if event.timestamp > block.timestamp {
-                    return Err(ChainError::IncorrectEventTimestamp {
-                        chain_id,
-                        message_timestamp: event.timestamp,
-                        block_timestamp: block.timestamp,
-                    });
-                }
                 // Mark the message as processed in the inbox.
                 inbox
                     .remove_event(event)

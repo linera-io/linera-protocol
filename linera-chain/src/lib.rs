@@ -56,8 +56,9 @@ pub enum ChainError {
         previous_event: Event,
     },
     #[error(
-        "Message in block proposed to {chain_id:?} is out of order compared to previous messages from \
-         origin {origin:?}: {event:?}. Block and height should be at least: {next_height}, {next_index}"
+        "Message in block proposed to {chain_id:?} is out of order compared to previous messages \
+         from origin {origin:?}: {event:?}. Block and height should be at least: \
+         {next_height}, {next_index}"
     )]
     IncorrectMessageOrder {
         chain_id: ChainId,

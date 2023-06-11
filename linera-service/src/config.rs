@@ -335,8 +335,7 @@ impl WalletState {
                     Some(chain_id) == self.inner.default,
                 );
             } else {
-                println!("Chain {} not found.", chain_id);
-                return;
+                panic!("Chain {} not found.", chain_id);
             }
         } else {
             for (chain_id, user_chain) in &self.inner.chains {
