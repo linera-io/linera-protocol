@@ -321,17 +321,17 @@ where
     /// multi-owner chain, we pick one identity for which we know the private key.
     pub async fn identity(&mut self) -> Result<Owner, anyhow::Error> {
         match self.chain_info().await?.manager {
-            ChainManagerInfo::Single(m) => {
-                if !self.known_key_pairs.contains_key(&m.owner) {
+            ChainManagerInfo::Single(manager) => {
+                if !self.known_key_pairs.contains_key(&manager.owner) {
                     bail!(
                         "No key available to interact with single-owner chain {}",
                         self.chain_id
                     );
                 }
-                Ok(m.owner)
+                Ok(manager.owner)
             }
-            ChainManagerInfo::Multi(m) => {
-                let mut identities = m
+            ChainManagerInfo::Multi(manager) => {
+                let mut identities = manager
                     .owners
                     .keys()
                     .filter(|owner| self.known_key_pairs.contains_key(owner));

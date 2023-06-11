@@ -81,8 +81,8 @@ impl ChainManager {
 
     pub fn next_round(&self) -> RoundNumber {
         match self {
-            ChainManager::Multi(m) => {
-                let round = m.round();
+            ChainManager::Multi(manager) => {
+                let round = manager.round();
                 round.try_add_one().unwrap_or(round)
             }
             _ => RoundNumber::default(),
