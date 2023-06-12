@@ -618,20 +618,28 @@ where
             })
             .collect::<Vec<_>>();
         let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        for (full_name, mut channel) in full_names.into_iter().zip(channels) {
-            let recipients = channel.subscribers.indices().await?;
-            let targets = recipients
-                .into_iter()
-                .map(|recipient| Target::channel(recipient, full_name.clone()))
-                .collect::<Vec<_>>();
-            let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
-            for mut outbox in outboxes {
-                if outbox.schedule_message(height)? {
-                    *outbox_counters.entry(height).or_default() += 1;
-                }
+        let stream = full_names.into_iter().zip(channels);
+        let stream = stream::iter(stream)
+            .map(|(full_name, mut channel)| async move {
+                let recipients = channel.subscribers.indices().await?;
+                channel.block_height.set(Some(height));
+                let targets = recipients
+                    .into_iter()
+                    .map(|recipient| Target::channel(recipient, full_name.clone()))
+                    .collect::<Vec<_>>();
+                Ok::<Vec<Target>,ChainError>(targets)
+            })
+            .buffer_unordered(C::MAX_CONNECTIONS);
+        let infos = stream.try_collect::<Vec<_>>().await?;
+        let targets = infos.into_iter().flatten().collect::<Vec<_>>();
+        let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
+        let mut increment = 0;
+        for mut outbox in outboxes {
+            if outbox.schedule_message(height)? {
+                increment += 1;
             }
-            channel.block_height.set(Some(height));
         }
+        *outbox_counters.entry(height).or_default() += increment;
         let full_names = raw_result
             .subscribe
             .clone()
@@ -665,11 +673,9 @@ where
         let infos = stream.try_collect::<Vec<_>>().await?;
         let mut targets = Vec::new();
         let mut heights = Vec::new();
-        for info in infos {
-            if let Some((target, height)) = info {
-                targets.push(target.clone());
-                heights.push(height);
-            }
+        for (target, height) in infos.into_iter().flatten() {
+            targets.push(target);
+            heights.push(height);
         }
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
         for (height, mut outbox) in heights.into_iter().zip(outboxes) {
