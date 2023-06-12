@@ -8,7 +8,10 @@ use crate::{
     doc_scalar,
 };
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use std::{
+    hash::{Hash, Hasher},
+    str::FromStr,
+};
 
 #[cfg(any(test, feature = "test"))]
 use test_strategy::Arbitrary;
@@ -55,7 +58,7 @@ pub struct ApplicationId<A = ()> {
 }
 
 /// A unique identifier for an application bytecode.
-#[derive(Debug, Deserialize, Hash, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct BytecodeId<A = ()> {
     pub message_id: MessageId,
@@ -150,6 +153,16 @@ impl<A: Ord> Ord for BytecodeId<A> {
             _phantom,
         } = other;
         self.message_id.cmp(message_id)
+    }
+}
+
+impl<A> Hash for BytecodeId<A> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let BytecodeId {
+            message_id,
+            _phantom,
+        } = self;
+        message_id.hash(state);
     }
 }
 
