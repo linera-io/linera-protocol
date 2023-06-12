@@ -55,7 +55,7 @@ pub struct ApplicationId<A = ()> {
 }
 
 /// A unique identifier for an application bytecode.
-#[derive(Debug, Deserialize, Hash, Ord, PartialOrd, Serialize)]
+#[derive(Debug, Deserialize, Hash, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct BytecodeId<A = ()> {
     pub message_id: MessageId,
@@ -132,6 +132,26 @@ impl<A: PartialEq> PartialEq for BytecodeId<A> {
 }
 
 impl<A: Eq> Eq for BytecodeId<A> {}
+
+impl<A: PartialOrd> PartialOrd for BytecodeId<A> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let BytecodeId {
+            message_id,
+            _phantom,
+        } = other;
+        self.message_id.partial_cmp(message_id)
+    }
+}
+
+impl<A: Ord> Ord for BytecodeId<A> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let BytecodeId {
+            message_id,
+            _phantom,
+        } = other;
+        self.message_id.cmp(message_id)
+    }
+}
 
 impl BytecodeId {
     pub fn new(message_id: MessageId) -> Self {
