@@ -633,7 +633,11 @@ where
         let infos = stream.try_collect::<Vec<_>>().await?;
         let targets_set = infos.clone().into_iter().flatten().collect::<HashSet<_>>();
         let targets = infos.into_iter().flatten().collect::<Vec<_>>();
-        println!("1 : |targets_set|={} |targets|={}", targets_set.len(), targets.len());
+        println!(
+            "1 : |targets_set|={} |targets|={}",
+            targets_set.len(),
+            targets.len()
+        );
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
         let mut increment = 0;
         for mut outbox in outboxes {
@@ -681,7 +685,11 @@ where
             heights.push(height);
         }
         let targets_set = targets.clone().into_iter().collect::<HashSet<_>>();
-        println!("2 : |targets_set|={} |targets|={}", targets_set.len(), targets.len());
+        println!(
+            "2 : |targets_set|={} |targets|={}",
+            targets_set.len(),
+            targets.len()
+        );
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
         let mut increment = 0;
         for (height, mut outbox) in heights.into_iter().zip(outboxes) {
