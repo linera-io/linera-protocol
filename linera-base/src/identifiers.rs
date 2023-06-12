@@ -47,7 +47,7 @@ pub struct MessageId {
 }
 
 /// A unique identifier for a user application.
-#[derive(Hash, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 #[serde(rename = "UserApplicationId")]
 pub struct ApplicationId<A = ()> {
@@ -238,6 +238,17 @@ impl<A: Ord> Ord for ApplicationId<A> {
             std::cmp::Ordering::Equal => self.creation.cmp(creation),
             result => result,
         }
+    }
+}
+
+impl<A> Hash for ApplicationId<A> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let ApplicationId {
+            bytecode_id,
+            creation,
+        } = self;
+        bytecode_id.hash(state);
+        creation.hash(state);
     }
 }
 
