@@ -250,7 +250,13 @@ impl WalletState {
         let block = false;
         let file_lock = match FileLock::lock(path, block, file) {
             Ok(lock) => lock,
-            Err(err) => bail!("Error getting write lock to wallet: {}", err),
+            Err(err) => bail!(
+                r#"
+Error getting write lock to wallet: {}.
+Please make sure a node service isn't running locally, only one client can use a wallet at a time.
+            "#,
+                err
+            ),
         };
         let inner = serde_json::from_reader(BufReader::new(&file_lock.file))?;
         Ok(Self {
@@ -265,7 +271,13 @@ impl WalletState {
         let block = false;
         let file_lock = match FileLock::lock(path, block, file) {
             Ok(lock) => lock,
-            Err(err) => bail!("Error getting write lock to wallet: {}", err),
+            Err(err) => bail!(
+                r#"
+Error getting write lock to wallet: {}.
+Please make sure a node service isn't running locally, only one client can use a wallet at a time.
+            "#,
+                err
+            ),
         };
         let mut reader = BufReader::new(&file_lock.file);
         if reader.fill_buf()?.is_empty() {
