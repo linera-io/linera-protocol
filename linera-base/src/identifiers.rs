@@ -44,7 +44,7 @@ pub struct MessageId {
 }
 
 /// A unique identifier for a user application.
-#[derive(Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
+#[derive(Hash, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 #[serde(rename = "UserApplicationId")]
 pub struct ApplicationId<A = ()> {
@@ -201,6 +201,32 @@ impl<A: PartialEq> PartialEq for ApplicationId<A> {
 }
 
 impl<A: Eq> Eq for ApplicationId<A> {}
+
+impl<A: PartialOrd> PartialOrd for ApplicationId<A> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let ApplicationId {
+            bytecode_id,
+            creation,
+        } = other;
+        match self.bytecode_id.partial_cmp(bytecode_id) {
+            Some(std::cmp::Ordering::Equal) => self.creation.partial_cmp(creation),
+            result => result,
+        }
+    }
+}
+
+impl<A: Ord> Ord for ApplicationId<A> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let ApplicationId {
+            bytecode_id,
+            creation,
+        } = other;
+        match self.bytecode_id.cmp(bytecode_id) {
+            std::cmp::Ordering::Equal => self.creation.cmp(creation),
+            result => result,
+        }
+    }
+}
 
 impl ApplicationId {
     pub fn with_abi<A>(self) -> ApplicationId<A> {
