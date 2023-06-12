@@ -556,6 +556,7 @@ where
     where
         F: Fn(E) -> Message,
     {
+        use futures::stream::{self, StreamExt, TryStreamExt};
         // Record the messages of the execution. Messages are understood within an
         // application.
         let mut recipients = HashSet::new();
@@ -641,22 +642,39 @@ where
             })
             .collect::<Vec<_>>();
         let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        for ((name, id), mut channel) in raw_result.subscribe.into_iter().zip(channels) {
-            let full_name = ChannelFullName {
-                application_id,
-                name,
-            };
-            // Add subscriber.
-            if !channel.subscribers.contains(&id).await? {
-                // Send the latest message if any.
-                if let Some(latest_height) = channel.block_height.get() {
-                    let target = Target::channel(id, full_name.clone());
-                    let mut outbox = self.outboxes.try_load_entry_mut(&target).await?;
-                    if outbox.schedule_message(*latest_height)? {
-                        *outbox_counters.entry(*latest_height).or_default() += 1;
+        let stream = raw_result.subscribe.into_iter().zip(channels);
+        let stream = stream::iter(stream)
+            .map(|((name, id), mut channel)| async move {
+                let mut result = None;
+                let full_name = ChannelFullName {
+                    application_id,
+                    name,
+                };
+                // Add subscriber.
+                if !channel.subscribers.contains(&id).await? {
+                    // Send the latest message if any.
+                    if let Some(latest_height) = channel.block_height.get() {
+                        let target = Target::channel(id, full_name.clone());
+                        result = Some((target, *latest_height));
                     }
+                    channel.subscribers.insert(&id)?;
                 }
-                channel.subscribers.insert(&id)?;
+                Ok::<Option<(Target,BlockHeight)>, ChainError>(result)
+            })
+            .buffer_unordered(C::MAX_CONNECTIONS);
+        let infos = stream.try_collect::<Vec<_>>().await?;
+        let mut targets = Vec::new();
+        let mut heights = Vec::new();
+        for info in infos {
+            if let Some((target,height)) = info {
+                targets.push(target.clone());
+                heights.push(height);
+            }
+        }
+        let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
+        for (height, mut outbox) in heights.into_iter().zip(outboxes) {
+            if outbox.schedule_message(height)? {
+                *outbox_counters.entry(height).or_default() += 1;
             }
         }
         Ok(())
