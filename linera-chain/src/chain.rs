@@ -627,7 +627,7 @@ where
                     .into_iter()
                     .map(|recipient| Target::channel(recipient, full_name.clone()))
                     .collect::<Vec<_>>();
-                Ok::<Vec<Target>,ChainError>(targets)
+                Ok::<Vec<Target>, ChainError>(targets)
             })
             .buffer_unordered(C::MAX_CONNECTIONS);
         let infos = stream.try_collect::<Vec<_>>().await?;
