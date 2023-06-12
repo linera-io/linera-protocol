@@ -55,7 +55,7 @@ pub struct ApplicationId<A = ()> {
 }
 
 /// A unique identifier for an application bytecode.
-#[derive(Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Debug, Deserialize, Hash, Ord, PartialOrd, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct BytecodeId<A = ()> {
     pub message_id: MessageId,
@@ -120,6 +120,18 @@ impl<A> Clone for BytecodeId<A> {
 }
 
 impl<A> Copy for BytecodeId<A> {}
+
+impl<A: PartialEq> PartialEq for BytecodeId<A> {
+    fn eq(&self, other: &Self) -> bool {
+        let BytecodeId {
+            message_id,
+            _phantom,
+        } = other;
+        self.message_id == *message_id
+    }
+}
+
+impl<A: Eq> Eq for BytecodeId<A> {}
 
 impl BytecodeId {
     pub fn new(message_id: MessageId) -> Self {
