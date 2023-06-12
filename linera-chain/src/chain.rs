@@ -659,14 +659,14 @@ where
                     }
                     channel.subscribers.insert(&id)?;
                 }
-                Ok::<Option<(Target,BlockHeight)>, ChainError>(result)
+                Ok::<Option<(Target, BlockHeight)>, ChainError>(result)
             })
             .buffer_unordered(C::MAX_CONNECTIONS);
         let infos = stream.try_collect::<Vec<_>>().await?;
         let mut targets = Vec::new();
         let mut heights = Vec::new();
         for info in infos {
-            if let Some((target,height)) = info {
+            if let Some((target, height)) = info {
                 targets.push(target.clone());
                 heights.push(height);
             }
