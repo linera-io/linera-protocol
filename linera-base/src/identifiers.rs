@@ -44,7 +44,7 @@ pub struct MessageId {
 }
 
 /// A unique identifier for a user application.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
+#[derive(Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 #[serde(rename = "UserApplicationId")]
 pub struct ApplicationId<A = ()> {
@@ -157,6 +157,18 @@ impl<A> Clone for ApplicationId<A> {
 }
 
 impl<A> Copy for ApplicationId<A> {}
+
+impl<A: PartialEq> PartialEq for ApplicationId<A> {
+    fn eq(&self, other: &Self) -> bool {
+        let ApplicationId {
+            bytecode_id,
+            creation,
+        } = other;
+        self.bytecode_id == *bytecode_id && self.creation == *creation
+    }
+}
+
+impl<A: Eq> Eq for ApplicationId<A> {}
 
 impl ApplicationId {
     pub fn with_abi<A>(self) -> ApplicationId<A> {
