@@ -11,6 +11,7 @@
     "copy-webpack-plugin": "^11",
     "json-formatter-js": "^2",
     "webpack": "^5",
-    "webpack-cli": "^5"
+    "webpack-cli": "^5",
+    "html-loader": "^4.2.0"
   }
 }

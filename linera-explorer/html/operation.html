@@ -1,0 +1,7 @@
+<div v-if="op.System?.Transfer">
+  Transfer {{ op.System.Transfer.amount }} to
+  <span :title="op.System.Transfer.recipient.Account.chain_id">{{ sh(op.System.Transfer.recipient.Account.chain_id) }}</span>
+</div>
+<div v-else>
+  <v-json :data="op" :id="id+'-operation'"></v-json>
+</div>
