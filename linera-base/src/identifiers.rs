@@ -9,6 +9,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    fmt::Debug,
     hash::{Hash, Hasher},
     str::FromStr,
 };
@@ -58,7 +59,7 @@ pub struct ApplicationId<A = ()> {
 }
 
 /// A unique identifier for an application bytecode.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct BytecodeId<A = ()> {
     pub message_id: MessageId,
@@ -163,6 +164,18 @@ impl<A> Hash for BytecodeId<A> {
             _phantom,
         } = self;
         message_id.hash(state);
+    }
+}
+
+impl<A> Debug for BytecodeId<A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let BytecodeId {
+            message_id,
+            _phantom,
+        } = self;
+        f.debug_struct("BytecodeId")
+            .field("message_id", message_id)
+            .finish()
     }
 }
 
@@ -340,7 +353,7 @@ impl<A> SessionId<A> {
 
 impl std::fmt::Display for Owner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        self.0.fmt(f)
+        std::fmt::Display::fmt(&self.0, f)
     }
 }
 
@@ -366,7 +379,7 @@ impl std::str::FromStr for Owner {
 
 impl std::fmt::Display for ChainId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+        std::fmt::Display::fmt(&self.0, f)
     }
 }
 
