@@ -11,6 +11,7 @@ use crate::{
     ChainError, ChainManager,
 };
 use async_graphql::SimpleObject;
+use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
@@ -209,7 +210,6 @@ where
     /// Verifies that this chain is up-to-date and all the messages executed ahead of time
     /// have been properly received by now.
     pub async fn validate_incoming_messages(&mut self) -> Result<(), ChainError> {
-        use futures::stream::{self, StreamExt, TryStreamExt};
         let chain_id = self.chain_id();
         let origins = self.inboxes.indices().await?;
         let inboxes = self.inboxes.try_load_entries(&origins).await?;
@@ -556,7 +556,6 @@ where
     where
         F: Fn(E) -> Message,
     {
-        use futures::stream::{self, StreamExt, TryStreamExt};
         // Record the messages of the execution. Messages are understood within an
         // application.
         let mut recipients = HashSet::new();
