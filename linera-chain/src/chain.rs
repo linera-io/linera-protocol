@@ -669,12 +669,7 @@ where
             })
             .buffer_unordered(C::MAX_CONNECTIONS);
         let infos = stream.try_collect::<Vec<_>>().await?;
-        let mut targets = Vec::new();
-        let mut heights = Vec::new();
-        for (target, height) in infos.into_iter().flatten() {
-            targets.push(target);
-            heights.push(height);
-        }
+        let (targets, heights): (Vec<_>, Vec<_>) = infos.into_iter().flatten().unzip();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
         for (height, mut outbox) in heights.into_iter().zip(outboxes) {
             if outbox.schedule_message(height)? {
