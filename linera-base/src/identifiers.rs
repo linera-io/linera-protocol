@@ -68,7 +68,6 @@ pub struct BytecodeId<A = ()> {
 }
 
 /// The identifier of a session.
-#[derive(Debug)]
 pub struct SessionId<A = ()> {
     /// The user application that runs the session.
     pub application_id: ApplicationId<A>,
@@ -343,6 +342,19 @@ impl<A: Ord> Ord for SessionId<A> {
             std::cmp::Ordering::Equal => self.index.cmp(index),
             result => result,
         }
+    }
+}
+
+impl<A> Debug for SessionId<A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let SessionId {
+            application_id,
+            index,
+        } = self;
+        f.debug_struct("SessionId")
+            .field("application_id", application_id)
+            .field("index", index)
+            .finish()
     }
 }
 
