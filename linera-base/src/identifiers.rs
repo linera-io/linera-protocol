@@ -48,7 +48,7 @@ pub struct MessageId {
 }
 
 /// A unique identifier for a user application.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 #[serde(rename = "UserApplicationId")]
 pub struct ApplicationId<A = ()> {
@@ -262,6 +262,19 @@ impl<A> Hash for ApplicationId<A> {
         } = self;
         bytecode_id.hash(state);
         creation.hash(state);
+    }
+}
+
+impl<A> Debug for ApplicationId<A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ApplicationId {
+            bytecode_id,
+            creation,
+        } = self;
+        f.debug_struct("ApplicationId")
+            .field("bytecode_id", bytecode_id)
+            .field("creation", creation)
+            .finish()
     }
 }
 
