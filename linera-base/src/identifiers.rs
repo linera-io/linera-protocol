@@ -67,7 +67,7 @@ pub struct BytecodeId<A = ()> {
 }
 
 /// The identifier of a session.
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Ord, PartialOrd)]
 pub struct SessionId<A = ()> {
     /// The user application that runs the session.
     pub application_id: ApplicationId<A>,
@@ -281,6 +281,18 @@ impl<A> Clone for SessionId<A> {
 }
 
 impl<A> Copy for SessionId<A> {}
+
+impl<A: PartialEq> PartialEq for SessionId<A> {
+    fn eq(&self, other: &Self) -> bool {
+        let SessionId {
+            application_id,
+            index,
+        } = other;
+        self.application_id == *application_id && self.index == *index
+    }
+}
+
+impl<A: Eq> Eq for SessionId<A> {}
 
 impl SessionId {
     pub fn with_abi<A>(self) -> SessionId<A> {
