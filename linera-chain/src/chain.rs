@@ -633,13 +633,11 @@ where
         let infos = stream.try_collect::<Vec<_>>().await?;
         let targets = infos.into_iter().flatten().collect::<Vec<_>>();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
-        let mut increment = 0;
         for mut outbox in outboxes {
             if outbox.schedule_message(height)? {
-                increment += 1;
+                *outbox_counters.entry(height).or_default() += 1;
             }
         }
-        *outbox_counters.entry(height).or_default() += increment;
         let full_names = raw_result
             .subscribe
             .clone()
