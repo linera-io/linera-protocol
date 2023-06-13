@@ -67,7 +67,7 @@ pub struct BytecodeId<A = ()> {
 }
 
 /// The identifier of a session.
-#[derive(Debug, Ord, PartialOrd)]
+#[derive(Debug)]
 pub struct SessionId<A = ()> {
     /// The user application that runs the session.
     pub application_id: ApplicationId<A>,
@@ -293,6 +293,32 @@ impl<A: PartialEq> PartialEq for SessionId<A> {
 }
 
 impl<A: Eq> Eq for SessionId<A> {}
+
+impl<A: PartialOrd> PartialOrd for SessionId<A> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let SessionId {
+            application_id,
+            index,
+        } = other;
+        match self.application_id.partial_cmp(application_id) {
+            Some(std::cmp::Ordering::Equal) => self.index.partial_cmp(index),
+            result => result,
+        }
+    }
+}
+
+impl<A: Ord> Ord for SessionId<A> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let SessionId {
+            application_id,
+            index,
+        } = other;
+        match self.application_id.cmp(application_id) {
+            std::cmp::Ordering::Equal => self.index.cmp(index),
+            result => result,
+        }
+    }
+}
 
 impl SessionId {
     pub fn with_abi<A>(self) -> SessionId<A> {
