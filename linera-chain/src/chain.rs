@@ -631,13 +631,7 @@ where
             })
             .buffer_unordered(C::MAX_CONNECTIONS);
         let infos = stream.try_collect::<Vec<_>>().await?;
-        let targets_set = infos.clone().into_iter().flatten().collect::<HashSet<_>>();
         let targets = infos.into_iter().flatten().collect::<Vec<_>>();
-        println!(
-            "1 : |targets_set|={} |targets|={}",
-            targets_set.len(),
-            targets.len()
-        );
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
         let mut increment = 0;
         for mut outbox in outboxes {
@@ -645,7 +639,6 @@ where
                 increment += 1;
             }
         }
-        println!("1: increment={}", increment);
         *outbox_counters.entry(height).or_default() += increment;
         let full_names = raw_result
             .subscribe
@@ -684,21 +677,12 @@ where
             targets.push(target);
             heights.push(height);
         }
-        let targets_set = targets.clone().into_iter().collect::<HashSet<_>>();
-        println!(
-            "2 : |targets_set|={} |targets|={}",
-            targets_set.len(),
-            targets.len()
-        );
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
-        let mut increment = 0;
         for (height, mut outbox) in heights.into_iter().zip(outboxes) {
             if outbox.schedule_message(height)? {
                 *outbox_counters.entry(height).or_default() += 1;
-                increment += 1;
             }
         }
-        println!("2: increment={}", increment);
         Ok(())
     }
 

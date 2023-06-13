@@ -442,7 +442,9 @@ impl Client {
         from: ChainId,
         to_owner: Option<Owner>,
     ) -> anyhow::Result<(MessageId, ChainId)> {
+        println!("open_chain, step 1");
         let mut command = self.run_with_storage().await;
+        println!("open_chain, step 2");
         command
             .arg("open-chain")
             .args(["--from", &from.to_string()]);
@@ -451,10 +453,18 @@ impl Client {
             command.args(["--to-public-key", &owner.to_string()]);
         }
 
+        println!("open_chain, step 3");
         let stdout = Self::run_command(&mut command).await;
+        println!("open_chain, step 4");
         let mut split = stdout.split('\n');
-        let message_id: MessageId = split.next().unwrap().parse()?;
+        println!("open_chain, step 5");
+        println!("split={:?}", split);
+        let entry = split.next().unwrap();
+        println!("entry={:?}", entry);
+        let message_id: MessageId = entry.parse()?;
+        println!("open_chain, step 6");
         let chain_id = ChainId::from_str(split.next().unwrap())?;
+        println!("open_chain, step 7");
 
         Ok((message_id, chain_id))
     }
