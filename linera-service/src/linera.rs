@@ -44,6 +44,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use std::io::Read;
 use structopt::StructOpt;
 use tracing::{debug, info, warn};
 
@@ -66,6 +67,7 @@ use {
     std::collections::{HashMap, HashSet},
     tracing::{error, trace},
 };
+use linera_service::client::{LocalNet, Network};
 
 struct ClientContext {
     wallet_state: WalletState,
@@ -885,8 +887,14 @@ enum ClientCommand {
 
     /// Manage Linera projects.
     Project(ProjectCommand),
+
+    Net(NetCommand)
 }
 
+#[derive(StructOpt)]
+enum NetCommand {
+    Up
+}
 #[derive(StructOpt)]
 enum WalletCommand {
     /// Show the contents of the wallet.
@@ -1467,7 +1475,6 @@ where
                 println!("{}", chain_id);
                 context.save_wallet();
             }
-
             Project(project_command) => match project_command {
                 ProjectCommand::PublishAndCreate {
                     path,
@@ -1517,8 +1524,7 @@ where
                 }
                 _ => unreachable!("other project commands do not require storage"),
             },
-
-            CreateGenesisConfig { .. } | Keygen | Wallet(_) => unreachable!(),
+            CreateGenesisConfig { .. } | Keygen | Wallet(_) | Net(_) => unreachable!(),
         }
         Ok(())
     }
@@ -1607,6 +1613,32 @@ async fn main() -> Result<(), anyhow::Error> {
             context.save_wallet();
             println!("{}", public);
             Ok(())
+        }
+
+        ClientCommand::Net(net_command) => match net_command {
+            NetCommand::Up => {
+                let network = Network::Grpc;
+                let mut runner = LocalNet::new(network, 1);
+                let client1 = runner.make_client(network);
+                let client2 = runner.make_client(network);
+
+                runner.generate_initial_validator_config().await;
+                client1.create_genesis_config().await;
+                client2.wallet_init(&[]).await;
+
+                // Create initial server and client config.
+                runner.run_local_net().await;
+                let net_path = runner.net_path();
+
+                println!("\nLinera net directory available at: {}", net_path.display());
+                println!("To configure your Linera client for this network, run:\n");
+                println!("{}", format!("export LINERA_WALLET=\"{}\"", net_path.join("wallet_0.json").display()).bold());
+                println!("{}", format!("export LINERA_STORAGE=\"rocksdb:{}\"", net_path.join("linera.db").display()).bold());
+
+                std::io::stdin().bytes().next();
+
+                Ok(())
+            }
         }
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {

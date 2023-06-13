@@ -36,12 +36,15 @@ linera-execution = { workspace = true }
 linera-rpc = { workspace = true }
 linera-storage = { workspace = true }
 linera-views = { workspace = true }
+once_cell = { workspace = true }
 metrics-exporter-tcp = { workspace = true }
 tracing = { workspace = true }
 parse_duration = { workspace = true }
+reqwest = { workspace = true, features = ["json"]  }
 serde = { workspace = true }
 serde_json = { workspace = true }
 structopt = { workspace = true }
+tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = { workspace = true }
