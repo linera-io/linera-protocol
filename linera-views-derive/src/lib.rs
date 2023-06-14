@@ -5,9 +5,6 @@
 
 pub(crate) mod util;
 
-extern crate heck;
-extern crate proc_macro;
-extern crate syn;
 use crate::util::{concat, get_graphql_identifiers, snakify, string_to_ident};
 use heck::AsUpperCamelCase;
 use proc_macro::TokenStream;
