@@ -678,8 +678,8 @@ impl Certificate {
     /// Returns whether the validator is among the signatories of this certificate.
     pub fn is_signed_by(&self, validator_name: &ValidatorName) -> bool {
         self.signatures
-            .iter()
-            .any(|(name, _)| name == validator_name)
+            .binary_search_by(|(name, _)| name.cmp(validator_name))
+            .is_ok()
     }
 }
 
