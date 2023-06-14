@@ -591,12 +591,24 @@ impl<'a> SignatureAggregator<'a> {
     }
 }
 
+// Checks if the array slice is strictly ordered. That means that if the array
+// has duplicates, this will return False, even if the array is sorted
+fn is_strictly_ordered(values: &[(ValidatorName, Signature)]) -> bool {
+    values.windows(2).all(|pair| pair[0].0 < pair[1].0)
+}
+
 impl Certificate {
     pub fn new(
         value: HashedValue,
         round: RoundNumber,
-        signatures: Vec<(ValidatorName, Signature)>,
+        mut signatures: Vec<(ValidatorName, Signature)>,
     ) -> Self {
+        if !is_strictly_ordered(&signatures) {
+            // Not enforcing no duplicates, check the documentation for is_strictly_ordered
+            // It's the responsibility of the caller to make sure signatures has no duplicates
+            signatures.sort_by_key(|&(validator_name, _)| validator_name)
+        }
+
         Self {
             value,
             round,
