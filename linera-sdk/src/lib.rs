@@ -224,16 +224,16 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
         &mut self,
         authenticated: bool,
         application: ApplicationId<A>,
-        call: &A::ApplicationCall,
+        argument: &A::ApplicationCall,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<(A::Response, Vec<SessionId>), Self::Error> {
-        let call_bytes = bcs::to_bytes(call)?;
+        let argument_bytes = bcs::to_bytes(argument)?;
         let (response_bytes, ids) =
             Self::Storage::execute_with_released_state(self, move || async move {
                 crate::contract::system_api::call_application_without_persisting_state(
                     authenticated,
                     application.forget_abi(),
-                    &call_bytes,
+                    &argument_bytes,
                     forwarded_sessions,
                 )
             })
@@ -249,16 +249,16 @@ pub trait Contract: WithContractAbi + ContractAbi + Send + Sized {
         &mut self,
         authenticated: bool,
         session: SessionId<A>,
-        call: &A::SessionCall,
+        argument: &A::SessionCall,
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<(A::Response, Vec<SessionId>), Self::Error> {
-        let call_bytes = bcs::to_bytes(call)?;
+        let argument_bytes = bcs::to_bytes(argument)?;
         let (response_bytes, ids) =
             Self::Storage::execute_with_released_state(self, move || async move {
                 crate::contract::system_api::call_session_without_persisting_state(
                     authenticated,
                     session.forget_abi(),
-                    &call_bytes,
+                    &argument_bytes,
                     forwarded_sessions,
                 )
             })
