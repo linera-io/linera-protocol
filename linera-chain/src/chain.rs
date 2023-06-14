@@ -626,7 +626,7 @@ where
                     .into_iter()
                     .map(|recipient| Target::channel(recipient, full_name.clone()))
                     .collect::<Vec<_>>();
-                Ok::<Vec<Target>, ChainError>(targets)
+                Ok::<_, ChainError>(targets)
             })
             .buffer_unordered(C::MAX_CONNECTIONS);
         let infos = stream.try_collect::<Vec<_>>().await?;
@@ -664,7 +664,7 @@ where
                     }
                     channel.subscribers.insert(&id)?;
                 }
-                Ok::<Option<(Target, BlockHeight)>, ChainError>(result)
+                Ok::<_, ChainError>(result)
             })
             .buffer_unordered(C::MAX_CONNECTIONS);
         let infos = stream.try_collect::<Vec<_>>().await?;
