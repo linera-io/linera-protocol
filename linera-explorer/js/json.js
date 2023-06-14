@@ -1,12 +1,18 @@
 import JSONFormatter from 'json-formatter-js'
 
-export default {
+function load(id, data) {
+  let formatter = new JSONFormatter(data, Infinity)
+  let elt = document.getElementById(id)
+  elt.appendChild(formatter.render())
+}
+
+var component = {
   template: '<div :id="inner_id"></div>',
-  props: ["id", "data"],
-  data() { return { inner_id: this.id + '-json' } },
+  props: [ "id", "data" ],
+  data() { return { inner_id: this.id + '-inner' } },
   mounted() {
-    let formatter = new JSONFormatter(this.data, Infinity)
-    let elt = document.getElementById(this.inner_id)
-    elt.appendChild(formatter.render())
+    load(this.inner_id, this.data)
   }
 }
+
+export default { load, component }

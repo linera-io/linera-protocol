@@ -2,18 +2,18 @@
   <div class="card-body">
     <h5 class="card-title">
       <span>{{ title }}</span>
-      <button class="btn btn-link btn-sm" data-bs-toggle="modal" :data-bs-target="'#json-head-'+block.hash">
+      <button class="btn btn-link btn-sm" data-bs-toggle="modal" :data-bs-target="'#'+block.hash+'-modal'" @click="json_load(block.hash+'-json', block)">
         <i class="bi bi-braces"></i>
       </button>
-      <div :id="'json-head-'+block.hash" class="modal fade">
+      <div :id="block.hash+'-modal'" class="modal fade">
         <div class="modal-dialog modal-xl">
           <div class="modal-content">
             <div class="modal-header">
-              <h5 class="modal-title">Head</h5>
+              <h5 class="modal-title">{{ title }}</h5>
               <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-              <v-json :data="block" id="head-data"></v-json>
+              <div :id="block.hash+'-json'"></div>
             </div>
           </div>
         </div>
@@ -42,7 +42,7 @@
       </li>
       <li class="list-group-item d-flex justify-content-between">
         <span><strong>Previous Block</strong></span>
-        <a v-if="block.value.executedBlock.block.previousBlockHash!==undefined" @click="route('block', [['hash', block.value.executedBlock.block.previousBlockHash]])" class="btn btn-link">{{ block.value.executedBlock.block.previousBlockHash }}</a>
+        <a v-if="block.value.executedBlock.block.previousBlockHash!==undefined" @click="route('block', [['block', block.value.executedBlock.block.previousBlockHash]])" class="btn btn-link">{{ block.value.executedBlock.block.previousBlockHash }}</a>
         <span v-else>--</span>
       </li>
       <li class="list-group-item d-flex justify-content-between">
@@ -67,7 +67,7 @@
             <div class="card">
               <div class="card-header">Message {{ i+1 }}</div>
               <div class="card-body">
-                <v-json :data="m" :id="'head-inmessage-'+i"></v-json>
+                <v-json :data="m" :id="block.hash+'-inmessage-'+i"></v-json>
               </div>
             </div>
           </li>
@@ -87,7 +87,7 @@
             <div class="card">
               <div class="card-header">Message {{ i+1 }}</div>
               <div class="card-body">
-                <v-json :data="m" :id="'head-outmessage-'+i"></v-json>
+                <v-json :data="m" :id="block.hash+'-outmessage-'+i"></v-json>
               </div>
             </div>
           </li>
@@ -104,9 +104,8 @@
       <div v-if="block.value.executedBlock.block.operations.length!==0" class="collapse" :id="'operations-collapse-'+block.hash">
         <ul class="list-group">
           <li v-for="(o, i) in block.value.executedBlock.block.operations" class="list-group-item p-0">
-            <div class="card card-body">
-              <div class="card-title">Operation {{ i+1 }}</div>
-              <v-op :op="o" :id="'head-'+i"></v-op>
+            <div class="card card-body p-0">
+              <v-op :op="o" :id="block.hash+'-operation-'+i" :index="i" :route="route"></v-op>
             </div>
           </li>
         </ul>

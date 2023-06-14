@@ -14,6 +14,7 @@ use futures::prelude::*;
 use uuid::Uuid;
 use wasm_bindgen_futures::spawn_local;
 // use pharos::{ObserveConfig, Observable};
+use std::str::FromStr;
 
 type Epoch = Value;
 type Message = Value;
@@ -23,21 +24,22 @@ type Origin = Value;
 
 #[derive(Serialize, Deserialize, Clone)]
 enum Page {
-    #[serde(rename = "home")]
-    Home,
+    #[serde(rename = "unloaded")]
+    Unloaded,
+    #[serde(rename = "blocks")]
+    Blocks {
+        chain: ChainId,
+        blocks: Vec<blocks_query::BlocksQueryBlocks>,
+    },
     #[serde(rename = "block")]
     Block(Box<block_query::BlockQueryBlock>),
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Data {
-    message: String,
     node: String,
-    blocks: Vec<blocks_query::BlocksQueryBlocks>,
-    path: String,
     page: Page,
     chains: Vec<ChainId>,
-    chain: Option<ChainId>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -66,9 +68,7 @@ pub enum Reason {
     },
 }
 
-
-
-const SER : Serializer = serde_wasm_bindgen::Serializer::json_compatible();
+const SER : Serializer = serde_wasm_bindgen::Serializer::json_compatible().serialize_bytes_as_arrays(true);
 
 #[wasm_bindgen(start)]
 pub fn main_js() -> Result<(), JsValue> {
@@ -78,13 +78,9 @@ pub fn main_js() -> Result<(), JsValue> {
 #[wasm_bindgen]
 pub fn data() -> JsValue {
     let data = Data {
-        message: "Hello".to_string(),
         node: "http://localhost:8080".to_string(),
-        blocks: Vec::new(),
-        path: "".to_string(),
-        page: Page::Home,
+        page: Page::Unloaded,
         chains: Vec::new(),
-        chain: None,
     };
     data.serialize(&SER).unwrap()
 }
@@ -135,112 +131,72 @@ fn log_str(s: &str) {
     web_sys::console::log_1(&JsValue::from_str(s))
 }
 
-fn set_default_chain(app: &JsValue, data: &Data, l: &[blocks_query::BlocksQueryBlocks]) {
-    match (l.get(0), data.chain) {
-        (None, _) | (_, Some(_)) => (),
-        (Some(b), _) => {
-            let js = b.value.executed_block.block.chain_id.serialize(&SER).unwrap();
-            setf(app, "chain", &js)
-        }
+fn default_chain(chain: Option<ChainId>, l: &Vec<blocks_query::BlocksQueryBlocks>) -> ChainId {
+    match (chain, l.get(0)) {
+        (Some(id), _) => id,
+        (_, Some(b)) => b.value.executed_block.block.chain_id,
+        _ => ChainId::from_str("").unwrap(),
     }
 }
 
-pub async fn get_blocks(app: &JsValue, data: &Data, from: &Option<CryptoHash>) {
-    let variables = blocks_query::Variables {
-        from: *from,
-        chain_id: data.chain,
-        limit: None,
-    };
+async fn blocks(node: &str, chain_id: Option<ChainId>, from: Option<CryptoHash>) -> Page {
     let client = reqwest::Client::new();
-    let res = post_graphql::<BlocksQuery, _>(&client, &data.node, variables)
-        .await
-        .unwrap();
+    let variables = blocks_query::Variables { from, chain_id, limit: None };
+    let res = post_graphql::<BlocksQuery, _>(&client, node, variables).await.unwrap();
     let blocks = res.data.unwrap().blocks;
-    set_default_chain(app, data, &blocks);
-    if let Ok(res_js) = blocks.serialize(&SER) {
-        setf(app, "blocks", &res_js)
-    }
+    let chain = default_chain(chain_id, &blocks);
+    Page::Blocks { chain, blocks }
 }
 
-async fn get_block(app: &JsValue, data: &Data, hash: &Option<CryptoHash>) {
-    let variables = block_query::Variables {
-        hash: *hash,
-        chain_id: data.chain,
-    };
+async fn block(node: &str, chain_id: Option<ChainId>, hash: Option<CryptoHash>) -> Page {
     let client = reqwest::Client::new();
-    let res = post_graphql::<BlockQuery, _>(&client, &data.node, variables)
-        .await
-        .unwrap();
-    let b = res.data.unwrap().block.unwrap();
-    if let Ok(page_js) = Page::Block(Box::new(b)).serialize(&SER) {
-        setf(app, "page", &page_js)
-    }
+    let variables = block_query::Variables { hash, chain_id };    
+    let res = post_graphql::<BlockQuery, _>(&client, node, variables).await.unwrap();
+    let block = res.data.unwrap().block.unwrap();
+    Page::Block(Box::new(block))
 }
 
-async fn get_chains(app: &JsValue, data: &Data) {
-    let variables = chains_query::Variables;
+async fn chains(app: &JsValue, node: &str) {
     let client = reqwest::Client::new();
-    let res = post_graphql::<ChainsQuery, _>(&client, &data.node, variables)
-        .await
-        .unwrap();
+    let variables = chains_query::Variables;    
+    let res = post_graphql::<ChainsQuery, _>(&client, node, variables).await.unwrap();
     let l = res.data.unwrap().chains;
     let chains_js = l.serialize(&SER).unwrap();
     setf(app, "chains", &chains_js);
 }
 
-async fn route_aux(
-    app: &JsValue,
-    data: &Data,
-    path: &Option<String>,
-    args: Vec<(String, CryptoHash)>,
-    _refresh: bool,
-) {
-    log_str(&format!("route: {}", path.clone().unwrap_or("none".to_string())));
-    let path = path.clone().unwrap_or(data.path.clone());
-    match path.as_str() {
-        "" => {
-            get_blocks(app, data, &None).await;
-            get_chains(app, data).await;
-            setf(app, "page", &JsValue::from_str("home"));
-        }
-        "block" => {
-            let hash = args.into_iter().find(|(k, _)| k == "hash");
-            match hash {
-                None => log_str("no hash given"),
-                Some((_, hash)) => get_block(app, data, &Some(hash)).await
-            }
-        }
-        _ => (),
+async fn route_aux(app: &JsValue, data: &Data, path: &Option<String>, args: Vec<(String, String)>) {
+    let path = match (path, data.page.clone()) {
+        (Some(p), _) => p,
+        (_, Page::Unloaded) => "",
+        (_, Page::Block(_)) => "block",
+        (_, Page::Blocks {..}) => "blocks",
     };
-    let path_js = JsValue::from_str(&path);
-    setf(app, "path", &path_js);
-    let state = js_sys::Object::new();
-    setf(
-        &state,
-        "page",
-        &data.page.serialize(&SER).unwrap(),
-    );
-    setf(&state, "path", &path_js);
-    setf(
-        &state,
-        "chain",
-        &data.chain.serialize(&SER).unwrap(),
-    );
-    web_sys::window()
-        .unwrap()
-        .history()
-        .unwrap()
-        .push_state(&state, &path)
-        .expect("failed pushstate");
+    let chain_id = args.iter().find(|(k, _)| k == "chain").map(|x| ChainId::from_str(&x.1).unwrap());
+    let page = match path {
+        "" => blocks(&data.node, None, None).await,
+        "block" => {
+            let hash = args.into_iter().find(|(k, _)| k == "block").map(|x| CryptoHash::from_str(&x.1).unwrap());
+            block(&data.node, chain_id, hash).await
+        },
+        "blocks" => {
+            blocks(&data.node, chain_id, None).await
+        },
+        _ => Page::Unloaded,
+    };
+    let page_js = page.serialize(&SER).unwrap();
+    setf(app, "page", &page_js);
+    let page_jstr = js_sys::JSON::stringify(&page_js).expect("failed page stringify");
+    web_sys::window().unwrap().history().unwrap().push_state(&page_jstr.into(), &path).expect("push_state failed");
 }
 
 #[wasm_bindgen]
-pub async fn route(app: JsValue, path: JsValue, args: JsValue, refresh: Option<bool>) {
+pub async fn route(app: JsValue, path: JsValue, args: JsValue) {    
     let path = path.as_string();
-    log_str(&format!("route: {}", path.clone().unwrap_or("none".to_string())));
-    let data = from_value::<Data>(app.clone()).unwrap();
-    let args = from_value::<Vec<(String, CryptoHash)>>(args).unwrap_or(vec![]);
-    route_aux(&app, &data, &path, args, refresh.unwrap_or(true)).await
+    let args = from_value::<Vec<(String, String)>>(args).unwrap_or(vec![]);
+    log_str(&format!("route: {} {:?}", path.clone().unwrap_or("none".to_string()), args));
+    let data = from_value::<Data>(app.clone()).unwrap();    
+    route_aux(&app, &data, &path, args).await
 }
 
 #[wasm_bindgen]
@@ -251,16 +207,22 @@ pub fn short(s: String) -> String {
 
 fn set_onpopstate(app: JsValue) {
     let a = Closure::<dyn FnMut(JsValue)>::new(move |e: JsValue| {
-        let data_js = getf(&e, "state");
-        setf(&app, "page", &getf(&data_js, "page"));
-        setf(&app, "path", &getf(&data_js, "path"));
-        setf(&app, "chain", &getf(&data_js, "chain"));
+        let page_str = getf(&e, "state").as_string().unwrap();
+        let page = js_sys::JSON::parse(&page_str).expect("failed parse page");
+        setf(&app, "page", &page);
     });
-    web_sys::window()
-        .unwrap()
-        .set_onpopstate(Some(a.as_ref().unchecked_ref()));
+    web_sys::window().unwrap().set_onpopstate(Some(a.as_ref().unchecked_ref()));
     a.forget()
 }
+
+fn page_chain(data: &Data) -> Option<ChainId> {
+    match &data.page {
+        Page::Unloaded => None,
+        Page::Block(b) => Some(b.value.executed_block.block.chain_id),
+        Page::Blocks { blocks, ..} => blocks.get(0).map(|b| b.value.executed_block.block.chain_id)
+    }
+}
+
 
 async fn subscribe(app: JsValue) {
     spawn_local( async move {
@@ -277,9 +239,10 @@ async fn subscribe(app: JsValue) {
                     if let Some(p) = gq.payload {
                         if let Some(d) = p.data {
                             let data = from_value::<Data>(app.clone()).unwrap();
-                            match (Some(d.notifications.chain_id) == data.chain, d.notifications.reason) {
+                            let chain = page_chain(&data);
+                            match (Some(d.notifications.chain_id) == chain, d.notifications.reason) {
                                 (true, Reason::NewBlock { hash: _hash, .. }) => {
-                                    route_aux(&app, &data, &None, vec!(), false).await
+                                    route_aux(&app, &data, &None, vec!()).await
                                 },
                                 _ => ()
                             }
@@ -297,6 +260,7 @@ pub async fn init(app: JsValue) {
     console_error_panic_hook::set_once();
     set_onpopstate(app.clone());
     let data = from_value::<Data>(app.clone()).unwrap();
-    route_aux(&app, &data, &None, Vec::new(), true).await;
+    chains(&app, &data.node).await;
+    route_aux(&app, &data, &None, Vec::new()).await;
     subscribe(app.clone()).await;
 }

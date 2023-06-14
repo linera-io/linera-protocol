@@ -12,8 +12,8 @@
           <input v-model="node" class="form-control">
         </li>
         <li class="nav-item mx-2">
-          <select v-model="chain" @change="route()" class="form-select">
-            <option v-for="c in chains" :value="c" :selected="c==chain">{{ sh(c) }}</option>
+          <select @change="route('blocks', [['chain', $event.target.value]])" class="form-select">
+            <option v-for="c in chains" :value="c" :selected="(page.blocks?.chain || page.block?.value.executedBlock.block.chainId) == c">{{ sh(c) }}</option>
           </select>
         </li>
         <li class="nav-itemmx-2">
@@ -26,8 +26,14 @@
   </div>
 </nav>
 <div class="container">
-  <div v-if="page=='home'">
-    <v-block v-if="blocks.length!=0" class="m-2" :block="blocks[0]" title="Head" :route="route">
+  <div v-if="page=='unloaded'">
+    <div class="text-center m-5 p-5">
+      <span class="spinner-border">
+      </span>
+    </div>
+  </div>
+  <div v-else-if="page.blocks">
+    <v-block v-if="page.blocks.blocks.length!=0" class="m-2" :block="page.blocks.blocks[0]" title="Head" :route="route">
     </v-block>
     <div>
       <table class="table">
@@ -44,10 +50,10 @@
           <th>JSON</th>
         </thead>
         <tbody>
-          <tr v-for="b in blocks">
+          <tr v-for="b in page.blocks.blocks">
             <td>{{ b.value.executedBlock.block.height }}</td>
             <td :title="b.hash">
-              <a @click="route('block', [['hash', b.hash]])" class="btn btn-link">{{ sh(b.hash) }}
+              <a @click="route('block', [['block', b.hash]])" class="btn btn-link">{{ sh(b.hash) }}
             </td>
             <td>{{ (new Date(b.value.executedBlock.block.timestamp/1000)).toLocaleString() }}</td>
             <td :title="b.value.executedBlock.block.authenticatedSigner">{{ sh(b.value.executedBlock.block.authenticatedSigner) }}</td>
@@ -57,10 +63,10 @@
             <td>{{ b.value.executedBlock.messages.length }}</td>
             <td>{{ b.value.executedBlock.block.operations.length }}</td>
             <td>
-              <button class="btn btn-link btn-sm" data-bs-toggle="modal" :data-bs-target="'#json-block-'+b.hash">
+              <button class="btn btn-link btn-sm" data-bs-toggle="modal" :data-bs-target="'#'+b.hash+'-modal'" @click="json_load(b.hash+'-json', b)">
                 <i class="bi bi-braces"></i>
               </button>
-              <div :id="'json-block-'+b.hash" class="modal fade">
+              <div :id="b.hash+'-modal'" class="modal fade">
                 <div class="modal-dialog modal-xl">
                   <div class="modal-content">
                     <div class="modal-header">
@@ -68,7 +74,8 @@
                       <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                      <v-json :data="b" :id="'block-data-'+b.hash"></v-json>
+                      <div :id="b.hash+'-json'">
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -80,7 +87,7 @@
     </div>
   </div>
 
-  <div v-else-if="page.block!==undefined">
+  <div v-else-if="page.block">
     <v-block :block="page.block" title="Block" :route="route">
     </v-block>
   </div>
