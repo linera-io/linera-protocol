@@ -14,7 +14,7 @@ use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     ApplicationId, BytecodeLocation, Message, Operation,
 };
-use serde::{Deserialize, Serialize};
+use serde::{de::Deserializer, Deserialize, Serialize};
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -323,7 +323,7 @@ impl<'a> LiteCertificate<'a> {
 }
 
 /// A certified statement from the committee.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct Certificate {
     /// The certified value.
@@ -378,7 +378,7 @@ impl Serialize for HashedValue {
 impl<'a> Deserialize<'a> for HashedValue {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::de::Deserializer<'a>,
+        D: Deserializer<'a>,
     {
         Ok(CertificateValue::deserialize(deserializer)?.into())
     }
@@ -595,6 +595,32 @@ impl<'a> SignatureAggregator<'a> {
 // has duplicates, this will return False, even if the array is sorted
 fn is_strictly_ordered(values: &[(ValidatorName, Signature)]) -> bool {
     values.windows(2).all(|pair| pair[0].0 < pair[1].0)
+}
+
+impl<'de> Deserialize<'de> for Certificate {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Debug, Deserialize)]
+        #[serde(rename = "Certificate")]
+        struct CertificateHelper {
+            value: HashedValue,
+            round: RoundNumber,
+            signatures: Vec<(ValidatorName, Signature)>,
+        }
+
+        let helper: CertificateHelper = Deserialize::deserialize(deserializer)?;
+        if !is_strictly_ordered(&helper.signatures) {
+            Err(serde::de::Error::custom("Vector is not strictly sorted"))
+        } else {
+            Ok(Self {
+                value: helper.value,
+                round: helper.round,
+                signatures: helper.signatures,
+            })
+        }
+    }
 }
 
 impl Certificate {
