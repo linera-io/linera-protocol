@@ -3,8 +3,6 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
-extern crate core;
-
 mod utils;
 
 use self::utils::create_dummy_user_application_description;
