@@ -160,7 +160,7 @@ impl MatchingEngine {
             .await
     }
 
-    /// transfer of tokens from the owner to the destination
+    /// Transfers tokens from the owner to the destination
     async fn transfer(
         &mut self,
         owner: AccountOwner,
