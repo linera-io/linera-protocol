@@ -400,19 +400,23 @@ impl MatchingEngine {
         Ok(value_ret)
     }
 
-    /// Create the transfers corresponding to the order:
-    /// * nature is the nature of the order in question
-    /// * fill is the amount that is being pricessed
-    /// * owner is the owner of the new order being inserted.
-    /// * order_level is the liquidity providing order.
-    /// * price_level is the price of the level in question
-    /// * The price_insert is the price that has
+    /// Creates the transfers corresponding to the order:
+    ///
+    /// * `nature` is the nature of the order in question.
+    /// * `fill` is the amount that is being processed.
+    /// * `owner` is the owner of the new order being inserted.
+    /// * `order_level` is the liquidity providing order.
+    /// * `price_level` is the price of the existing order that provides liquidity.
+    /// * `price_insert` is the price that of the newly added order.
+    ///
     /// If the new order satisfies bid > best_ask or ask < best_bid
     /// then there is money on the table. There are three possible
     /// ways to handle this:
-    /// * The delta gets to the owner of the matching engine
+    ///
+    /// * The delta gets to the owner of the matching engine.
     /// * The liquidity providing order gets the delta.
-    /// * The liquidity eating order gets the delta
+    /// * The liquidity eating order gets the delta.
+    ///
     /// We choose the second scenario since the liquidity providing
     /// order is waiting and so deserves to be rewarded for the wait.
     fn get_transfers(
