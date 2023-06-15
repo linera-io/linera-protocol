@@ -11,6 +11,7 @@ use crate::{
     ChainError, ChainManager,
 };
 use async_graphql::SimpleObject;
+use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
@@ -209,7 +210,6 @@ where
     /// Verifies that this chain is up-to-date and all the messages executed ahead of time
     /// have been properly received by now.
     pub async fn validate_incoming_messages(&mut self) -> Result<(), ChainError> {
-        use futures::stream::{self, StreamExt, TryStreamExt};
         let chain_id = self.chain_id();
         let origins = self.inboxes.indices().await?;
         let inboxes = self.inboxes.try_load_entries(&origins).await?;
@@ -617,19 +617,25 @@ where
             })
             .collect::<Vec<_>>();
         let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        for (full_name, mut channel) in full_names.into_iter().zip(channels) {
-            let recipients = channel.subscribers.indices().await?;
-            let targets = recipients
-                .into_iter()
-                .map(|recipient| Target::channel(recipient, full_name.clone()))
-                .collect::<Vec<_>>();
-            let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
-            for mut outbox in outboxes {
-                if outbox.schedule_message(height)? {
-                    *outbox_counters.entry(height).or_default() += 1;
-                }
+        let stream = full_names.into_iter().zip(channels);
+        let stream = stream::iter(stream)
+            .map(|(full_name, mut channel)| async move {
+                let recipients = channel.subscribers.indices().await?;
+                channel.block_height.set(Some(height));
+                let targets = recipients
+                    .into_iter()
+                    .map(|recipient| Target::channel(recipient, full_name.clone()))
+                    .collect::<Vec<_>>();
+                Ok::<_, ChainError>(targets)
+            })
+            .buffer_unordered(C::MAX_CONNECTIONS);
+        let infos = stream.try_collect::<Vec<_>>().await?;
+        let targets = infos.into_iter().flatten().collect::<Vec<_>>();
+        let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
+        for mut outbox in outboxes {
+            if outbox.schedule_message(height)? {
+                *outbox_counters.entry(height).or_default() += 1;
             }
-            channel.block_height.set(Some(height));
         }
         let full_names = raw_result
             .subscribe
@@ -641,22 +647,32 @@ where
             })
             .collect::<Vec<_>>();
         let channels = self.channels.try_load_entries_mut(&full_names).await?;
-        for ((name, id), mut channel) in raw_result.subscribe.into_iter().zip(channels) {
-            let full_name = ChannelFullName {
-                application_id,
-                name,
-            };
-            // Add subscriber.
-            if !channel.subscribers.contains(&id).await? {
-                // Send the latest message if any.
-                if let Some(latest_height) = channel.block_height.get() {
-                    let target = Target::channel(id, full_name.clone());
-                    let mut outbox = self.outboxes.try_load_entry_mut(&target).await?;
-                    if outbox.schedule_message(*latest_height)? {
-                        *outbox_counters.entry(*latest_height).or_default() += 1;
+        let stream = raw_result.subscribe.into_iter().zip(channels);
+        let stream = stream::iter(stream)
+            .map(|((name, id), mut channel)| async move {
+                let mut result = None;
+                let full_name = ChannelFullName {
+                    application_id,
+                    name,
+                };
+                // Add subscriber.
+                if !channel.subscribers.contains(&id).await? {
+                    // Send the latest message if any.
+                    if let Some(latest_height) = channel.block_height.get() {
+                        let target = Target::channel(id, full_name.clone());
+                        result = Some((target, *latest_height));
                     }
+                    channel.subscribers.insert(&id)?;
                 }
-                channel.subscribers.insert(&id)?;
+                Ok::<_, ChainError>(result)
+            })
+            .buffer_unordered(C::MAX_CONNECTIONS);
+        let infos = stream.try_collect::<Vec<_>>().await?;
+        let (targets, heights): (Vec<_>, Vec<_>) = infos.into_iter().flatten().unzip();
+        let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
+        for (height, mut outbox) in heights.into_iter().zip(outboxes) {
+            if outbox.schedule_message(height)? {
+                *outbox_counters.entry(height).or_default() += 1;
             }
         }
         Ok(())
