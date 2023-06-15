@@ -116,6 +116,7 @@ meta-counter = { path = "./examples/meta-counter" }
 reentrant-counter = { path = "./examples/reentrant-counter" }
 fungible = { path = "./examples/fungible" }
 crowd-funding = { path = "./examples/crowd-funding" }
+matching-engine = { path = "./examples/matching-engine" }
 social = { path = "./examples/social" }
 
 [profile.release]

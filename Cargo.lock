@@ -2729,6 +2729,7 @@ dependencies = [
  "linera-rpc",
  "linera-storage",
  "linera-views",
+ "matching-engine",
  "metrics-exporter-tcp",
  "once_cell",
  "parse_duration",
@@ -2736,6 +2737,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "social",
  "structopt",
  "tempfile",
  "test-log",
@@ -3039,6 +3041,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8263075bb86c5a1b1427b5ae862e8889656f126e9f77c484496e8b47cf5c5558"
 dependencies = [
  "regex-automata",
+]
+
+[[package]]
+name = "matching-engine"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-trait",
+ "bcs",
+ "fungible",
+ "linera-sdk",
+ "linera-views",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

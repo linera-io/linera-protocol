@@ -197,6 +197,16 @@ macro_rules! impl_strictly_wrapped_number {
             pub fn saturating_mul(&self, other: $wrapped) -> Self {
                 Self(self.0.saturating_mul(other))
             }
+
+            pub fn try_mul(self, other: $wrapped) -> Result<Self, ArithmeticError> {
+                let val = self.0.checked_mul(other).ok_or(ArithmeticError::Overflow)?;
+                Ok(Self(val))
+            }
+
+            pub fn try_mul_assign(&mut self, other: $wrapped) -> Result<(), ArithmeticError> {
+                self.0 = self.0.checked_mul(other).ok_or(ArithmeticError::Overflow)?;
+                Ok(())
+            }
         }
 
         impl From<$name> for $wrapped {

@@ -71,9 +71,11 @@ tempfile = { workspace = true }
 test-log = { workspace = true, features = ["trace"] }
 test-strategy = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
+social = { workspace = true }
 counter = { workspace = true }
 fungible = { workspace = true }
 crowd-funding = { workspace = true }
+matching-engine = { workspace = true }
 
 [[bin]]
 name = "linera"

@@ -1,0 +1,29 @@
+[package]
+name = "matching-engine"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dependencies]
+serde_json = { workspace = true }
+async-graphql = { workspace = true }
+async-trait = { workspace = true }
+bcs = { workspace = true }
+fungible = { workspace = true }
+linera-sdk = { workspace = true }
+linera-views = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+fungible = { workspace = true, features = ["test"] }
+linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+tokio = { workspace = true }
+
+[[bin]]
+name = "matching_engine_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "matching_engine_service"
+path = "src/service.rs"

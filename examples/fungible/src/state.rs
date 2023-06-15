@@ -19,7 +19,6 @@ pub struct FungibleToken {
 #[allow(dead_code)]
 impl FungibleToken {
     /// Initializes the application state with some accounts with initial balances.
-
     pub(crate) async fn initialize_accounts(&mut self, state: InitialState) {
         for (k, v) in state.accounts {
             self.accounts
