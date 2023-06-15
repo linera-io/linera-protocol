@@ -28,7 +28,7 @@ use serde::Deserialize;
 use std::{net::SocketAddr, path::PathBuf};
 use structopt::StructOpt;
 use tokio::fs;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 struct ServerContext {
     server_config: ValidatorServerConfig,
@@ -161,7 +161,7 @@ impl ServerContext {
                     .listen_address(address)
                     .install()
                 {
-                    warn!(
+                    error!(
                         ?error, %address,
                         "Could not install TCP metrics exporter."
                     );
