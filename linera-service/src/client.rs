@@ -2,7 +2,6 @@ use crate::config::WalletState;
 use async_graphql::InputType;
 use linera_base::{
     abi::ContractAbi,
-    data_types::Amount,
     identifiers::{ChainId, MessageId, Owner},
 };
 use linera_execution::Bytecode;
@@ -190,7 +189,7 @@ impl Client {
         tmp
     }
 
-    async fn project_publish(
+    pub async fn project_publish(
         &self,
         path: PathBuf,
         required_application_ids: Vec<String>,
@@ -214,7 +213,7 @@ impl Client {
         stdout.trim().to_string()
     }
 
-    async fn project_test(&self, path: &Path) {
+    pub async fn project_test(&self, path: &Path) {
         let mut command = self.run().await;
         assert!(command
             .current_dir(path)
@@ -477,11 +476,11 @@ impl Client {
         new_chain
     }
 
-    fn get_wallet(&self) -> WalletState {
+    pub fn get_wallet(&self) -> WalletState {
         WalletState::from_file(self.tmp_dir.path().join(&self.wallet).as_path()).unwrap()
     }
 
-    fn get_owner(&self) -> Option<Owner> {
+    pub fn get_owner(&self) -> Option<Owner> {
         let wallet = self.get_wallet();
         let chain_id = wallet.default_chain()?;
         let public_key = wallet.get(chain_id)?.key_pair.as_ref()?.public();
@@ -793,11 +792,11 @@ impl LocalNet {
         self.tmp_dir.path()
     }
 
-    fn kill_server(&mut self, i: usize, j: usize) {
+    pub fn kill_server(&mut self, i: usize, j: usize) {
         self.local_net.get_mut(&i).unwrap().kill_server(j);
     }
 
-    fn remove_validator(&mut self, i: usize) {
+    pub fn remove_validator(&mut self, i: usize) {
         self.local_net.remove(&i).unwrap();
     }
 
@@ -819,9 +818,12 @@ impl LocalNet {
     }
 
     pub async fn build_example(&self, name: &str) -> (PathBuf, PathBuf) {
-        let examples_dir = env::current_dir().unwrap().join("../examples/");
-        self.build_application(examples_dir.join(name).as_path(), name, true)
+        self.build_application(Self::example_path(name).as_path(), name, true)
             .await
+    }
+
+    pub fn example_path(name: &str) -> PathBuf {
+        env::current_dir().unwrap().join("../examples/").join(name)
     }
 
     pub async fn build_application(
@@ -864,7 +866,7 @@ pub struct NodeService {
 }
 
 impl NodeService {
-    fn assert_is_running(&mut self) {
+    pub fn assert_is_running(&mut self) {
         if let Some(status) = self.child.try_wait().unwrap() {
             assert!(status.success());
         }
@@ -874,14 +876,12 @@ impl NodeService {
         self.query_node("mutation { processInbox }").await;
     }
 
-    pub async fn make_application(&self, application_id: &str) -> Application {
+    pub async fn make_application(&self, application_id: &str) -> String {
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let values = self.try_get_applications_uri().await;
             if let Some(link) = values.get(application_id) {
-                return Application {
-                    uri: link.to_string(),
-                };
+                return link.to_string();
             }
             warn!(
                 "Waiting for application {application_id:?} to be visible on chain {:?}",
@@ -969,71 +969,5 @@ impl NodeService {
         let query = format!("mutation {{ requestApplication(applicationId: {application_id}) }}");
         let data = self.query_node(&query).await;
         serde_json::from_value(data["requestApplication"].clone()).unwrap()
-    }
-}
-
-pub struct Application {
-    uri: String,
-}
-
-#[cfg(test)]
-#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-impl Application {
-    pub async fn get_fungible_account_owner_amount(
-        &self,
-        account_owner: &fungible::AccountOwner,
-    ) -> Amount {
-        let query = format!(
-            "query {{ accounts(accountOwner: {} ) }}",
-            account_owner.to_value()
-        );
-        let response_body = self.query_application(&query).await;
-        serde_json::from_value(response_body["accounts"].clone()).unwrap_or_default()
-    }
-
-    pub async fn assert_fungible_account_balances(
-        &self,
-        accounts: impl IntoIterator<Item = (fungible::AccountOwner, Amount)>,
-    ) {
-        for (account_owner, amount) in accounts {
-            let value = self.get_fungible_account_owner_amount(&account_owner).await;
-            assert_eq!(value, amount);
-        }
-    }
-
-    pub async fn get_counter_value(&self) -> u64 {
-        let data = self.query_application("query { value }").await;
-        serde_json::from_value(data["value"].clone()).unwrap()
-    }
-
-    pub async fn query_application(&self, query: &str) -> Value {
-        let client = reqwest::Client::new();
-        let response = client
-            .post(&self.uri)
-            .json(&json!({ "query": query }))
-            .send()
-            .await
-            .unwrap();
-        if !response.status().is_success() {
-            panic!(
-                "Query \"{}\" failed: {}",
-                query.get(..200).unwrap_or(query),
-                response.text().await.unwrap()
-            );
-        }
-        let value: Value = response.json().await.unwrap();
-        if let Some(errors) = value.get("errors") {
-            panic!(
-                "Query \"{}\" failed: {}",
-                query.get(..200).unwrap_or(query),
-                errors
-            );
-        }
-        value["data"].clone()
-    }
-
-    pub async fn increment_counter_value(&self, increment: u64) {
-        let query = format!("mutation {{ increment(value: {})}}", increment);
-        self.query_application(&query).await;
     }
 }

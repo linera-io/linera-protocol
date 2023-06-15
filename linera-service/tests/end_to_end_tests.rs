@@ -5,32 +5,14 @@
 #![cfg_attr(not(any(feature = "wasmer", feature = "wasmtime")), allow(dead_code))]
 
 use async_graphql::InputType;
-use linera_base::{
-    abi::ContractAbi,
-    identifiers::{ChainId, MessageId, Owner},
-};
-use linera_execution::Bytecode;
-use linera_service::config::WalletState;
-use once_cell::sync::{Lazy, OnceCell};
+use linera_base::identifiers::ChainId;
+
+use once_cell::sync::Lazy;
 use serde_json::{json, Value};
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    env, fs,
-    ops::RangeInclusive,
-    path::{Path, PathBuf},
-    process::Stdio,
-    rc::Rc,
-    str::FromStr,
-    time::Duration,
-};
-use tempfile::{tempdir, TempDir};
-use tokio::{
-    process::{Child, Command},
-    sync::Mutex,
-};
-use tonic_health::proto::{
-    health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
-};
+use std::{collections::BTreeMap, time::Duration};
+
+use tokio::sync::Mutex;
+
 use tracing::{info, warn};
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
@@ -42,6 +24,75 @@ use linera_service::client::{LocalNet, Network};
 
 /// A static lock to prevent integration tests from running in parallel.
 static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+pub struct Application {
+    uri: String,
+}
+
+#[cfg(test)]
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+impl Application {
+    fn new(uri: String) -> Self {
+        Self { uri }
+    }
+    pub async fn get_fungible_account_owner_amount(
+        &self,
+        account_owner: &fungible::AccountOwner,
+    ) -> Amount {
+        let query = format!(
+            "query {{ accounts(accountOwner: {} ) }}",
+            account_owner.to_value()
+        );
+        let response_body = self.query_application(&query).await;
+        serde_json::from_value(response_body["accounts"].clone()).unwrap_or_default()
+    }
+
+    pub async fn assert_fungible_account_balances(
+        &self,
+        accounts: impl IntoIterator<Item = (fungible::AccountOwner, Amount)>,
+    ) {
+        for (account_owner, amount) in accounts {
+            let value = self.get_fungible_account_owner_amount(&account_owner).await;
+            assert_eq!(value, amount);
+        }
+    }
+
+    pub async fn get_counter_value(&self) -> u64 {
+        let data = self.query_application("query { value }").await;
+        serde_json::from_value(data["value"].clone()).unwrap()
+    }
+
+    pub async fn query_application(&self, query: &str) -> Value {
+        let client = reqwest::Client::new();
+        let response = client
+            .post(&self.uri)
+            .json(&json!({ "query": query }))
+            .send()
+            .await
+            .unwrap();
+        if !response.status().is_success() {
+            panic!(
+                "Query \"{}\" failed: {}",
+                query.get(..200).unwrap_or(query),
+                response.text().await.unwrap()
+            );
+        }
+        let value: Value = response.json().await.unwrap();
+        if let Some(errors) = value.get("errors") {
+            panic!(
+                "Query \"{}\" failed: {}",
+                query.get(..200).unwrap_or(query),
+                errors
+            );
+        }
+        value["data"].clone()
+    }
+
+    pub async fn increment_counter_value(&self, increment: u64) {
+        let query = format!("mutation {{ increment(value: {})}}", increment);
+        self.query_application(&query).await;
+    }
+}
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -74,7 +125,7 @@ async fn test_end_to_end_counter() {
         .await;
     let mut node_service = client.run_node_service(None, None).await;
 
-    let application = node_service.make_application(&application_id).await;
+    let application = Application::new(node_service.make_application(&application_id).await);
 
     let counter_value = application.get_counter_value().await;
     assert_eq!(counter_value, original_counter_value);
@@ -112,7 +163,7 @@ async fn test_end_to_end_counter_publish_create() {
         .await;
     let mut node_service = client.run_node_service(None, None).await;
 
-    let application = node_service.make_application(&application_id).await;
+    let application = Application::new(node_service.make_application(&application_id).await);
 
     let counter_value = application.get_counter_value().await;
     assert_eq!(counter_value, original_counter_value);
@@ -325,7 +376,7 @@ async fn test_end_to_end_social_user_pub_sub() {
     // Request the application so chain 2 has it, too.
     node_service2.request_application(&application_id).await;
 
-    let app2 = node_service2.make_application(&application_id).await;
+    let app2 = Application::new(node_service2.make_application(&application_id).await);
     let subscribe = format!("mutation {{ subscribe(chainId: \"{chain1}\") }}");
     let hash = app2.query_application(&subscribe).await;
 
@@ -334,7 +385,7 @@ async fn test_end_to_end_social_user_pub_sub() {
     let response = node_service2.query_node(&query).await;
     assert_eq!(hash, response["chain"]["tipState"]["blockHash"]);
 
-    let app1 = node_service1.make_application(&application_id).await;
+    let app1 = Application::new(node_service1.make_application(&application_id).await);
     let post = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
     app1.query_application(post).await;
 
@@ -456,7 +507,7 @@ async fn test_end_to_end_fungible() {
     let mut node_service1 = client1.run_node_service(chain1, 8080).await;
     let mut node_service2 = client2.run_node_service(chain2, 8081).await;
 
-    let app1 = node_service1.make_application(&application_id).await;
+    let app1 = Application::new(node_service1.make_application(&application_id).await);
     app1.assert_fungible_account_balances([
         (account_owner1, Amount::from_tokens(5)),
         (account_owner2, Amount::from_tokens(2)),
@@ -485,7 +536,7 @@ async fn test_end_to_end_fungible() {
     .await;
 
     // Fungible didn't exist on chain2 initially but now it does and we can talk to it.
-    let app2 = node_service2.make_application(&application_id).await;
+    let app2 = Application::new(node_service2.make_application(&application_id).await);
 
     app2.assert_fungible_account_balances(BTreeMap::from([
         (account_owner1, Amount::ZERO),
@@ -603,11 +654,13 @@ async fn test_end_to_end_crowd_funding() {
     let mut node_service1 = client1.run_node_service(chain1, 8080).await;
     let mut node_service2 = client2.run_node_service(chain2, 8081).await;
 
-    let app_fungible1 = node_service1
-        .make_application(&application_id_fungible)
-        .await;
+    let app_fungible1 = Application::new(
+        node_service1
+            .make_application(&application_id_fungible)
+            .await,
+    );
 
-    let app_crowd1 = node_service1.make_application(&application_id_crowd).await;
+    let app_crowd1 = Application::new(node_service1.make_application(&application_id_crowd).await);
 
     // Transferring tokens to user2 on chain2
     let destination = Account {
@@ -628,7 +681,7 @@ async fn test_end_to_end_crowd_funding() {
         .request_application(&application_id_crowd)
         .await;
 
-    let app_crowd2 = node_service2.make_application(&application_id_crowd).await;
+    let app_crowd2 = Application::new(node_service2.make_application(&application_id_crowd).await);
 
     // Transferring
     let amount_transfer = Amount::ONE;
@@ -673,7 +726,7 @@ async fn test_project_test() {
     let mut runner = LocalNet::new(network, 0);
     let client = runner.make_client(network);
     client
-        .project_test(&TestRunner::example_path("counter"))
+        .project_test(&LocalNet::example_path("counter"))
         .await;
 }
 
@@ -682,7 +735,7 @@ async fn test_project_publish() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 1);
+    let mut runner = LocalNet::new(network, 1);
     let client = runner.make_client(network);
 
     runner.generate_initial_validator_config().await;
