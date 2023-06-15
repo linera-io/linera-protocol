@@ -49,7 +49,7 @@ impl Contract for MatchingEngine {
         Ok(ExecutionResult::default())
     }
 
-    /// execute the order operation
+    /// Executes the order operation.
     /// If the chain is the one of the matching engine then the ordered is processed
     /// locally otherwise, it gets transmitted as a message to the chain of the engine.
     async fn execute_operation(
