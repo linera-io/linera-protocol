@@ -4,10 +4,9 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 mod state;
-use crate::state::{Transfer, KeyBook, OrderEntry};
+use crate::state::{KeyBook, OrderEntry, Transfer};
 use matching_engine::{
-    product_price_amount, ApplicationCall, Message, Operation, Order, OrderId,
-    OrderNature, Price,
+    product_price_amount, ApplicationCall, Message, Operation, Order, OrderId, OrderNature, Price,
 };
 use state::{LevelView, MatchingEngine, MatchingEngineError};
 use std::cmp::min;
@@ -319,7 +318,7 @@ impl MatchingEngine {
     }
 
     /// For a specific level of price, look at all the orders and find the one that
-    /// matches or emit an error.
+    /// has this specific order_id.
     /// When that order is found, then the cancellation is applied to it.
     /// Then the information is emitted for the handling of this operation.
     async fn modify_order_level(

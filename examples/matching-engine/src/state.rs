@@ -10,8 +10,8 @@ use linera_sdk::{
 use linera_views::views::{RootView, View, ViewError};
 use matching_engine::{OrderId, OrderNature, Price};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use std::collections::BTreeSet;
+use thiserror::Error;
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
@@ -107,28 +107,24 @@ pub struct LevelView {
 }
 
 /// The matching engine containing the information.
-/// Meaning of the entries:
-/// * The next_order_number contains the order_id so that
-///   the order_id gets created from 0, to infinity.
-/// * bids containing the bids starting from the best one
-///   (highest proposed price by buyer) to the worse
-/// * asks containing the asks starting from the best one
-///   (smallest asked price by seller) to the worse.
-/// * orders containing the map from the order_id to the
-///   key information
-/// * The account_info containing the list of order_id
-///   by the owner.
 #[derive(RootView, GraphQLView)]
 #[view(context = "ViewStorageContext")]
 pub struct MatchingEngine {
-    /// The lowest order number that has not been used yet.
+    ///The next_order_number contains the order_id so that
+    ///the order_id gets created from 0, to infinity.
     pub next_order_number: RegisterView<OrderId>,
-    /// The map of the outstanding bids, by the bitwise complement of the price
+    /// The map of the outstanding bids, by the bitwise complement of
+    /// the revert of the price. The order is from the best price
+    /// level (highest proposed by buyer) to the worse
     pub bids: CustomCollectionView<Price, LevelView>,
-    /// The map of the outstanding asks, by asking price
+    /// The map of the outstanding asks, by the bitwise complement of
+    /// the price. The order is from the best one (smallest asked price
+    /// by seller) to the worse.
     pub asks: CustomCollectionView<Price, LevelView>,
-    /// The map with the list of orders
+    /// The map with the list of orders giving for each order_id the
+    /// fundamental information on the order (nature, owner, amount)
     pub orders: MapView<OrderId, KeyBook>,
-    /// The map with the information on the account owner
+    /// The map giving for each account owner the set of order_id
+    /// owned by that owner.
     pub account_info: MapView<AccountOwner, AccountInfo>,
 }
