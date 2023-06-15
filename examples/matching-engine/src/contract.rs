@@ -70,7 +70,7 @@ impl Contract for MatchingEngine {
         Ok(result)
     }
 
-    /// Execution of the order on the chain of the creation chain
+    /// Execution of the order on the creation chain
     async fn execute_message(
         &mut self,
         context: &MessageContext,
