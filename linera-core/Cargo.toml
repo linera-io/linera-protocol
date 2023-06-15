@@ -56,7 +56,6 @@ linera-core = { path = ".", default-features = false, features = ["test"] }
 linera-views = { workspace = true }
 metrics = { workspace = true }
 metrics-util = { workspace = true }
-portable-atomic = { workspace = true }
 serde_json = { workspace = true }
 social = { workspace = true }
 test-case = { workspace = true }

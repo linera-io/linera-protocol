@@ -2,10 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use criterion::measurement::{Measurement, ValueFormatter};
-use metrics::{Counter, Gauge, Histogram, Key, KeyName, Recorder, SharedString, Unit};
+use metrics::{
+    atomics::AtomicU64, Counter, Gauge, Histogram, Key, KeyName, Recorder, SharedString, Unit,
+};
 use metrics_util::registry::{AtomicStorage, Registry};
-use portable_atomic::{AtomicU64, Ordering};
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::HashSet,
+    sync::{atomic::Ordering, Arc},
+};
 
 /// A metrics recorder that can be used for measurements with Criterion.
 #[derive(Clone)]
