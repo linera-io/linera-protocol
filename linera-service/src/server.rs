@@ -28,7 +28,7 @@ use serde::Deserialize;
 use std::{net::SocketAddr, path::PathBuf};
 use structopt::StructOpt;
 use tokio::fs;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 struct ServerContext {
     server_config: ValidatorServerConfig,
@@ -82,21 +82,7 @@ impl ServerContext {
             let cross_chain_config = self.cross_chain_config.clone();
             handles.push(async move {
                 if let Some(port) = shard.metrics_port {
-                    let host = &shard.metrics_host;
-                    match format!("{}:{}", host, port).parse::<SocketAddr>() {
-                        Err(err) => error!("Invalid metrics address: {err}"),
-                        Ok(address) => {
-                            if let Err(error) = metrics_exporter_tcp::TcpBuilder::new()
-                                .listen_address(address)
-                                .install()
-                            {
-                                tracing::warn!(
-                                    ?error, %address,
-                                    "Could not install TCP metrics exporter."
-                                );
-                            }
-                        }
-                    }
+                    Self::start_metrics(&shard.metrics_host, port);
                 }
                 let server = simple_network::Server::new(
                     internal_network,
@@ -137,6 +123,9 @@ impl ServerContext {
             let cross_chain_config = self.cross_chain_config.clone();
             let notification_config = self.notification_config.clone();
             handles.push(async move {
+                if let Some(port) = shard.metrics_port {
+                    Self::start_metrics(&shard.metrics_host, port);
+                }
                 let spawned_server = match GrpcServer::spawn(
                     listen_address.to_string(),
                     shard.port,
@@ -162,6 +151,23 @@ impl ServerContext {
         join_all(handles).await;
 
         Ok(())
+    }
+
+    fn start_metrics(host: &str, port: u16) {
+        match format!("{}:{}", host, port).parse::<SocketAddr>() {
+            Err(err) => error!("Invalid metrics address: {err}"),
+            Ok(address) => {
+                if let Err(error) = metrics_exporter_tcp::TcpBuilder::new()
+                    .listen_address(address)
+                    .install()
+                {
+                    warn!(
+                        ?error, %address,
+                        "Could not install TCP metrics exporter."
+                    );
+                }
+            }
+        }
     }
 }
 
