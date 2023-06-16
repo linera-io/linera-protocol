@@ -78,10 +78,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Build check_copyright_header script
+      run: |
+        cd ./scripts/check_copyright_header
+        cargo build --release
     - name: Check Copyright headers
       run: >
         find linera-* -name '*.rs' -a -not -wholename '*/target/*' -print0
-        | xargs -0 -L1 ./scripts/check_copyright_header.sh
+        | xargs -0 -L1 ./scripts/target/release/check_copyright_header
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal

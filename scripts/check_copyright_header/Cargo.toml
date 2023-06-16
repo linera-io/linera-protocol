@@ -1,0 +1,12 @@
+[package]
+name = "check_copyright_header"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+
+[[bin]]
+name = "check_copyright_header"
+path = "src/main.rs"
