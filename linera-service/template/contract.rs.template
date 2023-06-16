@@ -25,7 +25,7 @@ impl Contract for Application {{
     async fn initialize(
         &mut self,
         _context: &OperationContext,
-        _argument: (),
+        _argument: Self::InitializationArgument,
     ) -> Result<ExecutionResult<Self::Message>, Self::Error> {{
         Ok(ExecutionResult::default())
     }}
@@ -33,7 +33,7 @@ impl Contract for Application {{
     async fn execute_operation(
         &mut self,
         _context: &OperationContext,
-        _operation: (),
+        _operation: Self::Operation,
     ) -> Result<ExecutionResult<Self::Message>, Self::Error> {{
         Ok(ExecutionResult::default())
     }}
@@ -41,7 +41,7 @@ impl Contract for Application {{
     async fn execute_message(
         &mut self,
         _context: &MessageContext,
-        _message: (),
+        _message: Self::Message,
     ) -> Result<ExecutionResult<Self::Message>, Self::Error> {{
         Ok(ExecutionResult::default())
     }}
@@ -49,7 +49,7 @@ impl Contract for Application {{
     async fn handle_application_call(
         &mut self,
         _context: &CalleeContext,
-        _argument: (),
+        _call: Self::ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error> {{
         Ok(ApplicationCallResult::default())
@@ -58,8 +58,8 @@ impl Contract for Application {{
     async fn handle_session_call(
         &mut self,
         _context: &CalleeContext,
-        _session: (),
-        _argument: (),
+        _session: Self::SessionState,
+        _call: Self::SessionCall,
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error> {{
         Ok(SessionCallResult::default())

@@ -23,7 +23,7 @@ impl Service for Application {{
     async fn query_application(
         self: Arc<Self>,
         _context: &QueryContext,
-        _argument: (),
+        _query: Self::Query,
     ) -> Result<(), Self::Error> {{
         Err(Error::QueriesNotSupported)
     }}
