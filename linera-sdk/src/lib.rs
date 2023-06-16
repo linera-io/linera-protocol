@@ -428,7 +428,7 @@ where
 }
 
 /// The result of calling into a session.
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SessionCallResult<Message, Value, SessionState> {
     /// The result of the application call.
     pub inner: ApplicationCallResult<Message, Value, SessionState>,
