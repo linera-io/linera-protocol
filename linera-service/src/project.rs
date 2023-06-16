@@ -42,6 +42,9 @@ impl Project {
         debug!("writing Cargo.toml");
         Self::create_cargo_toml(&root, &project_name)?;
 
+        debug!("writing rust-toolchain");
+        Self::create_rust_toolchain(&root)?;
+
         debug!("writing state.rs");
         Self::create_state_file(&source_directory)?;
 
@@ -146,6 +149,14 @@ impl Project {
             linera_views_dep = linera_views_dep
         );
         Self::write_string_to_file(&toml_path, &toml_contents)
+    }
+
+    fn create_rust_toolchain(project_root: &Path) -> Result<()> {
+        let toolchain_path = project_root.join("rust-toolchain");
+        Self::write_string_to_file(
+            &toolchain_path,
+            include_str!("../template/rust-toolchain.template"),
+        )
     }
 
     fn create_state_file(source_directory: &Path) -> Result<()> {
