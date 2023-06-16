@@ -331,7 +331,7 @@ pub struct Certificate {
     /// The round in which the value was certified.
     pub round: RoundNumber,
     /// Signatures on the value.
-    pub signatures: Vec<(ValidatorName, Signature)>,
+    signatures: Vec<(ValidatorName, Signature)>,
 }
 
 impl Origin {
@@ -580,7 +580,7 @@ impl<'a> SignatureAggregator<'a> {
         ensure!(voting_rights > 0, ChainError::InvalidSigner);
         self.weight += voting_rights;
         // Update certificate.
-        self.partial.signatures.push((validator, signature));
+        self.partial.add_signature((validator, signature));
 
         if self.weight >= self.committee.quorum_threshold() {
             self.weight = 0; // Prevent from creating the certificate twice.
@@ -640,6 +640,24 @@ impl Certificate {
             round,
             signatures,
         }
+    }
+
+    pub fn signatures(&self) -> &Vec<(ValidatorName, Signature)> {
+        &self.signatures
+    }
+
+    // Adds a signature to the certificate's list of signatures
+    // It's the responsibility of the caller to not insert duplicates
+    pub fn add_signature(
+        &mut self,
+        signature: (ValidatorName, Signature),
+    ) -> &Vec<(ValidatorName, Signature)> {
+        let index = self
+            .signatures
+            .binary_search_by(|(name, _)| name.cmp(&signature.0))
+            .unwrap_or_else(std::convert::identity);
+        self.signatures.insert(index, signature);
+        &self.signatures
     }
 
     /// Verifies the certificate.

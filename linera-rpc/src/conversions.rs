@@ -252,7 +252,7 @@ impl TryFrom<HandleCertificateRequest> for grpc::Certificate {
             chain_id: Some(request.certificate.value().chain_id().into()),
             value: bincode::serialize(&request.certificate.value)?,
             round: request.certificate.round.0,
-            signatures: bincode::serialize(&request.certificate.signatures)?,
+            signatures: bincode::serialize(request.certificate.signatures())?,
             blobs: bincode::serialize(&request.blobs)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
         })
