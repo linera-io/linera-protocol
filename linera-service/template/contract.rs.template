@@ -6,8 +6,8 @@ use self::state::Application;
 use async_trait::async_trait;
 use linera_sdk::{{
     base::{{SessionId, WithContractAbi}},
-    ApplicationCallResult, CalleeContext, Contract, MessageContext,
-    ExecutionResult, OperationContext, SessionCallResult, ViewStateStorage,
+    ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
+    OperationContext, SessionCallResult, ViewStateStorage,
 }};
 use thiserror::Error;
 
@@ -51,7 +51,8 @@ impl Contract for Application {{
         _context: &CalleeContext,
         _call: Self::ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error> {{
+    ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
+    {{
         Ok(ApplicationCallResult::default())
     }}
 
@@ -61,7 +62,8 @@ impl Contract for Application {{
         _session: Self::SessionState,
         _call: Self::SessionCall,
         _forwarded_sessions: Vec<SessionId>,
-    ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error> {{
+    ) -> Result<SessionCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
+    {{
         Ok(SessionCallResult::default())
     }}
 }}
