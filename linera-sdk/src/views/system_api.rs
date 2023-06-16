@@ -90,6 +90,6 @@ impl KeyValueStoreClient for KeyValueStore {
     }
 }
 
-/// Implementation of [`linera_views::common::Context`] that uses the KeyValueStore to
-/// allow views to store data in the storage layer provided to Linera applications.
+/// Implementation of [`linera_views::common::Context`] to be used for data storage
+/// by Linera applications.
 pub type ViewStorageContext = ContextFromDb<(), KeyValueStore>;
