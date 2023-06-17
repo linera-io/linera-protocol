@@ -19,7 +19,7 @@ impl WithContractAbi for Application {{
 
 #[async_trait]
 impl Contract for Application {{
-    type Error = Error;
+    type Error = ContractError;
     type Storage = ViewStateStorage<Self>;
 
     async fn initialize(
@@ -70,7 +70,7 @@ impl Contract for Application {{
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
-pub enum Error {{
+pub enum ContractError {{
     /// Failed to deserialize BCS bytes
     #[error("Failed to deserialize BCS bytes")]
     BcsError(#[from] bcs::Error),

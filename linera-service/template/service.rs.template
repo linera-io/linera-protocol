@@ -16,7 +16,7 @@ impl WithServiceAbi for Application {{
 
 #[async_trait]
 impl Service for Application {{
-    type Error = Error;
+    type Error = ServiceError;
     type Storage = ViewStateStorage<Self>;
 
     async fn query_application(
@@ -24,13 +24,13 @@ impl Service for Application {{
         _context: &QueryContext,
         _query: Self::Query,
     ) -> Result<(), Self::Error> {{
-        Err(Error::QueriesNotSupported)
+        Err(ServiceError::QueriesNotSupported)
     }}
 }}
 
 /// An error that can occur while querying the service.
 #[derive(Debug, Error)]
-pub enum Error {{
+pub enum ServiceError {{
     /// Query not supported by the application.
     #[error("Queries not supported by application")]
     QueriesNotSupported,
