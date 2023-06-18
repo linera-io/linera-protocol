@@ -247,7 +247,7 @@ where
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let mut big_key = key.to_vec();
-        big_key.extend(&[0,0,0,0]);
+        big_key.extend(&[0, 0, 0, 0]);
         let value = self.client.read_key_bytes(&big_key).await?;
         let Some(value) = value else {
             return Ok(None);
@@ -283,7 +283,7 @@ where
         let mut big_keys = Vec::new();
         for key in &keys {
             let mut big_key = key.clone();
-            big_key.extend(&[0,0,0,0]);
+            big_key.extend(&[0, 0, 0, 0]);
             big_keys.push(big_key);
         }
         let values = self.client.read_multi_key_bytes(big_keys).await?;
@@ -368,15 +368,13 @@ where
                 key = big_key[..len - 4].to_vec();
                 big_value.extend(value[4..].to_vec());
                 pos = 1;
-            } else {
-                if big_key[..len - 4] == key {
-                    if idx == pos && idx < count {
-                        big_value.extend(value);
-                        pos += 1;
-                    }
-                } else {
-                    pos = 0; // To avoid 
+            } else if big_key[..len - 4] == key {
+                if idx == pos && idx < count {
+                    big_value.extend(value);
+                    pos += 1;
                 }
+            } else {
+                pos = 0;
             }
             if pos == count {
                 key_values.push((mem::take(&mut key), mem::take(&mut big_value)));
@@ -391,12 +389,12 @@ where
             match operation {
                 WriteOperation::Delete { key } => {
                     let mut big_key = key.to_vec();
-                    big_key.extend(&[0,0,0,0]);
+                    big_key.extend(&[0, 0, 0, 0]);
                     batch_new.delete_key(big_key);
                 }
                 WriteOperation::Put { key, value } => {
                     let mut big_key = key.clone();
-                    big_key.extend(&[0,0,0,0]);
+                    big_key.extend(&[0, 0, 0, 0]);
                     let mut first_chunk = Vec::new();
                     let mut pos: u32 = 0;
                     for value_chunk in value.chunks(K::MAX_VALUE_SIZE) {
@@ -404,8 +402,7 @@ where
                         if pos == 0 {
                             first_chunk = value_chunk.to_vec();
                         } else {
-                            batch_new
-                                .put_key_value_bytes(big_key_segment, value_chunk.to_vec());
+                            batch_new.put_key_value_bytes(big_key_segment, value_chunk.to_vec());
                         }
                         pos += 1;
                     }
