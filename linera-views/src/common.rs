@@ -49,22 +49,9 @@ pub(crate) const MIN_VIEW_TAG: u8 = 1;
 /// Data type indicating that the database is not consistent
 #[derive(Error, Debug)]
 pub enum DatabaseConsistencyError {
-    /// The key is of length 0 so we cannot extract the first byte
-    #[error("key of length 0, so we cannot extract the first byte")]
-    ZeroLengthKey,
-
-    /// When using the splitting scheme the first byte gives the status. So, the value should have non-zero length
-    #[error("value of length 0, so we cannot extract the first byte")]
-    ZeroLengthValue,
-
-    /// When using thr splitting scheme, the first byte value indicates the nature. 0 is classic, 1 is split. Any other
-    /// value is an error
-    #[error("first value is different from 0 and 1")]
-    FirstValueDifferentZeroOne,
-
-    /// Last byte of key different from 0 or 1
-    #[error("last byte of key is different from 0 and 1")]
-    LastByteOfKeyDifferentZeroOne,
+    /// The key is of length less than 4 so we cannot extract the first byte
+    #[error("key of length less than 4, so we cannot extract the first byte")]
+    TooShortKey,
 
     /// In the splitting scheme a certain number of segments was specified, but some are missing
     #[error("segment is missing from the database")]
@@ -260,24 +247,16 @@ where
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let mut big_key = key.to_vec();
-        big_key.extend(&[0]);
+        big_key.extend(&[0,0,0,0]);
         let value = self.client.read_key_bytes(&big_key).await?;
         let Some(value) = value else {
             return Ok(None);
         };
-        let first_value = value.first();
-        if first_value.is_none() {
-            return Err(DatabaseConsistencyError::ZeroLengthValue.into());
-        }
-        let first_value = *first_value.unwrap();
-        if first_value != 0 && first_value != 1 {
-            return Err(DatabaseConsistencyError::FirstValueDifferentZeroOne.into());
-        }
-        if first_value == 0 {
-            return Ok(Some(value[1..].to_vec()));
-        }
         let count = Self::read_count_from_value(&value)?;
-        let mut big_value = value[5..].to_vec();
+        let mut big_value = value[4..].to_vec();
+        if count == 1 {
+            return Ok(Some(big_value));
+        }
         let mut big_keys = Vec::new();
         for i in 1..count {
             let big_key_segment = Self::get_segment_key(key, i)?;
@@ -304,7 +283,7 @@ where
         let mut big_keys = Vec::new();
         for key in &keys {
             let mut big_key = key.clone();
-            big_key.extend(&[0]);
+            big_key.extend(&[0,0,0,0]);
             big_keys.push(big_key);
         }
         let values = self.client.read_multi_key_bytes(big_keys).await?;
@@ -318,24 +297,14 @@ where
                     big_values.push(None);
                 }
                 Some(value) => {
-                    let Some(&first_byte) = value.first() else {
-                        return Err(DatabaseConsistencyError::ZeroLengthValue.into());
-                    };
-                    if first_byte != 0 && first_byte != 1 {
-                        return Err(DatabaseConsistencyError::FirstValueDifferentZeroOne.into());
+                    let count = Self::read_count_from_value(&value)?;
+                    let big_value = value[4..].to_vec();
+                    for i in 1..count {
+                        let big_key_segment = Self::get_segment_key(key, i)?;
+                        keys_add.push(big_key_segment);
                     }
-                    if first_byte == 0 {
-                        n_blocks.push(0);
-                        big_values.push(Some(value[1..].to_vec()));
-                    } else {
-                        let count = Self::read_count_from_value(&value)?;
-                        for i in 1..count {
-                            let big_key_segment = Self::get_segment_key(key, i)?;
-                            keys_add.push(big_key_segment);
-                        }
-                        n_blocks.push(count);
-                        big_values.push(Some(value[5..].to_vec()));
-                    }
+                    n_blocks.push(count);
+                    big_values.push(Some(big_value));
                 }
             }
         }
@@ -343,7 +312,7 @@ where
             let segments: Vec<Option<Vec<u8>>> = self.client.read_multi_key_bytes(keys_add).await?;
             let mut pos = 0;
             for (idx, count) in n_blocks.iter().enumerate() {
-                if count > &0 {
+                if count > &1 {
                     let value: &mut Option<Vec<u8>> = big_values.get_mut(idx).unwrap();
                     if let Some(ref mut value) = value {
                         for _ in 1..*count {
@@ -368,15 +337,9 @@ where
         {
             let big_key = big_key?;
             let len = big_key.len();
-            if len == 0 {
-                return Err(DatabaseConsistencyError::ZeroLengthKey.into());
-            }
-            let last_byte = big_key.get(len - 1).unwrap();
-            if last_byte == &0 {
-                let key = big_key[0..len - 1].to_vec();
+            if Self::read_index_from_key(big_key)? == 0 {
+                let key = big_key[0..len - 4].to_vec();
                 keys.push(key);
-            } else if last_byte != &1 {
-                return Err(DatabaseConsistencyError::LastByteOfKeyDifferentZeroOne.into());
             }
         }
         Ok(keys)
@@ -399,41 +362,24 @@ where
         {
             let (big_key, value) = result?;
             let len = big_key.len();
-            let last_byte = big_key.get(len - 1).unwrap();
-            if last_byte == &0 {
-                let first_value = value.first();
-                if first_value.is_none() {
-                    return Err(DatabaseConsistencyError::ZeroLengthValue.into());
-                }
-                let first_value = *first_value.unwrap();
-                if first_value != 0 && first_value != 1 {
-                    return Err(DatabaseConsistencyError::FirstValueDifferentZeroOne.into());
-                }
-                if first_value == 0 {
-                    let big_value = value[1..].to_vec();
-                    let key_loc = big_key[0..len - 1].to_vec();
-                    key_values.push((key_loc, big_value));
-                } else {
-                    count = Self::read_count_from_value(value)?;
-                    big_value.extend(value[5..].to_vec());
-                    key = big_key[0..len - 1].to_vec();
-                    pos = 1;
-                }
+            let idx = Self::read_index_from_key(big_key)?;
+            if idx == 0 {
+                count = Self::read_count_from_value(value)?;
+                key = big_key[..len - 4].to_vec();
+                big_value.extend(value[4..].to_vec());
+                pos = 1;
             } else {
-                if last_byte != &1 {
-                    return Err(DatabaseConsistencyError::LastByteOfKeyDifferentZeroOne.into());
-                }
-                if big_key[..len - 5] == key {
-                    // key is matching so we might consider including it
-                    let idx = Self::read_index_from_key(big_key)?;
+                if big_key[..len - 4] == key {
                     if idx == pos && idx < count {
                         big_value.extend(value);
                         pos += 1;
-                        if pos == count {
-                            key_values.push((mem::take(&mut key), mem::take(&mut big_value)));
-                        }
                     }
+                } else {
+                    pos = 0; // To avoid 
                 }
+            }
+            if pos == count {
+                key_values.push((mem::take(&mut key), mem::take(&mut big_value)));
             }
         }
         Ok(key_values)
@@ -445,32 +391,26 @@ where
             match operation {
                 WriteOperation::Delete { key } => {
                     let mut big_key = key.to_vec();
-                    big_key.extend(&[0]);
+                    big_key.extend(&[0,0,0,0]);
                     batch_new.delete_key(big_key);
                 }
                 WriteOperation::Put { key, value } => {
                     let mut big_key = key.clone();
-                    big_key.extend(&[0]);
-                    if value.len() <= K::MAX_VALUE_SIZE {
-                        let mut value_ext = vec![0];
-                        value_ext.extend(&value);
-                        batch_new.put_key_value_bytes(big_key, value_ext);
-                    } else {
-                        let mut first_chunk = Vec::new();
-                        let mut pos: u32 = 0;
-                        for value_chunk in value.chunks(K::MAX_VALUE_SIZE) {
-                            if pos == 0 {
-                                first_chunk = value_chunk.to_vec();
-                            } else {
-                                let big_key_segment = Self::get_segment_key(&key, pos)?;
-                                batch_new
-                                    .put_key_value_bytes(big_key_segment, value_chunk.to_vec());
-                            }
-                            pos += 1;
+                    big_key.extend(&[0,0,0,0]);
+                    let mut first_chunk = Vec::new();
+                    let mut pos: u32 = 0;
+                    for value_chunk in value.chunks(K::MAX_VALUE_SIZE) {
+                        let big_key_segment = Self::get_segment_key(&key, pos)?;
+                        if pos == 0 {
+                            first_chunk = value_chunk.to_vec();
+                        } else {
+                            batch_new
+                                .put_key_value_bytes(big_key_segment, value_chunk.to_vec());
                         }
-                        let value_ext = Self::get_initial_count_first_chunk(pos, &first_chunk)?;
-                        batch_new.put_key_value_bytes(big_key, value_ext);
+                        pos += 1;
                     }
+                    let value_ext = Self::get_initial_count_first_chunk(pos, &first_chunk)?;
+                    batch_new.put_key_value_bytes(big_key, value_ext);
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
                     batch_new.delete_key_prefix(key_prefix);
@@ -496,10 +436,10 @@ where
     }
 
     fn read_count_from_value(value: &[u8]) -> Result<u32, K::Error> {
-        if value.len() < 5 {
+        if value.len() < 4 {
             return Err(DatabaseConsistencyError::NoCountAvailable.into());
         }
-        let mut bytes = value[1..5].to_vec();
+        let mut bytes = value[0..4].to_vec();
         bytes.reverse();
         Ok(bcs::from_bytes::<u32>(&bytes)?)
     }
@@ -509,13 +449,15 @@ where
         let mut bytes = bcs::to_bytes(&index)?;
         bytes.reverse();
         big_key_segment.extend(bytes);
-        big_key_segment.extend(&[1]);
         Ok(big_key_segment)
     }
 
     fn read_index_from_key(key: &[u8]) -> Result<u32, K::Error> {
         let len = key.len();
-        let mut bytes = key[len - 5..len - 1].to_vec();
+        if len < 4 {
+            return Err(DatabaseConsistencyError::TooShortKey.into());
+        }
+        let mut bytes = key[len - 4..len].to_vec();
         bytes.reverse();
         Ok(bcs::from_bytes::<u32>(&bytes)?)
     }
@@ -523,7 +465,7 @@ where
     fn get_initial_count_first_chunk(count: u32, first_chunk: &[u8]) -> Result<Vec<u8>, K::Error> {
         let mut bytes = bcs::to_bytes(&count)?;
         bytes.reverse();
-        let mut value_ext = vec![1];
+        let mut value_ext = Vec::new();
         value_ext.extend(bytes);
         value_ext.extend(first_chunk);
         Ok(value_ext)
