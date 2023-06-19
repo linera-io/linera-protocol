@@ -415,7 +415,7 @@ where
                     return false;
                 }
             }
-            Reason::NewBlock { height } => {
+            Reason::NewBlock { height, .. } => {
                 let chain_id = notification.chain_id;
                 if Self::get_local_next_block_height(this.clone(), chain_id, &mut local_node).await
                     > Some(height)
@@ -1503,5 +1503,25 @@ where
             user_data,
         }))
         .await
+    }
+
+    pub async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue> {
+        let v = self
+            .node_client
+            .storage_client()
+            .await
+            .read_value(hash)
+            .await?;
+        Ok(v)
+    }
+
+    pub async fn read_values(&self, from: CryptoHash, limit: u32) -> Result<Vec<HashedValue>> {
+        let v = self
+            .node_client
+            .storage_client()
+            .await
+            .read_values(from, limit)
+            .await?;
+        Ok(v)
     }
 }

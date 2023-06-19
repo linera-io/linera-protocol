@@ -11,6 +11,7 @@ members = [
         "linera-storage",
         "linera-views",
         "linera-views-derive",
+        "linera-explorer",
 ]
 exclude = [
         "examples",
@@ -101,6 +102,7 @@ wasmtime = "1.0"
 wit-bindgen-guest-rust = { version = "0.2.0", package = "linera-wit-bindgen-guest-rust" }
 wit-bindgen-host-wasmer-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmer-rust" }
 wit-bindgen-host-wasmtime-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmtime-rust" }
+wasm-bindgen = "0.2.45"
 
 linera-base = { version = "0.2.0", path = "./linera-base" }
 linera-chain = { version = "0.2.0", path = "./linera-chain" }

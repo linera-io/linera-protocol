@@ -1,0 +1,417 @@
+schema {
+  query: QueryRoot
+  mutation: MutationRoot
+  subscription: SubscriptionRoot
+}
+
+"""A non-negative amount of tokens."""
+scalar Amount
+
+"""A unique identifier for a user application"""
+scalar ApplicationId
+
+type ApplicationOverview {
+  id: ApplicationId!
+  description: UserApplicationDescription!
+  link: String!
+}
+
+"""
+A block containing operations to apply on a given chain, as well as the
+acknowledgment of a number of incoming messages from other chains.
+* Incoming messages must be selected in the order they were
+produced by the sending chain, but can be skipped.
+* When a block is proposed to a validator, all cross-chain messages must have been
+received ahead of time in the inbox of the chain.
+* This constraint does not apply to the execution of confirmed blocks.
+"""
+type Block {
+  """The chain to which this block belongs."""
+  chainId: ChainId!
+
+  """The number identifying the current configuration."""
+  epoch: Epoch!
+
+  """
+  A selection of incoming messages to be executed first. Successive messages of same
+  sender and height are grouped together for conciseness.
+  """
+  incomingMessages: [Message!]!
+
+  """The operations to execute."""
+  operations: [Operation!]!
+
+  """The block height."""
+  height: BlockHeight!
+
+  """
+  The timestamp when this block was created. This must be later than all messages received
+  in this block, but no later than the current time.
+  """
+  timestamp: Timestamp!
+
+  """
+  The user signing for the operations in the block. (Currently, this must be the `owner`
+  in the block proposal, or no one.)
+  """
+  authenticatedSigner: Owner
+
+  """
+  Certified hash (see `Certificate` below) of the previous block in the
+  chain, if any.
+  """
+  previousBlockHash: CryptoHash
+}
+
+"""A block height to identify blocks in a chain"""
+scalar BlockHeight
+
+"""A WebAssembly module's bytecode"""
+scalar Bytecode
+
+"""A unique identifier for an application bytecode"""
+scalar BytecodeId
+
+"""A chain ID with a block height."""
+type ChainAndHeight {
+  chainId: ChainId!
+  height: BlockHeight!
+}
+
+"""How to create a chain"""
+scalar ChainDescription
+
+"""
+The unique identifier (UID) of a chain. This is currently computed as the hash value of a ChainDescription.
+"""
+scalar ChainId
+
+"""The state of the certification process for a chain's next block"""
+scalar ChainManager
+
+"""Represents the owner(s) of a chain"""
+scalar ChainOwnership
+
+type ChainStateExtendedView {
+  chainId: ChainId!
+  executionState: ExecutionStateView!
+  executionStateHash: CryptoHash
+  tipState: ChainTipState!
+  manager: ChainManager!
+  confirmedLog(start: Int, end: Int): [CryptoHash!]!
+  receivedLog(start: Int, end: Int): [ChainAndHeight!]!
+  inboxes(origin: Origin!): ChainStateViewInboxesEntry!
+  outboxes(target: Target!): ChainStateViewOutboxesEntry!
+  outboxCounters: JSONObject!
+  channels(channelFullName: ChannelFullName!): ChainStateViewChannelsEntry!
+}
+
+type ChainStateViewChannelsEntry {
+  channelFullName: ChannelFullName!
+  channelStateView: ChannelStateView!
+}
+
+type ChainStateViewInboxesEntry {
+  origin: Origin!
+  inboxStateView: InboxStateView!
+}
+
+type ChainStateViewOutboxesEntry {
+  target: Target!
+  outboxStateView: OutboxStateView!
+}
+
+"""Block-chaining state."""
+type ChainTipState {
+  """Hash of the latest certified block in this chain, if any."""
+  blockHash: CryptoHash
+
+  """Sequence number tracking blocks."""
+  nextBlockHeight: BlockHeight!
+}
+
+"""A channel name together with its application id"""
+scalar ChannelFullName
+
+"""The name of a subscription channel"""
+scalar ChannelName
+
+type ChannelStateView {
+  subscribers: [ChainId!]!
+  blockHeight: BlockHeight
+}
+
+"""The identifier of a channel, relative to a particular application."""
+type ChannelSubscription {
+  """The chain id broadcasting on this channel."""
+  chainId: ChainId!
+
+  """The name of the channel."""
+  name: ChannelName!
+}
+
+"""
+A set of validators (identified by their public keys) and their voting rights.
+"""
+input Committee {
+  """The validators in the committee."""
+  validators: JSONObject!
+
+  """The sum of all voting rights."""
+  totalVotes: Int!
+
+  """The threshold to form a quorum."""
+  quorumThreshold: Int!
+
+  """The threshold to prove the validity of a statement."""
+  validityThreshold: Int!
+
+  """The pricing agreed on for this epoch."""
+  pricing: Pricing!
+}
+
+"""A Sha3-256 value"""
+scalar CryptoHash
+
+type Cursor {
+  height: BlockHeight!
+  index: Int!
+}
+
+"""The destination of a message, relative to a particular application."""
+scalar Destination
+
+"""An effect to be sent and possibly executed in the receiver's block."""
+scalar Effect
+
+"""
+A number identifying the configuration of the chain (aka the committee)
+"""
+scalar Epoch
+
+"""
+An effect together with non replayable information to ensure uniqueness in a particular inbox
+"""
+scalar Event
+
+"""
+A block, together with the effects and the state hash resulting from its execution.
+"""
+type ExecutedBlock {
+  block: Block!
+  effects: [OutgoingEffect!]!
+  stateHash: CryptoHash!
+}
+
+type ExecutionStateView {
+  system: SystemExecutionStateView!
+}
+
+type HashedValue {
+  hash: CryptoHash!
+  value: Value!
+}
+
+type InboxStateView {
+  nextCursorToAdd: Cursor!
+  nextCursorToRemove: Cursor!
+  addedEvents(count: Int): [Event!]!
+  removedEvents(count: Int): [Event!]!
+}
+
+"""A scalar that can represent any JSON Object value."""
+scalar JSONObject
+
+"""A message received from a block of another chain."""
+type Message {
+  """The origin of the message (chain and channel if any)."""
+  origin: Origin!
+
+  """
+  The content of the message to be delivered to the inbox identified by
+  `origin`.
+  """
+  event: Event!
+}
+
+type MutationRoot {
+  """
+  Processes the inbox and returns the lists of certificate hashes that were created, if any.
+  """
+  processInbox: [CryptoHash!]!
+
+  """
+  Transfers `amount` units of value from the given owner's account to the recipient.
+  If no owner is given, try to take the units out of the unattributed account.
+  """
+  transfer(owner: Owner, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
+
+  """
+  Claims `amount` units of value from the given owner's account in
+  the remote `target` chain. Depending on its configuration (see also #464), the
+  `target` chain may refuse to process the message.
+  """
+  claim(owner: Owner!, target: ChainId!, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
+
+  """
+  Creates (or activates) a new chain by installing the given authentication key.
+  This will automatically subscribe to the future committees created by `admin_id`.
+  """
+  openChain(publicKey: PublicKey!): ChainId!
+
+  """Closes the chain."""
+  closeChain: CryptoHash!
+
+  """Changes the authentication key of the chain."""
+  changeOwner(newPublicKey: PublicKey!): CryptoHash!
+
+  """Changes the authentication key of the chain."""
+  changeMultipleOwners(newPublicKeys: [PublicKey!]!): CryptoHash!
+
+  """
+  (admin chain only) Registers a new committee. This will notify the subscribers of
+  the admin chain so that they can migrate to the new epoch (by accepting the
+  notification as an "incoming message" in a next block).
+  """
+  createCommittee(adminId: ChainId!, epoch: Epoch!, committee: Committee!): CryptoHash!
+
+  """Subscribes to a system channel."""
+  subscribe(chainId: ChainId!, channel: SystemChannel!): CryptoHash!
+
+  """Unsubscribes from a system channel."""
+  unsubscribe(chainId: ChainId!, channel: SystemChannel!): CryptoHash!
+
+  """
+  (admin chain only) Removes a committee. Once this message is accepted by a chain,
+  blocks from the retired epoch will not be accepted until they are followed (hence
+  re-certified) by a block certified by a recent committee.
+  """
+  removeCommittee(adminId: ChainId!, epoch: Epoch!): CryptoHash!
+
+  """Publishes a new application bytecode."""
+  publishBytecode(contract: Bytecode!, service: Bytecode!): BytecodeId!
+
+  """Creates a new application."""
+  createApplication(bytecodeId: BytecodeId!, parameters: String!, initializationArgument: String!, requiredApplicationIds: [ApplicationId!]!): ApplicationId!
+
+  """
+  Requests a `RegisterApplications` effect from another chain so the application can be used
+  on this one.
+  """
+  requestApplication(applicationId: ApplicationId!, targetChainId: ChainId): CryptoHash!
+}
+
+"""Notify that a chain has a new certified block or a new message"""
+scalar Notification
+
+"""An operation to be executed in a block"""
+scalar Operation
+
+"""
+The origin of a message, relative to a particular application. Used to identify each inbox.
+"""
+scalar Origin
+
+type OutboxStateView {
+  nextHeightToSchedule: BlockHeight!
+  queue(count: Int): [BlockHeight!]!
+}
+
+"""An effect together with routing information."""
+type OutgoingEffect {
+  destination: Destination!
+  authenticatedSigner: Owner
+  effect: Effect!
+}
+
+"""
+The owner of a chain. This is currently the hash of the owner's public key used to verify signatures.
+"""
+scalar Owner
+
+"""A collection of costs associated with blocks in validators."""
+input Pricing {
+  """
+  The base price for each certificate, to compensate for the communication and signing
+  overhead.
+  """
+  certificate: Amount!
+
+  """
+  The price per unit of fuel used when executing effects and operations for user applications.
+  """
+  fuel: Amount!
+
+  """
+  The cost to store a block's operations and incoming messages, per byte.
+  """
+  storage: Amount!
+
+  """The cost to store and send cross-chain messages, per byte."""
+  messages: Amount!
+}
+
+"""A signature public key"""
+scalar PublicKey
+
+type QueryRoot {
+  chain(chainId: ChainId): ChainStateExtendedView!
+  applications(chainId: ChainId): [ApplicationOverview!]!
+  chains: [ChainId!]!
+  block(hash: CryptoHash, chainId: ChainId): HashedValue
+  blocks(from: CryptoHash, chainId: ChainId, limit: Int): [HashedValue!]!
+}
+
+"""The recipient of a transfer"""
+scalar Recipient
+
+"""
+A number to identify successive attempts to decide a value in a consensus protocol.
+"""
+scalar RoundNumber
+
+type SubscriptionRoot {
+  """Subscribes to notifications from the current chain."""
+  notifications: Notification!
+}
+
+"""The channels available in the system application."""
+enum SystemChannel {
+  """Channel used to broadcast reconfigurations."""
+  ADMIN
+
+  """Channel used to broadcast new published bytecodes."""
+  PUBLISHED_BYTECODES
+}
+
+type SystemExecutionStateView {
+  description: ChainDescription
+  epoch: Epoch
+  adminId: ChainId
+  subscriptions: [ChannelSubscription!]!
+  committees: JSONObject!
+  ownership: ChainOwnership!
+  balance: Amount!
+  timestamp: Timestamp!
+}
+
+"""
+The target of a message, relative to a particular application. Used to identify each outbox.
+"""
+scalar Target
+
+"""A timestamp, in microseconds since the Unix epoch"""
+scalar Timestamp
+
+"""Description of the necessary information to run a user application"""
+scalar UserApplicationDescription
+
+"""Optional user message attached to a transfer"""
+scalar UserData
+
+type Value {
+  executedBlock: ExecutedBlock!
+  round: RoundNumber!
+  status: String!
+}
+

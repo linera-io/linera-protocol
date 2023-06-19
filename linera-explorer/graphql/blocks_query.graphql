@@ -1,0 +1,30 @@
+query BlocksQuery($from: CryptoHash, $chainId: ChainId, $limit: Int) {
+  blocks(from: $from, chainId: $chainId, limit: $limit) {
+    hash
+    value {
+      status
+      round
+      executedBlock {
+        block {
+          chainId
+          # epoch
+          height
+          timestamp
+          authenticatedSigner
+          previousBlockHash
+          # incomingMessages {
+          #   origin
+          #   event
+          # }
+          # operations
+        }
+        effects {
+          destination
+          authenticatedSigner
+          # effect
+        }
+        stateHash
+      }
+    }
+  }
+}

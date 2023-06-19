@@ -1,0 +1,27 @@
+[package]
+name = "linera-explorer"
+version = "0.1.0"
+edition = "2021"
+description = "Block explorer for linera chain"
+readme = "README.md"
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.io"
+documentation = "https://docs.rs/linera-explorer/latest/linera_explorer/"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = { workspace = true }
+web-sys = { version = "0.3.63", features = [ "console", "Window", "History" ] }
+js-sys = "0.3.63"
+serde = { version = "1.0.152", features = [ "derive" ] }
+serde-wasm-bindgen = "0.4"
+graphql_client = { version = "0.13", features = [ "reqwest" ] }
+linera-base = { workspace = true }
+# linera-execution = { workspace = true }
+# linera-chain = { workspace = true }
+wasm-bindgen-futures = "0.4.34"
+reqwest = "^0.11"
+console_error_panic_hook = "0.1.7"

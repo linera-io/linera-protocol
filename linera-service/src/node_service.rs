@@ -24,7 +24,7 @@ use linera_base::{
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
     BcsHexParseError,
 };
-use linera_chain::ChainStateView;
+use linera_chain::{data_types::HashedValue, ChainStateView};
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
     worker::Notification,
@@ -47,6 +47,7 @@ use tracing::{debug, error, info};
 struct QueryRoot<P, S> {
     client: Arc<Mutex<ChainClient<P, S>>>,
     port: NonZeroU16,
+    chains: Vec<ChainId>,
 }
 
 /// Our root GraphQL subscription type.
@@ -364,6 +365,52 @@ where
 
         Ok(overviews)
     }
+
+    async fn chains(&self) -> Result<Vec<ChainId>, Error> {
+        Ok(self.chains.clone())
+    }
+
+    async fn block(
+        &self,
+        hash: Option<CryptoHash>,
+        chain_id: Option<ChainId>,
+    ) -> Result<Option<HashedValue>, Error> {
+        let hash = match hash {
+            Some(hash) => Some(hash),
+            None => {
+                let view = self.client.lock().await.chain_state_view(chain_id).await?;
+                view.tip_state.get().block_hash
+            }
+        };
+        if let Some(hash) = hash {
+            let b = self.client.lock().await.read_value(hash).await?;
+            Ok(Some(b))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn blocks(
+        &self,
+        from: Option<CryptoHash>,
+        chain_id: Option<ChainId>,
+        limit: Option<u32>,
+    ) -> Result<Vec<HashedValue>, Error> {
+        let limit = limit.unwrap_or(10);
+        let from = match from {
+            Some(from) => Some(from),
+            None => {
+                let view = self.client.lock().await.chain_state_view(chain_id).await?;
+                view.tip_state.get().block_hash
+            }
+        };
+        if let Some(from) = from {
+            let v = self.client.lock().await.read_values(from, limit).await?;
+            Ok(v)
+        } else {
+            Ok(vec![])
+        }
+    }
 }
 
 // What follows is a hack to add a chain_id field to `ChainStateView` based on
@@ -483,6 +530,7 @@ pub struct NodeService<P, S> {
     client: Arc<Mutex<ChainClient<P, S>>>,
     config: ChainListenerConfig,
     port: NonZeroU16,
+    chains: Vec<ChainId>,
 }
 
 impl<P, S> Clone for NodeService<P, S> {
@@ -491,6 +539,7 @@ impl<P, S> Clone for NodeService<P, S> {
             client: self.client.clone(),
             config: self.config.clone(),
             port: self.port,
+            chains: self.chains.clone(),
         }
     }
 }
@@ -502,12 +551,18 @@ where
     ViewError: From<S::ContextError>,
 {
     /// Creates a new instance of the node service given a client chain and a port.
-    pub fn new(client: ChainClient<P, S>, config: ChainListenerConfig, port: NonZeroU16) -> Self {
+    pub fn new(
+        client: ChainClient<P, S>,
+        config: ChainListenerConfig,
+        port: NonZeroU16,
+        chains: Vec<ChainId>,
+    ) -> Self {
         let client = Arc::new(Mutex::new(client));
         Self {
             client,
             config,
             port,
+            chains,
         }
     }
 
@@ -516,6 +571,7 @@ where
             QueryRoot {
                 client: self.client.clone(),
                 port: self.port,
+                chains: self.chains.clone(),
             },
             MutationRoot {
                 client: self.client.clone(),

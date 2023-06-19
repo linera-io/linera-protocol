@@ -1,0 +1,13 @@
+{
+  "author": "linera <linera@contact.com>",
+  "name": "linera-explorer",
+  "version": "0.1.0",
+  "scripts": {
+    "build": "webpack",
+    "test": "cargo test && wasm-pack test --headless"
+  },
+  "devDependencies": {
+    "@wasm-tool/wasm-pack-plugin": "^1",
+    "copy-webpack-plugin": "^11"
+  }
+}

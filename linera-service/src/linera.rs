@@ -1301,7 +1301,8 @@ where
             } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 chain_client.synchronize_from_validators().await?;
-                let service = NodeService::new(chain_client, config, port);
+                let chains = context.wallet_state.chain_ids();
+                let service = NodeService::new(chain_client, config, port, chains);
                 service
                     .run(context, |context, client| {
                         Box::pin(async {

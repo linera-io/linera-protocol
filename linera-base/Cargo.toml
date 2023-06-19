@@ -26,6 +26,7 @@ serde-name = { workspace = true }
 sha3 = { workspace = true }
 test-strategy = { workspace = true, optional = true }
 thiserror = { workspace = true }
+wasm-bindgen = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono = { workspace = true }

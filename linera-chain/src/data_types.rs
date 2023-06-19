@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::ChainError;
-use async_graphql::SimpleObject;
+use async_graphql::{Object, SimpleObject};
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
     data_types::{BlockHeight, RoundNumber, Timestamp},
@@ -31,7 +31,7 @@ mod data_types_tests;
 /// * When a block is proposed to a validator, all cross-chain messages must have been
 ///   received ahead of time in the inbox of the chain.
 /// * This constraint does not apply to the execution of confirmed blocks.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct Block {
     /// The chain to which this block belongs.
     pub chain_id: ChainId,
@@ -88,7 +88,7 @@ pub struct BlockAndRound {
 }
 
 /// A message received from a block of another chain.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct IncomingMessage {
     /// The origin of the message (chain and channel if any).
     pub origin: Origin,
@@ -164,7 +164,7 @@ pub struct BlockProposal {
 }
 
 /// A message together with routing information.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct OutgoingMessage {
     pub destination: Destination,
     pub authenticated_signer: Option<Owner>,
@@ -172,7 +172,7 @@ pub struct OutgoingMessage {
 }
 
 /// A block, together with the messages and the state hash resulting from its execution.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct ExecutedBlock {
     pub block: Block,
     pub messages: Vec<OutgoingMessage>,
@@ -186,6 +186,21 @@ pub enum CertificateValue {
     ConfirmedBlock { executed_block: ExecutedBlock },
 }
 
+#[Object]
+impl CertificateValue {
+    #[graphql(derived(name = "executed_block"))]
+    async fn _executed_block(&self) -> ExecutedBlock {
+        self.executed_block().clone()
+    }
+
+    async fn status(&self) -> String {
+        match self {
+            CertificateValue::ValidatedBlock { .. } => "validated".to_string(),
+            CertificateValue::ConfirmedBlock { .. } => "confirmed".to_string(),
+        }
+    }
+}
+
 /// A statement to be certified by the validators, with its hash.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct HashedValue {
@@ -194,7 +209,20 @@ pub struct HashedValue {
     hash: CryptoHash,
 }
 
-/// The hash and chain ID of a `CertificateValue`.
+#[Object]
+impl HashedValue {
+    #[graphql(derived(name = "hash"))]
+    async fn _hash(&self) -> CryptoHash {
+        self.hash
+    }
+
+    #[graphql(derived(name = "value"))]
+    async fn _value(&self) -> CertificateValue {
+        self.value.clone()
+    }
+}
+
+/// The hash and chain ID of a `Value`.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct LiteValue {
     pub value_hash: CryptoHash,
@@ -445,7 +473,7 @@ impl CertificateValue {
         &self.executed_block().messages
     }
 
-    fn executed_block(&self) -> &ExecutedBlock {
+    pub fn executed_block(&self) -> &ExecutedBlock {
         match self {
             CertificateValue::ConfirmedBlock { executed_block, .. }
             | CertificateValue::ValidatedBlock { executed_block, .. } => executed_block,
