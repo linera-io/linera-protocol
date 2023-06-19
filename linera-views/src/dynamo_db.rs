@@ -75,7 +75,7 @@ const MAX_CONNECTIONS: usize = 50;
 
 /// The limit on size is 400 kB for DynamoDb
 /// Which is 409600 bytes. To be safe, we remove 600 bytes. This is a lot actually.
-/// In theory, we just need to remove 1 + 4 bytes
+/// In theory, we just need to remove 4 bytes
 const MAX_VALUE_SIZE: usize = 409000;
 
 /// Builds the key attributes for a table item.
