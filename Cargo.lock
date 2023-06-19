@@ -2727,7 +2727,9 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "futures",
+ "graphql-introspection-query",
  "graphql_client",
+ "hex",
  "js-sys",
  "linera-base",
  "pharos",

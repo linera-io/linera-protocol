@@ -13,19 +13,27 @@ use ws_stream_wasm::*;
 use futures::prelude::*;
 use uuid::Uuid;
 use wasm_bindgen_futures::spawn_local;
-// use pharos::{ObserveConfig, Observable};
 use std::str::FromStr;
+// use graphql_introspection_query::introspection_response::IntrospectionResponse;
 
 type Epoch = Value;
 type Message = Value;
 type Operation = Value;
 type Event = Value;
 type Origin = Value;
+type UserApplicationDescription = Value;
+type ApplicationId = String;
 
 #[derive(Serialize, Deserialize, Clone)]
 enum Page {
     #[serde(rename = "unloaded")]
     Unloaded,
+    #[serde(rename = "home")]
+    Home {
+        chain: ChainId,
+        blocks: Vec<blocks_query::BlocksQueryBlocks>,
+        apps: Vec<applications::ApplicationsApplications>,
+    },
     #[serde(rename = "blocks")]
     Blocks {
         chain: ChainId,
@@ -33,11 +41,26 @@ enum Page {
     },
     #[serde(rename = "block")]
     Block(Box<block_query::BlockQueryBlock>),
+    #[serde(rename = "applications")]
+    Applications(Vec<applications::ApplicationsApplications>),
+    #[serde(rename = "application")]
+    Application {
+        app: applications::ApplicationsApplications,
+        introspection: Value,
+    },
+    #[serde(rename = "error")]
+    Error(String)
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Config {
+    node: String,
+    tls: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Data {
-    node: String,
+    config: Config,
     page: Page,
     chains: Vec<ChainId>,
 }
@@ -75,10 +98,29 @@ pub fn main_js() -> Result<(), JsValue> {
     Ok(())
 }
 
+fn load_config() -> Config {
+    let default = Config {
+        node: "localhost:8080".to_string(),
+        tls: false,
+    };
+    match web_sys::window().unwrap().local_storage() {
+        Ok(Some(st)) => {
+            match st.get_item("config") {
+                Ok(Some(s)) => {
+                    serde_json::from_str::<Config>(&s).unwrap_or(default)
+                }
+                _ => default
+            }
+        },
+        _ => default
+    }
+}
+
+
 #[wasm_bindgen]
 pub fn data() -> JsValue {
     let data = Data {
-        node: "http://localhost:8080".to_string(),
+        config: load_config(),
         page: Page::Unloaded,
         chains: Vec::new(),
     };
@@ -117,6 +159,14 @@ pub struct ChainsQuery;
 )]
 pub struct NotificationsSubscription;
 
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "graphql/schema.graphql",
+    query_path = "graphql/applications.graphql",
+    response_derives = "Debug, Serialize, Clone"
+)]
+pub struct Applications;
+
 fn setf(target: &JsValue, field: &str, value: &JsValue) {
     js_sys::Reflect::set(target, &JsValue::from_str(field), value)
         .unwrap_or_else(|_| panic!("failed to set '{}'", field));
@@ -135,15 +185,39 @@ fn default_chain(chain: Option<ChainId>, l: &Vec<blocks_query::BlocksQueryBlocks
     match (chain, l.get(0)) {
         (Some(id), _) => id,
         (_, Some(b)) => b.value.executed_block.block.chain_id,
-        _ => ChainId::from_str("").unwrap(),
+        _ => ChainId::from_str("e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65").unwrap(),
     }
 }
 
-async fn blocks(node: &str, chain_id: Option<ChainId>, from: Option<CryptoHash>) -> Page {
+fn data_address(c: &Config, ws: bool) -> String {
+    let proto = if ws { "ws" } else { "http" };
+    let tls = if c.tls { "s" } else { "" };
+    format!("{}{}://{}", proto, tls, c.node)
+}
+
+async fn get_blocks(node: &str, chain_id: Option<ChainId>, from: Option<CryptoHash>, limit: Option<u32>) -> Vec<blocks_query::BlocksQueryBlocks> {
     let client = reqwest::Client::new();
-    let variables = blocks_query::Variables { from, chain_id, limit: None };
+    let variables = blocks_query::Variables { from, chain_id, limit: limit.map(|x| x.into()) };
     let res = post_graphql::<BlocksQuery, _>(&client, node, variables).await.unwrap();
-    let blocks = res.data.unwrap().blocks;
+    res.data.unwrap().blocks
+}
+
+async fn get_applications(node: &str, chain_id: Option<ChainId>) -> Vec<applications::ApplicationsApplications> {
+    let client = reqwest::Client::new();
+    let variables = applications::Variables { chain_id };
+    let res = post_graphql::<Applications, _>(&client, node, variables).await.unwrap();
+    res.data.unwrap().applications
+}
+
+async fn home(node: &str, chain_id: Option<ChainId>) -> Page {
+    let blocks = get_blocks(node, chain_id, None, None).await;
+    let chain = default_chain(chain_id, &blocks);
+    let apps = get_applications(node, chain_id).await;
+    Page::Home { blocks, chain, apps }
+}
+
+async fn blocks(node: &str, chain_id: Option<ChainId>, from: Option<CryptoHash>, limit: Option<u32>) -> Page {
+    let blocks = get_blocks(node, chain_id, from, limit).await;
     let chain = default_chain(chain_id, &blocks);
     Page::Blocks { chain, blocks }
 }
@@ -165,29 +239,81 @@ async fn chains(app: &JsValue, node: &str) {
     setf(app, "chains", &chains_js);
 }
 
+async fn applications(node: &str, chain_id: Option<ChainId>) -> Page {
+    let applications = get_applications(node, chain_id).await;
+    Page::Applications(applications)
+}
+
+async fn introspection(url: &str) -> Value {
+    let client = reqwest::Client::new();
+    let res = client.post(url).body("{\"query\":\"query IntrospectionQuery {__schema{queryType{name}mutationType{name}subscriptionType{name}types{...FullType}directives{name description locations args{...InputValue}}}}fragment FullType on __Type{kind name description fields(includeDeprecated:true){name description args{...InputValue}type{...TypeRef}isDeprecated deprecationReason}inputFields{...InputValue}interfaces{...TypeRef}enumValues(includeDeprecated:true){name description isDeprecated deprecationReason}possibleTypes{...TypeRef}}fragment InputValue on __InputValue{name description type{...TypeRef}defaultValue}fragment TypeRef on __Type{kind name ofType{kind name ofType{kind name ofType{kind name ofType{kind name ofType{kind name ofType{kind name ofType{kind name}}}}}}}}\", \"operationName\":\"IntrospectionQuery\"}").send().await.unwrap().text().await.unwrap();
+    serde_json::from_str(&res).unwrap()
+}
+
+async fn application(app: applications::ApplicationsApplications) -> Page {
+    let introspection = introspection(&app.link).await;
+    Page::Application { app, introspection }
+}
+
+fn format_bytes(v: &JsValue) -> JsValue {
+    let vf = v.clone();
+    match js_sys::Object::try_from(v) {
+        None => vf,
+        Some(o) => {
+            js_sys::Object::keys(o).iter().for_each(|k : JsValue| match k.as_string() {
+                None => (),
+                Some(kstr) => {
+                    if kstr == "bytes".to_string() {
+                        let a = js_sys::Array::from(&getf(&vf, "bytes"));
+                        // if a.length() > 64 {
+                        let av = a.to_vec();
+                        let av2 : Vec<u8> = av.iter().map(|x| x.as_f64().unwrap() as u8).collect();
+                        setf(&vf, "bytes", &JsValue::from_str(&hex::encode(av2)))
+                        // }
+                    } else {
+                        setf(&vf, &kstr, &format_bytes(&getf(&vf, &kstr)))
+                    }
+                }
+            });
+            vf
+        }
+    }
+}
+
 async fn route_aux(app: &JsValue, data: &Data, path: &Option<String>, args: Vec<(String, String)>) {
     let path = match (path, data.page.clone()) {
         (Some(p), _) => p,
-        (_, Page::Unloaded) => "",
+        (_, Page::Unloaded | Page::Home {..} ) => "",
         (_, Page::Block(_)) => "block",
         (_, Page::Blocks {..}) => "blocks",
+        (_, Page::Applications(_)) => "applications",
+        (_, Page::Application {..}) => "application",
+        (_, Page::Error(_)) => "error",
     };
     let chain_id = args.iter().find(|(k, _)| k == "chain").map(|x| ChainId::from_str(&x.1).unwrap());
+    let address = data_address(&data.config, false);
     let page = match path {
-        "" => blocks(&data.node, None, None).await,
+        "" => home(&address, chain_id).await,
         "block" => {
             let hash = args.into_iter().find(|(k, _)| k == "block").map(|x| CryptoHash::from_str(&x.1).unwrap());
-            block(&data.node, chain_id, hash).await
+            block(&address, chain_id, hash).await
         },
-        "blocks" => {
-            blocks(&data.node, chain_id, None).await
-        },
+        "blocks" => blocks(&address, chain_id, None, Some(20)).await,
+        "applications" => applications(&address, chain_id).await,
+        "application" => {
+            match args.into_iter().find(|(k, _)| k == "app").map(|x| js_sys::JSON::parse(&x.1).unwrap()) {
+                None => Page::Error("no application given".to_string()),
+                Some(js) => {
+                    let app = from_value::<applications::ApplicationsApplications>(js).unwrap();
+                    application(app).await
+                }
+            }
+        }
         _ => Page::Unloaded,
     };
-    let page_js = page.serialize(&SER).unwrap();
+    let page_js = format_bytes(&page.serialize(&SER).unwrap());
     setf(app, "page", &page_js);
-    let page_jstr = js_sys::JSON::stringify(&page_js).expect("failed page stringify");
-    web_sys::window().unwrap().history().unwrap().push_state(&page_jstr.into(), &path).expect("push_state failed");
+    web_sys::window().unwrap().history().unwrap().push_state(&page_js, &path).expect("push_state failed");
 }
 
 #[wasm_bindgen]
@@ -205,28 +331,38 @@ pub fn short(s: String) -> String {
     format!("{}..{}", &s[..4], &s[n - 4..])
 }
 
+#[wasm_bindgen]
+pub fn short_app(s: String) -> String {
+    format!("{}..{}..{}..", &s[..4], &s[64..68], &s[152..156])
+}
+
 fn set_onpopstate(app: JsValue) {
     let a = Closure::<dyn FnMut(JsValue)>::new(move |e: JsValue| {
-        let page_str = getf(&e, "state").as_string().unwrap();
-        let page = js_sys::JSON::parse(&page_str).expect("failed parse page");
-        setf(&app, "page", &page);
+        setf(&app, "page", &getf(&e, "state"));
     });
     web_sys::window().unwrap().set_onpopstate(Some(a.as_ref().unchecked_ref()));
     a.forget()
 }
 
+fn application_chain(a: &applications::ApplicationsApplications) -> ChainId {
+    ChainId::from_str(a.description.as_object().unwrap().get("creation").unwrap().as_object().unwrap().get("chain_id").unwrap().as_str().unwrap()).unwrap()
+}
+
 fn page_chain(data: &Data) -> Option<ChainId> {
     match &data.page {
-        Page::Unloaded => None,
         Page::Block(b) => Some(b.value.executed_block.block.chain_id),
-        Page::Blocks { blocks, ..} => blocks.get(0).map(|b| b.value.executed_block.block.chain_id)
+        Page::Blocks { chain, .. } => Some(*chain),
+        Page::Applications(l) => l.get(0).map(|a| application_chain(&a)),
+        Page::Application {app, ..} => Some(application_chain(&app)),
+        _ => None,
     }
 }
 
-
 async fn subscribe(app: JsValue) {
     spawn_local( async move {
-        let (_ws, mut wsio) = WsMeta::connect( "ws://localhost:8080/ws", Some(vec!("graphql-transport-ws")) ).await.unwrap();
+        let data = from_value::<Data>(app.clone()).unwrap();
+        let address = data_address(&data.config, true);
+        let (_ws, mut wsio) = WsMeta::connect( &format!("{}/ws", address), Some(vec!("graphql-transport-ws")) ).await.unwrap();
         wsio.send(WsMessage::Text("{\"type\": \"connection_init\", \"payload\": {}}".to_string())).await.unwrap();
         wsio.next().await;
         let uuid = Uuid::new_v3(&Uuid::NAMESPACE_DNS, b"linera.dev");
@@ -260,7 +396,16 @@ pub async fn init(app: JsValue) {
     console_error_panic_hook::set_once();
     set_onpopstate(app.clone());
     let data = from_value::<Data>(app.clone()).unwrap();
-    chains(&app, &data.node).await;
+    let address = data_address(&data.config, false);
+    chains(&app, &address).await;
     route_aux(&app, &data, &None, Vec::new()).await;
     subscribe(app.clone()).await;
+}
+
+#[wasm_bindgen]
+pub fn save_config(app: JsValue) {
+    let data = from_value::<Data>(app).unwrap();
+    if let Ok(Some(st)) = web_sys::window().unwrap().local_storage() {
+        st.set_item("config", &serde_json::to_string::<Config>(&data.config).unwrap()).unwrap();
+    }
 }

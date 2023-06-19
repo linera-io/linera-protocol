@@ -1,4 +1,4 @@
-<div v-if="op.System">
+<div v-if="op?.System">
   <div v-if="op.System.Transfer">
     <div class="card">
       <div class="card-header">
@@ -29,7 +29,7 @@
   </div>
 </div>
 
-<div v-else-if="op.User">
+<div v-else-if="op?.User">
   <div class="card">
     <div class="card-header">
       <span v-if="index!==undefined">{{ index+1 }}. </span>
@@ -37,6 +37,15 @@
     </div>
     <div class="card-body">
       <pre><code>{{ op.User.bytes }}</code></pre>
+    </div>
+  </div>
+</div>
+
+<div v-else>
+  <div class="card">
+    <div class="card-header">
+      <span v-if="index!==undefined">{{ index+1 }}. </span>
+      <span>Undefined operation</span>
     </div>
   </div>
 </div>

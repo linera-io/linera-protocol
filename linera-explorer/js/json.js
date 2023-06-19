@@ -7,7 +7,7 @@ function load(id, data) {
 }
 
 var component = {
-  template: '<div :id="inner_id"></div>',
+  template: '<div :id="inner_id" style="overflow-x: auto"></div>',
   props: [ "id", "data" ],
   data() { return { inner_id: this.id + '-inner' } },
   mounted() {

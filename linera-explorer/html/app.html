@@ -6,17 +6,26 @@
     </button>
     <div class="collapse navbar-collapse" id="navbarSupportedContent">
       <ul class="navbar-nav me-auto">
+        <li class="nav-item">
+          <a class="nav-link" :class="page.applications ? 'active' : ''" @click="route('applications')" role="button">Applications</a>
+        </li>
       </ul>
       <ul class="navbar-nav ms-auto">
         <li class="nav-item mx-2">
-          <input v-model="node" class="form-control">
+          <input v-model="config.node" class="form-control" @change="save_config">
         </li>
         <li class="nav-item mx-2">
-          <select @change="route('blocks', [['chain', $event.target.value]])" class="form-select">
-            <option v-for="c in chains" :value="c" :selected="(page.blocks?.chain || page.block?.value.executedBlock.block.chainId) == c">{{ sh(c) }}</option>
+          <div class="form-control form-check form-switch">
+            <input class="form-check-input" type="checkbox" v-model="config.tls" id="tls-check" @change="save_config">
+            <label class="form-check-label" for="tls-check">TLS</label>
+          </div>
+        </li>
+        <li class="nav-item mx-2">
+          <select @change="route(undefined, [['chain', $event.target.value]])" class="form-select">
+            <option v-for="c in chains" :value="c" :selected="(page.blocks?.chain || page.home?.chain || page.block?.value.executedBlock.block.chainId) == c">{{ sh(c) }}</option>
           </select>
         </li>
-        <li class="nav-itemmx-2">
+        <li class="nav-item mx-2">
           <button @click="route()" class="btn btn-primary">
             <i class="bi bi-arrow-clockwise"></i>
           </button>
@@ -32,64 +41,29 @@
       </span>
     </div>
   </div>
-  <div v-else-if="page.blocks">
-    <v-block v-if="page.blocks.blocks.length!=0" class="m-2" :block="page.blocks.blocks[0]" title="Head" :route="route">
+
+  <div v-else-if="page.home">
+    <v-block v-if="page.home.blocks.length!=0" class="m-2" :block="page.home.blocks[0]" title="Head" :route="route">
     </v-block>
-    <div>
-      <table class="table">
-        <thead>
-          <th>Height</th>
-          <th>Hash</th>
-          <th>Timestamp</th>
-          <th>Signer</th>
-          <th>Status</th>
-          <th>Round</th>
-          <th>#InMessages</th>
-          <th>#OutMessages</th>
-          <th>#Operations</th>
-          <th>JSON</th>
-        </thead>
-        <tbody>
-          <tr v-for="b in page.blocks.blocks">
-            <td>{{ b.value.executedBlock.block.height }}</td>
-            <td :title="b.hash">
-              <a @click="route('block', [['block', b.hash]])" class="btn btn-link">{{ sh(b.hash) }}
-            </td>
-            <td>{{ (new Date(b.value.executedBlock.block.timestamp/1000)).toLocaleString() }}</td>
-            <td :title="b.value.executedBlock.block.authenticatedSigner">{{ sh(b.value.executedBlock.block.authenticatedSigner) }}</td>
-            <td>{{ b.value.status }}</td>
-            <td>{{ b.value.round }}</td>
-            <td>{{ b.value.executedBlock.block.incomingMessages.length }}</td>
-            <td>{{ b.value.executedBlock.messages.length }}</td>
-            <td>{{ b.value.executedBlock.block.operations.length }}</td>
-            <td>
-              <button class="btn btn-link btn-sm" data-bs-toggle="modal" :data-bs-target="'#'+b.hash+'-modal'" @click="json_load(b.hash+'-json', b)">
-                <i class="bi bi-braces"></i>
-              </button>
-              <div :id="b.hash+'-modal'" class="modal fade">
-                <div class="modal-dialog modal-xl">
-                  <div class="modal-content">
-                    <div class="modal-header">
-                      <h5 class="modal-title">Block</h5>
-                      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                      <div :id="b.hash+'-json'">
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <v-blocks :route="route" :blocks="page.home.blocks"></v-blocks>
+    <v-applications :route="route" :apps="page.home.apps"></v-applications>
+  </div>
+
+  <div v-else-if="page.blocks">
+    <v-blocks :route="route" :blocks="page.home.blocks"></v-blocks>
   </div>
 
   <div v-else-if="page.block">
     <v-block :block="page.block" title="Block" :route="route">
     </v-block>
+  </div>
+
+  <div v-else-if="page.applications">
+    <v-applications :route="route" :apps="page.applications"></v-applications>
+  </div>
+
+  <div v-else-if="page.application">
+    <v-application :route="route" :app="page.application"></v-application>
   </div>
 
   <div v-else>

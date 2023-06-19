@@ -1,0 +1,16 @@
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Application</div>
+  </div>
+  <div class="card-body">
+    <ul class="list-group">
+      <li class="list-group-item d-flex justify-content-between">
+        <span><strong>ID</strong></span>
+        {{ shapp(app.app.id) }}
+      </li>
+    </ul>
+    <div>
+      <v-json :data="app.introspection" id="app-shema"></v-json>
+    </div>
+  </div>
+</div>
