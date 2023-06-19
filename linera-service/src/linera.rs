@@ -1618,16 +1618,16 @@ async fn main() -> Result<(), anyhow::Error> {
         ClientCommand::Net(net_command) => match net_command {
             NetCommand::Up => {
                 let network = Network::Grpc;
-                let mut runner = LocalNet::new(network, 1);
+                let mut runner = LocalNet::new(network, 1)?;
                 let client1 = runner.make_client(network);
                 let client2 = runner.make_client(network);
 
-                runner.generate_initial_validator_config().await;
-                client1.create_genesis_config().await;
-                client2.wallet_init(&[]).await;
+                runner.generate_initial_validator_config().await?;
+                client1.create_genesis_config().await?;
+                client2.wallet_init(&[]).await?;
 
                 // Create initial server and client config.
-                runner.run_local_net().await;
+                runner.run_local_net().await?;
                 let net_path = runner.net_path();
 
                 println!(

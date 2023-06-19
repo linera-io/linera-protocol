@@ -102,16 +102,16 @@ async fn test_end_to_end_counter() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = LocalNet::new(network, 4);
+    let mut runner = LocalNet::new(network, 4).unwrap();
     let client = runner.make_client(network);
 
     let original_counter_value = 35;
     let increment = 5;
 
-    runner.generate_initial_validator_config().await;
-    client.create_genesis_config().await;
-    runner.run_local_net().await;
-    let (contract, service) = runner.build_example("counter").await;
+    runner.generate_initial_validator_config().await.unwrap();
+    client.create_genesis_config().await.unwrap();
+    runner.run_local_net().await.unwrap();
+    let (contract, service) = runner.build_example("counter").await.unwrap();
 
     let application_id = client
         .publish_and_create::<CounterAbi>(
@@ -122,10 +122,16 @@ async fn test_end_to_end_counter() {
             vec![],
             None,
         )
-        .await;
-    let mut node_service = client.run_node_service(None, None).await;
+        .await
+        .unwrap();
+    let mut node_service = client.run_node_service(None, None).await.unwrap();
 
-    let application = Application::new(node_service.make_application(&application_id).await);
+    let application = Application::new(
+        node_service
+            .make_application(&application_id)
+            .await
+            .unwrap(),
+    );
 
     let counter_value = application.get_counter_value().await;
     assert_eq!(counter_value, original_counter_value);
@@ -146,24 +152,33 @@ async fn test_end_to_end_counter_publish_create() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = LocalNet::new(network, 4);
+    let mut runner = LocalNet::new(network, 4).unwrap();
     let client = runner.make_client(network);
 
     let original_counter_value = 35;
     let increment = 5;
 
-    runner.generate_initial_validator_config().await;
-    client.create_genesis_config().await;
-    runner.run_local_net().await;
-    let (contract, service) = runner.build_example("counter").await;
+    runner.generate_initial_validator_config().await.unwrap();
+    client.create_genesis_config().await.unwrap();
+    runner.run_local_net().await.unwrap();
+    let (contract, service) = runner.build_example("counter").await.unwrap();
 
-    let bytecode_id = client.publish_bytecode(contract, service, None).await;
+    let bytecode_id = client
+        .publish_bytecode(contract, service, None)
+        .await
+        .unwrap();
     let application_id = client
         .create_application::<CounterAbi>(bytecode_id, &original_counter_value, None)
-        .await;
-    let mut node_service = client.run_node_service(None, None).await;
+        .await
+        .unwrap();
+    let mut node_service = client.run_node_service(None, None).await.unwrap();
 
-    let application = Application::new(node_service.make_application(&application_id).await);
+    let application = Application::new(
+        node_service
+            .make_application(&application_id)
+            .await
+            .unwrap(),
+    );
 
     let counter_value = application.get_counter_value().await;
     assert_eq!(counter_value, original_counter_value);
@@ -182,20 +197,20 @@ async fn test_end_to_end_multiple_wallets() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
-    let mut runner = LocalNet::new(Network::Grpc, 4);
+    let mut runner = LocalNet::new(Network::Grpc, 4).unwrap();
     let client_1 = runner.make_client(Network::Grpc);
     let client_2 = runner.make_client(Network::Grpc);
 
     // Create initial server and client config.
-    runner.generate_initial_validator_config().await;
-    client_1.create_genesis_config().await;
-    client_2.wallet_init(&[]).await;
+    runner.generate_initial_validator_config().await.unwrap();
+    client_1.create_genesis_config().await.unwrap();
+    client_2.wallet_init(&[]).await.unwrap();
 
     // Start local network.
-    runner.run_local_net().await;
+    runner.run_local_net().await.unwrap();
 
     // Get some chain owned by Client 1.
-    let chain_1 = *client_1.get_wallet().chain_ids().first().unwrap();
+    let chain_1 = *client_1.get_wallet().unwrap().chain_ids().first().unwrap();
 
     // Generate a key for Client 2.
     let client_2_key = client_2.keygen().await.unwrap();
@@ -216,15 +231,15 @@ async fn test_end_to_end_multiple_wallets() {
     assert_eq!(client_1.query_balance(chain_1).await.unwrap(), "10.");
 
     // Transfer 5 units from Chain 1 to Chain 2.
-    client_1.transfer("5", chain_1, chain_2).await;
-    client_2.synchronize_balance(chain_2).await;
+    client_1.transfer("5", chain_1, chain_2).await.unwrap();
+    client_2.synchronize_balance(chain_2).await.unwrap();
 
     assert_eq!(client_1.query_balance(chain_1).await.unwrap(), "5.");
     assert_eq!(client_2.query_balance(chain_2).await.unwrap(), "5.");
 
     // Transfer 2 units from Chain 2 to Chain 1.
-    client_2.transfer("2", chain_2, chain_1).await;
-    client_1.synchronize_balance(chain_1).await;
+    client_2.transfer("2", chain_2, chain_1).await.unwrap();
+    client_1.synchronize_balance(chain_1).await.unwrap();
 
     assert_eq!(client_1.query_balance(chain_1).await.unwrap(), "7.");
     assert_eq!(client_2.query_balance(chain_2).await.unwrap(), "3.");
@@ -243,43 +258,44 @@ async fn test_end_to_end_reconfiguration_simple() {
 }
 
 async fn test_reconfiguration(network: Network) {
-    let mut runner = LocalNet::new(network, 4);
+    let mut runner = LocalNet::new(network, 4).unwrap();
     let client = runner.make_client(network);
     let client_2 = runner.make_client(network);
 
-    let servers = runner.generate_initial_validator_config().await;
-    client.create_genesis_config().await;
-    client_2.wallet_init(&[]).await;
-    runner.run_local_net().await;
+    let servers = runner.generate_initial_validator_config().await.unwrap();
+    client.create_genesis_config().await.unwrap();
+    client_2.wallet_init(&[]).await.unwrap();
+    runner.run_local_net().await.unwrap();
 
-    let chain_1 = client.get_wallet().default_chain().unwrap();
+    let chain_1 = client.get_wallet().unwrap().default_chain().unwrap();
 
     let (node_service_2, chain_2) = match network {
         Network::Grpc => {
-            let chain_2 = client.open_and_assign(&client_2).await;
-            let node_service_2 = client_2.run_node_service(chain_2, 8081).await;
+            let chain_2 = client.open_and_assign(&client_2).await.unwrap();
+            let node_service_2 = client_2.run_node_service(chain_2, 8081).await.unwrap();
             (Some(node_service_2), chain_2)
         }
         Network::Simple => {
             client
                 .transfer("10", ChainId::root(9), ChainId::root(8))
-                .await;
+                .await
+                .unwrap();
             (None, ChainId::root(9))
         }
     };
 
-    client.query_validators(None).await;
+    client.query_validators(None).await.unwrap();
 
     // Query balance for first and last user chain
     assert_eq!(client.query_balance(chain_1).await.unwrap(), "10.");
     assert_eq!(client.query_balance(chain_2).await.unwrap(), "0.");
 
     // Transfer 3 units
-    client.transfer("3", chain_1, chain_2).await;
+    client.transfer("3", chain_1, chain_2).await.unwrap();
 
     // Restart last server (dropping it kills the process)
     runner.kill_server(4, 3);
-    runner.start_server(4, 3).await;
+    runner.start_server(4, 3).await.unwrap();
 
     // Query balances again
     assert_eq!(client.query_balance(chain_1).await.unwrap(), "7.");
@@ -295,39 +311,39 @@ async fn test_reconfiguration(network: Network) {
     let (_, chain_3) = client.open_chain(chain_1, None).await.unwrap();
 
     // Inspect state of derived chain
-    assert!(client.is_chain_present_in_wallet(chain_3).await);
+    assert!(client.is_chain_present_in_wallet(chain_3).await.unwrap());
 
     // Create configurations for two more validators
-    let server_5 = runner.generate_validator_config(5).await;
-    let server_6 = runner.generate_validator_config(6).await;
+    let server_5 = runner.generate_validator_config(5).await.unwrap();
+    let server_6 = runner.generate_validator_config(6).await.unwrap();
 
     // Start the validators
-    runner.start_validators(5..=6).await;
+    runner.start_validators(5..=6).await.unwrap();
 
     // Add validator 5
-    client.set_validator(&server_5, 9500, 100).await;
+    client.set_validator(&server_5, 9500, 100).await.unwrap();
 
-    client.query_validators(None).await;
-    client.query_validators(Some(chain_1)).await;
+    client.query_validators(None).await.unwrap();
+    client.query_validators(Some(chain_1)).await.unwrap();
 
     // Add validator 6
-    client.set_validator(&server_6, 9600, 100).await;
+    client.set_validator(&server_6, 9600, 100).await.unwrap();
 
     // Remove validator 5
-    client.remove_validator(&server_5).await;
+    client.remove_validator(&server_5).await.unwrap();
     runner.remove_validator(5);
 
-    client.query_validators(None).await;
-    client.query_validators(Some(chain_1)).await;
+    client.query_validators(None).await.unwrap();
+    client.query_validators(Some(chain_1)).await.unwrap();
 
     // Remove validators 1, 2, 3 and 4, so only 6 remains.
     for (i, server) in servers.into_iter().enumerate() {
-        client.remove_validator(&server).await;
+        client.remove_validator(&server).await.unwrap();
         runner.remove_validator(i + 1);
     }
 
-    client.transfer("5", chain_1, chain_2).await;
-    client.synchronize_balance(chain_2).await;
+    client.transfer("5", chain_1, chain_2).await.unwrap();
+    client.synchronize_balance(chain_2).await.unwrap();
     assert_eq!(client.query_balance(chain_2).await.unwrap(), "8.");
 
     if let Some(node_service_2) = node_service_2 {
@@ -335,7 +351,8 @@ async fn test_reconfiguration(network: Network) {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let response = node_service_2
                 .query_node("query { chain { executionState { system { balance } } } }")
-                .await;
+                .await
+                .unwrap();
             if response["chain"]["executionState"]["system"]["balance"].as_str() == Some("8.") {
                 return;
             }
@@ -350,42 +367,61 @@ async fn test_end_to_end_social_user_pub_sub() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = LocalNet::new(network, 4);
+    let mut runner = LocalNet::new(network, 4).unwrap();
     let client1 = runner.make_client(network);
     let client2 = runner.make_client(network);
 
     // Create initial server and client config.
-    runner.generate_initial_validator_config().await;
-    client1.create_genesis_config().await;
-    client2.wallet_init(&[]).await;
+    runner.generate_initial_validator_config().await.unwrap();
+    client1.create_genesis_config().await.unwrap();
+    client2.wallet_init(&[]).await.unwrap();
 
     // Start local network.
-    runner.run_local_net().await;
-    let (contract, service) = runner.build_example("social").await;
+    runner.run_local_net().await.unwrap();
+    let (contract, service) = runner.build_example("social").await.unwrap();
 
-    let chain1 = client1.get_wallet().default_chain().unwrap();
-    let chain2 = client1.open_and_assign(&client2).await;
+    let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
+    let chain2 = client1.open_and_assign(&client2).await.unwrap();
 
-    let mut node_service1 = client1.run_node_service(chain1, 8080).await;
-    let mut node_service2 = client2.run_node_service(chain2, 8081).await;
+    let mut node_service1 = client1.run_node_service(chain1, 8080).await.unwrap();
+    let mut node_service2 = client2.run_node_service(chain2, 8081).await.unwrap();
 
-    let bytecode_id = node_service1.publish_bytecode(contract, service).await;
+    let bytecode_id = node_service1
+        .publish_bytecode(contract, service)
+        .await
+        .unwrap();
     node_service1.process_inbox().await;
-    let application_id = node_service1.create_application(&bytecode_id).await;
+    let application_id = node_service1
+        .create_application(&bytecode_id)
+        .await
+        .unwrap();
 
     // Request the application so chain 2 has it, too.
-    node_service2.request_application(&application_id).await;
+    node_service2
+        .request_application(&application_id)
+        .await
+        .unwrap();
 
-    let app2 = Application::new(node_service2.make_application(&application_id).await);
+    let app2 = Application::new(
+        node_service2
+            .make_application(&application_id)
+            .await
+            .unwrap(),
+    );
     let subscribe = format!("mutation {{ subscribe(chainId: \"{chain1}\") }}");
     let hash = app2.query_application(&subscribe).await;
 
     // The returned hash should now be the latest one.
     let query = format!("query {{ chain(chainId: \"{chain2}\") {{ tipState {{ blockHash }} }} }}");
-    let response = node_service2.query_node(&query).await;
+    let response = node_service2.query_node(&query).await.unwrap();
     assert_eq!(hash, response["chain"]["tipState"]["blockHash"]);
 
-    let app1 = Application::new(node_service1.make_application(&application_id).await);
+    let app1 = Application::new(
+        node_service1
+            .make_application(&application_id)
+            .await
+            .unwrap(),
+    );
     let post = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
     app1.query_application(post).await;
 
@@ -417,25 +453,26 @@ async fn test_end_to_end_retry_notification_stream() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = LocalNet::new(network, 1);
+    let mut runner = LocalNet::new(network, 1).unwrap();
     let client1 = runner.make_client(network);
     let client2 = runner.make_client(network);
 
     // Create initial server and client config.
-    runner.generate_initial_validator_config().await;
-    client1.create_genesis_config().await;
+    runner.generate_initial_validator_config().await.unwrap();
+    client1.create_genesis_config().await.unwrap();
     let chain = ChainId::root(0);
     let mut height = 0;
-    client2.wallet_init(&[chain]).await;
+    client2.wallet_init(&[chain]).await.unwrap();
 
     // Start local network.
-    runner.run_local_net().await;
+    runner.run_local_net().await.unwrap();
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
-    let mut node_service2 = client2.run_node_service(chain, 8081).await;
+    let mut node_service2 = client2.run_node_service(chain, 8081).await.unwrap();
     let response = node_service2
         .query_node("query { chain { tipState { nextBlockHeight } } }")
-        .await;
+        .await
+        .unwrap();
     assert_eq!(
         response["chain"]["tipState"]["nextBlockHeight"].as_u64(),
         Some(height)
@@ -443,18 +480,22 @@ async fn test_end_to_end_retry_notification_stream() {
 
     // Oh no! The validator has an outage and gets restarted!
     runner.remove_validator(1);
-    runner.start_validators(1..=1).await;
+    runner.start_validators(1..=1).await.unwrap();
 
     // The node service should try to reconnect.
     'success: {
         for i in 0..10 {
             // Add a new block on the chain, triggering a notification.
-            client1.transfer("1", chain, ChainId::root(9)).await;
+            client1
+                .transfer("1", chain, ChainId::root(9))
+                .await
+                .unwrap();
             tokio::time::sleep(Duration::from_secs(i)).await;
             height += 1;
             let response = node_service2
                 .query_node("query { chain { tipState { nextBlockHeight } } }")
-                .await;
+                .await
+                .unwrap();
             if response["chain"]["tipState"]["nextBlockHeight"].as_u64() == Some(height) {
                 break 'success;
             }
@@ -473,20 +514,20 @@ async fn test_end_to_end_fungible() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = LocalNet::new(network, 4);
+    let mut runner = LocalNet::new(network, 4).unwrap();
     let client1 = runner.make_client(network);
     let client2 = runner.make_client(network);
 
-    runner.generate_initial_validator_config().await;
-    client1.create_genesis_config().await;
-    client2.wallet_init(&[]).await;
+    runner.generate_initial_validator_config().await.unwrap();
+    client1.create_genesis_config().await.unwrap();
+    client2.wallet_init(&[]).await.unwrap();
 
     // Create initial server and client config.
-    runner.run_local_net().await;
-    let (contract, service) = runner.build_example("fungible").await;
+    runner.run_local_net().await.unwrap();
+    let (contract, service) = runner.build_example("fungible").await.unwrap();
 
-    let chain1 = client1.get_wallet().default_chain().unwrap();
-    let chain2 = client1.open_and_assign(&client2).await;
+    let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
+    let chain2 = client1.open_and_assign(&client2).await.unwrap();
 
     // The players
     let owner1 = client1.get_owner().unwrap();
@@ -502,12 +543,18 @@ async fn test_end_to_end_fungible() {
     // Setting up the application and verifying
     let application_id = client1
         .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, vec![], None)
-        .await;
+        .await
+        .unwrap();
 
-    let mut node_service1 = client1.run_node_service(chain1, 8080).await;
-    let mut node_service2 = client2.run_node_service(chain2, 8081).await;
+    let mut node_service1 = client1.run_node_service(chain1, 8080).await.unwrap();
+    let mut node_service2 = client2.run_node_service(chain2, 8081).await.unwrap();
 
-    let app1 = Application::new(node_service1.make_application(&application_id).await);
+    let app1 = Application::new(
+        node_service1
+            .make_application(&application_id)
+            .await
+            .unwrap(),
+    );
     app1.assert_fungible_account_balances([
         (account_owner1, Amount::from_tokens(5)),
         (account_owner2, Amount::from_tokens(2)),
@@ -536,7 +583,12 @@ async fn test_end_to_end_fungible() {
     .await;
 
     // Fungible didn't exist on chain2 initially but now it does and we can talk to it.
-    let app2 = Application::new(node_service2.make_application(&application_id).await);
+    let app2 = Application::new(
+        node_service2
+            .make_application(&application_id)
+            .await
+            .unwrap(),
+    );
 
     app2.assert_fungible_account_balances(BTreeMap::from([
         (account_owner1, Amount::ZERO),
@@ -591,20 +643,20 @@ async fn test_end_to_end_crowd_funding() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = LocalNet::new(network, 4);
+    let mut runner = LocalNet::new(network, 4).unwrap();
     let client1 = runner.make_client(network);
     let client2 = runner.make_client(network);
 
-    runner.generate_initial_validator_config().await;
-    client1.create_genesis_config().await;
-    client2.wallet_init(&[]).await;
+    runner.generate_initial_validator_config().await.unwrap();
+    client1.create_genesis_config().await.unwrap();
+    client2.wallet_init(&[]).await.unwrap();
 
     // Create initial server and client config.
-    runner.run_local_net().await;
-    let (contract_fungible, service_fungible) = runner.build_example("fungible").await;
+    runner.run_local_net().await.unwrap();
+    let (contract_fungible, service_fungible) = runner.build_example("fungible").await.unwrap();
 
-    let chain1 = client1.get_wallet().default_chain().unwrap();
-    let chain2 = client1.open_and_assign(&client2).await;
+    let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
+    let chain2 = client1.open_and_assign(&client2).await.unwrap();
 
     // The players
     let owner1 = client1.get_owner().unwrap();
@@ -625,7 +677,8 @@ async fn test_end_to_end_crowd_funding() {
             vec![],
             None,
         )
-        .await;
+        .await
+        .unwrap();
 
     // Setting up the application crowd funding
     let deadline = Timestamp::from(std::u64::MAX);
@@ -635,7 +688,7 @@ async fn test_end_to_end_crowd_funding() {
         deadline,
         target,
     };
-    let (contract_crowd, service_crowd) = runner.build_example("crowd-funding").await;
+    let (contract_crowd, service_crowd) = runner.build_example("crowd-funding").await.unwrap();
     let application_id_crowd = client1
         .publish_and_create::<CrowdFundingAbi>(
             contract_crowd,
@@ -649,18 +702,25 @@ async fn test_end_to_end_crowd_funding() {
             vec![application_id_fungible.clone()],
             None,
         )
-        .await;
+        .await
+        .unwrap();
 
-    let mut node_service1 = client1.run_node_service(chain1, 8080).await;
-    let mut node_service2 = client2.run_node_service(chain2, 8081).await;
+    let mut node_service1 = client1.run_node_service(chain1, 8080).await.unwrap();
+    let mut node_service2 = client2.run_node_service(chain2, 8081).await.unwrap();
 
     let app_fungible1 = Application::new(
         node_service1
             .make_application(&application_id_fungible)
-            .await,
+            .await
+            .unwrap(),
     );
 
-    let app_crowd1 = Application::new(node_service1.make_application(&application_id_crowd).await);
+    let app_crowd1 = Application::new(
+        node_service1
+            .make_application(&application_id_crowd)
+            .await
+            .unwrap(),
+    );
 
     // Transferring tokens to user2 on chain2
     let destination = Account {
@@ -679,9 +739,15 @@ async fn test_end_to_end_crowd_funding() {
     // Register the campaign on chain2.
     node_service2
         .request_application(&application_id_crowd)
-        .await;
+        .await
+        .unwrap();
 
-    let app_crowd2 = Application::new(node_service2.make_application(&application_id_crowd).await);
+    let app_crowd2 = Application::new(
+        node_service2
+            .make_application(&application_id_crowd)
+            .await
+            .unwrap(),
+    );
 
     // Transferring
     let amount_transfer = Amount::ONE;
@@ -710,24 +776,26 @@ async fn test_end_to_end_crowd_funding() {
 #[test_log::test(tokio::test)]
 async fn test_project_new() {
     let network = Network::Grpc;
-    let mut runner = LocalNet::new(network, 0);
+    let mut runner = LocalNet::new(network, 0).unwrap();
     let client = runner.make_client(network);
 
-    let tmp_dir = client.project_new("init-test").await;
+    let tmp_dir = client.project_new("init-test").await.unwrap();
     let project_dir = tmp_dir.path().join("init-test");
     runner
         .build_application(project_dir.as_path(), "init-test", false)
-        .await;
+        .await
+        .unwrap();
 }
 
 #[test_log::test(tokio::test)]
 async fn test_project_test() {
     let network = Network::Grpc;
-    let mut runner = LocalNet::new(network, 0);
+    let mut runner = LocalNet::new(network, 0).unwrap();
     let client = runner.make_client(network);
     client
         .project_test(&LocalNet::example_path("counter"))
-        .await;
+        .await
+        .unwrap();
 }
 
 #[test_log::test(tokio::test)]
@@ -735,19 +803,25 @@ async fn test_project_publish() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = LocalNet::new(network, 1);
+    let mut runner = LocalNet::new(network, 1).unwrap();
     let client = runner.make_client(network);
 
-    runner.generate_initial_validator_config().await;
-    client.create_genesis_config().await;
-    runner.run_local_net().await;
+    runner.generate_initial_validator_config().await.unwrap();
+    client.create_genesis_config().await.unwrap();
+    runner.run_local_net().await.unwrap();
 
-    let tmp_dir = client.project_new("init-test").await;
+    let tmp_dir = client.project_new("init-test").await.unwrap();
     let project_dir = tmp_dir.path().join("init-test");
 
-    client.project_publish(project_dir, vec![], None).await;
+    client
+        .project_publish(project_dir, vec![], None)
+        .await
+        .unwrap();
 
-    let node_service = client.run_node_service(None, None).await;
+    let node_service = client.run_node_service(None, None).await.unwrap();
 
-    assert_eq!(node_service.try_get_applications_uri().await.len(), 1)
+    assert_eq!(
+        node_service.try_get_applications_uri().await.unwrap().len(),
+        1
+    )
 }
