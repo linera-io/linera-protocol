@@ -91,13 +91,13 @@ impl StorageConfig {
             }
             #[cfg(feature = "rocksdb")]
             Rocksdb { path } => {
-                let mut create_dir = false;
-                if path.is_dir() {
+                let create_dir = if path.is_dir() {
                     tracing::warn!("Using existing database {:?}", path);
+                    false
                 } else {
-                    create_dir = true;
                     std::fs::create_dir_all(path)?;
-                }
+                    true
+                };
 
                 let mut client = RocksdbStoreClient::new(path.clone(), wasm_runtime, cache_size);
                 if create_dir {
