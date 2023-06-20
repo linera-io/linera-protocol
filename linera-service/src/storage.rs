@@ -90,16 +90,19 @@ impl StorageConfig {
                 job.run(client).await
             }
             #[cfg(feature = "rocksdb")]
-            Rocksdb { path } if path.is_dir() => {
-                tracing::warn!("Using existing database {:?}", path);
-                let client = RocksdbStoreClient::new(path.clone(), wasm_runtime, cache_size);
-                job.run(client).await
-            }
-            #[cfg(feature = "rocksdb")]
             Rocksdb { path } => {
-                std::fs::create_dir_all(path)?;
+                let mut create_dir = false;
+                if path.is_dir() {
+                    tracing::warn!("Using existing database {:?}", path);
+                } else {
+                    create_dir = true;
+                    std::fs::create_dir_all(path)?;
+                }
+
                 let mut client = RocksdbStoreClient::new(path.clone(), wasm_runtime, cache_size);
-                config.initialize_store(&mut client).await?;
+                if create_dir {
+                    config.initialize_store(&mut client).await?;
+                }
                 job.run(client).await
             }
             #[cfg(feature = "aws")]
