@@ -5,7 +5,7 @@ use crate::{
     batch::{Batch, DeletePrefixExpander, SimpleUnorderedBatch},
     common::{
         ContextFromDb, DatabaseConsistencyError, KeyIterable, KeyValueIterable,
-        KeyValueStoreClient, KeyValueStoreClientBigValue, MIN_VIEW_TAG,
+        KeyValueStoreClient, MIN_VIEW_TAG,
     },
     localstack,
     lru_caching::LruCachingKeyValueClient,
@@ -243,7 +243,11 @@ enum KeyTag {
     Entry,
 }
 
-fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, DynamoDbContextError> {
+fn get_journaling_key(
+    base_key: &[u8],
+    tag: u8,
+    pos: usize,
+) -> Result<Vec<u8>, DynamoDbContextError> {
     // We used the value 0 because it does not collide with other key values.
     // since other tags are starting from 1.
     let mut key = base_key.to_vec();
@@ -972,6 +976,10 @@ pub enum DynamoDbContextError {
     /// The recovery failed.
     #[error("The DynamoDB database recovery failed")]
     DatabaseRecoveryFailed,
+
+    /// The database is not coherent
+    #[error(transparent)]
+    DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 
     /// The length of the value should be at most 400KB.
     #[error("The DynamoDB value should be less than 400KB")]
