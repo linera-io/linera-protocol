@@ -31,6 +31,9 @@ impl KeyValueStore {
 #[async_trait]
 impl KeyValueStoreClient for KeyValueStore {
     const MAX_CONNECTIONS: usize = 1;
+    // The KeyValueStoreClient of the system_api does not have splitting limits.
+    // Those are done by the lower ranked parts of the system.
+    const MAX_VALUE_SIZE: usize = usize::MAX;
     type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;

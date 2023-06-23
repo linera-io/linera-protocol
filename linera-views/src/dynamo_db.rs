@@ -3,7 +3,10 @@
 
 use crate::{
     batch::{Batch, DeletePrefixExpander, SimpleUnorderedBatch},
-    common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient, MIN_VIEW_TAG},
+    common::{
+        ContextFromDb, DatabaseConsistencyError, KeyIterable, KeyValueIterable,
+        KeyValueStoreClient, KeyValueStoreClientBigValue, MIN_VIEW_TAG,
+    },
     localstack,
     lru_caching::LruCachingKeyValueClient,
 };
@@ -69,6 +72,11 @@ const MAX_BATCH_WRITE_ITEM_BYTES: usize = 16777216;
 /// Fundamental constant of DynamoDB: The maximum number of simultaneous connections is 50.
 /// See https://stackoverflow.com/questions/13128613/amazon-dynamo-db-max-client-connections
 const MAX_CONNECTIONS: usize = 50;
+
+/// The limit on size is 400 kB for DynamoDb
+/// Which is 409600 bytes. To be safe, we remove 600 bytes. This is a lot actually.
+/// In theory, we just need to remove 4 bytes
+const MAX_VALUE_SIZE: usize = 409000;
 
 /// Builds the key attributes for a table item.
 ///
@@ -235,12 +243,7 @@ enum KeyTag {
     Entry,
 }
 
-/// Builds a key for the journal.
-fn get_journaling_key(
-    base_key: &[u8],
-    tag: u8,
-    pos: usize,
-) -> Result<Vec<u8>, DynamoDbContextError> {
+fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, DynamoDbContextError> {
     // We used the value 0 because it does not collide with other key values.
     // since other tags are starting from 1.
     let mut key = base_key.to_vec();
@@ -644,6 +647,7 @@ impl DynamoDbClientInternal {
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClientInternal {
     const MAX_CONNECTIONS: usize = MAX_CONNECTIONS;
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
@@ -729,6 +733,7 @@ pub struct DynamoDbClient {
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClient {
     const MAX_CONNECTIONS: usize = MAX_CONNECTIONS;
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;

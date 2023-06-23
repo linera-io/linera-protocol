@@ -5,11 +5,14 @@ use crate::batch::{
     WriteOperation,
     WriteOperation::{Delete, Put},
 };
+
 use rand::{Rng, RngCore};
 use std::collections::HashSet;
 
 #[cfg(feature = "aws")]
 use {
+    crate::dynamo_db::DynamoDbClient,
+    crate::lru_caching::TEST_CACHE_SIZE,
     anyhow::{Context, Error},
     aws_sdk_s3::Endpoint,
     aws_types::SdkConfig,
@@ -134,6 +137,20 @@ impl LocalStackTestContext {
     }
 }
 
+/// Create a basic client that can be used for tests
+#[cfg(feature = "aws")]
+pub async fn create_dynamodb_test_client() -> DynamoDbClient {
+    let localstack = LocalStackTestContext::new().await.unwrap();
+    let (key_value_operation, _) = DynamoDbClient::from_config(
+        localstack.dynamo_db_config(),
+        "test_table".parse().expect("Invalid table name"),
+        TEST_CACHE_SIZE,
+    )
+    .await
+    .unwrap();
+    key_value_operation
+}
+
 #[cfg(feature = "aws")]
 /// Helper function to list the names of buckets registered on S3.
 pub async fn list_buckets(client: &aws_sdk_s3::Client) -> Result<Vec<String>, Error> {
@@ -184,6 +201,16 @@ pub fn get_random_byte_vector<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usi
     v
 }
 
+/// generate a key with small indices so as to have collisions
+pub fn get_small_key_space<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
+    let mut key = key_prefix.to_vec();
+    for _ in 0..n {
+        let byte = rng.gen_range(0..4) as u8;
+        key.push(byte);
+    }
+    key
+}
+
 /// Builds a random k element subset of n
 pub fn get_random_kset<R: RngCore>(rng: &mut R, n: usize, k: usize) -> Vec<usize> {
     let mut values = Vec::new();
@@ -201,14 +228,16 @@ pub fn get_random_kset<R: RngCore>(rng: &mut R, n: usize, k: usize) -> Vec<usize
 pub fn get_random_key_value_vec_prefix<R: RngCore>(
     rng: &mut R,
     key_prefix: Vec<u8>,
+    len_key: usize,
+    len_value: usize,
     n: usize,
 ) -> Vec<(Vec<u8>, Vec<u8>)> {
     loop {
         let mut v_ret = Vec::new();
         let mut vector_set = HashSet::new();
         for _ in 0..n {
-            let v1 = get_random_byte_vector(rng, &key_prefix, 8);
-            let v2 = get_random_byte_vector(rng, &Vec::new(), 8);
+            let v1 = get_random_byte_vector(rng, &key_prefix, len_key);
+            let v2 = get_random_byte_vector(rng, &Vec::new(), len_value);
             let v12 = (v1.clone(), v2);
             vector_set.insert(v1);
             v_ret.push(v12);
@@ -222,7 +251,7 @@ pub fn get_random_key_value_vec_prefix<R: RngCore>(
 /// Takes a random number generator rng, a number n and returns n random (key,value)
 /// which are all distinct with key and value are of length 8.
 pub fn get_random_key_value_vec<R: RngCore>(rng: &mut R, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
-    get_random_key_value_vec_prefix(rng, Vec::new(), n)
+    get_random_key_value_vec_prefix(rng, Vec::new(), 8, 8, n)
 }
 
 type VectorPutDelete = (Vec<(Vec<u8>, Vec<u8>)>, usize);
@@ -233,7 +262,7 @@ pub fn get_random_key_value_operations<R: RngCore>(
     n: usize,
     k: usize,
 ) -> VectorPutDelete {
-    let key_value_vector = get_random_key_value_vec_prefix(rng, Vec::new(), n);
+    let key_value_vector = get_random_key_value_vec_prefix(rng, Vec::new(), 8, 8, n);
     (key_value_vector, k)
 }
 

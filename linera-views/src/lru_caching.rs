@@ -21,7 +21,7 @@ use {
     crate::common::ContextFromDb,
     crate::memory::{MemoryClient, MemoryStoreMap},
     crate::views::ViewError,
-    async_lock::{MutexGuardArc, RwLock},
+    async_lock::MutexGuardArc,
 };
 
 /// The LruPrefixCache store the data for a simple read_keys queries
@@ -95,6 +95,9 @@ where
     K: KeyValueStoreClient + Send + Sync,
 {
     const MAX_CONNECTIONS: usize = K::MAX_CONNECTIONS;
+    // The LRU caching does the high level so the splitting stuff is done
+    // by the container K used in the constructor
+    const MAX_VALUE_SIZE: usize = usize::MAX;
     type Error = K::Error;
     type Keys = K::Keys;
     type KeyValues = K::KeyValues;
@@ -232,7 +235,7 @@ impl<E> LruCachingMemoryContext<E> {
         extra: E,
         n: usize,
     ) -> Result<Self, ViewError> {
-        let client = Arc::new(RwLock::new(guard));
+        let client = MemoryClient::new(guard);
         let lru_client = LruCachingKeyValueClient::new(client, n);
         Ok(Self {
             db: lru_client,
