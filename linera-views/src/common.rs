@@ -206,28 +206,31 @@ pub trait KeyValueStoreClient {
 /// Some databases have a design with relatively small size for values (like 400 kB)
 /// which forces us to split the value into several small block.
 /// Design is the following:
-/// ---We have classic key, named 'logical key" which contains the nature
-///    of the value and a part of the value.
-///    logical key are of the form [key , 0]
-///    logical value are of the form [0, value] if classic
-///                               or [0, * * * * first_segment] if segmented
-///        the [* * * *] represent the size of the block
-/// ---The remaining segment keys are of the form [key * * * * 1]
-///    with [* * * *] the index of the segment in question.
+/// * For every `key` we build several corresponding keys [key * * * *] that contain
+///   each a piece of the full data set.
+///   The [ * * * *] is actually the serialization of the index which is u32 so that
+///   the order of the serialization is the same as the order of the u32 entries.
+/// * For the first key, that is  [key 0 0 0 0] the information is [* * * * value0]
+///   with [* * * *] being the serialization of the u32 count of the number of blocks
+///   and value0 the first block of the value. For the other keys [key * * * *] the
+///   corresponding value is valueK with valueK the K-th entry in the value. The full
+///   value is reconstructed as value = [value0 value1 .... valueN]
 ///
 /// The effective working of the system relies on a number of design choices.
-/// ---In the retrieval by the "find_keys_by_prefix" and similar, the keys are
-///    returned in lexicographic order.
-/// ---The count and indices are serialized as u32 and the serialization is done
-///    so that the u32 ordering is the same as the lexicographic ordering. So, we
-///    get first the logical key and then the segment keys one by one in the correct
-///    order.
-/// ---Suppose that we have written a (key,value1) with several segments and then
-///    we replace by a (key,value2) which has less segment or uses just a logical key.
-///    Our choice is to leave the old segments in the database. Same with delete:
-///    we just delete the logical key.
-/// ---We avoid the overflowing of the system by the following trick: When we delete
-///    a view, we do a delete by prefix, which thus deletes the old segments if present.
+/// * In the retrieval by the "find_keys_by_prefix" and similar, the keys are
+///   returned in lexicographic order.
+/// * The count and indices are serialized as u32 and the serialization is done
+///   so that the u32 ordering is the same as the lexicographic ordering. So, we
+///   get first the first key (and so the count) and then the segment keys one by
+///   one in the correct order.
+/// * Suppose that we have written a (key,value1) with several segments and then
+///   we replace by a (key,value2) which has less segment or uses just a logical key.
+///   Our choice is to leave the old segments in the database. Same with delete:
+///   we just delete the first key.
+/// * We avoid the overflowing of the system by the following trick: When we delete
+///   a view, we do a delete by prefix, which thus deletes the old segments if present.
+/// * In order to have a segment that deletes all the unused segment, every write has
+///   to have a read just before which is expensive.
 #[derive(Clone)]
 pub struct KeyValueStoreClientBigValue<K> {
     client: K,
