@@ -134,6 +134,7 @@ impl UnorderedBatch {
     }
 }
 
+/// Check if `key` is matched by some prefixes in `key_prefix_set`.
 fn is_prefix_matched(key_prefix_set: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
     let range = (Bound::Unbounded, Bound::Included(key.to_vec()));
     let range = key_prefix_set.range(range);
@@ -207,21 +208,23 @@ impl Batch {
                     delete_and_insert_map.insert(key, Some(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    let key_list: Vec<Vec<u8>> = delete_and_insert_map
-                        .range(get_interval(key_prefix.clone()))
-                        .map(|x| x.0.to_vec())
-                        .collect();
-                    for key in key_list {
-                        delete_and_insert_map.remove(&key);
+                    if !is_prefix_matched(&delete_prefix_set, &key_prefix) {
+                        let key_list = delete_and_insert_map
+                            .range(get_interval(key_prefix.clone()))
+                            .map(|x| x.0.to_vec())
+                            .collect::<Vec<_>>();
+                        for key in key_list {
+                            delete_and_insert_map.remove(&key);
+                        }
+                        let key_prefix_list = delete_prefix_set
+                            .range(get_interval(key_prefix.clone()))
+                            .map(|x: &Vec<u8>| x.to_vec())
+                            .collect::<Vec<_>>();
+                        for key_prefix in key_prefix_list {
+                            delete_prefix_set.remove(&key_prefix);
+                        }
+                        delete_prefix_set.insert(key_prefix);
                     }
-                    let key_prefix_list: Vec<Vec<u8>> = delete_prefix_set
-                        .range(get_interval(key_prefix.clone()))
-                        .map(|x: &Vec<u8>| x.to_vec())
-                        .collect();
-                    for key_prefix in key_prefix_list {
-                        delete_prefix_set.remove(&key_prefix);
-                    }
-                    delete_prefix_set.insert(key_prefix);
                 }
             }
         }
