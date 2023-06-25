@@ -200,29 +200,37 @@ impl Batch {
         for op in self.operations {
             match op {
                 WriteOperation::Delete { key } => {
+                    // We delete a key. However if said key was already matched by a delete_prefix then
+                    // nothing needs to be done.
                     if !is_prefix_matched(&delete_prefix_set, &key) {
                         delete_and_insert_map.insert(key, None);
                     }
                 }
                 WriteOperation::Put { key, value } => {
+                    // Simple insert
                     delete_and_insert_map.insert(key, Some(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
+                    // First identifies all the deletes and inserts and remove them
+                    let key_list = delete_and_insert_map
+                        .range(get_interval(key_prefix.clone()))
+                        .map(|x| x.0.to_vec())
+                        .collect::<Vec<_>>();
+                    for key in key_list {
+                        delete_and_insert_map.remove(&key);
+                    }
+                    // If that key is matched by something already present, then nothing to be done
                     if !is_prefix_matched(&delete_prefix_set, &key_prefix) {
-                        let key_list = delete_and_insert_map
-                            .range(get_interval(key_prefix.clone()))
-                            .map(|x| x.0.to_vec())
-                            .collect::<Vec<_>>();
-                        for key in key_list {
-                            delete_and_insert_map.remove(&key);
-                        }
+                        // Find the existing key_prefixes that are matched
                         let key_prefix_list = delete_prefix_set
                             .range(get_interval(key_prefix.clone()))
                             .map(|x: &Vec<u8>| x.to_vec())
                             .collect::<Vec<_>>();
+                        // Delete them
                         for key_prefix in key_prefix_list {
                             delete_prefix_set.remove(&key_prefix);
                         }
+                        // Then insert the dominant entry in the database
                         delete_prefix_set.insert(key_prefix);
                     }
                 }

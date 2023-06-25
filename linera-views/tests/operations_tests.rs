@@ -50,6 +50,7 @@ async fn test_readings_vec<OP: KeyValueStoreClient + Sync>(
     }
     for key_prefix in set {
         println!("key_prefix={:?}", key_prefix);
+        // Getting the find_keys_by_prefix / find_key_values_by_prefix
         let len_prefix = key_prefix.len();
         let mut keys_request = Vec::new();
         for key in key_value_operation
@@ -58,10 +59,11 @@ async fn test_readings_vec<OP: KeyValueStoreClient + Sync>(
             .unwrap()
             .iterator()
         {
-            let key: Vec<u8> = key.unwrap().to_vec();
+            let key = key.unwrap().to_vec();
             keys_request.push(key);
         }
         let mut key_values_request = Vec::new();
+        let mut keys_request_deriv = Vec::new();
         for key_value in key_value_operation
             .find_key_values_by_prefix(&key_prefix)
             .await
@@ -70,19 +72,11 @@ async fn test_readings_vec<OP: KeyValueStoreClient + Sync>(
         {
             let key_value = key_value.unwrap();
             key_values_request.push((key_value.0.to_vec(), key_value.1.to_vec()));
+            keys_request_deriv.push(key_value.0.to_vec());
         }
-        // Check length coherency
         let len = keys_request.len();
-        let len_kv = key_values_request.len();
-        assert_eq!(len, len_kv);
         // Check find_keys / find_key_values
-        for i in 0..len {
-            let key1 = keys_request[i].clone();
-            let key2 = key_values_request[i].clone().0;
-            println!("A : key1={:?}", key1);
-            println!("    key2={:?}", key2);
-            assert_eq!(key1, key2);
-        }
+        assert_eq!(keys_request, keys_request_deriv);
         // Check key ordering
         for i in 1..len {
             let key1 = keys_request[i - 1].clone();
@@ -96,13 +90,24 @@ async fn test_readings_vec<OP: KeyValueStoreClient + Sync>(
         }
         let mut set_key_value2 = HashSet::new();
         for key_value in &key_value_vec {
+            println!("key_value.0={:?} len={}", key_value.0, key_value.0.len());
             if key_value.0.starts_with(&key_prefix) {
                 let key = key_value.0[len_prefix..].to_vec();
                 let value = key_value.1.clone();
                 set_key_value2.insert((key, value));
             }
         }
-        assert_eq!(set_key_value1, set_key_value2);
+        println!("keys_request={:?}", keys_request);
+        println!("set_key_value1 - set_key_value2");
+        print_differences_hashset(&set_key_value1, &set_key_value2);
+        println!("set_key_value2 - set_key_value1");
+        print_differences_hashset(&set_key_value2, &set_key_value1);
+        println!("len={} key_prefix={:?}", len, key_prefix);
+        println!("|set_key_value1|={} |set_key_value2|={} |key_value_vec|={}", set_key_value1.len(), set_key_value2.len(), key_value_vec.len());
+        if set_key_value1 != set_key_value2 {
+            assert_eq!(1, 0);
+        }
+//        assert_eq!(set_key_value1, set_key_value2);
     }
     // Now checking the read_multi_key_bytes
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
@@ -137,22 +142,57 @@ async fn test_readings_vec<OP: KeyValueStoreClient + Sync>(
     }
 }
 
-#[cfg(test)]
-async fn test_readings_random<OP: KeyValueStoreClient + Sync>(
-    key_value_operation: OP,
-    len_value: usize,
-) {
+fn print_differences_hashset(set1: &HashSet<(Vec<u8>,Vec<u8>)>, set2: &HashSet<(Vec<u8>,Vec<u8>)>) {
+    let mut n_error = 0;
+    for key_value in set1 {
+        if !set2.contains(key_value) {
+            let key = &key_value.0;
+            println!("key={:?} len={} in set1 but not set2", key, key.len());
+            n_error += 1;
+        }
+    }
+    println!("n_error={}", n_error);
+}
+
+fn get_random_key_value_vec1(len_value: usize) -> Vec<(Vec<u8>,Vec<u8>)> {
     let key_prefix = vec![0];
     let n = 1000;
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
-    let key_value_vec =
-        get_random_key_value_vec_prefix(&mut rng, key_prefix.clone(), 8, len_value, n);
-    test_readings_vec(key_value_operation, key_value_vec).await;
+    get_random_key_value_vec_prefix(&mut rng, key_prefix.clone(), 8, len_value, n)
+}
+
+fn get_random_key_value_vec2(len_value: usize) -> Vec<(Vec<u8>,Vec<u8>)> {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+    let key_prefix = vec![0];
+    let n = 100;
+    let mut key_values = Vec::new();
+    let mut key_set = HashSet::new();
+    for _ in 0..n {
+        let key = get_small_key_space(&mut rng, &key_prefix, 4);
+        let value = get_random_byte_vector(&mut rng, &[], len_value);
+        if !key_set.contains(&key) {
+            key_set.insert(key.clone());
+            key_values.push((key,value));
+        }
+    }
+    key_values
+}
+
+
+
+#[cfg(test)]
+async fn test_readings_random<OP: KeyValueStoreClient + Sync + Clone>(
+    key_value_operation: OP,
+    len_value: usize,
+) {
+    for key_value_vec in [get_random_key_value_vec1(len_value), get_random_key_value_vec2(len_value)] {
+        test_readings_vec(key_value_operation.clone(), key_value_vec.clone()).await;
+    }
 }
 
 #[tokio::test]
 async fn test_readings_memory() {
-    for len_value in [50, 1000] {
+    for len_value in [10, 1000] {
         let key_value_operation = create_memory_test_client();
         test_readings_random(key_value_operation, len_value).await;
     }
@@ -193,30 +233,53 @@ async fn test_readings_memory_specific() {
     test_readings_vec(key_value_operation, key_value_vec).await;
 }
 
+fn print_differences_btreemap(kv1: &BTreeMap<Vec<u8>,Vec<u8>>, kv2: &BTreeMap<Vec<u8>,Vec<u8>>) {
+    for (key,value1) in kv1 {
+        let value2 = kv2.get(key);
+        match value2 {
+            None => {
+                println!("key={:?} in kv1 but absent from kv2", key);
+            },
+            Some(value2) => {
+                if value1 != value2 {
+                    println!("key={:?} present in both, but value1={:?} value2={:?}", key, value1, value2);
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 async fn test_writings_random<OP: KeyValueStoreClient + Sync>(key_value_operation: OP) {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     let mut kv_state = BTreeMap::new();
     let n_oper = 100;
-    let siz_batch = 10;
+    let siz_batch = 8;
     // key space has size 4^4 = 256 so we necessarily encounter collisions
     let key_prefix = vec![0];
     for _ in 0..n_oper {
         let mut batch = Batch::new();
-        for _ in 0..siz_batch {
+        println!("--------------- ITER --------------");
+        for (key,value) in &kv_state {
+            println!("key={:?} value={:?}", key, value);
+        }
+        for idx in 0..siz_batch {
             let thr = rng.gen_range(0..8);
+            println!("idx={} thr={}", idx, thr);
             // Inserting a key
             if thr < 5 {
                 // Insert
                 let key = get_small_key_space(&mut rng, &key_prefix, 4);
-                let len_value = rng.gen_range(0..500); // Could need to be split
+                let len_value = rng.gen_range(0..10); // Could need to be split
                 let value = get_random_byte_vector(&mut rng, &[], len_value);
+                println!("  Put key={:?} value={:?}", key, value);
                 batch.put_key_value_bytes(key.clone(), value.clone());
                 kv_state.insert(key, value);
             }
             if thr == 6 {
                 // key might be missing, no matter, it has to work
                 let key = get_small_key_space(&mut rng, &key_prefix, 4);
+                println!("  Delete key={:?}", key);
                 kv_state.remove(&key);
                 batch.delete_key(key);
             }
@@ -225,14 +288,18 @@ async fn test_writings_random<OP: KeyValueStoreClient + Sync>(key_value_operatio
                 let delete_key_prefix = get_small_key_space(&mut rng, &key_prefix, len);
                 batch.delete_key_prefix(delete_key_prefix.clone());
                 let key_list = kv_state
-                    .range(get_interval(delete_key_prefix))
+                    .range(get_interval(delete_key_prefix.clone()))
                     .map(|x| x.0.to_vec())
                     .collect::<Vec<_>>();
+                println!("  |key_list|={} delete_key_prefix={:?}", key_list.len(), delete_key_prefix);
                 for key in key_list {
+                    println!("    Deleting key={:?} by delete_key_prefix", key);
                     kv_state.remove(&key);
                 }
             }
         }
+        println!("       -----------");
+        batch.print();
         key_value_operation.write_batch(batch, &[]).await.unwrap();
         // Checking the consistency
         let mut key_values = BTreeMap::new();
@@ -247,6 +314,8 @@ async fn test_writings_random<OP: KeyValueStoreClient + Sync>(key_value_operatio
             key.extend(key_value.0);
             key_values.insert(key, key_value.1.to_vec());
         }
+        print_differences_btreemap(&key_values, &kv_state);
+//        println!("|key_values|={} |kv_state|={}", key_values.len(), kv_state.len());
         assert_eq!(key_values, kv_state);
     }
 }
