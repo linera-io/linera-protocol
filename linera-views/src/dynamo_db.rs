@@ -63,8 +63,7 @@ const _MAX_TRANSACT_WRITE_ITEM_BYTES: usize = 4194304;
 
 /// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 100.
 /// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html>
-pub const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 25;
-//pub const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
+pub const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
 
 /// Fundamental constants in DynamoDB: The maximum size of a BatchWriteItem is 16M.
 /// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html>
@@ -244,11 +243,7 @@ enum KeyTag {
     Entry,
 }
 
-fn get_journaling_key(
-    base_key: &[u8],
-    tag: u8,
-    pos: u32,
-) -> Result<Vec<u8>, DynamoDbContextError> {
+fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, DynamoDbContextError> {
     // We used the value 0 because it does not collide with other key values.
     // since other tags are starting from 1.
     let mut key = base_key.to_vec();
@@ -278,18 +273,14 @@ impl JournalHeader {
             let key = get_journaling_key(base_key, KeyTag::Entry as u8, self.block_count - 1)?;
             let value: Option<DynamoDbBatch> = db.read_key(&key).await?;
             if let Some(value) = value {
-                println!("Beginning of one resolution");
                 let mut tb = TransactionBuilder::default();
                 tb.insert_delete_request(key, db)?; // Delete the preceding journal entry
                 for delete in value.0.deletions {
-                    println!("delete={:?}", delete);
                     tb.insert_delete_request(delete, db)?;
                 }
                 for key_value in value.0.insertions {
-                    println!("put={:?} value={:?}", key_value.0, key_value.1);
                     tb.insert_put_request(key_value.0, key_value.1, db)?;
                 }
-                println!("Beginning of one resolution");
                 self.block_count -= 1;
                 DynamoDbBatch::add_journal_header_operations(&mut tb, &self, db, base_key)?;
                 tb.submit(db).await?;
@@ -322,13 +313,10 @@ impl DynamoDbBatch {
         base_key: &[u8],
     ) -> Result<(), DynamoDbContextError> {
         let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
-        println!("add_journal_header_operations key={:?}", key);
         if header.block_count > 0 {
-            println!("   inserting the journal key");
             let value = bcs::to_bytes(header)?;
             transact_builder.insert_put_request(key, value, db)?;
         } else {
-            println!("   deleting the journal key");
             transact_builder.insert_delete_request(key, db)?;
         }
         Ok(())
@@ -340,11 +328,9 @@ impl DynamoDbBatch {
         db: &DynamoDbClientInternal,
         base_key: &[u8],
     ) -> Result<JournalHeader, DynamoDbContextError> {
-        println!("write_journal - Beginning base_key={:?}", base_key);
         let delete_count = self.0.deletions.len();
         let insert_count = self.0.insertions.len();
         let total_count = delete_count + insert_count;
-        println!("delete_count={} insert_count={}", delete_count, insert_count);
         let mut curr_size = 0;
         let mut curr_len = 0;
         let mut deletions = Vec::new();
@@ -355,12 +341,10 @@ impl DynamoDbBatch {
             if i < delete_count {
                 let delete = &self.0.deletions[i];
                 curr_size += delete.len();
-                println!("i={} delete key={:?}", i, delete);
                 deletions.push(delete.to_vec());
             } else {
                 let key_value = &self.0.insertions[i - delete_count];
                 curr_size += key_value.0.len() + key_value.1.len();
-                println!("i={} put key={:?} value={:?}", i, key_value.0, key_value.1);
                 insertions.push(key_value.clone());
             }
             let do_flush = if i == total_count - 1 || curr_len == MAX_TRANSACT_WRITE_ITEM_SIZE - 2 {
@@ -375,14 +359,12 @@ impl DynamoDbBatch {
                 curr_size + size_next > MAX_BATCH_WRITE_ITEM_BYTES
             };
             if do_flush {
-                println!("|deletions|={} |insertions|={}", deletions.len(), insertions.len());
                 let simple_unordered_batch = SimpleUnorderedBatch {
                     deletions: mem::take(&mut deletions),
                     insertions: mem::take(&mut insertions),
                 };
                 let entry = DynamoDbBatch(simple_unordered_batch);
                 let key = get_journaling_key(base_key, KeyTag::Entry as u8, block_count)?;
-                println!("   block_count={} key={:?}", block_count, key);
                 let value = bcs::to_bytes(&entry)?;
                 db.write_single_key_value(key, value).await?;
                 block_count += 1;
@@ -394,10 +376,8 @@ impl DynamoDbBatch {
         if block_count > 0 {
             let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
             let value = bcs::to_bytes(&header)?;
-            println!("Writing the journal entry key={:?} value={:?}", key, value);
             db.write_single_key_value(key, value).await?;
         }
-        println!("write_journal - End");
         Ok(header)
     }
 
@@ -426,8 +406,6 @@ impl DynamoDbBatch {
         // Also we remove the deletes that are followed by inserts on the same key because
         // the TransactWriteItem and BatchWriteItem are not going to work that way.
         let unordered_batch = batch.simplify();
-        println!("         --------- unordered_batch -------");
-        unordered_batch.print();
         let simple_unordered_batch = unordered_batch.expand_delete_prefixes(db).await?;
         Ok(DynamoDbBatch(simple_unordered_batch))
     }
@@ -730,13 +708,11 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
         let block_operations = DynamoDbBatch::from_batch(self, batch).await?;
         if block_operations.is_fastpath_feasible() {
-            block_operations.write_fastpath_failsafe(self).await?;
+            block_operations.write_fastpath_failsafe(self).await
         } else {
             let header = block_operations.write_journal(self, base_key).await?;
-            header.coherently_resolve_journal(self, base_key).await?;
+            header.coherently_resolve_journal(self, base_key).await
         }
-        println!("= - = - = - = - = - = - = - = - = - = - = - = - = - = - = - = - = - = - = - =");
-        Ok(())
     }
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
