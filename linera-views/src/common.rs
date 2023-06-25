@@ -215,6 +215,7 @@ pub trait KeyValueStoreClient {
 ///   and value0 the first block of the value. For the other keys [key * * * *] the
 ///   corresponding value is valueK with valueK the K-th entry in the value. The full
 ///   value is reconstructed as value = [value0 value1 .... valueN]
+///   The number of blocks is always non-zero, even if the value is empty.
 ///
 /// The effective working of the system relies on a number of design choices.
 /// * In the retrieval by the "find_keys_by_prefix" and similar, the keys are
@@ -409,7 +410,8 @@ where
                         }
                         pos += 1;
                     }
-                    let value_ext = Self::get_initial_count_first_chunk(pos, &first_chunk)?;
+                    let count = if pos == 0 { 1 } else { pos };
+                    let value_ext = Self::get_initial_count_first_chunk(count, &first_chunk)?;
                     batch_new.put_key_value_bytes(big_key, value_ext);
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
