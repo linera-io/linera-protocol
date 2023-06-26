@@ -844,18 +844,29 @@ where
                 }
             }
             RequestApplication(application_id) => {
-                let applications = self
+                match self
                     .registry
                     .describe_applications_with_dependencies(
                         vec![*application_id],
                         &Default::default(),
                     )
-                    .await?;
-                result.messages.push((
-                    Destination::Recipient(context.message_id.chain_id),
-                    false,
-                    SystemMessage::RegisterApplications { applications },
-                ));
+                    .await
+                {
+                    Err(SystemExecutionError::UnknownApplicationId(id)) => {
+                        tracing::info!(
+                            %id,
+                            "Application request was skipped: application not known."
+                        );
+                    }
+                    Err(err) => return Err(err),
+                    Ok(applications) => {
+                        result.messages.push((
+                            Destination::Recipient(context.message_id.chain_id),
+                            false,
+                            SystemMessage::RegisterApplications { applications },
+                        ));
+                    }
+                }
             }
             _ => {
                 tracing::error!(

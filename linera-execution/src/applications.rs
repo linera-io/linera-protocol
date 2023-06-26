@@ -138,22 +138,22 @@ where
     pub async fn bytecode_locations(
         &self,
     ) -> Result<Vec<(BytecodeId, BytecodeLocation)>, SystemExecutionError> {
-        let ids = self.published_bytecodes.indices().await?;
-        self.bytecode_locations_for(ids).await
+        let mut locations = Vec::new();
+        self.published_bytecodes
+            .for_each_index_value(|id, location| {
+                locations.push((id, location));
+                Ok(())
+            })
+            .await?;
+        Ok(locations)
     }
 
-    /// Returns all locations of published bytecode with the given IDs.
-    pub async fn bytecode_locations_for(
+    /// Returns the location of published bytecode with the given ID.
+    pub async fn bytecode_location_for(
         &self,
-        ids: impl IntoIterator<Item = BytecodeId>,
-    ) -> Result<Vec<(BytecodeId, BytecodeLocation)>, SystemExecutionError> {
-        let mut locations = Vec::new();
-        for id in ids {
-            if let Some(location) = self.published_bytecodes.get(&id).await? {
-                locations.push((id, location));
-            }
-        }
-        Ok(locations)
+        id: &BytecodeId,
+    ) -> Result<Option<BytecodeLocation>, SystemExecutionError> {
+        Ok(self.published_bytecodes.get(id).await?)
     }
 
     /// Registers an existing application.
