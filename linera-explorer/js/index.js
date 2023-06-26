@@ -6,6 +6,9 @@ import block_component from './block.js'
 import blocks_component from './blocks.js'
 import application_component from './application.js'
 import applications_component from './applications.js'
+import entrypoint_component from './entrypoint.js'
+import input_type_component from './input_type.js'
+import output_type_component from './output_type.js'
 import template from '../html/app.html'
 
 function main(r) {
@@ -23,10 +26,13 @@ function main(r) {
   app.component('v-block', block_component)
   app.component('v-op', op_component)
   app.component('v-json', json.component)
+  app.component('v-entrypoint', entrypoint_component(r))
+  app.component('v-input-type', input_type_component(r))
+  app.component('v-output-type', output_type_component(r))
   app.config.globalProperties.sh = r.short
   app.config.globalProperties.shapp = r.short_app
   app.config.globalProperties.json_load = json.load
-  r.init(app.mount("#app"))
+  r.init(app.mount("#app"), window.location.pathname, window.location.search)
 }
 
 rust.then(r => main(r)).catch(console.error)

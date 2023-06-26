@@ -105,7 +105,7 @@ pub enum SystemOperation {
     OpenChain {
         public_key: PublicKey,
         admin_id: ChainId,
-        epoch: Epoch,        
+        epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
     },
     /// Closes the chain.

@@ -1,0 +1,34 @@
+<div>
+  <li class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#query-collapse-'+entry.name">
+    <span>{{ entry.name }}</span>
+    <i class="bi bi-caret-down-fill"></i>
+  </li>
+  <div class="collapse" :id="'query-collapse-'+entry.name">
+    <!-- INPUT -->
+    <div class="card card-body" v-if="entry.args.length!=0">
+      <div class="card-title">INPUT</div>
+      <div v-for="a in entry.args" :key="'entrypoint-'+a.name">
+        <div class="form-label" :title="a.description">{{ a.name }}{{ a.type.kind=='NON_NULL' ? ' (*)' : '' }}</div>
+        <v-input-type :t="a.type"></v-input-type>
+      </div>
+    </div>
+    <!-- OUTPUT -->
+    <div class="card card-body" v-if="!empty_output(entry.type)">
+      <div class="card-title">OUTPUT</div>
+      <v-output-type :t="entry.type" :depth="0"></v-output-type>
+    </div>
+    <div class="text-center">
+      <button class="btn btn-primary m-2" @click="query(entry, kind)">QUERY</button>
+    </div>
+    <!-- RESULT -->
+    <div class="card card-body" v-if="result">
+      <div class="card-title">RESULT</div>
+      <v-json :data="result"></v-json>
+    </div>
+    <!-- ERROS -->
+    <div class="card card-body" v-if="errors">
+      <div class="card-title">ERRORS</div>
+      <v-json :data="errors"></v-json>
+    </div>
+  </div>
+</div>

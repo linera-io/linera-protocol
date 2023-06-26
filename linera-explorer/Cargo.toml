@@ -14,7 +14,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 wasm-bindgen = { workspace = true }
-web-sys = { version = "0.3.63", features = [ "console", "Window", "History", "Storage" ] }
+web-sys = { version = "0.3.63", features = [ "console", "Window", "History", "Storage", "Location" ] }
 js-sys = "0.3.63"
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }

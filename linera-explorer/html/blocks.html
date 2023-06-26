@@ -13,7 +13,7 @@
       <th>JSON</th>
     </thead>
     <tbody>
-      <tr v-for="b in blocks.blocks">
+      <tr v-for="b in blocks" :key="'blocks-block-'+b.hash">
         <td>{{ b.value.executedBlock.block.height }}</td>
         <td :title="b.hash">
           <a @click="route('block', [['block', b.hash]])" class="btn btn-link">{{ sh(b.hash) }}
@@ -37,7 +37,7 @@
                   <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                  <div :id="b.hash+'-json'">
+                  <div :id="b.hash+'-json'" style="overflow-x: auto">
                   </div>
                 </div>
               </div>

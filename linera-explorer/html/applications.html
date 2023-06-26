@@ -6,7 +6,7 @@
       <th>JSON</th>
     </thead>
     <tbody>
-      <tr v-for="a in apps">
+      <tr v-for="a in apps" :key="'application-'+a.id">
         <td :title="a.id">
           <a target="_blank" class="btn btn-link btn-sm" @click="route('application', [['app', JSON.stringify(a)]])">
             {{ shapp(a.id) }}

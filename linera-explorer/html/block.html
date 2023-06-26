@@ -13,7 +13,7 @@
               <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-              <div :id="block.hash+'-json'"></div>
+              <div :id="block.hash+'-json'" style="overflow-x: auto"></div>
             </div>
           </div>
         </div>
@@ -63,7 +63,7 @@
       </li>
       <div v-if="block.value.executedBlock.block.incomingMessages.length!==0" class="collapse" :id="'in-messages-collapse-'+block.hash">
         <ul class="list-group">
-          <li v-for="(m, i) in block.value.executedBlock.block.incomingMessages" class="list-group-item p-0">
+          <li v-for="(m, i) in block.value.executedBlock.block.incomingMessages" class="list-group-item p-0" key="block.hash+'-inmessage-'+i">
             <div class="card">
               <div class="card-header">Message {{ i+1 }}</div>
               <div class="card-body">
@@ -83,7 +83,7 @@
       </li>
       <div v-if="block.value.executedBlock.messages.length!==0" class="collapse" :id="'out-messages-collapse-'+block.hash">
         <ul class="list-group">
-          <li v-for="(m, i) in block.value.executedBlock.messages" class="list-group-item p-0">
+          <li v-for="(m, i) in block.value.executedBlock.messages" class="list-group-item p-0" key="block.hash+'-outmessage-'+i">
             <div class="card">
               <div class="card-header">Message {{ i+1 }}</div>
               <div class="card-body">
@@ -103,7 +103,7 @@
       </li>
       <div v-if="block.value.executedBlock.block.operations.length!==0" class="collapse" :id="'operations-collapse-'+block.hash">
         <ul class="list-group">
-          <li v-for="(o, i) in block.value.executedBlock.block.operations" class="list-group-item p-0">
+          <li v-for="(o, i) in block.value.executedBlock.block.operations" class="list-group-item p-0" key="block.hash+'-operation-'+i">
             <div class="card card-body p-0">
               <v-op :op="o" :id="block.hash+'-operation-'+i" :index="i" :route="route"></v-op>
             </div>

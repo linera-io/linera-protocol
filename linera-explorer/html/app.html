@@ -7,23 +7,26 @@
     <div class="collapse navbar-collapse" id="navbarSupportedContent">
       <ul class="navbar-nav me-auto">
         <li class="nav-item">
+          <a class="nav-link" :class="page.blocks ? 'active' : ''" @click="route('blocks')" role="button">Blocks</a>
+        </li>
+        <li class="nav-item">
           <a class="nav-link" :class="page.applications ? 'active' : ''" @click="route('applications')" role="button">Applications</a>
         </li>
       </ul>
       <ul class="navbar-nav ms-auto">
+        <li class="nav-item mx-2">
+          <select @change="route(undefined, [['chain', $event.target.value]])" class="form-select">
+            <option v-for="c in chains" :value="c" :selected="(page.blocks?.chain || page.home?.chain || page.block?.value.executedBlock.block.chainId) == c" :key="'chain-'+c">{{ sh(c) }}</option>
+          </select>
+        </li>
         <li class="nav-item mx-2">
           <input v-model="config.node" class="form-control" @change="save_config">
         </li>
         <li class="nav-item mx-2">
           <div class="form-control form-check form-switch">
             <input class="form-check-input" type="checkbox" v-model="config.tls" id="tls-check" @change="save_config">
-            <label class="form-check-label" for="tls-check">TLS</label>
+            <label class="form-check-label" for="tls-check">TLS/SSL</label>
           </div>
-        </li>
-        <li class="nav-item mx-2">
-          <select @change="route(undefined, [['chain', $event.target.value]])" class="form-select">
-            <option v-for="c in chains" :value="c" :selected="(page.blocks?.chain || page.home?.chain || page.block?.value.executedBlock.block.chainId) == c">{{ sh(c) }}</option>
-          </select>
         </li>
         <li class="nav-item mx-2">
           <button @click="route()" class="btn btn-primary">
@@ -34,7 +37,7 @@
     </div>
   </div>
 </nav>
-<div class="container">
+<div class="container pb-5">
   <div v-if="page=='unloaded'">
     <div class="text-center m-5 p-5">
       <span class="spinner-border">
@@ -43,14 +46,24 @@
   </div>
 
   <div v-else-if="page.home">
-    <v-block v-if="page.home.blocks.length!=0" class="m-2" :block="page.home.blocks[0]" title="Head" :route="route">
+    <v-block v-if="page.home.blocks.length!=0" :block="page.home.blocks[0]" title="Head" :route="route">
     </v-block>
-    <v-blocks :route="route" :blocks="page.home.blocks"></v-blocks>
-    <v-applications :route="route" :apps="page.home.apps"></v-applications>
+    <div class="card">
+      <div class="card-header">Blocks</div>
+      <div class="card-body">
+        <v-blocks :route="route" :blocks="page.home.blocks"></v-blocks>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Applications</div>
+      <div class="card-body">
+        <v-applications :route="route" :apps="page.home.apps"></v-applications>
+      </div>
+    </div>
   </div>
 
   <div v-else-if="page.blocks">
-    <v-blocks :route="route" :blocks="page.home.blocks"></v-blocks>
+    <v-blocks :route="route" :blocks="page.blocks.blocks"></v-blocks>
   </div>
 
   <div v-else-if="page.block">
@@ -64,6 +77,12 @@
 
   <div v-else-if="page.application">
     <v-application :route="route" :app="page.application"></v-application>
+  </div>
+
+  <div v-else-if="page.error">
+    <div class="m-5 p-5 text-center">
+      {{ page.error }}
+    </div>
   </div>
 
   <div v-else>

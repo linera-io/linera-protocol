@@ -1,0 +1,18 @@
+<div>
+  <div v-if="depth==0 && t.kind=='SCALAR'"></div>
+  <div v-else-if="t.kind=='SCALAR'" class="form-check">
+    <input class="form-check-input" type="checkbox" v-model="t._include">
+    <label class="form-check-label">{{ name || t.name }}</label>
+  </div>
+  <v-output-type v-else-if="t.kind=='NON_NULL' || t.kind=='LIST'" :t="t.ofType" :name="name || t.name" :depth="depth"></v-output-type>
+  <div v-else-if="t.kind=='OBJECT'" class="row">
+    <div class="form-check" v-if="depth!=0">
+      <input class="form-check-input" type="checkbox" v-model="t._include">
+      <label class="form-check-label">{{ name || t.name }}</label>
+    </div>
+    <v-output-type v-for="(f, i) in t.fields" :class="depth==0 ? 'col-12' : 'col-11 offset-1'" :t="f.type" :name="f.name" :depth="depth+1" :key="'output-type-object-'+depth+'-'+i"></v-output-type>
+  </div>
+  <div v-else>
+    <v-json :data="t"></v-json>
+  </div>
+</div>
