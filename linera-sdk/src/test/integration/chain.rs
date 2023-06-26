@@ -328,10 +328,10 @@ impl ActiveChain {
             .expect("Failed to load application registry");
 
         applications
-            .bytecode_locations_for([bytecode_id.forget_abi()])
+            .bytecode_location_for(&bytecode_id.forget_abi())
             .await
             .expect("Failed to check known bytecode locations")
-            .is_empty()
+            .is_none()
     }
 
     /// Finds the message that sends the message with the bytecode location of `bytecode_id`.
