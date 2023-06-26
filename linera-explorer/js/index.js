@@ -32,7 +32,7 @@ function main(r) {
   app.config.globalProperties.sh = r.short
   app.config.globalProperties.shapp = r.short_app
   app.config.globalProperties.json_load = json.load
-  r.init(app.mount("#app"), window.location.pathname, window.location.search)
+  r.init(app.mount("#app"), window.location.href)
 }
 
 rust.then(r => main(r)).catch(console.error)

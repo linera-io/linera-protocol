@@ -91,6 +91,11 @@ The unique identifier (UID) of a chain. This is currently computed as the hash v
 """
 scalar ChainId
 
+type ChainInfo {
+  id: ChainId!
+  default: Boolean!
+}
+
 """The state of the certification process for a chain's next block"""
 scalar ChainManager
 
@@ -362,7 +367,7 @@ scalar PublicKey
 type QueryRoot {
   chain(chainId: ChainId): ChainStateExtendedView!
   applications(chainId: ChainId): [ApplicationOverview!]!
-  chains: [ChainId!]!
+  chains: [ChainInfo!]!
   block(hash: CryptoHash, chainId: ChainId): HashedValue
   blocks(from: CryptoHash, chainId: ChainId, limit: Int): [HashedValue!]!
 }

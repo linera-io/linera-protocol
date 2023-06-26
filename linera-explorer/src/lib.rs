@@ -10,6 +10,7 @@ use serde_json::Value;
 use futures::prelude::*;
 use serde_wasm_bindgen::{from_value, Serializer};
 use std::str::FromStr;
+use url::Url;
 use uuid::Uuid;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
@@ -33,15 +34,11 @@ type ApplicationId = String;
 enum Page {
     Unloaded,
     Home {
-        chain: ChainId,
-        blocks: Vec<blocks_query::BlocksQueryBlocks>,
+        blocks: Vec<blocks::BlocksBlocks>,
         apps: Vec<applications::ApplicationsApplications>,
     },
-    Blocks {
-        chain: ChainId,
-        blocks: Vec<blocks_query::BlocksQueryBlocks>,
-    },
-    Block(Box<block_query::BlockQueryBlock>),
+    Blocks(Vec<blocks::BlocksBlocks>),
+    Block(Box<block::BlockBlock>),
     Applications(Vec<applications::ApplicationsApplications>),
     Application {
         app: applications::ApplicationsApplications,
@@ -62,7 +59,8 @@ pub struct Config {
 pub struct Data {
     config: Config,
     page: Page,
-    chains: Vec<ChainId>,
+    chains: Vec<Value>,
+    chain: ChainId,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -117,6 +115,10 @@ pub fn data() -> JsValue {
         config: load_config(),
         page: Page::Unloaded,
         chains: Vec::new(),
+        chain: ChainId::from_str(
+            "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+        )
+        .unwrap(),
     };
     data.serialize(&SER).unwrap()
 }
@@ -124,26 +126,26 @@ pub fn data() -> JsValue {
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "graphql/schema.graphql",
-    query_path = "graphql/blocks_query.graphql",
+    query_path = "graphql/blocks.graphql",
     response_derives = "Debug, Serialize, Clone"
 )]
-pub struct BlocksQuery;
+pub struct Blocks;
 
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "graphql/schema.graphql",
-    query_path = "graphql/block_query.graphql",
+    query_path = "graphql/block.graphql",
     response_derives = "Debug, Serialize, Clone"
 )]
-pub struct BlockQuery;
+pub struct Block;
 
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "graphql/schema.graphql",
-    query_path = "graphql/chains_query.graphql",
+    query_path = "graphql/chains.graphql",
     response_derives = "Debug, Serialize"
 )]
-pub struct ChainsQuery;
+pub struct Chains;
 
 #[derive(GraphQLQuery)]
 #[graphql(
@@ -151,7 +153,7 @@ pub struct ChainsQuery;
     query_path = "graphql/notifications.graphql",
     response_derives = "Debug, Serialize"
 )]
-pub struct NotificationsSubscription;
+pub struct Notifications;
 
 #[derive(GraphQLQuery)]
 #[graphql(
@@ -161,15 +163,6 @@ pub struct NotificationsSubscription;
 )]
 pub struct Applications;
 
-fn default_blocks_chain(chain: Option<ChainId>, l: &[blocks_query::BlocksQueryBlocks]) -> ChainId {
-    match (chain, l.get(0)) {
-        (Some(id), _) => id,
-        (_, Some(b)) => b.value.executed_block.block.chain_id,
-        _ => ChainId::from_str("e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65")
-            .unwrap(),
-    }
-}
-
 fn node_service_address(c: &Config, ws: bool) -> String {
     let proto = if ws { "ws" } else { "http" };
     let tls = if c.tls { "s" } else { "" };
@@ -178,17 +171,17 @@ fn node_service_address(c: &Config, ws: bool) -> String {
 
 async fn get_blocks(
     node: &str,
-    chain_id: Option<ChainId>,
+    chain_id: &ChainId,
     from: Option<CryptoHash>,
     limit: Option<u32>,
-) -> Result<Vec<blocks_query::BlocksQueryBlocks>, String> {
+) -> Result<Vec<blocks::BlocksBlocks>, String> {
     let client = reqwest::Client::new();
-    let variables = blocks_query::Variables {
+    let variables = blocks::Variables {
         from,
-        chain_id,
+        chain_id: Some(*chain_id),
         limit: limit.map(|x| x.into()),
     };
-    let res = post_graphql::<BlocksQuery, _>(&client, node, variables)
+    let res = post_graphql::<Blocks, _>(&client, node, variables)
         .await
         .map_err(|e| e.to_string())?;
     res.data.map_or(Ok(Vec::new()), |d| Ok(d.blocks))
@@ -196,10 +189,12 @@ async fn get_blocks(
 
 async fn get_applications(
     node: &str,
-    chain_id: Option<ChainId>,
+    chain_id: &ChainId,
 ) -> Result<Vec<applications::ApplicationsApplications>, String> {
     let client = reqwest::Client::new();
-    let variables = applications::Variables { chain_id };
+    let variables = applications::Variables {
+        chain_id: Some(*chain_id),
+    };
     let res = post_graphql::<Applications, _>(&client, node, variables)
         .await
         .map_err(|e| e.to_string())?;
@@ -210,39 +205,33 @@ fn error(msg: &str) -> (Page, String) {
     (Page::Error(msg.to_string()), "/error".to_string())
 }
 
-async fn home(node: &str, chain_id: Option<ChainId>) -> Result<(Page, String), String> {
+async fn home(node: &str, chain_id: &ChainId) -> Result<(Page, String), String> {
     let blocks = get_blocks(node, chain_id, None, None).await?;
-    let chain = default_blocks_chain(chain_id, &blocks);
     let apps = get_applications(node, chain_id).await?;
-    Ok((
-        Page::Home {
-            blocks,
-            chain,
-            apps,
-        },
-        "/".to_string(),
-    ))
+    Ok((Page::Home { blocks, apps }, "/".to_string()))
 }
 
 async fn blocks(
     node: &str,
-    chain_id: Option<ChainId>,
+    chain_id: &ChainId,
     from: Option<CryptoHash>,
     limit: Option<u32>,
 ) -> Result<(Page, String), String> {
     let blocks = get_blocks(node, chain_id, from, limit).await?;
-    let chain = default_blocks_chain(chain_id, &blocks);
-    Ok((Page::Blocks { chain, blocks }, "/blocks".to_string()))
+    Ok((Page::Blocks(blocks), "/blocks".to_string()))
 }
 
 async fn block(
     node: &str,
-    chain_id: Option<ChainId>,
+    chain_id: &ChainId,
     hash: Option<CryptoHash>,
 ) -> Result<(Page, String), String> {
     let client = reqwest::Client::new();
-    let variables = block_query::Variables { hash, chain_id };
-    let res = post_graphql::<BlockQuery, _>(&client, node, variables)
+    let variables = block::Variables {
+        hash,
+        chain_id: Some(*chain_id),
+    };
+    let res = post_graphql::<Block, _>(&client, node, variables)
         .await
         .map_err(|e| e.to_string())?;
     let data = res.data.ok_or("no block data found".to_string())?;
@@ -251,19 +240,24 @@ async fn block(
     Ok((Page::Block(Box::new(block)), format!("/block/{}", hash)))
 }
 
-async fn chains(app: &JsValue, node: &str) -> Result<(), String> {
+async fn chains(app: &JsValue, node: &str) -> Result<ChainId, String> {
     let client = reqwest::Client::new();
-    let variables = chains_query::Variables;
-    let res = post_graphql::<ChainsQuery, _>(&client, node, variables)
+    let variables = chains::Variables;
+    let res = post_graphql::<Chains, _>(&client, node, variables)
         .await
         .map_err(|e| e.to_string())?;
     let l = res.data.unwrap().chains;
-    let chains_js = l.serialize(&SER).unwrap();
+    let chains_js = l.serialize(&SER).expect("failed to serialize ChainIds");
     setf(app, "chains", &chains_js);
-    Ok(())
+    let chain_id: ChainId = l
+        .iter()
+        .find(|chain| chain.default)
+        .expect("no default chain")
+        .id;
+    Ok(chain_id)
 }
 
-async fn applications(node: &str, chain_id: Option<ChainId>) -> Result<(Page, String), String> {
+async fn applications(node: &str, chain_id: &ChainId) -> Result<(Page, String), String> {
     let applications = get_applications(node, chain_id).await?;
     Ok((
         Page::Applications(applications),
@@ -396,7 +390,17 @@ fn format_bytes(v: &JsValue) -> JsValue {
     vf
 }
 
-async fn route_aux(app: &JsValue, data: &Data, path: &Option<String>, args: &[(String, String)]) {
+async fn route_aux(
+    app: &JsValue,
+    data: &Data,
+    path: &Option<String>,
+    chain_id: &ChainId,
+    args: &[(String, String)],
+) {
+    let chain_js: JsValue = chain_id
+        .serialize(&SER)
+        .expect("failed to serialize ChainId");
+    setf(app, "chain", &chain_js);
     let path = match (path, data.page.clone()) {
         (Some(p), _) => p,
         (_, Page::Unloaded | Page::Home { .. }) => "",
@@ -406,23 +410,17 @@ async fn route_aux(app: &JsValue, data: &Data, path: &Option<String>, args: &[(S
         (_, Page::Application { .. }) => "application",
         (_, Page::Error(_)) => "error",
     };
-    let chain_id = args
-        .iter()
-        .find(|(k, _)| k == "chain")
-        .map(|x| ChainId::from_str(&x.1).expect("wrong chain id"));
-    let chain_id = match data.page.clone() {
-        Page::Home { chain, .. } => Some(chain_id.unwrap_or(chain)),
-        Page::Blocks { chain, .. } => Some(chain_id.unwrap_or(chain)),
-        _ => chain_id,
-    };
     let address = node_service_address(&data.config, false);
     let res = match path {
         "" => home(&address, chain_id).await,
         "block" => {
-            let hash = args
-                .iter()
-                .find(|(k, _)| k == "block")
-                .map(|x| CryptoHash::from_str(&x.1).unwrap());
+            let hash = args.iter().find_map(|(k, v)| {
+                if k == "block" {
+                    Some(CryptoHash::from_str(v).unwrap())
+                } else {
+                    None
+                }
+            });
             block(&address, chain_id, hash).await
         }
         "blocks" => blocks(&address, chain_id, None, Some(20)).await,
@@ -434,15 +432,25 @@ async fn route_aux(app: &JsValue, data: &Data, path: &Option<String>, args: &[(S
                 application(app).await
             }
         },
+        "error" => {
+            let msg = args
+                .iter()
+                .find_map(|(k, v)| {
+                    if k == "msg" {
+                        Some(v.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or("unknown error".to_string());
+            Err(msg)
+        }
         _ => Err("unknown page".to_string()),
     };
     let (page, new_path) = res.unwrap_or_else(|e| error(&e));
     let page_js = format_bytes(&page.serialize(&SER).unwrap());
     setf(app, "page", &page_js);
-    let new_path = match chain_id {
-        None => new_path,
-        Some(id) => format!("{}?chain={}", new_path, id),
-    };
+    let new_path = format!("{}?chain={}", new_path, chain_id);
     web_sys::window()
         .expect("window object not found")
         .history()
@@ -462,7 +470,17 @@ pub async fn route(app: JsValue, path: JsValue, args: JsValue) {
     );
     log_str(&msg);
     let data = from_value::<Data>(app.clone()).expect("cannot parse vue data");
-    route_aux(&app, &data, &path, &args).await
+    let chain_id = args
+        .iter()
+        .find_map(|(k, v)| {
+            if k == "chain" {
+                Some(ChainId::from_str(v).expect("wrong chain id"))
+            } else {
+                None
+            }
+        })
+        .unwrap_or(data.chain);
+    route_aux(&app, &data, &path, &chain_id, &args).await
 }
 
 #[wasm_bindgen]
@@ -486,26 +504,7 @@ fn set_onpopstate(app: JsValue) {
     a.forget()
 }
 
-fn application_chain(a: &applications::ApplicationsApplications) -> Option<ChainId> {
-    a.description["creation"]["chain_id"]
-        .as_str()
-        .map(|id| ChainId::from_str(id).expect("cannot build chainID from string"))
-}
-
-fn page_chain(data: &Data) -> Option<ChainId> {
-    match &data.page {
-        Page::Block(b) => Some(b.value.executed_block.block.chain_id),
-        Page::Blocks { chain, .. } => Some(*chain),
-        Page::Applications(l) => match l.get(0) {
-            None => None,
-            Some(a) => application_chain(a),
-        },
-        Page::Application { app, .. } => application_chain(app),
-        _ => None,
-    }
-}
-
-async fn subscribe(app: JsValue, args: Vec<(String, String)>) {
+async fn subscribe(app: JsValue) {
     spawn_local(async move {
         let data = from_value::<Data>(app.clone()).expect("cannot parse vue data");
         let address = node_service_address(&data.config, true);
@@ -529,27 +528,18 @@ async fn subscribe(app: JsValue, args: Vec<(String, String)>) {
         while let Some(evt) = wsio.next().await {
             match evt {
                 WsMessage::Text(s) => {
-                    let gq = serde_json::from_str::<
-                        GQuery<Response<notifications_subscription::ResponseData>>,
-                    >(&s)
-                    .expect("unexpected websocket response");
+                    let gq =
+                        serde_json::from_str::<GQuery<Response<notifications::ResponseData>>>(&s)
+                            .expect("unexpected websocket response");
                     if let Some(p) = gq.payload {
                         if let Some(d) = p.data {
                             let data =
                                 from_value::<Data>(app.clone()).expect("cannot parse vue data");
-                            let chain_id = args
-                                .iter()
-                                .find(|(k, _)| k == "chain")
-                                .map(|x| ChainId::from_str(&x.1).expect("wrong chain id"));
-                            let chain_id = match chain_id {
-                                None => page_chain(&data),
-                                _ => chain_id,
-                            };
                             if let (true, Reason::NewBlock { hash: _hash, .. }) = (
-                                Some(d.notifications.chain_id) == chain_id,
+                                d.notifications.chain_id == data.chain,
                                 d.notifications.reason,
                             ) {
-                                route_aux(&app, &data, &None, &Vec::new()).await
+                                route_aux(&app, &data, &None, &data.chain, &Vec::new()).await
                             };
                         }
                     };
@@ -561,40 +551,62 @@ async fn subscribe(app: JsValue, args: Vec<(String, String)>) {
 }
 
 #[wasm_bindgen]
-pub async fn init(app: JsValue, pathname: String, search: String) {
+pub async fn init(app: JsValue, uri: String) {
     console_error_panic_hook::set_once();
     set_onpopstate(app.clone());
     let data = from_value::<Data>(app.clone()).expect("cannot parse vue data");
     let address = node_service_address(&data.config, false);
-    let _ = chains(&app, &address).await;
-    let (path, mut args) = match pathname.as_str() {
-        "" => (Some("".to_string()), vec![]),
-        "/blocks" => (Some("blocks".to_string()), vec![]),
-        "/applications" => (Some("applications".to_string()), vec![]),
-        s => {
-            let p = std::path::Path::new(s);
-            if p.starts_with("/block/") {
-                let hash = s[7..].to_string();
-                (Some("block".to_string()), vec![("block".to_string(), hash)])
-            } else if p.starts_with("/application/") {
-                let id = s[13..].to_string();
-                let link = format!("{}/applications/{}", address, id);
-                let app =
-                    serde_json::json!({"id": id, "link": link, "description": ""}).to_string();
-                (
-                    Some("application".to_string()),
-                    vec![("app".to_string(), app)],
-                )
-            } else {
-                (None, vec![])
-            }
+    let default_chain = chains(&app, &address).await;
+    match default_chain {
+        Err(e) => {
+            route_aux(
+                &app,
+                &data,
+                &Some("error".to_string()),
+                &data.chain,
+                &[("msg".to_string(), e.to_string())],
+            )
+            .await;
         }
-    };
-    if search.len() > 7 && &search[..6] == "?chain" {
-        args.push(("chain".to_string(), search[7..].to_string()));
-    };
-    route_aux(&app, &data, &path, &args).await;
-    subscribe(app.clone(), args).await;
+        Ok(default_chain) => {
+            let uri = Url::parse(&uri).expect("failed to parse url");
+            let pathname = uri.path();
+            let mut queries = uri.query_pairs();
+            let chain_id = queries
+                .find_map(|(k, v)| {
+                    if k == "chain" {
+                        Some(ChainId::from_str(&v).expect("cannot build chainId"))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(default_chain);
+            let (path, args) = match pathname {
+                "/blocks" => (Some("blocks".to_string()), vec![]),
+                "/applications" => (Some("applications".to_string()), vec![]),
+                s => {
+                    let p = std::path::Path::new(s);
+                    if p.starts_with("/block/") {
+                        let hash = s[7..].to_string();
+                        (Some("block".to_string()), vec![("block".to_string(), hash)])
+                    } else if p.starts_with("/application/") {
+                        let id = s[13..].to_string();
+                        let link = format!("{}/applications/{}", address, id);
+                        let app = serde_json::json!({"id": id, "link": link, "description": ""})
+                            .to_string();
+                        (
+                            Some("application".to_string()),
+                            vec![("app".to_string(), app)],
+                        )
+                    } else {
+                        (None, vec![])
+                    }
+                }
+            };
+            route_aux(&app, &data, &path, &chain_id, &args).await;
+            subscribe(app).await;
+        }
+    }
 }
 
 #[wasm_bindgen]

@@ -2737,6 +2737,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen 0.5.0",
  "serde_json",
+ "url",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",

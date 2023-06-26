@@ -16,7 +16,7 @@
       <ul class="navbar-nav ms-auto">
         <li class="nav-item mx-2">
           <select @change="route(undefined, [['chain', $event.target.value]])" class="form-select">
-            <option v-for="c in chains" :value="c" :selected="(page.blocks?.chain || page.home?.chain || page.block?.value.executedBlock.block.chainId) == c" :key="'chain-'+c">{{ sh(c) }}</option>
+            <option v-for="c in chains" :value="c.id" :selected="c.id==chain" :key="'chain-'+c.id">{{ sh(c.id) }}</option>
           </select>
         </li>
         <li class="nav-item mx-2">
@@ -63,7 +63,7 @@
   </div>
 
   <div v-else-if="page.blocks">
-    <v-blocks :route="route" :blocks="page.blocks.blocks"></v-blocks>
+    <v-blocks :route="route" :blocks="page.blocks"></v-blocks>
   </div>
 
   <div v-else-if="page.block">

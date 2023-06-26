@@ -43,11 +43,17 @@ use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
 
+#[derive(SimpleObject, Clone)]
+pub struct ChainInfo {
+    pub id: ChainId,
+    pub default: bool,
+}
+
 /// Our root GraphQL query type.
 struct QueryRoot<P, S> {
     client: Arc<Mutex<ChainClient<P, S>>>,
     port: NonZeroU16,
-    chains: Vec<ChainId>,
+    chains: Vec<ChainInfo>,
 }
 
 /// Our root GraphQL subscription type.
@@ -366,7 +372,7 @@ where
         Ok(overviews)
     }
 
-    async fn chains(&self) -> Result<Vec<ChainId>, Error> {
+    async fn chains(&self) -> Result<Vec<ChainInfo>, Error> {
         Ok(self.chains.clone())
     }
 
@@ -530,7 +536,7 @@ pub struct NodeService<P, S> {
     client: Arc<Mutex<ChainClient<P, S>>>,
     config: ChainListenerConfig,
     port: NonZeroU16,
-    chains: Vec<ChainId>,
+    chains: Vec<ChainInfo>,
 }
 
 impl<P, S> Clone for NodeService<P, S> {
@@ -555,7 +561,7 @@ where
         client: ChainClient<P, S>,
         config: ChainListenerConfig,
         port: NonZeroU16,
-        chains: Vec<ChainId>,
+        chains: Vec<ChainInfo>,
     ) -> Self {
         let client = Arc::new(Mutex::new(client));
         Self {
