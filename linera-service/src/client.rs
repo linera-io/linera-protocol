@@ -779,13 +779,13 @@ impl LocalNet {
     }
 
     pub fn kill_server(&mut self, i: usize, j: usize) {
-        self.local_net
-            .get_mut(&i)
-            .map(|validator| validator.kill_server(j));
+        if let Some(validator) = self.local_net.get_mut(&i) {
+            validator.kill_server(j)
+        };
     }
 
     pub fn remove_validator(&mut self, i: usize) {
-        if let None = self.local_net.remove(&i) {
+        if self.local_net.remove(&i).is_none() {
             warn!(
                 "Tried to remove validator at index {} which does not exist.",
                 i
@@ -795,11 +795,11 @@ impl LocalNet {
 
     pub async fn start_server(&mut self, i: usize, j: usize) -> Result<()> {
         let server = self.run_server(i, j).await?;
-        Ok(self
-            .local_net
+        self.local_net
             .get_mut(&i)
             .context("failed to validator")?
-            .add_server(server))
+            .add_server(server);
+        Ok(())
     }
 
     pub async fn start_validators(&mut self, validator_range: RangeInclusive<usize>) -> Result<()> {
