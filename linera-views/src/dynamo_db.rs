@@ -235,12 +235,7 @@ enum KeyTag {
     Entry,
 }
 
-/// Builds a key for the journal.
-fn get_journaling_key(
-    base_key: &[u8],
-    tag: u8,
-    pos: usize,
-) -> Result<Vec<u8>, DynamoDbContextError> {
+fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, DynamoDbContextError> {
     // We used the value 0 because it does not collide with other key values.
     // since other tags are starting from 1.
     let mut key = base_key.to_vec();
@@ -253,7 +248,7 @@ fn get_journaling_key(
 /// The header containing the current state of the journal.
 #[derive(Serialize, Deserialize)]
 struct JournalHeader {
-    block_count: usize,
+    block_count: u32,
 }
 
 impl JournalHeader {
@@ -268,11 +263,12 @@ impl JournalHeader {
                 break;
             }
             let key = get_journaling_key(base_key, KeyTag::Entry as u8, self.block_count - 1)?;
-            let value: Option<DynamoDbBatch> = db.read_key(&key).await?;
+            let value = db.read_key::<DynamoDbBatch>(&key).await?;
             if let Some(value) = value {
                 let mut tb = TransactionBuilder::default();
+                tb.insert_delete_request(key, db)?; // Delete the preceding journal entry
                 for delete in value.0.deletions {
-                    tb.insert_delete_request(delete, db)?
+                    tb.insert_delete_request(delete, db)?;
                 }
                 for key_value in value.0.insertions {
                     tb.insert_put_request(key_value.0, key_value.1, db)?;
@@ -343,7 +339,7 @@ impl DynamoDbBatch {
                 curr_size += key_value.0.len() + key_value.1.len();
                 insertions.push(key_value.clone());
             }
-            let do_flush = if i == total_count - 1 || curr_len == MAX_TRANSACT_WRITE_ITEM_SIZE - 1 {
+            let do_flush = if i == total_count - 1 || curr_len == MAX_TRANSACT_WRITE_ITEM_SIZE - 2 {
                 true
             } else {
                 let size_next = if i + 1 < delete_count {
@@ -712,7 +708,7 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
         let key = get_journaling_key(base_key, KeyTag::Journal as u8, 0)?;
-        let value: Option<JournalHeader> = self.read_key(&key).await?;
+        let value = self.read_key::<JournalHeader>(&key).await?;
         if let Some(header) = value {
             header.coherently_resolve_journal(self, base_key).await?;
         }

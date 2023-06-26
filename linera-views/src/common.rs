@@ -60,7 +60,9 @@ pub(crate) fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
     Unbounded
 }
 
-pub(crate) fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
+/// Computes an interval so that a vector has `key_prefix` as a prefix
+/// if and only if it belongs to the range.
+pub fn get_interval(key_prefix: Vec<u8>) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     let upper_bound = get_upper_bound(&key_prefix);
     (Included(key_prefix), upper_bound)
 }
@@ -148,7 +150,7 @@ pub trait KeyValueStoreClient {
     /// The journal is located at the `base_key`.
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error>;
 
-    /// Reads a single `key` and deserialize the result if present.
+    /// Reads a single `key` and deserializes the result if present.
     async fn read_key<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
     where
         Self::Error: From<bcs::Error>,
@@ -280,7 +282,7 @@ pub trait Context {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
 
-    /// Finds keys matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
+    /// Finds the keys matching the `key_prefix`. The `key_prefix` is not included in the returned keys.
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error>;
 
     /// Finds the `(key,value)` pairs matching the `key_prefix`. The `key_prefix` is not included in the returned keys.

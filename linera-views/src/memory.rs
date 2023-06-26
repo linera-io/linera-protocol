@@ -41,6 +41,15 @@ pub fn create_test_context() -> MemoryContext<()> {
     MemoryContext::new(guard, ())
 }
 
+/// Creates a test memory client.
+pub fn create_test_memory_client() -> MemoryClient {
+    let state = Arc::new(Mutex::new(BTreeMap::new()));
+    let guard = state
+        .try_lock_arc()
+        .expect("We should acquire the lock just after creating the object");
+    Arc::new(RwLock::new(guard))
+}
+
 #[async_trait]
 impl KeyValueStoreClient for MemoryClient {
     const MAX_CONNECTIONS: usize = 1;

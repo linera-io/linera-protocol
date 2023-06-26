@@ -4,7 +4,7 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{get_upper_bound, ContextFromDb, KeyValueStoreClient},
-    lru_caching::LruCachingKeyValueClient,
+    lru_caching::{LruCachingKeyValueClient, TEST_CACHE_SIZE},
 };
 use async_trait::async_trait;
 use std::{
@@ -12,38 +12,17 @@ use std::{
     path::Path,
     sync::Arc,
 };
+use tempfile::TempDir;
 use thiserror::Error;
 
 /// The RocksDb client in use.
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
 /// The internal client
-pub type DbInternal = Arc<DB>;
-
-/// A shared DB client for RocksDB implementing LruCaching
-#[derive(Clone)]
-pub struct RocksdbClient {
-    client: LruCachingKeyValueClient<DbInternal>,
-}
-
-impl RocksdbClient {
-    /// Creates a rocksdb database from a specified path
-    pub fn new<P: AsRef<Path>>(path: P, cache_size: usize) -> RocksdbClient {
-        let mut options = rocksdb::Options::default();
-        options.create_if_missing(true);
-        let db = DB::open(&options, path).unwrap();
-        let client = Arc::new(db);
-        Self {
-            client: LruCachingKeyValueClient::new(client, cache_size),
-        }
-    }
-}
-
-/// An implementation of [`crate::common::Context`] based on Rocksdb
-pub type RocksdbContext<E> = ContextFromDb<E, RocksdbClient>;
+pub type RocksdbClientInternal = Arc<DB>;
 
 #[async_trait]
-impl KeyValueStoreClient for DbInternal {
+impl KeyValueStoreClient for RocksdbClientInternal {
     const MAX_CONNECTIONS: usize = 1;
     type Error = RocksdbContextError;
     type Keys = Vec<Vec<u8>>;
@@ -169,6 +148,34 @@ impl KeyValueStoreClient for DbInternal {
         Ok(())
     }
 }
+
+/// A shared DB client for RocksDB implementing LruCaching
+#[derive(Clone)]
+pub struct RocksdbClient {
+    client: LruCachingKeyValueClient<RocksdbClientInternal>,
+}
+
+impl RocksdbClient {
+    /// Creates a RocksDB database from a specified path.
+    pub fn new<P: AsRef<Path>>(path: P, cache_size: usize) -> RocksdbClient {
+        let mut options = rocksdb::Options::default();
+        options.create_if_missing(true);
+        let db = DB::open(&options, path).unwrap();
+        let client = Arc::new(db);
+        Self {
+            client: LruCachingKeyValueClient::new(client, cache_size),
+        }
+    }
+}
+
+/// Creates a RocksDB database client to be used for tests.
+pub fn create_rocksdb_test_client() -> RocksdbClient {
+    let dir = TempDir::new().unwrap();
+    RocksdbClient::new(dir, TEST_CACHE_SIZE)
+}
+
+/// An implementation of [`crate::common::Context`] based on RocksDB
+pub type RocksdbContext<E> = ContextFromDb<E, RocksdbClient>;
 
 #[async_trait]
 impl KeyValueStoreClient for RocksdbClient {

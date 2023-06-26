@@ -19,7 +19,6 @@ aws = ["linera-views/aws"]
 rocksdb = ["linera-views/rocksdb"]
 
 [dependencies]
-async-lock = { workspace = true }
 async-trait = { workspace = true }
 bcs = { workspace = true }
 dashmap = { workspace = true }
