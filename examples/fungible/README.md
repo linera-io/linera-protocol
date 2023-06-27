@@ -126,7 +126,7 @@ npm start
 ```
 
 The web UI can then be opened by navigating to
-`http://localhost:3000/$APPLICATION_ID?owner=$SOURCE_ACCOUNT?port=$PORT`, where:
+`http://localhost:3000/$APPLICATION_ID?owner=$SOURCE_ACCOUNT&port=$PORT`, where:
 
 - `$APPLICATION_ID` is the token application ID obtained when creating the token
 - `$SOURCE_ACCOUNT` is the owner of the chosen sender account
