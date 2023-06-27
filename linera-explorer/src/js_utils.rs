@@ -1,3 +1,6 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use wasm_bindgen::prelude::*;
 
 pub fn setf(target: &JsValue, field: &str, value: &JsValue) {

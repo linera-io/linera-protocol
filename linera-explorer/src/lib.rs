@@ -1,9 +1,8 @@
-use graphql_client::{reqwest::post_graphql, GraphQLQuery, Response};
-use linera_base::{
-    crypto::CryptoHash,
-    data_types::{BlockHeight, Timestamp},
-    identifiers::{ChainId, Destination, Owner},
-};
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use graphql_client::{reqwest::post_graphql, Response};
+use linera_base::{crypto::CryptoHash, identifiers::ChainId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -19,29 +18,25 @@ use ws_stream_wasm::*;
 mod graphql;
 mod js_utils;
 
+use graphql::{
+    applications::ApplicationsApplications, block::BlockBlock, blocks::BlocksBlocks, Applications,
+    Block, Blocks, Chains,
+};
 use js_utils::{getf, js_to_json, log_str, parse, setf};
-
-type Epoch = Value;
-type Message = Value;
-type Operation = Value;
-type Event = Value;
-type Origin = Value;
-type UserApplicationDescription = Value;
-type ApplicationId = String;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
 enum Page {
     Unloaded,
     Home {
-        blocks: Vec<blocks::BlocksBlocks>,
-        apps: Vec<applications::ApplicationsApplications>,
+        blocks: Vec<BlocksBlocks>,
+        apps: Vec<ApplicationsApplications>,
     },
-    Blocks(Vec<blocks::BlocksBlocks>),
-    Block(Box<block::BlockBlock>),
-    Applications(Vec<applications::ApplicationsApplications>),
+    Blocks(Vec<BlocksBlocks>),
+    Block(Box<BlockBlock>),
+    Applications(Vec<ApplicationsApplications>),
     Application {
-        app: applications::ApplicationsApplications,
+        app: ApplicationsApplications,
         queries: Value,
         mutations: Value,
         subscriptions: Value,
@@ -69,24 +64,6 @@ pub struct GQuery<T> {
     #[serde(rename = "type")]
     typ: String,
     payload: Option<T>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Notification {
-    pub chain_id: ChainId,
-    pub reason: Reason,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Reason {
-    NewBlock {
-        height: BlockHeight,
-        hash: CryptoHash,
-    },
-    NewIncomingMessage {
-        origin: Origin,
-        height: BlockHeight,
-    },
 }
 
 const SER: Serializer =
@@ -123,46 +100,6 @@ pub fn data() -> JsValue {
     data.serialize(&SER).unwrap()
 }
 
-#[derive(GraphQLQuery)]
-#[graphql(
-    schema_path = "graphql/schema.graphql",
-    query_path = "graphql/blocks.graphql",
-    response_derives = "Debug, Serialize, Clone"
-)]
-pub struct Blocks;
-
-#[derive(GraphQLQuery)]
-#[graphql(
-    schema_path = "graphql/schema.graphql",
-    query_path = "graphql/block.graphql",
-    response_derives = "Debug, Serialize, Clone"
-)]
-pub struct Block;
-
-#[derive(GraphQLQuery)]
-#[graphql(
-    schema_path = "graphql/schema.graphql",
-    query_path = "graphql/chains.graphql",
-    response_derives = "Debug, Serialize"
-)]
-pub struct Chains;
-
-#[derive(GraphQLQuery)]
-#[graphql(
-    schema_path = "graphql/schema.graphql",
-    query_path = "graphql/notifications.graphql",
-    response_derives = "Debug, Serialize"
-)]
-pub struct Notifications;
-
-#[derive(GraphQLQuery)]
-#[graphql(
-    schema_path = "graphql/schema.graphql",
-    query_path = "graphql/applications.graphql",
-    response_derives = "Debug, Serialize, Clone"
-)]
-pub struct Applications;
-
 fn node_service_address(c: &Config, ws: bool) -> String {
     let proto = if ws { "ws" } else { "http" };
     let tls = if c.tls { "s" } else { "" };
@@ -174,9 +111,9 @@ async fn get_blocks(
     chain_id: &ChainId,
     from: Option<CryptoHash>,
     limit: Option<u32>,
-) -> Result<Vec<blocks::BlocksBlocks>, String> {
+) -> Result<Vec<BlocksBlocks>, String> {
     let client = reqwest::Client::new();
-    let variables = blocks::Variables {
+    let variables = graphql::blocks::Variables {
         from,
         chain_id: Some(*chain_id),
         limit: limit.map(|x| x.into()),
@@ -190,9 +127,9 @@ async fn get_blocks(
 async fn get_applications(
     node: &str,
     chain_id: &ChainId,
-) -> Result<Vec<applications::ApplicationsApplications>, String> {
+) -> Result<Vec<ApplicationsApplications>, String> {
     let client = reqwest::Client::new();
-    let variables = applications::Variables {
+    let variables = graphql::applications::Variables {
         chain_id: Some(*chain_id),
     };
     let res = post_graphql::<Applications, _>(&client, node, variables)
@@ -227,7 +164,7 @@ async fn block(
     hash: Option<CryptoHash>,
 ) -> Result<(Page, String), String> {
     let client = reqwest::Client::new();
-    let variables = block::Variables {
+    let variables = graphql::block::Variables {
         hash,
         chain_id: Some(*chain_id),
     };
@@ -242,7 +179,7 @@ async fn block(
 
 async fn chains(app: &JsValue, node: &str) -> Result<ChainId, String> {
     let client = reqwest::Client::new();
-    let variables = chains::Variables;
+    let variables = graphql::chains::Variables;
     let res = post_graphql::<Chains, _>(&client, node, variables)
         .await
         .map_err(|e| e.to_string())?;
@@ -327,9 +264,7 @@ fn fill_type(t: &Value, types: &Vec<Value>) -> Value {
     }
 }
 
-async fn application(
-    app: applications::ApplicationsApplications,
-) -> Result<(Page, String), String> {
+async fn application(app: ApplicationsApplications) -> Result<(Page, String), String> {
     let schema = graphql::introspection(&app.link).await?;
     let sch = &schema["data"]["__schema"];
     let types = sch["types"]
@@ -428,7 +363,7 @@ async fn route_aux(
         "application" => match args.iter().find(|(k, _)| k == "app").map(|x| parse(&x.1)) {
             None => Err("unknown application".to_string()),
             Some(js) => {
-                let app = from_value::<applications::ApplicationsApplications>(js).unwrap();
+                let app = from_value::<ApplicationsApplications>(js).unwrap();
                 application(app).await
             }
         },
@@ -528,14 +463,15 @@ async fn subscribe(app: JsValue) {
         while let Some(evt) = wsio.next().await {
             match evt {
                 WsMessage::Text(s) => {
-                    let gq =
-                        serde_json::from_str::<GQuery<Response<notifications::ResponseData>>>(&s)
-                            .expect("unexpected websocket response");
+                    let gq = serde_json::from_str::<
+                        GQuery<Response<graphql::notifications::ResponseData>>,
+                    >(&s)
+                    .expect("unexpected websocket response");
                     if let Some(p) = gq.payload {
                         if let Some(d) = p.data {
                             let data =
                                 from_value::<Data>(app.clone()).expect("cannot parse vue data");
-                            if let (true, Reason::NewBlock { hash: _hash, .. }) = (
+                            if let (true, graphql::Reason::NewBlock { hash: _hash, .. }) = (
                                 d.notifications.chain_id == data.chain,
                                 d.notifications.reason,
                             ) {
