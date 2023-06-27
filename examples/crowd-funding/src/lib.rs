@@ -45,25 +45,31 @@
 //! ./scripts/run_local.sh
 //! ```
 //!
-//! Compile the `crowd-funding` application WebAssembly binaries, and publish them as an application
-//! bytecode:
+//! Compile the Wasm binaries for the two applications `fungible` and `crowd-funding`
+//! application, and publish them as an application bytecode:
 //!
 //! ```bash
-//! export LINERA_WALLET="$(realpath target/debug/wallet.json)"
+//! alias linera="$PWD/target/debug/linera"
+//! export LINERA_WALLET="$PWD/target/debug/wallet.json"
 //! export LINERA_STORAGE="rocksdb:$(dirname "$LINERA_WALLET")/linera.db"
-//! export LINERA_WALLET_2="$(realpath target/debug/wallet_2.json)"
-//! export LINERA_STORAGE_2="rocksdb:$(dirname "$LINERA_WALLET_2")/linera_2.db"
+//! export LINERA_WALLET2="$PWD/target/debug/wallet_2.json"
+//! export LINERA_STORAGE2="rocksdb:$(dirname "$LINERA_WALLET2")/linera_2.db"
 //!
-//! cd examples/crowd-funding && cargo build --release && cd ../..
+//! (cargo build && cd examples && cargo build --release)
 //! linera --wallet "$LINERA_WALLET" --storage "$LINERA_STORAGE" publish-bytecode \
-//! examples/target/wasm32-unknown-unknown/release/crowd-funding_{contract,service}.wasm
+//!   examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm
+//! linera --wallet "$LINERA_WALLET" --storage "$LINERA_STORAGE" publish-bytecode \
+//!   examples/target/wasm32-unknown-unknown/release/crowd-funding_{contract,service}.wasm
 //! ```
 //!
-//! This will output the new bytecode ID, e.g.:
+//! This will output two new bytecode IDs, for instance:
 //!
 //! ```ignore
 //! e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000
+//! e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
 //! ```
+//!
+//! We will refer to them as `$BYTECODE_ID1` and `$BYTECODE_ID2`.
 //!
 //! ## Creating a Token
 //!
@@ -73,25 +79,26 @@
 //! that specifies the accounts that start with tokens.
 //!
 //! In order to select the accounts to have initial tokens, the command below can be used to list
-//! the chains created for the test:
+//! the chains created for the test as known by each wallet:
 //!
 //! ```bash
 //! linera --storage "$LINERA_STORAGE" --wallet "$LINERA_WALLET" wallet show
+//! linera --storage "$LINERA_STORAGE2" --wallet "$LINERA_WALLET2" wallet show
 //! ```
 //!
-//! A table will be shown with the chains registered in the wallet and their meta-data. The default
-//! chain should be highlighted in green. Each chain has an `Owner` field, and that is what is used
-//! for the account.
+//! A table will be shown with the chains registered in the wallet and their meta-data.
+//! The default chain of each wallet should be highlighted in green. Each chain has an
+//! `Owner` field, and that is what is used for the account. Let's pick the owners of the
+//! default chain of each wallet chain. Remember the corresponding chain IDs as
+//! `$CHAIN_ID1` (the chain where we just published the bytecode) and `$CHAIN_ID2` (some
+//! user chain).
 //!
 //! The example below creates a token application where two accounts start with the minted tokens,
 //! one with 100 of them and another with 200 of them:
 //!
 //! ```bash
-//! linera --storage "$LINERA_STORAGE" --wallet "$LINERA_WALLET" create-application $BYTECODE_ID \
-//!     --json-argument '{ "accounts": {
-//!         "User:445991f46ae490fe207e60c95d0ed95bf4e7ed9c270d4fd4fa555587c2604fe1": "100.",
-//!         "User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f": "200."
-//!     } }'
+//! linera --storage "$LINERA_STORAGE" --wallet "$LINERA_WALLET" create-application $BYTECODE_ID1 \
+//!     --json-argument '{ "accounts": { "User:445991f46ae490fe207e60c95d0ed95bf4e7ed9c270d4fd4fa555587c2604fe1": "100.", "User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f": "200." } }'
 //! ```
 //!
 //! This will output the application ID for the newly created token, e.g.:
@@ -100,18 +107,19 @@
 //! e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
 //! ```
 //!
-//! ## Using the Token Application
+//! Let remember it as `$APP_ID1`.
 //!
-//! Before using the token, a source and target address should be selected. The source address
-//! should ideally be on the default chain (used to create the token) and one of the accounts chosen
-//! for the initial state, because it will already have some initial tokens to send. The target
-//! address should be from a separate wallet due to current technical limitations (`linera service`
-//! can only handle one chain per wallet at the same time). To see the available chains in the
-//! secondary wallet, use:
+//! ## Creating a crowd-funding campaign
 //!
+//! Similarly, we're going to create a crowd-funding campaign on the default chain.
 //! ```bash
-//! linera --storage "$LINERA_STORAGE_2" --wallet "$LINERA_WALLET_2" wallet show
+//! linera --storage "$LINERA_STORAGE" --wallet "$LINERA_WALLET" create-application $BYTECODE_ID2 \
+//!    --json-argument '{ "owner": "User:504e41bc8a35ebf92f248009fccb1c55e2e59473f30d4249a2b88815fba48ef4", "deadline": 4102473600000000, "target": "100." }'
 //! ```
+//!
+//! Let remember the application ID as `$APP_ID1`.
+//!
+//! ## Interacting with the campaign
 //!
 //! First, a node service has to be started for each wallet, using two different ports. The
 //! `$SOURCE_CHAIN_ID` and `$TARGET_CHAIN_ID` can be left blank to use the default chains from each
@@ -119,7 +127,7 @@
 //!
 //! ```bash
 //! linera --wallet "$LINERA_WALLET" --storage "$LINERA_STORAGE" service --port 8080 $SOURCE_CHAIN_ID &
-//! linera --wallet "$LINERA_WALLET_2" --storage "$LINERA_STORAGE_2" service --port 8081 $TARGET_CHAIN_ID &
+//! linera --wallet "$LINERA_WALLET2" --storage "$LINERA_STORAGE2" service --port 8081 $TARGET_CHAIN_ID &
 //! ```
 //!
 //! Then the web frontend has to be started
@@ -131,7 +139,7 @@
 //! ```
 //!
 //! The web UI can then be opened by navigating to
-//! `http://localhost:3000/$APPLICATION_ID?owner=$SOURCE_ACCOUNT?port=$PORT`, where:
+//! `http://localhost:3000/$APPLICATION_ID?owner=$SOURCE_ACCOUNT&port=$PORT`, where:
 //!
 //! - `$APPLICATION_ID` is the token application ID obtained when creating the token
 //! - `$SOURCE_ACCOUNT` is the owner of the chosen sender account
