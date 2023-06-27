@@ -363,7 +363,7 @@ where
         certificate: &Certificate,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
-        let id = certificate.value.inner().chain_id().to_string();
+        let id = certificate.value().chain_id().to_string();
         increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id)]);
         let hash = certificate.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;

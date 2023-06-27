@@ -235,6 +235,11 @@ impl Vote {
             signature: self.signature,
         }
     }
+
+    /// Returns the value this vote is for.
+    pub fn value(&self) -> &CertificateValue {
+        self.value.inner()
+    }
 }
 
 /// A vote on a statement from a validator, represented as a `LiteValue`.
@@ -423,12 +428,11 @@ impl CertificateValue {
         if n == 0 {
             return None;
         }
+        let message_count = self.executed_block().messages.len();
         Some(MessageId {
             chain_id: self.chain_id(),
             height: self.height(),
-            index: u32::try_from(self.executed_block().messages.len())
-                .ok()?
-                .checked_sub(n)?,
+            index: u32::try_from(message_count).ok()?.checked_sub(n)?,
         })
     }
 

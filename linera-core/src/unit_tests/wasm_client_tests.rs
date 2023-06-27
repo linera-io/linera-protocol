@@ -443,17 +443,21 @@ where
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await?;
 
-    assert!(cert
-        .value()
-        .messages()
-        .iter()
-        .any(|OutgoingMessage { destination, message, .. }| {
+    assert!(cert.value().messages().iter().any(
+        |OutgoingMessage {
+             destination,
+             message,
+             ..
+         }| {
             matches!(
-                message,
-                Message::System(SystemMessage::RegisterApplications { applications })
-                if matches!(applications[0], UserApplicationDescription{ bytecode_id: b_id, .. } if b_id == bytecode_id.forget_abi())
+                message, Message::System(SystemMessage::RegisterApplications { applications })
+                if matches!(
+                    applications[0], UserApplicationDescription{ bytecode_id: b_id, .. }
+                    if b_id == bytecode_id.forget_abi()
+                )
             ) && *destination == Destination::Recipient(receiver.chain_id())
-        }));
+        }
+    ));
     receiver.synchronize_from_validators().await.unwrap();
     receiver.receive_certificate(cert).await.unwrap();
     let certs = receiver.process_inbox().await.unwrap();
