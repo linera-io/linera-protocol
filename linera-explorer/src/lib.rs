@@ -1,13 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! This module provides web files to run a block explorer from linera service node.
+
 use graphql_client::{reqwest::post_graphql, Response};
 use linera_base::{crypto::CryptoHash, identifiers::ChainId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use futures::prelude::*;
-use serde_wasm_bindgen::{from_value, Serializer};
+use serde_wasm_bindgen::from_value;
 use std::str::FromStr;
 use url::Url;
 use uuid::Uuid;
@@ -15,6 +17,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use ws_stream_wasm::*;
 
+mod entrypoint;
 mod graphql;
 mod js_utils;
 
@@ -22,8 +25,9 @@ use graphql::{
     applications::ApplicationsApplications, block::BlockBlock, blocks::BlocksBlocks, Applications,
     Block, Blocks, Chains,
 };
-use js_utils::{getf, js_to_json, log_str, parse, setf};
+use js_utils::{getf, log_str, parse, setf, SER};
 
+/// Page enum containing info for each page
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
 enum Page {
@@ -44,12 +48,14 @@ enum Page {
     Error(String),
 }
 
+/// Config type dealt with localstorage
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
     node: String,
     tls: bool,
 }
 
+/// Data type for vue.js
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Data {
     config: Config,
@@ -58,6 +64,7 @@ pub struct Data {
     chain: ChainId,
 }
 
+/// Graphql Query type (for subscriptions)
 #[derive(Serialize, Deserialize)]
 pub struct GQuery<T> {
     id: Option<String>,
@@ -66,9 +73,7 @@ pub struct GQuery<T> {
     payload: Option<T>,
 }
 
-const SER: Serializer =
-    serde_wasm_bindgen::Serializer::json_compatible().serialize_bytes_as_arrays(true);
-
+/// Get config from local storage
 fn load_config() -> Config {
     let default = Config {
         node: "localhost:8080".to_string(),
@@ -86,6 +91,7 @@ fn load_config() -> Config {
     }
 }
 
+/// Initialize vue.js data
 #[wasm_bindgen]
 pub fn data() -> JsValue {
     let data = Data {
@@ -325,6 +331,7 @@ fn format_bytes(v: &JsValue) -> JsValue {
     vf
 }
 
+/// Main function to switch between vue.js pages
 async fn route_aux(
     app: &JsValue,
     data: &Data,
@@ -486,6 +493,7 @@ async fn subscribe(app: JsValue) {
     })
 }
 
+/// Initialize pages and subscribe to notifications
 #[wasm_bindgen]
 pub async fn init(app: JsValue, uri: String) {
     console_error_panic_hook::set_once();
@@ -559,125 +567,4 @@ pub fn save_config(app: JsValue) {
         )
         .expect("cannot set config");
     }
-}
-
-fn forge_arg_type(arg: &Value, non_null: bool) -> Option<String> {
-    if arg["kind"] == serde_json::json!("SCALAR") {
-        if non_null {
-            Some(format!("{}", arg["_input"]))
-        } else {
-            arg.get("_input").map(|input| format!("{}", input))
-        }
-    } else if arg["kind"] == serde_json::json!("NON_NULL") {
-        forge_arg_type(&arg["ofType"], true)
-    } else {
-        None
-    }
-}
-
-fn forge_arg(arg: &Value) -> Option<String> {
-    forge_arg_type(&arg["type"], false).map(|s| {
-        format!(
-            "{}: {}",
-            arg["name"].as_str().expect("name is not a string"),
-            s
-        )
-    })
-}
-
-fn forge_args(args: Vec<Value>) -> String {
-    let args: Vec<String> = args.iter().filter_map(forge_arg).collect();
-    if !args.is_empty() {
-        format!("({})", args.join(","))
-    } else {
-        "".to_string()
-    }
-}
-
-fn forge_response_type(t: &Value, name: Option<&Value>, root: bool) -> String {
-    let is_non_null_or_list = matches!(t["kind"].as_str(), Some("NON_NULL") | Some("LIST"));
-    let incl = matches!(t.get("_include"), Some(Value::Bool(true)));
-    if !(incl || root || is_non_null_or_list) {
-        "".to_string()
-    } else {
-        match t["kind"].as_str().unwrap() {
-            "SCALAR" => name.unwrap_or(&t["name"]).as_str().unwrap().to_string(),
-            "NON_NULL" | "LIST" => forge_response_type(&t["ofType"], name, root),
-            "OBJECT" => {
-                let fields: Vec<String> = t["fields"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|x: &Value| forge_response_type(&x["type"], Some(&x["name"]), false))
-                    .collect();
-                if root {
-                    format!("{{ {} }}", fields.join(" "))
-                } else {
-                    format!("{} {{ {} }}", t["name"].as_str().unwrap(), fields.join(" "))
-                }
-            }
-            _ => "".to_string(),
-        }
-    }
-}
-
-fn forge_response(t: &Value) -> String {
-    if empty_output_aux(t) {
-        "".to_string()
-    } else {
-        forge_response_type(t, None, true)
-    }
-}
-
-#[wasm_bindgen]
-pub async fn query(app: JsValue, query: JsValue, kind: String) {
-    let link =
-        from_value::<String>(getf(&app, "link")).expect("cannot parse application vue argument");
-    let query_json = js_to_json(&query);
-    let name = query_json["name"].as_str().unwrap();
-    let args = query_json["args"].as_array().unwrap().to_vec();
-    let args = forge_args(args);
-    let input = format!("{}{}", name, args);
-    let response = forge_response(&query_json["type"]);
-    let body =
-        serde_json::json!({"query": format!("{} {{{} {}}}", kind, input, response) }).to_string();
-    log_str(&body);
-    let client = reqwest::Client::new();
-    let res = client
-        .post(&link)
-        .body(body)
-        .send()
-        .await
-        .expect("fail query send")
-        .text()
-        .await
-        .expect("cannot get text of query response");
-    let res_json = serde_json::from_str::<Value>(&res).expect("cannot translate JSON to JS");
-    setf(&app, "result", &res_json["data"].serialize(&SER).unwrap());
-    setf(
-        &app,
-        "errors",
-        &res_json
-            .get("errors")
-            .unwrap_or(&Value::Null)
-            .serialize(&SER)
-            .unwrap(),
-    );
-}
-
-fn empty_output_aux(v: &Value) -> bool {
-    match v.get("kind") {
-        None => true,
-        Some(s) => match s.as_str() {
-            Some("SCALAR") => true,
-            Some("LIST") | Some("NON_NULL") => empty_output_aux(&v["ofType"]),
-            _ => false,
-        },
-    }
-}
-
-#[wasm_bindgen]
-pub fn empty_output(t: JsValue) -> bool {
-    let t = js_to_json(&t);
-    empty_output_aux(&t)
 }

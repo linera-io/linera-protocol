@@ -14,20 +14,18 @@ crate-type = ["cdylib"]
 
 [dependencies]
 wasm-bindgen = { workspace = true }
-web-sys = { version = "0.3.63", features = [ "console", "Window", "History", "Storage", "Location" ] }
-js-sys = "0.3.63"
+web-sys = { version = "^0.3", features = [ "console", "Window", "History", "Storage", "Location" ] }
+js-sys = "^0.3"
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
-serde-wasm-bindgen = "0.5"
-graphql_client = { version = "0.13", features = [ "reqwest" ] }
-graphql-introspection-query = "^0.2"
+serde-wasm-bindgen = "^0.5"
+graphql_client = { version = "^0.13", features = [ "reqwest" ] }
 linera-base = { workspace = true }
-wasm-bindgen-futures = "0.4.34"
+wasm-bindgen-futures = "^0.4"
 reqwest = "^0.11"
-console_error_panic_hook = "0.1.7"
+console_error_panic_hook = "^0.1"
 ws_stream_wasm = "^0.7"
-futures = "*"
-pharos = "*"
+futures = "^0.3"
 uuid = { version = "^1.3", features = [ "v3" ] }
 hex = { workspace = true }
-url = "*"
+url = "^2.4"

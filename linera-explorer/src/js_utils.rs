@@ -1,7 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use serde_wasm_bindgen::Serializer;
 use wasm_bindgen::prelude::*;
+
+/// JS special serializer
+pub const SER: Serializer =
+    serde_wasm_bindgen::Serializer::json_compatible().serialize_bytes_as_arrays(true);
 
 pub fn setf(target: &JsValue, field: &str, value: &JsValue) {
     js_sys::Reflect::set(target, &JsValue::from_str(field), value)
