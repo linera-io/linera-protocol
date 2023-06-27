@@ -23,7 +23,7 @@ use linera_chain::{
         ExecutedBlock, HashedValue, IncomingMessage, LiteVote, Medium, Origin, OutgoingMessage,
         SignatureAggregator,
     },
-    ChainError,
+    ChainError, ChainManager,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
@@ -2329,13 +2329,10 @@ where
             *recipient_chain.execution_state.system.balance.get(),
             Amount::from_tokens(4)
         );
-        assert_eq!(
-            recipient_chain
-                .manager
-                .get()
-                .verify_owner(&recipient_key_pair.public().into()),
-            Some(recipient_key_pair.public())
-        );
+        assert!(matches!(
+            recipient_chain.manager.get(),
+            ChainManager::Single(single) if single.owner == recipient_key_pair.public().into()
+        ));
         assert_eq!(recipient_chain.confirmed_log.count(), 1);
         assert_eq!(
             recipient_chain.tip_state.get().block_hash,

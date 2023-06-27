@@ -308,7 +308,7 @@ impl ClientContext {
         let mut done_senders = HashSet::new();
         for vote in votes {
             // We aggregate votes indexed by sender.
-            let chain_id = vote.value.inner().chain_id();
+            let chain_id = vote.value().chain_id();
             if done_senders.contains(&chain_id) {
                 continue;
             }
