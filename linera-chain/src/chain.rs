@@ -95,14 +95,14 @@ impl ChainTipState {
 
     /// Returns `true` if the validated block's height is below the tip height. Returns an error if
     /// it is higher than the tip.
-    pub fn already_validated_block(&self, new_block: &Block) -> Result<bool, ChainError> {
+    pub fn already_validated_block(&self, height: BlockHeight) -> Result<bool, ChainError> {
         ensure!(
-            self.next_block_height >= new_block.height,
+            self.next_block_height >= height,
             ChainError::MissingEarlierBlocks {
                 current_block_height: self.next_block_height,
             }
         );
-        Ok(self.next_block_height > new_block.height)
+        Ok(self.next_block_height > height)
     }
 }
 
