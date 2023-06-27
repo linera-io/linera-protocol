@@ -629,15 +629,17 @@ where
             }
         );
         certificate.check(committee)?;
-        if chain.tip_state.get().already_validated_block(block)?
+        if chain
+            .tip_state
+            .get()
+            .already_validated_block(block.height)?
             || chain
                 .manager
                 .get_mut()
                 .check_validated_block(block, certificate.round)?
                 == ChainManagerOutcome::Skip
         {
-            // If we just processed the same pending block, return the chain info
-            // unchanged.
+            // If we just processed the same pending block, return the chain info unchanged.
             return Ok(ChainInfoResponse::new(&chain, self.key_pair()));
         }
         chain
