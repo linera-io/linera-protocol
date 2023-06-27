@@ -28,7 +28,7 @@ use linera_storage::Store;
 use linera_views::views::ViewError;
 use rand::prelude::SliceRandom;
 use serde::{Deserialize, Serialize};
-use std::{pin::Pin, sync::Arc};
+use std::{borrow::Cow, pin::Pin, sync::Arc};
 use thiserror::Error;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
@@ -503,7 +503,7 @@ where
         let mut node = self.node.lock().await;
         for result in results {
             if let Some(blob) = result? {
-                node.state.cache_recent_value(&blob).await;
+                node.state.cache_recent_value(Cow::Borrowed(&blob)).await;
                 blobs.push(blob);
             }
         }

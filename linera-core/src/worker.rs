@@ -30,6 +30,7 @@ use linera_views::{
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use std::{
+    borrow::Cow,
     collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     num::NonZeroUsize,
     sync::Arc,
@@ -504,7 +505,7 @@ where
         self.check_no_missing_bytecode(block, blobs).await?;
         // Persist certificate and blobs.
         for value in blobs {
-            self.cache_recent_value(value).await;
+            self.cache_recent_value(Cow::Borrowed(value)).await;
         }
         let (result_blob, result_certificate) = tokio::join!(
             self.storage.write_values(blobs),
@@ -547,6 +548,7 @@ where
             notify_when_messages_are_delivered,
         )
         .await;
+        self.cache_recent_value(Cow::Owned(certificate.value)).await;
         Ok((info, actions))
     }
 
@@ -611,7 +613,7 @@ where
             CertificateValue::ValidatedBlock {
                 executed_block: ExecutedBlock { block, .. },
             } => block,
-            CertificateValue::ConfirmedBlock { .. } => panic!("Expecting a validation certificate"),
+            _ => panic!("Expecting a validation certificate"),
         };
         // Check that the chain is active and ready for this confirmation.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
@@ -641,6 +643,13 @@ where
         {
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok(ChainInfoResponse::new(&chain, self.key_pair()));
+        }
+        if self
+            .cache_recent_value(Cow::Borrowed(&certificate.value))
+            .await
+        {
+            let value = certificate.value.clone().into_confirmed();
+            self.cache_recent_value(Cow::Owned(value)).await;
         }
         chain
             .manager
@@ -717,20 +726,15 @@ where
         Ok(Some(last_updated_height))
     }
 
-    pub async fn cache_recent_value(&mut self, value: &HashedValue) {
+    pub async fn cache_recent_value<'a>(&mut self, value: Cow<'a, HashedValue>) -> bool {
         let hash = value.hash();
         let mut recent_values = self.recent_values.lock().await;
         if recent_values.contains(&hash) {
-            return;
-        }
-        if value.inner().is_validated() {
-            // Cache the corresponding confirmed block, too, in case we get a certificate.
-            let conf_value = value.clone().into_confirmed();
-            let conf_hash = conf_value.hash();
-            recent_values.push(conf_hash, conf_value);
+            return false;
         }
         // Cache the certificate so that clients don't have to send the value again.
-        recent_values.push(hash, value.clone());
+        recent_values.push(hash, value.into_owned());
+        true
     }
 
     /// Returns a stored [`Certificate`] for a chain's block.
@@ -898,7 +902,7 @@ where
         manager.create_vote(proposal, messages, state_hash, self.key_pair());
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some(vote) = manager.pending() {
-            self.cache_recent_value(&vote.value).await;
+            self.cache_recent_value(Cow::Borrowed(&vote.value)).await;
         }
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
@@ -942,21 +946,20 @@ where
         let (info, actions) = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                self.process_validated_block(certificate.clone())
+                self.process_validated_block(certificate)
                     .await
                     .map(|info| (info, NetworkActions::default()))?
             }
             CertificateValue::ConfirmedBlock { .. } => {
                 // Execute the confirmed block.
                 self.process_confirmed_block(
-                    certificate.clone(),
+                    certificate,
                     &blobs,
                     notify_when_messages_are_delivered,
                 )
                 .await?
             }
         };
-        self.cache_recent_value(&certificate.value).await;
         Ok((info, actions))
     }
 
