@@ -359,7 +359,6 @@ where
         let overviews = applications
             .into_iter()
             .map(|(id, description)| ApplicationOverview::new(id, description, self.port))
-            .map(ApplicationOverview::from)
             .collect();
 
         Ok(overviews)
