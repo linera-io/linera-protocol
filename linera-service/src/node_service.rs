@@ -41,7 +41,7 @@ use serde_json::json;
 use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 /// Our root GraphQL query type.
 struct QueryRoot<P, S> {
@@ -580,7 +580,9 @@ where
         application_id: UserApplicationId,
         request: &Request,
     ) -> Result<async_graphql::Response, NodeServiceError> {
+        debug!("Request: {:?}", &request);
         let graphql_response = self.user_application_query(application_id, request).await?;
+        debug!("Response: {:?}", &graphql_response);
         let bcs_bytes_list = bytes_from_response(graphql_response.data);
         if bcs_bytes_list.is_empty() {
             return Err(NodeServiceError::MalformedApplicationResponse);
