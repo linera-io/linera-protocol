@@ -6,10 +6,11 @@
 mod state;
 
 use async_trait::async_trait;
+use core::str::FromStr;
 use crowd_funding::{ApplicationCall, InitializationArgument, Message, Operation};
 use fungible::{Account, AccountOwner, Destination, FungibleTokenAbi};
 use linera_sdk::{
-    base::{Amount, ApplicationId, SessionId, WithContractAbi},
+    base::{Amount, ApplicationId, BcsHexParseError, SessionId, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
     OperationContext, SessionCallResult, ViewStateStorage,
@@ -130,7 +131,8 @@ impl CrowdFunding {
     fn fungible_id() -> Result<ApplicationId<FungibleTokenAbi>, Error> {
         // TODO(#723): We should be able to pull the fungible ID from the
         // `required_application_ids` of the application description.
-        Self::parameters()
+        let application_id = ApplicationId::from_str(&Self::parameters()?)?;
+        Ok(application_id.with_abi())
     }
 
     /// Adds a pledge from a local account to the remote campaign chain.
@@ -446,6 +448,10 @@ pub enum Error {
     /// Failed to deserialize BCS bytes
     #[error("Failed to deserialize BCS bytes")]
     BcsError(#[from] bcs::Error),
+
+    /// Failed to deserialize the Fungible application ID.
+    #[error("Failed to deserialize the Fungible application ID")]
+    BcsHexParseError(#[from] BcsHexParseError),
 
     /// Failed to deserialize JSON string
     #[error("Failed to deserialize JSON string")]
