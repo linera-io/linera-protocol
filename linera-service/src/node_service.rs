@@ -37,6 +37,7 @@ use linera_execution::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
+use serde_json::json;
 use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
@@ -106,6 +107,7 @@ impl IntoResponse for NodeServiceError {
             | NodeServiceError::UnsupportedQueryType => (StatusCode::BAD_REQUEST, self.to_string()),
             NodeServiceError::GraphQLParseError { error } => (StatusCode::BAD_REQUEST, error),
         };
+        let tuple = (tuple.0, json!({"error": tuple.1}).to_string());
         tuple.into_response()
     }
 }
