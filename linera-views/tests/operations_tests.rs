@@ -37,10 +37,10 @@ async fn test_readings_vec<OP: KeyValueStoreClient + Sync>(
     let mut batch = Batch::new();
     let mut keys = Vec::new();
     let mut set_keys = HashSet::new();
-    for key_value in &key_value_vec {
-        keys.push(key_value.0.clone());
-        set_keys.insert(key_value.0.clone());
-        batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
+    for (key, value) in &key_value_vec {
+        keys.push(&key[..]);
+        set_keys.insert(&key[..]);
+        batch.put_key_value_bytes(key.clone(), value.clone());
     }
     key_value_operation.write_batch(batch, &[]).await.unwrap();
     for key_prefix in keys
@@ -49,48 +49,32 @@ async fn test_readings_vec<OP: KeyValueStoreClient + Sync>(
     {
         // Getting the find_keys_by_prefix / find_key_values_by_prefix
         let len_prefix = key_prefix.len();
-        let mut keys_request = Vec::new();
-        for key in key_value_operation
+        let keys_by_prefix = key_value_operation
             .find_keys_by_prefix(key_prefix)
             .await
-            .unwrap()
-            .iterator()
-        {
-            let key = key.unwrap().to_vec();
-            keys_request.push(key);
-        }
-        let mut key_values_request = Vec::new();
+            .unwrap();
+        let keys_request: Vec<_> = keys_by_prefix.iterator().map(Result::unwrap).collect();
+        let mut set_key_value1 = HashSet::new();
         let mut keys_request_deriv = Vec::new();
-        for key_value in key_value_operation
+        let key_values_by_prefix = key_value_operation
             .find_key_values_by_prefix(key_prefix)
             .await
-            .unwrap()
-            .iterator()
-        {
-            let key_value = key_value.unwrap();
-            key_values_request.push((key_value.0.to_vec(), key_value.1.to_vec()));
-            keys_request_deriv.push(key_value.0.to_vec());
+            .unwrap();
+        for (key, value) in key_values_by_prefix.iterator().map(Result::unwrap) {
+            set_key_value1.insert((key, value));
+            keys_request_deriv.push(key);
         }
-        let len = keys_request.len();
         // Check find_keys / find_key_values
         assert_eq!(keys_request, keys_request_deriv);
         // Check key ordering
-        for i in 1..len {
-            let key1 = keys_request[i - 1].clone();
-            let key2 = keys_request[i].clone();
-            assert!(key1 < key2);
+        for i in 1..keys_request.len() {
+            assert!(keys_request[i - 1] < keys_request[i]);
         }
         // Check the obtained values
-        let mut set_key_value1 = HashSet::<(Vec<u8>, Vec<u8>)>::new();
-        for key_value in key_values_request {
-            set_key_value1.insert((key_value.0.to_vec(), key_value.1.to_vec()));
-        }
         let mut set_key_value2 = HashSet::new();
-        for key_value in &key_value_vec {
-            if key_value.0.starts_with(key_prefix) {
-                let key = key_value.0[len_prefix..].to_vec();
-                let value = key_value.1.clone();
-                set_key_value2.insert((key, value));
+        for (key, value) in &key_value_vec {
+            if key.starts_with(key_prefix) {
+                set_key_value2.insert((&key[len_prefix..], &value[..]));
             }
         }
         assert_eq!(set_key_value1, set_key_value2);
@@ -100,20 +84,20 @@ async fn test_readings_vec<OP: KeyValueStoreClient + Sync>(
     for _ in 0..10 {
         let mut keys = Vec::new();
         let mut values = Vec::new();
-        for key_value in &key_value_vec {
+        for (key, value) in &key_value_vec {
             if rng.gen() {
                 // Put a key that is already present
-                keys.push(key_value.0.clone());
-                values.push(Some(key_value.1.clone()));
+                keys.push(key.clone());
+                values.push(Some(value.clone()));
             } else {
                 // Put a missing key
-                let len = key_value.0.len();
+                let len = key.len();
                 let pos = rng.gen_range(0..len);
-                let byte = *key_value.0.get(pos).unwrap();
+                let byte = *key.get(pos).unwrap();
                 let new_byte: u8 = if byte < 255 { byte + 1 } else { byte - 1 };
-                let mut new_key = key_value.0.clone();
+                let mut new_key = key.clone();
                 *new_key.get_mut(pos).unwrap() = new_byte;
-                if !set_keys.contains(&new_key) {
+                if !set_keys.contains(&*new_key) {
                     keys.push(new_key);
                     values.push(None);
                 }
