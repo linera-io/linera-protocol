@@ -81,6 +81,8 @@ enum NodeServiceError {
     GraphQLParseError { error: String },
     #[error("malformed application response")]
     MalformedApplicationResponse,
+    #[error("application service error")]
+    ApplicationServiceError { errors: Vec<String> },
 }
 
 impl From<ServerError> for NodeServiceError {
@@ -94,18 +96,29 @@ impl From<ServerError> for NodeServiceError {
 impl IntoResponse for NodeServiceError {
     fn into_response(self) -> response::Response {
         let tuple = match self {
-            NodeServiceError::BcsHexError(e) => (StatusCode::BAD_REQUEST, e.to_string()),
-            NodeServiceError::QueryStringError(e) => (StatusCode::BAD_REQUEST, e.to_string()),
-            NodeServiceError::BcsError(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-            NodeServiceError::JsonError(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-            NodeServiceError::Internal(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+            NodeServiceError::BcsHexError(e) => (StatusCode::BAD_REQUEST, vec![e.to_string()]),
+            NodeServiceError::QueryStringError(e) => (StatusCode::BAD_REQUEST, vec![e.to_string()]),
+            NodeServiceError::BcsError(e) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
+            }
+            NodeServiceError::JsonError(e) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
+            }
+            NodeServiceError::Internal(e) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
+            }
             NodeServiceError::MalformedApplicationResponse => {
-                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
+                (StatusCode::INTERNAL_SERVER_ERROR, vec![self.to_string()])
             }
             NodeServiceError::MissingOperation
             | NodeServiceError::HeterogeneousOperations
-            | NodeServiceError::UnsupportedQueryType => (StatusCode::BAD_REQUEST, self.to_string()),
-            NodeServiceError::GraphQLParseError { error } => (StatusCode::BAD_REQUEST, error),
+            | NodeServiceError::UnsupportedQueryType => {
+                (StatusCode::BAD_REQUEST, vec![self.to_string()])
+            }
+            NodeServiceError::GraphQLParseError { error } => (StatusCode::BAD_REQUEST, vec![error]),
+            NodeServiceError::ApplicationServiceError { errors } => {
+                (StatusCode::BAD_REQUEST, errors)
+            }
         };
         let tuple = (tuple.0, json!({"error": tuple.1}).to_string());
         tuple.into_response()
@@ -582,6 +595,14 @@ where
     ) -> Result<async_graphql::Response, NodeServiceError> {
         debug!("Request: {:?}", &request);
         let graphql_response = self.user_application_query(application_id, request).await?;
+        if graphql_response.is_err() {
+            let errors = graphql_response
+                .errors
+                .iter()
+                .map(|e| e.to_string())
+                .collect();
+            return Err(NodeServiceError::ApplicationServiceError { errors });
+        }
         debug!("Response: {:?}", &graphql_response);
         let bcs_bytes_list = bytes_from_response(graphql_response.data);
         if bcs_bytes_list.is_empty() {
