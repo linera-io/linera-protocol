@@ -110,6 +110,13 @@ impl UnorderedBatch {
     }
 }
 
+/// Checks if `key` is matched by any prefix in `key_prefix_set`.
+/// The set `key_prefix_set` must be minimal for the function to works correctly.
+/// That is, there should not be any two prefixes p1 and p2 such that p1 < p2 for
+/// the lexicographic ordering on `Vec<u8>` entries.
+/// Under this condition we have equivalence between two following statements:
+/// * There is an key_prefix in `key_prefiw_set` that matches `key`.
+/// * The highest key_prefix in `key_prefix_set` is actually matching.
 fn is_prefix_matched(key_prefix_set: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
     let range = (Bound::Unbounded, Bound::Included(key.to_vec()));
     let range = key_prefix_set.range(range);
@@ -158,29 +165,41 @@ impl Batch {
         for op in self.operations {
             match op {
                 WriteOperation::Delete { key } => {
+                    // We delete a key. However if said key was already matched by a delete_prefix then
+                    // nothing needs to be done.
                     if !is_prefix_matched(&delete_prefix_set, &key) {
                         delete_and_insert_map.insert(key, None);
+                    } else {
+                        delete_and_insert_map.remove(&key);
                     }
                 }
                 WriteOperation::Put { key, value } => {
+                    // Simple insert
                     delete_and_insert_map.insert(key, Some(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    let key_list: Vec<Vec<u8>> = delete_and_insert_map
+                    // First identifies all the deletes and inserts and remove them
+                    let key_list = delete_and_insert_map
                         .range(get_interval(key_prefix.clone()))
                         .map(|x| x.0.to_vec())
-                        .collect();
+                        .collect::<Vec<_>>();
                     for key in key_list {
                         delete_and_insert_map.remove(&key);
                     }
-                    let key_prefix_list: Vec<Vec<u8>> = delete_prefix_set
-                        .range(get_interval(key_prefix.clone()))
-                        .map(|x: &Vec<u8>| x.to_vec())
-                        .collect();
-                    for key_prefix in key_prefix_list {
-                        delete_prefix_set.remove(&key_prefix);
+                    // If that key is matched by something already present, then nothing to be done
+                    if !is_prefix_matched(&delete_prefix_set, &key_prefix) {
+                        // Find the existing key_prefixes that are matched
+                        let key_prefix_list = delete_prefix_set
+                            .range(get_interval(key_prefix.clone()))
+                            .map(|x: &Vec<u8>| x.to_vec())
+                            .collect::<Vec<_>>();
+                        // Delete them
+                        for key_prefix in key_prefix_list {
+                            delete_prefix_set.remove(&key_prefix);
+                        }
+                        // Then insert the dominant entry in the database
+                        delete_prefix_set.insert(key_prefix);
                     }
-                    delete_prefix_set.insert(key_prefix);
                 }
             }
         }
@@ -208,7 +227,7 @@ impl Batch {
         }
     }
 
-    /// Inserts the insertion of a `(key,value)` pair into the batch with a serializable value.
+    /// Adds the insertion of a `(key,value)` pair into the batch with a serializable value.
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
@@ -225,7 +244,7 @@ impl Batch {
         Ok(())
     }
 
-    /// Inserts the insertion of a `(key,value)` pair into the batch with value a vector of `u8`.
+    /// Adds the insertion of a `(key,value)` pair into the batch with value a vector of `u8`.
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
@@ -318,8 +337,32 @@ mod tests {
         assert!(unordered_batch.simple_unordered_batch.insertions.is_empty());
     }
 
+    #[test]
+    fn test_simplify_batch3() {
+        let mut batch = Batch::new();
+        batch.delete_key_prefix(vec![1, 2]);
+        batch.put_key_value_bytes(vec![1, 2, 3, 4], vec![]);
+        batch.delete_key_prefix(vec![1, 2, 3]);
+        let unordered_batch = batch.simplify();
+        assert_eq!(unordered_batch.key_prefix_deletions, vec![vec![1, 2]]);
+        assert!(unordered_batch.simple_unordered_batch.deletions.is_empty());
+        assert!(unordered_batch.simple_unordered_batch.insertions.is_empty());
+    }
+
+    #[test]
+    fn test_simplify_batch4() {
+        let mut batch = Batch::new();
+        batch.delete_key_prefix(vec![1, 2]);
+        batch.put_key_value_bytes(vec![1, 2, 3], vec![4, 5]);
+        batch.delete_key(vec![1, 2, 3]);
+        let unordered_batch = batch.simplify();
+        assert_eq!(unordered_batch.key_prefix_deletions, vec![vec![1, 2]]);
+        assert!(unordered_batch.simple_unordered_batch.deletions.is_empty());
+        assert!(unordered_batch.simple_unordered_batch.insertions.is_empty());
+    }
+
     #[tokio::test]
-    async fn test_simplify_batch3() {
+    async fn test_simplify_batch5() {
         let context = create_test_context();
         let mut batch = Batch::new();
         batch.put_key_value_bytes(vec![1, 2, 3], vec![]);

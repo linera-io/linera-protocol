@@ -21,7 +21,7 @@ use {
     crate::common::ContextFromDb,
     crate::memory::{MemoryClient, MemoryStoreMap},
     crate::views::ViewError,
-    async_lock::{MutexGuardArc, RwLock},
+    async_lock::MutexGuardArc,
 };
 
 /// The LruPrefixCache store the data for a simple read_keys queries
@@ -232,7 +232,7 @@ impl<E> LruCachingMemoryContext<E> {
         extra: E,
         n: usize,
     ) -> Result<Self, ViewError> {
-        let client = Arc::new(RwLock::new(guard));
+        let client = MemoryClient::new(guard.into());
         let lru_client = LruCachingKeyValueClient::new(client, n);
         Ok(Self {
             db: lru_client,
