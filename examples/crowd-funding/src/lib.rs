@@ -59,7 +59,7 @@
 //! linera --wallet "$LINERA_WALLET" --storage "$LINERA_STORAGE" publish-bytecode \
 //!   examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm
 //! linera --wallet "$LINERA_WALLET" --storage "$LINERA_STORAGE" publish-bytecode \
-//!   examples/target/wasm32-unknown-unknown/release/crowd-funding_{contract,service}.wasm
+//!   examples/target/wasm32-unknown-unknown/release/crowd_funding_{contract,service}.wasm
 //! ```
 //!
 //! This will output two new bytecode IDs, for instance:
@@ -86,19 +86,33 @@
 //! linera --storage "$LINERA_STORAGE2" --wallet "$LINERA_WALLET2" wallet show
 //! ```
 //!
-//! A table will be shown with the chains registered in the wallet and their meta-data.
+//! A table will be shown with the chains registered in the wallet and their meta-data:
+//!
+//! ```ignore
+//! ╭──────────────────────────────────────────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────────╮
+//! │ Chain Id                                                         ┆ Latest Block                                                                         │
+//! ╞══════════════════════════════════════════════════════════════════╪══════════════════════════════════════════════════════════════════════════════════════╡
+//! │ 1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03 ┆ Public Key:         6555b1c9152e4dd57ecbf3fd5ce2a9159764a0a04a4366a2edc88e1b36ed4873 │
+//! │                                                                  ┆ Owner:              c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f │
+//! │                                                                  ┆ Block Hash:         -                                                                │
+//! │                                                                  ┆ Timestamp:          2023-06-28 09:53:51.167301                                       │
+//! │                                                                  ┆ Next Block Height:  0                                                                │
+//! ╰──────────────────────────────────────────────────────────────────┴──────────────────────────────────────────────────────────────────────────────────────╯
+//! ```
+//!
 //! The default chain of each wallet should be highlighted in green. Each chain has an
 //! `Owner` field, and that is what is used for the account. Let's pick the owners of the
-//! default chain of each wallet chain. Remember the corresponding chain IDs as
+//! default chain of each wallet. Remember the corresponding chain IDs as
 //! `$CHAIN_ID1` (the chain where we just published the bytecode) and `$CHAIN_ID2` (some
-//! user chain).
+//! user chain, in wallet 2).
 //!
 //! The example below creates a token application where two accounts start with the minted tokens,
-//! one with 100 of them and another with 200 of them:
+//! one with 100 of them and another with 200 of them. Remember to replace the owners with ones
+//! that exist in your local network:
 //!
 //! ```bash
 //! linera --storage "$LINERA_STORAGE" --wallet "$LINERA_WALLET" create-application $BYTECODE_ID1 \
-//!     --json-argument '{ "accounts": { "User:445991f46ae490fe207e60c95d0ed95bf4e7ed9c270d4fd4fa555587c2604fe1": "100.", "User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f": "200." } }'
+//!     --json-argument '{ "accounts": { "User:445991f46ae490fe207e60c95d0ed95bf4e7ed9c270d4fd4fa555587c2604fe1": "100", "User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f": "200" } }'
 //! ```
 //!
 //! This will output the application ID for the newly created token, e.g.:
@@ -112,12 +126,27 @@
 //! ## Creating a crowd-funding campaign
 //!
 //! Similarly, we're going to create a crowd-funding campaign on the default chain.
+//! We have to specify our fungible application as a dependency and a parameter.
+//!
 //! ```bash
 //! linera --storage "$LINERA_STORAGE" --wallet "$LINERA_WALLET" create-application $BYTECODE_ID2 \
-//!    --json-argument '{ "owner": "User:504e41bc8a35ebf92f248009fccb1c55e2e59473f30d4249a2b88815fba48ef4", "deadline": 4102473600000000, "target": "100." }'
+//!    --json-argument '{ "owner": "User:504e41bc8a35ebf92f248009fccb1c55e2e59473f30d4249a2b88815fba48ef4", "deadline": 4102473600000000, "target": "100." }'  --required-application-ids=$APP_ID1  --json-parameters='{
+//!   "bytecode_id": {
+//!     "message_id": {
+//!       "chain_id": "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+//!       "height": 3,
+//!       "index": 0
+//!     }
+//!   },
+//!   "creation": {
+//!     "chain_id": "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
+//!     "height": 5,
+//!     "index": 0
+//!   }
+//! }'
 //! ```
 //!
-//! Let remember the application ID as `$APP_ID1`.
+//! Let's remember the application ID as `$APP_ID2`.
 //!
 //! ## Interacting with the campaign
 //!
@@ -130,26 +159,48 @@
 //! linera --wallet "$LINERA_WALLET2" --storage "$LINERA_STORAGE2" service --port 8081 $TARGET_CHAIN_ID &
 //! ```
 //!
-//! Then the web frontend has to be started
+//! Point your browser to http://localhost:8080, and enter the query:
 //!
-//! ```bash
-//! cd examples/fungible/web-frontend
-//! npm install
-//! npm start
+//! ```gql,ignore
+//! query { applications { id description link } }
 //! ```
 //!
-//! The web UI can then be opened by navigating to
-//! `http://localhost:3000/$APPLICATION_ID?owner=$SOURCE_ACCOUNT&port=$PORT`, where:
+//! The response will have two entries, one for each application.
 //!
-//! - `$APPLICATION_ID` is the token application ID obtained when creating the token
-//! - `$SOURCE_ACCOUNT` is the owner of the chosen sender account
-//! - `$PORT` is the port the sender wallet service is listening to (`8080` for the sender wallet
-//!   and `8081` for the receiver wallet as per the previous commands)
+//! If you do the same in http://localhost:8081, the node service for the other wallet,
+//! it will have no entries at all, because the applications haven't been registered
+//! there yet. Request `crowd-funding` from the other chain. As an application ID, use
+//! `$APP_ID2`:
 //!
-//! Two browser instances can be opened, one for the sender account and one for the receiver
-//! account. In the sender account browser, the target chain ID and account can be specified, as
-//! well as the amount to send. Once sent, the balance on the receiver account browser should
-//! automatically update.
+//! ```gql,ignore
+//! mutation { requestApplication(applicationId:"e476187…") }
+//! ```
+//!
+//! If you enter `query { applications { id description link } }` again, both entries will
+//! appear in the second wallet as well now. `$APP_ID1` has been registered,
+//! too, because it is a dependency of the other application.
+//!
+//! On both http://localhost:8080 and http://localhost:8081, you recognize the crowd-funding
+//! application by its ID, or by the fact that it has an entry in `required_application_ids`.
+//! The entry also has a field `link`. If you open that in a new tab, you see the GraphQL API
+//! for that application on that chain.
+//!
+//! Let's pledge 30 tokens by the campaign creator themself:
+//!
+//! ```gql,ignore
+//! mutation { pledgeWithTransfer(
+//!     owner:"User:445991f46ae490fe207e60c95d0ed95bf4e7ed9c270d4fd4fa555587c2604fe1",
+//!     amount:"30."
+//! ) }
+//! ```
+//!
+//! This will make the owner show up if we list everyone who has made a pledge so far:
+//!
+//! ```gql,ignore
+//! query { pledgesKeys }
+//! ```
+//!
+//!
 
 use async_graphql::{Request, Response, SimpleObject};
 use fungible::AccountOwner;
@@ -157,7 +208,7 @@ use linera_sdk::base::{Amount, ApplicationId, ContractAbi, ServiceAbi, Timestamp
 use serde::{Deserialize, Serialize};
 
 // TODO(#768): Remove the derive macros.
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct CrowdFundingAbi;
 
 impl ContractAbi for CrowdFundingAbi {
