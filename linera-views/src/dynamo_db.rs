@@ -17,12 +17,11 @@ use aws_sdk_dynamodb::{
     types::{Blob, SdkError},
     Client,
 };
-use futures::future::join_all;
+use futures::stream::{self, StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
+use static_assertions as sa;
 use std::{collections::HashMap, mem, str::FromStr};
 use thiserror::Error;
-
-use static_assertions as sa;
 
 /// The configuration to connect to DynamoDB.
 pub type Config = aws_sdk_dynamodb::Config;
@@ -653,14 +652,13 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbContextError> {
-        let mut handles = Vec::new();
-        for key in keys {
-            let key_db = build_key(key);
-            let handle = self.read_key_bytes_general(key_db);
-            handles.push(handle);
-        }
-        let result = join_all(handles).await;
-        Ok(result.into_iter().collect::<Result<_, _>>()?)
+        let stream = stream::iter(keys.into_iter())
+            .map(|key| async move {
+                let key_db = build_key(key);
+                self.read_key_bytes_general(key_db).await
+            })
+            .buffer_unordered(Self::MAX_CONNECTIONS);
+        Ok(stream.try_collect::<Vec<_>>().await?)
     }
 
     // TODO(#201): Large responses may be truncated.
