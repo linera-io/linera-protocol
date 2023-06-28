@@ -101,9 +101,9 @@ A table will be shown with the chains registered in the wallet and their meta-da
 
 The default chain of each wallet should be highlighted in green. Each chain has an
 `Owner` field, and that is what is used for the account. Let's pick the owners of the
-default chain of each wallet. Remember the corresponding chain IDs as
-`$CHAIN_ID1` (the chain where we just published the bytecode) and `$CHAIN_ID2` (some
-user chain, in wallet 2).
+default chain of each wallet and call them `$OWNER1` and `$OWNER2`. Remember the corresponding
+chain IDs as `$CHAIN_ID1` (the chain where we just published the bytecode) and `$CHAIN_ID2`
+(some user chain in wallet 2).
 
 The example below creates a token application where two accounts start with the minted tokens,
 one with 100 of them and another with 200 of them. Remember to replace the owners with ones
@@ -111,7 +111,7 @@ that exist in your local network:
 
 ```bash
 linera --storage "$LINERA_STORAGE" --wallet "$LINERA_WALLET" create-application $BYTECODE_ID1 \
-    --json-argument '{ "accounts": { "User:445991f46ae490fe207e60c95d0ed95bf4e7ed9c270d4fd4fa555587c2604fe1": "100", "User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f": "200" } }'
+    --json-argument '{ "accounts": { "User:'$OWNER1'": "100", "User:'$OWNER2'": "200" } }'
 ```
 
 This will output the application ID for the newly created token, e.g.:
@@ -129,20 +129,7 @@ We have to specify our fungible application as a dependency and a parameter.
 
 ```bash
 linera --storage "$LINERA_STORAGE" --wallet "$LINERA_WALLET" create-application $BYTECODE_ID2 \
-   --json-argument '{ "owner": "User:504e41bc8a35ebf92f248009fccb1c55e2e59473f30d4249a2b88815fba48ef4", "deadline": 4102473600000000, "target": "100." }'  --required-application-ids=$APP_ID1  --json-parameters='{
-  "bytecode_id": {
-    "message_id": {
-      "chain_id": "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
-      "height": 3,
-      "index": 0
-    }
-  },
-  "creation": {
-    "chain_id": "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
-    "height": 5,
-    "index": 0
-  }
-}'
+   --json-argument '{ "owner": "User:'$OWNER1'", "deadline": 4102473600000000, "target": "100." }'  --required-application-ids=$APP_ID1  --json-parameters='"'$APP_ID1'"'
 ```
 
 Let's remember the application ID as `$APP_ID2`.
@@ -184,7 +171,7 @@ application by its ID, or by the fact that it has an entry in `required_applicat
 The entry also has a field `link`. If you open that in a new tab, you see the GraphQL API
 for that application on that chain.
 
-Let's pledge 30 tokens by the campaign creator themself:
+Let's pledge 30 tokens by the campaign creator themself, i.e. `$OWNER1` on 8080:
 
 ```gql,ignore
 mutation { pledgeWithTransfer(
@@ -198,6 +185,5 @@ This will make the owner show up if we list everyone who has made a pledge so fa
 ```gql,ignore
 query { pledgesKeys }
 ```
-
 
 <!-- cargo-rdme end -->
