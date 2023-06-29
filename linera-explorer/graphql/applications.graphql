@@ -1,0 +1,7 @@
+query Applications($chainId: ChainId) {
+  applications(chainId: $chainId) {
+    id
+    link
+    description
+  }
+}
