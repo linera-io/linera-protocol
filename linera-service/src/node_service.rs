@@ -43,10 +43,17 @@ use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
 
+#[derive(SimpleObject, Clone)]
+pub struct ChainInfo {
+    pub id: ChainId,
+    pub default: bool,
+}
+
 /// Our root GraphQL query type.
 struct QueryRoot<P, S> {
     client: Arc<Mutex<ChainClient<P, S>>>,
     port: NonZeroU16,
+    chains: Vec<ChainInfo>,
 }
 
 /// Our root GraphQL subscription type.
@@ -363,6 +370,10 @@ where
 
         Ok(overviews)
     }
+
+    async fn chains(&self) -> Result<Vec<ChainInfo>, Error> {
+        Ok(self.chains.clone())
+    }
 }
 
 // What follows is a hack to add a chain_id field to `ChainStateView` based on
@@ -482,6 +493,7 @@ pub struct NodeService<P, S> {
     client: Arc<Mutex<ChainClient<P, S>>>,
     config: ChainListenerConfig,
     port: NonZeroU16,
+    chains: Vec<ChainInfo>,
 }
 
 impl<P, S> Clone for NodeService<P, S> {
@@ -490,6 +502,7 @@ impl<P, S> Clone for NodeService<P, S> {
             client: self.client.clone(),
             config: self.config.clone(),
             port: self.port,
+            chains: self.chains.clone(),
         }
     }
 }
@@ -501,12 +514,18 @@ where
     ViewError: From<S::ContextError>,
 {
     /// Creates a new instance of the node service given a client chain and a port.
-    pub fn new(client: ChainClient<P, S>, config: ChainListenerConfig, port: NonZeroU16) -> Self {
+    pub fn new(
+        client: ChainClient<P, S>,
+        config: ChainListenerConfig,
+        port: NonZeroU16,
+        chains: Vec<ChainInfo>,
+    ) -> Self {
         let client = Arc::new(Mutex::new(client));
         Self {
             client,
             config,
             port,
+            chains,
         }
     }
 
@@ -515,6 +534,7 @@ where
             QueryRoot {
                 client: self.client.clone(),
                 port: self.port,
+                chains: self.chains.clone(),
             },
             MutationRoot {
                 client: self.client.clone(),
