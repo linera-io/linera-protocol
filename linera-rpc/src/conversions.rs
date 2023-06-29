@@ -669,6 +669,7 @@ pub mod tests {
             chain_id: ChainId::root(0),
             reason: linera_core::worker::Reason::NewBlock {
                 height: BlockHeight(0),
+                hash: CryptoHash::new(&Foo("".into())),
             },
         };
         round_trip_check::<_, grpc::Notification>(notification);

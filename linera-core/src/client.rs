@@ -415,7 +415,7 @@ where
                     return false;
                 }
             }
-            Reason::NewBlock { height } => {
+            Reason::NewBlock { height, .. } => {
                 let chain_id = notification.chain_id;
                 if Self::get_local_next_block_height(this.clone(), chain_id, &mut local_node).await
                     > Some(height)
