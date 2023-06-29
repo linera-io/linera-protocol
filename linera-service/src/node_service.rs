@@ -37,13 +37,14 @@ use linera_execution::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
 
-#[derive(SimpleObject, Clone)]
+#[derive(SimpleObject, Serialize, Deserialize, Clone)]
 pub struct Chains {
     pub list: Vec<ChainId>,
     pub default: ChainId,

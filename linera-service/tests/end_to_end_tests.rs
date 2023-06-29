@@ -10,12 +10,13 @@ use linera_base::{
     identifiers::{ChainId, MessageId, Owner},
 };
 use linera_execution::Bytecode;
-use linera_service::config::WalletState;
+use linera_service::{config::WalletState, node_service::Chains};
 use once_cell::sync::{Lazy, OnceCell};
 use serde_json::{json, Value};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     env, fs,
+    io::prelude::*,
     ops::RangeInclusive,
     path::{Path, PathBuf},
     process::Stdio,
@@ -1077,6 +1078,185 @@ impl Application {
         let query = format!("mutation {{ increment(value: {})}}", increment);
         self.query_application(&query).await;
     }
+}
+
+fn make_graphql_query(file: &str, operation_name: &str, variables: &[(String, String)]) -> String {
+    let mut file = std::fs::File::open(file).expect("failed to open query file");
+    let mut query = String::new();
+    file.read_to_string(&mut query)
+        .expect("failed to read query file");
+    let query = query.replace('\n', " ");
+    let variables = if variables.is_empty() {
+        "".to_string()
+    } else {
+        let list: Vec<String> = variables
+            .iter()
+            .map(|(key, value)| format!("\"{}\": \"{}\"", key, value))
+            .collect();
+        format!(", \"variables\": {{ {} }}", list.join(", "))
+    };
+    format!(
+        "{{\"query\": \"{}\", \"operationName\": \"{}\"{}}}",
+        query, operation_name, variables
+    )
+}
+
+async fn check_request(query: String, good_result: &str, port: u16) {
+    let client = reqwest::Client::new();
+    for i in 0..10 {
+        tokio::time::sleep(Duration::from_secs(i)).await;
+        let request = client
+            .post(format!("http://localhost:{}/", port))
+            .body(query.clone())
+            .send()
+            .await;
+        if request.is_ok() {
+            let result = request.unwrap().text().await.unwrap();
+            assert_eq!(
+                result, good_result,
+                "wrong response to chain queries:\nexpected:\n{:?}\ngot:\n{:?}\n",
+                good_result, result
+            );
+            return;
+        } else {
+            continue;
+        }
+    }
+    panic!("query {:?} failed after 10 retries", query)
+}
+
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_chains_query() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let network = Network::Grpc;
+    let mut runner = TestRunner::new(network, 4);
+    let client = runner.make_client(network);
+
+    runner.generate_initial_validator_config().await;
+    client.create_genesis_config().await;
+
+    let good_result = {
+        let wallet = client.get_wallet();
+        let list = wallet.chain_ids();
+        let default = wallet.default_chain().expect("no default chain");
+        let chains = serde_json::to_string(&Chains { list, default }).unwrap();
+        format!("{{\"data\":{{\"chains\":{}}}}}", chains)
+    };
+
+    runner.run_local_net().await;
+    let mut node_service = client.run_node_service(None, None).await;
+
+    let query = make_graphql_query("../linera-explorer/graphql/chains.graphql", "Chains", &[]);
+    check_request(query, &good_result, node_service.port).await;
+    node_service.assert_is_running();
+}
+
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_applications_query() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let network = Network::Grpc;
+    let mut runner = TestRunner::new(network, 4);
+    let client = runner.make_client(network);
+
+    runner.generate_initial_validator_config().await;
+    client.create_genesis_config().await;
+
+    runner.run_local_net().await;
+    let mut node_service = client.run_node_service(None, None).await;
+
+    // only checks if application input type is good
+    let good_result = "{\"data\":{\"applications\":[]}}";
+    let query = make_graphql_query(
+        "../linera-explorer/graphql/applications.graphql",
+        "Applications",
+        &Vec::new(),
+    );
+    check_request(query, good_result, node_service.port).await;
+    node_service.assert_is_running();
+}
+
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_blocks_query() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let network = Network::Grpc;
+    let mut runner = TestRunner::new(network, 4);
+    let client = runner.make_client(network);
+
+    runner.generate_initial_validator_config().await;
+    client.create_genesis_config().await;
+
+    runner.run_local_net().await;
+    let mut node_service = client.run_node_service(None, None).await;
+
+    // only checks if block input type is good
+    let good_result = "{\"data\":{\"blocks\":[]}}";
+    let query = make_graphql_query(
+        "../linera-explorer/graphql/blocks.graphql",
+        "Blocks",
+        &Vec::new(),
+    );
+    check_request(query, good_result, node_service.port).await;
+    node_service.assert_is_running();
+}
+
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_block_query() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let network = Network::Grpc;
+    let mut runner = TestRunner::new(network, 4);
+    let client = runner.make_client(network);
+
+    runner.generate_initial_validator_config().await;
+    client.create_genesis_config().await;
+
+    runner.run_local_net().await;
+    let mut node_service = client.run_node_service(None, None).await;
+
+    // only checks if block input type is good
+    let good_result = "{\"data\":{\"block\":null}}";
+    let query = make_graphql_query(
+        "../linera-explorer/graphql/block.graphql",
+        "Block",
+        &Vec::new(),
+    );
+    check_request(query, good_result, node_service.port).await;
+    node_service.assert_is_running();
+}
+
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_check_schema() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let network = Network::Grpc;
+    let mut runner = TestRunner::new(network, 4);
+    let client = runner.make_client(network);
+
+    runner.generate_initial_validator_config().await;
+    client.create_genesis_config().await;
+    runner.run_local_net().await;
+    let mut node_service = client.run_node_service(None, None).await;
+    match std::process::Command::new("get-graphql-schema")
+        .arg(format!("http://localhost:{}", node_service.port))
+        .output()
+    {
+        Err(e) => warn!("get-grahql-schema not installed or failed: {}", e),
+        Ok(service_schema_result) => {
+            let service_schema = String::from_utf8(service_schema_result.stdout)
+                .expect("failed to read the service graphql schema");
+            let mut file_base = std::fs::File::open("../linera-explorer/graphql/schema.graphql")
+                .expect("failed to open schema.graphql");
+            let mut graphql_schema = String::new();
+            file_base
+                .read_to_string(&mut graphql_schema)
+                .expect("failed to read schema.graphql");
+            assert_eq!(graphql_schema, service_schema, "graphql schema has changed -> regenerate schema following steps in linera-explorer/README.md")
+        }
+    }
+    node_service.assert_is_running();
 }
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]

@@ -37,6 +37,7 @@ jobs:
         target: wasm32-unknown-unknown
         components: clippy, rustfmt
     - uses: Swatinem/rust-cache@v2
+    - uses: actions/setup-node@v3
     - name: Clear up some space
       run: |
         sudo rm -rf /usr/share/dotnet
@@ -59,6 +60,7 @@ jobs:
         cargo build --locked
     - name: Run all tests using the default features
       run: |
+        npm install get-graphql-schema
         cargo test --locked
     - name: Run some extra execution tests with wasmtime
       run: |
