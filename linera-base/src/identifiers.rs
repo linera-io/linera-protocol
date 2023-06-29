@@ -9,7 +9,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    fmt::Debug,
+    fmt::{Debug, Display},
     hash::{Hash, Hasher},
     str::FromStr,
 };
@@ -59,7 +59,7 @@ pub struct ApplicationId<A = ()> {
 }
 
 /// A unique identifier for an application bytecode.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct BytecodeId<A = ()> {
     pub message_id: MessageId,
@@ -175,6 +175,31 @@ impl<A> Debug for BytecodeId<A> {
         f.debug_struct("BytecodeId")
             .field("message_id", message_id)
             .finish()
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "BytecodeId")]
+struct SerializableBytecodeId {
+    message_id: MessageId,
+}
+
+impl<A> Serialize for BytecodeId<A> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        if serializer.is_human_readable() {
+            let bytes = bcs::to_bytes(&self.message_id).map_err(serde::ser::Error::custom)?;
+            serializer.serialize_str(&hex::encode(bytes))
+        } else {
+            SerializableBytecodeId::serialize(
+                &SerializableBytecodeId {
+                    message_id: self.message_id,
+                },
+                serializer,
+            )
+        }
     }
 }
 
@@ -376,9 +401,9 @@ impl<A> SessionId<A> {
     }
 }
 
-impl std::fmt::Display for Owner {
+impl Display for Owner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        std::fmt::Display::fmt(&self.0, f)
+        Display::fmt(&self.0, f)
     }
 }
 
@@ -402,9 +427,9 @@ impl std::str::FromStr for Owner {
     }
 }
 
-impl std::fmt::Display for ChainId {
+impl Display for ChainId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.0, f)
+        Display::fmt(&self.0, f)
     }
 }
 
