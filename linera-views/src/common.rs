@@ -95,12 +95,12 @@ pub trait KeyIterable<Error> {
 
 /// How to iterate over the key-value pairs returned by a search query.
 pub trait KeyValueIterable<Error> {
-    /// The iterator returns key-value pairs by reference.
+    /// The iterator that returns key-value pairs by reference.
     type Iterator<'a>: Iterator<Item = Result<(&'a [u8], &'a [u8]), Error>>
     where
         Self: 'a;
 
-    /// The iterator returns key-value pairs by value.
+    /// The iterator that returns key-value pairs by value.
     type IteratorOwned: Iterator<Item = Result<(Vec<u8>, Vec<u8>), Error>>;
 
     /// Iterates keys and values by reference.
