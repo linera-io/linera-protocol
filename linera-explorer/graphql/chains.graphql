@@ -1,6 +1,6 @@
 query Chains {
   chains {
-    default
     list
+    default
   }
 }
