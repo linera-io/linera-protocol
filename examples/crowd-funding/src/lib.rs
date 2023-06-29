@@ -106,9 +106,8 @@
 //! chain IDs as `$CHAIN_ID1` (the chain where we just published the bytecode) and `$CHAIN_ID2`
 //! (some user chain in wallet 2).
 //!
-//! The example below creates a token application where two accounts start with the minted tokens,
-//! one with 100 of them and another with 200 of them. Remember to replace the owners with ones
-//! that exist in your local network:
+//! Create a fungible token application where two accounts start with the minted tokens,
+//! one with 100 of them and another with 200 of them:
 //!
 //! ```bash
 //! linera --storage "$LINERA_STORAGE" --wallet "$LINERA_WALLET" create-application $BYTECODE_ID1 \
@@ -126,7 +125,7 @@
 //! ## Creating a crowd-funding campaign
 //!
 //! Similarly, we're going to create a crowd-funding campaign on the default chain.
-//! We have to specify our fungible application as a dependency and a parameter.
+//! We have to specify our fungible application as a dependency and a parameter:
 //!
 //! ```bash
 //! linera --storage "$LINERA_STORAGE" --wallet "$LINERA_WALLET" create-application $BYTECODE_ID2 \
@@ -149,7 +148,7 @@
 //! Point your browser to http://localhost:8080, and enter the query:
 //!
 //! ```gql,ignore
-//! query { applications { id description link } }
+//! query { applications { id link } }
 //! ```
 //!
 //! The response will have two entries, one for each application.
@@ -163,14 +162,13 @@
 //! mutation { requestApplication(applicationId:"e476187…") }
 //! ```
 //!
-//! If you enter `query { applications { id description link } }` again, both entries will
+//! If you enter `query { applications { id link } }` again, both entries will
 //! appear in the second wallet as well now. `$APP_ID1` has been registered,
 //! too, because it is a dependency of the other application.
 //!
 //! On both http://localhost:8080 and http://localhost:8081, you recognize the crowd-funding
-//! application by its ID, or by the fact that it has an entry in `required_application_ids`.
-//! The entry also has a field `link`. If you open that in a new tab, you see the GraphQL API
-//! for that application on that chain.
+//! application by its ID. The entry also has a field `link`. If you open that in a new tab, you
+//! see the GraphQL API for that application on that chain.
 //!
 //! Let's pledge 30 tokens by the campaign creator themself, i.e. `$OWNER1` on 8080:
 //!
@@ -186,6 +184,45 @@
 //! ```gql,ignore
 //! query { pledgesKeys }
 //! ```
+//!
+//! To also have `$OWNER2` make a pledge, they first need to claim their tokens. Those are still
+//! on the other chain, where the application was created. Find the link on http://localhost:8081
+//! for the fungible application, open it and run the following query. Remember to replace the user
+//! with `$OWNER2`. The _source_ chain ID should be the `$CHAIN_ID1`, and the target `$CHAIN_ID2`.
+//!
+//! ```gql,ignore
+//! mutation { claim(
+//!   sourceAccount: {
+//!     owner: "User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f",
+//!     chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+//!   },
+//!   amount: "200.",
+//!   targetAccount: {
+//!     owner:"User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f",
+//!     chainId:"1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03"
+//!   }
+//! ) }
+//! ```
+//!
+//! You can check that the 200 tokens have arrived:
+//!
+//! ```gql,ignore
+//! query {
+//!     accounts(accountOwner:"User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f")
+//! }
+//! ```
+//!
+//! Now, also on 8081, you can open the link for the crowd-funding application and run:
+//!
+//! ```gql,ignore
+//! mutation { pledgeWithTransfer(
+//!   owner:"User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f",
+//!   amount:"80."
+//! ) }
+//! ```
+//!
+//! This pledges another 80 tokens. With 110 pledged in total, we have now reached the campaign
+//! goal.
 
 use async_graphql::{Request, Response, SimpleObject};
 use fungible::AccountOwner;
