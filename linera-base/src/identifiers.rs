@@ -566,6 +566,10 @@ doc_scalar!(
     "The owner of a chain. This is currently the hash of the owner's public key used to verify \
     signatures."
 );
+doc_scalar!(
+    Destination,
+    "The destination of a message, relative to a particular application."
+);
 
 #[cfg(test)]
 mod tests {

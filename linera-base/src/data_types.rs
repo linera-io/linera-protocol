@@ -415,6 +415,10 @@ doc_scalar!(
     Timestamp,
     "A timestamp, in microseconds since the Unix epoch"
 );
+doc_scalar!(
+    RoundNumber,
+    "A number to identify successive attempts to decide a value in a consensus protocol."
+);
 
 #[cfg(test)]
 mod tests {
