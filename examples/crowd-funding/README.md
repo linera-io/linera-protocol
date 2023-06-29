@@ -221,6 +221,17 @@ mutation { pledgeWithTransfer(
 ```
 
 This pledges another 80 tokens. With 110 pledged in total, we have now reached the campaign
-goal.
+goal. Now the campaign owner (on 8080) can collect the funds:
+
+```gql,ignore
+mutation { collect }
+```
+
+In the fungible application on 8080, check that we have received 110 tokens, in addition to the
+70 that we had left after pledging 30:
+
+```gql,ignore
+query {accounts(accountOwner:"User:445991f46ae490fe207e60c95d0ed95bf4e7ed9c270d4fd4fa555587c2604fe1")}
+```
 
 <!-- cargo-rdme end -->
