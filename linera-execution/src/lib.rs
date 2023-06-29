@@ -42,7 +42,7 @@ use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
-    hex_debug,
+    doc_scalar, hex_debug,
     identifiers::{BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner, SessionId},
 };
 use linera_views::{batch::Batch, views::ViewError};
@@ -735,3 +735,9 @@ impl FromStr for WasmRuntime {
 #[derive(Clone, Debug, Error)]
 #[error("{0:?} is not a valid WebAssembly runtime")]
 pub struct InvalidWasmRuntime(String);
+
+doc_scalar!(Operation, "An operation to be executed in a block");
+doc_scalar!(
+    Message,
+    "An message to be sent and possibly executed in the receiver's block."
+);

@@ -24,7 +24,7 @@ use linera_base::{
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
     BcsHexParseError,
 };
-use linera_chain::ChainStateView;
+use linera_chain::{data_types::HashedValue, ChainStateView};
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
     worker::Notification,
@@ -373,6 +373,48 @@ where
 
     async fn chains(&self) -> Result<Vec<ChainInfo>, Error> {
         Ok(self.chains.clone())
+    }
+
+    async fn block(
+        &self,
+        hash: Option<CryptoHash>,
+        chain_id: Option<ChainId>,
+    ) -> Result<Option<HashedValue>, Error> {
+        let hash = match hash {
+            Some(hash) => Some(hash),
+            None => {
+                let view = self.client.lock().await.chain_state_view(chain_id).await?;
+                view.tip_state.get().block_hash
+            }
+        };
+        if let Some(hash) = hash {
+            let b = self.client.lock().await.read_value(hash).await?;
+            Ok(Some(b))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn blocks(
+        &self,
+        from: Option<CryptoHash>,
+        chain_id: Option<ChainId>,
+        limit: Option<u32>,
+    ) -> Result<Vec<HashedValue>, Error> {
+        let limit = limit.unwrap_or(10);
+        let from = match from {
+            Some(from) => Some(from),
+            None => {
+                let view = self.client.lock().await.chain_state_view(chain_id).await?;
+                view.tip_state.get().block_hash
+            }
+        };
+        if let Some(from) = from {
+            let v = self.client.lock().await.read_values(from, limit).await?;
+            Ok(v)
+        } else {
+            Ok(vec![])
+        }
     }
 }
 

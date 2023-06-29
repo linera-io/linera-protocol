@@ -75,6 +75,13 @@ pub trait Store: Sized {
     /// Reads the value with the given hash.
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError>;
 
+    /// Reads the values in descending order from the given hash.
+    async fn read_values(
+        &self,
+        from: CryptoHash,
+        limit: u32,
+    ) -> Result<Vec<HashedValue>, ViewError>;
+
     /// Writes the given value.
     async fn write_value(&self, value: &HashedValue) -> Result<(), ViewError>;
 
@@ -286,6 +293,24 @@ where
         increment_counter!(READ_VALUE_COUNTER, &[("chain_id", id)]);
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(value.with_hash_unchecked(hash))
+    }
+
+    async fn read_values(
+        &self,
+        from: CryptoHash,
+        limit: u32,
+    ) -> Result<Vec<HashedValue>, ViewError> {
+        let mut hash = Some(from);
+        let mut result = Vec::new();
+        for _ in 0..limit {
+            let Some(next_hash) = hash else {
+                break;
+            };
+            let value = self.read_value(next_hash).await?;
+            hash = value.inner().executed_block().block.previous_block_hash;
+            result.push(value);
+        }
+        Ok(result)
     }
 
     async fn write_value(&self, value: &HashedValue) -> Result<(), ViewError> {

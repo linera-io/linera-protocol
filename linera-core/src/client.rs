@@ -1504,4 +1504,24 @@ where
         }))
         .await
     }
+
+    pub async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue> {
+        let v = self
+            .node_client
+            .storage_client()
+            .await
+            .read_value(hash)
+            .await?;
+        Ok(v)
+    }
+
+    pub async fn read_values(&self, from: CryptoHash, limit: u32) -> Result<Vec<HashedValue>> {
+        let v = self
+            .node_client
+            .storage_client()
+            .await
+            .read_values(from, limit)
+            .await?;
+        Ok(v)
+    }
 }
