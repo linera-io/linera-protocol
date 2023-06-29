@@ -1,24 +1,37 @@
-<div>
-  <div v-if="!t">Type not found</div>
-  <input v-else-if="t.kind=='SCALAR' && (t.name=='Int' || t.name=='Float')" class="form-control" type="number" v-model="t._input">
-  <select v-else-if="t.kind=='SCALAR' && t.name=='Boolean'" class="form-select" v-model="t._input">
-    <option :value="true" selected>true</option>
-    <option :value="false">false</option>
-  </select>
-  <input v-else-if="t.kind=='SCALAR'" class="form-control" type="text" v-model="t._input">
-  <v-input-type v-else-if="t.kind=='NON_NULL'" :t="t.ofType"></v-input-type>
-  <div v-else-if="t.kind=='INPUT_OBJECT'" class="row">
-    <div v-for="f in t.inputFields" class="col-11 offset-1">
-      <div class="form-label" :title="f.description">{{ f.name }}{{ f.type.kind=='NON_NULL' ? ' (*)' : '' }}</div>
-      <v-input-type :t="f.type"></v-input-type>
-    </div>
+<div v-if="!t">TYPE NOT FOUND</div>
+<input v-else-if="t.kind=='SCALAR' && (t.name=='Int' || t.name=='Float')" class="form-control" type="number" v-model.number="t._input">
+<select v-else-if="t.kind=='SCALAR' && t.name=='Boolean'" class="form-select" v-model="t._input">
+  <option :value="true" selected>true</option>
+  <option :value="false">false</option>
+</select>
+<input v-else-if="t.kind=='SCALAR'" class="form-control" type="text" v-model="t._input">
+<v-input-type v-else-if="t.kind=='NON_NULL'" :t="t.ofType" :offset="offset"></v-input-type>
+<div v-else-if="t.kind=='INPUT_OBJECT'" class="row">
+  <div v-for="f in t.inputFields" :class="offset ? 'col-11 offset-1' : 'col-12'">
+    <div class="form-label" :title="f.description">{{ f.name }}{{ f.type.kind=='NON_NULL' ? ' (*)' : '' }}</div>
+    <v-input-type :t="f.type" :offset="true"></v-input-type>
   </div>
-  <!-- <div v-else-if="t.kind=='OBJECT'"> -->
-  <!--   OBJECT -->
-  <!--   <v-input-type v-for="f in get_type(t).fields" :t="f.type" :types="types"></v-input-type> -->
-  <!-- </div> -->
-  <!-- <v-input-type v-else-if="is_in_types(t['name'])" :t="get_type(t)" :types="types"></v-input-type> -->
-  <div v-else>
-    <v-json :data="t"></v-json>
+</div>
+<div v-else-if="t.kind=='LIST'">
+  <div v-for="(x, i) in t._input" class="row">
+    <span class="col-1 d-grid gap-2" v-if="x!==undefined">
+      <button class="btn btn-outline-secondary" @click="remove_input(i)">
+        <i class="bi bi-dash-circle-fill"></i>
+      </button>
+    </span>
+    <v-input-type :t="x" class="col-11" v-if="x!==undefined" :offset="false"></v-input-type>
   </div>
+  <div class="row">
+    <span class="col-1 d-grid gap-2">
+      <button class="btn btn-outline-secondary" @click="append_input()">
+        <i class="bi bi-plus-circle-fill"></i>
+      </button>
+    </span>
+  </div>
+</div>
+<select v-else-if="t.kind=='ENUM'" class="form-select" v-model="t._input">
+  <option v-for="e in t.enumValues" :value="e.name" selected>{{ e.name }}</option>
+</select>
+<div v-else>
+  <v-json :data="t"></v-json>
 </div>

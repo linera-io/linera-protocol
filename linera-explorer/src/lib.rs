@@ -3,6 +3,11 @@
 
 //! This module provides web files to run a block explorer from linera service node.
 
+mod entrypoint;
+mod graphql;
+mod input_type;
+mod js_utils;
+
 use graphql_client::{reqwest::post_graphql, Response};
 use linera_base::{crypto::CryptoHash, identifiers::ChainId};
 use serde::{Deserialize, Serialize};
@@ -16,10 +21,6 @@ use uuid::Uuid;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use ws_stream_wasm::*;
-
-mod entrypoint;
-mod graphql;
-mod js_utils;
 
 use graphql::{
     applications::ApplicationsApplications, block::BlockBlock, blocks::BlocksBlocks, Applications,
@@ -242,13 +243,27 @@ fn fill_type(t: &Value, types: &Vec<Value>) -> Value {
                     match types.iter().find(|x: &&Value| x["name"] == name) {
                         None => (),
                         Some(t2) => {
-                            let fields: Vec<Value> = t2["inputfields"]
+                            let fields: Vec<Value> = t2["inputFields"]
                                 .as_array()
                                 .unwrap()
                                 .iter()
                                 .map(|x| fill_type(x, types))
                                 .collect();
-                            m.insert("inputfields".to_string(), Value::Array(fields));
+                            m.insert("inputFields".to_string(), Value::Array(fields));
+                        }
+                    }
+                }
+                (Some("ENUM"), Some(name), _) => {
+                    match types.iter().find(|x: &&Value| x["name"] == name) {
+                        None => (),
+                        Some(t2) => {
+                            let values: Vec<Value> = t2["enumValues"]
+                                .as_array()
+                                .unwrap()
+                                .iter()
+                                .map(|x| fill_type(x, types))
+                                .collect();
+                            m.insert("enumValues".to_string(), Value::Array(values));
                         }
                     }
                 }
@@ -264,6 +279,13 @@ fn fill_type(t: &Value, types: &Vec<Value>) -> Value {
             };
             m.insert("ofType".to_string(), fill_type(&t["ofType"], types));
             m.insert("type".to_string(), fill_type(&t["type"], types));
+            m.insert("args".to_string(), fill_type(&t["args"], types));
+            if let Some("LIST") = kind {
+                m.insert("_input".to_string(), Value::Array(Vec::new()));
+            }
+            if let Some("SCALAR" | "ENUM" | "OBJECT") = kind {
+                m.insert("_include".to_string(), Value::Bool(true));
+            }
             Value::Object(m)
         }
         t => t.clone(),

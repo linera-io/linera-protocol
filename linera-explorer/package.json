@@ -7,11 +7,11 @@
     "test": "cargo test && wasm-pack test --headless"
   },
   "devDependencies": {
-    "@wasm-tool/wasm-pack-plugin": "^1",
-    "copy-webpack-plugin": "^11",
-    "json-formatter-js": "^2",
-    "webpack": "^5",
-    "webpack-cli": "^5",
-    "html-loader": "^4.2.0"
+    "@wasm-tool/wasm-pack-plugin": "^1.6",
+    "copy-webpack-plugin": "^11.0",
+    "json-formatter-js": "^2.3",
+    "webpack": "^5.88",
+    "webpack-cli": "^5.1",
+    "html-loader": "^4.2"
   }
 }

@@ -9,7 +9,12 @@ function load(id, data) {
 var component = {
   template: '<div :id="inner_id" style="overflow-x: auto"></div>',
   props: [ "id", "data" ],
-  data() { return { inner_id: this.id + '-inner' } },
+  data() {
+    let inner_id =
+        this.id ? this.id + '-inner' :
+        Date.now() + Math.floor(Math.random() * 100) + '-inner'
+    return { inner_id }
+  },
   mounted() {
     load(this.inner_id, this.data)
   }

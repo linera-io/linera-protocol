@@ -10,16 +10,38 @@ use wasm_bindgen::prelude::*;
 
 /// Recursively forge query argument
 fn forge_arg_type(arg: &Value, non_null: bool) -> Option<String> {
-    if arg["kind"] == serde_json::json!("SCALAR") {
-        if non_null {
-            Some(format!("{}", arg["_input"]))
-        } else {
-            arg.get("_input").map(|input| format!("{}", input))
+    match arg["kind"].as_str() {
+        Some("SCALAR") => {
+            if non_null {
+                Some(format!("{}", arg["_input"]))
+            } else {
+                arg.get("_input").map(|input| format!("{}", input))
+            }
         }
-    } else if arg["kind"] == serde_json::json!("NON_NULL") {
-        forge_arg_type(&arg["ofType"], true)
-    } else {
-        None
+        Some("NON_NULL") => forge_arg_type(&arg["ofType"], true),
+        Some("LIST") => {
+            let args: Vec<String> = arg["_input"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|x| forge_arg_type(x, false))
+                .collect();
+            Some(format!("[{}]", args.join(", ")))
+        }
+        Some("ENUM") => arg["_input"].as_str().map(|x| x.to_string()),
+        Some("INPUT_OBJECT") => {
+            let args: Vec<String> = arg["inputFields"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|x| {
+                    let name = x["name"].as_str().unwrap();
+                    forge_arg_type(&x["type"], false).map(|arg| format!("{}: {}", name, arg))
+                })
+                .collect();
+            Some(format!("{{{}}}", args.join(", ")))
+        }
+        _ => None,
     }
 }
 
@@ -43,26 +65,32 @@ fn forge_args(args: Vec<Value>) -> String {
 }
 
 /// Recursively forge query response
-fn forge_response_type(t: &Value, name: Option<&Value>, root: bool) -> String {
+fn forge_response_type(t: &Value, name: Option<&str>, root: bool) -> String {
     let is_non_null_or_list = matches!(t["kind"].as_str(), Some("NON_NULL") | Some("LIST"));
     let incl = matches!(t.get("_include"), Some(Value::Bool(true)));
     if !(incl || root || is_non_null_or_list) {
         "".to_string()
     } else {
         match t["kind"].as_str().unwrap() {
-            "SCALAR" => name.unwrap_or(&t["name"]).as_str().unwrap().to_string(),
+            "SCALAR" | "ENUM" => name
+                .unwrap_or_else(|| t["name"].as_str().unwrap())
+                .to_string(),
             "NON_NULL" | "LIST" => forge_response_type(&t["ofType"], name, root),
             "OBJECT" => {
                 let fields: Vec<String> = t["fields"]
                     .as_array()
                     .unwrap()
                     .iter()
-                    .map(|x: &Value| forge_response_type(&x["type"], Some(&x["name"]), false))
+                    .map(|x: &Value| forge_response_type(&x["type"], x["name"].as_str(), false))
                     .collect();
                 if root {
                     format!("{{ {} }}", fields.join(" "))
                 } else {
-                    format!("{} {{ {} }}", t["name"].as_str().unwrap(), fields.join(" "))
+                    format!(
+                        "{} {{ {} }}",
+                        name.unwrap_or_else(|| t["name"].as_str().unwrap()),
+                        fields.join(" ")
+                    )
                 }
             }
             _ => "".to_string(),
@@ -101,17 +129,21 @@ pub async fn query(app: JsValue, query: JsValue, kind: String) {
         .text()
         .await
         .expect("cannot get text of query response");
-    let res_json = serde_json::from_str::<Value>(&res).expect("cannot translate JSON to JS");
-    setf(&app, "result", &res_json["data"].serialize(&SER).unwrap());
-    setf(
-        &app,
-        "errors",
-        &res_json
-            .get("errors")
-            .unwrap_or(&Value::Null)
-            .serialize(&SER)
-            .unwrap(),
-    );
+    match serde_json::from_str::<Value>(&res) {
+        Ok(res_json) => {
+            setf(&app, "result", &res_json["data"].serialize(&SER).unwrap());
+            setf(
+                &app,
+                "errors",
+                &res_json
+                    .get("errors")
+                    .unwrap_or(&Value::Null)
+                    .serialize(&SER)
+                    .unwrap(),
+            );
+        }
+        Err(_) => setf(&app, "errors", &JsValue::from_str(&res)),
+    }
 }
 
 fn empty_output_aux(v: &Value) -> bool {

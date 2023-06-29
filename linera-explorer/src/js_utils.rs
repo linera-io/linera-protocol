@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// use serde::Serialize;
 use serde_wasm_bindgen::Serializer;
 use wasm_bindgen::prelude::*;
 
@@ -18,9 +19,17 @@ pub fn getf(target: &JsValue, field: &str) -> JsValue {
         .unwrap_or_else(|_| panic!("failed to get js field '{}'", field))
 }
 
-pub fn log_str(s: &str) {
-    web_sys::console::log_1(&JsValue::from_str(s))
+pub fn log(x: &JsValue) {
+    web_sys::console::log_1(x)
 }
+
+pub fn log_str(s: &str) {
+    log(&JsValue::from_str(s))
+}
+
+// pub fn log_json(v: &serde_json::Value) {
+//     log(&v.serialize(&SER).expect("failed to serialize json"))
+// }
 
 pub fn parse(x: &str) -> JsValue {
     js_sys::JSON::parse(x).expect("parse json failed")
@@ -34,4 +43,8 @@ pub fn stringify(x: &JsValue) -> String {
 
 pub fn js_to_json(x: &JsValue) -> serde_json::Value {
     serde_json::from_str::<serde_json::Value>(&stringify(x)).expect("js_to_json failed")
+}
+
+pub fn unproxy(x: &JsValue) -> JsValue {
+    parse(&stringify(x))
 }
