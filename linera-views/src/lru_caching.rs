@@ -24,12 +24,12 @@ use {
     async_lock::MutexGuardArc,
 };
 
-/// The LruPrefixCache store the data for a simple read_keys queries
-/// It is inspired from lru-cache crate.
+/// The LruPrefixCache stores the data for simple read_keys queries
+/// It is inspired by the crate `lru-cache`.
 ///
 /// We cannot apply this crate directly because the batch operation
-/// need to update the cache. In the case of DeletePrefix we have to
-/// handle the keys by prefix. And so we need to have a BTreeMap to
+/// need to update the cache. In the case of `DeletePrefix` we have to
+/// handle the keys by prefixes. And so we need to have a BTreeMap to
 /// keep track of this.
 
 /// The data structures
@@ -82,7 +82,7 @@ impl<'a> LruPrefixCache {
     }
 }
 
-/// We take a client, a maximum size and build a LRU based system.
+/// We take a client, a maximum size and build a LRU-based system.
 #[derive(Clone)]
 pub struct LruCachingKeyValueClient<K> {
     client: K,
@@ -202,7 +202,7 @@ impl<K> LruCachingKeyValueClient<K>
 where
     K: KeyValueStoreClient,
 {
-    /// Creates a new Key Value Store Client that implements LRU caching.
+    /// Creates a new Key-value store client that implements LRU caching.
     pub fn new(client: K, max_size: usize) -> Self {
         if max_size == 0 {
             Self {

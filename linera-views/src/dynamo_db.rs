@@ -157,7 +157,7 @@ fn extract_key_value(
     Ok((key, value))
 }
 
-/// Extracts the `(key,value)` pair attributes from an item (returned by value).
+/// Extracts the `(key, value)` pair attributes from an item (returned by value).
 fn extract_key_value_owned(
     prefix_len: usize,
     attributes: &mut HashMap<String, AttributeValue>,
@@ -245,7 +245,7 @@ fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, Dyn
     Ok(key)
 }
 
-/// The header containing the current state of the journal.
+/// The header contains the current state of the journal.
 #[derive(Serialize, Deserialize)]
 struct JournalHeader {
     block_count: u32,
@@ -314,7 +314,7 @@ impl DynamoDbBatch {
         Ok(())
     }
 
-    /// Writes blocks to the database so as to be resolved later.
+    /// Writes blocks to the database and resolves them later.
     pub async fn write_journal(
         self,
         db: &DynamoDbClientInternal,
@@ -392,7 +392,7 @@ impl DynamoDbBatch {
         db: &DynamoDbClientInternal,
         batch: Batch,
     ) -> Result<Self, DynamoDbContextError> {
-        // As a matter of fact the DynamoDB does not support the deleteprefix operation.
+        // The DynamoDB does not support the delete_prefix operation.
         // Therefore it does not make sense to have a delete prefix and they have to
         // be downloaded for making a list.
         // Also we remove the deletes that are followed by inserts on the same key because
@@ -474,7 +474,7 @@ impl Iterator for DynamoDbKeyValueIteratorOwned {
     }
 }
 
-/// A set of key-values returned by a search query on DynamoDb.
+/// A set of `(key, value)` returned by a search query on DynamoDb.
 pub struct DynamoDbKeyValues {
     prefix_len: usize,
     response: Box<QueryOutput>,
@@ -932,19 +932,19 @@ pub enum InvalidTableName {
 /// Errors that occur when using [`DynamoDbContext`].
 #[derive(Debug, Error)]
 pub enum DynamoDbContextError {
-    /// An error occurred while getting the item
+    /// An error occurred while getting the item.
     #[error(transparent)]
     Get(#[from] Box<SdkError<aws_sdk_dynamodb::error::GetItemError>>),
 
-    /// An error occurred while writing a batch of item.
+    /// An error occurred while writing a batch of items.
     #[error(transparent)]
     BatchWriteItem(#[from] Box<SdkError<aws_sdk_dynamodb::error::BatchWriteItemError>>),
 
-    /// An error occurred while writing a transact of items.
+    /// An error occurred while writing a transaction of items.
     #[error(transparent)]
     TransactWriteItem(#[from] Box<SdkError<aws_sdk_dynamodb::error::TransactWriteItemsError>>),
 
-    /// An error occurred while doing a Query
+    /// An error occurred while doing a Query.
     #[error(transparent)]
     Query(#[from] Box<SdkError<aws_sdk_dynamodb::error::QueryError>>),
 
@@ -952,11 +952,11 @@ pub enum DynamoDbContextError {
     #[error("The transact must have length at most MAX_TRANSACT_WRITE_ITEM_SIZE")]
     TransactUpperLimitSize,
 
-    /// Key have to be of non-zero length.
+    /// Keys have to be of non-zero length.
     #[error("The key must be of strictly positive length")]
     ZeroLengthKey,
 
-    /// Key prefix have to be of non-zero length.
+    /// Key prefixes have to be of non-zero length.
     #[error("The key_prefix must be of strictly positive length")]
     ZeroLengthKeyPrefix,
 

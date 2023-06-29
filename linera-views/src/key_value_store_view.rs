@@ -26,15 +26,15 @@ use {
     std::sync::Arc,
 };
 
-/// We actually implement two types:
-/// 1) The first type KeyValueStoreView that implements View and the function of KeyValueStoreClient
+/// We implement two types:
+/// 1) The first type KeyValueStoreView implements View and the function of KeyValueStoreClient
 /// (though not KeyValueStoreClient).
 ///
 /// 2) The second type ViewContainer encapsulates KeyValueStoreView and provides the following functionalities:
 /// * The Clone trait
 /// * a write_batch that takes a &self instead of a "&mut self"
 /// * a write_batch that writes in the context instead of writing of the view.
-/// At the present time, that second type is only used for tests.
+/// Currently, that second type is only used for tests.
 
 /// Key tags to create the sub-keys of a KeyValueStoreView on top of the base key.
 #[repr(u8)]
@@ -52,12 +52,12 @@ enum KeyTag {
 /// The updates and deleted_prefixes have to be coherent. This means:
 /// * If an index is deleted by one in deleted_prefixes then it should not be present
 ///   in updates at al.
-/// * deleted prefix in deleteprefix should not dominate anyone. That is if
+/// * deleted_prefix in DeletePrefix should not dominate anyone. That is if
 ///   we have `[0,2]` then we should not have `[0,2,3]` since it would be dominated
 ///   by the preceding.
 ///
 /// With that we have:
-/// * in order to test if an index is deleted by a prefix we compute the highest deleteprefix dp
+/// * in order to test if an index is deleted by a prefix we compute the highest delete_prefix dp
 ///   such that dp <= index.
 ///   If dp is indeed a prefix then we conclude from that.index is deleted, otherwise not.
 ///   The no domination is essential here.
@@ -796,7 +796,7 @@ where
 /// The function get_lower_bound(val) returns a Some(x) where x is the highest
 /// entry such that x <= val. If none exists then None is returned.
 ///
-/// the function calls get_lower_bound have to be called with increasing
+/// The function calls get_lower_bound have to be called with increasing
 /// values.
 struct NextLowerKeyIterator<'a, T: 'static> {
     prec1: Option<T>,

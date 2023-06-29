@@ -8,10 +8,10 @@
 //! * Deletion of all keys which contain a specified prefix
 //!
 //! The deletion using prefixes is generally but not always faster than deleting keys
-//! one by one. The only purpose of the batch is to write some transaction into the
+//! one by one. The only purpose of the batch is to write some transactions into the
 //! database.
 //!
-//! Note that normally users should not have to manipulate batches. The functionality
+//! Note that normal users should not have to manipulate batches. The functionality
 //! is public because some other libraries require it. But the users using views should
 //! not have to deal with batches.
 
@@ -66,9 +66,9 @@ pub struct Batch {
 /// Unordered list of deletes and puts being written.
 #[derive(Default, Serialize, Deserialize)]
 pub struct SimpleUnorderedBatch {
-    /// list of deletes unordered
+    /// list of deletions unordered
     pub deletions: Vec<Vec<u8>>,
-    /// list of inserts unorderd
+    /// list of insertions unordered
     pub insertions: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
@@ -82,7 +82,7 @@ pub struct UnorderedBatch {
 }
 
 impl UnorderedBatch {
-    /// From an `UnorderedBatch`, creates a [`SimpleUnorderedBatch`] that does not contain the
+    /// From an `UnorderedBatch`, create a [`SimpleUnorderedBatch`] that does not contain the
     /// `key_prefix_deletions`. This requires accessing the database to eliminate them.
     pub async fn expand_delete_prefixes<DB: DeletePrefixExpander>(
         self,
@@ -111,10 +111,10 @@ impl UnorderedBatch {
 }
 
 /// Checks if `key` is matched by any prefix in `key_prefix_set`.
-/// The set `key_prefix_set` must be minimal for the function to works correctly.
+/// The set `key_prefix_set` must be minimal for the function to work correctly.
 /// That is, there should not be any two prefixes p1 and p2 such that p1 < p2 for
 /// the lexicographic ordering on `Vec<u8>` entries.
-/// Under this condition we have equivalence between two following statements:
+/// Under this condition we have equivalence between the following two statements:
 /// * There is an key_prefix in `key_prefiw_set` that matches `key`.
 /// * The highest key_prefix in `key_prefix_set` is actually matching.
 fn is_prefix_matched(key_prefix_set: &BTreeSet<Vec<u8>>, key: &[u8]) -> bool {
@@ -178,7 +178,7 @@ impl Batch {
                     delete_and_insert_map.insert(key, Some(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    // First identifies all the deletes and inserts and remove them
+                    // First identifies all the deletes and inserts and removes them
                     let key_list = delete_and_insert_map
                         .range(get_interval(key_prefix.clone()))
                         .map(|x| x.0.to_vec())
@@ -244,7 +244,7 @@ impl Batch {
         Ok(())
     }
 
-    /// Adds the insertion of a `(key,value)` pair into the batch with value a vector of `u8`.
+    /// Adds the insertion of a `(key, value)` pair into the batch with `value` a vector of `u8`.
     /// ```rust
     /// # use linera_views::batch::Batch;
     ///   let mut batch = Batch::new();
@@ -281,7 +281,7 @@ impl Batch {
 
 /// A trait to expand delete_prefix operations.
 /// Certain databases (e.g. DynamoDB) do not support the deletion by prefix.
-/// Thus we need to access the databases in order to replace a delete prefix
+/// Thus we need to access the databases in order to replace a delete_prefix
 /// by a vector of the keys to be removed.
 #[async_trait]
 pub trait DeletePrefixExpander {

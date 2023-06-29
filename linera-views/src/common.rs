@@ -4,7 +4,7 @@
 //! This provides several functionalities for the handling of data.
 //! The most important traits are:
 //! * [`KeyValueStoreClient`][trait1] which manages the access to a database and is clonable. It has a minimal interface
-//! * [`Context`][trait2] which provides the access to a database plus a `base_key` and some extra type `E` which is carried along
+//! * [`Context`][trait2] which provides access to a database plus a `base_key` and some extra type `E` which is carried along
 //! and has no impact on the running of the system. There is also a bunch of other helper functions.
 //!
 //! [trait1]: common::KeyValueStoreClient
@@ -44,7 +44,7 @@ pub(crate) const MIN_VIEW_TAG: u8 = 1;
 /// When wanting to find the entries in a BTreeMap with a specific prefix,
 /// one option is to iterate over all keys. Another is to select an interval
 /// that represents exactly the keys having that prefix. Which fortunately
-/// is possible with the way the comparison operators for vectors is built.
+/// is possible with the way the comparison operators for vectors are built.
 ///
 /// The statement is that p is a prefix of v if and only if p <= v < upper_bound(p).
 pub(crate) fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
@@ -95,12 +95,12 @@ pub trait KeyIterable<Error> {
 
 /// How to iterate over the key-value pairs returned by a search query.
 pub trait KeyValueIterable<Error> {
-    /// The iterator returning key-value pairs by reference.
+    /// The iterator returns key-value pairs by reference.
     type Iterator<'a>: Iterator<Item = Result<(&'a [u8], &'a [u8]), Error>>
     where
         Self: 'a;
 
-    /// The iterator returning key-value pairs by value.
+    /// The iterator returns key-value pairs by value.
     type IteratorOwned: Iterator<Item = Result<(Vec<u8>, Vec<u8>), Error>>;
 
     /// Iterates keys and values by reference.
@@ -259,7 +259,7 @@ pub trait Context {
     /// Maximum number of simultaneous connections
     const MAX_CONNECTIONS: usize;
 
-    /// User provided data to be carried along.
+    /// User-provided data to be carried along.
     type Extra: Clone + Send + Sync;
 
     /// The error type in use by internal operations.
@@ -294,7 +294,7 @@ pub trait Context {
     /// Applies the operations from the `batch`, persisting the changes.
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error>;
 
-    /// Getter for the user provided data.
+    /// Getter for the user-provided data.
     fn extra(&self) -> &Self::Extra;
 
     /// Obtains a similar [`Context`] implementation with a different base key.
@@ -381,7 +381,7 @@ pub trait Context {
 /// [`KeyValueStoreClient`].
 #[derive(Debug, Default, Clone)]
 pub struct ContextFromDb<E, DB> {
-    /// The DB client, usually shared between views.
+    /// The DB client that is shared between views.
     pub db: DB,
     /// The base key for the current view.
     pub base_key: Vec<u8>,

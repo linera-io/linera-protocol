@@ -15,7 +15,7 @@ use thiserror::Error;
 #[path = "unit_tests/views.rs"]
 mod tests;
 
-/// A view gives an exclusive access to read and write the data stored at an underlying
+/// A view gives exclusive access to read and write the data stored at an underlying
 /// address in storage.
 #[async_trait]
 pub trait View<C>: Sized {
@@ -39,11 +39,10 @@ pub trait View<C>: Sized {
     /// changes are simply lost.
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError>;
 
-    /// Instead of persisting changes, clears all the data that belong to this view and its
+    /// Instead of persisting changes, clear all the data that belong to this view and its
     /// subviews. Crash-resistant storage implementations are expected to accumulate the
     /// desired changes into the `batch` variable first.
-    /// No data/metadata at all is left after delete. The view is consumed by delete
-    /// and cannot be used in any way after delete.
+    /// No data/metadata at all is left after deletion. The view is consumed by `delete`.
     fn delete(self, batch: &mut Batch);
 }
 
@@ -114,14 +113,14 @@ pub trait HashableView<C>: View<C> {
     /// Computes the hash of the values.
     ///
     /// Implementations do not need to include a type tag. However, the usual precautions
-    /// to enforce collision-resistance must be applied (e.g. including the length of a
+    /// to enforce collision resistance must be applied (e.g. including the length of a
     /// collection of values).
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
 
     /// Computes the hash of the values.
     ///
     /// Implementations do not need to include a type tag. However, the usual precautions
-    /// to enforce collision-resistance must be applied (e.g. including the length of a
+    /// to enforce collision resistance must be applied (e.g. including the length of a
     /// collection of values).
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
 }
@@ -131,10 +130,10 @@ pub trait Hasher: Default + Write + Send + Sync + 'static {
     /// The output type.
     type Output: Debug + Clone + Eq + AsRef<[u8]> + 'static;
 
-    /// Finishes the hashing process and return its output.
+    /// Finishes the hashing process and returns its output.
     fn finalize(self) -> Self::Output;
 
-    /// Serializes a value with BCS and include it in the hash.
+    /// Serializes a value with BCS and includes it in the hash.
     fn update_with_bcs_bytes(&mut self, value: &impl Serialize) -> Result<(), ViewError> {
         bcs::serialize_into(self, value)?;
         Ok(())
