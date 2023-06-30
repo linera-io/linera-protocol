@@ -24,7 +24,7 @@ use {
     async_lock::MutexGuardArc,
 };
 
-/// The LruPrefixCache stores the data for simple read_keys queries
+/// The `LruPrefixCache` stores the data for simple `read_keys` queries
 /// It is inspired by the crate `lru-cache`.
 ///
 /// We cannot apply this crate directly because the batch operation
