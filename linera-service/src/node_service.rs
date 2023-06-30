@@ -44,16 +44,16 @@ use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
 
 #[derive(SimpleObject, Clone)]
-pub struct ChainInfo {
-    pub id: ChainId,
-    pub default: bool,
+pub struct Chains {
+    pub list: Vec<ChainId>,
+    pub default: ChainId,
 }
 
 /// Our root GraphQL query type.
 struct QueryRoot<P, S> {
     client: Arc<Mutex<ChainClient<P, S>>>,
     port: NonZeroU16,
-    chains: Vec<ChainInfo>,
+    chains: Chains,
 }
 
 /// Our root GraphQL subscription type.
@@ -371,7 +371,7 @@ where
         Ok(overviews)
     }
 
-    async fn chains(&self) -> Result<Vec<ChainInfo>, Error> {
+    async fn chains(&self) -> Result<Chains, Error> {
         Ok(self.chains.clone())
     }
 
@@ -388,8 +388,8 @@ where
             }
         };
         if let Some(hash) = hash {
-            let b = self.client.lock().await.read_value(hash).await?;
-            Ok(Some(b))
+            let block = self.client.lock().await.read_value(hash).await?;
+            Ok(Some(block))
         } else {
             Ok(None)
         }
@@ -410,8 +410,13 @@ where
             }
         };
         if let Some(from) = from {
-            let v = self.client.lock().await.read_values(from, limit).await?;
-            Ok(v)
+            let values = self
+                .client
+                .lock()
+                .await
+                .read_values_downward(from, limit)
+                .await?;
+            Ok(values)
         } else {
             Ok(vec![])
         }
@@ -535,7 +540,7 @@ pub struct NodeService<P, S> {
     client: Arc<Mutex<ChainClient<P, S>>>,
     config: ChainListenerConfig,
     port: NonZeroU16,
-    chains: Vec<ChainInfo>,
+    chains: Chains,
 }
 
 impl<P, S> Clone for NodeService<P, S> {
@@ -560,7 +565,7 @@ where
         client: ChainClient<P, S>,
         config: ChainListenerConfig,
         port: NonZeroU16,
-        chains: Vec<ChainInfo>,
+        chains: Chains,
     ) -> Self {
         let client = Arc::new(Mutex::new(client));
         Self {
