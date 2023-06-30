@@ -48,9 +48,7 @@ pub struct MessageId {
 }
 
 /// A unique identifier for a user application.
-#[derive(Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
-#[serde(rename = "UserApplicationId")]
 pub struct ApplicationId<A = ()> {
     /// The bytecode to use for the application.
     pub bytecode_id: BytecodeId<A>,
@@ -351,6 +349,33 @@ impl<A> Serialize for ApplicationId<A> {
                 },
                 serializer,
             )
+        }
+    }
+}
+
+impl<'de, A> Deserialize<'de> for ApplicationId<A>
+where
+    A: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let application_id_bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+            let application_id: SerializableApplicationId =
+                bcs::from_bytes(&application_id_bytes).map_err(serde::de::Error::custom)?;
+            Ok(ApplicationId {
+                bytecode_id: application_id.bytecode_id.with_abi(),
+                creation: application_id.creation,
+            })
+        } else {
+            let value = SerializableApplicationId::deserialize(deserializer)?;
+            Ok(ApplicationId {
+                bytecode_id: value.bytecode_id.with_abi(),
+                creation: value.creation,
+            })
         }
     }
 }
