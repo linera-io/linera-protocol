@@ -52,7 +52,7 @@ enum KeyTag {
 /// The updates and deleted_prefixes have to be coherent. This means:
 /// * If an index is deleted by one in deleted_prefixes then it should not be present
 ///   in updates at al.
-/// * [`DeletePrefix::key_prefix`] should not dominate anyone. That is if we have `[0,2]`
+/// * [`DeletePrefix::key_prefix`][entry1] should not dominate anyone. That is if we have `[0,2]`
 ///   then we should not have `[0,2,3]` since it would be dominated by the preceding.
 ///
 /// With that we have:
@@ -60,6 +60,8 @@ enum KeyTag {
 ///   such that prefix <= index.
 ///   If dp is indeed a prefix then we conclude from that.index is deleted, otherwise not.
 ///   The no domination is essential here.
+///
+/// [entry1]: crate::batch::WriteOperation::DeletePrefix
 #[derive(Debug)]
 pub struct KeyValueStoreView<C> {
     context: C,
