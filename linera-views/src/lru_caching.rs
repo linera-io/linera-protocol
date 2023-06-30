@@ -202,7 +202,7 @@ impl<K> LruCachingKeyValueClient<K>
 where
     K: KeyValueStoreClient,
 {
-    /// Creates a new Key-value store client that implements LRU caching.
+    /// Creates a new key-value store client that implements LRU caching.
     pub fn new(client: K, max_size: usize) -> Self {
         if max_size == 0 {
             Self {
