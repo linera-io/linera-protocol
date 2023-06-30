@@ -564,7 +564,7 @@ where
     }
 }
 
-/// A View that has a type for keys. The ordering of the entries
+/// A `View` that has a type for keys. The ordering of the entries
 /// is determined by the serialization of the context.
 #[derive(Debug)]
 pub struct MapView<C, I, V> {
