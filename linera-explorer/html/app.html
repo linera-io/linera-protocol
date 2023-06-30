@@ -75,6 +75,10 @@
     <v-applications :route="route" :apps="page.applications"></v-applications>
   </div>
 
+  <div v-else-if="page.application">
+    <v-application :route="route" :app="page.application"></v-application>
+  </div>
+
   <div v-else-if="page.error">
     <div class="m-5 p-5 text-center">
       {{ page.error }}

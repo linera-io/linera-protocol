@@ -3,7 +3,9 @@
 
 //! This module provides web files to run a block explorer from linera service node.
 
+mod entrypoint;
 mod graphql;
+mod input_type;
 mod js_utils;
 
 use futures::prelude::*;
@@ -26,7 +28,7 @@ use graphql::{
     applications::ApplicationsApplications as Applications, block::BlockBlock as Block,
     blocks::BlocksBlocks as Blocks, Chains,
 };
-use js_utils::{getf, log_str, setf, SER};
+use js_utils::{getf, log_str, parse, setf, stringify, SER};
 
 /// Page enum containing info for each page
 #[derive(Serialize, Deserialize, Clone)]
@@ -40,6 +42,12 @@ enum Page {
     Blocks(Vec<Blocks>),
     Block(Box<Block>),
     Applications(Vec<Applications>),
+    Application {
+        app: Applications,
+        queries: Value,
+        mutations: Value,
+        subscriptions: Value,
+    },
     Error(String),
 }
 
@@ -216,6 +224,117 @@ async fn applications(node: &str, chain_id: &ChainId) -> Result<(Page, String), 
     ))
 }
 
+fn list_entrypoints(types: &[Value], name: &Value) -> Option<Value> {
+    types
+        .iter()
+        .find(|x: &&Value| &x["name"] == name)
+        .map(|x| x["fields"].clone())
+}
+
+fn fill_type(t: &Value, types: &Vec<Value>) -> Value {
+    match t {
+        Value::Array(l) => Value::Array(l.iter().map(|x: &Value| fill_type(x, types)).collect()),
+        Value::Object(m) => {
+            let mut m = m.clone();
+            let name = t["name"].as_str();
+            let kind = t["kind"].as_str();
+            let of_type = &t["ofType"];
+            match (kind, name, of_type) {
+                (Some("OBJECT"), Some(name), _) => {
+                    match types.iter().find(|x: &&Value| x["name"] == name) {
+                        None => (),
+                        Some(t2) => {
+                            let fields: Vec<Value> = t2["fields"]
+                                .as_array()
+                                .unwrap()
+                                .iter()
+                                .map(|x| fill_type(x, types))
+                                .collect();
+                            m.insert("fields".to_string(), Value::Array(fields));
+                        }
+                    }
+                }
+                (Some("INPUT_OBJECT"), Some(name), _) => {
+                    match types.iter().find(|x: &&Value| x["name"] == name) {
+                        None => (),
+                        Some(t2) => {
+                            let fields: Vec<Value> = t2["inputFields"]
+                                .as_array()
+                                .unwrap()
+                                .iter()
+                                .map(|x| fill_type(x, types))
+                                .collect();
+                            m.insert("inputFields".to_string(), Value::Array(fields));
+                        }
+                    }
+                }
+                (Some("ENUM"), Some(name), _) => {
+                    match types.iter().find(|x: &&Value| x["name"] == name) {
+                        None => (),
+                        Some(t2) => {
+                            let values: Vec<Value> = t2["enumValues"]
+                                .as_array()
+                                .unwrap()
+                                .iter()
+                                .map(|x| fill_type(x, types))
+                                .collect();
+                            m.insert("enumValues".to_string(), Value::Array(values));
+                        }
+                    }
+                }
+                (Some("LIST" | "NON_NULL"), Some(name), Value::Null) => {
+                    match types.iter().find(|x: &&Value| x["name"] == name) {
+                        None => (),
+                        Some(t2) => {
+                            m.insert("ofType".to_string(), fill_type(t2, types));
+                        }
+                    }
+                }
+                _ => (),
+            };
+            m.insert("ofType".to_string(), fill_type(&t["ofType"], types));
+            m.insert("type".to_string(), fill_type(&t["type"], types));
+            m.insert("args".to_string(), fill_type(&t["args"], types));
+            if let Some("LIST") = kind {
+                m.insert("_input".to_string(), Value::Array(Vec::new()));
+            }
+            if let Some("SCALAR" | "ENUM" | "OBJECT") = kind {
+                m.insert("_include".to_string(), Value::Bool(true));
+            }
+            Value::Object(m)
+        }
+        t => t.clone(),
+    }
+}
+
+async fn application(app: Applications) -> Result<(Page, String), String> {
+    let schema = graphql::introspection(&app.link).await?;
+    let sch = &schema["data"]["__schema"];
+    let types = sch["types"]
+        .as_array()
+        .expect("introspection types is not an array")
+        .clone();
+    let queries =
+        list_entrypoints(&types, &sch["queryType"]["name"]).unwrap_or(Value::Array(Vec::new()));
+    let queries = fill_type(&queries, &types);
+    let mutations =
+        list_entrypoints(&types, &sch["mutationType"]["name"]).unwrap_or(Value::Array(Vec::new()));
+    let mutations = fill_type(&mutations, &types);
+    let subscriptions = list_entrypoints(&types, &sch["subscriptionType"]["name"])
+        .unwrap_or(Value::Array(Vec::new()));
+    let subscriptions = fill_type(&subscriptions, &types);
+    let pathname = format!("/application/{}", app.id);
+    Ok((
+        Page::Application {
+            app,
+            queries,
+            mutations,
+            subscriptions,
+        },
+        pathname,
+    ))
+}
+
 fn format_bytes(value: &JsValue) -> JsValue {
     let modified_value = value.clone();
     if let Some(object) = js_sys::Object::try_from(value) {
@@ -255,6 +374,10 @@ fn page_name_and_args(page: &Page) -> (&str, Vec<(String, String)>) {
         Page::Block(b) => ("block", vec![("block".to_string(), b.hash.to_string())]),
         Page::Blocks { .. } => ("blocks", Vec::new()),
         Page::Applications(_) => ("applications", Vec::new()),
+        Page::Application { app, .. } => (
+            "application",
+            vec![("app".to_string(), stringify(&app.serialize(&SER).unwrap()))],
+        ),
         Page::Error(_) => ("error", Vec::new()),
     }
 }
@@ -304,6 +427,13 @@ async fn route_aux(app: &JsValue, data: &Data, path: &Option<String>, args: &[(S
             }
             "blocks" => blocks(&address, &chain_id, None, Some(20)).await,
             "applications" => applications(&address, &chain_id).await,
+            "application" => match find_arg(&args, "app").map(|v| parse(&v)) {
+                None => Err("unknown application".to_string()),
+                Some(app_js) => {
+                    let app = from_value::<Applications>(app_js).unwrap();
+                    application(app).await
+                }
+            },
             "error" => {
                 let msg = find_arg(&args, "msg").unwrap_or("unknown error".to_string());
                 Err(msg)
@@ -425,10 +555,21 @@ pub async fn init(app: JsValue, uri: String) {
             let path = match pathname {
                 "/blocks" => Some("blocks".to_string()),
                 "/applications" => Some("applications".to_string()),
-                pathname => match pathname.strip_prefix("/block/") {
-                    Some(hash) => {
+                pathname => match (
+                    pathname.strip_prefix("/block/"),
+                    pathname.strip_prefix("/application/"),
+                ) {
+                    (Some(hash), _) => {
                         args.push(("block".to_string(), hash.to_string()));
                         Some("block".to_string())
+                    }
+                    (_, Some(app_id)) => {
+                        let link = format!("{}/applications/{}", address, app_id);
+                        let app =
+                            serde_json::json!({"id": app_id, "link": link, "description": ""})
+                                .to_string();
+                        args.push(("app".to_string(), app));
+                        Some("application".to_string())
                     }
                     _ => None,
                 },
