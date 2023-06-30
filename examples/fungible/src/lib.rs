@@ -153,8 +153,6 @@ use {
     },
 };
 
-// TODO(#768): Remove the derive macros.
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
 pub struct FungibleTokenAbi;
 
 impl ContractAbi for FungibleTokenAbi {

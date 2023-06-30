@@ -7,8 +7,6 @@ use linera_sdk::base::{Amount, ApplicationId, ContractAbi, ServiceAbi};
 use linera_views::{common::CustomSerialize, views::ViewError};
 use serde::{Deserialize, Serialize};
 
-// TODO(#768): Remove the derive macros.
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
 pub struct MatchingEngineAbi;
 
 impl ContractAbi for MatchingEngineAbi {
