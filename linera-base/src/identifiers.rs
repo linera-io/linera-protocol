@@ -59,11 +59,9 @@ pub struct ApplicationId<A = ()> {
 }
 
 /// A unique identifier for an application bytecode.
-#[derive(Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Default))]
 pub struct BytecodeId<A = ()> {
     pub message_id: MessageId,
-    #[serde(skip)]
     _phantom: std::marker::PhantomData<A>,
 }
 
@@ -199,6 +197,30 @@ impl<A> Serialize for BytecodeId<A> {
                 },
                 serializer,
             )
+        }
+    }
+}
+
+impl<'de, A> Deserialize<'de> for BytecodeId<A> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let message_id_bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+            let message_id =
+                bcs::from_bytes(&message_id_bytes).map_err(serde::de::Error::custom)?;
+            Ok(BytecodeId {
+                message_id,
+                _phantom: std::marker::PhantomData,
+            })
+        } else {
+            let value = SerializableBytecodeId::deserialize(deserializer)?;
+            Ok(BytecodeId {
+                message_id: value.message_id,
+                _phantom: std::marker::PhantomData,
+            })
         }
     }
 }
