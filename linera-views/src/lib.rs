@@ -11,7 +11,7 @@
 /// The definition of the batches for writing in the database.
 pub mod batch;
 
-/// The definitions used for the memory/RocksDB/dynamo_db.
+/// The definitions used for the memory, RocksDB, and DynamoDB backends.
 pub mod common;
 
 /// The definition of the `View` and related traits.
