@@ -25,3 +25,21 @@ pub fn log(x: &JsValue) {
 pub fn log_str(s: &str) {
     log(&JsValue::from_str(s))
 }
+
+pub fn parse(x: &str) -> JsValue {
+    js_sys::JSON::parse(x).expect("parse json failed")
+}
+
+pub fn stringify(x: &JsValue) -> String {
+    js_sys::JSON::stringify(x)
+        .expect("stringify json failed")
+        .into()
+}
+
+pub fn js_to_json(x: &JsValue) -> serde_json::Value {
+    serde_json::from_str::<serde_json::Value>(&stringify(x)).expect("js_to_json failed")
+}
+
+pub fn unproxy(x: &JsValue) -> JsValue {
+    parse(&stringify(x))
+}

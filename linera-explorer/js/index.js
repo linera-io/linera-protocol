@@ -6,6 +6,10 @@ import op_component from './operation.js'
 import block_component from './block.js'
 import blocks_component from './blocks.js'
 import applications_component from './applications.js'
+import application_component from './application.js'
+import entrypoint_component from './entrypoint.js'
+import input_type_component from './input_type.js'
+import output_type_component from './output_type.js'
 
 function main(r) {
   const app = Vue.createApp({
@@ -21,6 +25,10 @@ function main(r) {
   app.component('v-block', block_component)
   app.component('v-blocks', blocks_component)
   app.component('v-applications', applications_component)
+  app.component('v-application', application_component)
+  app.component('v-entrypoint', entrypoint_component(r))
+  app.component('v-input-type', input_type_component(r))
+  app.component('v-output-type', output_type_component(r))
   app.config.globalProperties.sh = r.short_cryptohash
   app.config.globalProperties.shapp = r.short_app_id
   app.config.globalProperties.json_load = json.load
