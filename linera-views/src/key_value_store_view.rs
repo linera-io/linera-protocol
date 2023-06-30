@@ -57,7 +57,7 @@ enum KeyTag {
 ///   by the preceding.
 ///
 /// With that we have:
-/// * in order to test if an index is deleted by a prefix we compute the highest delete_prefix dp
+/// * in order to test if an index is deleted by a prefix we compute the highest deleted prefix dp
 ///   such that dp <= index.
 ///   If dp is indeed a prefix then we conclude from that.index is deleted, otherwise not.
 ///   The no domination is essential here.
