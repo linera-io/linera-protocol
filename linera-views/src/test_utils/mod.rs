@@ -45,7 +45,7 @@ impl LocalStackTestContext {
     /// An address to the LocalStack instance must be specified using a `LOCALSTACK_ENDPOINT`
     /// environment variable.
     ///
-    /// This also locks the `LOCALSTACK_GUARD` to enforce only one test has access to the
+    /// This also locks the `LOCALSTACK_GUARD` to enforce that only one test has access to the
     /// LocalStack instance.
     pub async fn new() -> Result<LocalStackTestContext, Error> {
         let base_config = aws_config::load_from_env().await;
@@ -201,7 +201,7 @@ pub fn get_random_byte_vector<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usi
     v
 }
 
-/// Appends a small value to a key to make collisions likely.
+/// Appends a small value to a key making collisions likely.
 pub fn get_small_key_space<R: RngCore>(rng: &mut R, key_prefix: &[u8], n: usize) -> Vec<u8> {
     let mut key = key_prefix.to_vec();
     for _ in 0..n {
@@ -222,9 +222,9 @@ pub fn get_random_kset<R: RngCore>(rng: &mut R, n: usize, k: usize) -> Vec<usize
 }
 
 /// Takes a random number generator, a key_prefix and generates
-/// pairs (key,value) with key obtained by appending 8 bytes at random to key_prefix
+/// pairs `(key, value)` with key obtained by appending 8 bytes at random to key_prefix
 /// and value obtained by appending 8 bytes to the trivial vector.
-/// We return n such (key,value) pairs which are all distinct
+/// We return n such `(key, value)` pairs which are all distinct
 pub fn get_random_key_value_vec_prefix<R: RngCore>(
     rng: &mut R,
     key_prefix: Vec<u8>,
@@ -248,8 +248,8 @@ pub fn get_random_key_value_vec_prefix<R: RngCore>(
     }
 }
 
-/// Takes a random number generator rng, a number n and returns n random (key,value)
-/// which are all distinct with key and value are of length 8.
+/// Takes a random number generator rng, a number n and returns n random `(key, value)`
+/// which are all distinct with key and value being of length 8.
 pub fn get_random_key_value_vec<R: RngCore>(rng: &mut R, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     get_random_key_value_vec_prefix(rng, Vec::new(), 8, 8, n)
 }

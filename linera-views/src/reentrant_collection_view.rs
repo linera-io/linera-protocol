@@ -36,7 +36,7 @@ pub struct ReentrantByteCollectionView<C, W> {
 ///
 /// Sub-views in a collection share a common key prefix, like in other view types. However,
 /// just concatenating the shared prefix with sub-view keys makes it impossible to distinguish if a
-/// given key belongs to child sub-view or a grandchild sub-view (consider for example if a
+/// given key belongs to a child sub-view or a grandchild sub-view (consider for example if a
 /// collection is stored inside the collection).
 #[repr(u8)]
 enum KeyTag {
@@ -209,8 +209,8 @@ where
         }
     }
 
-    /// Loads a read-only access to a subview for the data at the given index in the collection. If an entry
-    /// was removed before then a default entry is put on this index.
+    /// Loads a subview at the given index in the collection and gives read-only access to the data.
+    /// If an entry was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -332,8 +332,8 @@ where
     ViewError: From<C::Error>,
     W: View<C> + Send + Sync + 'static,
 {
-    /// Load multiple entries for write at once.
-    /// The entries in short_keys have to be all distincts.
+    /// Load multiple entries for writing at once.
+    /// The entries in short_keys have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -412,8 +412,8 @@ where
         Ok(result)
     }
 
-    /// Load multiple entries for read at once.
-    /// The entries in short_keys have to be all distincts.
+    /// Load multiple entries for reading at once.
+    /// The entries in short_keys have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -670,7 +670,7 @@ where
     }
 }
 
-/// A view that supports accessing a collection of views of the same kind, indexed by key,
+/// A view that supports accessing a collection of views of the same kind, indexed by keys,
 /// possibly several subviews at a time.
 #[derive(Debug)]
 pub struct ReentrantCollectionView<C, I, W> {
@@ -749,8 +749,8 @@ where
         self.collection.try_load_entry_mut(short_key).await
     }
 
-    /// Loads a read-only access to a subview for the data at the given index in the collection. If an entry
-    /// was removed before then a default entry is put on this index.
+    /// Loads a subview at the given index in the collection and gives read-only access to the data.
+    /// If an entry was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -842,8 +842,8 @@ where
     I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync + 'static,
 {
-    /// Load multiple entries for write at once.
-    /// The entries in indices have to be all distincts.
+    /// Load multiple entries for writing at once.
+    /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -875,8 +875,8 @@ where
         self.collection.try_load_entries_mut(short_keys).await
     }
 
-    /// Load multiple entries for read at once.
-    /// The entries in indices have to be all distincts.
+    /// Load multiple entries for reading at once.
+    /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -917,7 +917,7 @@ where
     W: View<C> + Send + Sync,
 {
     /// Returns the list of indices in the collection in an order determined
-    /// by the serialization.
+    /// by serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -1108,8 +1108,8 @@ where
         self.collection.try_load_entry_mut(short_key).await
     }
 
-    /// Loads a read-only access to a subview for the data at the given index in the collection. If an entry
-    /// was removed before then a default entry is put on this index.
+    /// Loads a subview at the given index in the collection and gives read-only access to the data.
+    /// If an entry was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -1203,8 +1203,8 @@ where
     I: Sync + Clone + Send + Debug + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync + 'static,
 {
-    /// Load multiple entries for write at once.
-    /// The entries in indices have to be all distincts.
+    /// Load multiple entries for writing at once.
+    /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -1236,8 +1236,8 @@ where
         self.collection.try_load_entries_mut(short_keys).await
     }
 
-    /// Load multiple entries for read at once.
-    /// The entries in indices have to be all distincts.
+    /// Load multiple entries for reading at once.
+    /// The entries in indices have to be all distinct.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};

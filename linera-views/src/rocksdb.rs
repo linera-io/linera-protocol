@@ -15,7 +15,7 @@ use std::{
 use tempfile::TempDir;
 use thiserror::Error;
 
-/// The RocksDb client in use.
+/// The RocksDb client that we use.
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
 /// The internal client
@@ -104,7 +104,7 @@ impl KeyValueStoreClient for RocksdbClientInternal {
         _base_key: &[u8],
     ) -> Result<(), RocksdbContextError> {
         let db = self.clone();
-        // NOTE: The delete_range functionality of rocksdb needs to have an upper bound in order to work.
+        // NOTE: The delete_range functionality of RocksDB needs to have an upper bound in order to work.
         // Thus in order to have the system working, we need to handle the unlikely case of having to
         // delete a key starting with [255, ...., 255]
         let len = batch.operations.len();

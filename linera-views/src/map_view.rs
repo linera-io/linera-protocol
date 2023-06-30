@@ -1,13 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! The `MapView` allows to implement a map that can be modified.
+//! The `MapView` implements a map that can be modified.
 //!
 //! This reproduces more or less the functionalities of the `BTreeMap`.
 //! There are 3 different variants:
 //! * The [`ByteMapView`][class1] whose keys are the `Vec<u8>` and the values are a serializable type `V`.
 //!   The ordering of the entries is via the lexicographic order of the keys.
-//! * The [`MapView`][class2] whose keys are a serializable type `K`and the value a serializable type `V`.
+//! * The [`MapView`][class2] whose keys are a serializable type `K` and the value a serializable type `V`.
 //!   The ordering is via the order of the BCS serialized keys.
 //! * The [`CustomMapView`][class3] whose keys are a serializable type `K` and the value a serializable type `V`.
 //!   The ordering is via the order of the custom serialized keys.
@@ -212,7 +212,7 @@ where
         Ok(())
     }
 
-    /// Obtainw a mutable reference to a value at a given position if available.
+    /// Obtains a mutable reference to a value at a given position if available.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -564,7 +564,7 @@ where
     }
 }
 
-/// A View that actually has a type for keys. The ordering of the entries
+/// A `View` that has a type for keys. The ordering of the entries
 /// is determined by the serialization of the context.
 #[derive(Debug)]
 pub struct MapView<C, I, V> {
@@ -726,7 +726,7 @@ where
     I: Sync + Send + Serialize + DeserializeOwned,
     V: Sync + Serialize + DeserializeOwned + 'static,
 {
-    /// Returns the list of indices in the map. The order is determined by the serialization.
+    /// Returns the list of indices in the map. The order is determined by serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -783,7 +783,7 @@ where
     }
 
     /// Applies a function f on each index. Indices are visited in the order
-    /// determined by the serialization.
+    /// determined by serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;
@@ -814,7 +814,7 @@ where
     }
 
     /// Applies a function f on each index/value pair. Indices and values are
-    /// visited in an order determined by the serialization.
+    /// visited in an order determined by serialization.
     /// If the function returns false, then the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -849,7 +849,7 @@ where
     }
 
     /// Applies a function on each index/value pair. Indices and values are
-    /// visited in an order determined by the serialization.
+    /// visited in an order determined by serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::create_test_context;

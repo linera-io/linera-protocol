@@ -1,29 +1,29 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module is used in the Linera protocol to map complex data-structures onto a
+//! This module is used in the Linera protocol to map complex data structures onto a
 //! key-value store. The central notion is a [`views::View`](crate::views::View) which can
 //! be loaded from storage, modified in memory, then committed (i.e. the changes are
 //! atomically persisted in storage).
 
 #![deny(missing_docs)]
 
-/// The definition of the batches for writing in the datatbase.
+/// The definition of the batches for writing in the database.
 pub mod batch;
 
-/// The definitions used for the memory/rocksdb/dynamo_db.
+/// The definitions used for the memory, RocksDB, and DynamoDB backends.
 pub mod common;
 
 /// The definition of the `View` and related traits.
 pub mod views;
 
-/// The `RegisterView` allows to implement a register for a single value.
+/// The `RegisterView` implements a register for a single value.
 pub mod register_view;
 
 /// The `LogView` implements a log list that can be pushed.
 pub mod log_view;
 
-/// The `QueueView` implements a queue that can pushed_backed and deleted on the front.
+/// The `QueueView` implements a queue that can push on the back and delete on the front.
 pub mod queue_view;
 
 /// The `MapView` implements a map with ordered keys.
@@ -46,7 +46,7 @@ pub mod lru_caching;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod reentrant_collection_view;
 
-/// The implementation of a key value store view.
+/// The implementation of a key-value store view.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod key_value_store_view;
 

@@ -11,8 +11,8 @@ use async_trait::async_trait;
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use thiserror::Error;
 
-/// The data is serialized in memory just like for rocksdb / dynamodb
-/// The analogue of the database is the BTreeMap
+/// The data is serialized in memory just like for RocksDB / DynamoDB
+/// The analog of the database is the BTreeMap
 pub type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
 /// A virtual DB client where data are persisted in memory.

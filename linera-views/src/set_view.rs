@@ -14,7 +14,7 @@ use std::{borrow::Borrow, collections::BTreeMap, fmt::Debug, marker::PhantomData
 /// Key tags to create the sub-keys of a SetView on top of the base key.
 #[repr(u8)]
 enum KeyTag {
-    /// Prefix for the indices of the setview
+    /// Prefix for the indices of the `SetView`
     Index = MIN_VIEW_TAG,
     /// Prefix for the hash
     Hash,
@@ -484,7 +484,7 @@ where
     ViewError: From<C::Error>,
     I: Sync + Clone + Send + Serialize + DeserializeOwned,
 {
-    /// Returns the list of indices in the set. The order is determined by the serialization.
+    /// Returns the list of indices in the set. The order is determined by serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_test_context, set_view::SetView};
