@@ -71,12 +71,12 @@ impl NotificationTracker {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use linera_base::crypto::{BcsSignable, CryptoHash};
+    use linera_base::crypto::{BcsHashable, CryptoHash};
 
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
-    struct Foo(String);
+    struct Foo;
 
-    impl BcsSignable for Foo {}
+    impl BcsHashable for Foo {}
 
     #[test]
     fn test_empty() {
@@ -84,7 +84,7 @@ pub mod tests {
             chain_id: ChainId::root(0),
             reason: Reason::NewBlock {
                 height: BlockHeight(0),
-                hash: CryptoHash::new(&Foo("".into())),
+                hash: CryptoHash::new(&Foo),
             },
         };
 
@@ -98,11 +98,11 @@ pub mod tests {
     fn test_new_blocks() {
         let reason_0 = Reason::NewBlock {
             height: BlockHeight(0),
-            hash: CryptoHash::new(&Foo("".into())),
+            hash: CryptoHash::new(&Foo),
         };
         let reason_1 = Reason::NewBlock {
             height: BlockHeight(1),
-            hash: CryptoHash::new(&Foo("".into())),
+            hash: CryptoHash::new(&Foo),
         };
         let chain_0 = ChainId::root(0);
         let chain_1 = ChainId::root(1);

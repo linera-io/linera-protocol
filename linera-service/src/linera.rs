@@ -30,7 +30,7 @@ use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
     chain_listener::ChainListenerConfig,
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
-    node_service::{ChainInfo, NodeService},
+    node_service::{Chains, NodeService},
     project::{self, Project},
     storage::{Runnable, StorageConfig},
 };
@@ -1301,19 +1301,9 @@ where
             } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 chain_client.synchronize_from_validators().await?;
-                let default_chain = chain_client.chain_id();
-                let chains = context
-                    .wallet_state
-                    .chain_ids()
-                    .iter()
-                    .map(|id| {
-                        let id = *id;
-                        ChainInfo {
-                            id,
-                            default: id == default_chain,
-                        }
-                    })
-                    .collect();
+                let default = chain_client.chain_id();
+                let list = context.wallet_state.chain_ids();
+                let chains = Chains { list, default };
                 let service = NodeService::new(chain_client, config, port, chains);
                 service
                     .run(context, |context, client| {

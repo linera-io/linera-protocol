@@ -76,7 +76,7 @@ pub trait Store: Sized {
     async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError>;
 
     /// Reads the values in descending order from the given hash.
-    async fn read_values(
+    async fn read_values_downward(
         &self,
         from: CryptoHash,
         limit: u32,
@@ -295,7 +295,7 @@ where
         Ok(value.with_hash_unchecked(hash))
     }
 
-    async fn read_values(
+    async fn read_values_downward(
         &self,
         from: CryptoHash,
         limit: u32,
