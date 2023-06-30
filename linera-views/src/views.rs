@@ -74,7 +74,7 @@ pub enum ViewError {
     /// Errors within the context can occur and are presented as ViewError.
     #[error("Storage operation error in {backend}: {error}")]
     ContextError {
-        /// backend can be e.g. RocksDb / AmazonDb / Memory / etc.
+        /// backend can be e.g. RocksDB / DynamoDB / Memory / etc.
         backend: String,
         /// error is the specific problem that occurred within that context
         error: String,
@@ -95,6 +95,10 @@ pub enum ViewError {
     /// The database is corrupt: Some entries are missing
     #[error("Missing database entries")]
     MissingEntries,
+
+    /// The value is too large for the client
+    #[error("The value is too large for the client")]
+    TooLargeValue,
 }
 
 impl ViewError {

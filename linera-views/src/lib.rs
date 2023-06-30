@@ -5,14 +5,61 @@
 //! key-value store. The central notion is a [`views::View`](crate::views::View) which can
 //! be loaded from storage, modified in memory, then committed (i.e. the changes are
 //! atomically persisted in storage).
+//!
+//! The package provides essentially two functionalities:
+//! * An abstraction to access databases.
+//! * Several containers named views for storing data modeled on classical ones.
+//!
+//! See `DESIGN.md` for more details.
+//!
+//! ## The supported databases.
+//!
+//! The databases supported are of the NoSQL variety and they are key-value stores.
+//!
+//! We provide support for the following databases:
+//! * `MemoryClient` is using the memory
+//! * `RocksdbClient` is a disk-based key-value store
+//! * `DynamoDbClient` is the AWS-based DynamoDB service.
+//!
+//! The corresponding type in the code is the `KeyValueStoreClient`.
+//! A context is the combination of a client and a path (named `base_key` which is
+//! of type `Vec<u8>`).
+//!
+//! ## Views.
+//!
+//! A view is a container whose data lies in one of the above-mentioned databases.
+//! When the container is modified the modification lies first in the view before
+//! being committed to the database. In technical terms, a view implements the trait `View`.
+//!
+//! The specific functionalities of the trait `View` are the following:
+//! * `load` for loading the view from a specific context.
+//! * `rollback` for canceling all modifications that were not committed thus far.
+//! * `clear` for clearing the view, in other words for reverting it to its default state.
+//! * `flush` for persisting the changes to storage.
+//! * `delete` for deleting the changes from the database.
+//!
+//! The following views implement the `View` trait:
+//! * `RegisterView` implements the storing of a single data.
+//! * `LogView` implements a log, which is a list of entries that can be expanded.
+//! * `QueueView` implements a queue, which is a list of entries that can be expanded and reduced.
+//! * `MapView` implements a map with keys and values.
+//! * `SetView` implements a set with keys.
+//! * `CollectionView` implements a map whose values are views themselves.
+//! * `ReentrantCollectionView` implements a map for which different keys can be accessed independently.
+//! * `ViewContainer<C>` implements a `KeyValueStoreClient` and is used internally.
+//!
+//! The `LogView` can be seen as an analog of `VecDeque` while `MapView` is an analog of `BTreeMap`.
 
 #![deny(missing_docs)]
 
 /// The definition of the batches for writing in the database.
 pub mod batch;
 
-/// The definitions used for the memory, RocksDB, and DynamoDB backends.
+/// The definitions used for the `KeyValueStoreClient` and `Context`.
 pub mod common;
+
+/// The code for handling big values by splitting them into several small ones.
+pub mod value_splitting;
 
 /// The definition of the `View` and related traits.
 pub mod views;
@@ -54,7 +101,7 @@ pub mod key_value_store_view;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod hashable_wrapper;
 
-/// Helper definitions for Rocksdb storage.
+/// Helper definitions for RocksDB storage.
 #[cfg(feature = "rocksdb")]
 #[cfg(not(target_arch = "wasm32"))]
 pub mod rocksdb;

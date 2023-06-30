@@ -38,6 +38,7 @@ use linera_execution::{
 use linera_views::{
     batch::Batch,
     common::{Context, ContextFromDb, KeyValueStoreClient},
+    value_splitting::DatabaseConsistencyError,
     views::{CryptoHashView, RootView, View, ViewError},
 };
 use metrics::increment_counter;
@@ -260,7 +261,8 @@ impl<CL> Store for DbStoreClient<CL>
 where
     CL: KeyValueStoreClient + Clone + Send + Sync + 'static,
     ViewError: From<<CL as KeyValueStoreClient>::Error>,
-    <CL as KeyValueStoreClient>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
+    <CL as KeyValueStoreClient>::Error:
+        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     type Context = ContextFromDb<ChainRuntimeContext<Self>, CL>;
     type ContextError = <CL as KeyValueStoreClient>::Error;

@@ -45,7 +45,7 @@ enum KeyTag {
     Hash,
 }
 
-/// A view that represents the function of KeyValueStoreClient (though not KeyValueStoreClient).
+/// A view that represents the functions of KeyValueStoreClient (though not KeyValueStoreClient).
 ///
 /// Comment on the data set:
 /// In order to work, the view needs to store the updates and deleted_prefixes.
@@ -158,10 +158,10 @@ where
     /// false, then the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![0]);
     ///   view.insert(vec![0,2], vec![0]);
@@ -227,10 +227,10 @@ where
     /// Applies the function f over all indices.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![0]);
     ///   view.insert(vec![0,2], vec![0]);
@@ -258,10 +258,10 @@ where
     /// If the function f returns false then the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![0]);
     ///   view.insert(vec![0,2], vec![0]);
@@ -326,10 +326,10 @@ where
     /// Applies the function f over all index/value pairs.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![0]);
     ///   view.insert(vec![0,2], vec![0]);
@@ -355,10 +355,10 @@ where
     /// Returns the list of indices in lexicographic order.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![0]);
     ///   view.insert(vec![0,2], vec![0]);
@@ -379,10 +379,10 @@ where
     /// Obtains the value at the given index, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![42]);
     ///   assert_eq!(view.get(&[0,1]).await.unwrap(), Some(vec![42]));
@@ -408,10 +408,10 @@ where
     /// Obtains the values of a range of indices
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![42]);
     ///   assert_eq!(view.multi_get(vec![vec![0,1], vec![0,2]]).await.unwrap(), vec![Some(vec![42]), None]);
@@ -450,10 +450,10 @@ where
     /// Sets or inserts a value.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![34]);
     ///   assert_eq!(view.get(&[0,1]).await.unwrap(), Some(vec![34]));
@@ -467,10 +467,10 @@ where
     /// Removes a value. If absent then the action has no effect.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![34]);
     ///   view.remove(vec![0,1]);
@@ -513,10 +513,10 @@ where
     /// Iterates over all the keys matching the given prefix. The prefix is not included in the returned keys.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![34]);
     ///   view.insert(vec![3,4], vec![42]);
@@ -579,10 +579,10 @@ where
     /// prefix is not included in the returned keys.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![34]);
     ///   view.insert(vec![3,4], vec![42]);
@@ -648,11 +648,11 @@ where
     /// Applies the given batch of `crate::common::WriteOperation`.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::create_test_context;
+    /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use linera_views::batch::Batch;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![34]);
     ///   view.insert(vec![3,4], vec![42]);
@@ -749,6 +749,7 @@ where
     ViewError: From<C::Error>,
 {
     const MAX_CONNECTIONS: usize = C::MAX_CONNECTIONS;
+    const MAX_VALUE_SIZE: usize = C::MAX_VALUE_SIZE;
     type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;

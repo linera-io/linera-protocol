@@ -4,7 +4,7 @@
 use linera_views::{
     common::HasherOutput,
     hashable_wrapper::WrappedHashableContainerView,
-    memory::create_test_context,
+    memory::create_memory_context,
     register_view::RegisterView,
     views::{HashableView, View},
 };
@@ -19,7 +19,7 @@ struct TestType<C> {
 // TODO(#560): Implement the same for CryptoHash
 #[tokio::test]
 async fn check_hashable_container_hash() {
-    let context = create_test_context();
+    let context = create_memory_context();
     let test = TestType::load(context).await.unwrap();
     let hash1 = test.inner.hash().await.unwrap();
     let hash2 = test.wrap.hash().await.unwrap();

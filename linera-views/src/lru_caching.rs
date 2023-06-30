@@ -95,6 +95,8 @@ where
     K: KeyValueStoreClient + Send + Sync,
 {
     const MAX_CONNECTIONS: usize = K::MAX_CONNECTIONS;
+    // The LRU cache does not change the underlying client's size limit.
+    const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
     type Error = K::Error;
     type Keys = K::Keys;
     type KeyValues = K::KeyValues;
@@ -232,7 +234,7 @@ impl<E> LruCachingMemoryContext<E> {
         extra: E,
         n: usize,
     ) -> Result<Self, ViewError> {
-        let client = MemoryClient::new(guard.into());
+        let client = MemoryClient::new(guard);
         let lru_client = LruCachingKeyValueClient::new(client, n);
         Ok(Self {
             db: lru_client,

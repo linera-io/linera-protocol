@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    memory::create_test_context,
+    memory::create_memory_context,
     queue_view::QueueView,
     views::{CryptoHashRootView, RootView, View},
 };
@@ -15,7 +15,7 @@ pub struct StateView<C> {
 
 #[tokio::test]
 async fn queue_view_mutability_check() {
-    let context = create_test_context();
+    let context = create_memory_context();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     let mut vector = Vec::new();
     let n = 20;

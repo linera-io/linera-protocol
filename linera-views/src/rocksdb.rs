@@ -5,6 +5,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{get_upper_bound, ContextFromDb, KeyValueStoreClient},
     lru_caching::{LruCachingKeyValueClient, TEST_CACHE_SIZE},
+    value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStoreClient},
 };
 use async_trait::async_trait;
 use std::{
@@ -15,7 +16,11 @@ use std::{
 use tempfile::TempDir;
 use thiserror::Error;
 
-/// The RocksDb client that we use.
+// The maximum size of values in RocksDB is 3 GB
+// That is 3221225472 and so for offset reason we decrease by 400
+const MAX_VALUE_SIZE: usize = 3221225072;
+
+/// The Rocksdb client that we use.
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
 /// The internal client
@@ -24,6 +29,7 @@ pub type RocksdbClientInternal = Arc<DB>;
 #[async_trait]
 impl KeyValueStoreClient for RocksdbClientInternal {
     const MAX_CONNECTIONS: usize = 1;
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     type Error = RocksdbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -152,7 +158,7 @@ impl KeyValueStoreClient for RocksdbClientInternal {
 /// A shared DB client for RocksDB implementing LruCaching
 #[derive(Clone)]
 pub struct RocksdbClient {
-    client: LruCachingKeyValueClient<RocksdbClientInternal>,
+    client: LruCachingKeyValueClient<ValueSplittingKeyValueStoreClient<RocksdbClientInternal>>,
 }
 
 impl RocksdbClient {
@@ -162,6 +168,7 @@ impl RocksdbClient {
         options.create_if_missing(true);
         let db = DB::open(&options, path).unwrap();
         let client = Arc::new(db);
+        let client = ValueSplittingKeyValueStoreClient::new(client);
         Self {
             client: LruCachingKeyValueClient::new(client, cache_size),
         }
@@ -180,6 +187,7 @@ pub type RocksdbContext<E> = ContextFromDb<E, RocksdbClient>;
 #[async_trait]
 impl KeyValueStoreClient for RocksdbClient {
     const MAX_CONNECTIONS: usize = 1;
+    const MAX_VALUE_SIZE: usize = usize::MAX;
     type Error = RocksdbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -243,6 +251,10 @@ pub enum RocksdbContextError {
     /// BCS serialization error.
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
+
+    /// The database is not coherent
+    #[error(transparent)]
+    DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 }
 
 impl From<RocksdbContextError> for crate::views::ViewError {

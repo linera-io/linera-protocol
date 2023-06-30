@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    memory::create_test_context,
+    memory::create_memory_context,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     views::{CryptoHashRootView, RootView, View},
@@ -17,7 +17,7 @@ pub struct StateView<C> {
 
 #[tokio::test]
 async fn reentrant_collection_view_check() {
-    let context = create_test_context();
+    let context = create_memory_context();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     let mut map = BTreeMap::<u8, u32>::new();
     let n = 20;

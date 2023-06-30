@@ -78,7 +78,7 @@ pub fn mock_application_state(state: impl Into<Option<Vec<u8>>>) {
 
 /// Initializes and returns a view context for using as the mocked key-value store.
 pub fn mock_key_value_store() -> MemoryContext<()> {
-    let store = linera_views::memory::create_test_context();
+    let store = linera_views::memory::create_memory_context();
     unsafe { MOCK_KEY_VALUE_STORE = Some(store.clone()) };
     store
 }

@@ -162,11 +162,11 @@ where
     /// at that index was absent or had not been assigned then the default value is provided.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::ByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   let subview = view.load_entry_mut(vec![0, 1]).await.unwrap();
     ///   let value = subview.get();
@@ -182,11 +182,11 @@ where
     /// was removed before or it was absent then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::ByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   view.load_entry_mut(vec![0, 1]).await.unwrap();
     ///   let subview = view.load_entry(vec![0, 1]).await.unwrap();
@@ -202,11 +202,11 @@ where
     /// already being visited.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::ByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   let subview = view.try_load_entry(vec![0, 1]).await.unwrap();
     ///   let value = subview.get();
@@ -262,11 +262,11 @@ where
     /// Resets an entry to the default value.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::ByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   let subview = view.load_entry_mut(vec![0, 1]).await.unwrap();
     ///   let value = subview.get_mut();
@@ -287,11 +287,11 @@ where
     /// Marks the entry as removed. If absent then nothing is done.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::ByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   let subview = view.load_entry_mut(vec![0, 1]).await.unwrap();
     ///   let value = subview.get_mut();
@@ -362,11 +362,11 @@ where
     /// ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::ByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   view.load_entry_mut(vec![0, 1]).await.unwrap();
     ///   view.load_entry_mut(vec![0, 2]).await.unwrap();
@@ -427,11 +427,11 @@ where
     /// lexicographic order.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::ByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   view.load_entry_mut(vec![0, 1]).await.unwrap();
     ///   view.load_entry_mut(vec![0, 2]).await.unwrap();
@@ -457,11 +457,11 @@ where
     /// Returns the list of keys in the collection. The order is lexicographic.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::ByteCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : ByteCollectionView<_, RegisterView<_,String>> = ByteCollectionView::load(context).await.unwrap();
     ///   view.load_entry_mut(vec![0, 1]).await.unwrap();
     ///   view.load_entry_mut(vec![0, 2]).await.unwrap();
@@ -589,11 +589,11 @@ where
     /// was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
     ///   let subview = view.load_entry_mut(&23).await.unwrap();
     ///   let value = subview.get();
@@ -613,11 +613,11 @@ where
     /// was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
     ///   view.load_entry_mut(&23).await.unwrap();
     ///   let subview = view.load_entry(&23).await.unwrap();
@@ -638,11 +638,11 @@ where
     /// already being visited.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
     ///   let subview = view.try_load_entry(&23).await.unwrap();
     ///   let value = subview.get();
@@ -661,11 +661,11 @@ where
     /// Resets an entry to the default value.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
     ///   let subview = view.load_entry_mut(&23).await.unwrap();
     ///   let value = subview.get_mut();
@@ -688,11 +688,11 @@ where
     /// Removes an entry from the CollectionView. If absent nothing happens.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
     ///   let subview = view.load_entry_mut(&23).await.unwrap();
     ///   let value = subview.get_mut();
@@ -729,11 +729,11 @@ where
     /// the serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
     ///   view.load_entry_mut(&23).await.unwrap();
     ///   view.load_entry_mut(&25).await.unwrap();
@@ -764,11 +764,11 @@ where
     /// the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
     ///   view.load_entry_mut(&23).await.unwrap();
     ///   view.load_entry_mut(&24).await.unwrap();
@@ -797,11 +797,11 @@ where
     /// determined by the serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CollectionView<_, u64, RegisterView<_,String>> = CollectionView::load(context).await.unwrap();
     ///   view.load_entry_mut(&23).await.unwrap();
     ///   view.load_entry_mut(&28).await.unwrap();
@@ -901,11 +901,11 @@ where
     /// was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
     ///   let subview = view.load_entry_mut(&23).await.unwrap();
     ///   let value = subview.get();
@@ -925,11 +925,11 @@ where
     /// was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
     ///   view.load_entry_mut(&23).await.unwrap();
     ///   let subview = view.load_entry(&23).await.unwrap();
@@ -950,11 +950,11 @@ where
     /// already being visited.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
     ///   let subview = view.try_load_entry(&23).await.unwrap();
     ///   let value = subview.get();
@@ -973,11 +973,11 @@ where
     /// Marks the entry so that it is removed in the next flush.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
     ///   let subview = view.load_entry_mut(&23).await.unwrap();
     ///   let value = subview.get_mut();
@@ -1000,11 +1000,11 @@ where
     /// Removes an entry from the CollectionView. If absent nothing happens.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
     ///   let subview = view.load_entry_mut(&23).await.unwrap();
     ///   let value = subview.get_mut();
@@ -1040,11 +1040,11 @@ where
     /// Returns the list of indices in the collection in the order determined by the custom serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
     ///   view.load_entry_mut(&23).await.unwrap();
     ///   view.load_entry_mut(&25).await.unwrap();
@@ -1075,11 +1075,11 @@ where
     /// then the loop ends prematurely.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
     ///   view.load_entry_mut(&28).await.unwrap();
     ///   view.load_entry_mut(&24).await.unwrap();
@@ -1109,11 +1109,11 @@ where
     /// determined by the custom serialization.
     /// ```rust
     /// # tokio_test::block_on(async {
-    /// # use linera_views::memory::{create_test_context, MemoryContext};
+    /// # use linera_views::memory::{create_memory_context, MemoryContext};
     /// # use linera_views::collection_view::CustomCollectionView;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_test_context();
+    /// # let context = create_memory_context();
     ///   let mut view : CustomCollectionView<_, u128, RegisterView<_,String>> = CustomCollectionView::load(context).await.unwrap();
     ///   view.load_entry_mut(&28).await.unwrap();
     ///   view.load_entry_mut(&24).await.unwrap();
