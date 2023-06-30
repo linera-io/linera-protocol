@@ -52,13 +52,12 @@ enum KeyTag {
 /// The updates and deleted_prefixes have to be coherent. This means:
 /// * If an index is deleted by one in deleted_prefixes then it should not be present
 ///   in updates at al.
-/// * deleted_prefix in DeletePrefix should not dominate anyone. That is if
-///   we have `[0,2]` then we should not have `[0,2,3]` since it would be dominated
-///   by the preceding.
+/// * [`DeletePrefix::key_prefix`] should not dominate anyone. That is if we have `[0,2]`
+///   then we should not have `[0,2,3]` since it would be dominated by the preceding.
 ///
 /// With that we have:
-/// * in order to test if an index is deleted by a prefix we compute the highest deleted prefix dp
-///   such that dp <= index.
+/// * in order to test if an index is deleted by a prefix we compute the highest deleted prefix `prefix`
+///   such that prefix <= index.
 ///   If dp is indeed a prefix then we conclude from that.index is deleted, otherwise not.
 ///   The no domination is essential here.
 #[derive(Debug)]
@@ -793,11 +792,11 @@ where
 }
 
 /// NextLowerKeyIterator iterates over the entries of a BTreeSet.
-/// The function get_lower_bound(val) returns a Some(x) where x is the highest
-/// entry such that x <= val. If none exists then None is returned.
+/// The function call `get_lower_bound(val)` returns a `Some(x)` where `x` is the highest
+/// entry such that `x <= val`. If none exists then None is returned.
 ///
-/// The function calls get_lower_bound have to be called with increasing
-/// values.
+/// The function calls `get_lower_bound` have to be called with increasing
+/// values in order to get correct results.
 struct NextLowerKeyIterator<'a, T: 'static> {
     prec1: Option<T>,
     prec2: Option<T>,

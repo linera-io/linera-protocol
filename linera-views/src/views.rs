@@ -39,7 +39,7 @@ pub trait View<C>: Sized {
     /// changes are simply lost.
     fn flush(&mut self, batch: &mut Batch) -> Result<(), ViewError>;
 
-    /// Instead of persisting changes, clear all the data that belong to this view and its
+    /// Instead of persisting changes, clears all the data that belong to this view and its
     /// subviews. Crash-resistant storage implementations are expected to accumulate the
     /// desired changes into the `batch` variable first.
     /// No data/metadata at all is left after deletion. The view is consumed by `delete`.

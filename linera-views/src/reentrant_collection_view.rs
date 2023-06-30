@@ -209,8 +209,8 @@ where
         }
     }
 
-    /// Loads read-only access to a subview for the data at the given index in the collection. If an entry
-    /// was removed before then a default entry is put on this index.
+    /// Loads a subview at the given index in the collection and gives read-only access to the data.
+    /// If an entry was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -749,8 +749,8 @@ where
         self.collection.try_load_entry_mut(short_key).await
     }
 
-    /// Loads read-only access to a subview for the data at the given index in the collection. If an entry
-    /// was removed before then a default entry is put on this index.
+    /// Loads a subview at the given index in the collection and gives read-only access to the data.
+    /// If an entry was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};
@@ -1108,8 +1108,8 @@ where
         self.collection.try_load_entry_mut(short_key).await
     }
 
-    /// Loads read-only access to a subview for the data at the given index in the collection. If an entry
-    /// was removed before then a default entry is put on this index.
+    /// Loads a subview at the given index in the collection and gives read-only access to the data.
+    /// If an entry was removed before then a default entry is put on this index.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::memory::{create_test_context, MemoryContext};

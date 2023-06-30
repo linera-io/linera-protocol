@@ -66,9 +66,9 @@ pub struct Batch {
 /// Unordered list of deletes and puts being written.
 #[derive(Default, Serialize, Deserialize)]
 pub struct SimpleUnorderedBatch {
-    /// list of deletions unordered
+    /// List of deletions unordered
     pub deletions: Vec<Vec<u8>>,
-    /// list of insertions unordered
+    /// List of insertions unordered
     pub insertions: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
@@ -82,7 +82,7 @@ pub struct UnorderedBatch {
 }
 
 impl UnorderedBatch {
-    /// From an `UnorderedBatch`, create a [`SimpleUnorderedBatch`] that does not contain the
+    /// From an `UnorderedBatch`, creates a [`SimpleUnorderedBatch`] that does not contain the
     /// `key_prefix_deletions`. This requires accessing the database to eliminate them.
     pub async fn expand_delete_prefixes<DB: DeletePrefixExpander>(
         self,
@@ -178,7 +178,7 @@ impl Batch {
                     delete_and_insert_map.insert(key, Some(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    // First identifies all the deletes and inserts and removes them
+                    // First identify all the deletions and insertions and then remove them
                     let key_list = delete_and_insert_map
                         .range(get_interval(key_prefix.clone()))
                         .map(|x| x.0.to_vec())
@@ -281,7 +281,7 @@ impl Batch {
 
 /// A trait to expand delete_prefix operations.
 /// Certain databases (e.g. DynamoDB) do not support the deletion by prefix.
-/// Thus we need to access the databases in order to replace a delete_prefix
+/// Thus we need to access the databases in order to replace a `DeletePrefix`
 /// by a vector of the keys to be removed.
 #[async_trait]
 pub trait DeletePrefixExpander {

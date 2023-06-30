@@ -245,7 +245,7 @@ fn get_journaling_key(base_key: &[u8], tag: u8, pos: u32) -> Result<Vec<u8>, Dyn
     Ok(key)
 }
 
-/// The header contains the current state of the journal.
+/// The header that contains the current state of the journal.
 #[derive(Serialize, Deserialize)]
 struct JournalHeader {
     block_count: u32,
@@ -392,7 +392,7 @@ impl DynamoDbBatch {
         db: &DynamoDbClientInternal,
         batch: Batch,
     ) -> Result<Self, DynamoDbContextError> {
-        // The DynamoDB does not support the delete_prefix operation.
+        // The DynamoDB does not support the `DeletePrefix` operation.
         // Therefore it does not make sense to have a delete prefix and they have to
         // be downloaded for making a list.
         // Also we remove the deletes that are followed by inserts on the same key because
