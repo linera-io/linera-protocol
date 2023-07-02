@@ -353,10 +353,7 @@ impl<A> Serialize for ApplicationId<A> {
     }
 }
 
-impl<'de, A> Deserialize<'de> for ApplicationId<A>
-where
-    A: Deserialize<'de>,
-{
+impl<'de, A> Deserialize<'de> for ApplicationId<A> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::de::Deserializer<'de>,
