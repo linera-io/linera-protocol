@@ -1626,7 +1626,10 @@ async fn test_end_to_end_crowd_funding() {
             contract_crowd,
             service_crowd,
             // TODO(#723): This hack will disappear soon.
-            &application_id_fungible,
+            &application_id_fungible
+                .parse::<ApplicationId>()
+                .unwrap()
+                .with_abi(),
             &state_crowd,
             vec![application_id_fungible.clone()],
             None,
