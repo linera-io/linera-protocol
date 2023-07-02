@@ -6,9 +6,9 @@ This example application implements crowd-funding campaigns using fungible token
 the `fungible` application. This demonstrates how to compose applications together and
 how to instantiate applications where one chain has a special role.
 
-Once this application is built and its bytecode published on a Linera chain, the
-published bytecode can be used to create different instances, where each
-instance represents a different campaign.
+Once an application is built and its bytecode published on a Linera chain, the
+published bytecode can be used to create different instances. Each instance or crowd-funding
+represents a different campaign.
 
 # How It Works
 
@@ -16,9 +16,9 @@ The chain that created the campaign is called the "campaign chain". It is owned 
 creator (and beneficiary) of the campaign.
 
 The goal of a crowd-funding campaign is to let people pledge any number of tokens from
-their own chain(s). If enough tokens are pledged before the campaign expires, the
-campaign is *successful* and the creator can receive all the funds. Otherwise, the
-campaign is *unsuccessful* and contributors should be refunded.
+their own chain(s). If enough tokens are pledged before the campaign expires, the campaign is
+*successful* and the creator can receive all the funds, including ones exceeding the funding
+target. Otherwise, the campaign is *unsuccessful* and contributors should be refunded.
 
 # Caveat
 
@@ -49,15 +49,15 @@ application, and publish them as an application bytecode:
 
 ```bash
 alias linera="$PWD/target/debug/linera"
-export LINERA_WALLET="$PWD/target/debug/wallet.json"
-export LINERA_STORAGE="rocksdb:$(dirname "$LINERA_WALLET")/linera.db"
+export LINERA_WALLET1="$PWD/target/debug/wallet.json"
+export LINERA_STORAGE1="rocksdb:$(dirname "$LINERA_WALLET1")/linera.db"
 export LINERA_WALLET2="$PWD/target/debug/wallet_2.json"
 export LINERA_STORAGE2="rocksdb:$(dirname "$LINERA_WALLET2")/linera_2.db"
 
 (cargo build && cd examples && cargo build --release)
-linera --wallet "$LINERA_WALLET" --storage "$LINERA_STORAGE" publish-bytecode \
+linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" publish-bytecode \
   examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm
-linera --wallet "$LINERA_WALLET" --storage "$LINERA_STORAGE" publish-bytecode \
+linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" publish-bytecode \
   examples/target/wasm32-unknown-unknown/release/crowd_funding_{contract,service}.wasm
 ```
 
@@ -81,13 +81,13 @@ In order to select the accounts to have initial tokens, the command below can be
 the chains created for the test as known by each wallet:
 
 ```bash
-linera --storage "$LINERA_STORAGE" --wallet "$LINERA_WALLET" wallet show
+linera --storage "$LINERA_STORAGE1" --wallet "$LINERA_WALLET1" wallet show
 linera --storage "$LINERA_STORAGE2" --wallet "$LINERA_WALLET2" wallet show
 ```
 
 A table will be shown with the chains registered in the wallet and their meta-data:
 
-```rust
+```text,ignore
 ╭──────────────────────────────────────────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────────╮
 │ Chain Id                                                         ┆ Latest Block                                                                         │
 ╞══════════════════════════════════════════════════════════════════╪══════════════════════════════════════════════════════════════════════════════════════╡
@@ -109,7 +109,7 @@ Create a fungible token application where two accounts start with the minted tok
 one with 100 of them and another with 200 of them:
 
 ```bash
-linera --storage "$LINERA_STORAGE" --wallet "$LINERA_WALLET" create-application $BYTECODE_ID1 \
+linera --storage "$LINERA_STORAGE1" --wallet "$LINERA_WALLET1" create-application $BYTECODE_ID1 \
     --json-argument '{ "accounts": { "User:'$OWNER1'": "100", "User:'$OWNER2'": "200" } }'
 ```
 
@@ -127,7 +127,7 @@ Similarly, we're going to create a crowd-funding campaign on the default chain.
 We have to specify our fungible application as a dependency and a parameter:
 
 ```bash
-linera --storage "$LINERA_STORAGE" --wallet "$LINERA_WALLET" create-application $BYTECODE_ID2 \
+linera --storage "$LINERA_STORAGE1" --wallet "$LINERA_WALLET1" create-application $BYTECODE_ID2 \
    --json-argument '{ "owner": "User:'$OWNER1'", "deadline": 4102473600000000, "target": "100." }'  --required-application-ids=$APP_ID1  --json-parameters='"'$APP_ID1'"'
 ```
 
@@ -140,7 +140,7 @@ First, a node service has to be started for each wallet, using two different por
 wallet:
 
 ```bash
-linera --wallet "$LINERA_WALLET" --storage "$LINERA_STORAGE" service --port 8080 $SOURCE_CHAIN_ID &
+linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" service --port 8080 $SOURCE_CHAIN_ID &
 linera --wallet "$LINERA_WALLET2" --storage "$LINERA_STORAGE2" service --port 8081 $TARGET_CHAIN_ID &
 ```
 

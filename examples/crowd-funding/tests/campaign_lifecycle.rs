@@ -49,7 +49,7 @@ async fn collect_pledges() {
     let campaign_id = campaign_chain
         .create_application::<CrowdFundingAbi>(
             bytecode_id,
-            token_id.forget_abi().to_string(),
+            token_id,
             campaign_state,
             vec![token_id.forget_abi()],
         )
@@ -146,7 +146,7 @@ async fn cancel_successful_campaign() {
     let campaign_id = campaign_chain
         .create_application::<CrowdFundingAbi>(
             bytecode_id,
-            token_id.forget_abi().to_string(),
+            token_id,
             campaign_state,
             vec![token_id.forget_abi()],
         )
