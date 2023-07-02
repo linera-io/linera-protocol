@@ -114,8 +114,7 @@ impl<'de> Deserialize<'de> for PublicKey {
     {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            let value =
-                Self::from_str(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
+            let value = Self::from_str(&s).map_err(serde::de::Error::custom)?;
             Ok(value)
         } else {
             #[derive(Deserialize)]
@@ -148,8 +147,7 @@ impl<'de> Deserialize<'de> for CryptoHash {
     {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            let value =
-                Self::from_str(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
+            let value = Self::from_str(&s).map_err(serde::de::Error::custom)?;
             Ok(value)
         } else {
             #[derive(Deserialize)]
@@ -181,9 +179,8 @@ impl<'de> Deserialize<'de> for KeyPair {
         // This is only used for JSON configuration.
         assert!(deserializer.is_human_readable());
         let s = String::deserialize(deserializer)?;
-        let value = hex::decode(s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
-        let key = dalek::Keypair::from_bytes(&value)
-            .map_err(|err| serde::de::Error::custom(err.to_string()))?;
+        let value = hex::decode(s).map_err(serde::de::Error::custom)?;
+        let key = dalek::Keypair::from_bytes(&value).map_err(serde::de::Error::custom)?;
         Ok(KeyPair(key))
     }
 }
@@ -208,9 +205,9 @@ impl<'de> Deserialize<'de> for Signature {
     {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            let value = hex::decode(s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
-            let sig = dalek::Signature::try_from(value.as_slice())
-                .map_err(|err| serde::de::Error::custom(err.to_string()))?;
+            let value = hex::decode(s).map_err(serde::de::Error::custom)?;
+            let sig =
+                dalek::Signature::try_from(value.as_slice()).map_err(serde::de::Error::custom)?;
             Ok(Signature(sig))
         } else {
             #[derive(Deserialize)]
