@@ -43,7 +43,11 @@ where
     }
 
     /// Runs the chain listener.
-    pub async fn run<C, F>(self, mut context: C, wallet_updater: F) -> Result<(), anyhow::Error>
+    pub async fn run<C, F>(
+        self,
+        context: Arc<Mutex<C>>,
+        wallet_updater: F,
+    ) -> Result<(), anyhow::Error>
     where
         for<'a> F:
             (Fn(&'a mut C, &'a mut ChainClient<P, S>) -> futures::future::BoxFuture<'a, ()>) + Send,
@@ -78,7 +82,8 @@ where
                             }
                         }
                     }
-                    wallet_updater(&mut context, client.deref_mut()).await;
+                    let mut context_guard = context.lock().await;
+                    wallet_updater(&mut *context_guard, client.deref_mut()).await;
                 }
 
                 if self.config.delay_after_ms > 0 {
