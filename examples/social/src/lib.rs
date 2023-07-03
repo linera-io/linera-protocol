@@ -144,8 +144,6 @@ use linera_sdk::base::{ChainId, ContractAbi, ServiceAbi, Timestamp};
 use linera_views::{common::CustomSerialize, views};
 use serde::{Deserialize, Serialize};
 
-// TODO(#768): Remove the derive macros.
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
 pub struct SocialAbi;
 
 impl ContractAbi for SocialAbi {

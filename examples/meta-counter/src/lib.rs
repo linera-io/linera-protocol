@@ -3,10 +3,7 @@
 
 use async_graphql::{Request, Response};
 use linera_sdk::base::{ApplicationId, ChainId, ContractAbi, ServiceAbi};
-use serde::{Deserialize, Serialize};
 
-// TODO(#768): Remove the derive macros.
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
 pub struct MetaCounterAbi;
 
 impl ContractAbi for MetaCounterAbi {
