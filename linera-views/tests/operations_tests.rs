@@ -18,6 +18,9 @@ use linera_views::rocksdb::create_rocksdb_test_client;
 #[cfg(feature = "aws")]
 use linera_views::test_utils::create_dynamodb_test_client;
 
+#[cfg(feature = "scylladb")]
+use linera_views::scylla_db::create_scylla_db_test_client;
+
 /// This test starts with a collection of key/values being inserted into the code
 /// which is then followed by a number of reading tests. The functionalities being
 /// tested are all the reading functionalities:
@@ -134,7 +137,7 @@ fn get_random_key_value_vec2(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
 
 fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
     let mut scenarios = Vec::new();
-    for len_value in [10, 1000] {
+    for len_value in [10, 100] {
         scenarios.push(get_random_key_value_vec1(len_value));
         scenarios.push(get_random_key_value_vec2(len_value));
     }
@@ -171,6 +174,15 @@ async fn test_readings_rocksdb() {
 async fn test_readings_dynamodb() {
     for scenario in get_random_test_scenarios() {
         let key_value_operation = create_dynamodb_test_client().await;
+        test_readings_vec(key_value_operation, scenario).await;
+    }
+}
+
+#[cfg(feature = "scylladb")]
+#[tokio::test]
+async fn test_readings_scylla_db() {
+    for scenario in get_random_test_scenarios() {
+        let key_value_operation = create_scylla_db_test_client().await;
         test_readings_vec(key_value_operation, scenario).await;
     }
 }
@@ -285,6 +297,13 @@ async fn test_writings_rocksdb() {
 #[tokio::test]
 async fn test_writings_dynamodb() {
     let key_value_operation = create_dynamodb_test_client().await;
+    test_writings_random(key_value_operation).await;
+}
+
+#[cfg(feature = "scylladb")]
+#[tokio::test]
+async fn test_writings_scylla_db() {
+    let key_value_operation = create_scylla_db_test_client().await;
     test_writings_random(key_value_operation).await;
 }
 

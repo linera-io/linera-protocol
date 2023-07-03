@@ -101,6 +101,11 @@ pub mod key_value_store_view;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod hashable_wrapper;
 
+/// Helper definitions for Scylladb storage.
+#[cfg(feature = "scylladb")]
+#[cfg(not(target_arch = "wasm32"))]
+pub mod scylla_db;
+
 /// Helper definitions for RocksDB storage.
 #[cfg(feature = "rocksdb")]
 #[cfg(not(target_arch = "wasm32"))]
