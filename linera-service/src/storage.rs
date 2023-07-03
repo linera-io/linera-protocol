@@ -91,7 +91,7 @@ impl StorageConfig {
             }
             #[cfg(feature = "rocksdb")]
             Rocksdb { path } => {
-                let create_dir = if path.is_dir() {
+                let is_new_dir = if path.is_dir() {
                     tracing::warn!("Using existing database {:?}", path);
                     false
                 } else {
@@ -100,7 +100,7 @@ impl StorageConfig {
                 };
 
                 let mut client = RocksdbStoreClient::new(path.clone(), wasm_runtime, cache_size);
-                if create_dir {
+                if is_new_dir {
                     config.initialize_store(&mut client).await?;
                 }
                 job.run(client).await
