@@ -1570,6 +1570,88 @@ async fn test_end_to_end_fungible() {
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
+async fn test_end_to_end_fungible_same_wallet() {
+    use fungible::{Account, FungibleTokenAbi, InitialState};
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let network = Network::Grpc;
+    let mut runner = TestRunner::new(network, 4);
+    let client1 = runner.make_client(network);
+
+    runner.generate_initial_validator_config().await;
+    client1.create_genesis_config().await;
+
+    // Create initial server and client config.
+    runner.run_local_net().await;
+    let (contract, service) = runner.build_example("fungible").await;
+
+    let chain1 = client1.get_wallet().default_chain().unwrap();
+    let chain2 = ChainId::root(2);
+
+    // The players
+    let account_owner1 = client1.get_fungible_account_owner();
+    let account_owner2 = {
+        let wallet = client1.get_wallet();
+        let user_chain = wallet.get(chain2).unwrap();
+        let public_key = user_chain.key_pair.as_ref().unwrap().public();
+        fungible::AccountOwner::User(public_key.into())
+    };
+    // The initial accounts on chain1
+    let accounts = BTreeMap::from([
+        (account_owner1, Amount::from_tokens(5)),
+        (account_owner2, Amount::from_tokens(2)),
+    ]);
+    let state = InitialState { accounts };
+    // Setting up the application and verifying
+    let application_id = client1
+        .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, vec![], None)
+        .await;
+
+    let mut node_service1 = client1.run_node_service(chain1, 8080).await;
+
+    let app1 = node_service1.make_application(&application_id).await;
+    app1.assert_fungible_account_balances([
+        (account_owner1, Amount::from_tokens(5)),
+        (account_owner2, Amount::from_tokens(2)),
+    ])
+    .await;
+
+    // Transferring
+    let destination = Account {
+        chain_id: chain2,
+        owner: account_owner2,
+    };
+    let amount_transfer = Amount::ONE;
+    let query = format!(
+        "mutation {{ transfer(owner: {}, amount: \"{}\", targetAccount: {}) }}",
+        account_owner1.to_value(),
+        amount_transfer,
+        destination.to_value(),
+    );
+    app1.query_application(&query).await;
+
+    // Checking the final values on chain1 and chain2.
+    app1.assert_fungible_account_balances([
+        (account_owner1, Amount::from_tokens(4)),
+        (account_owner2, Amount::from_tokens(2)),
+    ])
+    .await;
+    node_service1.assert_is_running();
+    node_service1.child.kill().await.unwrap();
+    drop(node_service1);
+
+    let mut node_service2 = client1.run_node_service(chain2, 8080).await;
+
+    let app2 = node_service2.make_application(&application_id).await;
+    app2.assert_fungible_account_balances([(account_owner2, Amount::ONE)])
+        .await;
+
+    node_service2.assert_is_running();
+}
+
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+#[test_log::test(tokio::test)]
 async fn test_end_to_end_crowd_funding() {
     use crowd_funding::{CrowdFundingAbi, InitializationArgument};
     use fungible::{Account, FungibleTokenAbi, InitialState};
