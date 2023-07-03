@@ -532,6 +532,12 @@ where
         for<'a> F:
             (Fn(&'a mut C, &'a mut ChainClient<P, S>) -> futures::future::BoxFuture<'a, ()>) + Send,
     {
+        // Process the inbox: For messages that are already there we won't receive a notification.
+        let mut client = self.client.lock().await;
+        client.synchronize_from_validators().await?;
+        client.process_inbox().await?;
+        drop(client);
+
         let port = self.port.get();
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
         let applications_handler = axum::routing::get(graphiql).post(Self::application_handler);
