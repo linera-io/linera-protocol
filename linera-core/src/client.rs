@@ -971,8 +971,6 @@ where
             block.previous_block_hash == self.block_hash,
             "Unexpected previous block hash"
         );
-        // Remember what we are trying to do
-        self.pending_block = Some(block.clone());
         // Collect blobs required for execution.
         let committee = self.local_committee().await?;
         let nodes = self.validator_node_provider.make_nodes(&committee)?;
@@ -984,7 +982,7 @@ where
         let key_pair = self.key_pair().await?;
         let proposal = BlockProposal::new(
             BlockAndRound {
-                block,
+                block: block.clone(),
                 round: next_round,
             },
             key_pair,
@@ -994,6 +992,8 @@ where
         self.node_client
             .handle_block_proposal(proposal.clone())
             .await?;
+        // Remember what we are trying to do, before sending the proposal to the validators.
+        self.pending_block = Some(block);
         // Send the query to validators.
         let final_certificate = match self.chain_info().await?.manager {
             ChainManagerInfo::Multi(_) => {
