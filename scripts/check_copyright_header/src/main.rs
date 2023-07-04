@@ -55,3 +55,119 @@ fn main() -> Result<()> {
 
     check_file_header(reader.lines())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_valid_file_with_header() {
+        let lines = vec![
+            "// Copyright (c) Zefchain Labs, Inc.",
+            "// SPDX-License-Identifier: Apache-2.0",
+            "",
+            "// Rest of the file...",
+        ]
+        .into_iter()
+        .map(String::from)
+        .map(Result::Ok);
+
+        assert!(check_file_header(lines).is_ok());
+    }
+
+    #[test]
+    fn test_valid_file_with_multiple_headers() {
+        let lines = vec![
+            "// Copyright (c) Zefchain Labs, Inc.",
+            "// Copyright (c) Some Other Company",
+            "// SPDX-License-Identifier: Apache-2.0",
+            "",
+            "// Rest of the file...",
+        ]
+        .into_iter()
+        .map(String::from)
+        .map(Result::Ok);
+
+        assert!(check_file_header(lines).is_ok());
+    }
+
+    #[test]
+    fn test_invalid_file_missing_zefchain_header() {
+        let lines = vec![
+            "// SPDX-License-Identifier: Apache-2.0",
+            "",
+            "// Rest of the file...",
+        ]
+        .into_iter()
+        .map(String::from)
+        .map(Result::Ok);
+
+        assert_eq!(
+            check_file_header(lines)
+                .map_err(|err| err.to_string())
+                .unwrap_err(),
+            "Incorrect copyright header, Zefchain Labs header not found"
+        );
+    }
+
+    #[test]
+    fn test_invalid_file_incorrect_zefchain_header() {
+        let lines = vec![
+            "// Copyright (c) Some Other Company",
+            "// SPDX-License-Identifier: Apache-2.0",
+            "",
+            "// Rest of the file...",
+        ]
+        .into_iter()
+        .map(String::from)
+        .map(Result::Ok);
+
+        assert_eq!(
+            check_file_header(lines)
+                .map_err(|err| err.to_string())
+                .unwrap_err(),
+            "Incorrect copyright header, Zefchain Labs header not found"
+        );
+    }
+
+    #[test]
+    fn test_invalid_file_unexpected_line() {
+        let lines = vec![
+            "// Copyright (c) Zefchain Labs, Inc.",
+            "// SPDX-License-Identifier: Apache-2.0",
+            "Unexpected line",
+            "",
+            "// Rest of the file...",
+        ]
+        .into_iter()
+        .map(String::from)
+        .map(Result::Ok);
+
+        assert_eq!(
+            check_file_header(lines)
+                .map_err(|err| err.to_string())
+                .unwrap_err(),
+            "Separation line not found"
+        );
+    }
+
+    #[test]
+    fn test_invalid_file_empty_line_before_header() {
+        let lines = vec![
+            "",
+            "// SPDX-License-Identifier: Apache-2.0",
+            "",
+            "// Rest of the file...",
+        ]
+        .into_iter()
+        .map(String::from)
+        .map(Result::Ok);
+
+        assert_eq!(
+            check_file_header(lines)
+                .map_err(|err| err.to_string())
+                .unwrap_err(),
+            "Unexpected line reached"
+        );
+    }
+}
