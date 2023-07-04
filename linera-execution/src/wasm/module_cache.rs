@@ -7,7 +7,7 @@
 //! estimate the total memory usage by the cache, since it's currently not possible to determine
 //! the size of a generic `Module`.
 
-use crate::{wasm::WasmExecutionError, Bytecode};
+use crate::Bytecode;
 use lru::LruCache;
 use std::sync::Arc;
 
@@ -40,10 +40,7 @@ impl<Module> ModuleCache<Module> {
         &mut self,
         bytecode: Bytecode,
         module_builder: impl FnOnce(Bytecode) -> Result<Module, E>,
-    ) -> Result<Arc<Module>, WasmExecutionError>
-    where
-        WasmExecutionError: From<E>,
-    {
+    ) -> Result<Arc<Module>, E> {
         if let Some(module) = self.get(&bytecode) {
             Ok(module)
         } else {

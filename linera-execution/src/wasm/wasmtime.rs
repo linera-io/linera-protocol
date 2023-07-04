@@ -109,14 +109,18 @@ impl WasmApplication {
         service_bytecode: Bytecode,
     ) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
-        let contract = contract_cache.get_or_insert_with(contract_bytecode, |bytecode| {
-            Module::new(&CONTRACT_ENGINE, bytecode)
-        })?;
+        let contract = contract_cache
+            .get_or_insert_with(contract_bytecode, |bytecode| {
+                Module::new(&CONTRACT_ENGINE, bytecode)
+            })
+            .map_err(WasmExecutionError::LoadContractModule)?;
 
         let mut service_cache = SERVICE_CACHE.lock().await;
-        let service = service_cache.get_or_insert_with(service_bytecode, |bytecode| {
-            Module::new(&SERVICE_ENGINE, bytecode)
-        })?;
+        let service = service_cache
+            .get_or_insert_with(service_bytecode, |bytecode| {
+                Module::new(&SERVICE_ENGINE, bytecode)
+            })
+            .map_err(WasmExecutionError::LoadServiceModule)?;
 
         Ok(WasmApplication::Wasmtime { contract, service })
     }
@@ -128,8 +132,10 @@ impl WasmApplication {
     ) -> Result<WasmRuntimeContext<'runtime, Contract<'runtime>>, WasmExecutionError> {
         let mut linker = Linker::new(&CONTRACT_ENGINE);
 
-        contract_system_api::add_to_linker(&mut linker, ContractState::system_api)?;
-        view_system_api::add_to_linker(&mut linker, ContractState::views_api)?;
+        contract_system_api::add_to_linker(&mut linker, ContractState::system_api)
+            .map_err(WasmExecutionError::LoadContractModule)?;
+        view_system_api::add_to_linker(&mut linker, ContractState::views_api)
+            .map_err(WasmExecutionError::LoadContractModule)?;
 
         let waker_forwarder = WakerForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
@@ -140,7 +146,8 @@ impl WasmApplication {
             contract_module,
             &mut linker,
             ContractState::data,
-        )?;
+        )
+        .map_err(WasmExecutionError::LoadContractModule)?;
         let application = Contract { contract };
 
         store
@@ -163,8 +170,10 @@ impl WasmApplication {
     ) -> Result<WasmRuntimeContext<'runtime, Service<'runtime>>, WasmExecutionError> {
         let mut linker = Linker::new(&SERVICE_ENGINE);
 
-        service_system_api::add_to_linker(&mut linker, ServiceState::system_api)?;
-        view_system_api::add_to_linker(&mut linker, ServiceState::views_api)?;
+        service_system_api::add_to_linker(&mut linker, ServiceState::system_api)
+            .map_err(WasmExecutionError::LoadServiceModule)?;
+        view_system_api::add_to_linker(&mut linker, ServiceState::views_api)
+            .map_err(WasmExecutionError::LoadServiceModule)?;
 
         let waker_forwarder = WakerForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
@@ -175,7 +184,8 @@ impl WasmApplication {
             service_module,
             &mut linker,
             ServiceState::data,
-        )?;
+        )
+        .map_err(WasmExecutionError::LoadServiceModule)?;
         let application = Service { service };
 
         Ok(WasmRuntimeContext {

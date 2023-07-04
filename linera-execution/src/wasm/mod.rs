@@ -58,7 +58,7 @@ impl WasmApplication {
         let contract_bytecode = if runtime.needs_sanitizer() {
             // Ensure bytecode normalization whenever wasmer and wasmtime are possibly
             // compared.
-            sanitize(contract_bytecode)?
+            sanitize(contract_bytecode).map_err(WasmExecutionError::LoadContractModule)?
         } else {
             contract_bytecode
         };
@@ -83,10 +83,12 @@ impl WasmApplication {
         WasmApplication::new(
             Bytecode::load_from_file(contract_bytecode_file)
                 .await
-                .map_err(anyhow::Error::from)?,
+                .map_err(anyhow::Error::from)
+                .map_err(WasmExecutionError::LoadContractModule)?,
             Bytecode::load_from_file(service_bytecode_file)
                 .await
-                .map_err(anyhow::Error::from)?,
+                .map_err(anyhow::Error::from)
+                .map_err(WasmExecutionError::LoadServiceModule)?,
             runtime,
         )
         .await
@@ -97,8 +99,10 @@ impl WasmApplication {
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[derive(Debug, Error)]
 pub enum WasmExecutionError {
-    #[error("Failed to load WASM module: {_0}")]
-    LoadModule(#[from] anyhow::Error),
+    #[error("Failed to load contract WASM module: {_0}")]
+    LoadContractModule(#[source] anyhow::Error),
+    #[error("Failed to load service WASM module: {_0}")]
+    LoadServiceModule(#[source] anyhow::Error),
     #[cfg(feature = "wasmtime")]
     #[error("Failed to create and configure Wasmtime runtime")]
     CreateWasmtimeEngine(#[source] anyhow::Error),

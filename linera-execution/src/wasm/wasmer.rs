@@ -118,14 +118,18 @@ impl WasmApplication {
     ) -> Result<Self, WasmExecutionError> {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let contract = contract_cache
-            .get_or_insert_with(contract_bytecode, CachedContractModule::new)?
-            .create_execution_instance()?;
+            .get_or_insert_with(contract_bytecode, CachedContractModule::new)
+            .map_err(WasmExecutionError::LoadContractModule)?
+            .create_execution_instance()
+            .map_err(WasmExecutionError::LoadContractModule)?;
 
         let mut service_cache = SERVICE_CACHE.lock().await;
-        let service = service_cache.get_or_insert_with(service_bytecode, |bytecode| {
-            Module::new(&*SERVICE_ENGINE, bytecode)
-                .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)
-        })?;
+        let service = service_cache
+            .get_or_insert_with(service_bytecode, |bytecode| {
+                Module::new(&*SERVICE_ENGINE, bytecode)
+                    .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)
+            })
+            .map_err(WasmExecutionError::LoadServiceModule)?;
 
         Ok(WasmApplication::Wasmer { contract, service })
     }
@@ -150,7 +154,8 @@ impl WasmApplication {
         let views_api_setup =
             view_system_api::add_to_imports(&mut store, &mut imports, view_system_api);
         let (contract, instance) =
-            contract::Contract::instantiate(&mut store, contract_module, &mut imports)?;
+            contract::Contract::instantiate(&mut store, contract_module, &mut imports)
+                .map_err(WasmExecutionError::LoadContractModule)?;
         let application = Contract {
             contract,
             _lifetime: PhantomData,
@@ -158,8 +163,8 @@ impl WasmApplication {
 
         metering::set_remaining_points(&mut store, &instance, runtime.remaining_fuel());
 
-        system_api_setup(&instance, &store)?;
-        views_api_setup(&instance, &store)?;
+        system_api_setup(&instance, &store).map_err(WasmExecutionError::LoadContractModule)?;
+        views_api_setup(&instance, &store).map_err(WasmExecutionError::LoadContractModule)?;
 
         Ok(WasmRuntimeContext {
             waker_forwarder,
@@ -191,14 +196,15 @@ impl WasmApplication {
         let views_api_setup =
             view_system_api::add_to_imports(&mut store, &mut imports, view_system_api);
         let (service, instance) =
-            service::Service::instantiate(&mut store, service_module, &mut imports)?;
+            service::Service::instantiate(&mut store, service_module, &mut imports)
+                .map_err(WasmExecutionError::LoadServiceModule)?;
         let application = Service {
             service,
             _lifetime: PhantomData,
         };
 
-        system_api_setup(&instance, &store)?;
-        views_api_setup(&instance, &store)?;
+        system_api_setup(&instance, &store).map_err(WasmExecutionError::LoadServiceModule)?;
+        views_api_setup(&instance, &store).map_err(WasmExecutionError::LoadServiceModule)?;
 
         Ok(WasmRuntimeContext {
             waker_forwarder,
@@ -703,12 +709,9 @@ pub struct CachedContractModule {
 
 impl CachedContractModule {
     /// Creates a new [`CachedContractModule`] by compiling a `contract_bytecode`.
-    pub fn new(contract_bytecode: Bytecode) -> Result<Self, WasmExecutionError> {
-        let module = Module::new(&Self::create_compilation_engine(), contract_bytecode)
-            .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
-        let compiled_bytecode = module
-            .serialize()
-            .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
+    pub fn new(contract_bytecode: Bytecode) -> Result<Self, anyhow::Error> {
+        let module = Module::new(&Self::create_compilation_engine(), contract_bytecode)?;
+        let compiled_bytecode = module.serialize()?;
         Ok(CachedContractModule { compiled_bytecode })
     }
 
@@ -723,11 +726,10 @@ impl CachedContractModule {
     }
 
     /// Creates a [`Module`] from a compiled contract using a headless [`Engine`].
-    pub fn create_execution_instance(&self) -> Result<(Engine, Module), WasmExecutionError> {
+    pub fn create_execution_instance(&self) -> Result<(Engine, Module), anyhow::Error> {
         let engine = Engine::headless();
         let store = Store::new(&engine);
-        let module = unsafe { Module::deserialize(&store, &*self.compiled_bytecode) }
-            .map_err(wit_bindgen_host_wasmer_rust::anyhow::Error::from)?;
+        let module = unsafe { Module::deserialize(&store, &*self.compiled_bytecode) }?;
         Ok((engine, module))
     }
 }
