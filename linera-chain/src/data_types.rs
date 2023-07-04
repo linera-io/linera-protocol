@@ -14,7 +14,7 @@ use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     ApplicationId, BytecodeLocation, Message, Operation,
 };
-use serde::{Deserialize, Serialize};
+use serde::{de::Deserializer, Deserialize, Serialize};
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -323,7 +323,7 @@ impl<'a> LiteCertificate<'a> {
 }
 
 /// A certified statement from the committee.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct Certificate {
     /// The certified value.
@@ -331,7 +331,7 @@ pub struct Certificate {
     /// The round in which the value was certified.
     pub round: RoundNumber,
     /// Signatures on the value.
-    pub signatures: Vec<(ValidatorName, Signature)>,
+    signatures: Vec<(ValidatorName, Signature)>,
 }
 
 impl Origin {
@@ -378,7 +378,7 @@ impl Serialize for HashedValue {
 impl<'a> Deserialize<'a> for HashedValue {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::de::Deserializer<'a>,
+        D: Deserializer<'a>,
     {
         Ok(CertificateValue::deserialize(deserializer)?.into())
     }
@@ -580,7 +580,7 @@ impl<'a> SignatureAggregator<'a> {
         ensure!(voting_rights > 0, ChainError::InvalidSigner);
         self.weight += voting_rights;
         // Update certificate.
-        self.partial.signatures.push((validator, signature));
+        self.partial.add_signature((validator, signature));
 
         if self.weight >= self.committee.quorum_threshold() {
             self.weight = 0; // Prevent from creating the certificate twice.
@@ -591,17 +591,73 @@ impl<'a> SignatureAggregator<'a> {
     }
 }
 
+// Checks if the array slice is strictly ordered. That means that if the array
+// has duplicates, this will return False, even if the array is sorted
+fn is_strictly_ordered(values: &[(ValidatorName, Signature)]) -> bool {
+    values.windows(2).all(|pair| pair[0].0 < pair[1].0)
+}
+
+impl<'de> Deserialize<'de> for Certificate {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Debug, Deserialize)]
+        #[serde(rename = "Certificate")]
+        struct CertificateHelper {
+            value: HashedValue,
+            round: RoundNumber,
+            signatures: Vec<(ValidatorName, Signature)>,
+        }
+
+        let helper: CertificateHelper = Deserialize::deserialize(deserializer)?;
+        if !is_strictly_ordered(&helper.signatures) {
+            Err(serde::de::Error::custom("Vector is not strictly sorted"))
+        } else {
+            Ok(Self {
+                value: helper.value,
+                round: helper.round,
+                signatures: helper.signatures,
+            })
+        }
+    }
+}
+
 impl Certificate {
     pub fn new(
         value: HashedValue,
         round: RoundNumber,
-        signatures: Vec<(ValidatorName, Signature)>,
+        mut signatures: Vec<(ValidatorName, Signature)>,
     ) -> Self {
+        if !is_strictly_ordered(&signatures) {
+            // Not enforcing no duplicates, check the documentation for is_strictly_ordered
+            // It's the responsibility of the caller to make sure signatures has no duplicates
+            signatures.sort_by_key(|&(validator_name, _)| validator_name)
+        }
+
         Self {
             value,
             round,
             signatures,
         }
+    }
+
+    pub fn signatures(&self) -> &Vec<(ValidatorName, Signature)> {
+        &self.signatures
+    }
+
+    // Adds a signature to the certificate's list of signatures
+    // It's the responsibility of the caller to not insert duplicates
+    pub fn add_signature(
+        &mut self,
+        signature: (ValidatorName, Signature),
+    ) -> &Vec<(ValidatorName, Signature)> {
+        let index = self
+            .signatures
+            .binary_search_by(|(name, _)| name.cmp(&signature.0))
+            .unwrap_or_else(std::convert::identity);
+        self.signatures.insert(index, signature);
+        &self.signatures
     }
 
     /// Verifies the certificate.
@@ -640,8 +696,8 @@ impl Certificate {
     /// Returns whether the validator is among the signatories of this certificate.
     pub fn is_signed_by(&self, validator_name: &ValidatorName) -> bool {
         self.signatures
-            .iter()
-            .any(|(name, _)| name == validator_name)
+            .binary_search_by(|(name, _)| name.cmp(validator_name))
+            .is_ok()
     }
 }
 
