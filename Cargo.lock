@@ -2960,6 +2960,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-witty"
+version = "0.2.0"
+
+[[package]]
 name = "link-cplusplus"
 version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"

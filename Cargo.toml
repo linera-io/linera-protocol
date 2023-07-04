@@ -11,6 +11,7 @@ members = [
         "linera-storage",
         "linera-views",
         "linera-views-derive",
+        "linera-witty",
 ]
 exclude = [
         "examples",
