@@ -97,7 +97,7 @@ impl WasmApplication {
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[derive(Debug, Error)]
 pub enum WasmExecutionError {
-    #[error("Failed to load WASM module")]
+    #[error("Failed to load WASM module: {_0}")]
     LoadModule(#[from] anyhow::Error),
     #[cfg(feature = "wasmtime")]
     #[error("Failed to create and configure Wasmtime runtime")]
