@@ -58,7 +58,6 @@ impl Contract for Counter {
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, Self::Error>
     {
-        log::error!("incrementing by {:?}", increment);
         self.value += increment;
         Ok(ApplicationCallResult {
             value: self.value,
