@@ -53,8 +53,8 @@ pub struct Chains {
     pub default: Option<ChainId>,
 }
 
-type ClientMapInner<P, S> = BTreeMap<ChainId, Arc<Mutex<ChainClient<P, S>>>>;
-struct ClientMap<P, S>(Arc<Mutex<ClientMapInner<P, S>>>);
+pub(crate) type ClientMapInner<P, S> = BTreeMap<ChainId, Arc<Mutex<ChainClient<P, S>>>>;
+pub(crate) struct ClientMap<P, S>(Arc<Mutex<ClientMapInner<P, S>>>);
 
 impl<P, S> Clone for ClientMap<P, S> {
     fn clone(&self) -> Self {
@@ -67,12 +67,14 @@ impl<P, S> ClientMap<P, S> {
         Some(self.0.lock().await.get(chain_id)?.clone())
     }
 
-    async fn client_lock(&self, chain_id: &ChainId) -> Option<OwnedMutexGuard<ChainClient<P, S>>> {
-        let map_guard = self.0.lock().await;
-        Some(map_guard.get(chain_id)?.clone().lock_owned().await)
+    pub(crate) async fn client_lock(
+        &self,
+        chain_id: &ChainId,
+    ) -> Option<OwnedMutexGuard<ChainClient<P, S>>> {
+        Some(self.client(chain_id).await?.lock_owned().await)
     }
 
-    async fn map_lock(&self) -> MutexGuard<ClientMapInner<P, S>> {
+    pub(crate) async fn map_lock(&self) -> MutexGuard<ClientMapInner<P, S>> {
         self.0.lock().await
     }
 }
@@ -730,18 +732,14 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        let context = Arc::new(Mutex::new(context));
-        let sync_fut = future::select_all(clients.into_iter().map(|client| {
-            Box::pin(
-                ChainListener::new(self.config.clone(), client)
-                    .run(context.clone(), wallet_updater.clone()),
-            )
-        }));
+        let sync_fut = Box::pin(
+            ChainListener::new(self.config, self.clients.clone()).run(context, wallet_updater),
+        );
         let serve_fut =
             Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
 
         match future::select(sync_fut, serve_fut).await {
-            future::Either::Left(((value, _, _), _)) => {
+            future::Either::Left((value, _)) => {
                 value?;
                 error!("Chain listener was terminated.");
             }
