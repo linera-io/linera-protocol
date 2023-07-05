@@ -8,3 +8,5 @@
 //! files is the Rust source code.
 //!
 //! [WIT]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/WIT.md
+
+mod primitive_types;
