@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = [
+    "check_copyright_header",
+]
+
+[workspace.dependencies]
+anyhow = "1.0.57"
+
+check_copyright_header = { path = "./check_copyright_header" }
