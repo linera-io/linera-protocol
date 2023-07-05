@@ -10,7 +10,7 @@
 use super::SimpleType;
 
 /// Primitive types supported by WebAssembly.
-pub trait FlatType: SimpleType {}
+pub trait FlatType: SimpleType<Flat = Self> {}
 
 impl FlatType for i32 {}
 impl FlatType for i64 {}
