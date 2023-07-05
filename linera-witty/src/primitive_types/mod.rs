@@ -3,6 +3,7 @@
 
 //! Primitive WebAssembly and WIT types.
 
+mod flat_type;
 mod simple_type;
 
-pub use self::simple_type::SimpleType;
+pub use self::{flat_type::FlatType, simple_type::SimpleType};
