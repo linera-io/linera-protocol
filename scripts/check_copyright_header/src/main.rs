@@ -1,13 +1,28 @@
-use anyhow::{bail, Error, Result};
 use std::{
     env,
     fs::File,
     io::{BufRead, BufReader},
 };
+use thiserror::Error;
+
+#[derive(Error, Debug, PartialEq)]
+pub enum CheckFileHeaderError {
+    #[error("Unexpected line reached")]
+    UnexpectedLineReachedError,
+
+    #[error("Incorrect copyright header, Zefchain Labs header not found")]
+    ZefchainLabsHeaderNotFoundError,
+
+    #[error("Separation line not found")]
+    SeparationLineNotFoundError,
+
+    #[error("Incorrect copyright header")]
+    IncorrectCopyrightHeaderError,
+}
 
 fn check_file_header(
     lines: impl IntoIterator<Item = Result<String, std::io::Error>>,
-) -> Result<(), Error> {
+) -> Result<(), CheckFileHeaderError> {
     let mut found_zefchain_labs_header = false;
     let mut is_end_of_header = false;
 
@@ -28,25 +43,25 @@ fn check_file_header(
                 continue;
             }
 
-            bail!("Unexpected line reached");
+            return Err(CheckFileHeaderError::UnexpectedLineReachedError);
         } else {
             if !found_zefchain_labs_header {
-                bail!("Incorrect copyright header, Zefchain Labs header not found");
+                return Err(CheckFileHeaderError::ZefchainLabsHeaderNotFoundError);
             }
 
             if line.is_empty() {
                 // Found separation line
                 return Ok(());
             } else {
-                bail!("Separation line not found");
+                return Err(CheckFileHeaderError::SeparationLineNotFoundError);
             }
         }
     }
 
-    bail!("Incorrect copyright header")
+    Err(CheckFileHeaderError::IncorrectCopyrightHeaderError)
 }
 
-fn main() -> Result<()> {
+fn main() -> Result<(), CheckFileHeaderError> {
     let args: Vec<String> = env::args().collect();
     let file_path = args.get(1).expect("Usage: FILE");
 
@@ -103,10 +118,8 @@ mod tests {
         .map(Result::Ok);
 
         assert_eq!(
-            check_file_header(lines)
-                .map_err(|err| err.to_string())
-                .unwrap_err(),
-            "Incorrect copyright header, Zefchain Labs header not found"
+            check_file_header(lines).unwrap_err(),
+            CheckFileHeaderError::ZefchainLabsHeaderNotFoundError,
         );
     }
 
@@ -123,10 +136,8 @@ mod tests {
         .map(Result::Ok);
 
         assert_eq!(
-            check_file_header(lines)
-                .map_err(|err| err.to_string())
-                .unwrap_err(),
-            "Incorrect copyright header, Zefchain Labs header not found"
+            check_file_header(lines).unwrap_err(),
+            CheckFileHeaderError::ZefchainLabsHeaderNotFoundError,
         );
     }
 
@@ -144,10 +155,8 @@ mod tests {
         .map(Result::Ok);
 
         assert_eq!(
-            check_file_header(lines)
-                .map_err(|err| err.to_string())
-                .unwrap_err(),
-            "Separation line not found"
+            check_file_header(lines).unwrap_err(),
+            CheckFileHeaderError::SeparationLineNotFoundError,
         );
     }
 
@@ -164,10 +173,8 @@ mod tests {
         .map(Result::Ok);
 
         assert_eq!(
-            check_file_header(lines)
-                .map_err(|err| err.to_string())
-                .unwrap_err(),
-            "Unexpected line reached"
+            check_file_header(lines).unwrap_err(),
+            CheckFileHeaderError::UnexpectedLineReachedError,
         );
     }
 }

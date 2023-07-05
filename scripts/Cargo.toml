@@ -5,6 +5,6 @@ members = [
 ]
 
 [workspace.dependencies]
-anyhow = "1.0.57"
+thiserror = "1.0.38"
 
 check_copyright_header = { path = "./check_copyright_header" }
