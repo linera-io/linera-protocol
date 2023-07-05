@@ -91,6 +91,15 @@ impl chain_listener::ClientContext<NodeProvider> for ClientContext {
     ) -> ChainClient<NodeProvider, S> {
         self.make_chain_client(storage, chain_id)
     }
+
+    fn update_wallet_for_new_chain(
+        &mut self,
+        chain_id: ChainId,
+        key_pair: Option<KeyPair>,
+        timestamp: Timestamp,
+    ) {
+        self.update_wallet_for_new_chain(chain_id, key_pair, timestamp);
+    }
 }
 
 impl ClientContext {

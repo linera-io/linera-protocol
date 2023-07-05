@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::{future, lock::Mutex, StreamExt};
-use linera_base::identifiers::ChainId;
+use linera_base::{crypto::KeyPair, data_types::Timestamp, identifiers::ChainId};
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
     tracker::NotificationTracker,
@@ -17,7 +17,8 @@ use tracing::{info, warn};
 
 use crate::{config::WalletState, node_service::ClientMap};
 
-type ClientStream<P, S> = Box<dyn Stream<Item = Arc<Mutex<ChainClient<P, S>>>> + Send + Unpin>;
+type ClientNotificationStream<P, S> =
+    Box<dyn Stream<Item = (Notification, Arc<Mutex<ChainClient<P, S>>>)> + Send + Unpin>;
 
 #[derive(Debug, Clone, StructOpt)]
 pub struct ChainListenerConfig {
@@ -38,6 +39,13 @@ pub trait ClientContext<P: ValidatorNodeProvider> {
         storage: S,
         chain_id: impl Into<Option<ChainId>>,
     ) -> ChainClient<P, S>;
+
+    fn update_wallet_for_new_chain(
+        &mut self,
+        chain_id: ChainId,
+        key_pair: Option<KeyPair>,
+        timestamp: Timestamp,
+    );
 }
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
@@ -74,9 +82,21 @@ where
         self.update_streams(&mut streams, &mut context, &storage)
             .await?;
 
-        while let (Some(client), _, _) =
+        while let (Some((notification, client)), _, _) =
             future::select_all(streams.values_mut().map(StreamExt::next)).await
         {
+            if let Reason::NewBlock {
+                new_chains,
+                timestamp,
+                ..
+            } = notification.reason
+            {
+                for (new_id, public_key) in new_chains {
+                    if let Some(key_pair) = context.wallet_state().key_pair_for_pk(&public_key) {
+                        context.update_wallet_for_new_chain(new_id, Some(key_pair), timestamp);
+                    }
+                }
+            }
             let mut client = client.lock().await;
             wallet_updater(&mut context, &mut *client).await;
             self.update_streams(&mut streams, &mut context, &storage)
@@ -111,7 +131,7 @@ where
 
     async fn update_streams<C>(
         &self,
-        streams: &mut HashMap<ChainId, ClientStream<P, S>>,
+        streams: &mut HashMap<ChainId, ClientNotificationStream<P, S>>,
         context: &mut C,
         storage: &S,
     ) -> Result<(), anyhow::Error>
@@ -156,12 +176,12 @@ where
                             }
                             {
                                 let mut client = client.lock().await;
-                                Self::handle_notification(&mut *client, notification).await;
+                                Self::handle_notification(&mut *client, notification.clone()).await;
                             }
                             if delay_after_ms > 0 {
                                 tokio::time::sleep(Duration::from_millis(delay_after_ms)).await;
                             }
-                            client.clone()
+                            (notification, client.clone())
                         })
                     });
                 Ok((chain_id, stream))
