@@ -23,6 +23,9 @@ pub trait SimpleType: Default + Sealed + Sized {
 
     /// The underlying WebAssembly type used when flattening this type.
     type Flat: FlatType;
+
+    /// Flattens this type into a [`FlatType`] that's natively supported by WebAssembly.
+    fn flatten(self) -> Self::Flat;
 }
 
 macro_rules! simple_type {
@@ -33,6 +36,10 @@ macro_rules! simple_type {
             const ALIGNMENT: u32 = $alignment;
 
             type Flat = $flat;
+
+            fn flatten(self) -> Self::Flat {
+                self as $flat
+            }
         }
     };
 }
