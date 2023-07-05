@@ -54,7 +54,7 @@ export LINERA_STORAGE1="rocksdb:$(dirname "$LINERA_WALLET1")/linera.db"
 export LINERA_WALLET2="$PWD/target/debug/wallet_2.json"
 export LINERA_STORAGE2="rocksdb:$(dirname "$LINERA_WALLET2")/linera_2.db"
 
-(cargo build && cd examples && cargo build --release)
+(cargo build && cd examples && cargo build --release && cd ..)
 linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" publish-bytecode \
   examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm
 linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" publish-bytecode \
