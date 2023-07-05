@@ -25,3 +25,9 @@ path = "src/contract.rs"
 [[bin]]
 name = "{project_name}_service"
 path = "src/service.rs"
+
+[profile.release]
+debug = true
+lto = true
+opt-level = 'z'
+strip = 'debuginfo'
