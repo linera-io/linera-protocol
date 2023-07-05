@@ -670,6 +670,8 @@ pub mod tests {
             reason: linera_core::worker::Reason::NewBlock {
                 height: BlockHeight(0),
                 hash: CryptoHash::new(&Foo("".into())),
+                timestamp: Default::default(),
+                new_chains: Default::default(),
             },
         };
         round_trip_check::<_, grpc::Notification>(notification);
