@@ -618,9 +618,9 @@ enum ClientCommand {
 
     /// Open (i.e. activate) a new chain deriving the UID from an existing one.
     OpenChain {
-        /// Sending chain id (must be one of our chains).
+        /// Chain id (must be one of our chains).
         #[structopt(long = "from")]
-        sender: Option<ChainId>,
+        chain_id: Option<ChainId>,
 
         /// Public key of the new owner (otherwise create a key pair and remember it)
         #[structopt(long = "to-public-key")]
@@ -630,9 +630,9 @@ enum ClientCommand {
     /// Close (i.e. deactivate) an existing chain.
     // TODO: Consider `spend-and-transfer` instead for real-life use cases.
     CloseChain {
-        /// Sending chain id (must be one of our chains)
+        /// Chain id (must be one of our chains)
         #[structopt(long = "from")]
-        sender: ChainId,
+        chain_id: ChainId,
     },
 
     /// Read the balance of the chain from the local state of the client.
@@ -1000,8 +1000,11 @@ where
                 context.save_wallet();
             }
 
-            OpenChain { sender, public_key } => {
-                let mut chain_client = context.make_chain_client(storage, sender);
+            OpenChain {
+                chain_id,
+                public_key,
+            } => {
+                let mut chain_client = context.make_chain_client(storage, chain_id);
                 let (new_public_key, key_pair) = match public_key {
                     Some(key) => (key, None),
                     None => {
@@ -1032,8 +1035,8 @@ where
                 context.save_wallet();
             }
 
-            CloseChain { sender } => {
-                let mut chain_client = context.make_chain_client(storage, sender);
+            CloseChain { chain_id } => {
+                let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting operation to close the chain");
                 let time_start = Instant::now();
                 let certificate = chain_client.close_chain().await.unwrap();
