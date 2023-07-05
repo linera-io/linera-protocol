@@ -33,6 +33,9 @@ impl Project {
         debug!("creating the source directory");
         let source_directory = Self::create_source_directory(&root)?;
 
+        debug!("initializing git repository");
+        Self::initialize_git_repository(&root)?;
+
         let project_name = root
             .file_name()
             .and_then(OsStr::to_str)
@@ -135,6 +138,26 @@ impl Project {
         let source_directory = project_root.join("src");
         std::fs::create_dir(&source_directory)?;
         Ok(source_directory)
+    }
+
+    fn initialize_git_repository(project_root: &Path) -> Result<()> {
+        let output = Command::new("git")
+            .args([
+                "init",
+                project_root
+                    .to_str()
+                    .context("project name contains non UTF-8 characters")?,
+            ])
+            .output()?;
+
+        if !output.status.success() {
+            bail!(
+                "failed to initialize git repository at {}",
+                &project_root.display()
+            );
+        }
+
+        Self::write_string_to_file(&project_root.join(".gitignore"), "/target")
     }
 
     fn create_cargo_toml(project_root: &Path, project_name: &str) -> Result<()> {
