@@ -8,11 +8,17 @@
 //! executed targeting the host architecture, instead of targeting `wasm32-unknown-unknown` like
 //! done for unit tests.
 
-#![cfg(any(feature = "wasmer", feature = "wasmtime"))]
+#![cfg(any(feature = "test", feature = "wasmer", feature = "wasmtime"))]
 
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 mod block;
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 mod chain;
 mod mock_stubs;
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 mod validator;
 
-pub use self::{block::BlockBuilder, chain::ActiveChain, mock_stubs::*, validator::TestValidator};
+#[cfg(feature = "test")]
+pub use self::mock_stubs::*;
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+pub use self::{block::BlockBuilder, chain::ActiveChain, validator::TestValidator};
