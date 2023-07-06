@@ -176,7 +176,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-chain-id` function signature")
                     .call_async(&mut caller, ())
                     .await
-                    .expect("Failed to call `mocked-chain-id` function");
+                    .expect(
+                        "Failed to call `mocked-chain-id` function. \
+                        Please ensure `linera_sdk::test::mock_chain_id` was called",
+                    );
 
                 copy_memory_slices(&mut caller, result_offset, return_offset, 32);
             })
@@ -223,7 +226,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-application-id` function signature")
                     .call_async(&mut caller, ())
                     .await
-                    .expect("Failed to call `mocked-application-id` function");
+                    .expect(
+                        "Failed to call `mocked-application-id` function. \
+                        Please ensure `linera_sdk::test::mock_application_id` was called",
+                    );
 
                 copy_memory_slices(&mut caller, result_offset, return_offset, 96);
             })
@@ -248,7 +254,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-application-parameters` function signature")
                     .call_async(&mut caller, ())
                     .await
-                    .expect("Failed to call `mocked-application-parameters` function");
+                    .expect(
+                        "Failed to call `mocked-application-parameters` function. \
+                        Please ensure `linera_sdk::test::mock_application_parameters` was called",
+                    );
 
                 copy_memory_slices(&mut caller, result_offset, return_offset, 8);
             })
@@ -274,7 +283,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-read-system-balance` function signature")
                     .call_async(&mut caller, ())
                     .await
-                    .expect("Failed to call `mocked-read-system-balance` function");
+                    .expect(
+                        "Failed to call `mocked-read-system-balance` function. \
+                        Please ensure `linera_sdk::test::mock_system_balance` was called",
+                    );
 
                 copy_memory_slices(&mut caller, result_offset, return_offset, 16);
             })
@@ -297,7 +309,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-read-system-timestamp` function signature")
                     .call_async(&mut caller, ())
                     .await
-                    .expect("Failed to call `mocked-read-system-timestamp` function");
+                    .expect(
+                        "Failed to call `mocked-read-system-timestamp` function. \
+                        Please ensure `linera_sdk::test::mock_system_timestamp` was called",
+                    );
 
                 timestamp
             })
@@ -366,7 +381,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-load` function signature")
                     .call_async(&mut caller, ())
                     .await
-                    .expect("Failed to call `mocked-load` function");
+                    .expect(
+                        "Failed to call `mocked-load` function. \
+                        Please ensure `linera_sdk::test::mock_application_state` was called",
+                    );
 
                 copy_memory_slices(&mut caller, result_offset, return_offset, 8);
             })
@@ -391,7 +409,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-load-and-lock` function signature")
                     .call_async(&mut caller, ())
                     .await
-                    .expect("Failed to call `mocked-load`-and-lock function");
+                    .expect(
+                        "Failed to call `mocked-load-and-lock` function. \
+                        Please ensure `linera_sdk::test::mock_application_state` was called",
+                    );
 
                 copy_memory_slices(&mut caller, result_offset, return_offset, 12);
             })
@@ -421,7 +442,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-lock` function signature")
                     .call_async(&mut caller, ())
                     .await
-                    .expect("Failed to call `mocked-lock` function");
+                    .expect(
+                        "Failed to call `mocked-lock` function. \
+                        Please ensure `linera_sdk::test::mock_application_state` was called",
+                    );
 
                 match locked {
                     0 => 2,
@@ -451,7 +475,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-chain-id` function signature")
                     .call_async(&mut caller, ())
                     .await
-                    .expect("Failed to call `mocked-chain-id` function");
+                    .expect(
+                        "Failed to call `mocked-chain-id` function. \
+                        Please ensure `linera_sdk::test::mock_chain_id` was called",
+                    );
 
                 copy_memory_slices(&mut caller, result_offset, return_offset, 32);
             })
@@ -498,7 +525,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-application-id` function signature")
                     .call_async(&mut caller, ())
                     .await
-                    .expect("Failed to call `mocked-application-id` function");
+                    .expect(
+                        "Failed to call `mocked-application-id` function. \
+                        Please ensure `linera_sdk::test::mock_application_id` was called",
+                    );
 
                 copy_memory_slices(&mut caller, result_offset, return_offset, 96);
             })
@@ -523,7 +553,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-application-parameters` function signature")
                     .call_async(&mut caller, ())
                     .await
-                    .expect("Failed to call `mocked-application-parameters` function");
+                    .expect(
+                        "Failed to call `mocked-application-parameters` function. \
+                        Please ensure `linera_sdk::test::mock_application_parameters` was called",
+                    );
 
                 copy_memory_slices(&mut caller, result_offset, return_offset, 8);
             })
@@ -549,7 +582,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-read-system-balance` function signature")
                     .call_async(&mut caller, ())
                     .await
-                    .expect("Failed to call `mocked-read-system-balance` function");
+                    .expect(
+                        "Failed to call `mocked-read-system-balance` function. \
+                        Please ensure `linera_sdk::test::mock_system_balance` was called",
+                    );
 
                 copy_memory_slices(&mut caller, result_offset, return_offset, 16);
             })
@@ -572,7 +608,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-read-system-timestamp` function signature")
                     .call_async(&mut caller, ())
                     .await
-                    .expect("Failed to call `mocked-read-system-timestamp` function");
+                    .expect(
+                        "Failed to call `mocked-read-system-timestamp` function. \
+                        Please ensure `linera_sdk::test::mock_system_timestamp` was called",
+                    );
 
                 timestamp
             })
@@ -647,7 +686,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-load` function signature")
                     .call_async(&mut caller, ())
                     .await
-                    .expect("Failed to call `mocked-load` function");
+                    .expect(
+                        "Failed to call `mocked-load` function. \
+                        Please ensure `linera_sdk::test::mock_application_state` was called",
+                    );
 
                 store_in_memory(&mut caller, return_offset, 1_i32);
                 store_in_memory(&mut caller, return_offset + 4, 0_i32);
@@ -676,7 +718,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-lock` function signature")
                     .call_async(&mut caller, ())
                     .await
-                    .expect("Failed to call `mocked-lock` function");
+                    .expect(
+                        "Failed to call `mocked-lock` function. \
+                        Please ensure `linera_sdk::test::mock_application_state` was called",
+                    );
 
                 match locked {
                     0 => {
@@ -878,7 +923,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                         ),
                     )
                     .await
-                    .expect("Failed to call `mocked-try-query-application` function");
+                    .expect(
+                        "Failed to call `mocked-try-query-application` function. \
+                        Please ensure `linera_sdk::test::mock_try_call_application` was called",
+                    );
 
                 store_in_memory(&mut caller, return_offset, 1_i32);
                 copy_memory_slices(&mut caller, result_offset, return_offset + 4, 12);
@@ -927,7 +975,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-read-key-bytes` function signature")
                     .call_async(&mut caller, (key_address, key_length))
                     .await
-                    .expect("Failed to call `mocked-read-key-bytes` function");
+                    .expect(
+                        "Failed to call `mocked-read-key-bytes` function. \
+                        Please ensure `linera_sdk::test::mock_key_value_store` was called",
+                    );
 
                 store_in_memory(&mut caller, return_offset, 1_i32);
                 copy_memory_slices(&mut caller, result_offset, return_offset + 4, 12);
@@ -975,7 +1026,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-find-keys` function signature")
                     .call_async(&mut caller, (prefix_address, prefix_length))
                     .await
-                    .expect("Failed to call `mocked-find-keys` function");
+                    .expect(
+                        "Failed to call `mocked-find-keys` function. \
+                        Please ensure `linera_sdk::test::mock_key_value_store` was called",
+                    );
 
                 store_in_memory(&mut caller, return_offset, 1_i32);
                 copy_memory_slices(&mut caller, result_offset, return_offset + 4, 12);
@@ -1024,7 +1078,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-find-key-values` function signature")
                     .call_async(&mut caller, (prefix_address, prefix_length))
                     .await
-                    .expect("Failed to call `mocked-find-key-values` function");
+                    .expect(
+                        "Failed to call `mocked-find-key-values` function. \
+                        Please ensure `linera_sdk::test::mock_key_value_store` was called",
+                    );
 
                 store_in_memory(&mut caller, return_offset, 1_i32);
                 copy_memory_slices(&mut caller, result_offset, return_offset + 4, 12);
@@ -1175,7 +1232,10 @@ pub fn add_to_linker(linker: &mut Linker<Resources>) -> Result<()> {
                     .expect("Incorrect `mocked-write-batch` function signature")
                     .call_async(&mut caller, (operations_vector, vector_length))
                     .await
-                    .expect("Failed to call `mocked-write-batch` function");
+                    .expect(
+                        "Failed to call `mocked-write-batch` function. \
+                        Please ensure `linera_sdk::test::mock_key_value_store` was called",
+                    );
 
                 1
             })
