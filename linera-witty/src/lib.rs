@@ -11,4 +11,5 @@
 
 #![deny(missing_docs)]
 
+mod memory_layout;
 mod primitive_types;
