@@ -12,6 +12,7 @@
 
 mod block;
 mod chain;
+mod mock_stubs;
 mod validator;
 
-pub use self::{block::BlockBuilder, chain::ActiveChain, validator::TestValidator};
+pub use self::{block::BlockBuilder, chain::ActiveChain, mock_stubs::*, validator::TestValidator};
