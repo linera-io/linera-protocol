@@ -20,6 +20,7 @@ use linera_execution::{
     Bytecode, Message, Query, Response,
 };
 use std::{
+    io,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -205,7 +206,10 @@ impl ActiveChain {
             (&binaries[1], &binaries[0])
         };
 
-        let base_path = PathBuf::from("../target/wasm32-unknown-unknown/release");
+        let base_path = self
+            .find_output_directory_of(repository)
+            .await
+            .expect("Failed to look for output binaries");
         let contract_path = base_path.join(format!("{}.wasm", contract_binary));
         let service_path = base_path.join(format!("{}.wasm", service_binary));
 
@@ -217,6 +221,31 @@ impl ActiveChain {
                 .await
                 .expect("Failed to load service bytecode from file"),
         )
+    }
+
+    /// Searches for the directory where the built WebAssembly binaries should be.
+    ///
+    /// Assumes that the binaries will be built and placed inside a
+    /// `target/wasm32-unknown-unknown/release` sub-directory. However, since the crate with the
+    /// binaries could be part of a workspace, that output sub-directory must be searched in parent
+    /// directories as well.
+    async fn find_output_directory_of(&self, repository: &Path) -> Result<PathBuf, io::Error> {
+        let output_sub_directory = Path::new("target/wasm32-unknown-unknown/release");
+        let mut current_directory = repository;
+        let mut output_path = current_directory.join(output_sub_directory);
+
+        while !fs::try_exists(&output_path).await? {
+            current_directory = current_directory.parent().unwrap_or_else(|| {
+                panic!(
+                    "Failed to find Wasm binary output directory in {}",
+                    repository.display()
+                )
+            });
+
+            output_path = current_directory.join(output_sub_directory);
+        }
+
+        Ok(output_path)
     }
 
     /// Returns the height of the tip of this microchain.
