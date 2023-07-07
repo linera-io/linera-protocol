@@ -21,11 +21,11 @@ web-sys = { version = "0.3", features = [ "console", "Window", "History", "Stora
 js-sys = "0.3"
 console_error_panic_hook = "0.1"
 graphql_client = { version = "0.13", features = [ "reqwest" ] }
+ws_stream_wasm = "0.7"
+uuid = { version = "1.4", features = [ "v3" ] }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
 hex = { workspace = true }
 reqwest = { workspace = true }
 linera-base = { workspace = true }
-
-[package.metadata.cargo-machete]
-ignored = ["wasm-bindgen-futures"]
+futures = { workspace = true }
