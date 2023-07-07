@@ -6,7 +6,8 @@
 mod graphql;
 mod js_utils;
 
-use graphql_client::reqwest::post_graphql;
+use futures::prelude::*;
+use graphql_client::{reqwest::post_graphql, Response};
 use linera_base::{
     crypto::CryptoHash,
     identifiers::{ChainDescription, ChainId},
@@ -16,7 +17,10 @@ use serde_json::Value;
 use serde_wasm_bindgen::from_value;
 use std::str::FromStr;
 use url::Url;
+use uuid::Uuid;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::spawn_local;
+use ws_stream_wasm::*;
 
 use graphql::{
     applications::ApplicationsApplications as Applications, block::BlockBlock as Block,
@@ -40,6 +44,7 @@ enum Page {
 }
 
 /// Config type dealt with localstorage
+#[wasm_bindgen]
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
     node: String,
@@ -85,6 +90,15 @@ pub fn data() -> JsValue {
         chain: ChainId::from(ChainDescription::Root(0)),
     };
     data.serialize(&SER).unwrap()
+}
+
+/// Graphql Query type (for subscriptions)
+#[derive(Serialize, Deserialize)]
+pub struct GQuery<T> {
+    id: Option<String>,
+    #[serde(rename = "type")]
+    typ: String,
+    payload: Option<T>,
 }
 
 pub enum Protocol {
@@ -339,8 +353,54 @@ fn set_onpopstate(app: JsValue) {
     callback.forget()
 }
 
+async fn subscribe(app: JsValue) {
+    spawn_local(async move {
+        let data = from_value::<Data>(app.clone()).expect("cannot parse vue data");
+        let address = node_service_address(&data.config, Protocol::Websocket);
+        let (_ws, mut wsio) = WsMeta::connect(
+            &format!("{}/ws", address),
+            Some(vec!["graphql-transport-ws"]),
+        )
+        .await
+        .expect("cannot connect to websocket");
+        wsio.send(WsMessage::Text(
+            "{\"type\": \"connection_init\", \"payload\": {}}".to_string(),
+        ))
+        .await
+        .expect("cannot send to websocket");
+        wsio.next().await;
+        let uuid = Uuid::new_v3(&Uuid::NAMESPACE_DNS, b"linera.dev");
+        let query = format!("{{\"id\": \"{}\", \"type\": \"subscribe\", \"payload\": {{\"query\": \"subscription {{ notifications }}\"}}}}", uuid);
+        wsio.send(WsMessage::Text(query))
+            .await
+            .expect("cannot send to websocket");
+        while let Some(evt) = wsio.next().await {
+            match evt {
+                WsMessage::Text(s) => {
+                    let gq = serde_json::from_str::<
+                        GQuery<Response<graphql::notifications::ResponseData>>,
+                    >(&s)
+                    .expect("unexpected websocket response");
+                    if let Some(p) = gq.payload {
+                        if let Some(d) = p.data {
+                            let data =
+                                from_value::<Data>(app.clone()).expect("cannot parse vue data");
+                            if let (true, graphql::Reason::NewBlock { hash: _hash, .. }) = (
+                                d.notifications.chain_id == data.chain,
+                                d.notifications.reason,
+                            ) {
+                                route_aux(&app, &data, &None, &Vec::new()).await
+                            };
+                        }
+                    };
+                }
+                WsMessage::Binary(_) => (),
+            }
+        }
+    })
+}
+
 /// Initializes pages and subscribes to notifications
-#[wasm_bindgen]
 pub async fn init(app: JsValue, uri: String) {
     console_error_panic_hook::set_once();
     set_onpopstate(app.clone());
@@ -374,6 +434,7 @@ pub async fn init(app: JsValue, uri: String) {
                 },
             };
             route_aux(&app, &data, &path, &args).await;
+            subscribe(app).await;
         }
     }
 }
