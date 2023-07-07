@@ -1,8 +1,11 @@
-<div>
+<div v-if="apps.length==0" class="text-center">
+  No applications for this chain
+</div>
+<div v-else>
   <table class="table">
     <thead>
       <th>Id</th>
-      <th>graphiql</th>
+      <th>GraphiQL</th>
       <th>JSON</th>
     </thead>
     <tbody>

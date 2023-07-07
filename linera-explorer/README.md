@@ -16,7 +16,7 @@ and then
 ```
 webpack
 ```
-It will create a `dist` folder from where you can run a HTTP server
+It will create a `dist` folder from where you can run an HTTP server
 
 ## Contributing
 
