@@ -4,10 +4,44 @@
 //! A representation of either a [`FlatType`] or nothing, represented by the unit (`()`) type.
 
 use super::flat_type::FlatType;
+use crate::memory_layout::{FlatLayout, Layout};
+use frunk::HCons;
 
 /// A marker trait for [`FlatType`]s and the unit type, which uses no storage space.
-pub trait MaybeFlatType: Sized {}
+pub trait MaybeFlatType: Sized {
+    /// Result of flattening the layout made up of the current element followed by `Tail`.
+    type Flatten<Tail: Layout>: FlatLayout;
 
-impl MaybeFlatType for () {}
+    /// Flattens a layout that starts with this [`MaybeFlatType`] followed by a provided `Tail`.
+    fn flatten<Tail>(self, tail: Tail) -> Self::Flatten<Tail>
+    where
+        Tail: Layout;
+}
 
-impl<AnyFlatType> MaybeFlatType for AnyFlatType where AnyFlatType: FlatType {}
+impl MaybeFlatType for () {
+    type Flatten<Tail: Layout> = Tail::Flat;
+
+    fn flatten<Tail>(self, tail: Tail) -> Self::Flatten<Tail>
+    where
+        Tail: Layout,
+    {
+        tail.flatten()
+    }
+}
+
+impl<AnyFlatType> MaybeFlatType for AnyFlatType
+where
+    AnyFlatType: FlatType,
+{
+    type Flatten<Tail: Layout> = HCons<Self, Tail::Flat>;
+
+    fn flatten<Tail>(self, tail: Tail) -> Self::Flatten<Tail>
+    where
+        Tail: Layout,
+    {
+        HCons {
+            head: self.flatten(),
+            tail: tail.flatten(),
+        }
+    }
+}
