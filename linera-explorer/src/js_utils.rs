@@ -6,8 +6,7 @@ use serde_wasm_bindgen::Serializer;
 use wasm_bindgen::prelude::*;
 
 /// JS special serializer
-pub const SER: Serializer =
-    serde_wasm_bindgen::Serializer::json_compatible().serialize_bytes_as_arrays(true);
+pub const SER: Serializer = serde_wasm_bindgen::Serializer::json_compatible();
 
 pub fn setf(target: &JsValue, field: &str, value: &JsValue) {
     js_sys::Reflect::set(target, &JsValue::from_str(field), value)

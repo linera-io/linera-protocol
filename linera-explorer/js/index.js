@@ -21,8 +21,8 @@ function main(r) {
   app.component('v-block', block_component)
   app.component('v-blocks', blocks_component)
   app.component('v-applications', applications_component)
-  app.config.globalProperties.sh = r.short
-  app.config.globalProperties.shapp = r.short_app
+  app.config.globalProperties.sh = r.short_cryptohash
+  app.config.globalProperties.shapp = r.short_app_id
   app.config.globalProperties.json_load = json.load
   r.init(app.mount("#app"), window.location.href)
 }

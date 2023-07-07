@@ -1,4 +1,7 @@
-<div>
+<div v-if="blocks.length==0" class="text-center">
+  No blocks for this chain
+</div>
+<div v-else>
   <table class="table">
     <thead>
       <th>Height</th>
