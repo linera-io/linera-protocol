@@ -9,4 +9,6 @@
 //!
 //! [WIT]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/WIT.md
 
+#![deny(missing_docs)]
+
 mod primitive_types;
