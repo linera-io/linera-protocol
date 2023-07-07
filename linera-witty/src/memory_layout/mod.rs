@@ -8,6 +8,7 @@
 //! of fundamental types.
 
 mod element;
+mod flat_layout;
 mod layout;
 
-pub use self::layout::Layout;
+pub use self::{flat_layout::FlatLayout, layout::Layout};
