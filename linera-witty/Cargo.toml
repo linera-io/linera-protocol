@@ -9,3 +9,6 @@ homepage = "https://linera.io"
 documentation = "https://docs.rs/linera-witty/latest/linera_witty/"
 license = "Apache-2.0"
 edition = "2021"
+
+[dependencies]
+frunk = { workspace = true }

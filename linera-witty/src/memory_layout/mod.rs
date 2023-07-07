@@ -8,3 +8,6 @@
 //! of fundamental types.
 
 mod element;
+mod layout;
+
+pub use self::layout::Layout;
