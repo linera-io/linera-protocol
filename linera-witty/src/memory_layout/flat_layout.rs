@@ -12,7 +12,7 @@ use frunk::{HCons, HNil};
 /// This allows laying out complex types as a sequence of WebAssembly types that can represent the
 /// parameters or the return list of a function. WIT uses this as an optimization to pass complex
 /// types as multiple native WebAssembly parameters.
-pub trait FlatLayout: Layout {}
+pub trait FlatLayout: Layout<Flat = Self> {}
 
 impl FlatLayout for HNil {}
 
