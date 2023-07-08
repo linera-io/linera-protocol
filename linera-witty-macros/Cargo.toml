@@ -1,0 +1,14 @@
+[package]
+name = "linera-witty-macros"
+version = "0.2.0"
+description = "Procedural macros for generation of WIT compatible host code from Rust code"
+authors = ["Linera <contact@linera.io>"]
+readme = "README.md"
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.io"
+documentation = "https://docs.rs/linera-witty-macros/latest/linera_witty_macros/"
+license = "Apache-2.0"
+edition = "2021"
+
+[lib]
+proc-macro = true

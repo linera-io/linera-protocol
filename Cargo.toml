@@ -12,6 +12,7 @@ members = [
         "linera-views",
         "linera-views-derive",
         "linera-witty",
+        "linera-witty-macros",
         "linera-explorer",
 ]
 exclude = [
