@@ -496,7 +496,7 @@ where
 
         let balance = self.execution_state.system.balance.get_mut();
         Self::sub_assign_fees(balance, credit)?;
-        Self::sub_assign_fees(balance, pricing.fuel_price(used_fuel))?;
+        Self::sub_assign_fees(balance, pricing.fuel_price(used_fuel)?)?;
         Self::sub_assign_fees(balance, pricing.messages_price(&messages)?)?;
 
         // Recompute the state hash.

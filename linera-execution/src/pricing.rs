@@ -30,17 +30,17 @@ impl Pricing {
     pub fn messages_price(&self, data: &impl Serialize) -> Result<Amount, PricingError> {
         let size =
             u128::try_from(bcs::serialized_size(data)?).map_err(|_| ArithmeticError::Overflow)?;
-        Ok(self.messages.saturating_mul(size))
+        Ok(self.messages.try_mul(size)?)
     }
 
     pub fn storage_price(&self, data: &impl Serialize) -> Result<Amount, PricingError> {
         let size =
             u128::try_from(bcs::serialized_size(data)?).map_err(|_| ArithmeticError::Overflow)?;
-        Ok(self.storage.saturating_mul(size))
+        Ok(self.storage.try_mul(size)?)
     }
 
-    pub fn fuel_price(&self, fuel: u64) -> Amount {
-        self.fuel.saturating_mul(u128::from(fuel))
+    pub fn fuel_price(&self, fuel: u64) -> Result<Amount, PricingError> {
+        Ok(self.fuel.try_mul(u128::from(fuel))?)
     }
 
     /// Returns how much fuel can be paid with the given balance.
