@@ -3142,6 +3142,12 @@ dependencies = [
 [[package]]
 name = "linera-witty-macros"
 version = "0.2.0"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "link-cplusplus"

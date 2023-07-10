@@ -12,3 +12,9 @@ edition = "2021"
 
 [lib]
 proc-macro = true
+
+[dependencies]
+proc-macro-error = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }
