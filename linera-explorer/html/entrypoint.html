@@ -9,13 +9,13 @@
       <div class="card-title">INPUT</div>
       <div v-for="a in entry.args" :key="'entrypoint-'+a.name">
         <div class="form-label" :title="a.description">{{ a.name }}{{ a.type.kind=='NON_NULL' ? ' (*)' : '' }}</div>
-        <v-input-type :t="a.type"></v-input-type>
+        <v-input-type :elt="a.type"></v-input-type>
       </div>
     </div>
     <!-- OUTPUT -->
-    <div class="card card-body" v-if="!empty_output(entry.type)">
+    <div class="card card-body" v-if="!empty_response(entry.type)">
       <div class="card-title">OUTPUT</div>
-      <v-output-type :t="entry.type" :depth="0"></v-output-type>
+      <v-output-type :elt="entry.type" :depth="0"></v-output-type>
     </div>
     <div class="text-center">
       <button class="btn btn-primary m-2" @click="query(entry, kind)">SEND</button>
@@ -25,7 +25,7 @@
       <div class="card-title">RESULT</div>
       <v-json :data="result"></v-json>
     </div>
-    <!-- ERROS -->
+    <!-- ERRORS -->
     <div class="card card-body" v-if="errors">
       <div class="card-title">ERRORS</div>
       <v-json :data="errors"></v-json>

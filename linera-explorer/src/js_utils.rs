@@ -10,12 +10,12 @@ pub const SER: Serializer = serde_wasm_bindgen::Serializer::json_compatible();
 
 pub fn setf(target: &JsValue, field: &str, value: &JsValue) {
     js_sys::Reflect::set(target, &JsValue::from_str(field), value)
-        .unwrap_or_else(|_| panic!("failed to set js field '{}'", field));
+        .unwrap_or_else(|_| panic!("failed to set JS field '{}'", field));
 }
 
 pub fn getf(target: &JsValue, field: &str) -> JsValue {
     js_sys::Reflect::get(target, &JsValue::from_str(field))
-        .unwrap_or_else(|_| panic!("failed to get js field '{}'", field))
+        .unwrap_or_else(|_| panic!("failed to get JS field '{}'", field))
 }
 
 pub fn log(x: &JsValue) {
@@ -27,17 +27,17 @@ pub fn log_str(s: &str) {
 }
 
 pub fn parse(x: &str) -> JsValue {
-    js_sys::JSON::parse(x).expect("parse json failed")
+    js_sys::JSON::parse(x).expect("failed to parse JSON")
 }
 
 pub fn stringify(x: &JsValue) -> String {
     js_sys::JSON::stringify(x)
-        .expect("stringify json failed")
+        .expect("failed to stringify JSON")
         .into()
 }
 
 pub fn js_to_json(x: &JsValue) -> serde_json::Value {
-    serde_json::from_str::<serde_json::Value>(&stringify(x)).expect("js_to_json failed")
+    serde_json::from_str::<serde_json::Value>(&stringify(x)).expect("failed to convert JS to JSON")
 }
 
 pub fn unproxy(x: &JsValue) -> JsValue {

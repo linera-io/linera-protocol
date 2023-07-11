@@ -3,6 +3,8 @@
 
 //! This module provides web files to run a block explorer from linera service node.
 
+#![recursion_limit = "256"]
+
 mod entrypoint;
 mod graphql;
 mod input_type;
@@ -25,25 +27,25 @@ use wasm_bindgen_futures::spawn_local;
 use ws_stream_wasm::*;
 
 use graphql::{
-    applications::ApplicationsApplications as Applications, block::BlockBlock as Block,
+    applications::ApplicationsApplications as Application, block::BlockBlock as Block,
     blocks::BlocksBlocks as Blocks, Chains,
 };
 use js_utils::{getf, log_str, parse, setf, stringify, SER};
 
-/// Page enum containing info for each page
+/// Page enum containing info for each page.
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
 enum Page {
     Unloaded,
     Home {
         blocks: Vec<Blocks>,
-        apps: Vec<Applications>,
+        apps: Vec<Application>,
     },
     Blocks(Vec<Blocks>),
     Block(Box<Block>),
-    Applications(Vec<Applications>),
+    Applications(Vec<Application>),
     Application {
-        app: Applications,
+        app: Application,
         queries: Value,
         mutations: Value,
         subscriptions: Value,
@@ -51,7 +53,7 @@ enum Page {
     Error(String),
 }
 
-/// Config type dealt with localstorage
+/// Config type dealt with localstorage.
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
@@ -60,7 +62,7 @@ pub struct Config {
 }
 
 impl Config {
-    /// Load config from local storage
+    /// Loads config from local storage.
     fn load() -> Self {
         let default = Config {
             node: "localhost:8080".to_string(),
@@ -79,7 +81,7 @@ impl Config {
     }
 }
 
-/// type for Vue data
+/// type for Vue data.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Data {
     config: Config,
@@ -88,7 +90,7 @@ pub struct Data {
     chain: ChainId,
 }
 
-/// Initializes Vue data
+/// Initializes Vue data.
 #[wasm_bindgen]
 pub fn data() -> JsValue {
     let data = Data {
@@ -100,7 +102,7 @@ pub fn data() -> JsValue {
     data.serialize(&SER).unwrap()
 }
 
-/// Graphql Query type (for subscriptions)
+/// GraphQL query type (for subscriptions).
 #[derive(Serialize, Deserialize)]
 pub struct GQuery<T> {
     id: Option<String>,
@@ -144,7 +146,7 @@ async fn get_blocks(
     }
 }
 
-async fn get_applications(node: &str, chain_id: &ChainId) -> Result<Vec<Applications>, String> {
+async fn get_applications(node: &str, chain_id: &ChainId) -> Result<Vec<Application>, String> {
     let client = reqwest::Client::new();
     let variables = graphql::applications::Variables {
         chain_id: Some(*chain_id),
@@ -158,16 +160,19 @@ async fn get_applications(node: &str, chain_id: &ChainId) -> Result<Vec<Applicat
     }
 }
 
+/// Returns the error page.
 fn error(msg: &str) -> (Page, String) {
     (Page::Error(msg.to_string()), "/error".to_string())
 }
 
+/// Returns the home page.
 async fn home(node: &str, chain_id: &ChainId) -> Result<(Page, String), String> {
     let blocks = get_blocks(node, chain_id, None, None).await?;
     let apps = get_applications(node, chain_id).await?;
     Ok((Page::Home { blocks, apps }, format!("/?chain={}", chain_id)))
 }
 
+/// Returns the blocks page.
 async fn blocks(
     node: &str,
     chain_id: &ChainId,
@@ -179,6 +184,7 @@ async fn blocks(
     Ok((Page::Blocks(blocks), format!("/blocks?chain={}", chain_id)))
 }
 
+/// Returns the block page.
 async fn block(
     node: &str,
     chain_id: &ChainId,
@@ -201,6 +207,7 @@ async fn block(
     ))
 }
 
+/// Queries wallet chains.
 async fn chains(app: &JsValue, node: &str) -> Result<ChainId, String> {
     let client = reqwest::Client::new();
     let variables = graphql::chains::Variables;
@@ -216,6 +223,7 @@ async fn chains(app: &JsValue, node: &str) -> Result<ChainId, String> {
     Ok(chains.default)
 }
 
+/// Returns the applications page.
 async fn applications(node: &str, chain_id: &ChainId) -> Result<(Page, String), String> {
     let applications = get_applications(node, chain_id).await?;
     Ok((
@@ -224,6 +232,7 @@ async fn applications(node: &str, chain_id: &ChainId) -> Result<(Page, String), 
     ))
 }
 
+/// Lists entrypoints for GraphQL queries, mutations or subscriptions.
 fn list_entrypoints(types: &[Value], name: &Value) -> Option<Value> {
     types
         .iter()
@@ -231,83 +240,91 @@ fn list_entrypoints(types: &[Value], name: &Value) -> Option<Value> {
         .map(|x| x["fields"].clone())
 }
 
-fn fill_type(t: &Value, types: &Vec<Value>) -> Value {
-    match t {
-        Value::Array(l) => Value::Array(l.iter().map(|x: &Value| fill_type(x, types)).collect()),
-        Value::Object(m) => {
-            let mut m = m.clone();
-            let name = t["name"].as_str();
-            let kind = t["kind"].as_str();
-            let of_type = &t["ofType"];
+/// Fills recursively GraphQL objects with their type definitions.
+fn fill_type(element: &Value, types: &Vec<Value>) -> Value {
+    match element {
+        Value::Array(array) => Value::Array(
+            array
+                .iter()
+                .map(|elt: &Value| fill_type(elt, types))
+                .collect(),
+        ),
+        Value::Object(object) => {
+            let mut object = object.clone();
+            let name = element["name"].as_str();
+            let kind = element["kind"].as_str();
+            let of_type = &element["ofType"];
             match (kind, name, of_type) {
                 (Some("OBJECT"), Some(name), _) => {
-                    match types.iter().find(|x: &&Value| x["name"] == name) {
+                    match types.iter().find(|elt: &&Value| elt["name"] == name) {
                         None => (),
-                        Some(t2) => {
-                            let fields: Vec<Value> = t2["fields"]
+                        Some(element_definition) => {
+                            let fields: Vec<Value> = element_definition["fields"]
                                 .as_array()
                                 .unwrap()
                                 .iter()
-                                .map(|x| fill_type(x, types))
+                                .map(|elt| fill_type(elt, types))
                                 .collect();
-                            m.insert("fields".to_string(), Value::Array(fields));
+                            object.insert("fields".to_string(), Value::Array(fields));
                         }
                     }
                 }
                 (Some("INPUT_OBJECT"), Some(name), _) => {
-                    match types.iter().find(|x: &&Value| x["name"] == name) {
+                    match types.iter().find(|elt: &&Value| elt["name"] == name) {
                         None => (),
-                        Some(t2) => {
-                            let fields: Vec<Value> = t2["inputFields"]
+                        Some(element_definition) => {
+                            let fields: Vec<Value> = element_definition["inputFields"]
                                 .as_array()
                                 .unwrap()
                                 .iter()
-                                .map(|x| fill_type(x, types))
+                                .map(|elt| fill_type(elt, types))
                                 .collect();
-                            m.insert("inputFields".to_string(), Value::Array(fields));
+                            object.insert("inputFields".to_string(), Value::Array(fields));
                         }
                     }
                 }
                 (Some("ENUM"), Some(name), _) => {
-                    match types.iter().find(|x: &&Value| x["name"] == name) {
+                    match types.iter().find(|elt: &&Value| elt["name"] == name) {
                         None => (),
-                        Some(t2) => {
-                            let values: Vec<Value> = t2["enumValues"]
+                        Some(element_definition) => {
+                            let values: Vec<Value> = element_definition["enumValues"]
                                 .as_array()
                                 .unwrap()
                                 .iter()
-                                .map(|x| fill_type(x, types))
+                                .map(|elt| fill_type(elt, types))
                                 .collect();
-                            m.insert("enumValues".to_string(), Value::Array(values));
+                            object.insert("enumValues".to_string(), Value::Array(values));
                         }
                     }
                 }
                 (Some("LIST" | "NON_NULL"), Some(name), Value::Null) => {
-                    match types.iter().find(|x: &&Value| x["name"] == name) {
+                    match types.iter().find(|elt: &&Value| elt["name"] == name) {
                         None => (),
-                        Some(t2) => {
-                            m.insert("ofType".to_string(), fill_type(t2, types));
+                        Some(element_definition) => {
+                            object
+                                .insert("ofType".to_string(), fill_type(element_definition, types));
                         }
                     }
                 }
                 _ => (),
             };
-            m.insert("ofType".to_string(), fill_type(&t["ofType"], types));
-            m.insert("type".to_string(), fill_type(&t["type"], types));
-            m.insert("args".to_string(), fill_type(&t["args"], types));
+            object.insert("ofType".to_string(), fill_type(&element["ofType"], types));
+            object.insert("type".to_string(), fill_type(&element["type"], types));
+            object.insert("args".to_string(), fill_type(&element["args"], types));
             if let Some("LIST") = kind {
-                m.insert("_input".to_string(), Value::Array(Vec::new()));
+                object.insert("_input".to_string(), Value::Array(Vec::new()));
             }
             if let Some("SCALAR" | "ENUM" | "OBJECT") = kind {
-                m.insert("_include".to_string(), Value::Bool(true));
+                object.insert("_include".to_string(), Value::Bool(true));
             }
-            Value::Object(m)
+            Value::Object(object)
         }
-        t => t.clone(),
+        elt => elt.clone(),
     }
 }
 
-async fn application(app: Applications) -> Result<(Page, String), String> {
+/// Returns the application page.
+async fn application(app: Application) -> Result<(Page, String), String> {
     let schema = graphql::introspection(&app.link).await?;
     let sch = &schema["data"]["__schema"];
     let types = sch["types"]
@@ -404,7 +421,7 @@ fn chain_id_from_args(
     }
 }
 
-/// Main function to switch between vue.js pages
+/// Main function to switch between vue.js pages.
 async fn route_aux(app: &JsValue, data: &Data, path: &Option<String>, args: &[(String, String)]) {
     let chain_id = chain_id_from_args(app, data, args);
     let (page_name, args): (&str, Vec<(String, String)>) = match (path, &data.page) {
@@ -430,7 +447,7 @@ async fn route_aux(app: &JsValue, data: &Data, path: &Option<String>, args: &[(S
             "application" => match find_arg(&args, "app").map(|v| parse(&v)) {
                 None => Err("unknown application".to_string()),
                 Some(app_js) => {
-                    let app = from_value::<Applications>(app_js).unwrap();
+                    let app = from_value::<Application>(app_js).unwrap();
                     application(app).await
                 }
             },
@@ -483,6 +500,7 @@ fn set_onpopstate(app: JsValue) {
     callback.forget()
 }
 
+/// Subscribes to new block notifications.
 async fn subscribe(app: JsValue) {
     spawn_local(async move {
         let data = from_value::<Data>(app.clone()).expect("cannot parse vue data");
@@ -530,7 +548,8 @@ async fn subscribe(app: JsValue) {
     })
 }
 
-/// Initializes pages and subscribes to notifications
+/// Initializes pages and subscribes to notifications.
+#[wasm_bindgen]
 pub async fn init(app: JsValue, uri: String) {
     console_error_panic_hook::set_once();
     set_onpopstate(app.clone());
@@ -580,7 +599,7 @@ pub async fn init(app: JsValue, uri: String) {
     }
 }
 
-/// Save config to local storage
+/// Saves config to local storage.
 #[wasm_bindgen]
 pub fn save_config(app: JsValue) {
     let data = from_value::<Data>(app).expect("cannot parse vue data");

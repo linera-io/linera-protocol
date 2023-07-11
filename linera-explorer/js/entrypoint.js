@@ -11,8 +11,8 @@ export default function(r) {
       query(args, kind) {
         r.query(this, args, kind)
       },
-      empty_output(t) {
-        return r.empty_output(t)
+      empty_response(t) {
+        return r.empty_response(t)
       },
     }
   }
