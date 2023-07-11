@@ -4,3 +4,4 @@
 //! Implementations of the custom traits for existing types.
 
 mod frunk;
+mod std;
