@@ -7,3 +7,9 @@
 ///
 /// Shared types between different guest instances that use the same runtime.
 pub trait Runtime: Sized {}
+
+/// An active guest Wasm module.
+pub trait Instance: Sized {
+    /// The runtime this instance is running in.
+    type Runtime: Runtime;
+}
