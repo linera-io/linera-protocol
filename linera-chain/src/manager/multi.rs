@@ -16,7 +16,7 @@ use linera_base::{
     identifiers::Owner,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// The specific state of a chain managed by multiple owners.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -25,10 +25,13 @@ pub struct MultiOwnerManager {
     pub owners: HashMap<Owner, PublicKey>,
     /// Latest authenticated block that we have received (and voted to validate).
     pub proposed: Option<BlockProposal>,
-    /// Latest validated proposal that we have seen (and voted to confirm).
+    /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
+    /// validator).
     pub locked: Option<Certificate>,
     /// Latest proposal that we have voted on (either to validate or to confirm it).
     pub pending: Option<Vote>,
+    /// The validated blocks from rounds higher than `locked`.
+    pub validated: BTreeMap<RoundNumber, Certificate>,
 }
 
 impl MultiOwnerManager {
@@ -38,6 +41,7 @@ impl MultiOwnerManager {
             proposed: None,
             locked: None,
             pending: None,
+            validated: Default::default(),
         }
     }
 
@@ -80,8 +84,11 @@ impl MultiOwnerManager {
             } = value.inner()
             {
                 ensure!(new_round > *round, ChainError::InsufficientRound(*round));
+                let is_new_block = |certificate: &Certificate| {
+                    certificate.value().executed_block().block == *new_block
+                };
                 ensure!(
-                    *new_block == *block,
+                    *new_block == *block || self.validated.values().any(is_new_block),
                     ChainError::HasLockedBlock(block.height, *round)
                 );
             }
@@ -89,9 +96,19 @@ impl MultiOwnerManager {
         Ok(Outcome::Accept)
     }
 
-    pub fn check_validated_block(&self, certificate: &Certificate) -> Result<Outcome, ChainError> {
+    pub fn check_validated_block(
+        &mut self,
+        certificate: &Certificate,
+    ) -> Result<Outcome, ChainError> {
         let new_block = &certificate.value().executed_block().block;
         let new_round = certificate.round;
+        if let Some(certificate) = &self.locked {
+            ensure!(
+                new_round >= certificate.round,
+                ChainError::InsufficientRound(certificate.round)
+            );
+        }
+        self.validated.insert(new_round, certificate.clone());
         if let Some(Vote { value, round, .. }) = &self.pending {
             match value.inner() {
                 CertificateValue::ConfirmedBlock { executed_block } => {
@@ -142,6 +159,10 @@ impl MultiOwnerManager {
         // for non-voting nodes.
         let value = certificate.value.clone().into_confirmed();
         let round = certificate.round;
+        self.validated = round
+            .try_add_one()
+            .map(|round| self.validated.split_off(&round))
+            .unwrap_or_default();
         self.locked = Some(certificate);
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
@@ -166,6 +187,8 @@ pub struct MultiOwnerManagerInfo {
     pub owners: HashMap<Owner, PublicKey>,
     /// Latest authenticated block that we have received, if requested.
     pub requested_proposed: Option<BlockProposal>,
+    /// Latest validated proposal that we have seen, if requested.
+    pub requested_validated: Option<Certificate>,
     /// Latest validated proposal that we have seen (and voted to confirm), if requested.
     pub requested_locked: Option<Certificate>,
     /// Latest vote we cast (either to validate or to confirm a block).
@@ -181,6 +204,7 @@ impl From<&MultiOwnerManager> for MultiOwnerManagerInfo {
         MultiOwnerManagerInfo {
             owners: manager.owners.clone(),
             requested_proposed: None,
+            requested_validated: None,
             requested_locked: None,
             pending: manager.pending.as_ref().map(|vote| vote.lite()),
             requested_pending_value: None,
@@ -192,6 +216,11 @@ impl From<&MultiOwnerManager> for MultiOwnerManagerInfo {
 impl MultiOwnerManagerInfo {
     pub fn add_values(&mut self, manager: &MultiOwnerManager) {
         self.requested_proposed = manager.proposed.clone();
+        self.requested_validated = manager
+            .validated
+            .last_key_value()
+            .map(|(_, cert)| cert.clone())
+            .or_else(|| manager.locked.clone());
         self.requested_locked = manager.locked.clone();
         self.requested_pending_value = manager.pending.as_ref().map(|vote| vote.value.clone());
     }

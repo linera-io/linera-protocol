@@ -114,7 +114,7 @@ impl ChainManager {
     ) -> Result<Outcome, ChainError> {
         match self {
             ChainManager::Multi(manager) => manager.check_validated_block(certificate),
-            ChainManager::None | ChainManager::Single(_)  => panic!("unexpected chain manager"),
+            ChainManager::None | ChainManager::Single(_) => panic!("unexpected chain manager"),
         }
     }
 
@@ -139,7 +139,7 @@ impl ChainManager {
     pub fn create_final_vote(&mut self, certificate: Certificate, key_pair: Option<&KeyPair>) {
         match self {
             ChainManager::Multi(manager) => manager.create_final_vote(certificate, key_pair),
-            ChainManager::None | ChainManager::Single(_)  => panic!("unexpected chain manager"),
+            ChainManager::None | ChainManager::Single(_) => panic!("unexpected chain manager"),
         }
     }
 }

@@ -389,6 +389,9 @@ MultiOwnerManagerInfo:
     - requested_proposed:
         OPTION:
           TYPENAME: BlockProposal
+    - requested_validated:
+        OPTION:
+          TYPENAME: Certificate
     - requested_locked:
         OPTION:
           TYPENAME: Certificate
