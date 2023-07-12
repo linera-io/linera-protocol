@@ -3,4 +3,7 @@
 
 //! Code to interface with different runtimes.
 
+mod error;
 mod traits;
+
+pub use self::error::RuntimeError;

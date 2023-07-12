@@ -3139,6 +3139,7 @@ dependencies = [
  "frunk",
  "linera-witty",
  "linera-witty-macros",
+ "thiserror",
 ]
 
 [[package]]

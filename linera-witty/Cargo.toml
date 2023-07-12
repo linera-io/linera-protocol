@@ -17,6 +17,7 @@ macros = ["linera-witty-macros"]
 [dependencies]
 frunk = { workspace = true }
 linera-witty-macros = { workspace = true, optional = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 linera-witty = { workspace = true, features = ["macros"] }
