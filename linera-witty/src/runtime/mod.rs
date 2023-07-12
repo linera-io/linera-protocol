@@ -4,6 +4,7 @@
 //! Code to interface with different runtimes.
 
 mod error;
+mod memory;
 mod traits;
 
 pub use self::error::RuntimeError;
