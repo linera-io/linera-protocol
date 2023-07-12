@@ -15,7 +15,6 @@ use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{BlockHeight, RoundNumber},
     doc_scalar, ensure,
-    identifiers::Owner,
 };
 use linera_execution::ChainOwnership;
 use serde::{Deserialize, Serialize};
@@ -65,16 +64,10 @@ impl ChainManager {
         !matches!(self, ChainManager::None)
     }
 
-    pub fn verify_owner(&self, owner: &Owner) -> Option<PublicKey> {
+    pub fn verify_owner(&self, proposal: &BlockProposal) -> Option<PublicKey> {
         match self {
-            ChainManager::Single(manager) => {
-                if manager.owner == *owner {
-                    Some(manager.public_key)
-                } else {
-                    None
-                }
-            }
-            ChainManager::Multi(manager) => manager.owners.get(owner).copied(),
+            ChainManager::Single(manager) => manager.verify_owner(proposal),
+            ChainManager::Multi(manager) => manager.verify_owner(proposal),
             ChainManager::None => None,
         }
     }
@@ -85,7 +78,7 @@ impl ChainManager {
                 let round = manager.round();
                 round.try_add_one().unwrap_or(round)
             }
-            _ => RoundNumber::default(),
+            ChainManager::None | ChainManager::Single(_) => RoundNumber::default(),
         }
     }
 
@@ -93,7 +86,7 @@ impl ChainManager {
         match self {
             ChainManager::Single(manager) => manager.pending(),
             ChainManager::Multi(manager) => manager.pending(),
-            _ => None,
+            ChainManager::None => None,
         }
     }
 
@@ -111,18 +104,17 @@ impl ChainManager {
         match self {
             ChainManager::Single(manager) => manager.check_proposed_block(new_block, new_round),
             ChainManager::Multi(manager) => manager.check_proposed_block(new_block, new_round),
-            _ => panic!("unexpected chain manager"),
+            ChainManager::None => panic!("unexpected chain manager"),
         }
     }
 
     pub fn check_validated_block(
-        &self,
-        new_block: &Block,
-        new_round: RoundNumber,
+        &mut self,
+        certificate: &Certificate,
     ) -> Result<Outcome, ChainError> {
         match self {
-            ChainManager::Multi(manager) => manager.check_validated_block(new_block, new_round),
-            _ => panic!("unexpected chain manager"),
+            ChainManager::Multi(manager) => manager.check_validated_block(certificate),
+            ChainManager::None | ChainManager::Single(_)  => panic!("unexpected chain manager"),
         }
     }
 
@@ -140,14 +132,14 @@ impl ChainManager {
             ChainManager::Multi(manager) => {
                 manager.create_vote(proposal, messages, state_hash, key_pair)
             }
-            _ => panic!("unexpected chain manager"),
+            ChainManager::None => panic!("unexpected chain manager"),
         }
     }
 
     pub fn create_final_vote(&mut self, certificate: Certificate, key_pair: Option<&KeyPair>) {
         match self {
             ChainManager::Multi(manager) => manager.create_final_vote(certificate, key_pair),
-            _ => panic!("unexpected chain manager"),
+            ChainManager::None | ChainManager::Single(_)  => panic!("unexpected chain manager"),
         }
     }
 }

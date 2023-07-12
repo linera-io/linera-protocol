@@ -89,11 +89,9 @@ impl MultiOwnerManager {
         Ok(Outcome::Accept)
     }
 
-    pub fn check_validated_block(
-        &self,
-        new_block: &Block,
-        new_round: RoundNumber,
-    ) -> Result<Outcome, ChainError> {
+    pub fn check_validated_block(&self, certificate: &Certificate) -> Result<Outcome, ChainError> {
+        let new_block = &certificate.value().executed_block().block;
+        let new_round = certificate.round;
         if let Some(Vote { value, round, .. }) = &self.pending {
             match value.inner() {
                 CertificateValue::ConfirmedBlock { executed_block } => {
@@ -151,6 +149,10 @@ impl MultiOwnerManager {
             // Ok to overwrite validation votes with confirmation votes at equal or higher round.
             self.pending = Some(vote);
         }
+    }
+
+    pub fn verify_owner(&self, proposal: &BlockProposal) -> Option<PublicKey> {
+        self.owners.get(&proposal.owner).copied()
     }
 }
 
