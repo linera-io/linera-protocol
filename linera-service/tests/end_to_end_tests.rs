@@ -1131,13 +1131,13 @@ async fn test_end_to_end_chains_query() {
     let good_result = {
         let wallet = client.get_wallet();
         let list = wallet.chain_ids();
-        let default = wallet.default_chain().expect("no default chain");
+        let default = wallet.default_chain();
         let chains = serde_json::to_string(&Chains { list, default }).unwrap();
         format!("{{\"data\":{{\"chains\":{}}}}}", chains)
     };
 
     runner.run_local_net().await;
-    let mut node_service = client.run_node_service(None, None).await;
+    let mut node_service = client.run_node_service(None).await;
 
     let query = make_graphql_query("../linera-explorer/graphql/chains.graphql", "Chains", &[]);
     check_request(query, &good_result, node_service.port).await;
@@ -1156,7 +1156,7 @@ async fn test_end_to_end_applications_query() {
     client.create_genesis_config().await;
 
     runner.run_local_net().await;
-    let mut node_service = client.run_node_service(None, None).await;
+    let mut node_service = client.run_node_service(None).await;
 
     // only checks if application input type is good
     let good_result = "{\"data\":{\"applications\":[]}}";
@@ -1181,7 +1181,7 @@ async fn test_end_to_end_blocks_query() {
     client.create_genesis_config().await;
 
     runner.run_local_net().await;
-    let mut node_service = client.run_node_service(None, None).await;
+    let mut node_service = client.run_node_service(None).await;
 
     // only checks if block input type is good
     let good_result = "{\"data\":{\"blocks\":[]}}";
@@ -1206,7 +1206,7 @@ async fn test_end_to_end_block_query() {
     client.create_genesis_config().await;
 
     runner.run_local_net().await;
-    let mut node_service = client.run_node_service(None, None).await;
+    let mut node_service = client.run_node_service(None).await;
 
     // only checks if block input type is good
     let good_result = "{\"data\":{\"block\":null}}";
@@ -1230,22 +1230,26 @@ async fn test_end_to_end_check_schema() {
     runner.generate_initial_validator_config().await;
     client.create_genesis_config().await;
     runner.run_local_net().await;
-    let mut node_service = client.run_node_service(None, None).await;
+    let mut node_service = client.run_node_service(None).await;
     match std::process::Command::new("get-graphql-schema")
         .arg(format!("http://localhost:{}", node_service.port))
         .output()
     {
-        Err(e) => warn!("get-grahql-schema not installed or failed: {}", e),
+        Err(e) => warn!("get-graphql-schema not installed or failed: {}", e),
         Ok(service_schema_result) => {
             let service_schema = String::from_utf8(service_schema_result.stdout)
-                .expect("failed to read the service graphql schema");
+                .expect("failed to read the service GraphQL schema");
             let mut file_base = std::fs::File::open("../linera-explorer/graphql/schema.graphql")
                 .expect("failed to open schema.graphql");
             let mut graphql_schema = String::new();
             file_base
                 .read_to_string(&mut graphql_schema)
                 .expect("failed to read schema.graphql");
-            assert_eq!(graphql_schema, service_schema, "graphql schema has changed -> regenerate schema following steps in linera-explorer/README.md")
+            assert_eq!(
+                graphql_schema, service_schema,
+                "GraphQL schema has changed -> regenerate schema following steps in \
+                linera-explorer/README.md"
+            );
         }
     }
     node_service.assert_is_running();
