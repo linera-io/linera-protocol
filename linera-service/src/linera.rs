@@ -423,13 +423,15 @@ impl ClientContext {
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
     ) {
-        self.wallet_state.insert(UserChain {
-            chain_id,
-            key_pair: key_pair.as_ref().map(|kp| kp.copy()),
-            block_hash: None,
-            timestamp,
-            next_block_height: BlockHeight::from(0),
-        });
+        if self.wallet_state.get(chain_id).is_none() {
+            self.wallet_state.insert(UserChain {
+                chain_id,
+                key_pair: key_pair.as_ref().map(|kp| kp.copy()),
+                block_hash: None,
+                timestamp,
+                next_block_height: BlockHeight::from(0),
+            });
+        }
     }
 
     #[cfg(feature = "benchmark")]
