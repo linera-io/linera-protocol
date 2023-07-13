@@ -71,7 +71,10 @@ impl NotificationTracker {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use linera_base::crypto::{BcsHashable, CryptoHash};
+    use linera_base::{
+        crypto::{BcsHashable, CryptoHash},
+        data_types::Timestamp,
+    };
 
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
     struct Foo;
@@ -85,8 +88,8 @@ pub mod tests {
             reason: Reason::NewBlock {
                 height: BlockHeight(0),
                 hash: CryptoHash::new(&Foo),
-                timestamp: Default::default(),
-                new_chains: Default::default(),
+                timestamp: Timestamp::default(),
+                new_chains: Vec::new(),
             },
         };
 
