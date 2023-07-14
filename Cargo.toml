@@ -116,6 +116,7 @@ linera-rpc = { version = "0.2.0", path = "./linera-rpc" }
 linera-storage = { version = "0.2.0", path = "./linera-storage", default-features = false }
 linera-views = { version = "0.2.0", path = "./linera-views", default-features = false }
 linera-views-derive = { version = "0.2.0", path = "./linera-views-derive" }
+linera-witty = { version = "0.2.0", path = "./linera-witty" }
 linera-witty-macros = { version = "0.2.0", path = "./linera-witty-macros" }
 
 counter = { path = "./examples/counter" }
