@@ -10,5 +10,10 @@ documentation = "https://docs.rs/linera-witty/latest/linera_witty/"
 license = "Apache-2.0"
 edition = "2021"
 
+[features]
+default = ["macros"]
+macros = ["linera-witty-macros"]
+
 [dependencies]
 frunk = { workspace = true }
+linera-witty-macros = { workspace = true, optional = true }
