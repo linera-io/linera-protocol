@@ -13,3 +13,5 @@
 
 mod memory_layout;
 mod primitive_types;
+
+pub use self::memory_layout::Layout;
