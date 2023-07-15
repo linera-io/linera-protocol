@@ -11,6 +11,9 @@
 
 #![deny(missing_docs)]
 
+#[macro_use]
+mod macro_utils;
+
 mod memory_layout;
 mod primitive_types;
 mod type_traits;
