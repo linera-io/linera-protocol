@@ -12,6 +12,9 @@ use crate::memory_layout::FlatLayout;
 pub trait Runtime: Sized {
     /// A handle to something exported from a guest Wasm module.
     type Export;
+
+    /// A handle to the guest Wasm module's memory.
+    type Memory;
 }
 
 /// An active guest Wasm module.

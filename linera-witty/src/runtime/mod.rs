@@ -7,4 +7,8 @@ mod error;
 mod memory;
 mod traits;
 
-pub use self::error::RuntimeError;
+pub use self::{
+    error::RuntimeError,
+    memory::Memory,
+    traits::{Instance, InstanceWithFunction, Runtime},
+};

@@ -8,6 +8,18 @@ use thiserror::Error;
 /// Errors that can occur when using a Wasm runtime.
 #[derive(Debug, Error)]
 pub enum RuntimeError {
+    /// Attempt to allocate a buffer larger than `i32::MAX`.
+    #[error("Requested allocation size is too large")]
+    AllocationTooLarge,
+
+    /// Call to `cabi_realloc` returned a negative value instead of a valid address.
+    #[error("Memory allocation failed")]
+    AllocationFailed,
+
+    /// Attempt to deallocate an address that's after `i32::MAX`.
+    #[error("Attempt to deallocate an invalid address")]
+    DeallocateInvalidAddress,
+
     /// Attempt to load a function not exported from a module.
     #[error("Function `{_0}` could not be found in the module's exports")]
     FunctionNotFound(String),

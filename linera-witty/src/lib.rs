@@ -19,7 +19,7 @@ mod primitive_types;
 mod runtime;
 mod type_traits;
 
-pub use self::{memory_layout::Layout, type_traits::WitType};
+pub use self::{memory_layout::Layout, runtime::Memory, type_traits::WitType};
 pub use frunk::{hlist::HList, HList, HNil};
 #[cfg(feature = "macros")]
 pub use linera_witty_macros::WitType;
