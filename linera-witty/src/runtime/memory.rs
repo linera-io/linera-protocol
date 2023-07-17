@@ -3,7 +3,9 @@
 
 //! Abstraction over how different runtimes manipulate the guest WebAssembly module's memory.
 
+use super::RuntimeError;
 use crate::{Layout, WitType};
+use std::borrow::Cow;
 
 /// An address for a location in a guest WebAssembly module's memory.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -29,4 +31,23 @@ impl GuestPointer {
 
         GuestPointer(self.0 + index * element_size.0)
     }
+}
+
+/// Interface for accessing a runtime specific memory.
+pub trait RuntimeMemory<Instance> {
+    /// Reads `length` bytes from memory from the provided `location`.
+    fn read<'instance>(
+        &self,
+        instance: &'instance Instance,
+        location: GuestPointer,
+        length: u32,
+    ) -> Result<Cow<'instance, [u8]>, RuntimeError>;
+
+    /// Writes the `bytes` to memory at the provided `location`.
+    fn write(
+        &mut self,
+        instance: &mut Instance,
+        location: GuestPointer,
+        bytes: &[u8],
+    ) -> Result<(), RuntimeError>;
 }
