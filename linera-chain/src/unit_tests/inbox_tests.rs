@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use linera_base::crypto::{BcsSignable, CryptoHash};
+use linera_base::{
+    crypto::{BcsSignable, CryptoHash},
+    data_types::Timestamp,
+};
 use linera_execution::{Message, UserApplicationId};
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +29,7 @@ fn make_event(
         height: BlockHeight::from(height),
         index,
         authenticated_signer: None,
-        timestamp: Default::default(),
+        timestamp: Timestamp::default(),
         message: Message::User {
             application_id: UserApplicationId::default(),
             bytes: message.into(),
