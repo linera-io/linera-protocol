@@ -174,6 +174,7 @@ fn make_transfer_block_proposal(
         },
         key_pair,
         vec![],
+        None,
     )
 }
 
@@ -503,6 +504,7 @@ where
             },
             &key_pair,
             vec![],
+            None,
         )
     };
 
@@ -612,7 +614,7 @@ where
     let unknown_key = KeyPair::generate();
 
     let unknown_sender_block_proposal =
-        BlockProposal::new(block_proposal.content, &unknown_key, vec![]);
+        BlockProposal::new(block_proposal.content, &unknown_key, vec![], None);
     assert!(worker
         .handle_block_proposal(unknown_sender_block_proposal)
         .await

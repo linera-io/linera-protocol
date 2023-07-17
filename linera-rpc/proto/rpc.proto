@@ -137,6 +137,9 @@ message BlockProposal {
 
   // Required bytecode
   bytes blobs = 5;
+
+  // A certificate for a validated block that justifies the proposal in this round.
+  optional bytes validated = 6;
 }
 
 // A certified statement from the committee, without the value.

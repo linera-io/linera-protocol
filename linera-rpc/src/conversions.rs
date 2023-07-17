@@ -106,6 +106,10 @@ impl TryFrom<BlockProposal> for grpc::BlockProposal {
             owner: Some(block_proposal.owner.into()),
             signature: Some(block_proposal.signature.into()),
             blobs: bincode::serialize(&block_proposal.blobs)?,
+            validated: block_proposal
+                .validated
+                .map(|cert| bincode::serialize(&cert))
+                .transpose()?,
         })
     }
 }
@@ -124,6 +128,10 @@ impl TryFrom<grpc::BlockProposal> for BlockProposal {
             owner: try_proto_convert(block_proposal.owner)?,
             signature: try_proto_convert(block_proposal.signature)?,
             blobs: bincode::deserialize(&block_proposal.blobs)?,
+            validated: block_proposal
+                .validated
+                .map(|bytes| bincode::deserialize(&bytes))
+                .transpose()?,
         })
     }
 }
@@ -653,6 +661,7 @@ pub mod tests {
 
     #[test]
     pub fn test_block_proposal() {
+        let key_pair = KeyPair::generate();
         let block_proposal = BlockProposal {
             content: BlockAndRound {
                 block: get_block(),
@@ -665,6 +674,18 @@ pub mod tests {
                 messages: vec![],
                 state_hash: CryptoHash::new(&Foo("execution state".into())),
             })],
+            validated: Some(Certificate::new(
+                HashedValue::new_validated(ExecutedBlock {
+                    block: get_block(),
+                    messages: vec![],
+                    state_hash: CryptoHash::new(&Foo("validated".into())),
+                }),
+                RoundNumber(3),
+                vec![(
+                    ValidatorName::from(key_pair.public()),
+                    Signature::new(&Foo("signed".into()), &key_pair),
+                )],
+            )),
         };
 
         round_trip_check::<_, grpc::BlockProposal>(block_proposal);

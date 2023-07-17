@@ -4,8 +4,8 @@
 use super::Outcome;
 use crate::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, CertificateValue, ExecutedBlock, HashedValue,
-        LiteVote, OutgoingMessage, Vote,
+        BlockAndRound, BlockProposal, CertificateValue, ExecutedBlock, HashedValue, LiteVote,
+        OutgoingMessage, Vote,
     },
     ChainError,
 };
@@ -43,13 +43,11 @@ impl SingleOwnerManager {
     }
 
     /// Verifies the safety of the block w.r.t. voting rules.
-    pub fn check_proposed_block(
-        &self,
-        new_block: &Block,
-        new_round: RoundNumber,
-    ) -> Result<Outcome, ChainError> {
+    pub fn check_proposed_block(&self, proposal: &BlockProposal) -> Result<Outcome, ChainError> {
+        let new_block = &proposal.content.block;
+        let new_round = proposal.content.round;
         ensure!(
-            new_round == RoundNumber::default(),
+            new_round == RoundNumber::default() && proposal.validated.is_none(),
             ChainError::InvalidBlockProposal
         );
         if let Some(vote) = &self.pending {

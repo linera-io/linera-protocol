@@ -842,24 +842,27 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, proposal);
         let BlockProposal {
-            content: BlockAndRound { block, round },
+            content: BlockAndRound { block, .. },
             owner,
             signature,
             blobs,
+            validated: _,
         } = &proposal;
         let chain_id = block.chain_id;
         let mut chain = self.storage.load_active_chain(chain_id).await?;
         // Check the epoch.
-        let epoch = chain
+        let (epoch, committee) = chain
             .execution_state
             .system
-            .epoch
-            .get()
+            .current_committee()
             .expect("chain is active");
         ensure!(
             block.epoch == epoch,
             WorkerError::InvalidEpoch { chain_id, epoch }
         );
+        if let Some(validated) = &proposal.validated {
+            validated.check(committee)?;
+        }
         // Check the authentication of the block.
         let public_key = chain
             .manager
@@ -874,7 +877,7 @@ where
         // Check if the chain is ready for this new block proposal.
         // This should always pass for nodes without voting key.
         chain.tip_state.get().verify_block_chaining(block)?;
-        if chain.manager.get().check_proposed_block(block, *round)? == ChainManagerOutcome::Skip {
+        if chain.manager.get().check_proposed_block(&proposal)? == ChainManagerOutcome::Skip {
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok((
                 ChainInfoResponse::new(&chain, self.key_pair()),

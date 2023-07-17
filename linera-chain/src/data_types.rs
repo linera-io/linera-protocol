@@ -161,6 +161,7 @@ pub struct BlockProposal {
     pub owner: Owner,
     pub signature: Signature,
     pub blobs: Vec<HashedValue>,
+    pub validated: Option<Certificate>,
 }
 
 /// A message together with routing information.
@@ -534,13 +535,19 @@ impl HashedValue {
 }
 
 impl BlockProposal {
-    pub fn new(content: BlockAndRound, secret: &KeyPair, blobs: Vec<HashedValue>) -> Self {
+    pub fn new(
+        content: BlockAndRound,
+        secret: &KeyPair,
+        blobs: Vec<HashedValue>,
+        validated: Option<Certificate>,
+    ) -> Self {
         let signature = Signature::new(&content, secret);
         Self {
             content,
             owner: secret.public().into(),
             signature,
             blobs,
+            validated,
         }
     }
 }
