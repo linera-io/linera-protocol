@@ -645,7 +645,7 @@ where
             || chain
                 .manager
                 .get_mut()
-                .check_validated_block(block, certificate.round)?
+                .check_validated_block(&certificate)?
                 == ChainManagerOutcome::Skip
         {
             // If we just processed the same pending block, return the chain info unchanged.
@@ -864,7 +864,7 @@ where
         let public_key = chain
             .manager
             .get()
-            .verify_owner(owner)
+            .verify_owner(&proposal)
             .ok_or(WorkerError::InvalidOwner)?;
         signature.check(&proposal.content, public_key)?;
         // Check the authentication of the operations in the block.
