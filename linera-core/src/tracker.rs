@@ -104,14 +104,14 @@ pub mod tests {
         let reason_0 = Reason::NewBlock {
             height: BlockHeight(0),
             hash: CryptoHash::new(&Foo),
-            timestamp: Default::default(),
-            new_chains: Default::default(),
+            timestamp: Timestamp::default(),
+            new_chains: Vec::new(),
         };
         let reason_1 = Reason::NewBlock {
             height: BlockHeight(1),
             hash: CryptoHash::new(&Foo),
-            timestamp: Default::default(),
-            new_chains: Default::default(),
+            timestamp: Timestamp::default(),
+            new_chains: Vec::new(),
         };
         let chain_0 = ChainId::root(0);
         let chain_1 = ChainId::root(1);
