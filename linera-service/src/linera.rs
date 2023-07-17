@@ -301,6 +301,7 @@ impl ClientContext {
                 },
                 key_pair,
                 vec![],
+                None,
             );
             proposals.push(proposal.into());
             if proposals.len() >= max_proposals {

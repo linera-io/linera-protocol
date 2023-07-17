@@ -4,8 +4,8 @@
 use super::Outcome;
 use crate::{
     data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
-        HashedValue, LiteVote, OutgoingMessage, Vote,
+        BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedValue,
+        LiteVote, OutgoingMessage, Vote,
     },
     ChainError,
 };
@@ -61,17 +61,21 @@ impl MultiOwnerManager {
     }
 
     /// Verifies the safety of the block w.r.t. voting rules.
-    pub fn check_proposed_block(
-        &self,
-        new_block: &Block,
-        new_round: RoundNumber,
-    ) -> Result<Outcome, ChainError> {
-        if let Some(proposal) = &self.proposed {
-            if proposal.content.block == *new_block && proposal.content.round == new_round {
+    pub fn check_proposed_block(&self, proposal: &BlockProposal) -> Result<Outcome, ChainError> {
+        let new_block = &proposal.content.block;
+        let new_round = proposal.content.round;
+        if let Some(validated) = &proposal.validated {
+            ensure!(
+                validated.round < new_round,
+                ChainError::InvalidBlockProposal
+            );
+        }
+        if let Some(old_proposal) = &self.proposed {
+            if old_proposal.content.block == *new_block && old_proposal.content.round == new_round {
                 return Ok(Outcome::Skip);
             }
-            if new_round <= proposal.content.round {
-                return Err(ChainError::InsufficientRound(proposal.content.round));
+            if new_round <= old_proposal.content.round {
+                return Err(ChainError::InsufficientRound(old_proposal.content.round));
             }
         }
         if let Some(Certificate { round, value, .. }) = &self.locked {
@@ -81,7 +85,11 @@ impl MultiOwnerManager {
             {
                 ensure!(new_round > *round, ChainError::InsufficientRound(*round));
                 ensure!(
-                    *new_block == *block,
+                    *new_block == *block
+                        || proposal
+                            .validated
+                            .as_ref()
+                            .map_or(false, |cert| cert.round > *round),
                     ChainError::HasLockedBlock(block.height, *round)
                 );
             }
@@ -89,10 +97,7 @@ impl MultiOwnerManager {
         Ok(Outcome::Accept)
     }
 
-    pub fn check_validated_block(
-        &self,
-        certificate: &Certificate,
-    ) -> Result<Outcome, ChainError> {
+    pub fn check_validated_block(&self, certificate: &Certificate) -> Result<Outcome, ChainError> {
         let new_block = &certificate.value().executed_block().block;
         let new_round = certificate.round;
         if let Some(Vote { value, round, .. }) = &self.pending {
@@ -201,5 +206,16 @@ impl MultiOwnerManagerInfo {
 
     pub fn next_round(&self) -> RoundNumber {
         self.round.try_add_one().unwrap_or(self.round)
+    }
+
+    pub fn highest_validated(&self) -> Option<&Certificate> {
+        self.requested_locked
+            .iter()
+            .chain(
+                self.requested_proposed
+                    .as_ref()
+                    .and_then(|proposal| proposal.validated.as_ref()),
+            )
+            .max_by_key(|cert| cert.round)
     }
 }

@@ -8,7 +8,7 @@ pub use multi::{MultiOwnerManager, MultiOwnerManagerInfo};
 pub use single::{SingleOwnerManager, SingleOwnerManagerInfo};
 
 use crate::{
-    data_types::{Block, BlockProposal, Certificate, LiteVote, OutgoingMessage, Vote},
+    data_types::{BlockProposal, Certificate, LiteVote, OutgoingMessage, Vote},
     ChainError,
 };
 use linera_base::{
@@ -91,19 +91,15 @@ impl ChainManager {
     }
 
     /// Verifies the safety of the block w.r.t. voting rules.
-    pub fn check_proposed_block(
-        &self,
-        new_block: &Block,
-        new_round: RoundNumber,
-    ) -> Result<Outcome, ChainError> {
+    pub fn check_proposed_block(&self, proposal: &BlockProposal) -> Result<Outcome, ChainError> {
         // When a block is certified, incrementing its height must succeed.
         ensure!(
-            new_block.height < BlockHeight::max(),
+            proposal.content.block.height < BlockHeight::max(),
             ChainError::InvalidBlockHeight
         );
         match self {
-            ChainManager::Single(manager) => manager.check_proposed_block(new_block, new_round),
-            ChainManager::Multi(manager) => manager.check_proposed_block(new_block, new_round),
+            ChainManager::Single(manager) => manager.check_proposed_block(proposal),
+            ChainManager::Multi(manager) => manager.check_proposed_block(proposal),
             ChainManager::None => panic!("unexpected chain manager"),
         }
     }
@@ -181,6 +177,13 @@ impl ChainManagerInfo {
             ChainManagerInfo::Single(single) => single.pending.as_ref(),
             ChainManagerInfo::Multi(multi) => multi.pending.as_ref(),
             _ => None,
+        }
+    }
+
+    pub fn highest_validated(&self) -> Option<&Certificate> {
+        match self {
+            ChainManagerInfo::Multi(multi) => multi.highest_validated(),
+            ChainManagerInfo::None | ChainManagerInfo::Single(_) => None,
         }
     }
 

@@ -979,6 +979,7 @@ where
             .read_or_download_blobs(nodes, block.bytecode_locations())
             .await?;
         // Build the initial query.
+        let manager = self.chain_info().await?.manager;
         let key_pair = self.key_pair().await?;
         let proposal = BlockProposal::new(
             BlockAndRound {
@@ -987,6 +988,7 @@ where
             },
             key_pair,
             blobs,
+            manager.highest_validated().cloned(),
         );
         // Try to execute the block locally first.
         self.node_client
@@ -995,7 +997,7 @@ where
         // Remember what we are trying to do, before sending the proposal to the validators.
         self.pending_block = Some(block);
         // Send the query to validators.
-        let final_certificate = match self.chain_info().await?.manager {
+        let final_certificate = match manager {
             ChainManagerInfo::Multi(_) => {
                 // Need two round-trips.
                 let certificate = self
