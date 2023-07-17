@@ -55,10 +55,7 @@ impl SingleOwnerManager {
         if let Some(vote) = &self.pending {
             let block = match vote.value() {
                 CertificateValue::ConfirmedBlock { executed_block, .. } => &executed_block.block,
-                value => {
-                    let msg = format!("Unexpected value: {:?}", value);
-                    return Err(ChainError::InternalError(msg));
-                }
+                _ => return Err(ChainError::InternalError("Unexpected value".to_string())),
             };
             if block == new_block {
                 return Ok(Outcome::Skip);
@@ -97,6 +94,10 @@ impl SingleOwnerManager {
             let vote = Vote::new(value, round, key_pair);
             self.pending = Some(vote);
         }
+    }
+
+    pub fn verify_owner(&self, proposal: &BlockProposal) -> Option<PublicKey> {
+        (self.owner == proposal.owner).then_some(self.public_key)
     }
 }
 

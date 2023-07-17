@@ -21,10 +21,10 @@ linera-base = { workspace = true }
 linera-execution = { workspace = true }
 linera-views = { workspace = true, features = ["metrics"] }
 futures = { workspace = true }
-tracing = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 linera-chain = { path = ".", features = ["test"] }
