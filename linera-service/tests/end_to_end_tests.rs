@@ -1559,7 +1559,7 @@ async fn test_open_chain_node_service() {
     );
     node_service.query_node(&query).await;
 
-    // Verify that the default chain now has 6 and the new one has 4 tokens.
+    // Verify that the deafult chain now has 6 and the new one has 4 tokens.
     for i in 0..10 {
         tokio::time::sleep(Duration::from_secs(i)).await;
         let response1 = node_service
