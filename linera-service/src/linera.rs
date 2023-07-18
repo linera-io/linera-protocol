@@ -79,7 +79,6 @@ struct ClientContext {
     wait_for_outgoing_messages: bool,
 }
 
-#[async_trait]
 impl chain_listener::ClientContext<NodeProvider> for ClientContext {
     fn wallet_state(&self) -> &WalletState {
         &self.wallet_state
@@ -100,15 +99,6 @@ impl chain_listener::ClientContext<NodeProvider> for ClientContext {
         timestamp: Timestamp,
     ) {
         self.update_wallet_for_new_chain(chain_id, key_pair, timestamp);
-    }
-
-    async fn update_wallet<'a, S>(&'a mut self, client: &'a mut ChainClient<NodeProvider, S>)
-    where
-        S: Store + Clone + Send + Sync + 'static,
-        ViewError: From<S::ContextError>,
-    {
-        self.update_wallet_from_client(client).await;
-        self.save_wallet()
     }
 }
 
@@ -1334,7 +1324,12 @@ where
                 let list = context.wallet_state.chain_ids();
                 let chains = Chains { list, default };
                 NodeService::new(config, port, chains, storage)
-                    .run(context)
+                    .run(context, |context, client| {
+                        Box::pin(async {
+                            context.update_wallet_from_client(client).await;
+                            context.save_wallet();
+                        })
+                    })
                     .await?;
             }
 

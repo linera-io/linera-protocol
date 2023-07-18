@@ -690,8 +690,11 @@ where
     }
 
     /// Runs the node service.
-    pub async fn run<C>(self, context: C) -> Result<(), anyhow::Error>
+    pub async fn run<C, F>(self, context: C, wallet_updater: F) -> Result<(), anyhow::Error>
     where
+        for<'a> F: (Fn(&'a mut C, &'a mut ChainClient<P, S>) -> futures::future::BoxFuture<'a, ()>)
+            + Send
+            + Clone,
         C: ClientContext<P>,
     {
         let port = self.port.get();
@@ -712,10 +715,11 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        let sync_fut = Box::pin(
-            ChainListener::new(self.config, self.clients.clone())
-                .run(context, self.storage.clone()),
-        );
+        let sync_fut = Box::pin(ChainListener::new(self.config, self.clients.clone()).run(
+            context,
+            wallet_updater,
+            self.storage.clone(),
+        ));
         let serve_fut =
             Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
 
