@@ -1156,7 +1156,6 @@ async fn test_end_to_end_applications_query() {
     client.create_genesis_config().await;
 
     runner.run_local_net().await;
-    let chain = client.get_wallet().default_chain().unwrap();
     let mut node_service = client.run_node_service(None).await;
 
     // only checks if application input type is good
@@ -1164,7 +1163,7 @@ async fn test_end_to_end_applications_query() {
     let query = make_graphql_query(
         "../linera-explorer/graphql/applications.graphql",
         "Applications",
-        &[("chainId".to_string(), chain.to_string())],
+        &Vec::new(),
     );
     check_request(query, good_result, node_service.port).await;
     node_service.assert_is_running();
@@ -1182,7 +1181,6 @@ async fn test_end_to_end_blocks_query() {
     client.create_genesis_config().await;
 
     runner.run_local_net().await;
-    let chain = client.get_wallet().default_chain().unwrap();
     let mut node_service = client.run_node_service(None).await;
 
     // only checks if block input type is good
@@ -1190,7 +1188,7 @@ async fn test_end_to_end_blocks_query() {
     let query = make_graphql_query(
         "../linera-explorer/graphql/blocks.graphql",
         "Blocks",
-        &[("chainId".to_string(), chain.to_string())],
+        &Vec::new(),
     );
     check_request(query, good_result, node_service.port).await;
     node_service.assert_is_running();
@@ -1208,7 +1206,6 @@ async fn test_end_to_end_block_query() {
     client.create_genesis_config().await;
 
     runner.run_local_net().await;
-    let chain = client.get_wallet().default_chain().unwrap();
     let mut node_service = client.run_node_service(None).await;
 
     // only checks if block input type is good
@@ -1216,7 +1213,7 @@ async fn test_end_to_end_block_query() {
     let query = make_graphql_query(
         "../linera-explorer/graphql/block.graphql",
         "Block",
-        &[("chainId".to_string(), chain.to_string())],
+        &Vec::new(),
     );
     check_request(query, good_result, node_service.port).await;
     node_service.assert_is_running();
