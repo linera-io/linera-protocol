@@ -3,7 +3,7 @@
 
 use graphql_client::GraphQLQuery;
 use linera_base::{
-    crypto::{CryptoHash, PublicKey},
+    crypto::CryptoHash,
     data_types::{BlockHeight, Timestamp},
     identifiers::{ChainId, Destination, Owner},
 };
@@ -29,8 +29,6 @@ pub enum Reason {
     NewBlock {
         height: BlockHeight,
         hash: CryptoHash,
-        timestamp: Timestamp,
-        new_chains: Vec<(ChainId, PublicKey)>,
     },
     NewIncomingMessage {
         origin: Origin,

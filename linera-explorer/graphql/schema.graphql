@@ -99,7 +99,7 @@ scalar ChainOwnership
 
 type Chains {
   list: [ChainId!]!
-  default: ChainId
+  default: ChainId!
 }
 
 type ChainStateExtendedView {
@@ -248,67 +248,67 @@ type MutationRoot {
   """
   Processes the inbox and returns the lists of certificate hashes that were created, if any.
   """
-  processInbox(chainId: ChainId!): [CryptoHash!]!
+  processInbox: [CryptoHash!]!
 
   """
   Transfers `amount` units of value from the given owner's account to the recipient.
   If no owner is given, try to take the units out of the unattributed account.
   """
-  transfer(chainId: ChainId!, owner: Owner, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
+  transfer(owner: Owner, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
 
   """
   Claims `amount` units of value from the given owner's account in
   the remote `target` chain. Depending on its configuration (see also #464), the
   `target` chain may refuse to process the message.
   """
-  claim(chainId: ChainId!, owner: Owner!, target: ChainId!, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
+  claim(owner: Owner!, target: ChainId!, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
 
   """
   Creates (or activates) a new chain by installing the given authentication key.
   This will automatically subscribe to the future committees created by `admin_id`.
   """
-  openChain(chainId: ChainId!, publicKey: PublicKey!): ChainId!
+  openChain(publicKey: PublicKey!): ChainId!
 
   """Closes the chain."""
-  closeChain(chainId: ChainId!): CryptoHash!
+  closeChain: CryptoHash!
 
   """Changes the authentication key of the chain."""
-  changeOwner(chainId: ChainId!, newPublicKey: PublicKey!): CryptoHash!
+  changeOwner(newPublicKey: PublicKey!): CryptoHash!
 
   """Changes the authentication key of the chain."""
-  changeMultipleOwners(chainId: ChainId!, newPublicKeys: [PublicKey!]!): CryptoHash!
+  changeMultipleOwners(newPublicKeys: [PublicKey!]!): CryptoHash!
 
   """
   (admin chain only) Registers a new committee. This will notify the subscribers of
   the admin chain so that they can migrate to the new epoch (by accepting the
   notification as an "incoming message" in a next block).
   """
-  createCommittee(chainId: ChainId!, epoch: Epoch!, committee: Committee!): CryptoHash!
+  createCommittee(epoch: Epoch!, committee: Committee!): CryptoHash!
 
   """Subscribes to a system channel."""
-  subscribe(subscriberChainId: ChainId!, publisherChainId: ChainId!, channel: SystemChannel!): CryptoHash!
+  subscribe(chainId: ChainId!, channel: SystemChannel!): CryptoHash!
 
   """Unsubscribes from a system channel."""
-  unsubscribe(subscriberChainId: ChainId!, publisherChainId: ChainId!, channel: SystemChannel!): CryptoHash!
+  unsubscribe(chainId: ChainId!, channel: SystemChannel!): CryptoHash!
 
   """
   (admin chain only) Removes a committee. Once this message is accepted by a chain,
   blocks from the retired epoch will not be accepted until they are followed (hence
   re-certified) by a block certified by a recent committee.
   """
-  removeCommittee(chainId: ChainId!, epoch: Epoch!): CryptoHash!
+  removeCommittee(epoch: Epoch!): CryptoHash!
 
   """Publishes a new application bytecode."""
-  publishBytecode(chainId: ChainId!, contract: Bytecode!, service: Bytecode!): BytecodeId!
+  publishBytecode(contract: Bytecode!, service: Bytecode!): BytecodeId!
 
   """Creates a new application."""
-  createApplication(chainId: ChainId!, bytecodeId: BytecodeId!, parameters: String!, initializationArgument: String!, requiredApplicationIds: [ApplicationId!]!): ApplicationId!
+  createApplication(bytecodeId: BytecodeId!, parameters: String!, initializationArgument: String!, requiredApplicationIds: [ApplicationId!]!): ApplicationId!
 
   """
   Requests a `RegisterApplications` message from another chain so the application can be used
   on this one.
   """
-  requestApplication(chainId: ChainId!, applicationId: ApplicationId!, targetChainId: ChainId): CryptoHash!
+  requestApplication(applicationId: ApplicationId!, targetChainId: ChainId): CryptoHash!
 }
 
 """Notify that a chain has a new certified block or a new message"""
@@ -365,11 +365,11 @@ input Pricing {
 scalar PublicKey
 
 type QueryRoot {
-  chain(chainId: ChainId!): ChainStateExtendedView!
-  applications(chainId: ChainId!): [ApplicationOverview!]!
+  chain(chainId: ChainId): ChainStateExtendedView!
+  applications(chainId: ChainId): [ApplicationOverview!]!
   chains: Chains!
-  block(hash: CryptoHash, chainId: ChainId!): HashedValue
-  blocks(from: CryptoHash, chainId: ChainId!, limit: Int): [HashedValue!]!
+  block(hash: CryptoHash, chainId: ChainId): HashedValue
+  blocks(from: CryptoHash, chainId: ChainId, limit: Int): [HashedValue!]!
 }
 
 """The recipient of a transfer"""
@@ -377,7 +377,7 @@ scalar Recipient
 
 type SubscriptionRoot {
   """Subscribes to notifications from the current chain."""
-  notifications(chainId: ChainId!): Notification!
+  notifications: Notification!
 }
 
 """The channels available in the system application."""
