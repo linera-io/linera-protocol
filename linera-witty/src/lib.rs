@@ -18,11 +18,13 @@ mod memory_layout;
 mod primitive_types;
 mod runtime;
 mod type_traits;
+mod util;
 
 pub use self::{
     memory_layout::Layout,
     runtime::{GuestPointer, InstanceWithMemory, Memory, Runtime, RuntimeError, RuntimeMemory},
     type_traits::{WitLoad, WitType},
+    util::Split,
 };
 pub use frunk::{hlist::HList, HList, HNil};
 #[cfg(feature = "macros")]
