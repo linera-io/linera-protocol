@@ -763,6 +763,9 @@ enum ClientCommand {
 
     /// Run a GraphQL service on the local node of a given chain.
     Service {
+        /// Chain id
+        chain_id: Option<ChainId>,
+
         #[structopt(flatten)]
         config: ChainListenerConfig,
 
@@ -1294,17 +1297,17 @@ where
                 // Not saving the wallet because `listen()` does not create blocks.
             }
 
-            Service { config, port } => {
-                let mut clients = Vec::new();
-                for chain_id in context.wallet_state.own_chain_ids() {
-                    let mut client = context.make_chain_client(storage.clone(), chain_id);
-                    client.synchronize_from_validators().await?;
-                    clients.push(client);
-                }
-                let default = context.wallet_state.default_chain();
+            Service {
+                chain_id,
+                config,
+                port,
+            } => {
+                let mut chain_client = context.make_chain_client(storage, chain_id);
+                chain_client.synchronize_from_validators().await?;
+                let default = chain_client.chain_id();
                 let list = context.wallet_state.chain_ids();
                 let chains = Chains { list, default };
-                let service = NodeService::new(clients, config, port, chains);
+                let service = NodeService::new(chain_client, config, port, chains);
                 service
                     .run(context, |context, client| {
                         Box::pin(async {
