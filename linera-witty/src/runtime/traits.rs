@@ -5,6 +5,7 @@
 
 use super::RuntimeError;
 use crate::memory_layout::FlatLayout;
+use frunk::HList;
 
 /// A Wasm runtime.
 ///
@@ -57,4 +58,20 @@ where
         self.function_from_export(export)?
             .ok_or_else(|| RuntimeError::NotAFunction(name.to_string()))
     }
+}
+
+/// Trait alias for a Wasm module instance with the WIT Canonical ABI `cabi_realloc` function.
+pub trait CabiReallocAlias: InstanceWithFunction<HList![i32, i32, i32, i32], HList![i32]> {}
+
+impl<AnyInstance> CabiReallocAlias for AnyInstance where
+    AnyInstance: InstanceWithFunction<HList![i32, i32, i32, i32], HList![i32]>
+{
+}
+
+/// Trait alias for a Wasm module instance with the WIT Canonical ABI `cabi_free` function.
+pub trait CabiFreeAlias: InstanceWithFunction<HList![i32], HList![]> {}
+
+impl<AnyInstance> CabiFreeAlias for AnyInstance where
+    AnyInstance: InstanceWithFunction<HList![i32], HList![]>
+{
 }

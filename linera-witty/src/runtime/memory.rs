@@ -3,7 +3,10 @@
 
 //! Abstraction over how different runtimes manipulate the guest WebAssembly module's memory.
 
-use super::{InstanceWithFunction, Runtime, RuntimeError};
+use super::{
+    traits::{CabiFreeAlias, CabiReallocAlias},
+    InstanceWithFunction, Runtime, RuntimeError,
+};
 use crate::{Layout, WitType};
 use frunk::{hlist, hlist_pat, HList};
 use std::borrow::Cow;
@@ -51,22 +54,6 @@ pub trait RuntimeMemory<Instance> {
         location: GuestPointer,
         bytes: &[u8],
     ) -> Result<(), RuntimeError>;
-}
-
-/// Trait alias for a Wasm module instance with the WIT Canonical ABI `cabi_realloc` function.
-pub trait CabiReallocAlias: InstanceWithFunction<HList![i32, i32, i32, i32], HList![i32]> {}
-
-impl<AnyInstance> CabiReallocAlias for AnyInstance where
-    AnyInstance: InstanceWithFunction<HList![i32, i32, i32, i32], HList![i32]>
-{
-}
-
-/// Trait alias for a Wasm module instance with the WIT Canonical ABI `cabi_free` function.
-pub trait CabiFreeAlias: InstanceWithFunction<HList![i32], HList![]> {}
-
-impl<AnyInstance> CabiFreeAlias for AnyInstance where
-    AnyInstance: InstanceWithFunction<HList![i32], HList![]>
-{
 }
 
 /// A handle to interface with a guest Wasm module instance's memory.
