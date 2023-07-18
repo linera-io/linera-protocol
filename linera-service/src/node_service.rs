@@ -470,8 +470,11 @@ where
     async fn block(
         &self,
         hash: Option<CryptoHash>,
-        chain_id: ChainId,
+        chain_id: Option<ChainId>,
     ) -> Result<Option<HashedValue>, Error> {
+        let Some(chain_id) = chain_id else {
+             return Ok(None); // TODO(afck): Make this non-optional.
+        };
         let Some(client) = self.clients.client_lock(&chain_id).await else {
             return Ok(None);
         };
@@ -493,9 +496,12 @@ where
     async fn blocks(
         &self,
         from: Option<CryptoHash>,
-        chain_id: ChainId,
+        chain_id: Option<ChainId>,
         limit: Option<u32>,
     ) -> Result<Vec<HashedValue>, Error> {
+        let Some(chain_id) = chain_id else {
+             return Ok(vec![]); // TODO(afck): Make this non-optional.
+        };
         let Some(client) = self.clients.client_lock(&chain_id).await else {
             return Ok(vec![]);
         };
@@ -662,7 +668,12 @@ where
     ViewError: From<S::ContextError>,
 {
     /// Creates a new instance of the node service given a client chain and a port.
-    pub fn new(config: ChainListenerConfig, port: NonZeroU16, chains: Chains, storage: S) -> Self {
+    pub fn new(
+        config: ChainListenerConfig,
+        port: NonZeroU16,
+        chains: Chains,
+        storage: S,
+    ) -> Self {
         Self {
             clients: ClientMap::default(),
             config,
