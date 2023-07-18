@@ -8,7 +8,7 @@ mod implementations;
 use crate::memory_layout::Layout;
 
 /// A type that is representable by fundamental WIT types.
-pub trait WitType {
+pub trait WitType: Sized {
     /// The size of the type when laid out in memory.
     const SIZE: u32;
 
