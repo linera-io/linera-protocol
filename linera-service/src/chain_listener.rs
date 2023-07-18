@@ -61,7 +61,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    /// Creates a new chain listener given client chains.
+    /// Creates a new chain listener given a client chain.
     pub(crate) fn new(config: ChainListenerConfig, clients: ClientMap<P, S>) -> Self {
         Self { config, clients }
     }
@@ -97,7 +97,8 @@ where
                     }
                 }
             }
-            wallet_updater(&mut context, &mut *client.lock().await).await;
+            let mut client = client.lock().await;
+            wallet_updater(&mut context, &mut *client).await;
             self.update_streams(&mut streams, &mut context, &storage)
                 .await?;
         }

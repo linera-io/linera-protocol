@@ -181,19 +181,9 @@ impl WalletState {
     }
 
     pub fn key_pair_for_pk(&self, key: &PublicKey) -> Option<KeyPair> {
-        if let Some(key_pair) = self
-            .inner
+        self.inner
             .unassigned_key_pairs
             .get(key)
-            .map(|key_pair| key_pair.copy())
-        {
-            return Some(key_pair);
-        }
-        self.inner
-            .chains
-            .values()
-            .filter_map(|user_chain| user_chain.key_pair.as_ref())
-            .find(|key_pair| key_pair.public() == *key)
             .map(|key_pair| key_pair.copy())
     }
 
