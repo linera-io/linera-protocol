@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
+use crate::chain_listener::{ChainListener, ChainListenerConfig};
 use async_graphql::{
     futures_util::Stream,
     http::GraphiQLSource,
@@ -59,12 +59,6 @@ pub(crate) struct ClientMap<P, S>(Arc<Mutex<ClientMapInner<P, S>>>);
 impl<P, S> Clone for ClientMap<P, S> {
     fn clone(&self) -> Self {
         ClientMap(self.0.clone())
-    }
-}
-
-impl<P, S> Default for ClientMap<P, S> {
-    fn default() -> Self {
-        Self(Arc::new(Mutex::new(BTreeMap::new())))
     }
 }
 
@@ -646,17 +640,15 @@ pub struct NodeService<P, S> {
     config: ChainListenerConfig,
     port: NonZeroU16,
     chains: Chains,
-    storage: S,
 }
 
-impl<P, S: Clone> Clone for NodeService<P, S> {
+impl<P, S> Clone for NodeService<P, S> {
     fn clone(&self) -> Self {
         Self {
             clients: self.clients.clone(),
             config: self.config.clone(),
             port: self.port,
             chains: self.chains.clone(),
-            storage: self.storage.clone(),
         }
     }
 }
@@ -669,17 +661,20 @@ where
 {
     /// Creates a new instance of the node service given a client chain and a port.
     pub fn new(
+        clients: impl IntoIterator<Item = ChainClient<P, S>>,
         config: ChainListenerConfig,
         port: NonZeroU16,
         chains: Chains,
-        storage: S,
     ) -> Self {
+        let clients = clients
+            .into_iter()
+            .map(|client| (client.chain_id(), Arc::new(Mutex::new(client))))
+            .collect();
         Self {
-            clients: ClientMap::default(),
+            clients: ClientMap(Arc::new(Mutex::new(clients))),
             config,
             port,
             chains,
-            storage,
         }
     }
 
@@ -706,8 +701,19 @@ where
         for<'a> F: (Fn(&'a mut C, &'a mut ChainClient<P, S>) -> futures::future::BoxFuture<'a, ()>)
             + Send
             + Clone,
-        C: ClientContext<P>,
     {
+        // Process the inbox: For messages that are already there we won't receive a notification.
+        let clients: Vec<_> = self.clients.map_lock().await.values().cloned().collect();
+        future::join_all(clients.iter().map(|client| async {
+            let mut guard = client.lock().await;
+            guard.synchronize_from_validators().await?;
+            guard.process_inbox().await?;
+            Ok(())
+        }))
+        .await
+        .into_iter()
+        .collect::<Result<Vec<()>, anyhow::Error>>()?;
+
         let port = self.port.get();
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
         let applications_handler = axum::routing::get(graphiql).post(Self::application_handler);
@@ -726,11 +732,9 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        let sync_fut = Box::pin(ChainListener::new(self.config, self.clients.clone()).run(
-            context,
-            wallet_updater,
-            self.storage.clone(),
-        ));
+        let sync_fut = Box::pin(
+            ChainListener::new(self.config, self.clients.clone()).run(context, wallet_updater),
+        );
         let serve_fut =
             Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
 

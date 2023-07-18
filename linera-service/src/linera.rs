@@ -28,7 +28,7 @@ use linera_execution::{
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
-    chain_listener::{self, ChainListenerConfig},
+    chain_listener::ChainListenerConfig,
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     node_service::{Chains, NodeService},
     project::{self, Project},
@@ -77,20 +77,6 @@ struct ClientContext {
     notification_retry_delay: Duration,
     notification_retries: u32,
     wait_for_outgoing_messages: bool,
-}
-
-impl chain_listener::ClientContext<NodeProvider> for ClientContext {
-    fn wallet_state(&self) -> &WalletState {
-        &self.wallet_state
-    }
-
-    fn make_chain_client<S>(
-        &self,
-        storage: S,
-        chain_id: impl Into<Option<ChainId>>,
-    ) -> ChainClient<NodeProvider, S> {
-        self.make_chain_client(storage, chain_id)
-    }
 }
 
 impl ClientContext {
@@ -208,11 +194,11 @@ impl ClientContext {
         validator_clients
     }
 
-    pub(crate) fn make_chain_client<S>(
+    fn make_chain_client<S>(
         &self,
         storage: S,
         chain_id: impl Into<Option<ChainId>>,
-    ) -> ChainClient<NodeProvider, S> {
+    ) -> ChainClient<impl ValidatorNodeProvider, S> {
         let chain_id = chain_id.into().unwrap_or_else(|| {
             self.wallet_state
                 .default_chain()
@@ -1309,10 +1295,17 @@ where
             }
 
             Service { config, port } => {
+                let mut clients = Vec::new();
+                for chain_id in context.wallet_state.own_chain_ids() {
+                    let mut client = context.make_chain_client(storage.clone(), chain_id);
+                    client.synchronize_from_validators().await?;
+                    clients.push(client);
+                }
                 let default = context.wallet_state.default_chain();
                 let list = context.wallet_state.chain_ids();
                 let chains = Chains { list, default };
-                NodeService::new(config, port, chains, storage)
+                let service = NodeService::new(clients, config, port, chains);
+                service
                     .run(context, |context, client| {
                         Box::pin(async {
                             context.update_wallet_from_client(client).await;
