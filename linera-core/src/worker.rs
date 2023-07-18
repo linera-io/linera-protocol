@@ -6,10 +6,10 @@ use crate::data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChain
 use async_trait::async_trait;
 use futures::{future, FutureExt};
 use linera_base::{
-    crypto::{CryptoHash, KeyPair, PublicKey},
+    crypto::{CryptoHash, KeyPair},
     data_types::{ArithmeticError, BlockHeight, Timestamp},
     doc_scalar, ensure,
-    identifiers::{ChainId, Destination, Owner},
+    identifiers::{ChainId, Owner},
 };
 use linera_chain::{
     data_types::{
@@ -20,8 +20,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    BytecodeLocation, Message, Query, Response, SystemMessage, UserApplicationDescription,
-    UserApplicationId,
+    BytecodeLocation, Query, Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::{
@@ -43,7 +42,8 @@ use tracing::{debug, error, instrument, trace, warn};
 
 #[cfg(any(test, feature = "test"))]
 use {
-    linera_base::identifiers::MessageId, linera_chain::data_types::ChannelFullName,
+    linera_base::identifiers::{Destination, MessageId},
+    linera_chain::data_types::ChannelFullName,
     linera_execution::ApplicationRegistryView,
 };
 
@@ -121,8 +121,6 @@ pub enum Reason {
     NewBlock {
         height: BlockHeight,
         hash: CryptoHash,
-        timestamp: Timestamp,
-        new_chains: Vec<(ChainId, PublicKey)>,
     },
     NewIncomingMessage {
         origin: Origin,
@@ -540,26 +538,11 @@ where
         chain.confirmed_log.push(certificate.hash());
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         let mut actions = self.create_network_actions(&mut chain).await?;
-        let new_chains = messages
-            .iter()
-            .filter_map(|out_msg| {
-                if let Message::System(SystemMessage::OpenChain { public_key, .. }) =
-                    out_msg.message
-                {
-                    if let Destination::Recipient(id) = out_msg.destination {
-                        return Some((id, public_key));
-                    }
-                }
-                None
-            })
-            .collect();
         actions.notifications.push(Notification {
             chain_id: block.chain_id,
             reason: Reason::NewBlock {
                 height: block.height,
                 hash: certificate.value.hash(),
-                timestamp: block.timestamp,
-                new_chains,
             },
         });
         // Persist chain.
