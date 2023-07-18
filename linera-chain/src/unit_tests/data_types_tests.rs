@@ -23,7 +23,7 @@ fn test_signed_values() {
             user_data: UserData::default(),
         })],
         height: BlockHeight::from(0),
-        timestamp: Timestamp::default(),
+        timestamp: Default::default(),
         authenticated_signer: None,
         previous_block_hash: None,
     };
@@ -65,7 +65,7 @@ fn test_certificates() {
         previous_block_hash: None,
         height: BlockHeight::from(0),
         authenticated_signer: None,
-        timestamp: Timestamp::default(),
+        timestamp: Default::default(),
     };
     let executed_block = ExecutedBlock {
         block,

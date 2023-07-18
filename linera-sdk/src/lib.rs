@@ -420,8 +420,8 @@ where
 {
     fn default() -> Self {
         Self {
-            value: Value::default(),
-            execution_result: ExecutionResult::default(),
+            value: Default::default(),
+            execution_result: Default::default(),
             create_sessions: vec![],
         }
     }

@@ -321,7 +321,7 @@ impl<S> LocalNodeClient<S> {
         let node = LocalNode { state };
         Self {
             node: Arc::new(Mutex::new(node)),
-            notifier: Notifier::default(),
+            notifier: Default::default(),
         }
     }
 }
