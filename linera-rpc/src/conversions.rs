@@ -436,16 +436,9 @@ impl TryFrom<grpc::Owner> for Owner {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use linera_base::{
-        crypto::{BcsSignable, CryptoHash, KeyPair},
-        data_types::{Amount, Timestamp},
-    };
-    use linera_chain::{
-        data_types::{Block, BlockAndRound, ExecutedBlock, HashedValue},
-        ChainManagerInfo,
-    };
+    use linera_base::crypto::{BcsSignable, CryptoHash, KeyPair};
+    use linera_chain::data_types::{Block, BlockAndRound, ExecutedBlock, HashedValue};
     use linera_core::data_types::ChainInfo;
-    use linera_execution::committee::Epoch;
     use serde::{Deserialize, Serialize};
     use std::{borrow::Cow, fmt::Debug};
 
@@ -457,12 +450,12 @@ pub mod tests {
     fn get_block() -> Block {
         Block {
             chain_id: ChainId::root(0),
-            epoch: Epoch::default(),
+            epoch: Default::default(),
             incoming_messages: vec![],
             operations: vec![],
-            height: BlockHeight::from(0),
+            height: Default::default(),
             authenticated_signer: None,
-            timestamp: Timestamp::default(),
+            timestamp: Default::default(),
             previous_block_hash: None,
         }
     }
@@ -526,11 +519,11 @@ pub mod tests {
             chain_id: ChainId::root(0),
             epoch: None,
             description: None,
-            manager: ChainManagerInfo::default(),
-            system_balance: Amount::ZERO,
+            manager: Default::default(),
+            system_balance: Default::default(),
             block_hash: None,
-            timestamp: Timestamp::default(),
-            next_block_height: BlockHeight::from(0),
+            timestamp: Default::default(),
+            next_block_height: Default::default(),
             state_hash: None,
             requested_committees: None,
             requested_pending_messages: vec![],
@@ -656,7 +649,7 @@ pub mod tests {
         let block_proposal = BlockProposal {
             content: BlockAndRound {
                 block: get_block(),
-                round: RoundNumber::zero(),
+                round: Default::default(),
             },
             owner: Owner::from(KeyPair::generate().public()),
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
@@ -677,8 +670,8 @@ pub mod tests {
             reason: linera_core::worker::Reason::NewBlock {
                 height: BlockHeight(0),
                 hash: CryptoHash::new(&Foo("".into())),
-                timestamp: Timestamp::default(),
-                new_chains: Vec::new(),
+                timestamp: Default::default(),
+                new_chains: Default::default(),
             },
         };
         round_trip_check::<_, grpc::Notification>(notification);

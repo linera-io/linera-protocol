@@ -292,8 +292,8 @@ Please make sure a node service isn't running locally, only one client can use a
         let mut reader = BufReader::new(&file_lock.file);
         if reader.fill_buf()?.is_empty() {
             let inner = InnerWallet {
-                chains: BTreeMap::new(),
-                unassigned_key_pairs: HashMap::new(),
+                chains: Default::default(),
+                unassigned_key_pairs: Default::default(),
                 default: None,
                 genesis_config,
             };
