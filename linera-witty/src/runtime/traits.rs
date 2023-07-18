@@ -3,7 +3,7 @@
 
 //! Abstractions over different Wasm runtime implementations.
 
-use super::RuntimeError;
+use super::{memory::RuntimeMemory, RuntimeError};
 use crate::memory_layout::FlatLayout;
 use frunk::HList;
 
@@ -73,5 +73,15 @@ pub trait CabiFreeAlias: InstanceWithFunction<HList![i32], HList![]> {}
 
 impl<AnyInstance> CabiFreeAlias for AnyInstance where
     AnyInstance: InstanceWithFunction<HList![i32], HList![]>
+{
+}
+
+/// Trait alias for a Wasm module instance with the WIT Canonical ABI functions.
+pub trait InstanceWithMemory: CabiReallocAlias + CabiFreeAlias {}
+
+impl<AnyInstance> InstanceWithMemory for AnyInstance
+where
+    AnyInstance: CabiReallocAlias + CabiFreeAlias,
+    <AnyInstance::Runtime as Runtime>::Memory: RuntimeMemory<AnyInstance>,
 {
 }
