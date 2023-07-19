@@ -12,7 +12,6 @@
     "json-formatter-js": "^2.3",
     "webpack": "^5.88",
     "webpack-cli": "^5.1",
-    "html-loader": "^4.2",
-    "get-graphql-schema": "^2.1"
+    "html-loader": "^4.2"
   }
 }

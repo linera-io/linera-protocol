@@ -3,3 +3,4 @@ package-lock.json
 pkg
 dist
 graphql/*.rs
+graphql/schema.graphql

@@ -594,6 +594,11 @@ where
         .finish()
     }
 
+    /// Exports GraphQL schema to string
+    pub fn schema_sdl(&self) -> String {
+        self.schema().sdl()
+    }
+
     /// Runs the node service.
     pub async fn run<C>(self, context: C) -> Result<(), anyhow::Error>
     where

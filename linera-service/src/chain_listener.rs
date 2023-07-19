@@ -25,6 +25,15 @@ pub struct ChainListenerConfig {
     pub(crate) delay_after_ms: u64,
 }
 
+impl ChainListenerConfig {
+    pub fn new(delay_before_ms: u64, delay_after_ms: u64) -> Self {
+        ChainListenerConfig {
+            delay_before_ms,
+            delay_after_ms,
+        }
+    }
+}
+
 #[async_trait]
 pub trait ClientContext<P: ValidatorNodeProvider> {
     async fn update_wallet<'a, S>(&'a mut self, client: &'a mut ChainClient<P, S>)
