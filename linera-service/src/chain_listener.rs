@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_trait::async_trait;
 use futures::{lock::Mutex, StreamExt};
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
@@ -24,6 +25,14 @@ pub struct ChainListenerConfig {
     pub(crate) delay_after_ms: u64,
 }
 
+#[async_trait]
+pub trait ClientContext<P: ValidatorNodeProvider> {
+    async fn update_wallet<'a, S>(&'a mut self, client: &'a mut ChainClient<P, S>)
+    where
+        S: Store + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>;
+}
+
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
 /// appropriately.
 pub struct ChainListener<P, S> {
@@ -43,10 +52,9 @@ where
     }
 
     /// Runs the chain listener.
-    pub async fn run<C, F>(self, mut context: C, wallet_updater: F) -> Result<(), anyhow::Error>
+    pub async fn run<C>(self, mut context: C) -> Result<(), anyhow::Error>
     where
-        for<'a> F:
-            (Fn(&'a mut C, &'a mut ChainClient<P, S>) -> futures::future::BoxFuture<'a, ()>) + Send,
+        C: ClientContext<P>,
     {
         let mut notification_stream = ChainClient::listen(self.client.clone()).await?;
         let mut tracker = NotificationTracker::default();
@@ -78,7 +86,7 @@ where
                             }
                         }
                     }
-                    wallet_updater(&mut context, client.deref_mut()).await;
+                    context.update_wallet(client.deref_mut()).await;
                 }
 
                 if self.config.delay_after_ms > 0 {

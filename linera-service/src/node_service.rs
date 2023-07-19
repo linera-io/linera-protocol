@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::chain_listener::{ChainListener, ChainListenerConfig};
+use crate::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
 use async_graphql::{
     futures_util::Stream,
     http::GraphiQLSource,
@@ -595,10 +595,9 @@ where
     }
 
     /// Runs the node service.
-    pub async fn run<C, F>(self, context: C, wallet_updater: F) -> Result<(), anyhow::Error>
+    pub async fn run<C>(self, context: C) -> Result<(), anyhow::Error>
     where
-        for<'a> F:
-            (Fn(&'a mut C, &'a mut ChainClient<P, S>) -> futures::future::BoxFuture<'a, ()>) + Send,
+        C: ClientContext<P>,
     {
         // Process the inbox: For messages that are already there we won't receive a notification.
         let mut client = self.client.lock().await;
@@ -621,9 +620,7 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        let sync_fut = Box::pin(
-            ChainListener::new(self.config, self.client.clone()).run(context, wallet_updater),
-        );
+        let sync_fut = Box::pin(ChainListener::new(self.config, self.client.clone()).run(context));
         let serve_fut =
             Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
 
