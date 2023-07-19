@@ -412,7 +412,7 @@ where
     }
 
     pub async fn query_application(
-        &mut self,
+        &self,
         chain_id: ChainId,
         query: &Query,
     ) -> Result<Response, NodeError> {

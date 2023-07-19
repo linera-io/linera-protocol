@@ -30,7 +30,7 @@ use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
     chain_listener::{self, ChainListenerConfig},
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
-    node_service::{Chains, NodeService},
+    node_service::NodeService,
     project::{self, Project},
     storage::{Runnable, StorageConfig},
 };
@@ -1331,10 +1331,8 @@ where
             }
 
             Service { config, port } => {
-                let default = context.wallet_state.default_chain();
-                let list = context.wallet_state.chain_ids();
-                let chains = Chains { list, default };
-                let service = NodeService::new(config, port, chains, storage);
+                let default_chain = context.wallet_state.default_chain();
+                let service = NodeService::new(config, port, default_chain, storage);
                 service.run(context).await?;
             }
 
