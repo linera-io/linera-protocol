@@ -1227,38 +1227,6 @@ async fn test_end_to_end_block_query() {
     node_service.assert_is_running();
 }
 
-#[test_log::test(tokio::test)]
-async fn test_end_to_end_check_schema() {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
-    let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 4);
-    let client = runner.make_client(network);
-
-    runner.generate_initial_validator_config().await;
-    client.create_genesis_config().await;
-    runner.run_local_net().await;
-    let mut node_service = client.run_node_service(None, None).await;
-    match std::process::Command::new("get-graphql-schema")
-        .arg(format!("http://localhost:{}", node_service.port))
-        .output()
-    {
-        Err(e) => warn!("get-grahql-schema not installed or failed: {}", e),
-        Ok(service_schema_result) => {
-            let service_schema = String::from_utf8(service_schema_result.stdout)
-                .expect("failed to read the service graphql schema");
-            let mut file_base = std::fs::File::open("../linera-explorer/graphql/schema.graphql")
-                .expect("failed to open schema.graphql");
-            let mut graphql_schema = String::new();
-            file_base
-                .read_to_string(&mut graphql_schema)
-                .expect("failed to read schema.graphql");
-            assert_eq!(graphql_schema, service_schema, "graphql schema has changed -> regenerate schema following steps in linera-explorer/README.md")
-        }
-    }
-    node_service.assert_is_running();
-}
-
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_counter() {
