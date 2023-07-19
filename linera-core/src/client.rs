@@ -954,7 +954,7 @@ where
         }
     }
 
-    /// Executes (or retries) a regular block proposal. Update local balance.
+    /// Executes (or retries) a regular block proposal. Updates local balance.
     /// If `with_confirmation` is false, we stop short of executing the finalized block.
     async fn propose_block(&mut self, block: Block) -> Result<Certificate> {
         let next_round = self.next_round;
@@ -981,6 +981,13 @@ where
         // Build the initial query.
         let manager = self.chain_info().await?.manager;
         let key_pair = self.key_pair().await?;
+        let validated = manager.highest_validated().cloned();
+        if let Some(validated) = &validated {
+            ensure!(
+                validated.value().executed_block().block == block,
+                "A different block has already been validated at this height"
+            );
+        }
         let proposal = BlockProposal::new(
             BlockAndRound {
                 block: block.clone(),
@@ -988,7 +995,7 @@ where
             },
             key_pair,
             blobs,
-            manager.highest_validated().cloned(),
+            validated,
         );
         // Try to execute the block locally first.
         self.node_client
