@@ -32,6 +32,8 @@ use graphql::{
 };
 use js_utils::{getf, log_str, parse, setf, stringify, SER};
 
+static mut WEBSOCKET: Option<WsMeta> = None;
+
 /// Page enum containing info for each page.
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
@@ -86,7 +88,7 @@ impl Config {
 pub struct Data {
     config: Config,
     page: Page,
-    chains: Vec<Value>,
+    chains: Vec<ChainId>,
     chain: ChainId,
 }
 
@@ -127,35 +129,35 @@ fn node_service_address(config: &Config, protocol: Protocol) -> String {
 
 async fn get_blocks(
     node: &str,
-    chain_id: &ChainId,
+    chain_id: ChainId,
     from: Option<CryptoHash>,
     limit: Option<u32>,
 ) -> Result<Vec<Blocks>, String> {
     let client = reqwest::Client::new();
     let variables = graphql::blocks::Variables {
         from,
-        chain_id: Some(*chain_id),
+        chain_id: Some(chain_id),
         limit: limit.map(|x| x.into()),
     };
     let res = post_graphql::<crate::graphql::Blocks, _>(&client, node, variables)
         .await
         .map_err(|e| e.to_string())?;
     match res.data {
-        None => Err("null blocks data".to_string()),
+        None => Err(format!("null blocks data: {:?}", res.errors)),
         Some(data) => Ok(data.blocks),
     }
 }
 
-async fn get_applications(node: &str, chain_id: &ChainId) -> Result<Vec<Application>, String> {
+async fn get_applications(node: &str, chain_id: ChainId) -> Result<Vec<Application>, String> {
     let client = reqwest::Client::new();
     let variables = graphql::applications::Variables {
-        chain_id: Some(*chain_id),
+        chain_id: Some(chain_id),
     };
     let result = post_graphql::<crate::graphql::Applications, _>(&client, node, variables)
         .await
         .map_err(|e| e.to_string())?;
     match result.data {
-        None => Err("null applications data".to_string()),
+        None => Err(format!("null applications data: {:?}", result.errors)),
         Some(data) => Ok(data.applications),
     }
 }
@@ -166,7 +168,7 @@ fn error(msg: &str) -> (Page, String) {
 }
 
 /// Returns the home page.
-async fn home(node: &str, chain_id: &ChainId) -> Result<(Page, String), String> {
+async fn home(node: &str, chain_id: ChainId) -> Result<(Page, String), String> {
     let blocks = get_blocks(node, chain_id, None, None).await?;
     let apps = get_applications(node, chain_id).await?;
     Ok((Page::Home { blocks, apps }, format!("/?chain={}", chain_id)))
@@ -175,7 +177,7 @@ async fn home(node: &str, chain_id: &ChainId) -> Result<(Page, String), String> 
 /// Returns the blocks page.
 async fn blocks(
     node: &str,
-    chain_id: &ChainId,
+    chain_id: ChainId,
     from: Option<CryptoHash>,
     limit: Option<u32>,
 ) -> Result<(Page, String), String> {
@@ -187,13 +189,13 @@ async fn blocks(
 /// Returns the block page.
 async fn block(
     node: &str,
-    chain_id: &ChainId,
+    chain_id: ChainId,
     hash: Option<CryptoHash>,
 ) -> Result<(Page, String), String> {
     let client = reqwest::Client::new();
     let variables = graphql::block::Variables {
         hash,
-        chain_id: Some(*chain_id),
+        chain_id: Some(chain_id),
     };
     let result = post_graphql::<crate::graphql::Block, _>(&client, node, variables)
         .await
@@ -220,11 +222,14 @@ async fn chains(app: &JsValue, node: &str) -> Result<ChainId, String> {
         .serialize(&SER)
         .expect("failed to serialize ChainIds");
     setf(app, "chains", &chains_js);
-    Ok(chains.default)
+    Ok(chains.default.unwrap_or_else(|| match chains.list.get(0) {
+        None => ChainId::from(ChainDescription::Root(0)),
+        Some(chain_id) => *chain_id,
+    }))
 }
 
 /// Returns the applications page.
-async fn applications(node: &str, chain_id: &ChainId) -> Result<(Page, String), String> {
+async fn applications(node: &str, chain_id: ChainId) -> Result<(Page, String), String> {
     let applications = get_applications(node, chain_id).await?;
     Ok((
         Page::Applications(applications),
@@ -408,55 +413,69 @@ fn chain_id_from_args(
     app: &JsValue,
     data: &Data,
     args: &[(String, String)],
-) -> Result<ChainId, String> {
+) -> Result<(ChainId, bool), String> {
     match find_arg(args, "chain") {
-        None => Ok(data.chain),
+        None => Ok((data.chain, false)),
         Some(chain_id) => {
             let chain_js: JsValue = chain_id
                 .serialize(&SER)
                 .expect("failed to serialize ChainId");
             setf(app, "chain", &chain_js);
-            ChainId::from_str(&chain_id).map_err(|e| e.to_string())
+            ChainId::from_str(&chain_id)
+                .map_err(|e| e.to_string())
+                .map(|id| (id, id == data.chain))
         }
     }
 }
 
-/// Main function to switch between vue.js pages.
+/// Main function to switch between Vue pages.
 async fn route_aux(app: &JsValue, data: &Data, path: &Option<String>, args: &[(String, String)]) {
-    let chain_id = chain_id_from_args(app, data, args);
+    let chain_info = chain_id_from_args(app, data, args);
     let (page_name, args): (&str, Vec<(String, String)>) = match (path, &data.page) {
         (Some(p), _) => (p, args.to_vec()),
         (_, p) => page_name_and_args(p),
     };
     let address = node_service_address(&data.config, Protocol::Http);
-    let result = match chain_id {
+    let result = match chain_info {
         Err(e) => Err(e),
-        Ok(chain_id) => match page_name {
-            "" => home(&address, &chain_id).await,
-            "block" => {
-                let hash = find_arg(&args, "block")
-                    .map(|hash| CryptoHash::from_str(&hash).map_err(|e| e.to_string()));
-                match hash {
-                    Some(Err(e)) => Err(e),
-                    None => block(&address, &chain_id, None).await,
-                    Some(Ok(hash)) => block(&address, &chain_id, Some(hash)).await,
+        Ok((chain_id, chain_changed)) => {
+            let page_result = match page_name {
+                "" => home(&address, chain_id).await,
+                "block" => {
+                    let hash = find_arg(&args, "block")
+                        .map(|hash| CryptoHash::from_str(&hash).map_err(|e| e.to_string()));
+                    match hash {
+                        Some(Err(e)) => Err(e),
+                        None => block(&address, chain_id, None).await,
+                        Some(Ok(hash)) => block(&address, chain_id, Some(hash)).await,
+                    }
                 }
-            }
-            "blocks" => blocks(&address, &chain_id, None, Some(20)).await,
-            "applications" => applications(&address, &chain_id).await,
-            "application" => match find_arg(&args, "app").map(|v| parse(&v)) {
-                None => Err("unknown application".to_string()),
-                Some(app_js) => {
-                    let app = from_value::<Application>(app_js).unwrap();
-                    application(app).await
+                "blocks" => blocks(&address, chain_id, None, Some(20)).await,
+                "applications" => applications(&address, chain_id).await,
+                "application" => match find_arg(&args, "app").map(|v| parse(&v)) {
+                    None => Err("unknown application".to_string()),
+                    Some(app_js) => {
+                        let app = from_value::<Application>(app_js).unwrap();
+                        application(app).await
+                    }
+                },
+                "error" => {
+                    let msg = find_arg(&args, "msg").unwrap_or("unknown error".to_string());
+                    Err(msg)
                 }
-            },
-            "error" => {
-                let msg = find_arg(&args, "msg").unwrap_or("unknown error".to_string());
-                Err(msg)
-            }
-            _ => Err("unknown page".to_string()),
-        },
+                _ => Err("unknown page".to_string()),
+            };
+            if chain_changed {
+                unsafe {
+                    if let Some(ws) = &WEBSOCKET {
+                        let _ = ws.close().await;
+                    }
+                }
+                let address = node_service_address(&data.config, Protocol::Websocket);
+                subscribe_chain(app, &address, chain_id).await;
+            };
+            page_result
+        }
     };
     let (page, new_path) = result.unwrap_or_else(|e| error(&e));
     let page_js = format_bytes(&page.serialize(&SER).unwrap());
@@ -500,28 +519,27 @@ fn set_onpopstate(app: JsValue) {
     callback.forget()
 }
 
-/// Subscribes to new block notifications.
-async fn subscribe(app: JsValue) {
-    spawn_local(async move {
-        let data = from_value::<Data>(app.clone()).expect("cannot parse vue data");
-        let address = node_service_address(&data.config, Protocol::Websocket);
-        let (_ws, mut wsio) = WsMeta::connect(
-            &format!("{}/ws", address),
-            Some(vec!["graphql-transport-ws"]),
-        )
-        .await
-        .expect("cannot connect to websocket");
-        wsio.send(WsMessage::Text(
-            "{\"type\": \"connection_init\", \"payload\": {}}".to_string(),
-        ))
+/// Subscribes to notifications for one chain
+async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
+    let (ws, mut wsio) = WsMeta::connect(
+        &format!("{}/ws", address),
+        Some(vec!["graphql-transport-ws"]),
+    )
+    .await
+    .expect("cannot connect to websocket");
+    wsio.send(WsMessage::Text(
+        "{\"type\": \"connection_init\", \"payload\": {}}".to_string(),
+    ))
+    .await
+    .expect("cannot send to websocket");
+    wsio.next().await;
+    let uuid = Uuid::new_v3(&Uuid::NAMESPACE_DNS, b"linera.dev");
+    let query = format!("{{\"id\": \"{}\", \"type\": \"subscribe\", \"payload\": {{\"query\": \"subscription {{ notifications(chainId: {}) }}\"}}}}", uuid, chain);
+    wsio.send(WsMessage::Text(query))
         .await
         .expect("cannot send to websocket");
-        wsio.next().await;
-        let uuid = Uuid::new_v3(&Uuid::NAMESPACE_DNS, b"linera.dev");
-        let query = format!("{{\"id\": \"{}\", \"type\": \"subscribe\", \"payload\": {{\"query\": \"subscription {{ notifications }}\"}}}}", uuid);
-        wsio.send(WsMessage::Text(query))
-            .await
-            .expect("cannot send to websocket");
+    let app = app.clone();
+    spawn_local(async move {
         while let Some(evt) = wsio.next().await {
             match evt {
                 WsMessage::Text(s) => {
@@ -533,19 +551,25 @@ async fn subscribe(app: JsValue) {
                         if let Some(d) = p.data {
                             let data =
                                 from_value::<Data>(app.clone()).expect("cannot parse vue data");
-                            if let (true, graphql::Reason::NewBlock { hash: _hash, .. }) = (
-                                d.notifications.chain_id == data.chain,
-                                d.notifications.reason,
-                            ) {
-                                route_aux(&app, &data, &None, &Vec::new()).await
-                            };
+                            if let graphql::Reason::NewBlock { hash: _hash, .. } =
+                                d.notifications.reason
+                            {
+                                if d.notifications.chain_id == chain {
+                                    route_aux(&app, &data, &None, &Vec::new()).await
+                                }
+                            }
+                        }
+                        if let Some(errors) = p.errors {
+                            errors.iter().for_each(|e| log_str(&e.to_string()));
+                            break;
                         }
                     };
                 }
                 WsMessage::Binary(_) => (),
             }
         }
-    })
+    });
+    unsafe { WEBSOCKET = Some(ws) }
 }
 
 /// Initializes pages and subscribes to notifications.
@@ -594,7 +618,6 @@ pub async fn init(app: JsValue, uri: String) {
                 },
             };
             route_aux(&app, &data, &path, &args).await;
-            subscribe(app).await;
         }
     }
 }

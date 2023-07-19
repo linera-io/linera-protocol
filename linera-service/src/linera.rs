@@ -81,6 +81,27 @@ struct ClientContext {
 
 #[async_trait]
 impl chain_listener::ClientContext<NodeProvider> for ClientContext {
+    fn wallet_state(&self) -> &WalletState {
+        &self.wallet_state
+    }
+
+    fn make_chain_client<S>(
+        &self,
+        storage: S,
+        chain_id: impl Into<Option<ChainId>>,
+    ) -> ChainClient<NodeProvider, S> {
+        self.make_chain_client(storage, chain_id)
+    }
+
+    fn update_wallet_for_new_chain(
+        &mut self,
+        chain_id: ChainId,
+        key_pair: Option<KeyPair>,
+        timestamp: Timestamp,
+    ) {
+        self.update_wallet_for_new_chain(chain_id, key_pair, timestamp);
+    }
+
     async fn update_wallet<'a, S>(&'a mut self, client: &'a mut ChainClient<NodeProvider, S>)
     where
         S: Store + Clone + Send + Sync + 'static,
@@ -778,9 +799,6 @@ enum ClientCommand {
 
     /// Run a GraphQL service on the local node of a given chain.
     Service {
-        /// Chain id
-        chain_id: Option<ChainId>,
-
         #[structopt(flatten)]
         config: ChainListenerConfig,
 
@@ -1312,17 +1330,11 @@ where
                 // Not saving the wallet because `listen()` does not create blocks.
             }
 
-            Service {
-                chain_id,
-                config,
-                port,
-            } => {
-                let mut chain_client = context.make_chain_client(storage, chain_id);
-                chain_client.synchronize_from_validators().await?;
-                let default = chain_client.chain_id();
+            Service { config, port } => {
+                let default = context.wallet_state.default_chain();
                 let list = context.wallet_state.chain_ids();
                 let chains = Chains { list, default };
-                let service = NodeService::new(chain_client, config, port, chains);
+                let service = NodeService::new(config, port, chains, storage);
                 service.run(context).await?;
             }
 

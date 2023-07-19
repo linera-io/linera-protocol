@@ -376,12 +376,7 @@ impl Client {
         stdout.trim().to_string()
     }
 
-    async fn run_node_service(
-        &self,
-        chain_id: impl Into<Option<ChainId>>,
-        port: impl Into<Option<u16>>,
-    ) -> NodeService {
-        let chain_id = chain_id.into();
+    async fn run_node_service(&self, port: impl Into<Option<u16>>) -> NodeService {
         let port = port.into().unwrap_or(8080);
         let mut command = self.run_with_storage().await;
         command.arg("service");
@@ -389,7 +384,6 @@ impl Client {
             command.args(var.split_whitespace());
         }
         let child = command
-            .args(chain_id.as_ref().map(ChainId::to_string))
             .args(["--port".to_string(), port.to_string()])
             .spawn()
             .unwrap();
@@ -402,11 +396,7 @@ impl Client {
                 .await;
             if request.is_ok() {
                 info!("Node service has started");
-                return NodeService {
-                    port,
-                    chain_id,
-                    child,
-                };
+                return NodeService { port, child };
             } else {
                 warn!("Waiting for node service to start");
             }
@@ -877,7 +867,6 @@ impl TestRunner {
 }
 
 struct NodeService {
-    chain_id: Option<ChainId>,
     port: u16,
     child: Child,
 }
@@ -889,36 +878,27 @@ impl NodeService {
         }
     }
 
-    async fn process_inbox(&self) {
-        self.query_node("mutation { processInbox }").await;
+    async fn process_inbox(&self, chain_id: &ChainId) {
+        let query = format!("mutation {{ processInbox(chainId: \"{chain_id}\") }}");
+        self.query_node(&query).await;
     }
 
-    async fn make_application(&self, application_id: &str) -> Application {
+    async fn make_application(&self, chain_id: &ChainId, application_id: &str) -> Application {
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
-            let values = self.try_get_applications_uri().await;
+            let values = self.try_get_applications_uri(chain_id).await;
             if let Some(link) = values.get(application_id) {
                 return Application {
                     uri: link.to_string(),
                 };
             }
-            warn!(
-                "Waiting for application {application_id:?} to be visible on chain {:?}",
-                self.chain_id
-            );
+            warn!("Waiting for application {application_id:?} to be visible on chain {chain_id:?}",);
         }
         panic!("Could not find application URI: {application_id}");
     }
 
-    async fn try_get_applications_uri(&self) -> HashMap<String, String> {
-        let query = if let Some(chain_id) = self.chain_id {
-            format!(
-                "query {{ applications(chainId: \"{}\") {{ id link }}}}",
-                chain_id
-            )
-        } else {
-            "query { applications { id link }}".to_string()
-        };
+    async fn try_get_applications_uri(&self, chain_id: &ChainId) -> HashMap<String, String> {
+        let query = format!("query {{ applications(chainId: \"{chain_id}\") {{ id link }}}}",);
         let data = self.query_node(&query).await;
         data["applications"]
             .as_array()
@@ -932,11 +912,17 @@ impl NodeService {
             .collect()
     }
 
-    async fn publish_bytecode(&self, contract: PathBuf, service: PathBuf) -> String {
+    async fn publish_bytecode(
+        &self,
+        chain_id: &ChainId,
+        contract: PathBuf,
+        service: PathBuf,
+    ) -> String {
         let contract_code = Bytecode::load_from_file(&contract).await.unwrap();
         let service_code = Bytecode::load_from_file(&service).await.unwrap();
         let query = format!(
-            "mutation {{ publishBytecode(contract: {}, service: {}) }}",
+            "mutation {{ publishBytecode(chainId: {}, contract: {}, service: {}) }}",
+            chain_id.to_value(),
             contract_code.to_value(),
             service_code.to_value(),
         );
@@ -973,6 +959,7 @@ impl NodeService {
 
     async fn create_application(
         &self,
+        chain_id: &ChainId,
         bytecode_id: String,
         parameters: String,
         argument: String,
@@ -985,6 +972,7 @@ impl NodeService {
         let new_argument = argument.replace('\"', "\\\"");
         let query = format!(
             "mutation {{ createApplication(\
+                chainId: \"{chain_id}\",
                 bytecodeId: \"{bytecode_id}\", \
                 parameters: \"{new_parameters}\", \
                 initializationArgument: \"{new_argument}\", \
@@ -995,9 +983,13 @@ impl NodeService {
         serde_json::from_value(data["createApplication"].clone()).unwrap()
     }
 
-    async fn request_application(&self, application_id: &str) -> String {
-        let query =
-            format!("mutation {{ requestApplication(applicationId: \"{application_id}\") }}");
+    async fn request_application(&self, chain_id: &ChainId, application_id: &str) -> String {
+        let query = format!(
+            "mutation {{ requestApplication(\
+                chainId: \"{chain_id}\", \
+                applicationId: \"{application_id}\") \
+            }}"
+        );
         let data = self.query_node(&query).await;
         serde_json::from_value(data["requestApplication"].clone()).unwrap()
     }
@@ -1139,13 +1131,13 @@ async fn test_end_to_end_chains_query() {
     let good_result = {
         let wallet = client.get_wallet();
         let list = wallet.chain_ids();
-        let default = wallet.default_chain().expect("no default chain");
+        let default = wallet.default_chain();
         let chains = serde_json::to_string(&Chains { list, default }).unwrap();
         format!("{{\"data\":{{\"chains\":{}}}}}", chains)
     };
 
     runner.run_local_net().await;
-    let mut node_service = client.run_node_service(None, None).await;
+    let mut node_service = client.run_node_service(None).await;
 
     let query = make_graphql_query("../linera-explorer/graphql/chains.graphql", "Chains", &[]);
     check_request(query, &good_result, node_service.port).await;
@@ -1164,14 +1156,15 @@ async fn test_end_to_end_applications_query() {
     client.create_genesis_config().await;
 
     runner.run_local_net().await;
-    let mut node_service = client.run_node_service(None, None).await;
+    let chain = client.get_wallet().default_chain().unwrap();
+    let mut node_service = client.run_node_service(None).await;
 
     // only checks if application input type is good
     let good_result = "{\"data\":{\"applications\":[]}}";
     let query = make_graphql_query(
         "../linera-explorer/graphql/applications.graphql",
         "Applications",
-        &Vec::new(),
+        &[("chainId".to_string(), chain.to_string())],
     );
     check_request(query, good_result, node_service.port).await;
     node_service.assert_is_running();
@@ -1189,14 +1182,15 @@ async fn test_end_to_end_blocks_query() {
     client.create_genesis_config().await;
 
     runner.run_local_net().await;
-    let mut node_service = client.run_node_service(None, None).await;
+    let chain = client.get_wallet().default_chain().unwrap();
+    let mut node_service = client.run_node_service(None).await;
 
     // only checks if block input type is good
     let good_result = "{\"data\":{\"blocks\":[]}}";
     let query = make_graphql_query(
         "../linera-explorer/graphql/blocks.graphql",
         "Blocks",
-        &Vec::new(),
+        &[("chainId".to_string(), chain.to_string())],
     );
     check_request(query, good_result, node_service.port).await;
     node_service.assert_is_running();
@@ -1214,14 +1208,15 @@ async fn test_end_to_end_block_query() {
     client.create_genesis_config().await;
 
     runner.run_local_net().await;
-    let mut node_service = client.run_node_service(None, None).await;
+    let chain = client.get_wallet().default_chain().unwrap();
+    let mut node_service = client.run_node_service(None).await;
 
     // only checks if block input type is good
     let good_result = "{\"data\":{\"block\":null}}";
     let query = make_graphql_query(
         "../linera-explorer/graphql/block.graphql",
         "Block",
-        &Vec::new(),
+        &[("chainId".to_string(), chain.to_string())],
     );
     check_request(query, good_result, node_service.port).await;
     node_service.assert_is_running();
@@ -1263,6 +1258,7 @@ async fn test_end_to_end_counter() {
 
     runner.generate_initial_validator_config().await;
     client.create_genesis_config().await;
+    let chain = client.get_wallet().default_chain().unwrap();
     runner.run_local_net().await;
     let (contract, service) = runner.build_example("counter").await;
 
@@ -1276,9 +1272,9 @@ async fn test_end_to_end_counter() {
             None,
         )
         .await;
-    let mut node_service = client.run_node_service(None, None).await;
+    let mut node_service = client.run_node_service(None).await;
 
-    let application = node_service.make_application(&application_id).await;
+    let application = node_service.make_application(&chain, &application_id).await;
 
     let counter_value = application.get_counter_value().await;
     assert_eq!(counter_value, original_counter_value);
@@ -1307,6 +1303,7 @@ async fn test_end_to_end_counter_publish_create() {
 
     runner.generate_initial_validator_config().await;
     client.create_genesis_config().await;
+    let chain = client.get_wallet().default_chain().unwrap();
     runner.run_local_net().await;
     let (contract, service) = runner.build_example("counter").await;
 
@@ -1314,9 +1311,9 @@ async fn test_end_to_end_counter_publish_create() {
     let application_id = client
         .create_application::<CounterAbi>(bytecode_id, &original_counter_value, None)
         .await;
-    let mut node_service = client.run_node_service(None, None).await;
+    let mut node_service = client.run_node_service(None).await;
 
-    let application = node_service.make_application(&application_id).await;
+    let application = node_service.make_application(&chain, &application_id).await;
 
     let counter_value = application.get_counter_value().await;
     assert_eq!(counter_value, original_counter_value);
@@ -1410,7 +1407,7 @@ async fn test_reconfiguration(network: Network) {
     let (node_service_2, chain_2) = match network {
         Network::Grpc => {
             let chain_2 = client.open_and_assign(&client_2).await;
-            let node_service_2 = client_2.run_node_service(chain_2, 8081).await;
+            let node_service_2 = client_2.run_node_service(8081).await;
             (Some(node_service_2), chain_2)
         }
         Network::Simple => {
@@ -1487,7 +1484,10 @@ async fn test_reconfiguration(network: Network) {
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let response = node_service_2
-                .query_node("query { chain { executionState { system { balance } } } }")
+                .query_node(&format!(
+                    "query {{ chain(chainId:\"{chain_2}\") \
+                    {{ executionState {{ system {{ balance }} }} }} }}"
+                ))
                 .await;
             if response["chain"]["executionState"]["system"]["balance"].as_str() == Some("8.") {
                 return;
@@ -1495,6 +1495,83 @@ async fn test_reconfiguration(network: Network) {
         }
         panic!("Failed to receive new block");
     }
+}
+
+#[test_log::test(tokio::test)]
+async fn test_open_chain_node_service() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let network = Network::Grpc;
+    let mut runner = TestRunner::new(network, 4);
+    let client = runner.make_client(network);
+    runner.generate_initial_validator_config().await;
+    client.create_genesis_config().await;
+    runner.run_local_net().await;
+
+    let default_chain = client.get_wallet().default_chain().unwrap();
+    let public_key = client
+        .get_wallet()
+        .get(default_chain)
+        .unwrap()
+        .key_pair
+        .as_ref()
+        .unwrap()
+        .public();
+
+    let node_service = client.run_node_service(8080).await;
+
+    // Open a new chain with the same public key.
+    // The node service should automatically create a client for it internally.
+    let query = format!(
+        "mutation {{ openChain(\
+            chainId:\"{default_chain}\", \
+            publicKey:\"{public_key}\"\
+        ) }}"
+    );
+    let data = node_service.query_node(&query).await;
+    let new_chain: ChainId = serde_json::from_value(data["openChain"].clone()).unwrap();
+
+    // Send 8 tokens to the new chain.
+    let query = format!(
+        "mutation {{ transfer(\
+            chainId:\"{default_chain}\", \
+            recipient: {{ Account: {{ chain_id:\"{new_chain}\" }} }}, \
+            amount:\"8\"\
+        ) }}"
+    );
+    node_service.query_node(&query).await;
+
+    // Send 4 tokens back.
+    let query = format!(
+        "mutation {{ transfer(\
+            chainId:\"{new_chain}\", \
+            recipient: {{ Account: {{ chain_id:\"{default_chain}\" }} }}, \
+            amount:\"4\"\
+        ) }}"
+    );
+    node_service.query_node(&query).await;
+
+    // Verify that the default chain now has 6 and the new one has 4 tokens.
+    for i in 0..10 {
+        tokio::time::sleep(Duration::from_secs(i)).await;
+        let response1 = node_service
+            .query_node(&format!(
+                "query {{ chain(chainId:\"{default_chain}\") \
+                    {{ executionState {{ system {{ balance }} }} }} }}"
+            ))
+            .await;
+        let response2 = node_service
+            .query_node(&format!(
+                "query {{ chain(chainId:\"{new_chain}\") \
+                    {{ executionState {{ system {{ balance }} }} }} }}"
+            ))
+            .await;
+        if response1["chain"]["executionState"]["system"]["balance"].as_str() == Some("6.")
+            && response2["chain"]["executionState"]["system"]["balance"].as_str() == Some("4.")
+        {
+            return;
+        }
+    }
+    panic!("Failed to receive new block");
 }
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
@@ -1524,15 +1601,19 @@ async fn test_end_to_end_social_user_pub_sub() {
         .create_application::<SocialAbi>(bytecode_id, &(), None)
         .await;
 
-    let mut node_service1 = client1.run_node_service(chain1, 8080).await;
-    let mut node_service2 = client2.run_node_service(chain2, 8081).await;
+    let mut node_service1 = client1.run_node_service(8080).await;
+    let mut node_service2 = client2.run_node_service(8081).await;
 
-    node_service1.process_inbox().await;
+    node_service1.process_inbox(&chain1).await;
 
     // Request the application so chain 2 has it, too.
-    node_service2.request_application(&application_id).await;
+    node_service2
+        .request_application(&chain2, &application_id)
+        .await;
 
-    let app2 = node_service2.make_application(&application_id).await;
+    let app2 = node_service2
+        .make_application(&chain2, &application_id)
+        .await;
     let subscribe = format!("mutation {{ subscribe(chainId: \"{chain1}\") }}");
     let hash = app2.query_application(&subscribe).await;
 
@@ -1541,11 +1622,13 @@ async fn test_end_to_end_social_user_pub_sub() {
     let response = node_service2.query_node(&query).await;
     assert_eq!(hash, response["chain"]["tipState"]["blockHash"]);
 
-    let app1 = node_service1.make_application(&application_id).await;
+    let app1 = node_service1
+        .make_application(&chain1, &application_id)
+        .await;
     let post = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
     app1.query_application(post).await;
 
-    // Instead of retrying, we could call `node_service1.process_inbox().await` here.
+    // Instead of retrying, we could call `node_service1.process_inbox(chain1).await` here.
     // However, we prefer to test the notification system for a change.
     let query = "query { receivedPostsKeys(count: 5) { author, index } }";
     let expected_response = json!({ "receivedPostsKeys": [
@@ -1588,9 +1671,11 @@ async fn test_end_to_end_retry_notification_stream() {
     runner.run_local_net().await;
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
-    let mut node_service2 = client2.run_node_service(chain, 8081).await;
+    let mut node_service2 = client2.run_node_service(8081).await;
     let response = node_service2
-        .query_node("query { chain { tipState { nextBlockHeight } } }")
+        .query_node(&format!(
+            "query {{ chain(chainId:\"{chain}\") {{ tipState {{ nextBlockHeight }} }} }}"
+        ))
         .await;
     assert_eq!(
         response["chain"]["tipState"]["nextBlockHeight"].as_u64(),
@@ -1609,7 +1694,9 @@ async fn test_end_to_end_retry_notification_stream() {
             tokio::time::sleep(Duration::from_secs(i)).await;
             height += 1;
             let response = node_service2
-                .query_node("query { chain { tipState { nextBlockHeight } } }")
+                .query_node(&format!(
+                    "query {{ chain(chainId:\"{chain}\") {{ tipState {{ nextBlockHeight }} }} }}"
+                ))
                 .await;
             if response["chain"]["tipState"]["nextBlockHeight"].as_u64() == Some(height) {
                 break 'success;
@@ -1658,10 +1745,12 @@ async fn test_end_to_end_fungible() {
         .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, vec![], None)
         .await;
 
-    let mut node_service1 = client1.run_node_service(chain1, 8080).await;
-    let mut node_service2 = client2.run_node_service(chain2, 8081).await;
+    let mut node_service1 = client1.run_node_service(8080).await;
+    let mut node_service2 = client2.run_node_service(8081).await;
 
-    let app1 = node_service1.make_application(&application_id).await;
+    let app1 = node_service1
+        .make_application(&chain1, &application_id)
+        .await;
     app1.assert_fungible_account_balances([
         (account_owner1, Amount::from_tokens(5)),
         (account_owner2, Amount::from_tokens(2)),
@@ -1690,7 +1779,9 @@ async fn test_end_to_end_fungible() {
     .await;
 
     // Fungible didn't exist on chain2 initially but now it does and we can talk to it.
-    let app2 = node_service2.make_application(&application_id).await;
+    let app2 = node_service2
+        .make_application(&chain2, &application_id)
+        .await;
 
     app2.assert_fungible_account_balances(BTreeMap::from([
         (account_owner1, Amount::ZERO),
@@ -1717,8 +1808,8 @@ async fn test_end_to_end_fungible() {
     app2.query_application(&query).await;
 
     // Make sure that the cross-chain communication happens fast enough.
-    node_service1.process_inbox().await;
-    node_service2.process_inbox().await;
+    node_service1.process_inbox(&chain1).await;
+    node_service2.process_inbox(&chain2).await;
 
     // Checking the final value
     app1.assert_fungible_account_balances([
@@ -1776,9 +1867,11 @@ async fn test_end_to_end_fungible_same_wallet() {
         .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, vec![], None)
         .await;
 
-    let mut node_service1 = client1.run_node_service(chain1, 8080).await;
+    let mut node_service = client1.run_node_service(8080).await;
 
-    let app1 = node_service1.make_application(&application_id).await;
+    let app1 = node_service
+        .make_application(&chain1, &application_id)
+        .await;
     app1.assert_fungible_account_balances([
         (account_owner1, Amount::from_tokens(5)),
         (account_owner2, Amount::from_tokens(2)),
@@ -1805,17 +1898,14 @@ async fn test_end_to_end_fungible_same_wallet() {
         (account_owner2, Amount::from_tokens(2)),
     ])
     .await;
-    node_service1.assert_is_running();
-    node_service1.child.kill().await.unwrap();
-    drop(node_service1);
 
-    let mut node_service2 = client1.run_node_service(chain2, 8080).await;
-
-    let app2 = node_service2.make_application(&application_id).await;
+    let app2 = node_service
+        .make_application(&chain2, &application_id)
+        .await;
     app2.assert_fungible_account_balances([(account_owner2, Amount::ONE)])
         .await;
 
-    node_service2.assert_is_running();
+    node_service.assert_is_running();
 }
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
@@ -1886,14 +1976,16 @@ async fn test_end_to_end_crowd_funding() {
         )
         .await;
 
-    let mut node_service1 = client1.run_node_service(chain1, 8080).await;
-    let mut node_service2 = client2.run_node_service(chain2, 8081).await;
+    let mut node_service1 = client1.run_node_service(8080).await;
+    let mut node_service2 = client2.run_node_service(8081).await;
 
     let app_fungible1 = node_service1
-        .make_application(&application_id_fungible)
+        .make_application(&chain1, &application_id_fungible)
         .await;
 
-    let app_crowd1 = node_service1.make_application(&application_id_crowd).await;
+    let app_crowd1 = node_service1
+        .make_application(&chain1, &application_id_crowd)
+        .await;
 
     // Transferring tokens to user2 on chain2
     let destination = Account {
@@ -1911,10 +2003,12 @@ async fn test_end_to_end_crowd_funding() {
 
     // Register the campaign on chain2.
     node_service2
-        .request_application(&application_id_crowd)
+        .request_application(&chain2, &application_id_crowd)
         .await;
 
-    let app_crowd2 = node_service2.make_application(&application_id_crowd).await;
+    let app_crowd2 = node_service2
+        .make_application(&chain2, &application_id_crowd)
+        .await;
 
     // Transferring
     let amount_transfer = Amount::ONE;
@@ -1926,7 +2020,7 @@ async fn test_end_to_end_crowd_funding() {
     app_crowd2.query_application(&query).await;
 
     // Make sure that the pledge is processed fast enough by client1.
-    node_service1.process_inbox().await;
+    node_service1.process_inbox(&chain1).await;
 
     // Ending the campaign.
     app_crowd1.query_application("mutation { collect }").await;
@@ -2005,15 +2099,15 @@ async fn test_end_to_end_matching_engine() {
         .await;
 
     // Now creating the service and exporting the applications
-    let mut node_service_admin = client_admin.run_node_service(chain_admin, 8080).await;
-    let mut node_service_a = client_a.run_node_service(chain_a, 8081).await;
-    let mut node_service_b = client_b.run_node_service(chain_b, 8082).await;
+    let mut node_service_admin = client_admin.run_node_service(8080).await;
+    let mut node_service_a = client_a.run_node_service(8081).await;
+    let mut node_service_b = client_b.run_node_service(8082).await;
 
     let app_fungible0_a = node_service_a
-        .make_application(&application_id_fungible0)
+        .make_application(&chain_a, &application_id_fungible0)
         .await;
     let app_fungible1_b = node_service_b
-        .make_application(&application_id_fungible1)
+        .make_application(&chain_b, &application_id_fungible1)
         .await;
     app_fungible0_a
         .assert_fungible_account_balances([
@@ -2031,16 +2125,16 @@ async fn test_end_to_end_matching_engine() {
         .await;
 
     node_service_admin
-        .request_application(&application_id_fungible0)
+        .request_application(&chain_admin, &application_id_fungible0)
         .await;
     let app_fungible0_admin = node_service_admin
-        .make_application(&application_id_fungible0)
+        .make_application(&chain_admin, &application_id_fungible0)
         .await;
     node_service_admin
-        .request_application(&application_id_fungible1)
+        .request_application(&chain_admin, &application_id_fungible1)
         .await;
     let app_fungible1_admin = node_service_admin
-        .make_application(&application_id_fungible1)
+        .make_application(&chain_admin, &application_id_fungible1)
         .await;
     app_fungible0_admin
         .assert_fungible_account_balances([
@@ -2070,12 +2164,13 @@ async fn test_end_to_end_matching_engine() {
         tokens: [token0, token1],
     };
     let bytecode_id = node_service_admin
-        .publish_bytecode(contract_matching, service_matching)
+        .publish_bytecode(&chain_admin, contract_matching, service_matching)
         .await;
     let parameter_str = serde_json::to_string(&parameter).unwrap();
     let argument_str = serde_json::to_string(&()).unwrap();
     let application_id_matching = node_service_admin
         .create_application(
+            &chain_admin,
             bytecode_id,
             parameter_str,
             argument_str,
@@ -2086,19 +2181,19 @@ async fn test_end_to_end_matching_engine() {
         )
         .await;
     let app_matching_admin = node_service_admin
-        .make_application(&application_id_matching)
+        .make_application(&chain_admin, &application_id_matching)
         .await;
     node_service_a
-        .request_application(&application_id_matching)
+        .request_application(&chain_a, &application_id_matching)
         .await;
     let app_matching_a = node_service_a
-        .make_application(&application_id_matching)
+        .make_application(&chain_a, &application_id_matching)
         .await;
     node_service_b
-        .request_application(&application_id_matching)
+        .request_application(&chain_b, &application_id_matching)
         .await;
     let app_matching_b = node_service_b
-        .make_application(&application_id_matching)
+        .make_application(&chain_b, &application_id_matching)
         .await;
 
     // Now creating orders
@@ -2126,9 +2221,9 @@ async fn test_end_to_end_matching_engine() {
         let query_string = format!("mutation {{ order(order: {}) }}", insert3.to_value());
         app_matching_b.query_application(&query_string).await;
     }
-    node_service_admin.process_inbox().await;
-    node_service_a.process_inbox().await;
-    node_service_b.process_inbox().await;
+    node_service_admin.process_inbox(&chain_admin).await;
+    node_service_a.process_inbox(&chain_a).await;
+    node_service_b.process_inbox(&chain_b).await;
 
     // Now reading the order_ids
     let order_ids_a = app_matching_admin
@@ -2149,7 +2244,7 @@ async fn test_end_to_end_matching_engine() {
             app_matching_admin.query_application(&query_string).await;
         }
     }
-    node_service_admin.process_inbox().await;
+    node_service_admin.process_inbox(&chain_admin).await;
 
     // Check balances
     app_fungible0_a
@@ -2221,8 +2316,9 @@ async fn test_project_publish() {
     let project_dir = tmp_dir.path().join("init-test");
 
     client.project_publish(project_dir, vec![], None).await;
+    let chain = client.get_wallet().default_chain().unwrap();
 
-    let node_service = client.run_node_service(None, None).await;
+    let node_service = client.run_node_service(None).await;
 
-    assert_eq!(node_service.try_get_applications_uri().await.len(), 1)
+    assert_eq!(node_service.try_get_applications_uri(&chain).await.len(), 1)
 }
