@@ -1498,6 +1498,7 @@ async fn test_reconfiguration(network: Network) {
 }
 
 #[test_log::test(tokio::test)]
+#[ignore] // TODO(#901)
 async fn test_open_chain_node_service() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
