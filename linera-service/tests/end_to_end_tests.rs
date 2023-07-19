@@ -1522,6 +1522,18 @@ async fn test_open_chain_node_service() {
 
     // Open a new chain with the same public key.
     // The node service should automatically create a client for it internally.
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    let query = format!(
+        "mutation {{ openChain(\
+            chainId:\"{default_chain}\", \
+            publicKey:\"{public_key}\"\
+        ) }}"
+    );
+    node_service.query_node(&query).await;
+
+    // Open another new chain.
+    // This is a regression test; a PR had to be reverted because this was hanging:
+    // https://github.com/linera-io/linera-protocol/pull/899
     let query = format!(
         "mutation {{ openChain(\
             chainId:\"{default_chain}\", \
