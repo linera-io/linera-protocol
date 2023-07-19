@@ -3,12 +3,18 @@
 
 use async_trait::async_trait;
 use futures::{future, lock::Mutex, StreamExt};
-use linera_base::{crypto::KeyPair, data_types::Timestamp, identifiers::ChainId};
+use linera_base::{
+    crypto::KeyPair,
+    data_types::Timestamp,
+    identifiers::{ChainId, Destination},
+};
+use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
     tracker::NotificationTracker,
     worker::{Notification, Reason},
 };
+use linera_execution::{Message, SystemMessage};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -82,9 +88,31 @@ where
         self.update_streams(&mut streams, &mut context, &storage)
             .await?;
 
-        while let (Some((_notification, _client)), _, _) =
+        while let (Some((notification, client)), _, _) =
             future::select_all(streams.values_mut().map(StreamExt::next)).await
-        {}
+        {
+            if let Reason::NewBlock { hash, .. } = notification.reason {
+                let value = storage.read_value(hash).await?;
+                let executed_block = &value.inner().executed_block();
+                let timestamp = executed_block.block.timestamp;
+                for out_msg in &executed_block.messages {
+                    if let OutgoingMessage {
+                        destination: Destination::Recipient(new_id),
+                        message: Message::System(SystemMessage::OpenChain { public_key, .. }),
+                        ..
+                    } = out_msg
+                    {
+                        if let Some(key_pair) = context.wallet_state().key_pair_for_pk(&public_key)
+                        {
+                            context.update_wallet_for_new_chain(*new_id, Some(key_pair), timestamp);
+                        }
+                    }
+                }
+            }
+            context.update_wallet(&mut *client.lock().await).await;
+            self.update_streams(&mut streams, &mut context, &storage)
+                .await?;
+        }
 
         Ok(())
     }
