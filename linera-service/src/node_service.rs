@@ -89,7 +89,7 @@ impl<P, S> ClientMap<P, S> {
 pub struct QueryRoot<P, S> {
     clients: ClientMap<P, S>,
     port: NonZeroU16,
-    chains: Chains,
+    default_chain: Option<ChainId>,
 }
 
 /// Our root GraphQL subscription type.
@@ -464,7 +464,10 @@ where
     }
 
     async fn chains(&self) -> Result<Chains, Error> {
-        Ok(self.chains.clone())
+        Ok(Chains {
+            list: self.clients.0.lock().await.keys().cloned().collect(),
+            default: self.default_chain,
+        })
     }
 
     async fn block(
@@ -639,7 +642,7 @@ pub struct NodeService<P, S> {
     clients: ClientMap<P, S>,
     config: ChainListenerConfig,
     port: NonZeroU16,
-    chains: Chains,
+    default_chain: Option<ChainId>,
     storage: S,
 }
 
@@ -649,7 +652,7 @@ impl<P, S: Clone> Clone for NodeService<P, S> {
             clients: self.clients.clone(),
             config: self.config.clone(),
             port: self.port,
-            chains: self.chains.clone(),
+            default_chain: self.default_chain,
             storage: self.storage.clone(),
         }
     }
@@ -662,12 +665,17 @@ where
     ViewError: From<S::ContextError>,
 {
     /// Creates a new instance of the node service given a client chain and a port.
-    pub fn new(config: ChainListenerConfig, port: NonZeroU16, chains: Chains, storage: S) -> Self {
+    pub fn new(
+        config: ChainListenerConfig,
+        port: NonZeroU16,
+        default_chain: Option<ChainId>,
+        storage: S,
+    ) -> Self {
         Self {
             clients: ClientMap::default(),
             config,
             port,
-            chains,
+            default_chain,
             storage,
         }
     }
@@ -677,7 +685,7 @@ where
             QueryRoot {
                 clients: self.clients.clone(),
                 port: self.port,
-                chains: self.chains.clone(),
+                default_chain: self.default_chain,
             },
             MutationRoot {
                 clients: self.clients.clone(),
@@ -745,7 +753,7 @@ where
             application_id,
             bytes,
         };
-        let Some(mut client) = self.clients.client_lock(&chain_id).await else {
+        let Some(client) = self.clients.client_lock(&chain_id).await else {
             return Err(NodeServiceError::UnknownChainId);
         };
         let response = client.query_application(&query).await?;

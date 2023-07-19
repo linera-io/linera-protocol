@@ -1125,7 +1125,7 @@ where
     }
 
     /// Queries an application.
-    pub async fn query_application(&mut self, query: &Query) -> Result<Response> {
+    pub async fn query_application(&self, query: &Query) -> Result<Response> {
         let response = self
             .node_client
             .query_application(self.chain_id, query)
