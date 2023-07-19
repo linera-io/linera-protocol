@@ -130,7 +130,7 @@ fn make_block(
 ) -> Block {
     let previous_block_hash = previous_confirmed_block.as_ref().map(|cert| cert.hash());
     let height = match &previous_confirmed_block {
-        None => BlockHeight::default(),
+        None => BlockHeight::from(0),
         Some(cert) => cert.value().height().try_add_one().unwrap(),
     };
     Block {
