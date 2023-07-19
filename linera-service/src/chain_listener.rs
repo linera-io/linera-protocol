@@ -109,8 +109,9 @@ where
                 }
             }
             context.update_wallet(&mut *client.lock().await).await;
-            self.update_streams(&mut streams, &mut context, &storage)
-                .await?;
+            // TODO(#901)
+            // self.update_streams(&mut streams, &mut context, &storage)
+            //     .await?;
         }
 
         Ok(())
