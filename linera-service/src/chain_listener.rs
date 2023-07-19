@@ -102,9 +102,8 @@ where
                         ..
                     } = out_msg
                     {
-                        if let Some(key_pair) = context.wallet_state().key_pair_for_pk(public_key) {
-                            context.update_wallet_for_new_chain(*new_id, Some(key_pair), timestamp);
-                        }
+                        let key_pair = context.wallet_state().key_pair_for_pk(public_key);
+                        context.update_wallet_for_new_chain(*new_id, key_pair, timestamp);
                     }
                 }
             }
