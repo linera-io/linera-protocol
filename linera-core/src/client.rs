@@ -982,6 +982,7 @@ where
         let manager = self.chain_info().await?.manager;
         let key_pair = self.key_pair().await?;
         let validated = manager.highest_validated().cloned();
+        // TODO(#66): return the block that should be proposed instead
         if let Some(validated) = &validated {
             ensure!(
                 validated.value().executed_block().block == block,
