@@ -13,7 +13,7 @@ use std::borrow::Cow;
 
 /// An address for a location in a guest WebAssembly module's memory.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct GuestPointer(u32);
+pub struct GuestPointer(pub(crate) u32);
 
 impl GuestPointer {
     /// Returns a new address that's the current address advanced to after the size of `T`.
