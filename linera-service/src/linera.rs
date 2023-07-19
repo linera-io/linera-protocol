@@ -198,7 +198,7 @@ impl ClientContext {
         &self,
         storage: S,
         chain_id: impl Into<Option<ChainId>>,
-    ) -> ChainClient<impl ValidatorNodeProvider, S> {
+    ) -> ChainClient<NodeProvider, S> {
         let chain_id = chain_id.into().unwrap_or_else(|| {
             self.wallet_state
                 .default_chain()
@@ -400,13 +400,15 @@ impl ClientContext {
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
     ) {
-        self.wallet_state.insert(UserChain {
-            chain_id,
-            key_pair: key_pair.as_ref().map(|kp| kp.copy()),
-            block_hash: None,
-            timestamp,
-            next_block_height: BlockHeight::from(0),
-        });
+        if self.wallet_state.get(chain_id).is_none() {
+            self.wallet_state.insert(UserChain {
+                chain_id,
+                key_pair: key_pair.as_ref().map(|kp| kp.copy()),
+                block_hash: None,
+                timestamp,
+                next_block_height: BlockHeight::from(0),
+            });
+        }
     }
 
     #[cfg(feature = "benchmark")]
