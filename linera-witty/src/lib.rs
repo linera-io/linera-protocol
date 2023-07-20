@@ -28,4 +28,4 @@ pub use self::{
 };
 pub use frunk::{hlist::HList, HList, HNil};
 #[cfg(feature = "macros")]
-pub use linera_witty_macros::WitType;
+pub use linera_witty_macros::{WitLoad, WitType};

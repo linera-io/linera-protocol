@@ -7,6 +7,7 @@
 
 #![deny(missing_docs)]
 
+mod wit_load;
 mod wit_type;
 
 use proc_macro::TokenStream;
@@ -32,6 +33,25 @@ pub fn derive_wit_type(input: TokenStream) -> TokenStream {
     };
 
     derive_trait(input, body, Ident::new("WitType", Span::call_site()))
+}
+
+/// Derives `WitLoad` for the Rust type.
+///
+/// All fields in the type must also implement `WitLoad`.
+#[proc_macro_error]
+#[proc_macro_derive(WitLoad)]
+pub fn derive_wit_load(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    let body = match &input.data {
+        Data::Struct(struct_item) => wit_load::derive_for_struct(&struct_item.fields),
+        Data::Enum(_enum_item) => todo!("Enums require joining and splitting flat types"),
+        Data::Union(_union_item) => {
+            abort!(input.ident, "Can't derive `WitLoad` for `union`s")
+        }
+    };
+
+    derive_trait(input, body, Ident::new("WitLoad", Span::call_site()))
 }
 
 /// Derives a trait named `trait_name` with the specified `body`.
