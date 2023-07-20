@@ -21,8 +21,8 @@ mod type_traits;
 
 pub use self::{
     memory_layout::Layout,
-    runtime::{GuestPointer, InstanceWithMemory, Memory},
-    type_traits::WitType,
+    runtime::{GuestPointer, InstanceWithMemory, Memory, Runtime, RuntimeError, RuntimeMemory},
+    type_traits::{WitLoad, WitType},
 };
 pub use frunk::{hlist::HList, HList, HNil};
 #[cfg(feature = "macros")]

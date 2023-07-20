@@ -9,6 +9,6 @@ mod traits;
 
 pub use self::{
     error::RuntimeError,
-    memory::{GuestPointer, Memory},
+    memory::{GuestPointer, Memory, RuntimeMemory},
     traits::{Instance, InstanceWithFunction, InstanceWithMemory, Runtime},
 };
