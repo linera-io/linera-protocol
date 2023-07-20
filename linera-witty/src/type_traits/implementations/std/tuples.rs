@@ -3,8 +3,11 @@
 
 //! Implementations of the custom traits for the tuple types.
 
-use crate::WitType;
-use frunk::HList;
+use crate::{
+    GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
+    WitLoad, WitType,
+};
+use frunk::{hlist_pat, HList};
 
 macro_rules! impl_wit_traits {
     ($( $names:ident : $types:ident ),*) => {
@@ -16,6 +19,40 @@ macro_rules! impl_wit_traits {
             const SIZE: u32 = <HList![$( $types ),*] as WitType>::SIZE;
 
             type Layout = <HList![$( $types ),*] as WitType>::Layout;
+        }
+
+        impl<$( $types ),*> WitLoad for ($( $types, )*)
+        where
+            $( $types: WitLoad, )*
+            HList![$( $types ),*]: WitLoad,
+        {
+            fn load<Instance>(
+                memory: &Memory<'_, Instance>,
+                location: GuestPointer,
+            ) -> Result<Self, RuntimeError>
+            where
+                Instance: InstanceWithMemory,
+                <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+            {
+                let hlist_pat![$( $names, )*] =
+                    <HList![$( $types, )*] as WitLoad>::load(memory, location)?;
+
+                Ok(($( $names, )*))
+            }
+
+            fn lift_from<Instance>(
+                layout: <Self::Layout as Layout>::Flat,
+                memory: &Memory<'_, Instance>,
+            ) -> Result<Self, RuntimeError>
+            where
+                Instance: InstanceWithMemory,
+                <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+            {
+                let hlist_pat![$( $names, )*] =
+                    <HList![$( $types, )*] as WitLoad>::lift_from(layout, memory)?;
+
+                Ok(($( $names, )*))
+            }
         }
     };
 }
