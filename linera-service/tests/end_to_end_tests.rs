@@ -1227,6 +1227,26 @@ async fn test_end_to_end_block_query() {
     node_service.assert_is_running();
 }
 
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_check_schema() {
+    let path = cargo_build_binary("linera-schema-export").await;
+    let mut command = Command::new(path);
+    let output = command
+        .kill_on_drop(true)
+        .output()
+        .await
+        .expect("failed to run linera-schema-export");
+    let service_schema =
+        String::from_utf8(output.stdout).expect("failed to read the service GraphQL schema");
+    let mut file_base = std::fs::File::open("../linera-explorer/graphql/schema.graphql")
+        .expect("failed to open schema.graphql");
+    let mut graphql_schema = String::new();
+    file_base
+        .read_to_string(&mut graphql_schema)
+        .expect("failed to read schema.graphql");
+    assert_eq!(graphql_schema, service_schema, "GraphQL schema has changed -> regenerate schema following steps in linera-explorer/README.md")
+}
+
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_counter() {

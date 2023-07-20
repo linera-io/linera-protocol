@@ -2776,18 +2776,12 @@ dependencies = [
 name = "linera-explorer"
 version = "0.2.0"
 dependencies = [
- "async-trait",
  "console_error_panic_hook",
  "futures",
  "graphql_client",
  "hex",
  "js-sys",
  "linera-base",
- "linera-chain",
- "linera-core",
- "linera-execution",
- "linera-service",
- "linera-storage",
  "reqwest",
  "serde",
  "serde-wasm-bindgen 0.5.0",

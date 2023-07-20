@@ -29,12 +29,3 @@ hex = { workspace = true }
 reqwest = { workspace = true }
 linera-base = { workspace = true }
 futures = { workspace = true }
-
-[build-dependencies]
-linera-base = { workspace = true }
-linera-core = { workspace = true }
-linera-chain = { workspace = true }
-linera-storage = { workspace = true }
-linera-service = { workspace = true }
-linera-execution = { workspace = true }
-async-trait = { workspace = true }

@@ -51,19 +51,19 @@ pub struct Chains {
 }
 
 /// Our root GraphQL query type.
-struct QueryRoot<P, S> {
+pub struct QueryRoot<P, S> {
     client: Arc<Mutex<ChainClient<P, S>>>,
     port: NonZeroU16,
     chains: Chains,
 }
 
 /// Our root GraphQL subscription type.
-struct SubscriptionRoot<P, S> {
+pub struct SubscriptionRoot<P, S> {
     client: Arc<Mutex<ChainClient<P, S>>>,
 }
 
 /// Our root GraphQL mutation type.
-struct MutationRoot<P, S> {
+pub struct MutationRoot<P, S> {
     client: Arc<Mutex<ChainClient<P, S>>>,
 }
 
@@ -577,7 +577,7 @@ where
         }
     }
 
-    fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S>, SubscriptionRoot<P, S>> {
+    pub fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S>, SubscriptionRoot<P, S>> {
         Schema::build(
             QueryRoot {
                 client: self.client.clone(),
@@ -592,11 +592,6 @@ where
             },
         )
         .finish()
-    }
-
-    /// Exports GraphQL schema to string
-    pub fn schema_sdl(&self) -> String {
-        self.schema().sdl()
     }
 
     /// Runs the node service.

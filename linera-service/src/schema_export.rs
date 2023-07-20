@@ -93,14 +93,17 @@ fn main() -> std::io::Result<()> {
         list: Vec::new(),
         default: chain_id,
     };
-    let config = ChainListenerConfig::new(0, 0);
+    let config = ChainListenerConfig {
+        delay_before_ms: 0,
+        delay_after_ms: 0,
+    };
     let service = NodeService::new(
         chain_client,
         config,
         std::num::NonZeroU16::new(8080).unwrap(),
         chains,
     );
-    let schema = service.schema_sdl();
-    std::fs::write("graphql/schema.graphql", schema)?;
+    let schema = service.schema().sdl();
+    print!("{}", schema);
     Ok(())
 }

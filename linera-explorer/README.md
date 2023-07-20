@@ -20,15 +20,9 @@ It will create a `dist` folder from where you can run an HTTP server
 
 ## Generate schema
 
-To generate the linera service schema:
-- install `get-graphql-schema`:
+To generate the linera service GraphQL schema, a binary `linera-export-schema` is available:
 ```bash
-npm i get-graphql-schema
-```
-- start a local network and service (port 8080 for example)
-- generate the schema with get-graphql-schema:
-```bash
-get-graphql-schema http://localhost:8080 > linera-explorer/graphql/schema.graphql
+target/debug/linera-schema-export > linera-explorer/graphql/schema.graphql
 ```
 
 ## Contributing
