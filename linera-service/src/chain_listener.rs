@@ -18,20 +18,11 @@ use tracing::{info, warn};
 pub struct ChainListenerConfig {
     /// Wait before processing any notification (useful for testing).
     #[structopt(long = "listener-delay-before-ms", default_value = "0")]
-    pub(crate) delay_before_ms: u64,
+    pub delay_before_ms: u64,
 
     /// Wait after processing any notification (useful for rate limiting).
     #[structopt(long = "listener-delay-after-ms", default_value = "0")]
-    pub(crate) delay_after_ms: u64,
-}
-
-impl ChainListenerConfig {
-    pub fn new(delay_before_ms: u64, delay_after_ms: u64) -> Self {
-        ChainListenerConfig {
-            delay_before_ms,
-            delay_after_ms,
-        }
-    }
+    pub delay_after_ms: u64,
 }
 
 #[async_trait]
