@@ -94,7 +94,7 @@ pub fn current_system_balance() -> Amount {
     wit::read_system_balance().into()
 }
 
-/// Retrieves the current system time.
+/// Retrieves the current system time, i.e. the timestamp of the block in which this is called.
 pub fn current_system_time() -> Timestamp {
     wit::read_system_timestamp().into()
 }
