@@ -54,21 +54,21 @@ pub struct Chains {
 }
 
 pub(crate) type ClientMapInner<P, S> = BTreeMap<ChainId, Arc<Mutex<ChainClient<P, S>>>>;
-pub(crate) struct ClientMap<P, S>(Arc<Mutex<ClientMapInner<P, S>>>);
+pub(crate) struct ChainClients<P, S>(Arc<Mutex<ClientMapInner<P, S>>>);
 
-impl<P, S> Clone for ClientMap<P, S> {
+impl<P, S> Clone for ChainClients<P, S> {
     fn clone(&self) -> Self {
-        ClientMap(self.0.clone())
+        ChainClients(self.0.clone())
     }
 }
 
-impl<P, S> Default for ClientMap<P, S> {
+impl<P, S> Default for ChainClients<P, S> {
     fn default() -> Self {
         Self(Arc::new(Mutex::new(BTreeMap::new())))
     }
 }
 
-impl<P, S> ClientMap<P, S> {
+impl<P, S> ChainClients<P, S> {
     async fn client(&self, chain_id: &ChainId) -> Option<Arc<Mutex<ChainClient<P, S>>>> {
         Some(self.0.lock().await.get(chain_id)?.clone())
     }
@@ -80,6 +80,15 @@ impl<P, S> ClientMap<P, S> {
         Some(self.client(chain_id).await?.lock_owned().await)
     }
 
+    pub(crate) async fn try_client_lock(
+        &self,
+        chain_id: &ChainId,
+    ) -> Result<OwnedMutexGuard<ChainClient<P, S>>, Error> {
+        self.client_lock(chain_id)
+            .await
+            .ok_or_else(|| Error::new("Unknown chain ID"))
+    }
+
     pub(crate) async fn map_lock(&self) -> MutexGuard<ClientMapInner<P, S>> {
         self.0.lock().await
     }
@@ -87,19 +96,19 @@ impl<P, S> ClientMap<P, S> {
 
 /// Our root GraphQL query type.
 pub struct QueryRoot<P, S> {
-    clients: ClientMap<P, S>,
+    clients: ChainClients<P, S>,
     port: NonZeroU16,
     default_chain: Option<ChainId>,
 }
 
 /// Our root GraphQL subscription type.
 pub struct SubscriptionRoot<P, S> {
-    clients: ClientMap<P, S>,
+    clients: ChainClients<P, S>,
 }
 
 /// Our root GraphQL mutation type.
 pub struct MutationRoot<P, S> {
-    clients: ClientMap<P, S>,
+    clients: ChainClients<P, S>,
 }
 
 #[derive(Debug, ThisError)]
@@ -166,10 +175,9 @@ impl IntoResponse for NodeServiceError {
             NodeServiceError::ApplicationServiceError { errors } => {
                 (StatusCode::BAD_REQUEST, errors)
             }
-            NodeServiceError::UnknownChainId => (
-                StatusCode::BAD_REQUEST,
-                vec!["unknown chain ID".to_string()],
-            ),
+            NodeServiceError::UnknownChainId => {
+                (StatusCode::NOT_FOUND, vec!["unknown chain ID".to_string()])
+            }
             NodeServiceError::InvalidChainId(_) => (
                 StatusCode::BAD_REQUEST,
                 vec!["invalid chain ID".to_string()],
@@ -187,7 +195,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    /// Subscribes to notifications from the current chain.
+    /// Subscribes to notifications from the specified chain.
     async fn notifications(
         &self,
         chain_id: ChainId,
@@ -210,9 +218,7 @@ where
         system_operation: SystemOperation,
         chain_id: ChainId,
     ) -> Result<CryptoHash, Error> {
-        let Some(mut client) = self.clients.client_lock(&chain_id).await else {
-            return Err(Error::new("Unknown chain ID"));
-        };
+        let mut client = self.clients.try_client_lock(&chain_id).await?;
         let operation = Operation::System(system_operation);
         Ok(client.execute_operation(operation).await?.value.hash())
     }
@@ -227,9 +233,7 @@ where
 {
     /// Processes the inbox and returns the lists of certificate hashes that were created, if any.
     async fn process_inbox(&self, chain_id: ChainId) -> Result<Vec<CryptoHash>, Error> {
-        let Some(mut client) = self.clients.client_lock(&chain_id).await else {
-            return Err(Error::new("Unknown chain ID"));
-        };
+        let mut client = self.clients.try_client_lock(&chain_id).await?;
         client.synchronize_from_validators().await?;
         let certificates = client.process_inbox().await?;
         let hashes = certificates.into_iter().map(|cert| cert.hash()).collect();
@@ -246,9 +250,7 @@ where
         amount: Amount,
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        let Some(mut client) = self.clients.client_lock(&chain_id).await else {
-            return Err(Error::new("Unknown chain ID"));
-        };
+        let mut client = self.clients.try_client_lock(&chain_id).await?;
         let certificate = client
             .transfer(owner, amount, recipient, user_data.unwrap_or_default())
             .await?;
@@ -268,9 +270,7 @@ where
         amount: Amount,
         user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        let Some(mut client) = self.clients.client_lock(&chain_id).await else {
-            return Err(Error::new("Unknown chain ID"));
-        };
+        let mut client = self.clients.try_client_lock(&chain_id).await?;
         let certificate = client
             .claim(
                 owner,
@@ -286,18 +286,14 @@ where
     /// Creates (or activates) a new chain by installing the given authentication key.
     /// This will automatically subscribe to the future committees created by `admin_id`.
     async fn open_chain(&self, chain_id: ChainId, public_key: PublicKey) -> Result<ChainId, Error> {
-        let Some(mut client) = self.clients.client_lock(&chain_id).await else {
-            return Err(Error::new("Unknown chain ID"));
-        };
+        let mut client = self.clients.try_client_lock(&chain_id).await?;
         let (message_id, _) = client.open_chain(public_key).await?;
         Ok(ChainId::child(message_id))
     }
 
     /// Closes the chain.
     async fn close_chain(&self, chain_id: ChainId) -> Result<CryptoHash, Error> {
-        let Some(mut client) = self.clients.client_lock(&chain_id).await else {
-            return Err(Error::new("Unknown chain ID"));
-        };
+        let mut client = self.clients.try_client_lock(&chain_id).await?;
         let certificate = client.close_chain().await?;
         Ok(certificate.hash())
     }
@@ -381,9 +377,7 @@ where
         contract: Bytecode,
         service: Bytecode,
     ) -> Result<BytecodeId, Error> {
-        let Some(mut client) = self.clients.client_lock(&chain_id).await else {
-            return Err(Error::new("Unknown chain ID"));
-        };
+        let mut client = self.clients.try_client_lock(&chain_id).await?;
         let (bytecode_id, _) = client.publish_bytecode(contract, service).await?;
         Ok(bytecode_id)
     }
@@ -397,9 +391,7 @@ where
         initialization_argument: String,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ApplicationId, Error> {
-        let Some(mut client) = self.clients.client_lock(&chain_id).await else {
-            return Err(Error::new("Unknown chain ID"));
-        };
+        let mut client = self.clients.try_client_lock(&chain_id).await?;
         let (application_id, _) = client
             .create_application_untyped(
                 bytecode_id,
@@ -419,9 +411,7 @@ where
         application_id: UserApplicationId,
         target_chain_id: Option<ChainId>,
     ) -> Result<CryptoHash, Error> {
-        let Some(mut client) = self.clients.client_lock(&chain_id).await else {
-            return Err(Error::new("Unknown chain ID"));
-        };
+        let mut client = self.clients.try_client_lock(&chain_id).await?;
         let certificate = client
             .request_application(application_id, target_chain_id)
             .await?;
@@ -437,17 +427,13 @@ where
     ViewError: From<S::ContextError>,
 {
     async fn chain(&self, chain_id: ChainId) -> Result<ChainStateExtendedView<S::Context>, Error> {
-        let Some(client) = self.clients.client_lock(&chain_id).await else {
-            return Err(Error::new("Unknown chain ID"));
-        };
+        let client = self.clients.try_client_lock(&chain_id).await?;
         let view = client.chain_state_view(Some(chain_id)).await?;
         Ok(ChainStateExtendedView::new(view))
     }
 
     async fn applications(&self, chain_id: ChainId) -> Result<Vec<ApplicationOverview>, Error> {
-        let Some(client) = self.clients.client_lock(&chain_id).await else {
-            return Err(Error::new("Unknown chain ID"));
-        };
+        let client = self.clients.try_client_lock(&chain_id).await?;
         let applications = client
             .chain_state_view(Some(chain_id))
             .await?
@@ -475,9 +461,7 @@ where
         hash: Option<CryptoHash>,
         chain_id: ChainId,
     ) -> Result<Option<HashedValue>, Error> {
-        let Some(client) = self.clients.client_lock(&chain_id).await else {
-            return Ok(None);
-        };
+        let client = self.clients.try_client_lock(&chain_id).await?;
         let hash = match hash {
             Some(hash) => Some(hash),
             None => {
@@ -499,9 +483,7 @@ where
         chain_id: ChainId,
         limit: Option<u32>,
     ) -> Result<Vec<HashedValue>, Error> {
-        let Some(client) = self.clients.client_lock(&chain_id).await else {
-            return Ok(vec![]);
-        };
+        let client = self.clients.try_client_lock(&chain_id).await?;
         let limit = limit.unwrap_or(10);
         let from = match from {
             Some(from) => Some(from),
@@ -639,7 +621,7 @@ async fn graphiql(uri: Uri) -> impl IntoResponse {
 /// The `NodeService` is a server that exposes a web-server to the client.
 /// The node service is primarily used to explore the state of a chain in GraphQL.
 pub struct NodeService<P, S> {
-    clients: ClientMap<P, S>,
+    clients: ChainClients<P, S>,
     config: ChainListenerConfig,
     port: NonZeroU16,
     default_chain: Option<ChainId>,
@@ -672,7 +654,7 @@ where
         storage: S,
     ) -> Self {
         Self {
-            clients: ClientMap::default(),
+            clients: ChainClients::default(),
             config,
             port,
             default_chain,

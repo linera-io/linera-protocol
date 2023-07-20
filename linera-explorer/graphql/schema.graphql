@@ -438,7 +438,7 @@ scalar Recipient
 
 type SubscriptionRoot {
 	"""
-	Subscribes to notifications from the current chain.
+	Subscribes to notifications from the specified chain.
 	"""
 	notifications(chainId: ChainId!): Notification!
 }
