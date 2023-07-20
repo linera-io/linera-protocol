@@ -53,7 +53,7 @@ pub struct Chains {
     pub default: Option<ChainId>,
 }
 
-pub(crate) type ClientMapInner<P, S> = BTreeMap<ChainId, Arc<Mutex<ChainClient<P, S>>>>;
+pub type ClientMapInner<P, S> = BTreeMap<ChainId, Arc<Mutex<ChainClient<P, S>>>>;
 pub(crate) struct ChainClients<P, S>(Arc<Mutex<ClientMapInner<P, S>>>);
 
 impl<P, S> Clone for ChainClients<P, S> {
@@ -236,6 +236,7 @@ where
         let mut client = self.clients.try_client_lock(&chain_id).await?;
         client.synchronize_from_validators().await?;
         let certificates = client.process_inbox().await?;
+        drop(client);
         let hashes = certificates.into_iter().map(|cert| cert.hash()).collect();
         Ok(hashes)
     }
