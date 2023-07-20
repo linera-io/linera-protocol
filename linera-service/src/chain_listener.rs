@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{config::WalletState, node_service::ChainClients};
 use async_trait::async_trait;
 use futures::{future, lock::Mutex, StreamExt};
 use linera_base::{
@@ -21,8 +22,6 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use structopt::StructOpt;
 use tokio_stream::Stream;
 use tracing::{info, warn};
-
-use crate::{config::WalletState, node_service::ChainClients};
 
 type ClientNotificationStream<P, S> =
     Box<dyn Stream<Item = (Notification, Arc<Mutex<ChainClient<P, S>>>)> + Send + Unpin>;
@@ -95,12 +94,12 @@ where
                 let value = storage.read_value(hash).await?;
                 let executed_block = &value.inner().executed_block();
                 let timestamp = executed_block.block.timestamp;
-                for out_msg in &executed_block.messages {
+                for outgoing_message in &executed_block.messages {
                     if let OutgoingMessage {
                         destination: Destination::Recipient(new_id),
                         message: Message::System(SystemMessage::OpenChain { public_key, .. }),
                         ..
-                    } = out_msg
+                    } = outgoing_message
                     {
                         let key_pair = context.wallet_state().key_pair_for_pk(public_key);
                         context.update_wallet_for_new_chain(*new_id, key_pair, timestamp);
