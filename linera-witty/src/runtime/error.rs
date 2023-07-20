@@ -3,6 +3,7 @@
 
 //! Common error type for usage of different Wasm runtimes.
 
+use std::{num::TryFromIntError, string::FromUtf8Error};
 use thiserror::Error;
 
 /// Errors that can occur when using a Wasm runtime.
@@ -27,4 +28,12 @@ pub enum RuntimeError {
     /// Attempt to load a function with a name that's used for a different import in the module.
     #[error("Export `{_0}` is not a function")]
     NotAFunction(String),
+
+    /// Attempt to load a string from a sequence of bytes that doesn't contain a UTF-8 string.
+    #[error("Failed to load string from non-UTF-8 bytes")]
+    InvalidString(#[from] FromUtf8Error),
+
+    /// Attempt to create a `GuestPointer` from an invalid address representation.
+    #[error("Invalid address read")]
+    InvalidNumber(#[from] TryFromIntError),
 }
