@@ -1498,7 +1498,8 @@ async fn test_reconfiguration(network: Network) {
 }
 
 #[test_log::test(tokio::test)]
-#[ignore] // TODO(#901)
+// TODO(#901): Node service should track newly opened chains
+#[ignore]
 async fn test_open_chain_node_service() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;

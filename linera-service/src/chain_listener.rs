@@ -108,7 +108,7 @@ where
                 }
             }
             context.update_wallet(&mut *client.lock().await).await;
-            // TODO(#901)
+            // TODO(#901): Node service should track newly opened chains
             // self.update_streams(&mut streams, &mut context, &storage)
             //     .await?;
         }
