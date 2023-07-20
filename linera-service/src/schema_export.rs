@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::identifiers::{ChainDescription, ChainId};
+use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 
 use async_trait::async_trait;
@@ -11,10 +11,7 @@ use linera_core::{
     node::{NodeError, NotificationStream, ValidatorNode},
 };
 use linera_execution::committee::Committee;
-use linera_service::{
-    chain_listener::ChainListenerConfig,
-    node_service::{Chains, NodeService},
-};
+use linera_service::{chain_listener::ChainListenerConfig, node_service::NodeService};
 use linera_storage::MemoryStoreClient;
 
 #[derive(Clone)]
@@ -71,12 +68,7 @@ impl ValidatorNodeProvider for DummyValidatorNodeProvider {
 }
 
 fn main() -> std::io::Result<()> {
-    let chain_id = ChainId::from(ChainDescription::Root(0));
     let store = MemoryStoreClient::new(None);
-    let chains = Chains {
-        list: Vec::new(),
-        default: Some(chain_id),
-    };
     let config = ChainListenerConfig {
         delay_before_ms: 0,
         delay_after_ms: 0,
@@ -84,7 +76,7 @@ fn main() -> std::io::Result<()> {
     let service = NodeService::<DummyValidatorNodeProvider, _>::new(
         config,
         std::num::NonZeroU16::new(8080).unwrap(),
-        chains,
+        None,
         store,
     );
     let schema = service.schema().sdl();

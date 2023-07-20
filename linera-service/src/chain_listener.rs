@@ -22,7 +22,7 @@ use structopt::StructOpt;
 use tokio_stream::Stream;
 use tracing::{info, warn};
 
-use crate::{config::WalletState, node_service::ClientMap};
+use crate::{config::WalletState, node_service::ChainClients};
 
 type ClientNotificationStream<P, S> =
     Box<dyn Stream<Item = (Notification, Arc<Mutex<ChainClient<P, S>>>)> + Send + Unpin>;
@@ -65,7 +65,7 @@ pub trait ClientContext<P: ValidatorNodeProvider> {
 /// appropriately.
 pub struct ChainListener<P, S> {
     config: ChainListenerConfig,
-    clients: ClientMap<P, S>,
+    clients: ChainClients<P, S>,
 }
 
 impl<P, S> ChainListener<P, S>
@@ -75,7 +75,7 @@ where
     ViewError: From<S::ContextError>,
 {
     /// Creates a new chain listener given client chains.
-    pub(crate) fn new(config: ChainListenerConfig, clients: ClientMap<P, S>) -> Self {
+    pub(crate) fn new(config: ChainListenerConfig, clients: ChainClients<P, S>) -> Self {
         Self { config, clients }
     }
 
