@@ -70,6 +70,24 @@ where
     cabi_free: Option<<Instance as InstanceWithFunction<HList![i32], HList![]>>::Function>,
 }
 
+impl<'runtime, Instance> Memory<'runtime, Instance>
+where
+    Instance: CabiReallocAlias + CabiFreeAlias,
+{
+    /// Creates a new [`Memory`] instance using a Wasm module `instance` and its `memory` export.
+    pub(super) fn new(
+        instance: &'runtime mut Instance,
+        memory: <Instance::Runtime as Runtime>::Memory,
+    ) -> Self {
+        Memory {
+            instance,
+            memory,
+            cabi_realloc: None,
+            cabi_free: None,
+        }
+    }
+}
+
 impl<Instance> Memory<'_, Instance>
 where
     Instance: CabiReallocAlias + CabiFreeAlias,

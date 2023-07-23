@@ -29,6 +29,14 @@ pub enum RuntimeError {
     #[error("Export `{_0}` is not a function")]
     NotAFunction(String),
 
+    /// Attempt to load the memory export from a module that doesn't export it.
+    #[error("Failed to load `memory` export")]
+    MissingMemory,
+
+    /// Attempt to load the memory export from a module that exports it as something else.
+    #[error("Unexpected type for `memory` export")]
+    NotMemory,
+
     /// Attempt to load a string from a sequence of bytes that doesn't contain a UTF-8 string.
     #[error("Failed to load string from non-UTF-8 bytes")]
     InvalidString(#[from] FromUtf8Error),

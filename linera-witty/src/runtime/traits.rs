@@ -3,7 +3,7 @@
 
 //! Abstractions over different Wasm runtime implementations.
 
-use super::{memory::RuntimeMemory, RuntimeError};
+use super::{memory::Memory, RuntimeError};
 use crate::memory_layout::FlatLayout;
 use frunk::HList;
 
@@ -77,11 +77,23 @@ impl<AnyInstance> CabiFreeAlias for AnyInstance where
 }
 
 /// Trait alias for a Wasm module instance with the WIT Canonical ABI functions.
-pub trait InstanceWithMemory: CabiReallocAlias + CabiFreeAlias {}
+pub trait InstanceWithMemory: CabiReallocAlias + CabiFreeAlias {
+    /// Converts an `export` into the runtime's specific memory type.
+    fn memory_from_export(
+        &self,
+        export: <Self::Runtime as Runtime>::Export,
+    ) -> Result<Option<<Self::Runtime as Runtime>::Memory>, RuntimeError>;
 
-impl<AnyInstance> InstanceWithMemory for AnyInstance
-where
-    AnyInstance: CabiReallocAlias + CabiFreeAlias,
-    <AnyInstance::Runtime as Runtime>::Memory: RuntimeMemory<AnyInstance>,
-{
+    /// Returns the memory export from the current Wasm module instance.
+    fn memory(&mut self) -> Result<Memory<'_, Self>, RuntimeError> {
+        let export = self
+            .load_export("memory")
+            .ok_or(RuntimeError::MissingMemory)?;
+
+        let memory = self
+            .memory_from_export(export)?
+            .ok_or(RuntimeError::NotMemory)?;
+
+        Ok(Memory::new(self, memory))
+    }
 }
