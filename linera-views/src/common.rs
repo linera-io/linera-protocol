@@ -39,7 +39,7 @@ pub(crate) enum Update<T> {
 }
 
 /// The minimum value for the view tags. Values in 0..MIN_VIEW_TAG are used for other purposes.
-pub(crate) const MIN_VIEW_TAG: u8 = 1;
+pub const MIN_VIEW_TAG: u8 = 1;
 
 /// When wanting to find the entries in a BTreeMap with a specific prefix,
 /// one option is to iterate over all keys. Another is to select an interval
