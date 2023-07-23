@@ -105,8 +105,8 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         let idx_lit = syn::LitInt::new(&idx.to_string(), Span::call_site());
         let type_ident = get_type_field(e).expect("Failed to find the type");
         load_future_quotes.push(quote! {
-            let index = #idx_lit + linera_views::common::MIN_VIEW_TAG;
-            let base_key = context.derive_key(&index)?;
+            let index = #idx_lit;
+            let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
             let #fut = #type_ident::load(context.clone_with_base_key(base_key));
         });
         load_ident_quotes.push(quote! {
@@ -742,12 +742,12 @@ pub mod tests {
                             stringify!(TestView),
                             &context.base_key(),
                         );
-                        let index = 0 + linera_views::common::MIN_VIEW_TAG;
-                        let base_key = context.derive_key(&index)?;
+                        let index = 0;
+                        let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
                         let register_fut =
                             RegisterView::load(context.clone_with_base_key(base_key));
-                        let index = 1 + linera_views::common::MIN_VIEW_TAG;
-                        let base_key = context.derive_key(&index)?;
+                        let index = 1;
+                        let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
                         let collection_fut =
                             CollectionView::load(context.clone_with_base_key(base_key));
                         let result = join!(register_fut, collection_fut);
