@@ -18,13 +18,9 @@ use linera_core::{
 use linera_execution::{Message, SystemMessage};
 use linera_storage::Store;
 use linera_views::views::ViewError;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use structopt::StructOpt;
-use tokio_stream::Stream;
 use tracing::{info, warn};
-
-type ClientNotificationStream<P, S> =
-    Box<dyn Stream<Item = (Notification, Arc<Mutex<ChainClient<P, S>>>)> + Send + Unpin>;
 
 #[derive(Debug, Clone, StructOpt)]
 pub struct ChainListenerConfig {
@@ -79,17 +75,95 @@ where
     }
 
     /// Runs the chain listener.
-    pub async fn run<C>(self, mut context: C, storage: S) -> Result<(), anyhow::Error>
+    pub async fn run<C>(self, context: C, storage: S) -> Result<(), anyhow::Error>
     where
-        C: ClientContext<P>,
+        C: ClientContext<P> + Send + 'static,
     {
-        let mut streams = HashMap::new();
-        self.update_streams(&mut streams, &mut context, &storage)
-            .await?;
+        let chain_ids = context.wallet_state().own_chain_ids();
+        let context = Arc::new(Mutex::new(context));
+        for chain_id in chain_ids {
+            self.run_with_chain_id(
+                chain_id,
+                context.clone(),
+                storage.clone(),
+                self.config.clone(),
+            )
+            .await;
+        }
 
-        while let (Some((notification, client)), _, _) =
-            future::select_all(streams.values_mut().map(StreamExt::next)).await
+        Ok(())
+    }
+
+    async fn run_with_chain_id<C>(
+        &self,
+        chain_id: ChainId,
+        context: Arc<Mutex<C>>,
+        storage: S,
+        config: ChainListenerConfig,
+    ) where
+        C: ClientContext<P> + Send + 'static,
+    {
+        let clients = self.clients.clone();
+        let _handle = tokio::task::spawn(async move {
+            if let Err(err) =
+                Self::run_client_stream(chain_id, clients, context, storage, config).await
+            {
+                tracing::error!("Stream for chain {} failed: {}", chain_id, err);
+            }
+        });
+    }
+
+    async fn run_client_stream<C>(
+        chain_id: ChainId,
+        clients: ChainClients<P, S>,
+        context: Arc<Mutex<C>>,
+        storage: S,
+        config: ChainListenerConfig,
+    ) -> Result<(), anyhow::Error>
+    where
+        C: ClientContext<P> + Send,
+    {
+        let client = {
+            let mut map_guard = clients.map_lock().await;
+            let context_guard = context.lock().await;
+            map_guard
+                .entry(chain_id)
+                .or_insert_with(|| {
+                    let client = context_guard.make_chain_client(storage.clone(), chain_id);
+                    Arc::new(Mutex::new(client))
+                })
+                .clone()
+        };
         {
+            // Process the inbox: For messages that are already there we won't receive a
+            // notification.
+            let mut guard = client.lock().await;
+            guard.synchronize_from_validators().await?;
+            guard.process_inbox().await?;
+        }
+        let notification_stream = ChainClient::listen(client.clone()).await?;
+        let mut tracker = NotificationTracker::default();
+        let client_clone = client.clone();
+        let mut stream = notification_stream
+            .filter(move |notification| future::ready(tracker.insert(notification.clone())))
+            .then(move |notification| {
+                info!("Received new notification: {:?}", notification);
+                let client = client_clone.clone();
+                Box::pin(async move {
+                    if config.delay_before_ms > 0 {
+                        tokio::time::sleep(Duration::from_millis(config.delay_before_ms)).await;
+                    }
+                    {
+                        let mut client = client.lock().await;
+                        Self::handle_notification(&mut *client, notification.clone()).await;
+                    }
+                    if config.delay_after_ms > 0 {
+                        tokio::time::sleep(Duration::from_millis(config.delay_after_ms)).await;
+                    }
+                    notification
+                })
+            });
+        while let Some(notification) = stream.next().await {
             if let Reason::NewBlock { hash, .. } = notification.reason {
                 let value = storage.read_value(hash).await?;
                 let executed_block = &value.inner().executed_block();
@@ -101,17 +175,18 @@ where
                         ..
                     } = outgoing_message
                     {
-                        let key_pair = context.wallet_state().key_pair_for_pk(public_key);
-                        context.update_wallet_for_new_chain(*new_id, key_pair, timestamp);
+                        let mut context_guard = context.lock().await;
+                        let key_pair = context_guard.wallet_state().key_pair_for_pk(public_key);
+                        context_guard.update_wallet_for_new_chain(*new_id, key_pair, timestamp);
                     }
                 }
             }
-            context.update_wallet(&mut *client.lock().await).await;
+            let mut context_guard = context.lock().await;
+            context_guard.update_wallet(&mut *client.lock().await).await;
             // TODO(#901): Node service should track newly opened chains
             // self.update_streams(&mut streams, &mut context, &storage)
             //     .await?;
         }
-
         Ok(())
     }
 
@@ -136,72 +211,5 @@ where
                 }
             }
         }
-    }
-
-    async fn update_streams<C>(
-        &self,
-        streams: &mut HashMap<ChainId, ClientNotificationStream<P, S>>,
-        context: &mut C,
-        storage: &S,
-    ) -> Result<(), anyhow::Error>
-    where
-        C: ClientContext<P>,
-    {
-        let new_clients: Vec<_> = {
-            let mut map_guard = self.clients.map_lock().await;
-            for chain_id in context.wallet_state().own_chain_ids() {
-                map_guard.entry(chain_id).or_insert_with(|| {
-                    let client = context.make_chain_client(storage.clone(), chain_id);
-                    Arc::new(Mutex::new(client))
-                });
-            }
-            map_guard
-                .iter()
-                .filter(|(chain_id, _)| !streams.contains_key(chain_id))
-                .map(|(chain_id, client)| (*chain_id, client.clone()))
-                .collect()
-        };
-        let delay_before_ms = self.config.delay_before_ms;
-        let delay_after_ms = self.config.delay_after_ms;
-        let new_streams = future::join_all(new_clients.into_iter().map(
-            |(chain_id, client)| async move {
-                {
-                    // Process the inbox: For messages that are already there we won't receive a
-                    // notification.
-                    let mut guard = client.lock().await;
-                    guard.synchronize_from_validators().await?;
-                    guard.process_inbox().await?;
-                }
-                let notification_stream = ChainClient::listen(client.clone()).await?;
-                let mut tracker = NotificationTracker::default();
-                let stream = notification_stream
-                    .filter(move |notification| future::ready(tracker.insert(notification.clone())))
-                    .then(move |notification| {
-                        info!("Received new notification: {:?}", notification);
-                        let client = client.clone();
-                        Box::pin(async move {
-                            if delay_before_ms > 0 {
-                                tokio::time::sleep(Duration::from_millis(delay_before_ms)).await;
-                            }
-                            {
-                                let mut client = client.lock().await;
-                                Self::handle_notification(&mut *client, notification.clone()).await;
-                            }
-                            if delay_after_ms > 0 {
-                                tokio::time::sleep(Duration::from_millis(delay_after_ms)).await;
-                            }
-                            (notification, client.clone())
-                        })
-                    });
-                Ok((chain_id, stream))
-            },
-        ))
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, anyhow::Error>>()?;
-        for (chain_id, stream) in new_streams {
-            streams.insert(chain_id, Box::new(stream));
-        }
-        Ok(())
     }
 }
