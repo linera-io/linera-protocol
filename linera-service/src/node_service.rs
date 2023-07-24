@@ -700,9 +700,7 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        ChainListener::new(self.config, self.clients.clone())
-            .run(context, self.storage.clone())
-            .await?;
+        ChainListener::new(self.config, self.clients.clone()).run(context, self.storage.clone());
         let serve_fut =
             Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
         serve_fut.await?;
