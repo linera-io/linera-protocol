@@ -40,3 +40,28 @@ pub trait WitLoad: WitType {
         Instance: InstanceWithMemory,
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>;
 }
+
+/// A type that can be stored in a guest Wasm module.
+pub trait WitStore: WitType {
+    /// Stores the type at the `location` in the guest's `memory`.
+    fn store<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<(), RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>;
+
+    /// Lowers the type into its flat layout representation.
+    ///
+    /// May write to the `memory` if the type has references to heap data or if it doesn't fix in
+    /// the maximum flat layout size.
+    fn lower<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+    ) -> Result<<Self::Layout as Layout>::Flat, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>;
+}

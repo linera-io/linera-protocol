@@ -25,7 +25,7 @@ pub use self::runtime::{FakeInstance, FakeRuntime};
 pub use self::{
     memory_layout::Layout,
     runtime::{GuestPointer, InstanceWithMemory, Memory, Runtime, RuntimeError, RuntimeMemory},
-    type_traits::{WitLoad, WitType},
+    type_traits::{WitLoad, WitStore, WitType},
     util::Split,
 };
 pub use frunk::{hlist, hlist::HList, HList, HNil};
