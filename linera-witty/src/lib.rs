@@ -20,6 +20,8 @@ mod runtime;
 mod type_traits;
 mod util;
 
+#[cfg(any(test, feature = "test"))]
+pub use self::runtime::FakeRuntime;
 pub use self::{
     memory_layout::Layout,
     runtime::{GuestPointer, InstanceWithMemory, Memory, Runtime, RuntimeError, RuntimeMemory},
