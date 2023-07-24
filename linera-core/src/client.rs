@@ -760,7 +760,7 @@ where
         Ok((name, new_tracker, certificates))
     }
 
-    /// Process the result of [`synchronize_received_certificates_from_validator`].
+    /// Processes the result of [`synchronize_received_certificates_from_validator`].
     async fn receive_certificates_from_validator(
         &mut self,
         name: ValidatorName,
