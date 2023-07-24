@@ -1,0 +1,146 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//! Tests for the `WitLoad` derive macro.
+
+#[path = "common/types.rs"]
+mod types;
+
+use self::types::{
+    Branch, Leaf, RecordWithDoublePadding, SimpleWrapper, TupleWithPadding, TupleWithoutPadding,
+};
+use linera_witty::{hlist, FakeInstance, InstanceWithMemory, Layout, WitLoad};
+use std::fmt::Debug;
+
+/// Check that a wrapper type is properly loaded from memory and lifted from its flat layout.
+#[test]
+fn simple_bool_wrapper() {
+    test_load_from_memory(&[1], SimpleWrapper(true));
+    test_load_from_memory(&[0], SimpleWrapper(false));
+
+    test_lift_from_flat_layout(hlist![1], SimpleWrapper(true));
+    test_lift_from_flat_layout(hlist![0], SimpleWrapper(false));
+}
+
+/// Check that a type with multiple fields ordered in a way that doesn't require any padding is
+/// properly loaded from memory and lifted from its flat layout.
+#[test]
+fn tuple_struct_without_padding() {
+    let expected = TupleWithoutPadding(0x0807_0605_0403_0201_u64, 0x0c0b_0a09_i32, 0x0e0d_i16);
+
+    test_load_from_memory(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], expected);
+    test_lift_from_flat_layout(
+        hlist![0x0807_0605_0403_0201_i64, 0x0c0b_0a09_i32, 0x0000_0e0d_i32],
+        expected,
+    );
+}
+
+/// Check that a type with multiple fields ordered in a way that requires padding between two of its
+/// fields is properly loaded from memory and lifted from its flat layout.
+#[test]
+fn tuple_struct_with_padding() {
+    let expected = TupleWithPadding(0x0201_u16, 0x0807_0605_u32, 0x100f_0e0d_0c0b_0a09_i64);
+
+    test_load_from_memory(
+        &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        expected,
+    );
+    test_lift_from_flat_layout(
+        hlist![0x0000_0201_i32, 0x0807_0605_i32, 0x100f_0e0d_0c0b_0a09_i64],
+        expected,
+    );
+}
+
+/// Check that a type with multiple named fields ordered in a way that requires padding before two
+/// fields is properly loaded from memory and lifted from its flat layout.
+#[test]
+fn named_struct_with_double_padding() {
+    let expected = RecordWithDoublePadding {
+        first: 0x0201_u16,
+        second: 0x0807_0605_u32,
+        third: 0x09_i8,
+        fourth: 0x1817_1615_1413_1211_i64,
+    };
+
+    test_load_from_memory(
+        &[
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+        ],
+        expected,
+    );
+    test_lift_from_flat_layout(
+        hlist![
+            0x0000_0201_i32,
+            0x0807_0605_i32,
+            0x0000_0009_i32,
+            0x1817_1615_1413_1211_i64,
+        ],
+        expected,
+    );
+}
+
+/// Check that a type that contains a field with a type that also has `WitStore` derived for it is
+/// properly loaded from memory and lifted from its flat layout.
+#[test]
+fn nested_types() {
+    let expected = Branch {
+        tag: 0x0201_u16,
+        first_leaf: Leaf {
+            first: true,
+            second: 0x201f_1e1d_1c1b_1a19_1817_1615_1413_1211_u128,
+        },
+        second_leaf: Leaf {
+            first: true,
+            second: 0x3837_3635_3433_3231_302f_2e2d_2c2b_2a29_u128,
+        },
+    };
+
+    test_load_from_memory(
+        &[
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46,
+            47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
+        ],
+        expected,
+    );
+    test_lift_from_flat_layout(
+        hlist![
+            0x0000_0201_i32,
+            0x0000_0009_i32,
+            0x1817_1615_1413_1211_i64,
+            0x201f_1e1d_1c1b_1a19_i64,
+            0x0000_0021_i32,
+            0x302f_2e2d_2c2b_2a29_i64,
+            0x3837_3635_3433_3231_i64,
+        ],
+        expected,
+    );
+}
+
+/// Tests that the type `T` can be loaded from an `input` sequence of bytes in memory and that it
+/// matches the `expected` value.
+fn test_load_from_memory<T>(input: &[u8], expected: T)
+where
+    T: Debug + Eq + WitLoad,
+{
+    let mut instance = FakeInstance::default();
+    let mut memory = instance.memory().unwrap();
+
+    let address = memory.allocate(input.len() as u32).unwrap();
+
+    memory.write(address, input).unwrap();
+
+    assert_eq!(T::load(&memory, address).unwrap(), expected);
+}
+
+/// Tests that the type `T` can be lifted from an `input` flat layout and that it matches the
+/// `expected` value.
+fn test_lift_from_flat_layout<T>(input: <T::Layout as Layout>::Flat, expected: T)
+where
+    T: Debug + Eq + WitLoad,
+{
+    let mut instance = FakeInstance::default();
+    let memory = instance.memory().unwrap();
+
+    assert_eq!(T::lift_from(input, &memory).unwrap(), expected);
+}

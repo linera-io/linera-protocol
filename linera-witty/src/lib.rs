@@ -28,6 +28,6 @@ pub use self::{
     type_traits::{WitLoad, WitType},
     util::Split,
 };
-pub use frunk::{hlist::HList, HList, HNil};
+pub use frunk::{hlist, hlist::HList, HList, HNil};
 #[cfg(feature = "macros")]
 pub use linera_witty_macros::{WitLoad, WitType};
