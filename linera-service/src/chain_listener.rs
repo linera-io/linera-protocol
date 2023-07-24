@@ -3,7 +3,7 @@
 
 use crate::{config::WalletState, node_service::ChainClients};
 use async_trait::async_trait;
-use futures::{future, lock::Mutex, StreamExt};
+use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::KeyPair,
     data_types::Timestamp,
@@ -131,7 +131,8 @@ where
                 })
                 .clone()
         };
-        let notification_stream = ChainClient::listen(client.clone()).await?;
+        let mut stream = ChainClient::listen(client.clone()).await?;
+        let mut tracker = NotificationTracker::default();
         {
             // Process the inbox: For messages that are already there we won't receive a
             // notification.
@@ -139,28 +140,21 @@ where
             guard.synchronize_from_validators().await?;
             guard.process_inbox().await?;
         }
-        let mut tracker = NotificationTracker::default();
-        let client_clone = client.clone();
-        let mut stream = notification_stream
-            .filter(move |notification| future::ready(tracker.insert(notification.clone())))
-            .then(move |notification| {
-                info!("Received new notification: {:?}", notification);
-                let client = client_clone.clone();
-                Box::pin(async move {
-                    if config.delay_before_ms > 0 {
-                        tokio::time::sleep(Duration::from_millis(config.delay_before_ms)).await;
-                    }
-                    {
-                        let mut client = client.lock().await;
-                        Self::handle_notification(&mut *client, notification.clone()).await;
-                    }
-                    if config.delay_after_ms > 0 {
-                        tokio::time::sleep(Duration::from_millis(config.delay_after_ms)).await;
-                    }
-                    notification
-                })
-            });
         while let Some(notification) = stream.next().await {
+            if !tracker.insert(notification.clone()) {
+                continue;
+            }
+            info!("Received new notification: {:?}", notification);
+            if config.delay_before_ms > 0 {
+                tokio::time::sleep(Duration::from_millis(config.delay_before_ms)).await;
+            }
+            {
+                let mut client = client.lock().await;
+                Self::handle_notification(&mut *client, notification.clone()).await;
+            }
+            if config.delay_after_ms > 0 {
+                tokio::time::sleep(Duration::from_millis(config.delay_after_ms)).await;
+            }
             if let Reason::NewBlock { hash, .. } = notification.reason {
                 let value = storage.read_value(hash).await?;
                 let executed_block = &value.inner().executed_block();
