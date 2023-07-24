@@ -13,6 +13,7 @@ edition = "2021"
 [features]
 default = ["macros"]
 macros = ["linera-witty-macros"]
+test = []
 
 [dependencies]
 frunk = { workspace = true }
@@ -20,4 +21,4 @@ linera-witty-macros = { workspace = true, optional = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-linera-witty = { workspace = true, features = ["macros"] }
+linera-witty = { workspace = true, features = ["macros", "test"] }
