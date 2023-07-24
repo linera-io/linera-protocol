@@ -6,9 +6,15 @@
 //! No WebAssembly bytecode can be executed, but it allows calling the canonical ABI functions
 //! related to memory allocation.
 
-use super::{GuestPointer, Instance, InstanceWithFunction, Runtime, RuntimeError};
+use super::{
+    GuestPointer, Instance, InstanceWithFunction, InstanceWithMemory, Runtime, RuntimeError,
+    RuntimeMemory,
+};
 use frunk::{hlist, hlist_pat, HList};
-use std::sync::{Arc, Mutex};
+use std::{
+    borrow::Cow,
+    sync::{Arc, Mutex},
+};
 
 /// A fake Wasm runtime.
 pub struct FakeRuntime;
@@ -91,5 +97,49 @@ impl InstanceWithFunction<HList![i32, i32, i32, i32], HList![i32]> for FakeInsta
         );
 
         Ok(hlist![address.0 as i32])
+    }
+}
+
+impl RuntimeMemory<FakeInstance> for Arc<Mutex<Vec<u8>>> {
+    fn read<'instance>(
+        &self,
+        instance: &'instance FakeInstance,
+        location: GuestPointer,
+        length: u32,
+    ) -> Result<Cow<'instance, [u8]>, RuntimeError> {
+        let memory = instance
+            .memory
+            .lock()
+            .expect("Panic while holding a lock to a `FakeInstance`'s memory");
+
+        let start = location.0 as usize;
+        let end = start + length as usize;
+
+        Ok(Cow::Owned(memory[start..end].to_owned()))
+    }
+
+    fn write(
+        &mut self,
+        instance: &mut FakeInstance,
+        location: GuestPointer,
+        bytes: &[u8],
+    ) -> Result<(), RuntimeError> {
+        let mut memory = instance
+            .memory
+            .lock()
+            .expect("Panic while holding a lock to a `FakeInstance`'s memory");
+
+        let start = location.0 as usize;
+        let end = start + bytes.len();
+
+        memory[start..end].copy_from_slice(bytes);
+
+        Ok(())
+    }
+}
+
+impl InstanceWithMemory for FakeInstance {
+    fn memory_from_export(&self, _export: ()) -> Result<Option<Arc<Mutex<Vec<u8>>>>, RuntimeError> {
+        Ok(Some(self.memory.clone()))
     }
 }
