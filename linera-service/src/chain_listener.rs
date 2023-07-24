@@ -20,7 +20,7 @@ use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{sync::Arc, time::Duration};
 use structopt::StructOpt;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 #[derive(Debug, Clone, StructOpt)]
 pub struct ChainListenerConfig {
@@ -75,40 +75,37 @@ where
     }
 
     /// Runs the chain listener.
-    pub async fn run<C>(self, context: C, storage: S) -> Result<(), anyhow::Error>
+    pub fn run<C>(self, context: C, storage: S)
     where
         C: ClientContext<P> + Send + 'static,
     {
         let chain_ids = context.wallet_state().own_chain_ids();
         let context = Arc::new(Mutex::new(context));
         for chain_id in chain_ids {
-            self.run_with_chain_id(
+            Self::run_with_chain_id(
                 chain_id,
+                self.clients.clone(),
                 context.clone(),
                 storage.clone(),
                 self.config.clone(),
-            )
-            .await;
+            );
         }
-
-        Ok(())
     }
 
-    async fn run_with_chain_id<C>(
-        &self,
+    fn run_with_chain_id<C>(
         chain_id: ChainId,
+        clients: ChainClients<P, S>,
         context: Arc<Mutex<C>>,
         storage: S,
         config: ChainListenerConfig,
     ) where
         C: ClientContext<P> + Send + 'static,
     {
-        let clients = self.clients.clone();
         let _handle = tokio::task::spawn(async move {
             if let Err(err) =
                 Self::run_client_stream(chain_id, clients, context, storage, config).await
             {
-                tracing::error!("Stream for chain {} failed: {}", chain_id, err);
+                error!("Stream for chain {} failed: {}", chain_id, err);
             }
         });
     }
@@ -121,7 +118,7 @@ where
         config: ChainListenerConfig,
     ) -> Result<(), anyhow::Error>
     where
-        C: ClientContext<P> + Send,
+        C: ClientContext<P> + Send + 'static,
     {
         let client = {
             let mut map_guard = clients.map_lock().await;
@@ -134,6 +131,7 @@ where
                 })
                 .clone()
         };
+        let notification_stream = ChainClient::listen(client.clone()).await?;
         {
             // Process the inbox: For messages that are already there we won't receive a
             // notification.
@@ -141,7 +139,6 @@ where
             guard.synchronize_from_validators().await?;
             guard.process_inbox().await?;
         }
-        let notification_stream = ChainClient::listen(client.clone()).await?;
         let mut tracker = NotificationTracker::default();
         let client_clone = client.clone();
         let mut stream = notification_stream
@@ -175,17 +172,23 @@ where
                         ..
                     } = outgoing_message
                     {
-                        let mut context_guard = context.lock().await;
-                        let key_pair = context_guard.wallet_state().key_pair_for_pk(public_key);
-                        context_guard.update_wallet_for_new_chain(*new_id, key_pair, timestamp);
+                        {
+                            let mut context_guard = context.lock().await;
+                            let key_pair = context_guard.wallet_state().key_pair_for_pk(public_key);
+                            context_guard.update_wallet_for_new_chain(*new_id, key_pair, timestamp);
+                        }
+                        Self::run_with_chain_id(
+                            *new_id,
+                            clients.clone(),
+                            context.clone(),
+                            storage.clone(),
+                            config.clone(),
+                        );
                     }
                 }
             }
             let mut context_guard = context.lock().await;
             context_guard.update_wallet(&mut *client.lock().await).await;
-            // TODO(#901): Node service should track newly opened chains
-            // self.update_streams(&mut streams, &mut context, &storage)
-            //     .await?;
         }
         Ok(())
     }

@@ -892,13 +892,13 @@ impl NodeService {
                     uri: link.to_string(),
                 };
             }
-            warn!("Waiting for application {application_id:?} to be visible on chain {chain_id:?}",);
+            warn!("Waiting for application {application_id:?} to be visible on chain {chain_id:?}");
         }
         panic!("Could not find application URI: {application_id}");
     }
 
     async fn try_get_applications_uri(&self, chain_id: &ChainId) -> HashMap<String, String> {
-        let query = format!("query {{ applications(chainId: \"{chain_id}\") {{ id link }}}}",);
+        let query = format!("query {{ applications(chainId: \"{chain_id}\") {{ id link }}}}");
         let data = self.query_node(&query).await;
         data["applications"]
             .as_array()
@@ -931,30 +931,38 @@ impl NodeService {
     }
 
     async fn query_node(&self, query: &str) -> Value {
-        let url = format!("http://localhost:{}/", self.port);
-        let client = reqwest::Client::new();
-        let response = client
-            .post(url)
-            .json(&json!({ "query": query }))
-            .send()
-            .await
-            .unwrap();
-        if !response.status().is_success() {
-            panic!(
-                "Query \"{}\" failed: {}",
-                query.get(..200).unwrap_or(query),
-                response.text().await.unwrap()
-            );
+        for i in 0..10 {
+            tokio::time::sleep(Duration::from_secs(i)).await;
+            let url = format!("http://localhost:{}/", self.port);
+            let client = reqwest::Client::new();
+            let response = client
+                .post(url)
+                .json(&json!({ "query": query }))
+                .send()
+                .await
+                .unwrap();
+            if !response.status().is_success() {
+                panic!(
+                    "Query \"{}\" failed: {}",
+                    query.get(..200).unwrap_or(query),
+                    response.text().await.unwrap()
+                );
+            }
+            let value: Value = response.json().await.unwrap();
+            if let Some(errors) = value.get("errors") {
+                warn!(
+                    "Query \"{}\" failed: {}",
+                    query.get(..200).unwrap_or(query),
+                    errors
+                );
+            } else {
+                return value["data"].clone();
+            }
         }
-        let value: Value = response.json().await.unwrap();
-        if let Some(errors) = value.get("errors") {
-            panic!(
-                "Query \"{}\" failed: {}",
-                query.get(..200).unwrap_or(query),
-                errors
-            );
-        }
-        value["data"].clone()
+        panic!(
+            "Query \"{}\" failed after 10 retries.",
+            query.get(..200).unwrap_or(query)
+        );
     }
 
     async fn create_application(
@@ -1498,8 +1506,6 @@ async fn test_reconfiguration(network: Network) {
 }
 
 #[test_log::test(tokio::test)]
-// TODO(#901): Node service should track newly opened chains
-#[ignore]
 async fn test_open_chain_node_service() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
@@ -1842,7 +1848,7 @@ async fn test_end_to_end_fungible() {
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_fungible_same_wallet() {
+async fn test_end_to_end_same_wallet_fungible() {
     use fungible::{Account, FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
