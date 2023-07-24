@@ -17,10 +17,7 @@ use axum::{
     response::IntoResponse,
     Extension, Router, Server,
 };
-use futures::{
-    future,
-    lock::{Mutex, MutexGuard, OwnedMutexGuard},
-};
+use futures::lock::{Mutex, MutexGuard, OwnedMutexGuard};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
     data_types::Amount,
@@ -683,7 +680,7 @@ where
     /// Runs the node service.
     pub async fn run<C>(self, context: C) -> Result<(), anyhow::Error>
     where
-        C: ClientContext<P>,
+        C: ClientContext<P> + Send + 'static,
     {
         let port = self.port.get();
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
@@ -703,23 +700,12 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        let sync_fut = Box::pin(
-            ChainListener::new(self.config, self.clients.clone())
-                .run(context, self.storage.clone()),
-        );
+        ChainListener::new(self.config, self.clients.clone())
+            .run(context, self.storage.clone())
+            .await?;
         let serve_fut =
             Server::bind(&SocketAddr::from(([127, 0, 0, 1], port))).serve(app.into_make_service());
-
-        match future::select(sync_fut, serve_fut).await {
-            future::Either::Left((value, _)) => {
-                value?;
-                error!("Chain listener was terminated.");
-            }
-            future::Either::Right((value, _)) => {
-                value?;
-                error!("Node service was terminated.");
-            }
-        }
+        serve_fut.await?;
 
         Ok(())
     }
