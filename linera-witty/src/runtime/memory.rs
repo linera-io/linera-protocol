@@ -16,6 +16,14 @@ use std::borrow::Cow;
 pub struct GuestPointer(pub(crate) u32);
 
 impl GuestPointer {
+    /// Returns a new address that's the current address advanced to add padding to ensure it's
+    /// aligned to the `alignment` byte boundary.
+    pub fn aligned_at(&self, alignment: u32) -> Self {
+        let padding = (-(self.0 as i32) & (alignment as i32 - 1)) as u32;
+
+        GuestPointer(self.0 + padding)
+    }
+
     /// Returns a new address that's the current address advanced to after the size of `T`.
     pub fn after<T: WitType>(&self) -> Self {
         GuestPointer(self.0 + T::SIZE)
@@ -24,9 +32,7 @@ impl GuestPointer {
     /// Returns a new address that's the current address advanced to add padding to ensure it's
     /// aligned properly for `T`.
     pub fn after_padding_for<T: WitType>(&self) -> Self {
-        let padding = (-(self.0 as i32) & (<T::Layout as Layout>::ALIGNMENT as i32 - 1)) as u32;
-
-        GuestPointer(self.0 + padding)
+        self.aligned_at(<T::Layout as Layout>::ALIGNMENT)
     }
 
     /// Returns the address of an element in a contiguous list of properly aligned `T` types.
