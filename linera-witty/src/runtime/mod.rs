@@ -10,7 +10,7 @@ mod test;
 mod traits;
 
 #[cfg(any(test, feature = "test"))]
-pub use self::test::FakeRuntime;
+pub use self::test::{FakeInstance, FakeRuntime};
 pub use self::{
     error::RuntimeError,
     memory::{GuestPointer, Memory, RuntimeMemory},
