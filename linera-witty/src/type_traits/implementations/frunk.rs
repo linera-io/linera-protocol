@@ -5,7 +5,7 @@
 
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory, Split,
-    WitLoad, WitType,
+    WitLoad, WitStore, WitType,
 };
 use frunk::{HCons, HNil};
 use std::ops::Add;
@@ -33,6 +33,31 @@ impl WitLoad for HNil {
     ) -> Result<Self, RuntimeError>
     where
         Instance: InstanceWithMemory,
+    {
+        Ok(HNil)
+    }
+}
+
+impl WitStore for HNil {
+    fn store<Instance>(
+        &self,
+        _memory: &mut Memory<'_, Instance>,
+        _location: GuestPointer,
+    ) -> Result<(), RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        Ok(())
+    }
+
+    fn lower<Instance>(
+        &self,
+        _memory: &mut Memory<'_, Instance>,
+    ) -> Result<<Self::Layout as Layout>::Flat, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
         Ok(HNil)
     }
@@ -87,5 +112,46 @@ where
             head: Head::lift_from(head_layout, memory)?,
             tail: Tail::lift_from(tail_layout, memory)?,
         })
+    }
+}
+
+impl<Head, Tail> WitStore for HCons<Head, Tail>
+where
+    Head: WitStore,
+    Tail: WitStore,
+    Head::Layout: Add<Tail::Layout>,
+    <Head::Layout as Add<Tail::Layout>>::Output: Layout,
+    <Head::Layout as Layout>::Flat: Add<<Tail::Layout as Layout>::Flat>,
+    Self::Layout: Layout<
+        Flat = <<Head::Layout as Layout>::Flat as Add<<Tail::Layout as Layout>::Flat>>::Output,
+    >,
+{
+    fn store<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<(), RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        self.head.store(memory, location)?;
+        self.tail.store(memory, location.after::<Head>())?;
+
+        Ok(())
+    }
+
+    fn lower<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+    ) -> Result<<Self::Layout as Layout>::Flat, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let head_layout = self.head.lower(memory)?;
+        let tail_layout = self.tail.lower(memory)?;
+
+        Ok(head_layout + tail_layout)
     }
 }
