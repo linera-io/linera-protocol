@@ -36,6 +36,7 @@ separate terminal:
 Compile the `social` example and create an application with it:
 
 ```bash
+alias linera="$PWD/target/debug/linera"
 export LINERA_WALLET="$(realpath target/debug/wallet.json)"
 export LINERA_STORAGE="rocksdb:$(dirname "$LINERA_WALLET")/linera.db"
 export LINERA_WALLET_2="$(realpath target/debug/wallet_2.json)"
@@ -43,7 +44,7 @@ export LINERA_STORAGE_2="rocksdb:$(dirname "$LINERA_WALLET_2")/linera_2.db"
 
 cd examples/social && cargo build --release && cd ../..
 
-linera --wallet "$LINERA_WALLET" --storage "$LINERA_STORAGE" publish-and-create examples/target/wasm32-unknown-unknown/release/social_{contract,service}.wasm
+linera publish-and-create examples/target/wasm32-unknown-unknown/release/social_{contract,service}.wasm
 ```
 
 This will output the new application ID, e.g.:
@@ -55,7 +56,7 @@ e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a650100000000000000
 With the `wallet show` command you can find the ID of the application creator's chain:
 
 ```bash
-linera --wallet "$LINERA_WALLET" --storage "$LINERA_STORAGE" wallet show
+linera wallet show
 ```
 
 ```rust
@@ -66,26 +67,30 @@ e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 Now start a node service for each wallet, using two different ports:
 
 ```bash
-linera --wallet "$LINERA_WALLET" --storage "$LINERA_STORAGE" service --port 8080 &
+linera service --port 8080 &
 linera --wallet "$LINERA_WALLET_2" --storage "$LINERA_STORAGE_2" service --port 8081 &
 ```
 
 Point your browser to http://localhost:8081. This is the wallet that didn't create the
-application, so we have to request it from the creator chain:
+application, so we have to request it from the creator chain. As the chain ID specify the
+one of the chain where it isn't registered yet:
 
 ```json
 mutation {
     requestApplication(
+        chainId: "1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03",
         applicationId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000"
     )
 }
 ```
 
 Now in both http://localhost:8080 and http://localhost:8081, this should list the
-application and provide a link to its GraphQL API:
+application and provide a link to its GraphQL API. Remember to use each wallet's chain ID:
 
 ```json
-query { applications { id description link } }
+query { applications(
+    chainId:"1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03"
+) { id link } }
 ```
 
 Open both URLs under the entry `link`. Now you can use the application on each chain.

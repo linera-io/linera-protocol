@@ -45,13 +45,14 @@
 //! bytecode:
 //!
 //! ```bash
+//! alias linera="$PWD/target/debug/linera"
 //! export LINERA_WALLET="$(realpath target/debug/wallet.json)"
 //! export LINERA_STORAGE="rocksdb:$(dirname "$LINERA_WALLET")/linera.db"
 //! export LINERA_WALLET_2="$(realpath target/debug/wallet_2.json)"
 //! export LINERA_STORAGE_2="rocksdb:$(dirname "$LINERA_WALLET_2")/linera_2.db"
 //!
 //! cd examples/fungible && cargo build --release && cd ../..
-//! linera --wallet "$LINERA_WALLET" --storage "$LINERA_STORAGE" publish-bytecode \
+//! linera publish-bytecode \
 //! examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm
 //! ```
 //!
@@ -72,7 +73,7 @@
 //! the chains created for the test:
 //!
 //! ```bash
-//! linera --storage "$LINERA_STORAGE" --wallet "$LINERA_WALLET" wallet show
+//! linera wallet show
 //! ```
 //!
 //! A table will be shown with the chains registered in the wallet and their meta-data. The default
@@ -83,7 +84,7 @@
 //! one with 100 of them and another with 200 of them:
 //!
 //! ```bash
-//! linera --storage "$LINERA_STORAGE" --wallet "$LINERA_WALLET" create-application $BYTECODE_ID \
+//! linera create-application e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000 \
 //!     --json-argument '{ "accounts": {
 //!         "User:445991f46ae490fe207e60c95d0ed95bf4e7ed9c270d4fd4fa555587c2604fe1": "100.",
 //!         "User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f": "200."
@@ -109,13 +110,11 @@
 //! linera --storage "$LINERA_STORAGE_2" --wallet "$LINERA_WALLET_2" wallet show
 //! ```
 //!
-//! First, a node service has to be started for each wallet, using two different ports. The
-//! `$SOURCE_CHAIN_ID` and `$TARGET_CHAIN_ID` can be left blank to use the default chains from each
-//! wallet:
+//! First, a node service has to be started for each wallet, using two different ports:
 //!
 //! ```bash
-//! linera --wallet "$LINERA_WALLET" --storage "$LINERA_STORAGE" service --port 8080 $SOURCE_CHAIN_ID &
-//! linera --wallet "$LINERA_WALLET_2" --storage "$LINERA_STORAGE_2" service --port 8081 $TARGET_CHAIN_ID &
+//! linera service --port 8080 &
+//! linera --wallet "$LINERA_WALLET_2" --storage "$LINERA_STORAGE_2" service --port 8081 &
 //! ```
 //!
 //! Then the web frontend has to be started

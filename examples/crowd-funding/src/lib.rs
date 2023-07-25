@@ -50,15 +50,15 @@
 //!
 //! ```bash
 //! alias linera="$PWD/target/debug/linera"
-//! export LINERA_WALLET1="$PWD/target/debug/wallet.json"
-//! export LINERA_STORAGE1="rocksdb:$(dirname "$LINERA_WALLET1")/linera.db"
+//! export LINERA_WALLET="$PWD/target/debug/wallet.json"
+//! export LINERA_STORAGE="rocksdb:$(dirname "$LINERA_WALLET1")/linera.db"
 //! export LINERA_WALLET2="$PWD/target/debug/wallet_2.json"
 //! export LINERA_STORAGE2="rocksdb:$(dirname "$LINERA_WALLET2")/linera_2.db"
 //!
 //! (cargo build && cd examples && cargo build --release)
-//! linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" publish-bytecode \
+//! linera publish-bytecode \
 //!   examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm
-//! linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" publish-bytecode \
+//! linera publish-bytecode \
 //!   examples/target/wasm32-unknown-unknown/release/crowd_funding_{contract,service}.wasm
 //! ```
 //!
@@ -82,7 +82,7 @@
 //! the chains created for the test as known by each wallet:
 //!
 //! ```bash
-//! linera --storage "$LINERA_STORAGE1" --wallet "$LINERA_WALLET1" wallet show
+//! linera wallet show
 //! linera --storage "$LINERA_STORAGE2" --wallet "$LINERA_WALLET2" wallet show
 //! ```
 //!
@@ -110,7 +110,7 @@
 //! one with 100 of them and another with 200 of them:
 //!
 //! ```bash
-//! linera --storage "$LINERA_STORAGE1" --wallet "$LINERA_WALLET1" create-application $BYTECODE_ID1 \
+//! linera create-application $BYTECODE_ID1 \
 //!     --json-argument '{ "accounts": { "User:'$OWNER1'": "100", "User:'$OWNER2'": "200" } }'
 //! ```
 //!
@@ -128,7 +128,7 @@
 //! We have to specify our fungible application as a dependency and a parameter:
 //!
 //! ```bash
-//! linera --storage "$LINERA_STORAGE1" --wallet "$LINERA_WALLET1" create-application $BYTECODE_ID2 \
+//! linera create-application $BYTECODE_ID2 \
 //!    --json-argument '{ "owner": "User:'$OWNER1'", "deadline": 4102473600000000, "target": "100." }'  --required-application-ids=$APP_ID1  --json-parameters='"'$APP_ID1'"'
 //! ```
 //!
@@ -136,35 +136,37 @@
 //!
 //! ## Interacting with the campaign
 //!
-//! First, a node service has to be started for each wallet, using two different ports. The
-//! `$SOURCE_CHAIN_ID` and `$TARGET_CHAIN_ID` can be left blank to use the default chains from each
-//! wallet:
+//! First, a node service has to be started for each wallet, using two different ports:
 //!
 //! ```bash
-//! linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" service --port 8080 $SOURCE_CHAIN_ID &
-//! linera --wallet "$LINERA_WALLET2" --storage "$LINERA_STORAGE2" service --port 8081 $TARGET_CHAIN_ID &
+//! linera service --port 8080 &
+//! linera --wallet "$LINERA_WALLET2" --storage "$LINERA_STORAGE2" service --port 8081 &
 //! ```
 //!
 //! Point your browser to http://localhost:8080, and enter the query:
 //!
 //! ```gql,ignore
-//! query { applications { id link } }
+//! query { applications(
+//!     chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
+//! ) { id link } }
 //! ```
 //!
 //! The response will have two entries, one for each application.
 //!
-//! If you do the same in http://localhost:8081, the node service for the other wallet,
-//! it will have no entries at all, because the applications haven't been registered
-//! there yet. Request `crowd-funding` from the other chain. As an application ID, use
-//! `$APP_ID2`:
+//! If you do the same with the other chain ID in http://localhost:8081, the node service for the
+//! other wallet, it will have no entries at all, because the applications haven't been registered
+//! there yet. Request `crowd-funding` from the other chain. As an application ID, use `$APP_ID2`:
 //!
 //! ```gql,ignore
-//! mutation { requestApplication(applicationId:"e476187…") }
+//! mutation { requestApplication(
+//!     chainId: "1db1936dad0717597a7743a8353c9c0191c14c3a129b258e9743aec2b4f05d03"
+//!     applicationId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65070000000000000000000000"
+//! ) }
 //! ```
 //!
-//! If you enter `query { applications { id link } }` again, both entries will
-//! appear in the second wallet as well now. `$APP_ID1` has been registered,
-//! too, because it is a dependency of the other application.
+//! If you enter the `applications` query again, both entries will appear in the second wallet as
+//! well now. `$APP_ID1` has been registered, too, because it is a dependency of the other
+//! application.
 //!
 //! On both http://localhost:8080 and http://localhost:8081, you recognize the crowd-funding
 //! application by its ID. The entry also has a field `link`. If you open that in a new tab, you
@@ -232,7 +234,9 @@
 //! 70 that we had left after pledging 30:
 //!
 //! ```gql,ignore
-//! query {accounts(accountOwner:"User:445991f46ae490fe207e60c95d0ed95bf4e7ed9c270d4fd4fa555587c2604fe1")}
+//! query { accounts(
+//!     accountOwner:"User:445991f46ae490fe207e60c95d0ed95bf4e7ed9c270d4fd4fa555587c2604fe1"
+//! )}
 //! ```
 
 use async_graphql::{Request, Response, SimpleObject};
