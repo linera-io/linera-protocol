@@ -5,9 +5,9 @@
 
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
-    WitLoad, WitType,
+    WitLoad, WitStore, WitType,
 };
-use frunk::{hlist_pat, HList};
+use frunk::{hlist, hlist_pat, HList};
 
 impl WitType for String {
     const SIZE: u32 = 8;
@@ -46,5 +46,41 @@ impl WitLoad for String {
         let bytes = memory.read(address, length)?.to_vec();
 
         Ok(String::from_utf8(bytes)?)
+    }
+}
+
+impl WitStore for String {
+    fn store<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<(), RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let length = u32::try_from(self.len())?;
+        let destination = memory.allocate(length)?;
+
+        destination.store(memory, location)?;
+        length.store(memory, location.after::<GuestPointer>())?;
+
+        memory.write(destination, self.as_bytes())
+    }
+
+    fn lower<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+    ) -> Result<Self::Layout, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let length = u32::try_from(self.len())?;
+        let destination = memory.allocate(length)?;
+
+        memory.write(destination, self.as_bytes())?;
+
+        Ok(destination.lower(memory)? + hlist![length as i32])
     }
 }
