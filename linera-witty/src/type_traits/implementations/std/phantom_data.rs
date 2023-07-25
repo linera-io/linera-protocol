@@ -5,9 +5,9 @@
 
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
-    WitLoad, WitType,
+    WitLoad, WitStore, WitType,
 };
-use frunk::HList;
+use frunk::{hlist, HList};
 use std::marker::PhantomData;
 
 impl<T> WitType for PhantomData<T> {
@@ -37,5 +37,30 @@ impl<T> WitLoad for PhantomData<T> {
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
         Ok(PhantomData)
+    }
+}
+
+impl<T> WitStore for PhantomData<T> {
+    fn store<Instance>(
+        &self,
+        _memory: &mut Memory<'_, Instance>,
+        _location: GuestPointer,
+    ) -> Result<(), RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        Ok(())
+    }
+
+    fn lower<Instance>(
+        &self,
+        _memory: &mut Memory<'_, Instance>,
+    ) -> Result<Self::Layout, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        Ok(hlist![])
     }
 }

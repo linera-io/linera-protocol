@@ -5,9 +5,9 @@
 
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
-    WitLoad, WitType,
+    WitLoad, WitStore, WitType,
 };
-use frunk::{hlist_pat, HList};
+use frunk::{hlist, hlist_pat, HList};
 
 impl WitType for bool {
     const SIZE: u32 = 1;
@@ -39,6 +39,32 @@ impl WitLoad for bool {
     }
 }
 
+impl WitStore for bool {
+    fn store<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<(), RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let value: u8 = if *self { 1 } else { 0 };
+        value.store(memory, location)
+    }
+
+    fn lower<Instance>(
+        &self,
+        _memory: &mut Memory<'_, Instance>,
+    ) -> Result<<Self::Layout as Layout>::Flat, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        Ok(hlist![i32::from(*self)])
+    }
+}
+
 impl<'t, T> WitType for &'t T
 where
     T: WitType,
@@ -46,4 +72,32 @@ where
     const SIZE: u32 = T::SIZE;
 
     type Layout = T::Layout;
+}
+
+impl<'t, T> WitStore for &'t T
+where
+    T: WitStore,
+{
+    fn store<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<(), RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        T::store(self, memory, location)
+    }
+
+    fn lower<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+    ) -> Result<<Self::Layout as Layout>::Flat, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        T::lower(self, memory)
+    }
 }

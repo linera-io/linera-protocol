@@ -5,9 +5,9 @@
 
 use crate::{
     GuestPointer, InstanceWithMemory, Layout, Memory, Runtime, RuntimeError, RuntimeMemory,
-    WitLoad, WitType,
+    WitLoad, WitStore, WitType,
 };
-use frunk::{hlist_pat, HList};
+use frunk::{hlist, hlist_pat, HList};
 
 macro_rules! impl_wit_traits {
     ($float:ty, $size:expr) => {
@@ -41,6 +41,31 @@ macro_rules! impl_wit_traits {
                 <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
             {
                 Ok(value)
+            }
+        }
+
+        impl WitStore for $float {
+            fn store<Instance>(
+                &self,
+                memory: &mut Memory<'_, Instance>,
+                location: GuestPointer,
+            ) -> Result<(), RuntimeError>
+            where
+                Instance: InstanceWithMemory,
+                <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+            {
+                memory.write(location, &self.to_le_bytes())
+            }
+
+            fn lower<Instance>(
+                &self,
+                _memory: &mut Memory<'_, Instance>,
+            ) -> Result<<Self::Layout as Layout>::Flat, RuntimeError>
+            where
+                Instance: InstanceWithMemory,
+                <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+            {
+                Ok(hlist![*self])
             }
         }
     };
