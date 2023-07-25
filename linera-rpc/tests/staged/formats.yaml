@@ -499,6 +499,10 @@ NodeError:
         STRUCT:
           - transport: STR
     22:
+      SubscriptionFailed:
+        STRUCT:
+          - status: STR
+    23:
       MissingCertificateValue: UNIT
 Operation:
   ENUM:
