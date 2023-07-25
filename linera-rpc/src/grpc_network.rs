@@ -622,17 +622,33 @@ impl ValidatorNode for GrpcClient {
         let subscription_request = SubscriptionRequest {
             chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
         };
-        let client = self.client.clone();
+        let mut client = self.client.clone();
+
+        // Make the first connection attempt before returning from this method.
+        let mut stream = Some(
+            client
+                .subscribe(subscription_request.clone())
+                .await
+                .map_err(|status| NodeError::SubscriptionFailed {
+                    status: status.to_string(),
+                })?
+                .into_inner(),
+        );
 
         // A stream of `Result<grpc::Notification, tonic::Status>` that keeps calling
         // `client.subscribe(request)` endlessly and without delay.
         let endlessly_retrying_notification_stream = stream::unfold((), move |()| {
             let mut client = client.clone();
             let subscription_request = subscription_request.clone();
+            let mut stream = stream.take();
             async move {
-                let stream = match client.subscribe(subscription_request.clone()).await {
-                    Err(err) => future::Either::Left(stream::iter(iter::once(Err(err)))),
-                    Ok(response) => future::Either::Right(response.into_inner()),
+                let stream = if let Some(stream) = stream.take() {
+                    future::Either::Right(stream)
+                } else {
+                    match client.subscribe(subscription_request.clone()).await {
+                        Err(err) => future::Either::Left(stream::iter(iter::once(Err(err)))),
+                        Ok(response) => future::Either::Right(response.into_inner()),
+                    }
                 };
                 Some((stream, ()))
             }
