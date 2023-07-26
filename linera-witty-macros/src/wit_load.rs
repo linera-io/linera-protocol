@@ -3,6 +3,9 @@
 
 //! Derivation of the `WitLoad` trait.
 
+#[path = "unit_tests/wit_load.rs"]
+mod tests;
+
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use syn::{Fields, Ident};
