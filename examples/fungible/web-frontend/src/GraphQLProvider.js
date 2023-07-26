@@ -10,12 +10,12 @@ import { GraphQLWsLink } from "@apollo/client/link/subscriptions";
 import { createClient } from "graphql-ws";
 import { getMainDefinition } from "@apollo/client/utilities";
 
-function GraphQLProvider({ applicationId, port, children }) {
-  let client = apolloClient(applicationId, port);
+function GraphQLProvider({ chainId, applicationId, port, children }) {
+  let client = apolloClient(chainId, applicationId, port);
   return <ApolloProvider client={client}>{children}</ApolloProvider>;
 }
 
-function apolloClient(applicationId, port) {
+function apolloClient(chainId, applicationId, port) {
   const wsLink = new GraphQLWsLink(
     createClient({
       url: `ws://localhost:${port}/ws`,
@@ -23,7 +23,7 @@ function apolloClient(applicationId, port) {
   );
 
   const httpLink = new HttpLink({
-    uri: `http://localhost:${port}/applications/` + applicationId,
+    uri: `http://localhost:${port}/chains/${chainId}/applications/${applicationId}`,
   });
 
   const splitLink = split(

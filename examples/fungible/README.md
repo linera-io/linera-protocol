@@ -47,8 +47,6 @@ bytecode:
 alias linera="$PWD/target/debug/linera"
 export LINERA_WALLET="$(realpath target/debug/wallet.json)"
 export LINERA_STORAGE="rocksdb:$(dirname "$LINERA_WALLET")/linera.db"
-export LINERA_WALLET_2="$(realpath target/debug/wallet_2.json)"
-export LINERA_STORAGE_2="rocksdb:$(dirname "$LINERA_WALLET_2")/linera_2.db"
 
 cd examples/fungible && cargo build --release && cd ../..
 linera publish-bytecode \
@@ -100,23 +98,15 @@ e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a650100000000000000
 
 Before using the token, a source and target address should be selected. The source address
 should ideally be on the default chain (used to create the token) and one of the accounts chosen
-for the initial state, because it will already have some initial tokens to send. The target
-address should be from a separate wallet due to current technical limitations (`linera service`
-can only handle one chain per wallet at the same time). To see the available chains in the
-secondary wallet, use:
+for the initial state, because it will already have some initial tokens to send.
 
-```bash
-linera --storage "$LINERA_STORAGE_2" --wallet "$LINERA_WALLET_2" wallet show
-```
-
-First, a node service has to be started for each wallet, using two different ports:
+First, a node service has to be started:
 
 ```bash
 linera service --port 8080 &
-linera --wallet "$LINERA_WALLET_2" --storage "$LINERA_STORAGE_2" service --port 8081 &
 ```
 
-Then the web frontend has to be started
+Then the web frontend:
 
 ```bash
 cd examples/fungible/web-frontend
@@ -125,12 +115,12 @@ npm start
 ```
 
 The web UI can then be opened by navigating to
-`http://localhost:3000/$APPLICATION_ID?owner=$SOURCE_ACCOUNT&port=$PORT`, where:
+`http://localhost:3000/$CHAIN_ID?app=$APPLICATION_ID&owner=$SOURCE_ACCOUNT&port=$PORT`, where:
 
-- `$APPLICATION_ID` is the token application ID obtained when creating the token
-- `$SOURCE_ACCOUNT` is the owner of the chosen sender account
-- `$PORT` is the port the sender wallet service is listening to (`8080` for the sender wallet
-  and `8081` for the receiver wallet as per the previous commands)
+- `$CHAIN_ID` is the ID of the chain where we registered the application.
+- `$APPLICATION_ID` is the token application ID obtained when creating the token.
+- `$SOURCE_ACCOUNT` is the owner of the chosen sender account.
+- `$PORT` is the port the sender wallet service is listening to.
 
 Two browser instances can be opened, one for the sender account and one for the receiver
 account. In the sender account browser, the target chain ID and account can be specified, as
