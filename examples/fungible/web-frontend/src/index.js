@@ -26,8 +26,12 @@ root.render(
 function GraphQLApp() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
+  let app = searchParams.get("app");
   let owner = searchParams.get("owner");
   let port = searchParams.get("port");
+  if (app == null) {
+    throw Error("missing app query param");
+  }
   if (owner == null) {
     throw Error("missing owner query param");
   }
@@ -35,8 +39,8 @@ function GraphQLApp() {
     port = 8080;
   }
   return (
-    <GraphQLProvider applicationId={id} port={port}>
-      <App owner={owner} />
+    <GraphQLProvider chainId={id} applicationId={app} port={port}>
+      <App chainId={id} owner={owner} />
     </GraphQLProvider>
   );
 }

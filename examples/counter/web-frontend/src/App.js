@@ -20,17 +20,18 @@ const INCREMENT_COUNTER = gql`
 `;
 
 const NOTIFICATION_SUBSCRIPTION = gql`
-  subscription {
-    notifications
+  subscription Notifications($chainId: ID!) {
+    notifications(chainId: $chainId)
   }
 `;
 
-function App() {
+function App({ chainId }) {
   let [valueQuery, { data, called }] = useLazyQuery(GET_COUNTER_VALUE, {
     fetchPolicy: "network-only",
   });
   useSubscription(NOTIFICATION_SUBSCRIPTION, {
-    onData: () => valueQuery(),
+    variables: { chainId: chainId },
+    onData: () => valueQuery()
   });
   if (!called) {
     void valueQuery();

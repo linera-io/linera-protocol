@@ -20,8 +20,8 @@ const MAKE_PAYMENT = gql`
 `;
 
 const NOTIFICATION_SUBSCRIPTION = gql`
-  subscription {
-    notifications
+  subscription Notifications($chainId: ID!) {
+    notifications(chainId: $chainId)
   }
 `;
 
@@ -51,7 +51,7 @@ const ErrorMessage = tw.div`
 `;
 
 // App component
-function App({ owner }) {
+function App({ chainId, owner }) {
   const [recipient, setRecipient] = useState("");
   const [targetChain, setTargetChain] = useState("");
   const [amount, setAmount] = useState("");
@@ -76,6 +76,7 @@ function App({ owner }) {
   }
 
   useSubscription(NOTIFICATION_SUBSCRIPTION, {
+    variables: { chainId: chainId },
     onData: () => balanceQuery(),
   });
 
@@ -95,14 +96,14 @@ function App({ owner }) {
   const handleSubmit = (event) => {
     event.preventDefault();
     makePayment({
-        variables: {
-            owner: `User:${owner}`,
-            amount,
-            targetAccount: {
-                chainId: targetChain,
-                owner: `User:${recipient}`,
-            },
+      variables: {
+        owner: `User:${owner}`,
+        amount,
+        targetAccount: {
+          chainId: targetChain,
+          owner: `User:${recipient}`,
         },
+      },
     }).then(r => console.log("payment made: " + r));
   };
 
