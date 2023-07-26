@@ -16,6 +16,7 @@ macros = ["linera-witty-macros"]
 test = []
 
 [dependencies]
+either = { workspace = true }
 frunk = { workspace = true }
 linera-witty-macros = { workspace = true, optional = true }
 thiserror = { workspace = true }

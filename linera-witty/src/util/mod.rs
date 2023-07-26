@@ -3,6 +3,7 @@
 
 //! Helper types and functions that aren't specific to WIT or WebAssembly.
 
+mod merge;
 mod split;
 
-pub use self::split::Split;
+pub use self::{merge::Merge, split::Split};

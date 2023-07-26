@@ -26,7 +26,7 @@ pub use self::{
     memory_layout::Layout,
     runtime::{GuestPointer, InstanceWithMemory, Memory, Runtime, RuntimeError, RuntimeMemory},
     type_traits::{WitLoad, WitStore, WitType},
-    util::Split,
+    util::{Merge, Split},
 };
 pub use frunk::{hlist, hlist::HList, hlist_pat, HList, HNil};
 #[cfg(feature = "macros")]
