@@ -2655,7 +2655,7 @@ dependencies = [
 
 [[package]]
 name = "linera-base"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-graphql",
  "bcs",
@@ -2677,7 +2677,7 @@ dependencies = [
 
 [[package]]
 name = "linera-chain"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-graphql",
  "async-lock",
@@ -2695,7 +2695,7 @@ dependencies = [
 
 [[package]]
 name = "linera-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -2735,7 +2735,7 @@ dependencies = [
 
 [[package]]
 name = "linera-execution"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -2774,7 +2774,7 @@ dependencies = [
 
 [[package]]
 name = "linera-explorer"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "console_error_panic_hook",
  "futures",
@@ -2797,7 +2797,7 @@ dependencies = [
 
 [[package]]
 name = "linera-rpc"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2835,7 +2835,7 @@ dependencies = [
 
 [[package]]
 name = "linera-sdk"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -2875,7 +2875,7 @@ dependencies = [
 
 [[package]]
 name = "linera-service"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -2928,7 +2928,7 @@ dependencies = [
 
 [[package]]
 name = "linera-storage"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2949,7 +2949,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -2983,7 +2983,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views-derive"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-graphql",
  "convert_case 0.6.0",
@@ -3135,7 +3135,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "frunk",
  "linera-witty",
@@ -3145,7 +3145,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty-macros"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
