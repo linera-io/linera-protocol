@@ -48,7 +48,7 @@ VALIDATORS=($(validator_options))
 # * `genesis.json` will contain the initial balances of chains as well as the initial committee.
 ./linera \
     --wallet wallet.json \
-    create_genesis_config 1000 \
+    create-genesis-config 1000 \
     --genesis genesis.json \
     --initial-funding 100 \
     --committee committee.json
