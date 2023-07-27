@@ -31,8 +31,9 @@ use graphql::{
     blocks::BlocksBlocks as Blocks, Chains,
 };
 use js_utils::{getf, log_str, parse, setf, stringify, SER};
+use once_cell::sync::OnceCell;
 
-static mut WEBSOCKET: Option<WsMeta> = None;
+static WEBSOCKET: OnceCell<WsMeta> = OnceCell::new();
 
 /// Page enum containing info for each page.
 #[derive(Serialize, Deserialize, Clone)]
@@ -413,9 +414,10 @@ fn chain_id_from_args(
     app: &JsValue,
     data: &Data,
     args: &[(String, String)],
+    init: bool,
 ) -> Result<(ChainId, bool), String> {
     match find_arg(args, "chain") {
-        None => Ok((data.chain, false)),
+        None => Ok((data.chain, init)),
         Some(chain_id) => {
             let chain_js: JsValue = chain_id
                 .serialize(&SER)
@@ -423,14 +425,20 @@ fn chain_id_from_args(
             setf(app, "chain", &chain_js);
             ChainId::from_str(&chain_id)
                 .map_err(|e| e.to_string())
-                .map(|id| (id, id == data.chain))
+                .map(|id| (id, id != data.chain || init))
         }
     }
 }
 
 /// Main function to switch between Vue pages.
-async fn route_aux(app: &JsValue, data: &Data, path: &Option<String>, args: &[(String, String)]) {
-    let chain_info = chain_id_from_args(app, data, args);
+async fn route_aux(
+    app: &JsValue,
+    data: &Data,
+    path: &Option<String>,
+    args: &[(String, String)],
+    init: bool,
+) {
+    let chain_info = chain_id_from_args(app, data, args, init);
     let (page_name, args): (&str, Vec<(String, String)>) = match (path, &data.page) {
         (Some(p), _) => (p, args.to_vec()),
         (_, p) => page_name_and_args(p),
@@ -466,10 +474,8 @@ async fn route_aux(app: &JsValue, data: &Data, path: &Option<String>, args: &[(S
                 _ => Err("unknown page".to_string()),
             };
             if chain_changed {
-                unsafe {
-                    if let Some(ws) = &WEBSOCKET {
-                        let _ = ws.close().await;
-                    }
+                if let Some(ws) = WEBSOCKET.get() {
+                    let _ = ws.close().await;
                 }
                 let address = node_service_address(&data.config, Protocol::Websocket);
                 subscribe_chain(app, &address, chain_id).await;
@@ -495,7 +501,7 @@ pub async fn route(app: JsValue, path: JsValue, args: JsValue) {
     let msg = format!("route: {} {:?}", path.as_deref().unwrap_or("none"), args);
     log_str(&msg);
     let data = from_value::<Data>(app.clone()).expect("cannot parse Vue data");
-    route_aux(&app, &data, &path, &args).await
+    route_aux(&app, &data, &path, &args, false).await
 }
 
 #[wasm_bindgen]
@@ -534,7 +540,14 @@ async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
     .expect("cannot send to websocket");
     wsio.next().await;
     let uuid = Uuid::new_v3(&Uuid::NAMESPACE_DNS, b"linera.dev");
-    let query = format!("{{\"id\": \"{}\", \"type\": \"subscribe\", \"payload\": {{\"query\": \"subscription {{ notifications(chainId: {}) }}\"}}}}", uuid, chain);
+    let payload_query = format!(
+        r#"subscription {{ notifications(chainId: \"{}\") }}"#,
+        chain
+    );
+    let query = format!(
+        r#"{{ "id": "{}", "type": "subscribe", "payload": {{"query": "{}"}} }}"#,
+        uuid, payload_query
+    );
     wsio.send(WsMessage::Text(query))
         .await
         .expect("cannot send to websocket");
@@ -542,24 +555,24 @@ async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
     spawn_local(async move {
         while let Some(evt) = wsio.next().await {
             match evt {
-                WsMessage::Text(s) => {
-                    let gq = serde_json::from_str::<
+                WsMessage::Text(message) => {
+                    let graphql_message = serde_json::from_str::<
                         GQuery<Response<graphql::notifications::ResponseData>>,
-                    >(&s)
+                    >(&message)
                     .expect("unexpected websocket response");
-                    if let Some(p) = gq.payload {
-                        if let Some(d) = p.data {
+                    if let Some(payload) = graphql_message.payload {
+                        if let Some(message_data) = payload.data {
                             let data =
                                 from_value::<Data>(app.clone()).expect("cannot parse vue data");
                             if let graphql::Reason::NewBlock { hash: _hash, .. } =
-                                d.notifications.reason
+                                message_data.notifications.reason
                             {
-                                if d.notifications.chain_id == chain {
-                                    route_aux(&app, &data, &None, &Vec::new()).await
+                                if message_data.notifications.chain_id == chain {
+                                    route_aux(&app, &data, &None, &Vec::new(), false).await
                                 }
                             }
                         }
-                        if let Some(errors) = p.errors {
+                        if let Some(errors) = payload.errors {
                             errors.iter().for_each(|e| log_str(&e.to_string()));
                             break;
                         }
@@ -569,7 +582,7 @@ async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
             }
         }
     });
-    unsafe { WEBSOCKET = Some(ws) }
+    let _ = WEBSOCKET.set(ws);
 }
 
 /// Initializes pages and subscribes to notifications.
@@ -587,6 +600,7 @@ pub async fn init(app: JsValue, uri: String) {
                 &data,
                 &Some("error".to_string()),
                 &[("msg".to_string(), e.to_string())],
+                true,
             )
             .await
         }
@@ -617,7 +631,7 @@ pub async fn init(app: JsValue, uri: String) {
                     _ => None,
                 },
             };
-            route_aux(&app, &data, &path, &args).await;
+            route_aux(&app, &data, &path, &args, true).await;
         }
     }
 }
