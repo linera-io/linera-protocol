@@ -1,0 +1,20 @@
+# ---------------------------------------------------------------------------------*
+# This will prevent your local modules and debug logs from being copied onto your 
+# Docker image and possibly overwriting modules installed within your image.
+# ---------------------------------------------------------------------------------*
+node_modules
+npm-debug.log
+# ignore .git and .cache folders
+.git
+.cache
+# ignore all markdown files (md) beside all README*.md other than README-secret.md
+*.md
+!README*.md
+README-secret.md
+# github related files
+.github/
+target
+scripts/target
+examples/target
+.gitignore
+.gcloudignore
