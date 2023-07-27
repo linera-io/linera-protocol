@@ -229,8 +229,8 @@ impl Batch {
 
     /// check the size of the values of the batch.
     pub fn check_value_size(&self, max_value_size: usize) -> bool {
-        for ent in &self.operations {
-            if let WriteOperation::Put { key: _, value } = ent {
+        for operation in &self.operations {
+            if let WriteOperation::Put { key: _, value } = operation {
                 if value.len() > max_value_size {
                     return false;
                 }
