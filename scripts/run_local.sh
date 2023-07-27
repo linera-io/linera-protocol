@@ -5,7 +5,7 @@ NUM_VALIDATORS=${1:-1}
 SHARDS_PER_VALIDATOR=${2:-4}
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-CONF_DIR="${SCRIPT_DIR}/../configuration"
+CONF_DIR="${SCRIPT_DIR}/../configuration/local"
 
 cd $SCRIPT_DIR/..
 
