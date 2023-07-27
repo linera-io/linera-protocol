@@ -368,11 +368,11 @@ where
         Ok(self.key_pair().await?.public())
     }
 
-    async fn get_local_next_block_height(
+    async fn get_local_chain_info(
         this: Arc<Mutex<Self>>,
         chain_id: ChainId,
         local_node: &mut LocalNodeClient<S>,
-    ) -> Option<BlockHeight> {
+    ) -> Option<ChainInfo> {
         let mut guard = this.lock().await;
         let Ok(info) = local_node.local_chain_info(chain_id).await else {
             error!("Fail to read local chain info for {chain_id}");
@@ -380,6 +380,15 @@ where
         };
         // Useful in case `chain_id` is the same as the local chain.
         guard.update_from_info(&info);
+        Some(info)
+    }
+
+    async fn get_local_next_block_height(
+        this: Arc<Mutex<Self>>,
+        chain_id: ChainId,
+        local_node: &mut LocalNodeClient<S>,
+    ) -> Option<BlockHeight> {
+        let info = Self::get_local_chain_info(this, chain_id, local_node).await?;
         Some(info.next_block_height)
     }
 
@@ -458,6 +467,34 @@ where
                         error!("Fail to process notification: {e}");
                         return false;
                     }
+                }
+            }
+            Reason::NewRound { height, round } => {
+                let chain_id = notification.chain_id;
+                if let Some(info) =
+                    Self::get_local_chain_info(this.clone(), chain_id, &mut local_node).await
+                {
+                    if info.next_block_height > height || info.manager.next_round() > round {
+                        debug!("Accepting redundant notification for new round");
+                        return true;
+                    }
+                }
+                if let Err(error) = local_node
+                    .try_synchronize_chain_state_from(name, node, chain_id)
+                    .await
+                {
+                    error!("Fail to process notification: {error}");
+                    return false;
+                }
+                let Some(info) =
+                    Self::get_local_chain_info(this.clone(), chain_id, &mut local_node).await
+                else {
+                    error!("Fail to read local chain info for {chain_id}");
+                    return false;
+                };
+                if info.next_block_height < height || info.manager.next_round() < round {
+                    error!("Fail to synchronize new block after notification");
+                    return false;
                 }
             }
         }

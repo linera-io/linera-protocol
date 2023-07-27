@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::{future, FutureExt};
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, BlockHeight, Timestamp},
+    data_types::{ArithmeticError, BlockHeight, RoundNumber, Timestamp},
     doc_scalar, ensure,
     identifiers::{ChainId, Owner},
 };
@@ -125,6 +125,10 @@ pub enum Reason {
     NewIncomingMessage {
         origin: Origin,
         height: BlockHeight,
+    },
+    NewRound {
+        height: BlockHeight,
+        round: RoundNumber,
     },
 }
 
@@ -615,7 +619,7 @@ where
     async fn process_validated_block(
         &mut self,
         certificate: Certificate,
-    ) -> Result<ChainInfoResponse, WorkerError> {
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let block = match certificate.value() {
             CertificateValue::ValidatedBlock {
                 executed_block: ExecutedBlock { block, .. },
@@ -638,18 +642,16 @@ where
             }
         );
         certificate.check(committee)?;
+        let mut actions = NetworkActions::default();
+        let next_round = chain.manager.get().next_round();
         if chain
             .tip_state
             .get()
             .already_validated_block(block.height)?
-            || chain
-                .manager
-                .get_mut()
-                .check_validated_block(&certificate)?
-                == ChainManagerOutcome::Skip
+            || chain.manager.get().check_validated_block(&certificate)? == ChainManagerOutcome::Skip
         {
             // If we just processed the same pending block, return the chain info unchanged.
-            return Ok(ChainInfoResponse::new(&chain, self.key_pair()));
+            return Ok((ChainInfoResponse::new(&chain, self.key_pair()), actions));
         }
         if self
             .cache_recent_value(Cow::Borrowed(&certificate.value))
@@ -661,10 +663,26 @@ where
         chain
             .manager
             .get_mut()
-            .create_final_vote(certificate, self.key_pair());
+            .create_final_vote(certificate.clone(), self.key_pair());
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
-        Ok(info)
+        if chain.manager.get().next_round() > next_round {
+            actions.notifications.push(Notification {
+                chain_id: block.chain_id,
+                reason: Reason::NewRound {
+                    height: block.height,
+                    round: chain.manager.get().next_round(),
+                },
+            })
+        }
+        if self
+            .cache_recent_value(Cow::Borrowed(&certificate.value))
+            .await
+        {
+            let value = certificate.value.into_confirmed();
+            self.cache_recent_value(Cow::Owned(value)).await;
+        }
+        Ok((info, actions))
     }
 
     async fn process_cross_chain_update(
@@ -962,9 +980,7 @@ where
         let (info, actions) = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                self.process_validated_block(certificate)
-                    .await
-                    .map(|info| (info, NetworkActions::default()))?
+                self.process_validated_block(certificate).await?
             }
             CertificateValue::ConfirmedBlock { .. } => {
                 // Execute the confirmed block.

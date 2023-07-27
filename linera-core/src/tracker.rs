@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::worker::{Notification, Reason};
-use linera_base::{data_types::BlockHeight, identifiers::ChainId};
+use linera_base::{
+    data_types::{BlockHeight, RoundNumber},
+    identifiers::ChainId,
+};
 use linera_chain::data_types::Origin;
 use std::collections::HashMap;
 
@@ -11,6 +14,7 @@ use std::collections::HashMap;
 pub struct NotificationTracker {
     new_block: HashMap<ChainId, BlockHeight>,
     new_message: HashMap<(ChainId, Origin), BlockHeight>,
+    new_round: HashMap<ChainId, (BlockHeight, RoundNumber)>,
 }
 
 impl NotificationTracker {
@@ -26,6 +30,10 @@ impl NotificationTracker {
                 .new_message
                 .get(&(notification.chain_id, origin.clone()))
                 .map_or(true, |prev_height| height > prev_height),
+            Reason::NewRound { round, height } => self
+                .new_round
+                .get(&notification.chain_id)
+                .map_or(true, |prev| (*height, *round) > *prev),
         }
     }
 
@@ -38,6 +46,9 @@ impl NotificationTracker {
             Reason::NewBlock { height, .. } => self.insert_new_block(notification.chain_id, height),
             Reason::NewIncomingMessage { height, origin } => {
                 self.insert_new_message(notification.chain_id, origin, height)
+            }
+            Reason::NewRound { height, round } => {
+                self.insert_new_round(notification.chain_id, height, round)
             }
         }
     }
@@ -80,6 +91,21 @@ impl NotificationTracker {
                 }
             }
         }
+    }
+
+    fn insert_new_round(
+        &mut self,
+        chain_id: ChainId,
+        height: BlockHeight,
+        round: RoundNumber,
+    ) -> bool {
+        if let Some(previous) = self.new_round.get(&chain_id) {
+            if *previous >= (height, round) {
+                return false;
+            }
+        }
+        self.new_round.insert(chain_id, (height, round));
+        true
     }
 }
 

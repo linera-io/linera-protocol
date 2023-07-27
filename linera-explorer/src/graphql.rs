@@ -4,7 +4,7 @@
 use graphql_client::GraphQLQuery;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, Timestamp},
+    data_types::{BlockHeight, RoundNumber, Timestamp},
     identifiers::{ChainId, Destination, Owner},
 };
 use serde::{Deserialize, Serialize};
@@ -25,6 +25,7 @@ pub struct Notification {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum Reason {
     NewBlock {
         height: BlockHeight,
@@ -33,6 +34,10 @@ pub enum Reason {
     NewIncomingMessage {
         origin: Origin,
         height: BlockHeight,
+    },
+    NewRound {
+        height: BlockHeight,
+        round: RoundNumber,
     },
 }
 

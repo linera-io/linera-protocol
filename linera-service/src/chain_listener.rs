@@ -212,6 +212,15 @@ where
                     );
                 }
             }
+            Reason::NewRound { .. } => {
+                if let Err(e) = client.update_validators().await {
+                    warn!(
+                        "Failed to update validators about the local chain after \
+                        receiving notification {:?} with error: {:?}",
+                        notification, e
+                    );
+                }
+            }
         }
     }
 }
