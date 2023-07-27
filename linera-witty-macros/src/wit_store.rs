@@ -7,6 +7,9 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use syn::{Fields, Ident, Index, Type};
 
+#[path = "unit_tests/wit_store.rs"]
+mod tests;
+
 /// Returns the body of the `WitStore` implementation for the Rust `struct` with the specified
 /// `fields`.
 pub fn derive_for_struct(fields: &Fields) -> TokenStream {
