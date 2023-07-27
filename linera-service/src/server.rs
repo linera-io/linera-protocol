@@ -20,6 +20,7 @@ use linera_service::{
     config::{
         CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig, ValidatorServerConfig,
     },
+    kubernetes::{fetch_pod_ips, find_value_with_key_prefix},
     storage::{Runnable, StorageConfig},
 };
 use linera_storage::Store;
@@ -36,6 +37,7 @@ struct ServerContext {
     notification_config: NotificationConfig,
     shard: Option<usize>,
     grace_period_micros: u64,
+    kube: bool,
 }
 
 impl ServerContext {
@@ -180,8 +182,15 @@ where
     type Output = ();
 
     async fn run(self, storage: S) -> Result<(), anyhow::Error> {
-        // Allow local IP address to be different from the public one.
-        let listen_address = "0.0.0.0";
+        let tmp_listen_address = if !self.kube {
+            // Allow local IP address to be different from the public one.
+            "0.0.0.0".to_string()
+        } else {
+            std::env::var("MY_POD_IP").expect("Could not get env variable MY_POD_IP")
+        };
+
+        let listen_address = tmp_listen_address.as_str();
+
         // Run the server
         let states = match self.shard {
             Some(shard) => {
@@ -317,6 +326,12 @@ enum ServerCommand {
         /// The maximal number of entries in the storage cache.
         #[structopt(long, default_value = "1000")]
         cache_size: usize,
+
+        /// Use this when running from a Kubernetes cluster (including from within GCP)
+        /// Won't use config files to determine host IPs, but will do it dynamically
+        /// based on cluster info
+        #[structopt(long)]
+        kube: bool,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -364,17 +379,46 @@ async fn main() {
             max_concurrent_queries,
             max_stream_queries,
             cache_size,
+            kube,
         } => {
             let genesis_config = GenesisConfig::read(&genesis_config_path)
                 .expect("Fail to read initial chain config");
-            let server_config = ValidatorServerConfig::read(&server_config_path)
+            let mut tmp_server_config = ValidatorServerConfig::read(&server_config_path)
                 .expect("Fail to read server config");
+
+            if kube {
+                let pod_name_to_ip = fetch_pod_ips().await.expect("Failed to fetch pod IPs");
+
+                // Assumes that each service will have just one pod. Since we have one service per shard, the first pod will always have
+                // -0 at the end of it for servers and some hash for the validators. So we check the prefix and assume only one entry
+                // will have that prefix.
+                tmp_server_config.validator.network.host = find_value_with_key_prefix(
+                    &pod_name_to_ip,
+                    &tmp_server_config.validator.network.host,
+                )
+                .expect("All hosts should be a prefix of a pod name!");
+                tmp_server_config.internal_network.host = find_value_with_key_prefix(
+                    &pod_name_to_ip,
+                    &tmp_server_config.internal_network.host,
+                )
+                .expect("All hosts should be a prefix of a pod name!");
+                for shard in &mut tmp_server_config.internal_network.shards {
+                    shard.host = find_value_with_key_prefix(&pod_name_to_ip, &shard.host)
+                        .expect("All hosts should be a prefix of a pod name!");
+                    shard.metrics_host =
+                        find_value_with_key_prefix(&pod_name_to_ip, &shard.metrics_host)
+                            .expect("All hosts should be a prefix of a pod name!");
+                }
+            }
+
+            let server_config = tmp_server_config;
             let job = ServerContext {
                 server_config,
                 cross_chain_config,
                 notification_config,
                 shard,
                 grace_period_micros: grace_period,
+                kube,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             storage_config

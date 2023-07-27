@@ -112,6 +112,8 @@ wasmtime = "1.0"
 wit-bindgen-guest-rust = { version = "0.2.0", package = "linera-wit-bindgen-guest-rust" }
 wit-bindgen-host-wasmer-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmer-rust" }
 wit-bindgen-host-wasmtime-rust = { version = "0.2.0", package = "linera-wit-bindgen-host-wasmtime-rust" }
+kube = "0.84.0"
+k8s-openapi = { version = "0.18.0", default-features = false, features = ["v1_26"] }
 
 linera-base = { version = "0.4.0", path = "./linera-base" }
 linera-chain = { version = "0.4.0", path = "./linera-chain" }

@@ -8,6 +8,7 @@ pub mod chain_listener;
 pub mod client;
 pub mod config;
 pub mod grpc_proxy;
+pub mod kubernetes;
 pub mod node_service;
 pub mod project;
 pub mod storage;

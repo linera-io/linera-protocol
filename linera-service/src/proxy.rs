@@ -15,6 +15,7 @@ use linera_rpc::{
 use linera_service::{
     config::{Import, ValidatorServerConfig},
     grpc_proxy::GrpcProxy,
+    kubernetes::{fetch_pod_ips, find_value_with_key_prefix},
 };
 use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
@@ -37,6 +38,12 @@ pub struct ProxyOptions {
     /// Timeout for receiving responses (us)
     #[structopt(long, default_value = "4000000")]
     recv_timeout_us: u64,
+
+    /// Use this when running from a Kubernetes cluster (including from within GCP)
+    /// Won't use config files to determine host IPs, but will do it dynamically
+    /// based on cluster info
+    #[structopt(long)]
+    kube: bool,
 }
 
 /// A Linera Proxy, either gRPC or over 'Simple Transport', meaning TCP or UDP.
@@ -57,8 +64,29 @@ impl Proxy {
     }
 
     /// Constructs and configures the [`Proxy`] given [`ProxyOptions`].
-    fn from_options(options: ProxyOptions) -> Result<Self> {
-        let config = ValidatorServerConfig::read(&options.config_path)?;
+    async fn from_options(options: ProxyOptions) -> Result<Self> {
+        let mut tmp_config = ValidatorServerConfig::read(&options.config_path)?;
+        if options.kube {
+            let pod_name_to_ip = fetch_pod_ips().await?;
+
+            // Assumes that each service will have just one pod. Since we have one service per shard, the first pod will always have
+            // -0 at the end of it for servers and some hash for the validators. So we check the prefix and assume only one entry
+            // will have that prefix.
+            tmp_config.validator.network.host =
+                find_value_with_key_prefix(&pod_name_to_ip, &tmp_config.validator.network.host)
+                    .expect("All hosts should be a prefix of a pod name!");
+            tmp_config.internal_network.host =
+                find_value_with_key_prefix(&pod_name_to_ip, &tmp_config.internal_network.host)
+                    .expect("All hosts should be a prefix of a pod name!");
+            for shard in &mut tmp_config.internal_network.shards {
+                shard.host = find_value_with_key_prefix(&pod_name_to_ip, &shard.host)
+                    .expect("All hosts should be a prefix of a pod name!");
+                shard.metrics_host =
+                    find_value_with_key_prefix(&pod_name_to_ip, &shard.metrics_host)
+                        .expect("All hosts should be a prefix of a pod name!");
+            }
+        }
+        let config = tmp_config;
         let internal_protocol = config.internal_network.protocol;
         let external_protocol = config.validator.network.protocol;
 
@@ -82,6 +110,7 @@ impl Proxy {
                     .clone_with_protocol(public_transport),
                 send_timeout: Duration::from_micros(options.send_timeout_us),
                 recv_timeout: Duration::from_micros(options.recv_timeout_us),
+                kube: options.kube,
             }),
             _ => {
                 bail!(
@@ -102,6 +131,7 @@ pub struct SimpleProxy {
     internal_config: ValidatorInternalNetworkPreConfig<TransportProtocol>,
     send_timeout: Duration,
     recv_timeout: Duration,
+    kube: bool,
 }
 
 #[async_trait]
@@ -137,7 +167,15 @@ impl SimpleProxy {
     #[instrument(skip_all, fields(port = self.public_config.port), err)]
     async fn run(self) -> Result<()> {
         info!("Starting simple server");
-        let address = format!("0.0.0.0:{}", self.public_config.port);
+        let address = if !self.kube {
+            format!("0.0.0.0:{}", self.public_config.port)
+        } else {
+            format!(
+                "{}:{}",
+                std::env::var("MY_POD_IP").expect("Could not get env variable MY_POD_IP"),
+                self.public_config.port
+            )
+        };
         self.public_config
             .protocol
             .spawn_server(&address, self)
@@ -174,6 +212,6 @@ async fn main() -> Result<()> {
         .with_env_filter(env_filter)
         .init();
 
-    let proxy = Proxy::from_options(ProxyOptions::from_args())?;
+    let proxy = Proxy::from_options(ProxyOptions::from_args()).await?;
     proxy.run().await
 }
