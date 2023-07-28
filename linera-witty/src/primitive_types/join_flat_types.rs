@@ -118,3 +118,31 @@ join_flat_types!(
         { |value| value },
     ),
 );
+
+impl<AnyFlatType> JoinFlatTypes for Either<(), AnyFlatType>
+where
+    AnyFlatType: FlatType,
+{
+    type Flat = AnyFlatType;
+
+    fn join(self) -> Self::Flat {
+        match self {
+            Either::Left(()) => AnyFlatType::default(),
+            Either::Right(value) => value,
+        }
+    }
+}
+
+impl<AnyFlatType> JoinFlatTypes for Either<AnyFlatType, ()>
+where
+    AnyFlatType: FlatType,
+{
+    type Flat = AnyFlatType;
+
+    fn join(self) -> Self::Flat {
+        match self {
+            Either::Left(value) => value,
+            Either::Right(()) => AnyFlatType::default(),
+        }
+    }
+}
