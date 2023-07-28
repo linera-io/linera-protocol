@@ -7,7 +7,8 @@
 mod types;
 
 use self::types::{
-    Branch, Leaf, RecordWithDoublePadding, SimpleWrapper, TupleWithPadding, TupleWithoutPadding,
+    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, TupleWithPadding,
+    TupleWithoutPadding,
 };
 use linera_witty::{HList, Layout, WitType};
 
@@ -66,4 +67,12 @@ fn nested_types() {
     assert_eq!(Branch::SIZE, 56);
     assert_eq!(<Branch as WitType>::Layout::ALIGNMENT, 8);
     assert_eq!(<<Branch as WitType>::Layout as Layout>::Flat::LEN, 7);
+}
+
+/// Check the memory size and layout derived for an `enum` type.
+#[test]
+fn enum_type() {
+    assert_eq!(Enum::SIZE, 18);
+    assert_eq!(<Enum as WitType>::Layout::ALIGNMENT, 8);
+    assert_eq!(<<Enum as WitType>::Layout as Layout>::Flat::LEN, 11);
 }

@@ -40,3 +40,12 @@ pub struct Branch {
     pub first_leaf: Leaf,
     pub second_leaf: Leaf,
 }
+
+/// An enum that has its alignment obtained from one variant and its size from another.
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, WitType)]
+pub enum Enum {
+    Empty,
+    LargeVariantWithLooseAlignment(i8, i8, i8, i8, i8, i8, i8, i8, i8, i8),
+    SmallerVariantWithStrictAlignment { inner: u64 },
+}
