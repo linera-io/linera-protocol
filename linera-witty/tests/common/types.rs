@@ -18,7 +18,6 @@ pub struct TupleWithoutPadding(pub u64, pub i32, pub i16);
 pub struct TupleWithPadding(pub u16, pub u32, pub i64);
 
 /// A struct with named fields that requires padding in two locations in its memory layout.
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, WitType, WitLoad)]
 pub struct RecordWithDoublePadding {
     pub first: u16,
@@ -28,7 +27,6 @@ pub struct RecordWithDoublePadding {
 }
 
 /// A simple struct with named fields to be used inside a more complex struct.
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, WitType, WitLoad)]
 pub struct Leaf {
     pub first: bool,
@@ -36,7 +34,6 @@ pub struct Leaf {
 }
 
 /// A struct that contains fields with custom types that also have derived trait implementations.
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, WitType, WitLoad)]
 pub struct Branch {
     pub tag: u16,
