@@ -11,7 +11,7 @@ use frunk::{hlist::HList, HCons, HNil};
 pub trait Sealed {}
 
 /// Representation of the memory layout of complex types as a sequence of fundamental WIT types.
-pub trait Layout: Sealed + Default + HList {
+pub trait Layout: Sealed + HList {
     /// The alignment boundary required for the layout.
     const ALIGNMENT: u32;
 

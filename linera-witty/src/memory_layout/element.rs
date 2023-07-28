@@ -12,7 +12,7 @@ use crate::primitive_types::{MaybeFlatType, SimpleType};
 pub trait Sealed {}
 
 /// Representation of a single element in a memory layout type.
-pub trait LayoutElement: Sealed + Default + Sized {
+pub trait LayoutElement: Sealed + Sized {
     /// The alignment boundary of the element type.
     const ALIGNMENT: u32;
     /// If the element is a zero sized type.
