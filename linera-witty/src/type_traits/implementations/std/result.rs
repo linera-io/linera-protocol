@@ -5,7 +5,7 @@
 
 use crate::{
     GuestPointer, InstanceWithMemory, JoinFlatLayouts, Layout, Memory, Merge, Runtime,
-    RuntimeError, RuntimeMemory, WitLoad, WitType,
+    RuntimeError, RuntimeMemory, WitLoad, WitStore, WitType,
 };
 use frunk::{hlist, hlist_pat, HCons};
 
@@ -86,6 +86,58 @@ where
                 JoinFlatLayouts::from_joined(value_layout),
                 memory,
             )?)),
+        }
+    }
+}
+
+impl<T, E> WitStore for Result<T, E>
+where
+    T: WitStore,
+    E: WitStore,
+    T::Layout: Merge<E::Layout>,
+    <T::Layout as Merge<E::Layout>>::Output: Layout,
+    <T::Layout as Layout>::Flat:
+        JoinFlatLayouts<<<T::Layout as Merge<E::Layout>>::Output as Layout>::Flat>,
+    <E::Layout as Layout>::Flat:
+        JoinFlatLayouts<<<T::Layout as Merge<E::Layout>>::Output as Layout>::Flat>,
+{
+    fn store<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<(), RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let data_location = location
+            .after::<bool>()
+            .after_padding_for::<T>()
+            .after_padding_for::<E>();
+
+        match self {
+            Ok(value) => {
+                false.store(memory, location)?;
+                value.store(memory, data_location)
+            }
+            Err(error) => {
+                true.store(memory, location)?;
+                error.store(memory, data_location)
+            }
+        }
+    }
+
+    fn lower<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+    ) -> Result<<Self::Layout as Layout>::Flat, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        match self {
+            Ok(value) => Ok(false.lower(memory)? + value.lower(memory)?.into_joined()),
+            Err(error) => Ok(true.lower(memory)? + error.lower(memory)?.into_joined()),
         }
     }
 }
