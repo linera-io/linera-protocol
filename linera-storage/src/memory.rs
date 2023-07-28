@@ -3,7 +3,7 @@
 
 use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
 use linera_execution::WasmRuntime;
-use linera_views::memory::{create_test_memory_client, MemoryClient};
+use linera_views::memory::{create_memory_client, MemoryClient};
 use std::sync::Arc;
 
 type MemoryStore = DbStore<MemoryClient>;
@@ -20,7 +20,7 @@ impl MemoryStoreClient {
 
 impl MemoryStore {
     pub fn new(wasm_runtime: Option<WasmRuntime>) -> Self {
-        let client = create_test_memory_client();
+        let client = create_memory_client();
         Self {
             client,
             guards: ChainGuards::default(),

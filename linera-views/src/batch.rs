@@ -227,6 +227,18 @@ impl Batch {
         }
     }
 
+    /// check the size of the values of the batch.
+    pub fn check_value_size(&self, max_value_size: usize) -> bool {
+        for operation in &self.operations {
+            if let WriteOperation::Put { key: _, value } = operation {
+                if value.len() > max_value_size {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
     /// Adds the insertion of a `(key,value)` pair into the batch with a serializable value.
     /// ```rust
     /// # use linera_views::batch::Batch;
@@ -307,7 +319,7 @@ impl DeletePrefixExpander for MemoryContext<()> {
 
 #[cfg(test)]
 mod tests {
-    use linera_views::{batch::Batch, common::Context, memory::create_test_context};
+    use linera_views::{batch::Batch, common::Context, memory::create_memory_context};
 
     #[test]
     fn test_simplify_batch1() {
@@ -363,7 +375,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_simplify_batch5() {
-        let context = create_test_context();
+        let context = create_memory_context();
         let mut batch = Batch::new();
         batch.put_key_value_bytes(vec![1, 2, 3], vec![]);
         batch.put_key_value_bytes(vec![1, 2, 4], vec![]);

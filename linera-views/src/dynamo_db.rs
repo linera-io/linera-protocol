@@ -6,6 +6,7 @@ use crate::{
     common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient, MIN_VIEW_TAG},
     localstack,
     lru_caching::LruCachingKeyValueClient,
+    value_splitting::DatabaseConsistencyError,
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
@@ -69,6 +70,9 @@ const MAX_BATCH_WRITE_ITEM_BYTES: usize = 16777216;
 /// Fundamental constant of DynamoDB: The maximum number of simultaneous connections is 50.
 /// See https://stackoverflow.com/questions/13128613/amazon-dynamo-db-max-client-connections
 const MAX_CONNECTIONS: usize = 50;
+
+/// This limit guarantees that the values seen by DynamoDb are under 400 kB = 409600 bytes.
+const MAX_VALUE_SIZE: usize = 409000;
 
 /// Builds the key attributes for a table item.
 ///
@@ -640,6 +644,7 @@ impl DynamoDbClientInternal {
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClientInternal {
     const MAX_CONNECTIONS: usize = MAX_CONNECTIONS;
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
@@ -725,6 +730,7 @@ pub struct DynamoDbClient {
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClient {
     const MAX_CONNECTIONS: usize = MAX_CONNECTIONS;
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
@@ -963,6 +969,10 @@ pub enum DynamoDbContextError {
     /// The recovery failed.
     #[error("The DynamoDB database recovery failed")]
     DatabaseRecoveryFailed,
+
+    /// The database is not coherent
+    #[error(transparent)]
+    DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 
     /// The length of the value should be at most 400KB.
     #[error("The DynamoDB value should be less than 400KB")]

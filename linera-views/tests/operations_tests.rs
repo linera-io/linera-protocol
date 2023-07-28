@@ -1,19 +1,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_lock::{Mutex, RwLock};
 use linera_views::{
     batch::Batch,
     common::{get_interval, KeyIterable, KeyValueIterable, KeyValueStoreClient},
     key_value_store_view::ViewContainer,
-    memory::{create_test_context, create_test_memory_client},
+    memory::{create_memory_client, create_memory_context},
     test_utils::{get_random_byte_vector, get_random_key_value_vec_prefix, get_small_key_space},
+    value_splitting::create_test_memory_client,
 };
 use rand::{Rng, SeedableRng};
-use std::{
-    collections::{BTreeMap, HashSet},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, HashSet};
 
 #[cfg(feature = "rocksdb")]
 use linera_views::rocksdb::create_rocksdb_test_client;
@@ -145,9 +142,17 @@ fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
 }
 
 #[tokio::test]
-async fn test_readings_memory() {
+async fn test_readings_test_memory() {
     for scenario in get_random_test_scenarios() {
         let key_value_operation = create_test_memory_client();
+        test_readings_vec(key_value_operation, scenario).await;
+    }
+}
+
+#[tokio::test]
+async fn test_readings_memory() {
+    for scenario in get_random_test_scenarios() {
+        let key_value_operation = create_memory_client();
         test_readings_vec(key_value_operation, scenario).await;
     }
 }
@@ -173,7 +178,7 @@ async fn test_readings_dynamodb() {
 #[tokio::test]
 async fn test_readings_key_value_store_view_memory() {
     for scenario in get_random_test_scenarios() {
-        let context = create_test_context();
+        let context = create_memory_context();
         let key_value_operation = ViewContainer::new(context).await.unwrap();
         test_readings_vec(key_value_operation, scenario).await;
     }
@@ -181,9 +186,7 @@ async fn test_readings_key_value_store_view_memory() {
 
 #[tokio::test]
 async fn test_readings_memory_specific() {
-    let map = Arc::new(Mutex::new(BTreeMap::new()));
-    let guard = map.clone().lock_arc().await;
-    let key_value_operation = Arc::new(RwLock::new(guard));
+    let key_value_operation = create_memory_client();
     let key_value_vec = vec![
         (vec![0, 1, 255], Vec::new()),
         (vec![0, 1, 255, 37], Vec::new()),
@@ -253,14 +256,20 @@ async fn test_writings_random<OP: KeyValueStoreClient + Sync>(key_value_operatio
 }
 
 #[tokio::test]
-async fn test_writings_memory() {
+async fn test_writings_test_memory() {
     let key_value_operation = create_test_memory_client();
     test_writings_random(key_value_operation).await;
 }
 
 #[tokio::test]
+async fn test_writings_memory() {
+    let key_value_operation = create_memory_client();
+    test_writings_random(key_value_operation).await;
+}
+
+#[tokio::test]
 async fn test_writings_key_value_store_view_memory() {
-    let context = create_test_context();
+    let context = create_memory_context();
     let key_value_operation = ViewContainer::new(context).await.unwrap();
     test_writings_random(key_value_operation).await;
 }
@@ -282,7 +291,7 @@ async fn test_writings_dynamodb() {
 #[tokio::test]
 async fn test_big_value_read_write() {
     use rand::{distributions::Alphanumeric, Rng};
-    let context = create_test_context();
+    let context = create_memory_context();
     for count in [50, 1024] {
         let rng = rand::rngs::StdRng::seed_from_u64(2);
         let test_string = rng
