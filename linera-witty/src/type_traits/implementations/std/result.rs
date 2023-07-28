@@ -3,8 +3,11 @@
 
 //! Implementations of the custom traits for the [`Result`] type.
 
-use crate::{Layout, Merge, WitType};
-use frunk::HCons;
+use crate::{
+    GuestPointer, InstanceWithMemory, JoinFlatLayouts, Layout, Memory, Merge, Runtime,
+    RuntimeError, RuntimeMemory, WitLoad, WitType,
+};
+use frunk::{hlist, hlist_pat, HCons};
 
 impl<T, E> WitType for Result<T, E>
 where
@@ -31,4 +34,58 @@ where
     };
 
     type Layout = HCons<i8, <T::Layout as Merge<E::Layout>>::Output>;
+}
+
+impl<T, E> WitLoad for Result<T, E>
+where
+    T: WitLoad,
+    E: WitLoad,
+    T::Layout: Merge<E::Layout>,
+    <T::Layout as Merge<E::Layout>>::Output: Layout,
+    <T::Layout as Layout>::Flat:
+        JoinFlatLayouts<<<T::Layout as Merge<E::Layout>>::Output as Layout>::Flat>,
+    <E::Layout as Layout>::Flat:
+        JoinFlatLayouts<<<T::Layout as Merge<E::Layout>>::Output as Layout>::Flat>,
+{
+    fn load<Instance>(
+        memory: &Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<Self, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let is_err = bool::load(memory, location)?;
+        let location = location
+            .after::<bool>()
+            .after_padding_for::<T>()
+            .after_padding_for::<E>();
+
+        match is_err {
+            true => Ok(Err(E::load(memory, location)?)),
+            false => Ok(Ok(T::load(memory, location)?)),
+        }
+    }
+
+    fn lift_from<Instance>(
+        hlist_pat![is_err, ...value_layout]: <Self::Layout as Layout>::Flat,
+        memory: &Memory<'_, Instance>,
+    ) -> Result<Self, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        let is_err = bool::lift_from(hlist![is_err], memory)?;
+
+        match is_err {
+            false => Ok(Ok(T::lift_from(
+                JoinFlatLayouts::from_joined(value_layout),
+                memory,
+            )?)),
+            true => Ok(Err(E::lift_from(
+                JoinFlatLayouts::from_joined(value_layout),
+                memory,
+            )?)),
+        }
+    }
 }
