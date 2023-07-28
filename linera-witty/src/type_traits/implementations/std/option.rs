@@ -5,7 +5,7 @@
 
 use crate::{
     GuestPointer, InstanceWithMemory, JoinFlatLayouts, Layout, Memory, Merge, Runtime,
-    RuntimeError, RuntimeMemory, WitLoad, WitType,
+    RuntimeError, RuntimeMemory, WitLoad, WitStore, WitType,
 };
 use frunk::{hlist, hlist_pat, HCons, HNil};
 
@@ -68,6 +68,47 @@ where
             )?))
         } else {
             Ok(None)
+        }
+    }
+}
+
+impl<T> WitStore for Option<T>
+where
+    T: WitStore,
+    HNil: Merge<T::Layout>,
+    <HNil as Merge<T::Layout>>::Output: Layout,
+    <T::Layout as Layout>::Flat:
+        JoinFlatLayouts<<<HNil as Merge<T::Layout>>::Output as Layout>::Flat>,
+{
+    fn store<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+        location: GuestPointer,
+    ) -> Result<(), RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        match self {
+            Some(value) => {
+                true.store(memory, location)?;
+                value.store(memory, location.after::<bool>().after_padding_for::<T>())
+            }
+            None => false.store(memory, location),
+        }
+    }
+
+    fn lower<Instance>(
+        &self,
+        memory: &mut Memory<'_, Instance>,
+    ) -> Result<<Self::Layout as Layout>::Flat, RuntimeError>
+    where
+        Instance: InstanceWithMemory,
+        <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
+    {
+        match self {
+            Some(value) => Ok(true.lower(memory)? + value.lower(memory)?.into_joined()),
+            None => Ok(false.lower(memory)? + Default::default()),
         }
     }
 }
