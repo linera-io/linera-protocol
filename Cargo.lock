@@ -3167,6 +3167,7 @@ dependencies = [
  "linera-witty-macros",
  "test-case",
  "thiserror",
+ "wasmer",
 ]
 
 [[package]]

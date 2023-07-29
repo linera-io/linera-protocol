@@ -8,6 +8,8 @@ mod memory;
 #[cfg(any(test, feature = "test"))]
 mod test;
 mod traits;
+#[cfg(feature = "wasmer")]
+pub mod wasmer;
 
 #[cfg(any(test, feature = "test"))]
 pub use self::test::{MockExportedFunction, MockInstance, MockRuntime};
