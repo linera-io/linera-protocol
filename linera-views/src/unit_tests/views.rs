@@ -17,7 +17,7 @@ use std::{
 
 #[cfg(feature = "rocksdb")]
 use {
-    crate::rocksdb::{RocksdbClient, RocksdbContext},
+    crate::rocksdb::{RocksDbClient, RocksDbContext},
     tempfile::TempDir,
 };
 
@@ -35,7 +35,7 @@ async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error
 #[cfg(feature = "rocksdb")]
 #[tokio::test]
 async fn test_queue_operations_with_rocksdb_context() -> Result<(), anyhow::Error> {
-    run_test_queue_operations_test_cases(RocksdbContextFactory::default()).await
+    run_test_queue_operations_test_cases(RocksDbContextFactory::default()).await
 }
 
 #[cfg(feature = "aws")]
@@ -202,19 +202,19 @@ impl TestContextFactory for MemoryContextFactory {
 
 #[cfg(feature = "rocksdb")]
 #[derive(Default)]
-struct RocksdbContextFactory {
+struct RocksDbContextFactory {
     temporary_directories: Vec<TempDir>,
 }
 
 #[cfg(feature = "rocksdb")]
 #[async_trait]
-impl TestContextFactory for RocksdbContextFactory {
-    type Context = RocksdbContext<()>;
+impl TestContextFactory for RocksDbContextFactory {
+    type Context = RocksDbContext<()>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let directory = TempDir::new()?;
-        let client = RocksdbClient::new(directory.path(), TEST_CACHE_SIZE);
-        let context = RocksdbContext::new(client, vec![], ());
+        let client = RocksDbClient::new(directory.path(), TEST_CACHE_SIZE);
+        let context = RocksDbContext::new(client, vec![], ());
 
         self.temporary_directories.push(directory);
 

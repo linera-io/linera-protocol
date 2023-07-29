@@ -35,7 +35,7 @@ use std::{
 use test_case::test_case;
 
 #[cfg(feature = "rocksdb")]
-use linera_storage::RocksdbStoreClient;
+use linera_storage::RocksDbStoreClient;
 
 #[cfg(feature = "aws")]
 use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
@@ -61,7 +61,7 @@ async fn test_rocksdb_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbStoreClient::new(
+    let client = RocksDbStoreClient::new(
         dir.path().to_path_buf(),
         Some(wasm_runtime),
         TEST_CACHE_SIZE,

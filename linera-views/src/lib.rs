@@ -18,7 +18,7 @@
 //!
 //! We provide support for the following databases:
 //! * `MemoryClient` is using the memory
-//! * `RocksdbClient` is a disk-based key-value store
+//! * `RocksDbClient` is a disk-based key-value store
 //! * `DynamoDbClient` is the AWS-based DynamoDB service.
 //!
 //! The corresponding type in the code is the `KeyValueStoreClient`.

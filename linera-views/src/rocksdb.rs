@@ -20,21 +20,21 @@ use thiserror::Error;
 // That is 3221225472 and so for offset reason we decrease by 400
 const MAX_VALUE_SIZE: usize = 3221225072;
 
-/// The Rocksdb client that we use.
+/// The RocksDB client that we use.
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
 /// The internal client
-pub type RocksdbClientInternal = Arc<DB>;
+pub type RocksDbClientInternal = Arc<DB>;
 
 #[async_trait]
-impl KeyValueStoreClient for RocksdbClientInternal {
+impl KeyValueStoreClient for RocksDbClientInternal {
     const MAX_CONNECTIONS: usize = 1;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
-    type Error = RocksdbContextError;
+    type Error = RocksDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksdbContextError> {
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
         let db = self.clone();
         let key = key.to_vec();
         Ok(tokio::task::spawn_blocking(move || db.get(&key)).await??)
@@ -43,7 +43,7 @@ impl KeyValueStoreClient for RocksdbClientInternal {
     async fn read_multi_key_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, RocksdbContextError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, RocksDbContextError> {
         let db = self.clone();
         let entries = tokio::task::spawn_blocking(move || db.multi_get(&keys)).await?;
         Ok(entries.into_iter().collect::<Result<_, _>>()?)
@@ -52,7 +52,7 @@ impl KeyValueStoreClient for RocksdbClientInternal {
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::Keys, RocksdbContextError> {
+    ) -> Result<Self::Keys, RocksDbContextError> {
         let db = self.clone();
         let prefix = key_prefix.to_vec();
         let len = prefix.len();
@@ -78,7 +78,7 @@ impl KeyValueStoreClient for RocksdbClientInternal {
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, RocksdbContextError> {
+    ) -> Result<Self::KeyValues, RocksDbContextError> {
         let db = self.clone();
         let prefix = key_prefix.to_vec();
         let len = prefix.len();
@@ -108,7 +108,7 @@ impl KeyValueStoreClient for RocksdbClientInternal {
         &self,
         mut batch: Batch,
         _base_key: &[u8],
-    ) -> Result<(), RocksdbContextError> {
+    ) -> Result<(), RocksDbContextError> {
         let db = self.clone();
         // NOTE: The delete_range functionality of RocksDB needs to have an upper bound in order to work.
         // Thus in order to have the system working, we need to handle the unlikely case of having to
@@ -130,7 +130,7 @@ impl KeyValueStoreClient for RocksdbClientInternal {
         for key in keys {
             batch.operations.push(WriteOperation::Delete { key });
         }
-        tokio::task::spawn_blocking(move || -> Result<(), RocksdbContextError> {
+        tokio::task::spawn_blocking(move || -> Result<(), RocksDbContextError> {
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
             for e_ent in batch.operations {
                 match e_ent {
@@ -157,13 +157,13 @@ impl KeyValueStoreClient for RocksdbClientInternal {
 
 /// A shared DB client for RocksDB implementing LruCaching
 #[derive(Clone)]
-pub struct RocksdbClient {
-    client: LruCachingKeyValueClient<ValueSplittingKeyValueStoreClient<RocksdbClientInternal>>,
+pub struct RocksDbClient {
+    client: LruCachingKeyValueClient<ValueSplittingKeyValueStoreClient<RocksDbClientInternal>>,
 }
 
-impl RocksdbClient {
+impl RocksDbClient {
     /// Creates a RocksDB database from a specified path.
-    pub fn new<P: AsRef<Path>>(path: P, cache_size: usize) -> RocksdbClient {
+    pub fn new<P: AsRef<Path>>(path: P, cache_size: usize) -> RocksDbClient {
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
         let db = DB::open(&options, path).unwrap();
@@ -176,48 +176,48 @@ impl RocksdbClient {
 }
 
 /// Creates a RocksDB database client to be used for tests.
-pub fn create_rocksdb_test_client() -> RocksdbClient {
+pub fn create_rocksdb_test_client() -> RocksDbClient {
     let dir = TempDir::new().unwrap();
-    RocksdbClient::new(dir, TEST_CACHE_SIZE)
+    RocksDbClient::new(dir, TEST_CACHE_SIZE)
 }
 
 /// An implementation of [`crate::common::Context`] based on RocksDB
-pub type RocksdbContext<E> = ContextFromDb<E, RocksdbClient>;
+pub type RocksDbContext<E> = ContextFromDb<E, RocksDbClient>;
 
 #[async_trait]
-impl KeyValueStoreClient for RocksdbClient {
+impl KeyValueStoreClient for RocksDbClient {
     const MAX_CONNECTIONS: usize = 1;
     const MAX_VALUE_SIZE: usize = usize::MAX;
-    type Error = RocksdbContextError;
+    type Error = RocksDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksdbContextError> {
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
         self.client.read_key_bytes(key).await
     }
 
     async fn read_multi_key_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, RocksdbContextError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, RocksDbContextError> {
         self.client.read_multi_key_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::Keys, RocksdbContextError> {
+    ) -> Result<Self::Keys, RocksDbContextError> {
         self.client.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, RocksdbContextError> {
+    ) -> Result<Self::KeyValues, RocksDbContextError> {
         self.client.find_key_values_by_prefix(key_prefix).await
     }
 
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), RocksdbContextError> {
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), RocksDbContextError> {
         self.client.write_batch(batch, base_key).await
     }
 
@@ -226,9 +226,9 @@ impl KeyValueStoreClient for RocksdbClient {
     }
 }
 
-impl<E: Clone + Send + Sync> RocksdbContext<E> {
-    /// Creates a [`RocksdbContext`].
-    pub fn new(db: RocksdbClient, base_key: Vec<u8>, extra: E) -> Self {
+impl<E: Clone + Send + Sync> RocksDbContext<E> {
+    /// Creates a [`RocksDbContext`].
+    pub fn new(db: RocksDbClient, base_key: Vec<u8>, extra: E) -> Self {
         Self {
             db,
             base_key,
@@ -237,16 +237,16 @@ impl<E: Clone + Send + Sync> RocksdbContext<E> {
     }
 }
 
-/// The error type for [`RocksdbContext`]
+/// The error type for [`RocksDbContext`]
 #[derive(Error, Debug)]
-pub enum RocksdbContextError {
-    /// Tokio join error in Rocksdb.
+pub enum RocksDbContextError {
+    /// Tokio join error in RocksDb.
     #[error("tokio join error: {0}")]
     TokioJoinError(#[from] tokio::task::JoinError),
 
-    /// Rocksdb error.
-    #[error("Rocksdb error: {0}")]
-    Rocksdb(#[from] rocksdb::Error),
+    /// RocksDb error.
+    #[error("RocksDb error: {0}")]
+    RocksDb(#[from] rocksdb::Error),
 
     /// BCS serialization error.
     #[error("BCS error: {0}")]
@@ -257,8 +257,8 @@ pub enum RocksdbContextError {
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 }
 
-impl From<RocksdbContextError> for crate::views::ViewError {
-    fn from(error: RocksdbContextError) -> Self {
+impl From<RocksDbContextError> for crate::views::ViewError {
+    fn from(error: RocksDbContextError) -> Self {
         Self::ContextError {
             backend: "rocksdb".to_string(),
             error: error.to_string(),

@@ -14,7 +14,7 @@ mod rocksdb;
 pub use crate::dynamo_db::DynamoDbStoreClient;
 pub use crate::memory::MemoryStoreClient;
 #[cfg(feature = "rocksdb")]
-pub use crate::rocksdb::RocksdbStoreClient;
+pub use crate::rocksdb::RocksDbStoreClient;
 
 use crate::chain_guards::ChainGuards;
 use async_trait::async_trait;

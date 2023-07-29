@@ -32,7 +32,7 @@ use std::{
 };
 
 #[cfg(feature = "rocksdb")]
-use linera_views::rocksdb::{RocksdbClient, RocksdbContext};
+use linera_views::rocksdb::{RocksDbClient, RocksDbContext};
 
 #[cfg(feature = "aws")]
 use linera_views::{dynamo_db::DynamoDbContext, test_utils::LocalStackTestContext};
@@ -129,14 +129,14 @@ impl StateStore for LruMemoryStore {
 }
 
 #[cfg(feature = "rocksdb")]
-pub struct RocksdbTestStore {
-    db: RocksdbClient,
+pub struct RocksDbTestStore {
+    db: RocksDbClient,
     accessed_chains: BTreeSet<usize>,
 }
 
 #[cfg(feature = "rocksdb")]
-impl RocksdbTestStore {
-    fn new(db: RocksdbClient) -> Self {
+impl RocksDbTestStore {
+    fn new(db: RocksDbClient) -> Self {
         Self {
             db,
             accessed_chains: BTreeSet::new(),
@@ -146,14 +146,14 @@ impl RocksdbTestStore {
 
 #[cfg(feature = "rocksdb")]
 #[async_trait]
-impl StateStore for RocksdbTestStore {
-    type Context = RocksdbContext<usize>;
+impl StateStore for RocksDbTestStore {
+    type Context = RocksDbContext<usize>;
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         // TODO(#643): Actually acquire a lock.
         tracing::trace!("Acquiring lock on {:?}", id);
-        let context = RocksdbContext::new(self.db.clone(), bcs::to_bytes(&id)?, id);
+        let context = RocksDbContext::new(self.db.clone(), bcs::to_bytes(&id)?, id);
         StateView::load(context).await
     }
 }
@@ -642,9 +642,9 @@ async fn test_views_in_key_value_store_view_memory() {
 async fn test_views_in_rocksdb_param(config: &TestConfig) {
     tracing::warn!("Testing config {:?} with rocksdb", config);
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbClient::new(&dir, TEST_CACHE_SIZE);
+    let client = RocksDbClient::new(&dir, TEST_CACHE_SIZE);
 
-    let mut store = RocksdbTestStore::new(client);
+    let mut store = RocksDbTestStore::new(client);
     let hash = test_store(&mut store, config).await;
     assert_eq!(store.accessed_chains.len(), 1);
 
@@ -726,9 +726,9 @@ async fn test_store_rollback() {
     test_store_rollback_kernel(&mut store).await;
 
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksdbClient::new(&dir, TEST_CACHE_SIZE);
+    let client = RocksDbClient::new(&dir, TEST_CACHE_SIZE);
 
-    let mut store = RocksdbTestStore::new(client);
+    let mut store = RocksDbTestStore::new(client);
     test_store_rollback_kernel(&mut store).await;
 }
 

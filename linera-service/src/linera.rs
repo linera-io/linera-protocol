@@ -195,7 +195,7 @@ impl ClientContext {
         match &options.storage_config {
             Some(config) => config.parse(),
             #[cfg(feature = "rocksdb")]
-            None => Ok(StorageConfig::Rocksdb {
+            None => Ok(StorageConfig::RocksDb {
                 path: Self::create_default_config_path()?.join("wallet.db"),
             }),
             #[cfg(not(feature = "rocksdb"))]
