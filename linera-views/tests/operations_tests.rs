@@ -13,7 +13,7 @@ use rand::{Rng, SeedableRng};
 use std::collections::{BTreeMap, HashSet};
 
 #[cfg(feature = "rocksdb")]
-use linera_views::rocksdb::create_rocksdb_test_client;
+use linera_views::rocks_db::create_rocksdb_test_client;
 
 #[cfg(feature = "aws")]
 use linera_views::test_utils::create_dynamodb_test_client;

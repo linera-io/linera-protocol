@@ -17,7 +17,7 @@ use std::{
 
 #[cfg(feature = "rocksdb")]
 use {
-    crate::rocksdb::{RocksDbClient, RocksDbContext},
+    crate::rocks_db::{RocksDbClient, RocksDbContext},
     tempfile::TempDir,
 };
 

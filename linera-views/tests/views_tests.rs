@@ -32,7 +32,7 @@ use std::{
 };
 
 #[cfg(feature = "rocksdb")]
-use linera_views::rocksdb::{RocksDbClient, RocksDbContext};
+use linera_views::rocks_db::{RocksDbClient, RocksDbContext};
 
 #[cfg(feature = "aws")]
 use linera_views::{dynamo_db::DynamoDbContext, test_utils::LocalStackTestContext};

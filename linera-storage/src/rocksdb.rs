@@ -3,7 +3,7 @@
 
 use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
 use linera_execution::WasmRuntime;
-use linera_views::rocksdb::RocksDbClient;
+use linera_views::rocks_db::RocksDbClient;
 use std::{path::PathBuf, sync::Arc};
 
 #[cfg(test)]

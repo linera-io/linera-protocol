@@ -104,7 +104,7 @@ pub mod hashable_wrapper;
 /// Helper definitions for RocksDB storage.
 #[cfg(feature = "rocksdb")]
 #[cfg(not(target_arch = "wasm32"))]
-pub mod rocksdb;
+pub mod rocks_db;
 
 /// Helper definitions for DynamoDB storage.
 #[cfg(feature = "aws")]
