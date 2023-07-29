@@ -7,7 +7,8 @@
 mod types;
 
 use self::types::{
-    Branch, Leaf, RecordWithDoublePadding, SimpleWrapper, TupleWithPadding, TupleWithoutPadding,
+    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, TupleWithPadding,
+    TupleWithoutPadding,
 };
 use linera_witty::{hlist, FakeInstance, InstanceWithMemory, Layout, WitLoad};
 use std::fmt::Debug;
@@ -112,6 +113,58 @@ fn nested_types() {
             0x0000_0021_i32,
             0x302f_2e2d_2c2b_2a29_i64,
             0x3837_3635_3433_3231_i64,
+        ],
+        expected,
+    );
+}
+
+/// Check that an enum type's variants are properly loaded from memory and lifted from its flat
+/// layout.
+#[test]
+fn enum_type() {
+    let expected = Enum::Empty;
+
+    test_load_from_memory(
+        &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+        expected,
+    );
+    test_lift_from_flat_layout(
+        hlist![0_i32, 0_i64, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32],
+        expected,
+    );
+
+    let expected = Enum::LargeVariantWithLooseAlignment(7, 8, 9, 10, 11, 12, 13, 14, 15, 16);
+
+    test_load_from_memory(
+        &[1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        expected,
+    );
+    test_lift_from_flat_layout(
+        hlist![1_i32, 7_i64, 8_i32, 9_i32, 10_i32, 11_i32, 12_i32, 13_i32, 14_i32, 15_i32, 16_i32],
+        expected,
+    );
+
+    let expected = Enum::SmallerVariantWithStrictAlignment {
+        inner: 0x0e0d_0c0b_0a09_0807_u64,
+    };
+
+    test_load_from_memory(
+        &[2, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        expected,
+    );
+    test_lift_from_flat_layout(
+        hlist![
+            2_i32,
+            0x0e0d_0c0b_0a09_0807_i64,
+            0_i32,
+            0_i32,
+            0_i32,
+            0_i32,
+            0_i32,
+            0_i32,
+            0_i32,
+            0_i32,
+            0_i32
         ],
         expected,
     );

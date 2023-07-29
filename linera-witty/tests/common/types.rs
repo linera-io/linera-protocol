@@ -43,7 +43,7 @@ pub struct Branch {
 
 /// An enum that has its alignment obtained from one variant and its size from another.
 #[allow(dead_code)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq, WitType)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, WitType, WitLoad)]
 pub enum Enum {
     Empty,
     LargeVariantWithLooseAlignment(i8, i8, i8, i8, i8, i8, i8, i8, i8, i8),
