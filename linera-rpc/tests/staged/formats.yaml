@@ -241,7 +241,9 @@ ChainOwnership:
                 KEY:
                   TYPENAME: Owner
                 VALUE:
-                  TYPENAME: PublicKey
+                  TUPLE:
+                    - TYPENAME: PublicKey
+                    - U128
 ChannelFullName:
   STRUCT:
     - application_id:
@@ -425,7 +427,9 @@ MultiOwnerManagerInfo:
           KEY:
             TYPENAME: Owner
           VALUE:
-            TYPENAME: PublicKey
+            TUPLE:
+              - TYPENAME: PublicKey
+              - U128
     - requested_proposed:
         OPTION:
           TYPENAME: BlockProposal

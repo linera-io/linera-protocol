@@ -1420,7 +1420,7 @@ where
             ChainManagerInfo::Multi(manager) => manager
                 .public_keys
                 .values()
-                .cloned()
+                .map(|(public_key, _)| *public_key)
                 .chain(iter::once(new_public_key))
                 .collect(),
         };

@@ -46,7 +46,11 @@ pub enum Outcome {
 }
 
 impl ChainManager {
-    pub fn reset(&mut self, ownership: &ChainOwnership) {
+    pub fn reset(
+        &mut self,
+        ownership: &ChainOwnership,
+        height: BlockHeight,
+    ) -> Result<(), ChainError> {
         match ownership {
             ChainOwnership::None => {
                 *self = ChainManager::None;
@@ -58,13 +62,11 @@ impl ChainManager {
             ChainOwnership::Multi {
                 public_keys: owners,
             } => {
-                let owners = owners
-                    .iter()
-                    .map(|(owner, public_key)| (*owner, *public_key))
-                    .collect();
-                *self = ChainManager::Multi(Box::new(MultiOwnerManager::new(owners)));
+                let owners = owners.clone();
+                *self = ChainManager::Multi(Box::new(MultiOwnerManager::new(owners, height.0)?));
             }
         }
+        Ok(())
     }
 
     pub fn is_active(&self) -> bool {

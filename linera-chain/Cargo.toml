@@ -21,6 +21,8 @@ linera-base = { workspace = true }
 linera-execution = { workspace = true }
 linera-views = { workspace = true, features = ["metrics"] }
 futures = { workspace = true }
+rand_distr = { workspace = true, features = ["serde1"] }
+rand_chacha = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

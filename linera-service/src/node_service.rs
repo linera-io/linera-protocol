@@ -296,12 +296,14 @@ where
     async fn open_multi_owner_chain(
         &self,
         chain_id: ChainId,
-        public_keys: Vec<PublicKey>,
+        owners: Vec<PublicKey>,
+        weights: Vec<u64>,
     ) -> Result<ChainId, Error> {
         let Some(mut client) = self.clients.client_lock(&chain_id).await else {
             return Err(Error::new("Unknown chain ID"));
         };
-        let ownership = ChainOwnership::multiple(public_keys);
+        let weights = weights.into_iter().map(u128::from);
+        let ownership = ChainOwnership::multiple(owners.into_iter().zip(weights));
         let (message_id, _) = client.open_chain(ownership).await?;
         Ok(ChainId::child(message_id))
     }
