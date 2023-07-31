@@ -136,6 +136,13 @@ impl ChainManager {
     pub fn create_final_vote(&mut self, certificate: Certificate, key_pair: Option<&KeyPair>) {
         match self {
             ChainManager::Multi(manager) => manager.create_final_vote(certificate, key_pair),
+            _ => panic!("unexpected chain manager"),
+        }
+    }
+
+    pub fn handle_timeout_certificate(&mut self, _: Certificate) {
+        match self {
+            ChainManager::Multi(_) => {}
             ChainManager::None | ChainManager::Single(_) => panic!("unexpected chain manager"),
         }
     }

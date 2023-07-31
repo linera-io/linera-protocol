@@ -157,7 +157,9 @@ where
             }
             if let Reason::NewBlock { hash, .. } = notification.reason {
                 let value = storage.read_value(hash).await?;
-                let executed_block = value.inner().executed_block();
+                let Some(executed_block) = value.inner().executed_block() else {
+                    continue;
+                };
                 let timestamp = executed_block.block.timestamp;
                 for outgoing_message in &executed_block.messages {
                     if let OutgoingMessage {

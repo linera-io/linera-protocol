@@ -657,8 +657,9 @@ where
             .cache_recent_value(Cow::Borrowed(&certificate.value))
             .await
         {
-            let value = certificate.value.clone().into_confirmed();
-            self.cache_recent_value(Cow::Owned(value)).await;
+            if let Some(value) = certificate.value.clone().into_confirmed() {
+                self.cache_recent_value(Cow::Owned(value)).await;
+            }
         }
         chain
             .manager
@@ -679,9 +680,43 @@ where
             .cache_recent_value(Cow::Borrowed(&certificate.value))
             .await
         {
-            let value = certificate.value.into_confirmed();
-            self.cache_recent_value(Cow::Owned(value)).await;
+            if let Some(value) = certificate.value.into_confirmed() {
+                self.cache_recent_value(Cow::Owned(value)).await;
+            }
         }
+        Ok((info, actions))
+    }
+
+    /// Processes a leader timeout issued from a multi-owner chain.
+    async fn process_leader_timeout(
+        &mut self,
+        certificate: Certificate,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        let (chain_id, _height, epoch) = match certificate.value() {
+            CertificateValue::LeaderTimeout {
+                chain_id,
+                height,
+                epoch,
+                ..
+            } => (*chain_id, *height, *epoch),
+            _ => panic!("Expecting a leader timeout certificate"),
+        };
+        // Check that the chain is active and ready for this confirmation.
+        // Verify the certificate. Returns a catch-all error to make client code more robust.
+        let chain = self.storage.load_active_chain(chain_id).await?;
+        let (current_epoch, committee) = chain
+            .execution_state
+            .system
+            .current_committee()
+            .expect("chain is active");
+        ensure!(
+            epoch == current_epoch,
+            WorkerError::InvalidEpoch { chain_id, epoch }
+        );
+        certificate.check(committee)?;
+        // TODO(#464): Handle timeout in chain manager.
+        let actions = NetworkActions::default();
+        let info = ChainInfoResponse::new(&chain, self.key_pair());
         Ok((info, actions))
     }
 
@@ -801,29 +836,29 @@ where
         chain_id: ChainId,
         message_id: MessageId,
     ) -> Result<Option<IncomingMessage>, WorkerError> {
-        let Some(certificate) = self
-            .read_certificate(message_id.chain_id, message_id.height)
-            .await?
-        else {
-            return Ok(None);
-        };
-
+        let sender = message_id.chain_id;
         let index = usize::try_from(message_id.index).map_err(|_| ArithmeticError::Overflow)?;
-        let Some(outgoing_message) = certificate.value().messages().get(index).cloned() else {
+        let Some(certificate) = self.read_certificate(sender, message_id.height).await? else {
+            return Ok(None);
+        };
+        let Some(messages) = certificate.value().messages() else {
+            return Ok(None);
+        };
+        let Some(outgoing_message) = messages.get(index).cloned() else {
             return Ok(None);
         };
 
-        let application_id = outgoing_message.message.application_id();
-        let origin = Origin {
-            sender: message_id.chain_id,
-            medium: match outgoing_message.destination {
-                Destination::Recipient(_) => Medium::Direct,
-                Destination::Subscribers(name) => Medium::Channel(ChannelFullName {
+        let medium = match outgoing_message.destination {
+            Destination::Recipient(_) => Medium::Direct,
+            Destination::Subscribers(name) => {
+                let application_id = outgoing_message.message.application_id();
+                Medium::Channel(ChannelFullName {
                     application_id,
                     name,
-                }),
-            },
+                })
+            }
         };
+        let origin = Origin { sender, medium };
 
         let mut chain = self.storage.load_active_chain(chain_id).await?;
         let mut inbox = chain.inboxes.try_load_entry_mut(&origin).await?;
@@ -990,6 +1025,10 @@ where
                     notify_when_messages_are_delivered,
                 )
                 .await?
+            }
+            CertificateValue::LeaderTimeout { .. } => {
+                // Handle the leader timeout.
+                self.process_leader_timeout(certificate).await?
             }
         };
         Ok((info, actions))

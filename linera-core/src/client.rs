@@ -653,7 +653,10 @@ where
             }
             CommunicateAction::FinalizeBlock(validity_certificate) => {
                 let round = validity_certificate.round;
-                (validity_certificate.value.into_confirmed(), round)
+                let Some(conf_value) = validity_certificate.value.into_confirmed() else {
+                    bail!("Unexpected certificate value for finalized block");
+                };
+                (conf_value, round)
             }
             CommunicateAction::AdvanceToNextBlockHeight(_) => {
                 return match result {
@@ -1039,7 +1042,7 @@ where
         // TODO(#66): return the block that should be proposed instead
         if let Some(validated) = &validated {
             ensure!(
-                validated.value().executed_block().block == block,
+                validated.value().block() == Some(&block),
                 "A different block has already been validated at this height"
             );
         }
