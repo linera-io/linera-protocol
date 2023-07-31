@@ -27,7 +27,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, Timestamp},
+    data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
 use linera_chain::{
@@ -178,7 +178,7 @@ pub trait Store: Sized {
         chain
             .manager
             .get_mut()
-            .reset(&ChainOwnership::single(public_key));
+            .reset(&ChainOwnership::single(public_key), BlockHeight(0))?;
         chain.save().await?;
         Ok(())
     }

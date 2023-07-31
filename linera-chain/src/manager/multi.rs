@@ -16,16 +16,23 @@ use linera_base::{
     identifiers::{ChainId, Owner},
 };
 use linera_execution::committee::Epoch;
+use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
+use rand_distr::{Distribution, WeightedAliasIndex};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use tracing::error;
 
 /// The specific state of a chain managed by multiple owners.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MultiOwnerManager {
-    /// The public keys of the chain's co-owners.
-    pub public_keys: HashMap<Owner, PublicKey>,
-    /// Latest authenticated block that we have received (and voted to validate).
+    /// The public keys of the chain's co-owners, with their weights. If all weights are zero, every owner can
+    /// propose in every round. Otherwise every round has only one leader, and rounds can time out.
+    pub public_keys: BTreeMap<Owner, (PublicKey, u128)>,
+    /// The seed for the pseudo-random number generator that determines the round leaders.
+    pub seed: u64,
+    /// The probability distribution for choosing a round leader.
+    pub distribution: Option<WeightedAliasIndex<u128>>,
+    /// Latest authenticated block that we have received.
     pub proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have seen (and voted to confirm).
     pub locked: Option<Certificate>,
@@ -34,13 +41,26 @@ pub struct MultiOwnerManager {
 }
 
 impl MultiOwnerManager {
-    pub fn new(public_keys: HashMap<Owner, PublicKey>) -> Self {
-        MultiOwnerManager {
+    pub fn new(
+        public_keys: impl IntoIterator<Item = (Owner, (PublicKey, u128))>,
+        seed: u64,
+    ) -> Result<Self, ChainError> {
+        let public_keys: BTreeMap<Owner, (PublicKey, u128)> = public_keys.into_iter().collect();
+        let distribution = if public_keys.values().all(|(_, weight)| *weight == 0) {
+            None
+        } else {
+            let weights = public_keys.values().map(|(_, weight)| *weight).collect();
+            Some(WeightedAliasIndex::new(weights)?)
+        };
+
+        Ok(MultiOwnerManager {
             public_keys,
+            seed,
+            distribution,
             proposed: None,
             locked: None,
             pending: None,
-        }
+        })
     }
 
     pub fn round(&self) -> RoundNumber {
@@ -186,8 +206,19 @@ impl MultiOwnerManager {
         // TODO(#464)
     }
 
+    /// Returns the public key of the block proposal's signer, if they are a valid owner and allowed
+    /// to propose a block in the proposal's round.
     pub fn verify_owner(&self, proposal: &BlockProposal) -> Option<PublicKey> {
-        self.public_keys.get(&proposal.owner).copied()
+        let Some(distribution) = &self.distribution else {
+            let (key, _) = self.public_keys.get(&proposal.owner)?;
+            return Some(*key);
+        };
+        let round = proposal.content.round.0;
+        let seed = u64::from(round).rotate_left(32).wrapping_add(self.seed);
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        let index = distribution.sample(&mut rng);
+        let (owner, (key, _)) = self.public_keys.iter().nth(index)?;
+        (*owner == proposal.owner).then_some(*key)
     }
 }
 
@@ -198,7 +229,7 @@ impl MultiOwnerManager {
 pub struct MultiOwnerManagerInfo {
     /// The public keys of the chain's co-owners.
     /// Using a map instead a hashset because Serde treats HashSet's as vectors.
-    pub public_keys: HashMap<Owner, PublicKey>,
+    pub public_keys: HashMap<Owner, (PublicKey, u128)>,
     /// Latest authenticated block that we have received, if requested.
     pub requested_proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have seen (and voted to confirm), if requested.
@@ -216,7 +247,7 @@ pub struct MultiOwnerManagerInfo {
 impl From<&MultiOwnerManager> for MultiOwnerManagerInfo {
     fn from(manager: &MultiOwnerManager) -> Self {
         MultiOwnerManagerInfo {
-            public_keys: manager.public_keys.clone(),
+            public_keys: manager.public_keys.clone().into_iter().collect(),
             requested_proposed: None,
             requested_locked: None,
             pending: manager.pending.as_ref().map(|vote| vote.lite()),

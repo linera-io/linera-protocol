@@ -1106,7 +1106,8 @@ impl Runnable for Job {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
-                let ownership = ChainOwnership::multiple(public_keys);
+                let owners = public_keys.into_iter().map(|pk| (pk, 100));
+                let ownership = ChainOwnership::multiple(owners);
                 let (message_id, certificate) = chain_client.open_chain(ownership).await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);

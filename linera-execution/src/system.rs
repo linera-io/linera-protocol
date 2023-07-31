@@ -521,8 +521,9 @@ where
                 self.ownership.set(ChainOwnership::single(*new_public_key));
             }
             ChangeMultipleOwners { new_public_keys } => {
-                self.ownership
-                    .set(ChainOwnership::multiple(new_public_keys.iter().cloned()));
+                self.ownership.set(ChainOwnership::multiple(
+                    new_public_keys.iter().map(|pub_key| (*pub_key, 0)),
+                ));
             }
             CloseChain => {
                 self.ownership.set(ChainOwnership::default());

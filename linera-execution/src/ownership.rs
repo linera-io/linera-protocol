@@ -15,7 +15,7 @@ pub enum ChainOwnership {
     Single { owner: Owner, public_key: PublicKey },
     /// The chain is managed by multiple owners.
     Multi {
-        public_keys: BTreeMap<Owner, PublicKey>,
+        public_keys: BTreeMap<Owner, (PublicKey, u128)>,
     },
 }
 
@@ -27,11 +27,11 @@ impl ChainOwnership {
         }
     }
 
-    pub fn multiple(public_keys: impl IntoIterator<Item = PublicKey>) -> Self {
+    pub fn multiple(keys_and_weights: impl IntoIterator<Item = (PublicKey, u128)>) -> Self {
         ChainOwnership::Multi {
-            public_keys: public_keys
+            public_keys: keys_and_weights
                 .into_iter()
-                .map(|key| (Owner::from(key), key))
+                .map(|(key, weight)| (Owner::from(key), (key, weight)))
                 .collect(),
         }
     }
@@ -54,7 +54,7 @@ impl ChainOwnership {
             }
             ChainOwnership::Multi {
                 public_keys: owners,
-            } => owners.get(owner).copied(),
+            } => owners.get(owner).map(|(key, _)| *key),
             ChainOwnership::None => None,
         }
     }
