@@ -73,7 +73,7 @@ pub struct ChainClient<ValidatorNodeProvider, StorageClient> {
     /// We track this value outside local storage mainly for security reasons.
     next_block_height: BlockHeight,
     /// Round number that we plan to use for the next block.
-    next_round: RoundNumber,
+    next_round: Option<RoundNumber>,
     /// Pending block.
     pending_block: Option<Block>,
     /// Known key pairs from present and past identities.
@@ -178,7 +178,7 @@ impl<P, S> ChainClient<P, S> {
             block_hash,
             timestamp,
             next_block_height,
-            next_round: RoundNumber::default(),
+            next_round: Some(RoundNumber::default()),
             pending_block: None,
             known_key_pairs,
             admin_id,
@@ -508,7 +508,7 @@ where
                 if let Some(info) =
                     Self::local_chain_info(this.clone(), chain_id, &mut local_node).await
                 {
-                    if (info.next_block_height, info.manager.next_round()) >= (height, round) {
+                    if (info.next_block_height, info.manager.current_round()) >= (height, round) {
                         debug!("Accepting redundant notification for new round");
                         return true;
                     }
@@ -526,7 +526,7 @@ where
                     error!("Fail to read local chain info for {chain_id}");
                     return false;
                 };
-                if (info.next_block_height, info.manager.next_round()) < (height, round) {
+                if (info.next_block_height, info.manager.current_round()) < (height, round) {
                     error!("Fail to synchronize new block after notification");
                     return false;
                 }
@@ -1040,8 +1040,9 @@ where
     /// Updates the latest block and next block height and round information from the chain info.
     fn update_from_info(&mut self, info: &ChainInfo) {
         if info.chain_id == self.chain_id
-            && (info.next_block_height, info.manager.next_round())
-                > (self.next_block_height, self.next_round)
+            && (info.next_block_height > self.next_block_height
+                || (info.next_block_height == self.next_block_height
+                    && self.next_round != info.manager.next_round()))
         {
             self.block_hash = info.block_hash;
             self.next_block_height = info.next_block_height;
@@ -1053,7 +1054,11 @@ where
     /// Executes (or retries) a regular block proposal. Updates local balance.
     /// If `with_confirmation` is false, we stop short of executing the finalized block.
     async fn propose_block(&mut self, block: Block) -> Result<Certificate, ChainClientError> {
-        let next_round = self.next_round;
+        let Some(next_round) = self.next_round else {
+            return Err(ChainClientError::BlockProposalError(
+                "Cannot propose a block; there is already a proposal in the current round",
+            ));
+        };
         ensure!(
             self.pending_block.is_none() || self.pending_block.as_ref() == Some(&block),
             ChainClientError::BlockProposalError("Client state has a different pending block")

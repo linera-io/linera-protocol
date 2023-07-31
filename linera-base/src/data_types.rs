@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
-use std::{fmt, time::SystemTime};
+use std::{
+    fmt,
+    time::{Duration, SystemTime},
+};
 use thiserror::Error;
 
 use crate::doc_scalar;
@@ -85,6 +88,12 @@ impl Timestamp {
     /// earlier than `self`.
     pub fn saturating_diff_micros(&self, other: Timestamp) -> u64 {
         self.0.saturating_sub(other.0)
+    }
+
+    /// Returns the timestamp that is `duration` later than `self`.
+    pub fn saturating_add(&self, duration: Duration) -> Timestamp {
+        let micros = u64::try_from(duration.as_micros()).unwrap_or(u64::MAX);
+        Timestamp(self.0.saturating_add(micros))
     }
 
     /// Returns a timestamp `micros` microseconds later than `self`, or the highest possible value
