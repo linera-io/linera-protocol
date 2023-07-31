@@ -104,8 +104,10 @@ pub enum ChainError {
     PreviousBlockMustBeConfirmedFirst,
     #[error("Invalid block proposal")]
     InvalidBlockProposal,
-    #[error("Round number should be greater than {0:?}")]
+    #[error("Round number should be at least {0:?}")]
     InsufficientRound(RoundNumber),
+    #[error("Round number should be {0:?}")]
+    WrongRound(RoundNumber),
     #[error("A different block for height {0:?} was already locked at round number {1:?}")]
     HasLockedBlock(BlockHeight, RoundNumber),
     #[error("Cannot confirm a block before its predecessors: {current_block_height:?}")]

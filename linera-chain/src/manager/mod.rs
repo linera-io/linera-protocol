@@ -81,12 +81,9 @@ impl ChainManager {
         }
     }
 
-    pub fn next_round(&self) -> RoundNumber {
+    pub fn current_round(&self) -> RoundNumber {
         match self {
-            ChainManager::Multi(manager) => {
-                let round = manager.round();
-                round.try_add_one().unwrap_or(round)
-            }
+            ChainManager::Multi(manager) => manager.current_round(),
             ChainManager::None | ChainManager::Single(_) => RoundNumber::default(),
         }
     }
@@ -225,10 +222,17 @@ impl ChainManagerInfo {
         }
     }
 
-    pub fn next_round(&self) -> RoundNumber {
+    pub fn current_round(&self) -> RoundNumber {
         match self {
-            ChainManagerInfo::Multi(multi) => multi.next_round(),
+            ChainManagerInfo::Multi(multi) => multi.current_round,
             ChainManagerInfo::None | ChainManagerInfo::Single(_) => RoundNumber::default(),
+        }
+    }
+
+    pub fn next_round(&self) -> Option<RoundNumber> {
+        match self {
+            ChainManagerInfo::Multi(multi) => multi.next_round,
+            ChainManagerInfo::None | ChainManagerInfo::Single(_) => Some(RoundNumber::default()),
         }
     }
 }

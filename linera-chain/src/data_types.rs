@@ -252,6 +252,7 @@ struct ValueHashAndRound(CryptoHash, RoundNumber);
 
 /// A vote on a statement from a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct Vote {
     pub value: HashedValue,
     pub round: RoundNumber,

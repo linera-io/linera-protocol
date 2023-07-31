@@ -649,7 +649,6 @@ where
         );
         certificate.check(committee)?;
         let mut actions = NetworkActions::default();
-        let next_round = chain.manager.get().next_round();
         if chain
             .tip_state
             .get()
@@ -660,18 +659,19 @@ where
             return Ok((ChainInfoResponse::new(&chain, self.key_pair()), actions));
         }
         self.cache_validated(&certificate.value).await;
+        let current_round = chain.manager.get().current_round();
         chain
             .manager
             .get_mut()
             .create_final_vote(certificate.clone(), self.key_pair());
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
-        if chain.manager.get().next_round() > next_round {
+        if chain.manager.get().current_round() > current_round {
             actions.notifications.push(Notification {
                 chain_id: block.chain_id,
                 reason: Reason::NewRound {
                     height: block.height,
-                    round: chain.manager.get().next_round(),
+                    round: chain.manager.get().current_round(),
                 },
             })
         }
@@ -710,17 +710,17 @@ where
         if chain.tip_state.get().already_validated_block(height)? {
             return Ok((ChainInfoResponse::new(&chain, self.key_pair()), actions));
         }
-        let next_round = chain.manager.get().next_round();
+        let current_round = chain.manager.get().current_round();
         chain
             .manager
             .get_mut()
             .handle_timeout_certificate(certificate.clone());
-        if chain.manager.get().next_round() > next_round {
+        if chain.manager.get().current_round() > current_round {
             actions.notifications.push(Notification {
                 chain_id,
                 reason: Reason::NewRound {
                     height,
-                    round: chain.manager.get().next_round(),
+                    round: chain.manager.get().current_round(),
                 },
             })
         }

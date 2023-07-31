@@ -436,6 +436,9 @@ MultiOwnerManagerInfo:
     - requested_locked:
         OPTION:
           TYPENAME: Certificate
+    - leader_timeout:
+        OPTION:
+          TYPENAME: Certificate
     - pending:
         OPTION:
           TYPENAME: LiteVote
@@ -445,8 +448,16 @@ MultiOwnerManagerInfo:
     - requested_pending_value:
         OPTION:
           TYPENAME: CertificateValue
-    - round:
+    - current_round:
         TYPENAME: RoundNumber
+    - next_round:
+        OPTION:
+          TYPENAME: RoundNumber
+    - leader:
+        OPTION:
+          TYPENAME: Owner
+    - round_timeout:
+        TYPENAME: Timestamp
 NodeError:
   ENUM:
     0:
