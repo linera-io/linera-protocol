@@ -34,7 +34,7 @@ async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error
 
 #[cfg(feature = "rocksdb")]
 #[tokio::test]
-async fn test_queue_operations_with_rocksdb_context() -> Result<(), anyhow::Error> {
+async fn test_queue_operations_with_rocks_db_context() -> Result<(), anyhow::Error> {
     run_test_queue_operations_test_cases(RocksDbContextFactory::default()).await
 }
 

@@ -176,7 +176,7 @@ impl RocksDbClient {
 }
 
 /// Creates a RocksDB database client to be used for tests.
-pub fn create_rocksdb_test_client() -> RocksDbClient {
+pub fn create_rocks_db_test_client() -> RocksDbClient {
     let dir = TempDir::new().unwrap();
     RocksDbClient::new(dir, TEST_CACHE_SIZE)
 }

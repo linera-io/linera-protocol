@@ -639,7 +639,7 @@ async fn test_views_in_key_value_store_view_memory() {
 
 #[cfg(feature = "rocksdb")]
 #[cfg(test)]
-async fn test_views_in_rocksdb_param(config: &TestConfig) {
+async fn test_views_in_rocks_db_param(config: &TestConfig) {
     tracing::warn!("Testing config {:?} with rocksdb", config);
     let dir = tempfile::TempDir::new().unwrap();
     let client = RocksDbClient::new(&dir, TEST_CACHE_SIZE);
@@ -655,9 +655,9 @@ async fn test_views_in_rocksdb_param(config: &TestConfig) {
 
 #[cfg(feature = "rocksdb")]
 #[tokio::test]
-async fn test_views_in_rocksdb() {
+async fn test_views_in_rocks_db() {
     for config in TestConfig::samples() {
-        test_views_in_rocksdb_param(&config).await
+        test_views_in_rocks_db_param(&config).await
     }
 }
 

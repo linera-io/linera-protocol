@@ -188,7 +188,7 @@ fn test_storage_config_from_str() {
 
 #[cfg(feature = "rocksdb")]
 #[test]
-fn test_rocksdb_storage_config_from_str() {
+fn test_rocks_db_storage_config_from_str() {
     assert_eq!(
         StorageConfig::from_str("rocksdb:foo.db").unwrap(),
         StorageConfig::RocksDb {

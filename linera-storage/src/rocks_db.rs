@@ -7,7 +7,7 @@ use linera_views::rocks_db::RocksDbClient;
 use std::{path::PathBuf, sync::Arc};
 
 #[cfg(test)]
-#[path = "unit_tests/rocksdb.rs"]
+#[path = "unit_tests/rocks_db.rs"]
 mod tests;
 
 type RocksDbStore = DbStore<RocksDbClient>;
