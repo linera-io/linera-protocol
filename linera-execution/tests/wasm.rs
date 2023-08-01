@@ -100,7 +100,10 @@ async fn test_fuel_for_counter_wasm_application(
     let request = async_graphql::Request::new("query { value }");
     let Response::User(serialized_value) = view
         .query_application(&context, &Query::user(app_id, &request).unwrap())
-        .await? else { panic!("unexpected response") };
+        .await?
+    else {
+        panic!("unexpected response")
+    };
     assert_eq!(
         serde_json::from_slice::<async_graphql::Response>(&serialized_value).unwrap(),
         expected_value

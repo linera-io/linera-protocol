@@ -39,7 +39,9 @@ impl<'a, W> std::ops::Deref for ReadGuardedView<'a, W> {
     type Target = W;
 
     fn deref(&self) -> &W {
-        let Update::Set(view) = self.guard.get(&self.short_key).unwrap() else { unreachable!(); };
+        let Update::Set(view) = self.guard.get(&self.short_key).unwrap() else {
+            unreachable!();
+        };
         view
     }
 }
@@ -330,7 +332,9 @@ where
                         let mut view = W::load(context).await?;
                         view.clear();
                         *entry = Update::Set(view);
-                        let Update::Set(view) = entry else { unreachable!(); };
+                        let Update::Set(view) = entry else {
+                            unreachable!();
+                        };
                         Ok(view)
                     }
                 }
@@ -344,7 +348,9 @@ where
                 if self.was_cleared {
                     view.clear();
                 }
-                let Update::Set(view) = entry.insert(Update::Set(view)) else { unreachable!(); };
+                let Update::Set(view) = entry.insert(Update::Set(view)) else {
+                    unreachable!();
+                };
                 Ok(view)
             }
         }
