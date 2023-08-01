@@ -38,9 +38,7 @@ impl<N: Clone> Notifier<N> {
     /// Notifies all the clients waiting for a notification from a given chain.
     pub fn notify(&self, chain_id: &ChainId, notification: N) {
         let senders_is_empty = {
-            let Some(mut senders) = self
-                .inner
-                .get_mut(chain_id) else {
+            let Some(mut senders) = self.inner.get_mut(chain_id) else {
                 trace!("Chain {chain_id:?} has no subscribers.");
                 return;
             };

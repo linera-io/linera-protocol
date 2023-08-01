@@ -524,7 +524,9 @@ where
                 }
             }
         };
-        let Update::Set(value) = update else { unreachable!() };
+        let Update::Set(value) = update else {
+            unreachable!()
+        };
         Ok(value)
     }
 }

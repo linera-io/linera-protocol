@@ -17,8 +17,9 @@ To make a contribution to the code after discussing it in a GitHub issue,
 1. Fork the repo and create your branch from `main`.
 2. If you've added code that should be tested, add tests.
 3. If you've changed APIs, update the documentation.
-4. Ensure the test suite passes with `cargo test && cargo clippy --all-targets`.
+4. Ensure the test suite passes with `cargo test && cargo clippy --all-targets --all-features`.
 5. Run `cargo +nightly fmt` to automatically format your changes (CI will let you know if you missed this).
+6. Repeat step 4 and 5 for WASM examples if needed (see the section on WASM below for the options to `cargo test`).
 
 This repository enforces a linear commit history. To remove merge commits, consider using `git filter-branch`
 as explained [here](https://stackoverflow.com/questions/17988099/how-do-i-trivially-linearize-my-git-history).
@@ -65,17 +66,13 @@ Contributions should generally follow the [Rust API guidelines](https://rust-lan
 
 Make sure to fix the lint errors reported by
 ```
-cargo clippy --all-targets
+cargo clippy --all-targets --all-features
 ```
-and run `cargo fmt` like this:
-```
-cargo fmt -- --config unstable_features=true --config imports_granularity=Crate
-```
-or (optimistically)
+and format the code with
 ```
 cargo +nightly fmt
 ```
-(see also [rust-lang/rustfmt#4991](https://github.com/rust-lang/rustfmt/issues/4991))
+(The nightly build is required notably for [rust-lang/rustfmt#4991](https://github.com/rust-lang/rustfmt/issues/4991).)
 
 ## Managing cargo features and dependencies between crates
 
@@ -83,13 +80,12 @@ cargo +nightly fmt
   features = ["test"] }` in the section `[dev-dependencies]` instead of repeating the
   dependencies already declared by the feature `test`.
 
-* A few crates define the features `wasm` and `wasmer`. For conveniency, these crates also
+* A few crates define the features `wasmtime` and `wasmer`. For conveniency, these crates also
   define a `default` feature. As a consequence, these crates must always be included with
   the flag `no-default-features = true`. (This also applies to the self-dependencies of the
   previous rule.)
 
-
-Besides the verification bove with clippy, the following steps will verify that most
+Besides the verification above with clippy, the following steps will verify that most
 combinations of features compile for each crate:
 ```
 cargo install --git https://github.com/ma2bd/cargo-all-features --branch workspace_metadata

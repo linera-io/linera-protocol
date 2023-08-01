@@ -78,6 +78,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Clear up some space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
     - name: Build check_copyright_header script
       run: |
         cd ./scripts/check_copyright_header
@@ -90,14 +96,13 @@ jobs:
       with:
         profile: minimal
         target: wasm32-unknown-unknown
-        components: clippy, rustfmt
+        components: clippy
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        components: rustfmt
     - uses: Swatinem/rust-cache@v2
-    - name: Clear up some space
-      run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /opt/ghc
-        sudo rm -rf "/usr/local/share/boost"
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
     - name: Install cargo-machete
       run: |
         cargo install cargo-machete --locked
@@ -113,7 +118,7 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Check formatting
       run: |
-        cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
+        cargo +nightly fmt -- --check
     - name: Check for unused dependencies
       run: |
         cargo machete
@@ -125,7 +130,7 @@ jobs:
     - name: Run WASM application lints
       run: |
         cd examples
-        cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate
+        cargo +nightly fmt -- --check
         cargo clippy --all-targets --all-features --target wasm32-unknown-unknown --locked
         cargo clippy --all-targets --all-features --target x86_64-unknown-linux-gnu --locked
     - name: Run clippy

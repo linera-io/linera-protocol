@@ -62,7 +62,9 @@ impl<'a> LruPrefixCache {
                 entry.insert(value);
                 self.queue.insert(key, ());
                 if self.queue.len() > self.max_cache_size {
-                    let Some(value) = self.queue.pop_front() else { unreachable!() };
+                    let Some(value) = self.queue.pop_front() else {
+                        unreachable!()
+                    };
                     self.map.remove(&value.0);
                 }
             }

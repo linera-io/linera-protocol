@@ -95,7 +95,7 @@ impl ChainGuards {
     }
 
     /// Obtains the current number of active guards.
-    #[cfg(any(test))]
+    #[cfg(test)]
     pub(crate) fn active_guards(&self) -> usize {
         self.guards.len()
     }

@@ -44,8 +44,8 @@ macro_rules! bcs_scalar {
 
             fn to_value(&self) -> $crate::async_graphql::Value {
                 let ::std::result::Result::Ok(bytes) = $crate::bcs::to_bytes(self) else {
-                                                    return $crate::async_graphql::Value::Null;
-                                                };
+                    return $crate::async_graphql::Value::Null;
+                };
                 let hex = $crate::hex::encode(&bytes);
                 $crate::async_graphql::to_value(hex)
                     .unwrap_or_else(|_| $crate::async_graphql::Value::Null)
@@ -67,7 +67,7 @@ macro_rules! bcs_scalar {
                     |_| $crate::async_graphql::registry::MetaType::Scalar {
                         name: ::std::borrow::ToOwned::to_owned(::std::stringify!($ty)),
                         description: ::std::option::Option::Some(
-                            ::std::string::ToString::to_string($desc)
+                            ::std::string::ToString::to_string($desc),
                         ),
                         is_valid: ::std::option::Option::Some(::std::sync::Arc::new(|value| {
                             <$ty as $crate::async_graphql::ScalarType>::is_valid(value)
@@ -109,7 +109,7 @@ macro_rules! bcs_scalar {
                     |_| $crate::async_graphql::registry::MetaType::Scalar {
                         name: ::std::borrow::ToOwned::to_owned(::std::stringify!($ty)),
                         description: ::std::option::Option::Some(
-                            ::std::string::ToString::to_string($desc)
+                            ::std::string::ToString::to_string($desc),
                         ),
                         is_valid: ::std::option::Option::Some(::std::sync::Arc::new(|value| {
                             <$ty as $crate::async_graphql::ScalarType>::is_valid(value)
@@ -134,9 +134,10 @@ macro_rules! bcs_scalar {
         }
 
         impl ::std::fmt::Display for $ty {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>)
-                -> ::std::result::Result<(), ::std::fmt::Error>
-            {
+            fn fmt(
+                &self,
+                f: &mut ::std::fmt::Formatter<'_>,
+            ) -> ::std::result::Result<(), ::std::fmt::Error> {
                 match $crate::bcs::to_bytes(self) {
                     ::std::result::Result::Ok(bytes) => {
                         ::std::fmt::Display::fmt(&$crate::hex::encode(&bytes), f)

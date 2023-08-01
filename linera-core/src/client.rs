@@ -716,11 +716,11 @@ where
                 .with_sent_certificates_in_range(BlockHeightRange::single(entry.height));
 
             let mut response = client.handle_chain_info_query(query).await?;
-            let Some(certificate) = response.info
-                .requested_sent_certificates.pop() else {
+            let Some(certificate) = response.info.requested_sent_certificates.pop() else {
                 break;
             };
-            let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
+            let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value()
+            else {
                 return Err(NodeError::InvalidChainInfoResponse);
             };
             let block = &executed_block.block;

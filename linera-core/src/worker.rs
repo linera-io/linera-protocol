@@ -690,8 +690,8 @@ where
             last_anticipated_block_height,
             certificates,
         )?;
-        let Some(last_updated_height) =
-            certificates.last().map(|cert| cert.value().height()) else {
+        let Some(last_updated_height) = certificates.last().map(|cert| cert.value().height())
+        else {
             return Ok(None);
         };
         // Process the received messages in certificates.
@@ -783,12 +783,17 @@ where
         chain_id: ChainId,
         message_id: MessageId,
     ) -> Result<Option<IncomingMessage>, WorkerError> {
-        let Some(certificate) = self.read_certificate(message_id.chain_id, message_id.height).await?
-            else { return Ok(None) };
+        let Some(certificate) = self
+            .read_certificate(message_id.chain_id, message_id.height)
+            .await?
+        else {
+            return Ok(None);
+        };
 
         let index = usize::try_from(message_id.index).map_err(|_| ArithmeticError::Overflow)?;
-        let Some(outgoing_message) = certificate.value().messages().get(index).cloned()
-            else { return Ok(None) };
+        let Some(outgoing_message) = certificate.value().messages().get(index).cloned() else {
+            return Ok(None);
+        };
 
         let application_id = outgoing_message.message.application_id();
         let origin = Origin {
@@ -806,18 +811,19 @@ where
         let mut inbox = chain.inboxes.try_load_entry_mut(&origin).await?;
 
         let certificate_hash = certificate.hash();
-        let Some(event) =
-            inbox
-                .added_events
-                .iter_mut()
-                .await?
-                .find(|event| {
-                    event.certificate_hash == certificate_hash
-                        && event.height == message_id.height
-                        && event.index == message_id.index
-                })
-                .cloned()
-            else { return Ok(None) };
+        let Some(event) = inbox
+            .added_events
+            .iter_mut()
+            .await?
+            .find(|event| {
+                event.certificate_hash == certificate_hash
+                    && event.height == message_id.height
+                    && event.index == message_id.index
+            })
+            .cloned()
+        else {
+            return Ok(None);
+        };
 
         assert_eq!(event.message, outgoing_message.message);
 
