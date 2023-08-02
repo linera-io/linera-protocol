@@ -13,7 +13,7 @@ pub struct SimpleWrapper(pub bool);
 #[derive(Clone, Copy, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
 pub struct TupleWithoutPadding(pub u64, pub i32, pub i16);
 
-/// A tuple struct that requires internal padding in its memory layout between all of its fields.
+/// A tuple struct that requires internal padding in its memory layout between two of its fields.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
 pub struct TupleWithPadding(pub u16, pub u32, pub i64);
 
