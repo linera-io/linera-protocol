@@ -7,6 +7,7 @@
 
 #![deny(missing_docs)]
 
+mod util;
 mod wit_load;
 mod wit_store;
 mod wit_type;
