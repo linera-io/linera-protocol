@@ -66,11 +66,11 @@ impl WitStore for HNil {
 impl<Head, Tail> WitType for HCons<Head, Tail>
 where
     Head: WitType,
-    Tail: WitType,
+    Tail: WitType + SizeCalculation,
     Head::Layout: Add<Tail::Layout>,
     <Head::Layout as Add<Tail::Layout>>::Output: Layout,
 {
-    const SIZE: u32 = Head::SIZE + Tail::SIZE;
+    const SIZE: u32 = Self::SIZE_STARTING_AT_BYTE_BOUNDARIES[0];
 
     type Layout = <Head::Layout as Add<Tail::Layout>>::Output;
 }
@@ -78,7 +78,7 @@ where
 impl<Head, Tail> WitLoad for HCons<Head, Tail>
 where
     Head: WitLoad,
-    Tail: WitLoad,
+    Tail: WitLoad + SizeCalculation,
     Head::Layout: Add<Tail::Layout>,
     <Head::Layout as Add<Tail::Layout>>::Output: Layout,
     <Self::Layout as Layout>::Flat:
@@ -94,7 +94,12 @@ where
     {
         Ok(HCons {
             head: Head::load(memory, location)?,
-            tail: Tail::load(memory, location.after::<Head>())?,
+            tail: Tail::load(
+                memory,
+                location
+                    .after::<Head>()
+                    .after_padding_for::<Tail::FirstElement>(),
+            )?,
         })
     }
 
@@ -118,7 +123,7 @@ where
 impl<Head, Tail> WitStore for HCons<Head, Tail>
 where
     Head: WitStore,
-    Tail: WitStore,
+    Tail: WitStore + SizeCalculation,
     Head::Layout: Add<Tail::Layout>,
     <Head::Layout as Add<Tail::Layout>>::Output: Layout,
     <Head::Layout as Layout>::Flat: Add<<Tail::Layout as Layout>::Flat>,
@@ -136,7 +141,12 @@ where
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
         self.head.store(memory, location)?;
-        self.tail.store(memory, location.after::<Head>())?;
+        self.tail.store(
+            memory,
+            location
+                .after::<Head>()
+                .after_padding_for::<Tail::FirstElement>(),
+        )?;
 
         Ok(())
     }
@@ -154,4 +164,59 @@ where
 
         Ok(head_layout + tail_layout)
     }
+}
+
+/// Helper trait used to calculate the size of a heterogeneous list considering internal alignment.
+///
+/// Assumes the maximum alignment necessary for any type is 8 bytes, which is the alignment for the
+/// largest flat types (`i64` and `f64`).
+trait SizeCalculation {
+    /// The size of the list considering the current size calculation starts at different offsets
+    /// inside an 8-byte window.
+    const SIZE_STARTING_AT_BYTE_BOUNDARIES: [u32; 8];
+
+    /// The type of the first element of the list, used to determine the current necessary
+    /// alignment.
+    type FirstElement: WitType;
+}
+
+impl SizeCalculation for HNil {
+    const SIZE_STARTING_AT_BYTE_BOUNDARIES: [u32; 8] = [0; 8];
+
+    type FirstElement = ();
+}
+
+/// Unrolls a `for`-like loop so that it runs in a `const` context.
+macro_rules! unroll_for {
+    ($binding:ident in [ $($elements:expr),* $(,)? ] $body:tt) => {
+        $(
+            let $binding = $elements;
+            $body
+        )*
+    };
+}
+
+impl<Head, Tail> SizeCalculation for HCons<Head, Tail>
+where
+    Head: WitType,
+    Tail: SizeCalculation,
+{
+    const SIZE_STARTING_AT_BYTE_BOUNDARIES: [u32; 8] = {
+        let mut size_at_boundaries = [0; 8];
+
+        unroll_for!(boundary_offset in [0, 1, 2, 3, 4, 5, 6, 7] {
+            let memory_location = GuestPointer(boundary_offset)
+                .after_padding_for::<Head>()
+                .after::<Head>();
+
+            let tail_size = Tail::SIZE_STARTING_AT_BYTE_BOUNDARIES[memory_location.0 as usize % 8];
+
+            size_at_boundaries[boundary_offset as usize] =
+                memory_location.0 - boundary_offset + tail_size;
+        });
+
+        size_at_boundaries
+    };
+
+    type FirstElement = Head;
 }
