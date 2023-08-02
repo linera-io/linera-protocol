@@ -1409,30 +1409,37 @@ where
     }
 
     /// Adds another owner to the chain.
+    ///
+    /// If the chain is currently of type `Single`, the existing owner's weight is set to 100, and
+    /// the first two rounds are multi-leader.
     pub async fn share_ownership(
         &mut self,
         new_public_key: PublicKey,
+        new_weight: u128,
     ) -> Result<Certificate, ChainClientError> {
         let info = self.prepare_chain().await?;
         let messages = self.pending_messages().await?;
-        let new_public_keys = match info.manager {
-            ChainManagerInfo::None => {
-                return Err(ChainError::InactiveChain(self.chain_id).into());
-            }
-            ChainManagerInfo::Single(manager) => {
-                vec![manager.public_key, new_public_key]
-            }
-            ChainManagerInfo::Multi(manager) => manager
-                .public_keys
-                .values()
-                .map(|(public_key, _)| *public_key)
-                .chain(iter::once(new_public_key))
-                .collect(),
+        let (new_public_keys, multi_leader_rounds) = match info.manager {
+            ChainManagerInfo::None => return Err(ChainError::InactiveChain(self.chain_id).into()),
+            ChainManagerInfo::Single(manager) => (
+                vec![(manager.public_key, 100), (new_public_key, new_weight)],
+                RoundNumber(2),
+            ),
+            ChainManagerInfo::Multi(manager) => (
+                manager
+                    .public_keys
+                    .values()
+                    .cloned()
+                    .chain(iter::once((new_public_key, new_weight)))
+                    .collect(),
+                manager.multi_leader_rounds,
+            ),
         };
         self.execute_block(
             messages,
             vec![Operation::System(SystemOperation::ChangeMultipleOwners {
                 new_public_keys,
+                multi_leader_rounds,
             })],
         )
         .await

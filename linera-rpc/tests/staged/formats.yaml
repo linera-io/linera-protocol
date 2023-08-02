@@ -244,6 +244,8 @@ ChainOwnership:
                   TUPLE:
                     - TYPENAME: PublicKey
                     - U128
+          - multi_leader_rounds:
+              TYPENAME: RoundNumber
 ChannelFullName:
   STRUCT:
     - application_id:
@@ -430,6 +432,8 @@ MultiOwnerManagerInfo:
             TUPLE:
               - TYPENAME: PublicKey
               - U128
+    - multi_leader_rounds:
+        TYPENAME: RoundNumber
     - requested_proposed:
         OPTION:
           TYPENAME: BlockProposal
@@ -806,7 +810,11 @@ SystemOperation:
         STRUCT:
           - new_public_keys:
               SEQ:
-                TYPENAME: PublicKey
+                TUPLE:
+                  - TYPENAME: PublicKey
+                  - U128
+          - multi_leader_rounds:
+              TYPENAME: RoundNumber
     6:
       Subscribe:
         STRUCT:
