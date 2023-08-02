@@ -69,6 +69,55 @@ fn hlist_with_padding() {
     );
 }
 
+/// Test roundtrip of `None::<i8>`.
+#[test]
+fn none() {
+    let input = None::<i8>;
+
+    test_memory_roundtrip(input, &[0x00, 0]);
+    test_flattening_roundtrip(input, hlist![0_i32, 0_i32]);
+}
+
+/// Test roundtrip of `Some::<i8>`.
+#[test]
+fn some_byte() {
+    let input = Some(-100_i8);
+
+    test_memory_roundtrip(input, &[0x01, 0x9c]);
+    test_flattening_roundtrip(input, hlist![1_i32, -100_i32]);
+}
+
+/// Test roundtrip of `Ok::<i16, u128>`.
+#[test]
+fn ok_two_bytes_but_large_err() {
+    let input = Ok::<_, u128>(0x1234_i16);
+
+    assert_eq!(
+        <<Result<i16, u128> as crate::WitType>::Layout as Layout>::ALIGNMENT,
+        8
+    );
+    test_memory_roundtrip(
+        input,
+        &[
+            0x00, 0, 0, 0, 0, 0, 0, 0, 0x34, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
+    );
+}
+
+/// Test roundtrip of `Err::<i16, u128>`.
+#[test]
+fn large_err() {
+    let input = Err::<i16, _>(0x0001_0203_0405_0607_0809_0a0b_0c0d_0e0f_u128);
+
+    test_memory_roundtrip(
+        input,
+        &[
+            0x01, 0, 0, 0, 0, 0, 0, 0, 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08, 0x07, 0x06,
+            0x05, 0x04, 0x03, 0x02, 0x01, 0x00,
+        ],
+    );
+}
+
 /// Test storing an instance of `T` to memory, checking that the `memory_data` bytes are correctly
 /// written, and check that the instance can be loaded from those bytes.
 fn test_memory_roundtrip<T>(input: T, memory_data: &[u8])
