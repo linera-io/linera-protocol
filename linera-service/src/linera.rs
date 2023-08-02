@@ -38,6 +38,7 @@ use serde_json::Value;
 use std::{
     env, fs,
     io::Read,
+    iter,
     num::NonZeroU16,
     path::PathBuf,
     sync::Arc,
@@ -721,6 +722,13 @@ enum ClientCommand {
         /// Public keys of the new owners
         #[structopt(long = "to-public-keys")]
         public_keys: Vec<PublicKey>,
+
+        /// Weights for the new owners
+        #[structopt(long = "weights")]
+        weights: Vec<u128>,
+
+        #[structopt(long = "multi-leader-rounds")]
+        multi_leader_rounds: Option<RoundNumber>,
     },
 
     /// Close (i.e. deactivate) an existing chain.
@@ -1142,12 +1150,26 @@ impl Runnable for Job {
             OpenMultiOwnerChain {
                 chain_id,
                 public_keys,
+                weights,
+                multi_leader_rounds,
             } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
-                let owners = public_keys.into_iter().map(|pk| (pk, 100));
-                let ownership = ChainOwnership::multiple(owners);
+                let owners: Vec<_> = if weights.is_empty() {
+                    public_keys.into_iter().zip(iter::repeat(100)).collect()
+                } else if weights.len() != public_keys.len() {
+                    bail!(
+                        "There are {} public keys but {} weights.",
+                        public_keys.len(),
+                        weights.len()
+                    );
+                } else {
+                    let weights = weights.into_iter().map(u128::from);
+                    public_keys.into_iter().zip(weights).collect()
+                };
+                let multi_leader_rounds = multi_leader_rounds.unwrap_or(RoundNumber::MAX);
+                let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
                 let (message_id, certificate) = chain_client.open_chain(ownership).await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
