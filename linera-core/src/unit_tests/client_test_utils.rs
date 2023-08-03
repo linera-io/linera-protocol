@@ -521,7 +521,7 @@ where
 
 #[cfg(feature = "rocksdb")]
 /// Limit concurrency for rocksdb tests to avoid "too many open files" errors.
-pub static ROCKSDB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
+pub static ROCKS_DB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
 
 #[derive(Default)]
 pub struct MakeMemoryStoreClient {

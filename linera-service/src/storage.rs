@@ -134,7 +134,7 @@ impl StorageConfig {
 
 const MEMORY: &str = "memory";
 #[cfg(feature = "rocksdb")]
-const ROCKSDB: &str = "rocksdb:";
+const ROCKS_DB: &str = "rocksdb:";
 #[cfg(feature = "aws")]
 const DYNAMO_DB: &str = "dynamodb:";
 
@@ -146,7 +146,7 @@ impl FromStr for StorageConfig {
             return Ok(Self::Memory);
         }
         #[cfg(feature = "rocksdb")]
-        if let Some(s) = input.strip_prefix(ROCKSDB) {
+        if let Some(s) = input.strip_prefix(ROCKS_DB) {
             return Ok(Self::RocksDb {
                 path: s.to_string().into(),
             });

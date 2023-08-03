@@ -26,7 +26,7 @@ use std::collections::BTreeMap;
 use test_case::test_case;
 
 #[cfg(feature = "rocksdb")]
-use crate::client::client_tests::{MakeRocksDbStoreClient, ROCKSDB_SEMAPHORE};
+use crate::client::client_tests::{MakeRocksDbStoreClient, ROCKS_DB_SEMAPHORE};
 
 #[cfg(feature = "aws")]
 use crate::client::client_tests::MakeDynamoDbStoreClient;
@@ -43,7 +43,7 @@ async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> Result<(),
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
     run_test_create_application(MakeRocksDbStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
@@ -145,7 +145,7 @@ async fn test_memory_run_application_with_dependency(
 async fn test_rocks_db_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
     run_test_run_application_with_dependency(MakeRocksDbStoreClient::with_wasm_runtime(
         wasm_runtime,
     ))
@@ -279,7 +279,7 @@ async fn test_memory_run_reentrant_application(
 async fn test_rocks_db_run_reentrant_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
     run_test_run_reentrant_application(MakeRocksDbStoreClient::with_wasm_runtime(wasm_runtime))
         .await
 }
@@ -374,7 +374,7 @@ async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<()
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
     run_test_cross_chain_message(MakeRocksDbStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
@@ -556,7 +556,7 @@ async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> Result<
 async fn test_rocks_db_user_pub_sub_channels(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
     run_test_user_pub_sub_channels(MakeRocksDbStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
