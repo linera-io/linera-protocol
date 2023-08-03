@@ -14,7 +14,7 @@
 //! The way to make the test work is the following:
 //! * docker pull scylladb/scylla
 //! * docker run --name my_scylla_container -d -p 9042:9042 scylladb/scylla
-//! * cargo test test_readings_scylladb --features scylladb -- --nocapture
+//! * cargo test test_readings_scylla_db --features scylladb -- --nocapture
 //!
 //! When running the test I actually obtain some error "No connections in the
 //! pool; last connection failed with: Invalid message: Frame error: early eof"
@@ -26,19 +26,24 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::KeyValueStoreClient,
 };
-use async_lock::RwLock;
+use async_lock::Semaphore;
 use async_trait::async_trait;
 use scylla::{IntoTypedRows, Session, SessionBuilder};
 use std::sync::Arc;
 use thiserror::Error;
+use std::ops::Deref;
 
 type ScyllaDbClientPair = (Session, Vec<u8>);
+
+const MAX_CONNECTIONS: usize = 10;
+
 
 /// The creation of a ScyllaDb client that can be used for accessing it.
 /// The `Vec<u8>`is a primary key.
 #[derive(Clone)]
 pub struct ScyllaDbClient {
-    client: Arc<RwLock<ScyllaDbClientPair>>,
+    client: Arc<ScyllaDbClientPair>,
+    count: Arc<Semaphore>,
 }
 
 /// The error type for [`ScyllaDbClient`]
@@ -59,13 +64,15 @@ pub enum ScyllaDbContextError {
 
 #[async_trait]
 impl KeyValueStoreClient for ScyllaDbClient {
-    const MAX_CONNECTIONS: usize = 10;
+    const MAX_CONNECTIONS: usize = MAX_CONNECTIONS;
+    const MAX_VALUE_SIZE: usize = usize::MAX;
     type Error = ScyllaDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        let client = self.client.read().await;
+        let client = self.client.deref();
+        let _guard = self.count.acquire().await;
         Self::read_key_internal(&client, key.to_vec()).await
     }
 
@@ -74,7 +81,8 @@ impl KeyValueStoreClient for ScyllaDbClient {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         // There is probably a better way in ScyllaDB for downloading several keys than this one.
-        let client = self.client.read().await;
+        let client = self.client.deref();
+        let _guard = self.count.acquire().await;
         let mut values = Vec::new();
         for key in keys {
             let value = Self::read_key_internal(&client, key.to_vec()).await?;
@@ -84,7 +92,8 @@ impl KeyValueStoreClient for ScyllaDbClient {
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
-        let client = self.client.read().await;
+        let client = self.client.deref();
+        let _guard = self.count.acquire().await;
         Self::find_keys_by_prefix_internal(&client, key_prefix.to_vec()).await
     }
 
@@ -92,12 +101,14 @@ impl KeyValueStoreClient for ScyllaDbClient {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error> {
-        let client = self.client.read().await;
+        let client = self.client.deref();
+        let _guard = self.count.acquire().await;
         Self::find_key_values_by_prefix_internal(&client, key_prefix.to_vec()).await
     }
 
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), Self::Error> {
-        let client = self.client.read().await;
+        let client = self.client.deref();
+        let _guard = self.count.acquire().await;
         Self::write_batch_internal(&client, batch).await
     }
 
@@ -281,9 +292,9 @@ impl ScyllaDbClient {
             )
             .await?;
         let client = (session, namespace);
-        let client = Arc::new(RwLock::new(client));
-        let client = ScyllaDbClient { client };
-        Ok(client)
+        let client = Arc::new(client);
+        let count = Arc::new(Semaphore::new(1));
+        Ok(ScyllaDbClient { client, count })
     }
 }
 
