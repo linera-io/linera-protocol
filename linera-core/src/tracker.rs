@@ -14,6 +14,21 @@ pub struct NotificationTracker {
 }
 
 impl NotificationTracker {
+    /// Returns whether the `Notification` has a higher `BlockHeight` than any previously
+    /// seen `Notification`.
+    pub fn is_new(&mut self, notification: &Notification) -> bool {
+        match &notification.reason {
+            Reason::NewBlock { height, .. } => self
+                .new_block
+                .get(&notification.chain_id)
+                .map_or(true, |prev_height| height > prev_height),
+            Reason::NewIncomingMessage { height, origin } => self
+                .new_message
+                .get(&(notification.chain_id, origin.clone()))
+                .map_or(true, |prev_height| height > prev_height),
+        }
+    }
+
     /// Adds a `Notification` to the `Tracker`.
     ///
     /// If the `Notification` has a higher `BlockHeight` than any previously seen `Notification`

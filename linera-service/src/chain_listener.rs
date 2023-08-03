@@ -141,7 +141,7 @@ where
             guard.process_inbox().await?;
         }
         while let Some(notification) = stream.next().await {
-            if !tracker.insert(notification.clone()) {
+            if !tracker.is_new(&notification) {
                 continue;
             }
             info!("Received new notification: {:?}", notification);
@@ -157,7 +157,7 @@ where
             }
             if let Reason::NewBlock { hash, .. } = notification.reason {
                 let value = storage.read_value(hash).await?;
-                let executed_block = &value.inner().executed_block();
+                let executed_block = value.inner().executed_block();
                 let timestamp = executed_block.block.timestamp;
                 for outgoing_message in &executed_block.messages {
                     if let OutgoingMessage {
@@ -181,6 +181,7 @@ where
                     }
                 }
             }
+            tracker.insert(notification);
             let mut context_guard = context.lock().await;
             context_guard.update_wallet(&mut *client.lock().await).await;
         }

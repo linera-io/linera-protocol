@@ -82,7 +82,7 @@ pub trait ValidatorWorker {
 
     /// Handles information queries on chains.
     async fn handle_chain_info_query(
-        &mut self,
+        &self,
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 
@@ -398,7 +398,7 @@ where
     }
 
     async fn create_cross_chain_request(
-        &mut self,
+        &self,
         confirmed_log: &mut LogView<Client::Context, CryptoHash>,
         height_map: Vec<(Medium, Vec<BlockHeight>)>,
         sender: ChainId,
@@ -423,7 +423,7 @@ where
 
     /// Loads pending cross-chain requests.
     async fn create_network_actions(
-        &mut self,
+        &self,
         chain: &mut ChainStateView<Client::Context>,
     ) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
@@ -984,7 +984,7 @@ where
         chain_id = format!("{:.8}", query.chain_id)
     ))]
     async fn handle_chain_info_query(
-        &mut self,
+        &self,
         query: ChainInfoQuery,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, query);

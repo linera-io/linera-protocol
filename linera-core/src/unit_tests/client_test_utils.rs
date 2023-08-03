@@ -214,7 +214,7 @@ where
         query: ChainInfoQuery,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
-        let mut validator = self.client.lock().await;
+        let validator = self.client.lock().await;
         let result = validator.state.handle_chain_info_query(query).await;
         // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
         sender.send(result.map_err(Into::into).map(|(info, _actions)| info))
