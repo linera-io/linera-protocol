@@ -14,22 +14,19 @@
 //! TODO(#934): Journaling operations
 //! TODO(#933): Enable the CI.
 
-use crate::common::get_upper_bound_option;
 use crate::{
     batch::{Batch, WriteOperation},
-    common::KeyValueStoreClient,
+    common::{get_upper_bound_option, KeyValueStoreClient},
 };
 use async_lock::Semaphore;
 use async_trait::async_trait;
 use scylla::{IntoTypedRows, Session, SessionBuilder};
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 use thiserror::Error;
-use std::ops::Deref;
 
 type ScyllaDbClientPair = (Session, Vec<u8>);
 
 const MAX_CONNECTIONS: usize = 10;
-
 
 /// The creation of a ScyllaDb client that can be used for accessing it.
 /// The `Vec<u8>`is a primary key.
