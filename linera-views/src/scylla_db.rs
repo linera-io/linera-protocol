@@ -4,24 +4,17 @@
 //! This provides a KeyValueStoreClient for the ScyllaDB database.
 //! The code is functional but some aspects are missing.
 //!
-//! Missing functionality:
-//! * The journaling of the storing needs to be implemented.
-//! * Provide a more efficient `read_multi_keys_bytes`.
-//! * Provide the container to all the other tests (there is memory tests,
-//! RocksDB tests, DynamoDB tests, so we just need more).
-//! * Make it part of the CI
+//! The current connection is done via a Session and a corresponding
+//! primary key that we name `namespace`. The total number of connection
+//! is controlled via the `MAX_CONNECTION`.
 //!
-//! The way to make the test work is the following:
-//! * docker pull scylladb/scylla
-//! * docker run --name my_scylla_container -d -p 9042:9042 scylladb/scylla
-//! * cargo test test_readings_scylla_db --features scylladb -- --nocapture
-//!
-//! When running the test I actually obtain some error "No connections in the
-//! pool; last connection failed with: Invalid message: Frame error: early eof"
-//! which I assume are network error on my computer.
+//! Support for ScyllaDb is experimental and is still missing important features:
+//! TODO(#936): Enable all tests using ScyllaDB
+//! TODO(#935): Read several keys at once
+//! TODO(#934): Journaling operations
+//! TODO(#933): Enable the CI.
 
 use crate::common::get_upper_bound_option;
-/// It is an experiemental module for supporting the ScyllaDB database.
 use crate::{
     batch::{Batch, WriteOperation},
     common::KeyValueStoreClient,
