@@ -5,5 +5,6 @@
 
 mod merge;
 mod split;
+mod zero_extend;
 
-pub use self::{merge::Merge, split::Split};
+pub use self::{merge::Merge, split::Split, zero_extend::ZeroExtend};
