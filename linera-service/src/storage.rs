@@ -9,7 +9,7 @@ use linera_storage::MemoryStoreClient;
 use std::str::FromStr;
 
 #[cfg(feature = "rocksdb")]
-use {linera_storage::RocksdbStoreClient, std::path::PathBuf};
+use {linera_storage::RocksDbStoreClient, std::path::PathBuf};
 
 #[cfg(feature = "aws")]
 use {
@@ -23,7 +23,7 @@ use {
 pub enum StorageConfig {
     Memory,
     #[cfg(feature = "rocksdb")]
-    Rocksdb {
+    RocksDb {
         path: PathBuf,
     },
     #[cfg(feature = "aws")]
@@ -42,11 +42,11 @@ pub trait Runnable<S> {
 
 #[doc(hidden)]
 #[cfg(feature = "rocksdb")]
-pub type MaybeRocksdbStoreClient = RocksdbStoreClient;
+pub type MaybeRocksDbStoreClient = RocksDbStoreClient;
 
 #[doc(hidden)]
 #[cfg(not(feature = "rocksdb"))]
-pub type MaybeRocksdbStoreClient = MemoryStoreClient;
+pub type MaybeRocksDbStoreClient = MemoryStoreClient;
 
 #[doc(hidden)]
 #[cfg(feature = "aws")]
@@ -58,14 +58,14 @@ pub type MaybeDynamoDbStoreClient = MemoryStoreClient;
 
 pub trait RunnableJob<Output>:
     Runnable<MemoryStoreClient, Output = Output>
-    + Runnable<MaybeRocksdbStoreClient, Output = Output>
+    + Runnable<MaybeRocksDbStoreClient, Output = Output>
     + Runnable<MaybeDynamoDbStoreClient, Output = Output>
 {
 }
 
 impl<Output, T> RunnableJob<Output> for T where
     T: Runnable<MemoryStoreClient, Output = Output>
-        + Runnable<MaybeRocksdbStoreClient, Output = Output>
+        + Runnable<MaybeRocksDbStoreClient, Output = Output>
         + Runnable<MaybeDynamoDbStoreClient, Output = Output>
 {
 }
@@ -90,7 +90,7 @@ impl StorageConfig {
                 job.run(client).await
             }
             #[cfg(feature = "rocksdb")]
-            Rocksdb { path } => {
+            RocksDb { path } => {
                 let is_new_dir = if path.is_dir() {
                     tracing::warn!("Using existing database {:?}", path);
                     false
@@ -99,7 +99,7 @@ impl StorageConfig {
                     true
                 };
 
-                let mut client = RocksdbStoreClient::new(path.clone(), wasm_runtime, cache_size);
+                let mut client = RocksDbStoreClient::new(path.clone(), wasm_runtime, cache_size);
                 if is_new_dir {
                     config.initialize_store(&mut client).await?;
                 }
@@ -134,7 +134,7 @@ impl StorageConfig {
 
 const MEMORY: &str = "memory";
 #[cfg(feature = "rocksdb")]
-const ROCKSDB: &str = "rocksdb:";
+const ROCKS_DB: &str = "rocksdb:";
 #[cfg(feature = "aws")]
 const DYNAMO_DB: &str = "dynamodb:";
 
@@ -146,8 +146,8 @@ impl FromStr for StorageConfig {
             return Ok(Self::Memory);
         }
         #[cfg(feature = "rocksdb")]
-        if let Some(s) = input.strip_prefix(ROCKSDB) {
-            return Ok(Self::Rocksdb {
+        if let Some(s) = input.strip_prefix(ROCKS_DB) {
+            return Ok(Self::RocksDb {
                 path: s.to_string().into(),
             });
         }
@@ -188,10 +188,10 @@ fn test_storage_config_from_str() {
 
 #[cfg(feature = "rocksdb")]
 #[test]
-fn test_rocksdb_storage_config_from_str() {
+fn test_rocks_db_storage_config_from_str() {
     assert_eq!(
         StorageConfig::from_str("rocksdb:foo.db").unwrap(),
-        StorageConfig::Rocksdb {
+        StorageConfig::RocksDb {
             path: "foo.db".into()
         }
     );

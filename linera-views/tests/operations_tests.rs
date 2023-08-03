@@ -13,7 +13,7 @@ use rand::{Rng, SeedableRng};
 use std::collections::{BTreeMap, HashSet};
 
 #[cfg(feature = "rocksdb")]
-use linera_views::rocksdb::create_rocksdb_test_client;
+use linera_views::rocks_db::create_rocks_db_test_client;
 
 #[cfg(feature = "aws")]
 use linera_views::test_utils::create_dynamodb_test_client;
@@ -159,9 +159,9 @@ async fn test_readings_memory() {
 
 #[cfg(feature = "rocksdb")]
 #[tokio::test]
-async fn test_readings_rocksdb() {
+async fn test_readings_rocks_db() {
     for scenario in get_random_test_scenarios() {
-        let key_value_operation = create_rocksdb_test_client();
+        let key_value_operation = create_rocks_db_test_client();
         test_readings_vec(key_value_operation, scenario).await;
     }
 }
@@ -276,8 +276,8 @@ async fn test_writings_key_value_store_view_memory() {
 
 #[cfg(feature = "rocksdb")]
 #[tokio::test]
-async fn test_writings_rocksdb() {
-    let key_value_operation = create_rocksdb_test_client();
+async fn test_writings_rocks_db() {
+    let key_value_operation = create_rocks_db_test_client();
     test_writings_random(key_value_operation).await;
 }
 

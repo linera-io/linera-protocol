@@ -31,7 +31,7 @@ use std::{
 use tokio::sync::oneshot;
 
 #[cfg(feature = "rocksdb")]
-use {linera_storage::RocksdbStoreClient, tokio::sync::Semaphore};
+use {linera_storage::RocksDbStoreClient, tokio::sync::Semaphore};
 
 #[cfg(feature = "aws")]
 use {
@@ -521,7 +521,7 @@ where
 
 #[cfg(feature = "rocksdb")]
 /// Limit concurrency for rocksdb tests to avoid "too many open files" errors.
-pub static ROCKSDB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
+pub static ROCKS_DB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
 
 #[derive(Default)]
 pub struct MakeMemoryStoreClient {
@@ -550,35 +550,35 @@ impl MakeMemoryStoreClient {
 
 #[cfg(feature = "rocksdb")]
 #[derive(Default)]
-pub struct MakeRocksdbStoreClient {
+pub struct MakeRocksDbStoreClient {
     temp_dirs: Vec<tempfile::TempDir>,
     wasm_runtime: Option<WasmRuntime>,
 }
 
 #[cfg(feature = "rocksdb")]
-impl MakeRocksdbStoreClient {
-    /// Creates a [`MakeRocksdbStoreClient`] that uses the specified [`WasmRuntime`] to run WASM
+impl MakeRocksDbStoreClient {
+    /// Creates a [`MakeRocksDbStoreClient`] that uses the specified [`WasmRuntime`] to run WASM
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        MakeRocksdbStoreClient {
+        MakeRocksDbStoreClient {
             wasm_runtime: wasm_runtime.into(),
-            ..MakeRocksdbStoreClient::default()
+            ..MakeRocksDbStoreClient::default()
         }
     }
 }
 
 #[cfg(feature = "rocksdb")]
 #[async_trait]
-impl StoreBuilder for MakeRocksdbStoreClient {
-    type Store = RocksdbStoreClient;
+impl StoreBuilder for MakeRocksDbStoreClient {
+    type Store = RocksDbStoreClient;
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         let dir = tempfile::TempDir::new()?;
         let path = dir.path().to_path_buf();
         self.temp_dirs.push(dir);
         let standard_max_cache_size = 1000;
-        Ok(RocksdbStoreClient::new(
+        Ok(RocksDbStoreClient::new(
             path,
             self.wasm_runtime,
             standard_max_cache_size,

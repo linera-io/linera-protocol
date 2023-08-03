@@ -26,7 +26,7 @@ use linera_views::views::ViewError;
 use test_log::test;
 
 #[cfg(feature = "rocksdb")]
-use crate::client::client_test_utils::{MakeRocksdbStoreClient, ROCKSDB_SEMAPHORE};
+use crate::client::client_test_utils::{MakeRocksDbStoreClient, ROCKS_DB_SEMAPHORE};
 
 #[cfg(feature = "aws")]
 use crate::client::client_test_utils::MakeDynamoDbStoreClient;
@@ -38,9 +38,9 @@ pub async fn test_memory_initiating_valid_transfer() -> Result<(), anyhow::Error
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocksdb_initiating_valid_transfer() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_initiating_valid_transfer(MakeRocksdbStoreClient::default()).await
+async fn test_rocks_db_initiating_valid_transfer() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_initiating_valid_transfer(MakeRocksDbStoreClient::default()).await
 }
 
 #[cfg(feature = "aws")]
@@ -94,9 +94,9 @@ async fn test_memory_claim_amount() -> Result<(), anyhow::Error> {
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocksdb_claim_amount() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_claim_amount(MakeRocksdbStoreClient::default()).await
+async fn test_rocks_db_claim_amount() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_claim_amount(MakeRocksDbStoreClient::default()).await
 }
 
 #[cfg(feature = "aws")]
@@ -178,9 +178,9 @@ async fn test_memory_rotate_key_pair() -> Result<(), anyhow::Error> {
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocksdb_rotate_key_pair() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_rotate_key_pair(MakeRocksdbStoreClient::default()).await
+async fn test_rocks_db_rotate_key_pair() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_rotate_key_pair(MakeRocksDbStoreClient::default()).await
 }
 
 #[cfg(feature = "aws")]
@@ -242,9 +242,9 @@ async fn test_memory_transfer_ownership() -> Result<(), anyhow::Error> {
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocksdb_transfer_ownership() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_transfer_ownership(MakeRocksdbStoreClient::default()).await
+async fn test_rocks_db_transfer_ownership() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_transfer_ownership(MakeRocksDbStoreClient::default()).await
 }
 
 #[cfg(feature = "aws")]
@@ -309,9 +309,9 @@ async fn test_memory_share_ownership() -> Result<(), anyhow::Error> {
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocksdb_share_ownership() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_share_ownership(MakeRocksdbStoreClient::default()).await
+async fn test_rocks_db_share_ownership() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_share_ownership(MakeRocksDbStoreClient::default()).await
 }
 
 #[cfg(feature = "aws")]
@@ -455,9 +455,9 @@ async fn test_memory_open_chain_then_close_it() -> Result<(), anyhow::Error> {
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocksdb_open_chain_then_close_it() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_open_chain_then_close_it(MakeRocksdbStoreClient::default()).await
+async fn test_rocks_db_open_chain_then_close_it() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_open_chain_then_close_it(MakeRocksDbStoreClient::default()).await
 }
 
 #[cfg(feature = "aws")]
@@ -507,9 +507,9 @@ async fn test_memory_transfer_then_open_chain() -> Result<(), anyhow::Error> {
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocksdb_transfer_then_open_chain() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_transfer_then_open_chain(MakeRocksdbStoreClient::default()).await
+async fn test_rocks_db_transfer_then_open_chain() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_transfer_then_open_chain(MakeRocksDbStoreClient::default()).await
 }
 
 #[cfg(feature = "aws")]
@@ -598,9 +598,9 @@ async fn test_memory_open_chain_then_transfer() -> Result<(), anyhow::Error> {
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocksdb_open_chain_then_transfer() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_open_chain_then_transfer(MakeRocksdbStoreClient::default()).await
+async fn test_rocks_db_open_chain_then_transfer() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_open_chain_then_transfer(MakeRocksDbStoreClient::default()).await
 }
 
 #[cfg(feature = "aws")]
@@ -678,9 +678,9 @@ async fn test_memory_close_chain() -> Result<(), anyhow::Error> {
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocksdb_close_chain() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_close_chain(MakeRocksdbStoreClient::default()).await
+async fn test_rocks_db_close_chain() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_close_chain(MakeRocksDbStoreClient::default()).await
 }
 
 #[cfg(feature = "aws")]
@@ -738,9 +738,9 @@ async fn test_memory_initiating_valid_transfer_too_many_faults() -> Result<(), a
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocksdb_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_initiating_valid_transfer_too_many_faults(MakeRocksdbStoreClient::default()).await
+async fn test_rocks_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_initiating_valid_transfer_too_many_faults(MakeRocksDbStoreClient::default()).await
 }
 
 #[cfg(feature = "aws")]
@@ -785,9 +785,9 @@ async fn test_memory_bidirectional_transfer() -> Result<(), anyhow::Error> {
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocksdb_bidirectional_transfer() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_bidirectional_transfer(MakeRocksdbStoreClient::default()).await
+async fn test_rocks_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_bidirectional_transfer(MakeRocksDbStoreClient::default()).await
 }
 
 #[cfg(feature = "aws")]
@@ -909,9 +909,9 @@ async fn test_memory_receiving_unconfirmed_transfer() -> Result<(), anyhow::Erro
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocksdb_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_receiving_unconfirmed_transfer(MakeRocksdbStoreClient::default()).await
+async fn test_rocks_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_receiving_unconfirmed_transfer(MakeRocksDbStoreClient::default()).await
 }
 
 #[cfg(feature = "aws")]
@@ -970,11 +970,11 @@ async fn test_memory_receiving_unconfirmed_transfer_with_lagging_sender_balances
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocksdb_receiving_unconfirmed_transfer_with_lagging_sender_balances(
+async fn test_rocks_db_receiving_unconfirmed_transfer_with_lagging_sender_balances(
 ) -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
     run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-        MakeRocksdbStoreClient::default(),
+        MakeRocksDbStoreClient::default(),
     )
     .await
 }
@@ -1088,9 +1088,9 @@ async fn test_memory_change_voting_rights() -> Result<(), anyhow::Error> {
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocksdb_change_voting_rights() -> Result<(), anyhow::Error> {
-    let _lock = ROCKSDB_SEMAPHORE.acquire().await;
-    run_test_change_voting_rights(MakeRocksdbStoreClient::default()).await
+async fn test_rocks_db_change_voting_rights() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_change_voting_rights(MakeRocksDbStoreClient::default()).await
 }
 
 #[cfg(feature = "aws")]

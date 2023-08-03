@@ -3,28 +3,28 @@
 
 use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
 use linera_execution::WasmRuntime;
-use linera_views::rocksdb::RocksdbClient;
+use linera_views::rocks_db::RocksDbClient;
 use std::{path::PathBuf, sync::Arc};
 
 #[cfg(test)]
-#[path = "unit_tests/rocksdb.rs"]
+#[path = "unit_tests/rocks_db.rs"]
 mod tests;
 
-type RocksdbStore = DbStore<RocksdbClient>;
+type RocksDbStore = DbStore<RocksDbClient>;
 
-pub type RocksdbStoreClient = DbStoreClient<RocksdbClient>;
+pub type RocksDbStoreClient = DbStoreClient<RocksDbClient>;
 
-impl RocksdbStoreClient {
+impl RocksDbStoreClient {
     pub fn new(path: PathBuf, wasm_runtime: Option<WasmRuntime>, cache_size: usize) -> Self {
-        RocksdbStoreClient {
-            client: Arc::new(RocksdbStore::new(path, wasm_runtime, cache_size)),
+        RocksDbStoreClient {
+            client: Arc::new(RocksDbStore::new(path, wasm_runtime, cache_size)),
         }
     }
 }
 
-impl RocksdbStore {
+impl RocksDbStore {
     pub fn new(dir: PathBuf, wasm_runtime: Option<WasmRuntime>, cache_size: usize) -> Self {
-        let client = RocksdbClient::new(dir, cache_size);
+        let client = RocksDbClient::new(dir, cache_size);
         Self {
             client,
             guards: ChainGuards::default(),

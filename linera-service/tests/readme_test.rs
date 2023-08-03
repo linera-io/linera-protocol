@@ -65,7 +65,7 @@ fn get_bash_quotes(reader: impl std::io::BufRead) -> std::io::Result<Vec<String>
 mod aws_test {
     use super::*;
 
-    const ROCKSDB_STORAGE: &str = "--storage rocksdb:server_\"$I\"_\"$J\".db";
+    const ROCKS_DB_STORAGE: &str = "--storage rocksdb:server_\"$I\"_\"$J\".db";
     const DYNAMO_DB_STORAGE: &str = "--storage dynamodb:server-\"$I\":localstack";
 
     const BUILD: &str = "cargo build";
@@ -82,8 +82,8 @@ mod aws_test {
         // Check that we have the expected number of examples starting with "```bash".
         assert_eq!(quotes.len(), 1);
         let quote = quotes.pop().unwrap();
-        assert_eq!(quote.matches(ROCKSDB_STORAGE).count(), 1);
-        let quote = quote.replace(ROCKSDB_STORAGE, DYNAMO_DB_STORAGE);
+        assert_eq!(quote.matches(ROCKS_DB_STORAGE).count(), 1);
+        let quote = quote.replace(ROCKS_DB_STORAGE, DYNAMO_DB_STORAGE);
         let quote = quote.replace(BUILD, AWS_BUILD);
 
         let mut test_script = std::fs::File::create(dir.path().join("test.sh"))?;
