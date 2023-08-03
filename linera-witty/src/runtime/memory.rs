@@ -11,6 +11,10 @@ use crate::{Layout, WitType};
 use frunk::{hlist, hlist_pat, HList};
 use std::borrow::Cow;
 
+#[cfg(test)]
+#[path = "unit_tests/memory.rs"]
+mod tests;
+
 /// An address for a location in a guest WebAssembly module's memory.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GuestPointer(pub(crate) u32);
