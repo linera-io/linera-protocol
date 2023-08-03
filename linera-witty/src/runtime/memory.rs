@@ -19,6 +19,9 @@ impl GuestPointer {
     /// Returns a new address that's the current address advanced to add padding to ensure it's
     /// aligned to the `alignment` byte boundary.
     pub const fn aligned_at(&self, alignment: u32) -> Self {
+        // The following computation is equivalent to:
+        // `(alignment - (self.0 % alignment)) % alignment`.
+        // Source: https://en.wikipedia.org/wiki/Data_structure_alignment#Computing_padding
         let padding = (-(self.0 as i32) & (alignment as i32 - 1)) as u32;
 
         GuestPointer(self.0 + padding)
