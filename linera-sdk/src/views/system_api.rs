@@ -30,13 +30,16 @@ impl KeyValueStore {
 
 #[async_trait]
 impl KeyValueStoreClient for KeyValueStore {
-    const MAX_CONNECTIONS: usize = 1;
     // The KeyValueStoreClient of the system_api does not have limits
     // on the size of its values.
     const MAX_VALUE_SIZE: usize = usize::MAX;
     type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    fn max_stream_queries(&self) -> usize {
+        1
+    }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let future = wit::ReadKeyBytes::new(key);

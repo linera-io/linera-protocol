@@ -306,6 +306,14 @@ enum ServerCommand {
         #[structopt(long)]
         wasm_runtime: Option<WasmRuntime>,
 
+        /// The maximal number of simultaneous queries to the database
+        #[structopt(long)]
+        max_concurrent_queries: Option<usize>,
+
+        /// The maximal number of stream queries to the database
+        #[structopt(long, default_value = "10")]
+        max_stream_queries: usize,
+
         /// The maximal number of entries in the storage cache.
         #[structopt(long, default_value = "1000")]
         cache_size: usize,
@@ -353,6 +361,8 @@ async fn main() {
             shard,
             grace_period,
             wasm_runtime,
+            max_concurrent_queries,
+            max_stream_queries,
             cache_size,
         } => {
             let genesis_config = GenesisConfig::read(&genesis_config_path)
@@ -368,7 +378,14 @@ async fn main() {
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             storage_config
-                .run_with_storage(&genesis_config, wasm_runtime, cache_size, job)
+                .run_with_storage(
+                    &genesis_config,
+                    wasm_runtime,
+                    max_concurrent_queries,
+                    max_stream_queries,
+                    cache_size,
+                    job,
+                )
                 .await
                 .unwrap();
         }

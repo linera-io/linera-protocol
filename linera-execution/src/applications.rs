@@ -18,8 +18,11 @@ use std::collections::{HashMap, HashSet};
 
 #[cfg(any(test, feature = "test"))]
 use {
-    async_lock::Mutex, linera_views::memory::MemoryContext, linera_views::views::View,
-    std::collections::BTreeMap, std::sync::Arc,
+    async_lock::Mutex,
+    linera_views::memory::{MemoryContext, MEMORY_MAX_STREAM_QUERIES},
+    linera_views::views::View,
+    std::collections::BTreeMap,
+    std::sync::Arc,
 };
 
 #[cfg(test)]
@@ -287,7 +290,7 @@ where
 {
     pub async fn new() -> Self {
         let guard = Arc::new(Mutex::new(BTreeMap::new())).lock_arc().await;
-        let context = MemoryContext::new(guard, ());
+        let context = MemoryContext::new(guard, MEMORY_MAX_STREAM_QUERIES, ());
         Self::load(context)
             .await
             .expect("Loading from memory should work")

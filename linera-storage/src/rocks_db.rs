@@ -15,16 +15,31 @@ type RocksDbStore = DbStore<RocksDbClient>;
 pub type RocksDbStoreClient = DbStoreClient<RocksDbClient>;
 
 impl RocksDbStoreClient {
-    pub fn new(path: PathBuf, wasm_runtime: Option<WasmRuntime>, cache_size: usize) -> Self {
+    pub fn new(
+        path: PathBuf,
+        wasm_runtime: Option<WasmRuntime>,
+        max_stream_queries: usize,
+        cache_size: usize,
+    ) -> Self {
         RocksDbStoreClient {
-            client: Arc::new(RocksDbStore::new(path, wasm_runtime, cache_size)),
+            client: Arc::new(RocksDbStore::new(
+                path,
+                wasm_runtime,
+                max_stream_queries,
+                cache_size,
+            )),
         }
     }
 }
 
 impl RocksDbStore {
-    pub fn new(dir: PathBuf, wasm_runtime: Option<WasmRuntime>, cache_size: usize) -> Self {
-        let client = RocksDbClient::new(dir, cache_size);
+    pub fn new(
+        dir: PathBuf,
+        wasm_runtime: Option<WasmRuntime>,
+        max_stream_queries: usize,
+        cache_size: usize,
+    ) -> Self {
+        let client = RocksDbClient::new(dir, max_stream_queries, cache_size);
         Self {
             client,
             guards: ChainGuards::default(),

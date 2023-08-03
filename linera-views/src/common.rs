@@ -123,9 +123,6 @@ pub trait KeyValueIterable<Error> {
 /// Low-level, asynchronous key-value operations. Useful for storage APIs not based on views.
 #[async_trait]
 pub trait KeyValueStoreClient {
-    /// Maximum number of simultaneous connections.
-    const MAX_CONNECTIONS: usize;
-
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
@@ -137,6 +134,9 @@ pub trait KeyValueStoreClient {
 
     /// Returns type for key-value search operations.
     type KeyValues: KeyValueIterable<Self::Error>;
+
+    /// Retrieve the number of stream queries.
+    fn max_stream_queries(&self) -> usize;
 
     /// Retrieves a `Vec<u8>` from the database using the provided `key`.
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
@@ -269,9 +269,6 @@ impl<E> KeyValueIterable<E> for Vec<(Vec<u8>, Vec<u8>)> {
 /// connect to the database and the address of the current entry.
 #[async_trait]
 pub trait Context {
-    /// Maximum number of simultaneous connections
-    const MAX_CONNECTIONS: usize;
-
     /// The maximal size of values that can be stored.
     const MAX_VALUE_SIZE: usize;
 
@@ -287,6 +284,9 @@ pub trait Context {
 
     /// Returns type for key-value search operations.
     type KeyValues: KeyValueIterable<Self::Error>;
+
+    /// Retrieve the number of stream queries.
+    fn max_stream_queries(&self) -> usize;
 
     /// Retrieves a `Vec<u8>` from the database using the provided `key` prefixed by the current
     /// context.
@@ -460,12 +460,15 @@ where
     DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<DB::Error>,
 {
-    const MAX_CONNECTIONS: usize = DB::MAX_CONNECTIONS;
     const MAX_VALUE_SIZE: usize = DB::MAX_VALUE_SIZE;
     type Extra = E;
     type Error = DB::Error;
     type Keys = DB::Keys;
     type KeyValues = DB::KeyValues;
+
+    fn max_stream_queries(&self) -> usize {
+        self.db.max_stream_queries()
+    }
 
     fn extra(&self) -> &E {
         &self.extra

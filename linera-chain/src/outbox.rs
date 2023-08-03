@@ -11,7 +11,9 @@ use linera_views::{
 
 #[cfg(any(test, feature = "test"))]
 use {
-    async_lock::Mutex, linera_views::memory::MemoryContext, std::collections::BTreeMap,
+    async_lock::Mutex,
+    linera_views::memory::{MemoryContext, MEMORY_MAX_STREAM_QUERIES},
+    std::collections::BTreeMap,
     std::sync::Arc,
 };
 
@@ -82,7 +84,7 @@ where
         let guard = Arc::new(Mutex::new(BTreeMap::new()))
             .try_lock_arc()
             .expect("a guard");
-        let context = MemoryContext::new(guard, ());
+        let context = MemoryContext::new(guard, MEMORY_MAX_STREAM_QUERIES, ());
         Self::load(context)
             .await
             .expect("Loading from memory should work")

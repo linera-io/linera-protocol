@@ -12,6 +12,9 @@ use async_trait::async_trait;
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use thiserror::Error;
 
+/// The number of streams for the test
+pub const MEMORY_MAX_STREAM_QUERIES: usize = 10;
+
 /// The data is serialized in memory just like for RocksDB / DynamoDB
 /// The analog of the database is the BTreeMap
 pub type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
@@ -20,15 +23,19 @@ pub type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 #[derive(Clone)]
 pub struct MemoryClient {
     map: Arc<RwLock<MutexGuardArc<MemoryStoreMap>>>,
+    max_stream_queries: usize,
 }
 
 #[async_trait]
 impl KeyValueStoreClient for MemoryClient {
-    const MAX_CONNECTIONS: usize = 1;
     const MAX_VALUE_SIZE: usize = usize::MAX;
     type Error = MemoryContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    fn max_stream_queries(&self) -> usize {
+        self.max_stream_queries
+    }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
         let map = self.map.read().await;
@@ -105,9 +112,12 @@ impl KeyValueStoreClient for MemoryClient {
 
 impl MemoryClient {
     /// constructor of MemoryClient
-    pub fn new(guard: MutexGuardArc<MemoryStoreMap>) -> Self {
+    pub fn new(guard: MutexGuardArc<MemoryStoreMap>, max_stream_queries: usize) -> Self {
         let map = Arc::new(RwLock::new(guard));
-        MemoryClient { map }
+        MemoryClient {
+            map,
+            max_stream_queries,
+        }
     }
 }
 
@@ -116,8 +126,8 @@ pub type MemoryContext<E> = ContextFromDb<E, MemoryClient>;
 
 impl<E> MemoryContext<E> {
     /// Creates a [`MemoryContext`].
-    pub fn new(guard: MutexGuardArc<MemoryStoreMap>, extra: E) -> Self {
-        let db = MemoryClient::new(guard);
+    pub fn new(guard: MutexGuardArc<MemoryStoreMap>, max_stream_queries: usize, extra: E) -> Self {
+        let db = MemoryClient::new(guard, max_stream_queries);
         let base_key = Vec::new();
         Self {
             db,
@@ -135,16 +145,21 @@ pub fn create_memory_context() -> MemoryContext<()> {
     let guard = state
         .try_lock_arc()
         .expect("We should acquire the lock just after creating the object");
-    MemoryContext::new(guard, ())
+    MemoryContext::new(guard, MEMORY_MAX_STREAM_QUERIES, ())
 }
 
 /// Creates a test memory client for working.
-pub fn create_memory_client() -> MemoryClient {
+pub fn create_memory_client_stream_queries(max_stream_queries: usize) -> MemoryClient {
     let state = Arc::new(Mutex::new(BTreeMap::new()));
     let guard = state
         .try_lock_arc()
         .expect("We should acquire the lock just after creating the object");
-    MemoryClient::new(guard)
+    MemoryClient::new(guard, max_stream_queries)
+}
+
+/// Creates a test memory client for working.
+pub fn create_memory_client() -> MemoryClient {
+    create_memory_client_stream_queries(MEMORY_MAX_STREAM_QUERIES)
 }
 
 /// The error type for [`MemoryContext`].

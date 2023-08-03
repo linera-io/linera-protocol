@@ -3,6 +3,7 @@
 
 use super::{DynamoDbContext, TableName, TableStatus};
 use crate::{
+    dynamo_db::{DYNAMO_DB_MAX_CONCURRENT_QUERIES, DYNAMO_DB_MAX_STREAM_QUERIES},
     lru_caching::TEST_CACHE_SIZE,
     test_utils::{list_tables, LocalStackTestContext},
 };
@@ -21,6 +22,8 @@ async fn table_is_created() -> Result<(), Error> {
     let (_storage, table_status) = DynamoDbContext::from_config(
         localstack.dynamo_db_config(),
         table.clone(),
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         vec![],
         (),
@@ -49,6 +52,8 @@ async fn separate_tables_are_created() -> Result<(), Error> {
     let (_storage, first_table_status) = DynamoDbContext::from_config(
         localstack.dynamo_db_config(),
         first_table.clone(),
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         vec![],
         (),
@@ -57,6 +62,8 @@ async fn separate_tables_are_created() -> Result<(), Error> {
     let (_storage, second_table_status) = DynamoDbContext::from_config(
         localstack.dynamo_db_config(),
         second_table.clone(),
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         vec![],
         (),
