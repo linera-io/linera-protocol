@@ -101,12 +101,17 @@ pub mod key_value_store_view;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod hashable_wrapper;
 
-/// Helper definitions for RocksDB storage.
+/// A storage backend for views based on ScyllaDB
+#[cfg(feature = "scylladb")]
+#[cfg(not(target_arch = "wasm32"))]
+pub mod scylla_db;
+
+/// A storage backend for views based on RocksDB
 #[cfg(feature = "rocksdb")]
 #[cfg(not(target_arch = "wasm32"))]
 pub mod rocks_db;
 
-/// Helper definitions for DynamoDB storage.
+/// A storage backend for views based on DynamoDB
 #[cfg(feature = "aws")]
 #[cfg(not(target_arch = "wasm32"))]
 pub mod dynamo_db;

@@ -47,17 +47,27 @@ pub const MIN_VIEW_TAG: u8 = 1;
 /// is possible with the way the comparison operators for vectors are built.
 ///
 /// The statement is that p is a prefix of v if and only if p <= v < upper_bound(p).
-pub(crate) fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
+pub(crate) fn get_upper_bound_option(key_prefix: &[u8]) -> Option<Vec<u8>> {
     let len = key_prefix.len();
     for i in (0..len).rev() {
         let val = key_prefix[i];
         if val < u8::MAX {
             let mut upper_bound = key_prefix[0..i + 1].to_vec();
             upper_bound[i] += 1;
-            return Excluded(upper_bound);
+            return Some(upper_bound);
         }
     }
-    Unbounded
+    None
+}
+
+/// The upper bound that can be used in ranges when accessing
+/// a container. That is a vector v is a prefix of p if and only if
+/// v belongs to the interval (Included(p), get_upper_bound(p)).
+pub(crate) fn get_upper_bound(key_prefix: &[u8]) -> Bound<Vec<u8>> {
+    match get_upper_bound_option(key_prefix) {
+        None => Unbounded,
+        Some(upper_bound) => Excluded(upper_bound),
+    }
 }
 
 /// Computes an interval so that a vector has `key_prefix` as a prefix
