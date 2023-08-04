@@ -24,12 +24,15 @@ use scylla::{IntoTypedRows, Session, SessionBuilder};
 use std::{ops::Deref, sync::Arc};
 use thiserror::Error;
 
-type ScyllaDbClientPair = (Session, Vec<u8>);
-
-const MAX_CONNECTIONS: usize = 10;
-
 /// The creation of a ScyllaDb client that can be used for accessing it.
 /// The `Vec<u8>`is a primary key.
+type ScyllaDbClientPair = (Session, Vec<u8>);
+
+/// We limit the number of connections that can be done.
+/// TODO: Put it as parameter when PR 931.
+const MAX_CONNECTIONS: usize = 10;
+
+/// The client itself and the keeping of the count of active connections.
 #[derive(Clone)]
 pub struct ScyllaDbClient {
     client: Arc<ScyllaDbClientPair>,
