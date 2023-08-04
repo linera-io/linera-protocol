@@ -66,7 +66,7 @@ impl KeyValueStoreClient for ScyllaDbClient {
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let client = self.client.deref();
         let _guard = self.count.acquire().await;
-        Self::read_key_internal(&client, key.to_vec()).await
+        Self::read_key_internal(client, key.to_vec()).await
     }
 
     async fn read_multi_key_bytes(
@@ -78,7 +78,7 @@ impl KeyValueStoreClient for ScyllaDbClient {
         let _guard = self.count.acquire().await;
         let mut values = Vec::new();
         for key in keys {
-            let value = Self::read_key_internal(&client, key.to_vec()).await?;
+            let value = Self::read_key_internal(client, key.to_vec()).await?;
             values.push(value);
         }
         Ok(values)
@@ -87,7 +87,7 @@ impl KeyValueStoreClient for ScyllaDbClient {
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
         let client = self.client.deref();
         let _guard = self.count.acquire().await;
-        Self::find_keys_by_prefix_internal(&client, key_prefix.to_vec()).await
+        Self::find_keys_by_prefix_internal(client, key_prefix.to_vec()).await
     }
 
     async fn find_key_values_by_prefix(
@@ -96,13 +96,13 @@ impl KeyValueStoreClient for ScyllaDbClient {
     ) -> Result<Self::KeyValues, Self::Error> {
         let client = self.client.deref();
         let _guard = self.count.acquire().await;
-        Self::find_key_values_by_prefix_internal(&client, key_prefix.to_vec()).await
+        Self::find_key_values_by_prefix_internal(client, key_prefix.to_vec()).await
     }
 
     async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), Self::Error> {
         let client = self.client.deref();
         let _guard = self.count.acquire().await;
-        Self::write_batch_internal(&client, batch).await
+        Self::write_batch_internal(client, batch).await
     }
 
     async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), Self::Error> {
