@@ -6,3 +6,5 @@
 mod custom_types;
 mod frunk;
 mod std;
+#[cfg(test)]
+mod tests;
