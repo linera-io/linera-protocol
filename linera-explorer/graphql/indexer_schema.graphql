@@ -1,0 +1,41 @@
+"""
+A block height to identify blocks in a chain
+"""
+scalar BlockHeight
+
+
+"""
+The unique identifier (UID) of a chain. This is currently computed as the hash value of a ChainDescription.
+"""
+scalar ChainId
+
+"""
+A Sha3-256 value
+"""
+scalar CryptoHash
+
+
+type HighestBlock {
+	chain: ChainId!
+	block: CryptoHash
+	height: BlockHeight
+}
+
+
+
+type State {
+	"""
+	Gets the plugins registered in the indexer
+	"""
+	plugins: [String!]!
+	"""
+	Gets the latest blocks registered for each chain handled by the indexer
+	"""
+	state: [HighestBlock!]!
+}
+
+
+schema {
+	query: State
+}
+

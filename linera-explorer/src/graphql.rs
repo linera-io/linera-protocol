@@ -1,9 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Result;
 use graphql_client::GraphQLQuery;
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{BcsHashable, CryptoHash},
     data_types::{BlockHeight, RoundNumber, Timestamp},
     identifiers::{ChainId, Destination, Owner},
 };
@@ -17,6 +18,15 @@ type Event = Value;
 type Origin = Value;
 type UserApplicationDescription = Value;
 type ApplicationId = String;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct OperationKey {
+    pub chain_id: ChainId,
+    pub height: BlockHeight,
+    pub index: usize,
+}
+
+impl BcsHashable for OperationKey {}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Notification {
@@ -81,7 +91,7 @@ pub struct Applications;
 )]
 pub struct Notifications;
 
-pub async fn introspection(url: &str) -> Result<Value, String> {
+pub async fn introspection(url: &str) -> Result<Value> {
     let client = reqwest::Client::new();
     let graphql_query =
         "query { \
@@ -113,10 +123,40 @@ pub async fn introspection(url: &str) -> Result<Value, String> {
         .post(url)
         .body(format!("{{\"query\":\"{}\"}}", graphql_query))
         .send()
-        .await
-        .map_err(|e| e.to_string())?
+        .await?
         .text()
-        .await
-        .map_err(|e| e.to_string())?;
-    serde_json::from_str::<Value>(&res).map_err(|e| e.to_string())
+        .await?;
+    Ok(serde_json::from_str::<Value>(&res)?)
 }
+
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "graphql/operations_schema.graphql",
+    query_path = "graphql/operations_requests.graphql",
+    response_derives = "Debug, Serialize, Clone"
+)]
+pub struct Operations;
+
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "graphql/operations_schema.graphql",
+    query_path = "graphql/operations_requests.graphql",
+    response_derives = "Debug, Serialize, Clone"
+)]
+pub struct OperationsCount;
+
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "graphql/operations_schema.graphql",
+    query_path = "graphql/operations_requests.graphql",
+    response_derives = "Debug, Serialize, Clone"
+)]
+pub struct LastOperation;
+
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "graphql/operations_schema.graphql",
+    query_path = "graphql/operations_requests.graphql",
+    response_derives = "Debug, Serialize, Clone"
+)]
+pub struct GetOperation;

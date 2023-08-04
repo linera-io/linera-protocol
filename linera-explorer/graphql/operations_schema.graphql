@@ -1,0 +1,63 @@
+directive @oneOf on INPUT_OBJECT
+
+
+"""
+The unique identifier (UID) of a chain. This is currently computed as the hash value of a ChainDescription.
+"""
+scalar ChainId
+
+type ChainOperation {
+	key: OperationKey!
+	previousOperation: OperationKey
+	index: Int!
+	block: CryptoHash!
+	content: Operation!
+}
+
+"""
+A Sha3-256 value
+"""
+scalar CryptoHash
+
+
+
+
+"""
+An operation to be executed in a block
+"""
+scalar Operation
+
+"""
+An operation key to index operations
+"""
+scalar OperationKey
+
+input OperationKeyKind @oneOf {
+	key: OperationKey
+	last: ChainId
+}
+
+type OperationsRoot {
+	"""
+	Gets the operation associated to its hash
+	"""
+	operation(key: OperationKeyKind!): ChainOperation
+	"""
+	Gets the operations in downward order from an operation hash or from the last block of a chain
+	"""
+	operations(from: OperationKeyKind!, limit: Int): [ChainOperation!]!
+	"""
+	Gets the number of operations registered for a chain
+	"""
+	count(chainId: ChainId!): Int!
+	"""
+	Gets the hash of the last operation registered for a chain
+	"""
+	last(chainId: ChainId!): OperationKey
+}
+
+
+schema {
+	query: OperationsRoot
+}
+

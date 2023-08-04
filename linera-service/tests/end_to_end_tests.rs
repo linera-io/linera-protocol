@@ -451,7 +451,7 @@ async fn test_end_to_end_block_query() {
 
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_check_schema() {
-    let path = cargo_build_binary("linera-schema-export").await;
+    let path = cargo_build_binary("linera-schema-export", None).await;
     let mut command = Command::new(path);
     let output = command
         .kill_on_drop(true)
@@ -466,7 +466,7 @@ async fn test_end_to_end_check_schema() {
     file_base
         .read_to_string(&mut graphql_schema)
         .expect("failed to read schema.graphql");
-    assert_eq!(graphql_schema, service_schema, "GraphQL schema has changed -> regenerate schema following steps in linera-explorer/README.md")
+    assert_eq!(graphql_schema, service_schema, "\nGraphQL schema has changed -> regenerate schema following steps in linera-explorer/README.md\n")
 }
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]

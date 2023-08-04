@@ -13,20 +13,21 @@ license = "Apache-2.0"
 crate-type = ["cdylib"]
 
 [dependencies]
-url = "2.4"
-wasm-bindgen = "0.2"
-serde-wasm-bindgen = "0.5"
-wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = [ "console", "Window", "History", "Storage", "Location" ] }
-js-sys = "0.3"
+anyhow = { workspace = true }
 console_error_panic_hook = "0.1"
+futures = { workspace = true }
 graphql_client = { version = "0.13", features = [ "reqwest" ] }
-ws_stream_wasm = "0.7"
-uuid = { version = "1.4", features = [ "v3" ] }
-serde = { workspace = true, features = [ "derive" ] }
-serde_json = { workspace = true }
 hex = { workspace = true }
 reqwest = { workspace = true }
+js-sys = "0.3"
 linera-base = { workspace = true }
-futures = { workspace = true }
 once_cell = { workspace = true }
+serde = { workspace = true, features = [ "derive" ] }
+serde-wasm-bindgen = "0.5"
+serde_json = { workspace = true }
+uuid = { version = "1.4", features = [ "v3" ] }
+url = "2.4"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [ "console", "Window", "History", "Storage", "Location" ] }
+ws_stream_wasm = "0.7"

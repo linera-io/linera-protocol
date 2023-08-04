@@ -1,0 +1,56 @@
+[package]
+name = "linera-indexer"
+version = "0.4.0"
+description = "Indexer for Linera protocol."
+authors = ["Linera <contact@linera.io>"]
+readme = "README.md"
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.io"
+documentation = "https://docs.rs/linera-indexer/latest/linera_indexer/"
+license = "Apache-2.0"
+edition = "2021"
+
+[features]
+default = ["rocksdb"]
+rocksdb = ["linera-views/rocksdb"]
+
+[dependencies]
+async-graphql = { workspace = true }
+async-graphql-axum = { workspace = true }
+async-trait = { workspace = true }
+async-tungstenite = { version = "0.22", features = ["tokio-runtime"] }
+axum = { workspace = true, features = ["ws", "headers"] }
+bcs = { workspace = true }
+futures = { workspace = true }
+graphql-ws-client = { version = "0.5", features = ["client-graphql-client"] }
+graphql_client = { version = "0.13", features = [ "reqwest" ] }
+hyper = "0.14"
+linera-base = { workspace = true }
+linera-chain = { workspace = true, features = ["test"] }
+linera-core = { workspace = true }
+linera-execution = { workspace = true }
+linera-views = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+structopt = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tower-http = { workspace = true, features = ["cors"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["fmt"] }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+linera-service = { workspace = true, features = ["rocksdb"] }
+once_cell = { workspace = true }
+test-log = { workspace = true, features = ["trace"] }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["async-trait"]
+
+[[bin]]
+name = "linera-indexer"
+path = "src/main.rs"
+required-features = ["default"]
