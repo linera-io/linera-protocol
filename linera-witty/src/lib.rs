@@ -26,7 +26,10 @@ pub use self::runtime::{FakeInstance, FakeRuntime};
 pub use self::{
     imported_function_interface::ImportedFunctionInterface,
     memory_layout::{JoinFlatLayouts, Layout},
-    runtime::{GuestPointer, InstanceWithMemory, Memory, Runtime, RuntimeError, RuntimeMemory},
+    runtime::{
+        GuestPointer, InstanceWithFunction, InstanceWithMemory, Memory, Runtime, RuntimeError,
+        RuntimeMemory,
+    },
     type_traits::{WitLoad, WitStore, WitType},
     util::{Merge, Split},
 };
