@@ -3,10 +3,34 @@
 
 //! Generation of code to import functions from a Wasm guest module.
 
+use crate::util::TokensSetItem;
+use heck::ToKebabCase;
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
 use quote::{quote, quote_spanned, ToTokens};
-use syn::{spanned::Spanned, FnArg, Ident, ReturnType, TraitItem, TraitItemMethod};
+use std::collections::HashSet;
+use syn::{
+    spanned::Spanned, FnArg, Ident, ItemTrait, LitStr, ReturnType, TraitItem, TraitItemMethod,
+};
+
+/// Returns the code generated for calling imported Wasm functions.
+///
+/// The generated code contains a new generic type with the `trait_definition`'s name that allows
+/// calling into the functions imported from a guest Wasm instance represented by a generic
+/// parameter.
+pub fn generate(trait_definition: ItemTrait, namespace: &LitStr) -> TokenStream {
+    WitImportGenerator::new(&trait_definition, namespace).generate()
+}
+
+/// A helper type for generation of the importing of Wasm functions.
+///
+/// Code generating is done in two phases. First the necessary pieces are collected and stored in
+/// this type. Then, they are used to generate the final code.
+pub struct WitImportGenerator<'input> {
+    trait_name: &'input Ident,
+    namespace: &'input LitStr,
+    functions: Vec<FunctionInformation<'input>>,
+}
 
 /// Pieces of information extracted from a function's definition.
 struct FunctionInformation<'input> {
@@ -16,6 +40,156 @@ struct FunctionInformation<'input> {
     return_type: TokenStream,
     interface: TokenStream,
     instance_constraint: TokenStream,
+}
+
+impl<'input> WitImportGenerator<'input> {
+    /// Collects the pieces necessary for code generation from the inputs.
+    fn new(trait_definition: &'input ItemTrait, namespace: &'input LitStr) -> Self {
+        let functions: Vec<_> = trait_definition
+            .items
+            .iter()
+            .map(FunctionInformation::from)
+            .collect();
+
+        WitImportGenerator {
+            trait_name: &trait_definition.ident,
+            namespace,
+            functions,
+        }
+    }
+
+    /// Consumes the collected pieces to generate the final code.
+    fn generate(self) -> TokenStream {
+        let function_slots = self.function_slots();
+        let slot_initializations = self.slot_initializations();
+        let imported_functions = self.imported_functions();
+        let instance_constraints = self.instance_constraints();
+
+        let trait_name = self.trait_name;
+
+        quote! {
+            #[allow(clippy::type_complexity)]
+            pub struct #trait_name<Instance>
+            #instance_constraints
+            {
+                instance: Instance,
+                #( #function_slots ),*
+            }
+
+            impl<Instance> #trait_name<Instance>
+            #instance_constraints
+            {
+                pub fn new(instance: Instance) -> Self {
+                    #trait_name {
+                        instance,
+                        #( #slot_initializations ),*
+                    }
+                }
+
+                #( #imported_functions )*
+            }
+        }
+    }
+
+    /// Returns the function slots definitions.
+    ///
+    /// The function slots are `Option` types used to lazily store handles to the functions
+    /// obtained from a Wasm guest instance.
+    fn function_slots(&self) -> impl Iterator<Item = TokenStream> + '_ {
+        self.functions.iter().map(|function| {
+            let function_name = function.name();
+            let instance_constraint = &function.instance_constraint;
+
+            quote_spanned! { function.span() =>
+                #function_name: Option<<Instance as #instance_constraint>::Function>
+            }
+        })
+    }
+
+    /// Returns the expressions to initialize the function slots.
+    fn slot_initializations(&self) -> impl Iterator<Item = TokenStream> + '_ {
+        self.functions.iter().map(|function| {
+            let function_name = function.name();
+
+            quote_spanned! { function.span() =>
+                #function_name: None
+            }
+        })
+    }
+
+    /// Returns the code to import and call each function.
+    fn imported_functions(&self) -> impl Iterator<Item = TokenStream> + '_ {
+        self.functions.iter().map(|function| {
+            let namespace = self.namespace;
+
+            let function_name = function.name();
+            let function_wit_name = function_name.to_string().to_kebab_case();
+
+            let instance = &function.instance_constraint;
+            let parameters = &function.parameter_definitions;
+            let parameter_bindings = &function.parameter_bindings;
+            let return_type = &function.return_type;
+            let interface = &function.interface;
+
+            quote_spanned! { function.span() =>
+                pub fn #function_name(
+                    &mut self,
+                    #parameters
+                ) -> Result<#return_type, linera_witty::RuntimeError>  {
+                    let function = match &self.#function_name {
+                        Some(function) => function,
+                        None => {
+                            self.#function_name = Some(<Instance as #instance>::load_function(
+                                &mut self.instance,
+                                &format!("{}#{}", #namespace, #function_wit_name),
+                            )?);
+
+                            self.#function_name
+                                .as_ref()
+                                .expect("Function loaded into slot, but the slot remains empty")
+                        }
+                    };
+
+                    let flat_parameters = #interface::lower_parameters(
+                        linera_witty::hlist![#parameter_bindings],
+                        &mut self.instance.memory()?,
+                    )?;
+
+                    let flat_results = self.instance.call(function, flat_parameters)?;
+
+                    #[allow(clippy::let_unit_value)]
+                    let result = #interface::lift_results(flat_results, &self.instance.memory()?)?;
+
+                    Ok(result)
+                }
+            }
+        })
+    }
+
+    /// Returns the instance constraints necessary for the generated type.
+    fn instance_constraints(&self) -> TokenStream {
+        let constraint_set: HashSet<_> = self
+            .functions
+            .iter()
+            .map(|function| TokensSetItem::from(&function.instance_constraint))
+            .collect();
+
+        if constraint_set.is_empty() {
+            quote! {}
+        } else {
+            let constraints = constraint_set.into_iter().fold(
+                quote! { linera_witty::InstanceWithMemory },
+                |list, item| quote! { #list + #item },
+            );
+
+            quote! {
+                where
+                    Instance: #constraints,
+                    <Instance::Runtime as linera_witty::Runtime>::Memory:
+                        linera_witty::RuntimeMemory<Instance>,
+            }
+        }
+    }
 }
 
 impl<'input> FunctionInformation<'input> {
