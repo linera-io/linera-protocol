@@ -11,3 +11,4 @@
 //! ABI](https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md#flattening).
 
 mod parameters;
+mod results;
