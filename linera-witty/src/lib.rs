@@ -14,6 +14,7 @@
 #[macro_use]
 mod macro_utils;
 
+mod imported_function_interface;
 mod memory_layout;
 mod primitive_types;
 mod runtime;
