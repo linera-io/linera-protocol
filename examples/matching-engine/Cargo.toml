@@ -7,6 +7,7 @@ edition = "2021"
 [dependencies]
 async-graphql = { workspace = true }
 async-trait = { workspace = true }
+log = { workspace = true }
 bcs = { workspace = true }
 fungible = { workspace = true }
 linera-sdk = { workspace = true }

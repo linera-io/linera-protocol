@@ -59,6 +59,7 @@ impl Contract for MatchingEngine {
         context: &OperationContext,
         operation: Operation,
     ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
+        log::trace!("Beginning of execute_operation");
         let mut result = ExecutionResult::default();
         match operation {
             Operation::ExecuteOrder { order } => {

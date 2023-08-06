@@ -31,9 +31,9 @@ num-traits = "0.2.16"
 
 counter = { path = "./counter" }
 crowd-funding = { path = "./crowd-funding" }
+matching-engine = { path = "./matching-engine" }
 fungible = { path = "./fungible" }
 amm = { path = "./amm" }
-matching-engine = { path = "./matching-engine" }
 
 [profile.release]
 debug = true
