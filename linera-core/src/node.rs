@@ -306,7 +306,7 @@ where
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let mut node = self.node.lock().await;
+        let node = self.node.lock().await;
         // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
         let (response, _actions) = node.state.handle_chain_info_query(query).await?;
         Ok(response)

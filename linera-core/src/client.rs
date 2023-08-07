@@ -415,7 +415,7 @@ where
                     return false;
                 }
             }
-            Reason::NewBlock { height, .. } => {
+            Reason::NewBlock { height, hash } => {
                 let chain_id = notification.chain_id;
                 if Self::get_local_next_block_height(this.clone(), chain_id, &mut local_node).await
                     > Some(height)
@@ -433,6 +433,25 @@ where
                         {
                             error!("Fail to synchronize new block after notification");
                             return false;
+                        }
+                        // TODO(#940): Avoid reading the block we just stored.
+                        match local_node
+                            .storage_client()
+                            .await
+                            .read_certificate(hash)
+                            .await
+                        {
+                            Ok(certificate)
+                                if certificate.value().chain_id() == chain_id
+                                    && certificate.value().height() == height => {}
+                            Ok(_) => {
+                                error!("Certificate hash in notification doesn't match");
+                                return false;
+                            }
+                            Err(error) => {
+                                error!(%error, "Could not download certificate with hash {hash}.");
+                                return false;
+                            }
                         }
                     }
                     Err(e) => {
