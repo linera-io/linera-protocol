@@ -1725,9 +1725,9 @@ dependencies = [
 
 [[package]]
 name = "either"
-version = "1.8.1"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fcaabb2fef8c910e7f4c7ce9f67a1283a1715879a7c230ca9d6d1ae31f16d91"
+checksum = "a26ae43d7bcc3b814de94796a5e736d4029efb0ee900c12e2d54c993ad1a1e07"
 
 [[package]]
 name = "encode_unicode"
@@ -3161,6 +3161,7 @@ dependencies = [
 name = "linera-witty"
 version = "0.3.0"
 dependencies = [
+ "either",
  "frunk",
  "linera-witty",
  "linera-witty-macros",

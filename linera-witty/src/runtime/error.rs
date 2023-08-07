@@ -44,4 +44,8 @@ pub enum RuntimeError {
     /// Attempt to create a `GuestPointer` from an invalid address representation.
     #[error("Invalid address read")]
     InvalidNumber(#[from] TryFromIntError),
+
+    /// Attempt to load an `enum` type but the discriminant doesn't match any of the variants.
+    #[error("Unexpected variant discriminant")]
+    InvalidVariant,
 }

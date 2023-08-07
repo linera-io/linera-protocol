@@ -8,7 +8,7 @@ use crate::{memory_layout::FlatLayout, Layout};
 use frunk::HCons;
 
 /// A marker trait for [`FlatType`]s and the unit type, which uses no storage space.
-pub trait MaybeFlatType: Sized {
+pub trait MaybeFlatType: Default + Sized {
     /// Result of flattening the layout made up of the current element followed by `Tail`.
     type Flatten<Tail: Layout>: FlatLayout;
 

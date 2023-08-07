@@ -7,7 +7,8 @@
 mod types;
 
 use self::types::{
-    Branch, Leaf, RecordWithDoublePadding, SimpleWrapper, TupleWithPadding, TupleWithoutPadding,
+    Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, TupleWithPadding,
+    TupleWithoutPadding,
 };
 use linera_witty::{hlist, FakeInstance, InstanceWithMemory, Layout, WitStore};
 use std::fmt::Debug;
@@ -123,6 +124,90 @@ fn nested_types() {
             0x0000_0001_i32,
             0x2d3c_4b5a_6978_8796_i64,
             0xaabb_ccdd_eeff_0f1e_u64 as i64,
+        ],
+    );
+}
+
+/// Check that an enum type's variants are properly stored in memory and lowered into its flat
+/// layout.
+#[test]
+fn enum_type() {
+    let data = Enum::Empty;
+
+    test_store_in_memory(
+        &data,
+        &[
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+        ],
+    );
+    test_lower_to_flat_layout(
+        &data,
+        hlist![
+            0x0000_0000_i32,
+            0x0000_0000_0000_0000_i64,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
+        ],
+    );
+
+    let data = Enum::LargeVariantWithLooseAlignment(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+
+    test_store_in_memory(
+        &data,
+        &[
+            0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+            0x06, 0x07, 0x08, 0x09,
+        ],
+    );
+    test_lower_to_flat_layout(
+        &data,
+        hlist![
+            0x0000_0001_i32,
+            0x0000_0000_0000_0000_i64,
+            0x0000_0001_i32,
+            0x0000_0002_i32,
+            0x0000_0003_i32,
+            0x0000_0004_i32,
+            0x0000_0005_i32,
+            0x0000_0006_i32,
+            0x0000_0007_i32,
+            0x0000_0008_i32,
+            0x0000_0009_i32,
+        ],
+    );
+
+    let data = Enum::SmallerVariantWithStrictAlignment {
+        inner: 0x0102_0304_0506_0708_u64,
+    };
+
+    test_store_in_memory(
+        &data,
+        &[
+            0x02, 0, 0, 0, 0, 0, 0, 0, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0, 0,
+        ],
+    );
+    test_lower_to_flat_layout(
+        &data,
+        hlist![
+            0x0000_0002_i32,
+            0x0102_0304_0506_0708_i64,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
+            0x0000_0000_i32,
         ],
     );
 }

@@ -51,6 +51,7 @@ derive_more = "0.99.17"
 dirs = "5.0.0"
 ed25519 = "1.2.0"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
+either = "1.9.0"
 frunk = "0.4.2"
 futures = "0.3.24"
 generic-array = { version = "0.14.4", features = ["serde"] }

@@ -6,13 +6,14 @@
 //! This is analogous to what [`MaybeFlatType`] is to [`crate::primitive_types::FlatType`]. Empty
 //! slots (represented by the `()` unit type) make it easier to generate code for zero sized types.
 
-use crate::primitive_types::{MaybeFlatType, SimpleType};
+use crate::primitive_types::{JoinFlatTypes, MaybeFlatType, SimpleType};
+use either::Either;
 
 /// Marker trait to prevent [`LayoutElement`] to be implemented for other types.
 pub trait Sealed {}
 
 /// Representation of a single element in a memory layout type.
-pub trait LayoutElement: Sealed + Default + Sized {
+pub trait LayoutElement: Sealed + Sized {
     /// The alignment boundary of the element type.
     const ALIGNMENT: u32;
     /// If the element is a zero sized type.
@@ -48,5 +49,52 @@ where
 
     fn flatten(self) -> Self::Flat {
         <T as SimpleType>::flatten(self)
+    }
+}
+
+impl<L, R> Sealed for Either<L, R>
+where
+    L: LayoutElement,
+    R: LayoutElement,
+{
+}
+
+impl<R> LayoutElement for Either<(), R>
+where
+    R: LayoutElement,
+{
+    const ALIGNMENT: u32 = R::ALIGNMENT;
+    const IS_EMPTY: bool = R::IS_EMPTY;
+
+    type Flat = R::Flat;
+
+    fn flatten(self) -> Self::Flat {
+        match self {
+            Either::Left(()) => <R::Flat as Default>::default(),
+            Either::Right(value) => value.flatten(),
+        }
+    }
+}
+
+impl<L, R> LayoutElement for Either<L, R>
+where
+    L: SimpleType,
+    R: LayoutElement,
+    Either<L::Flat, R::Flat>: JoinFlatTypes,
+{
+    const ALIGNMENT: u32 = if L::ALIGNMENT > R::ALIGNMENT {
+        L::ALIGNMENT
+    } else {
+        R::ALIGNMENT
+    };
+    const IS_EMPTY: bool = L::IS_EMPTY && R::IS_EMPTY;
+
+    type Flat = <Either<L::Flat, R::Flat> as JoinFlatTypes>::Flat;
+
+    fn flatten(self) -> Self::Flat {
+        match self {
+            Either::Left(left) => Either::Left(left.flatten()).join(),
+            Either::Right(right) => Either::Right(right.flatten()).join(),
+        }
     }
 }
