@@ -61,7 +61,7 @@ pub struct BlockHeight(pub u64);
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
-pub struct RoundNumber(pub u64);
+pub struct RoundNumber(pub u32);
 
 /// A timestamp, in microseconds since the Unix epoch.
 #[derive(
@@ -258,7 +258,7 @@ macro_rules! impl_wrapped_number {
 
 impl_wrapped_number!(Amount, u128);
 impl_wrapped_number!(BlockHeight, u64);
-impl_strictly_wrapped_number!(RoundNumber, u64);
+impl_strictly_wrapped_number!(RoundNumber, u32);
 
 impl fmt::Display for Amount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -362,7 +362,7 @@ impl std::str::FromStr for RoundNumber {
     type Err = std::num::ParseIntError;
 
     fn from_str(src: &str) -> Result<Self, Self::Err> {
-        Ok(Self(u64::from_str(src)?))
+        Ok(Self(u32::from_str(src)?))
     }
 }
 
