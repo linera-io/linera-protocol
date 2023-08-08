@@ -240,7 +240,8 @@ impl ChainManagerInfo {
     pub fn next_round(&self) -> Option<RoundNumber> {
         match self {
             ChainManagerInfo::Multi(multi) => multi.next_round,
-            ChainManagerInfo::None | ChainManagerInfo::Single(_) => Some(RoundNumber::default()),
+            ChainManagerInfo::Single(_) => Some(RoundNumber::default()),
+            ChainManagerInfo::None => None,
         }
     }
 }

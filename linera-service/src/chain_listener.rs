@@ -141,7 +141,7 @@ where
             // notification.
             let mut guard = client.lock().await;
             guard.synchronize_from_validators().await?;
-            guard.process_inbox().await?;
+            guard.try_process_inbox().await?;
             guard.chain_info().await?
         };
         let mut round_timeout: Option<Timestamp> = None;
@@ -159,7 +159,15 @@ where
             .await
             {
                 Err(_) => {
-                    // TODO(#928): Get leader timeout certificate.
+                    let mut guard = client.lock().await;
+                    if let Err(error) = guard.request_leader_timeout().await {
+                        warn!(%error, "Failed to request leader timeout");
+                    }
+                    let info = guard.chain_info().await?;
+                    if let ChainManagerInfo::Multi(manager) = &info.manager {
+                        round_timeout = Some(manager.round_timeout);
+                        guard.try_process_inbox().await?;
+                    }
                     continue;
                 }
                 Ok(Some(notification)) => notification,

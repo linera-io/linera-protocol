@@ -147,6 +147,12 @@ pub enum ChainClientError {
 
     #[error("Found several possible identities to interact with multi-owner chain {0}")]
     FoundMultipleKeysForMultiOwnerChain(ChainId),
+
+    #[error("Epoch missing from chain info")]
+    MissingEpoch,
+
+    #[error("Leader timeout certificate does not match the expected one.")]
+    UnexpectedLeaderTimeout,
 }
 
 impl<P, S> ChainClient<P, S> {
@@ -694,6 +700,18 @@ where
                 };
                 (conf_value, round)
             }
+            CommunicateAction::RequestLeaderTimeout {
+                height,
+                round,
+                epoch,
+            } => {
+                let value = HashedValue::from(CertificateValue::LeaderTimeout {
+                    chain_id,
+                    height,
+                    epoch,
+                });
+                (value, round)
+            }
             CommunicateAction::AdvanceToNextBlockHeight(_) => {
                 return match result {
                     Ok(_) => Ok(None),
@@ -1049,6 +1067,41 @@ where
             self.next_round = info.manager.next_round();
             self.timestamp = info.timestamp;
         }
+    }
+
+    /// Requests a leader timeout vote from all validators. If a quorum signs it, creates a
+    /// certificate and sends it to all validators, to make them enter then next round.
+    pub async fn request_leader_timeout(&mut self) -> Result<Certificate, ChainClientError> {
+        let committee = self.local_committee().await?;
+        let info = self.chain_info().await?;
+        let height = info.next_block_height;
+        let round = info.manager.current_round();
+        let epoch = info.epoch.ok_or_else(|| ChainClientError::MissingEpoch)?;
+        let chain_id = self.chain_id;
+        let action = CommunicateAction::RequestLeaderTimeout {
+            height,
+            round,
+            epoch,
+        };
+        let certificate = self
+            .communicate_chain_updates(&committee, chain_id, action)
+            .await?
+            .expect("a certificate");
+        let expected_value = CertificateValue::LeaderTimeout {
+            height,
+            chain_id: self.chain_id,
+            epoch,
+        };
+        if *certificate.value() != expected_value || certificate.round != round {
+            return Err(ChainClientError::UnexpectedLeaderTimeout);
+        }
+        self.communicate_chain_updates(
+            &committee,
+            chain_id,
+            CommunicateAction::AdvanceToNextBlockHeight(height),
+        )
+        .await?;
+        Ok(certificate)
     }
 
     /// Executes (or retries) a regular block proposal. Updates local balance.
@@ -1584,32 +1637,42 @@ where
         Ok(certificates)
     }
 
-    /// Creates an empty block to process all incoming messages, if we are allowed to propose.
-    /// If there are too many messages for one block, the others remain in the inbox.
-    pub async fn try_process_inbox(&mut self) -> Result<Option<Certificate>, ChainClientError> {
-        self.prepare_chain().await?;
-        let identity = self.identity().await?;
-        let chain = self.chain_state_view(None).await?;
-        if chain.manager.get().verify_owner(&identity, None).is_none() {
-            return Ok(None); // Not the current round leader.
-        }
-        drop(chain);
-        // If blocks are already validated, propose the highest one.
-        let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
-        let info = self.node_client.handle_chain_info_query(query).await?.info;
-        if let ChainManagerInfo::Multi(manager) = info.manager {
-            if let Some(cert) = manager.highest_validated() {
-                if let Some(block) = cert.value().block() {
-                    return Ok(Some(self.propose_block(block.clone()).await?));
+    /// Creates blocks to process all incoming messages, as long as we are allowed to propose and
+    /// there are messages in the inbox.
+    pub async fn try_process_inbox(&mut self) -> Result<Vec<Certificate>, ChainClientError> {
+        let mut certificates = Vec::new();
+        loop {
+            self.prepare_chain().await?;
+            let incoming_messages = self.pending_messages().await?;
+            if incoming_messages.is_empty() {
+                return Ok(certificates); // Nothing to propose.
+            }
+            let identity = match self.identity().await {
+                Ok(identity) => identity,
+                Err(error) => {
+                    info!(%error, "Not an owner of chain {}", self.chain_id);
+                    return Ok(certificates);
+                }
+            };
+            {
+                let chain = self.chain_state_view(None).await?;
+                if chain.manager.get().verify_owner(&identity, None).is_none() {
+                    return Ok(certificates); // Not the current round leader.
                 }
             }
+            // If blocks are already validated, propose the highest one.
+            let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
+            let info = self.node_client.handle_chain_info_query(query).await?.info;
+            if let ChainManagerInfo::Multi(manager) = info.manager {
+                if let Some(cert) = manager.highest_validated() {
+                    if let Some(block) = cert.value().block() {
+                        certificates.push(self.propose_block(block.clone()).await?);
+                        continue;
+                    }
+                }
+            }
+            certificates.push(self.execute_block(incoming_messages, vec![]).await?);
         }
-        let incoming_messages = self.pending_messages().await?;
-        if incoming_messages.is_empty() {
-            return Ok(None); // Nothing to propose.
-        }
-        let certificate = self.execute_block(incoming_messages, vec![]).await?;
-        Ok(Some(certificate))
     }
 
     /// Starts listening to the admin chain for new committees. (This is only useful for
