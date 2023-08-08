@@ -23,7 +23,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, HashedValue,
-        IncomingMessage, LiteVote,
+        IncomingMessage, LiteCertificate, LiteVote,
     },
     ChainManagerInfo, ChainStateView,
 };
@@ -637,15 +637,14 @@ where
                 )
             }
         };
-        let signatures: Vec<_> = votes
-            .into_iter()
-            .filter_map(|vote| vote.map(|vote| (vote.validator, vote.signature)))
-            .collect();
-        let certificate = Certificate::new(value, round, signatures);
         // Certificate is valid because
         // * `communicate_with_quorum` ensured a sufficient "weight" of
         // (non-error) answers were returned by validators.
         // * each answer is a vote signed by the expected validator.
+        let certificate = LiteCertificate::try_from_votes(votes.into_iter().flatten())
+            .ok_or_else(|| anyhow!("Vote values or rounds don't match; this is a bug"))?
+            .with_value(value)
+            .ok_or_else(|| anyhow!("A quorum voted for an unexpected value"))?;
         Ok(Some(certificate))
     }
 
