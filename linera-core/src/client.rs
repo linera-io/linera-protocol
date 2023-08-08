@@ -583,7 +583,9 @@ where
             &nodes,
             committee,
             |value: &Option<LiteVote>| -> Option<_> {
-                value.as_ref().map(|vote| vote.value.value_hash)
+                value
+                    .as_ref()
+                    .map(|vote| (vote.value.value_hash, vote.round))
             },
             |name, client| {
                 let mut updater = ValidatorUpdater {
@@ -598,16 +600,33 @@ where
             },
         )
         .await;
-        let votes = match result {
-            Ok((_hash, votes)) => votes,
-            Err(CommunicationError::Trusted(NodeError::InactiveChain(id)))
-                if id == chain_id
-                    && matches!(action, CommunicateAction::AdvanceToNextBlockHeight(_)) =>
-            {
-                // The chain is visibly not active (yet or any more) so there is no need
-                // to synchronize block heights.
-                return Ok(None);
+        let (value, round) = match action {
+            CommunicateAction::SubmitBlockForConfirmation(proposal) => {
+                let block = proposal.content.block;
+                let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
+                (
+                    HashedValue::from(CertificateValue::ConfirmedBlock { executed_block }),
+                    proposal.content.round,
+                )
             }
+            CommunicateAction::SubmitBlockForValidation(proposal) => {
+                let BlockAndRound { block, round } = proposal.content;
+                let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
+                (HashedValue::new_validated(executed_block), round)
+            }
+            CommunicateAction::FinalizeBlock(validity_certificate) => {
+                let round = validity_certificate.round;
+                (validity_certificate.value.into_confirmed(), round)
+            }
+            CommunicateAction::AdvanceToNextBlockHeight(_) => return Ok(None),
+        };
+        let votes = match result {
+            Ok((Some((votes_hash, votes_round)), votes))
+                if votes_hash == value.hash() && votes_round == round =>
+            {
+                votes
+            }
+            Ok((_, _)) => bail!("Unexpected response from validators"),
             Err(CommunicationError::Trusted(err)) => {
                 bail!("Failed to communicate with a quorum of validators: {}", err)
             }
@@ -622,33 +641,12 @@ where
             .into_iter()
             .filter_map(|vote| vote.map(|vote| (vote.validator, vote.signature)))
             .collect();
-        match action {
-            CommunicateAction::SubmitBlockForConfirmation(proposal) => {
-                let block = proposal.content.block;
-                let round = proposal.content.round;
-                let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
-                let value = HashedValue::from(CertificateValue::ConfirmedBlock { executed_block });
-                let certificate = Certificate::new(value, round, signatures);
-                // Certificate is valid because
-                // * `communicate_with_quorum` ensured a sufficient "weight" of
-                // (non-error) answers were returned by validators.
-                // * each answer is a vote signed by the expected validator.
-                Ok(Some(certificate))
-            }
-            CommunicateAction::SubmitBlockForValidation(proposal) => {
-                let BlockAndRound { block, round } = proposal.content;
-                let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
-                let value = HashedValue::new_validated(executed_block);
-                let certificate = Certificate::new(value, round, signatures);
-                Ok(Some(certificate))
-            }
-            CommunicateAction::FinalizeBlock(validity_certificate) => {
-                let round = validity_certificate.round;
-                let conf_value = validity_certificate.value.into_confirmed();
-                Ok(Some(Certificate::new(conf_value, round, signatures)))
-            }
-            CommunicateAction::AdvanceToNextBlockHeight(_) => Ok(None),
-        }
+        let certificate = Certificate::new(value, round, signatures);
+        // Certificate is valid because
+        // * `communicate_with_quorum` ensured a sufficient "weight" of
+        // (non-error) answers were returned by validators.
+        // * each answer is a vote signed by the expected validator.
+        Ok(Some(certificate))
     }
 
     async fn receive_certificate_internal(
