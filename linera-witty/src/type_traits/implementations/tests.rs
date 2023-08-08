@@ -102,6 +102,7 @@ fn ok_two_bytes_but_large_err() {
             0x00, 0, 0, 0, 0, 0, 0, 0, 0x34, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ],
     );
+    test_flattening_roundtrip(input, hlist![0_i32, 0x0000_1234_i64, 0_i64]);
 }
 
 /// Test roundtrip of `Err::<i16, u128>`.
@@ -115,6 +116,10 @@ fn large_err() {
             0x01, 0, 0, 0, 0, 0, 0, 0, 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08, 0x07, 0x06,
             0x05, 0x04, 0x03, 0x02, 0x01, 0x00,
         ],
+    );
+    test_flattening_roundtrip(
+        input,
+        hlist![1_i32, 0x0809_0a0b_0c0d_0e0f_i64, 0x0001_0203_0405_0607_i64],
     );
 }
 
