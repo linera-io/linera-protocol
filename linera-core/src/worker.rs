@@ -944,7 +944,7 @@ where
         let public_key = chain
             .manager
             .get()
-            .verify_owner(&proposal)
+            .verify_owner(&proposal.owner, proposal.content.round)
             .ok_or(WorkerError::InvalidOwner)?;
         signature.check(&proposal.content, public_key)?;
         // Check the authentication of the operations in the block.

@@ -240,7 +240,7 @@ where
     }
 
     /// Obtains the basic `ChainInfo` data for the local chain.
-    async fn chain_info(&mut self) -> Result<ChainInfo, LocalNodeError> {
+    pub async fn chain_info(&mut self) -> Result<ChainInfo, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id);
         let response = self.node_client.handle_chain_info_query(query).await?;
         Ok(response.info)
@@ -1582,6 +1582,34 @@ where
             certificates.push(certificate);
         }
         Ok(certificates)
+    }
+
+    /// Creates an empty block to process all incoming messages, if we are allowed to propose.
+    /// If there are too many messages for one block, the others remain in the inbox.
+    pub async fn try_process_inbox(&mut self) -> Result<Option<Certificate>, ChainClientError> {
+        self.prepare_chain().await?;
+        let identity = self.identity().await?;
+        let chain = self.chain_state_view(None).await?;
+        if chain.manager.get().verify_owner(&identity, None).is_none() {
+            return Ok(None); // Not the current round leader.
+        }
+        drop(chain);
+        // If blocks are already validated, propose the highest one.
+        let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
+        let info = self.node_client.handle_chain_info_query(query).await?.info;
+        if let ChainManagerInfo::Multi(manager) = info.manager {
+            if let Some(cert) = manager.highest_validated() {
+                if let Some(block) = cert.value().block() {
+                    return Ok(Some(self.propose_block(block.clone()).await?));
+                }
+            }
+        }
+        let incoming_messages = self.pending_messages().await?;
+        if incoming_messages.is_empty() {
+            return Ok(None); // Nothing to propose.
+        }
+        let certificate = self.execute_block(incoming_messages, vec![]).await?;
+        Ok(Some(certificate))
     }
 
     /// Starts listening to the admin chain for new committees. (This is only useful for

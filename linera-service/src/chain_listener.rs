@@ -9,7 +9,7 @@ use linera_base::{
     data_types::Timestamp,
     identifiers::{ChainId, Destination},
 };
-use linera_chain::data_types::OutgoingMessage;
+use linera_chain::{data_types::OutgoingMessage, ChainManagerInfo};
 use linera_core::{
     client::ChainClient,
     node::ValidatorNodeProvider,
@@ -22,6 +22,8 @@ use linera_views::views::ViewError;
 use std::{sync::Arc, time::Duration};
 use structopt::StructOpt;
 use tracing::{error, info, warn};
+
+const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 
 #[derive(Debug, Clone, StructOpt)]
 pub struct ChainListenerConfig {
@@ -134,14 +136,35 @@ where
         };
         let mut stream = ChainClient::listen(client.clone()).await?;
         let mut tracker = NotificationTracker::default();
-        {
+        let info = {
             // Process the inbox: For messages that are already there we won't receive a
             // notification.
             let mut guard = client.lock().await;
             guard.synchronize_from_validators().await?;
             guard.process_inbox().await?;
+            guard.chain_info().await?
+        };
+        let mut round_timeout: Option<Timestamp> = None;
+        if let ChainManagerInfo::Multi(manager) = &info.manager {
+            round_timeout = Some(manager.round_timeout);
+            client.lock().await.try_process_inbox().await?;
         }
-        while let Some(notification) = stream.next().await {
+        loop {
+            let notification = match tokio::time::timeout(
+                round_timeout.map_or(MAX_TIMEOUT, |t| {
+                    Duration::from_micros(t.saturating_diff_micros(Timestamp::now()))
+                }),
+                stream.next(),
+            )
+            .await
+            {
+                Err(_) => {
+                    // TODO(#928): Get leader timeout certificate.
+                    continue;
+                }
+                Ok(Some(notification)) => notification,
+                Ok(None) => break,
+            };
             if !tracker.is_new(&notification) {
                 continue;
             }
@@ -156,36 +179,57 @@ where
             if config.delay_after_ms > 0 {
                 tokio::time::sleep(Duration::from_millis(config.delay_after_ms)).await;
             }
-            if let Reason::NewBlock { hash, .. } = notification.reason {
-                let value = storage.read_value(hash).await?;
-                let Some(executed_block) = value.inner().executed_block() else {
-                    continue;
-                };
-                let timestamp = executed_block.block.timestamp;
-                for outgoing_message in &executed_block.messages {
-                    if let OutgoingMessage {
-                        destination: Destination::Recipient(new_id),
-                        message:
-                            Message::System(SystemMessage::OpenChain {
-                                ownership: ChainOwnership::Single { public_key, .. },
-                                ..
-                            }),
-                        ..
-                    } = outgoing_message
-                    {
+            match notification.reason {
+                Reason::NewBlock { hash, .. } => {
+                    let value = storage.read_value(hash).await?;
+                    let Some(executed_block) = value.inner().executed_block() else {
+                        continue;
+                    };
+                    let timestamp = executed_block.block.timestamp;
+                    for outgoing_message in &executed_block.messages {
+                        if let OutgoingMessage {
+                            destination: Destination::Recipient(new_id),
+                            message:
+                                Message::System(SystemMessage::OpenChain {
+                                    ownership: ChainOwnership::Single { public_key, .. },
+                                    ..
+                                }),
+                            ..
+                        } = outgoing_message
                         {
-                            let mut context_guard = context.lock().await;
-                            let key_pair = context_guard.wallet_state().key_pair_for_pk(public_key);
-                            context_guard.update_wallet_for_new_chain(*new_id, key_pair, timestamp);
+                            {
+                                {
+                                    let mut context_guard = context.lock().await;
+                                    let key_pair =
+                                        context_guard.wallet_state().key_pair_for_pk(public_key);
+                                    context_guard
+                                        .update_wallet_for_new_chain(*new_id, key_pair, timestamp);
+                                }
+                                Self::run_with_chain_id(
+                                    *new_id,
+                                    clients.clone(),
+                                    context.clone(),
+                                    storage.clone(),
+                                    config.clone(),
+                                );
+                            }
                         }
-                        Self::run_with_chain_id(
-                            *new_id,
-                            clients.clone(),
-                            context.clone(),
-                            storage.clone(),
-                            config.clone(),
-                        );
+                        let info = client.lock().await.chain_info().await?;
+                        if let ChainManagerInfo::Multi(manager) = &info.manager {
+                            round_timeout = Some(manager.round_timeout);
+                            client.lock().await.try_process_inbox().await?;
+                        }
                     }
+                }
+                Reason::NewRound { .. } => {
+                    let info = client.lock().await.chain_info().await?;
+                    if let ChainManagerInfo::Multi(manager) = &info.manager {
+                        round_timeout = Some(manager.round_timeout);
+                        client.lock().await.try_process_inbox().await?;
+                    }
+                }
+                Reason::NewIncomingMessage { .. } => {
+                    client.lock().await.try_process_inbox().await?;
                 }
             }
             tracker.insert(notification);

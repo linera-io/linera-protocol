@@ -24,7 +24,7 @@
 //! * Validators never vote for a `ValidatedBlock` **A** in round **r** if they have voted for a
 //!   _different_ `ConfirmedBlock` **B** in an earlier round **s** ≤ **r**, unless there is a
 //!   `ValidatedBlock` certificate (with a quorum of validator signatures) for **A** in some round
-//!   between **s** and **r**.
+//!   between **s** and **r** included in the block proposal.
 //! * Validators only vote for a `ConfirmedBlock` if there is a `ValidatedBlock` certificate for the
 //!   same block in the same round.
 //!
@@ -349,31 +349,35 @@ impl MultiOwnerManager {
         self.leader_timeout = Some(certificate);
     }
 
-    /// Returns the public key of the block proposal's signer, if they are a valid owner and allowed
-    /// to propose a block in the proposal's round.
-    pub fn verify_owner(&self, proposal: &BlockProposal) -> Option<PublicKey> {
-        if proposal.content.round < self.multi_leader_rounds {
-            let (key, _) = self.public_keys.get(&proposal.owner)?;
+    /// Returns the public key of the owner, if they are allowed to propose a block in the given
+    /// round. If no round is specified, the current round is used.
+    pub fn verify_owner(&self, owner: &Owner, round: Option<RoundNumber>) -> Option<PublicKey> {
+        let round = round.unwrap_or_else(|| self.current_round());
+        if round < self.multi_leader_rounds {
+            let (key, _) = self.public_keys.get(owner)?;
             return Some(*key); // Not in leader rotation mode; any owner is allowed to propose.
         };
-        let round = proposal.content.round.0;
-        let seed = u64::from(round).rotate_left(32).wrapping_add(self.seed);
-        let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        let index = self.distribution.sample(&mut rng);
-        let (owner, (key, _)) = self.public_keys.iter().nth(index)?;
-        (*owner == proposal.owner).then_some(*key)
+        let index = self.round_leader_index(round)?;
+        let (leader, (key, _)) = self.public_keys.iter().nth(index)?;
+        (leader == owner).then_some(*key)
     }
 
-    /// The leader who is allowed to propose a block in the given round, or `None` if every owner
-    /// is allowed to propose.
+    /// Returns the leader who is allowed to propose a block in the given round, or `None` if every
+    /// owner is allowed to propose.
     fn round_leader(&self, round: RoundNumber) -> Option<&Owner> {
         if round < self.multi_leader_rounds {
             return None;
         };
+        let index = self.round_leader_index(round)?;
+        self.public_keys.keys().nth(index)
+    }
+
+    /// Returns the index of the leader who is allowed to propose a block in the given round, or
+    /// `None` if every owner is allowed to propose.
+    fn round_leader_index(&self, round: RoundNumber) -> Option<usize> {
         let seed = u64::from(round.0).rotate_left(32).wrapping_add(self.seed);
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        let index = self.distribution.sample(&mut rng);
-        self.public_keys.keys().nth(index)
+        Some(self.distribution.sample(&mut rng))
     }
 }
 

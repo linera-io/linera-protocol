@@ -15,7 +15,7 @@ use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{BlockHeight, RoundNumber},
     doc_scalar, ensure,
-    identifiers::ChainId,
+    identifiers::{ChainId, Owner},
 };
 use linera_execution::{committee::Epoch, ChainOwnership};
 use serde::{Deserialize, Serialize};
@@ -77,10 +77,14 @@ impl ChainManager {
         !matches!(self, ChainManager::None)
     }
 
-    pub fn verify_owner(&self, proposal: &BlockProposal) -> Option<PublicKey> {
+    pub fn verify_owner(
+        &self,
+        owner: &Owner,
+        round: impl Into<Option<RoundNumber>>,
+    ) -> Option<PublicKey> {
         match self {
-            ChainManager::Single(manager) => manager.verify_owner(proposal),
-            ChainManager::Multi(manager) => manager.verify_owner(proposal),
+            ChainManager::Single(manager) => manager.verify_owner(owner, round.into()),
+            ChainManager::Multi(manager) => manager.verify_owner(owner, round.into()),
             ChainManager::None => None,
         }
     }
