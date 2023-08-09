@@ -202,3 +202,106 @@ where
         .set_float64(-0.000_08)
         .expect("Failed to run guest's `set-f64` function");
 }
+
+/// An interface to import functions with multiple parameters and return values.
+#[wit_import(package = "witty-macros:test-modules")]
+trait Operations {
+    fn and_bool(first: bool, second: bool) -> bool;
+    fn add_s8(first: i8, second: i8) -> i8;
+    fn add_u8(first: u8, second: u8) -> u8;
+    fn add_s16(first: i16, second: i16) -> i16;
+    fn add_u16(first: u16, second: u16) -> u16;
+    fn add_s32(first: i32, second: i32) -> i32;
+    fn add_u32(first: u32, second: u32) -> u32;
+    fn add_s64(first: i64, second: i64) -> i64;
+    fn add_u64(first: u64, second: u64) -> u64;
+    fn add_float32(first: f32, second: f32) -> f32;
+    fn add_float64(first: f64, second: f64) -> f64;
+}
+
+/// Test importing functions with multiple parameters and return values.
+#[test_case(MockInstanceFactory::default(); "with a mock instance")]
+fn operations<InstanceFactory>(mut factory: InstanceFactory)
+where
+    InstanceFactory: TestInstanceFactory,
+    InstanceFactory::Instance: InstanceForOperations,
+    <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
+        RuntimeMemory<InstanceFactory::Instance>,
+{
+    let instance = factory.load_test_module("operations");
+
+    let mut operations = Operations::new(instance);
+
+    assert_eq!(
+        operations
+            .and_bool(false, true)
+            .expect("Failed to run guest's `and-bool` function"),
+        false
+    );
+    assert_eq!(
+        operations
+            .and_bool(true, true)
+            .expect("Failed to run guest's `and-bool` function"),
+        true
+    );
+    assert_eq!(
+        operations
+            .add_s8(-126, 1)
+            .expect("Failed to run guest's `add-s8` function"),
+        -125
+    );
+    assert_eq!(
+        operations
+            .add_u8(189, 11)
+            .expect("Failed to run guest's `add-u8` function"),
+        200
+    );
+    assert_eq!(
+        operations
+            .add_s16(-400, -10)
+            .expect("Failed to run guest's `add-s16` function"),
+        -410
+    );
+    assert_eq!(
+        operations
+            .add_u16(32_000, 28_000)
+            .expect("Failed to run guest's `add-u16` function"),
+        60_000
+    );
+    assert_eq!(
+        operations
+            .add_s32(-2_000_000, 1_900_000)
+            .expect("Failed to run guest's `add-s32` function"),
+        -100_000
+    );
+    assert_eq!(
+        operations
+            .add_u32(3_000_000, 111)
+            .expect("Failed to run guest's `add-u32` function"),
+        3_000_111
+    );
+    assert_eq!(
+        operations
+            .add_s64(-2_000_000_001, 5_000_000_000)
+            .expect("Failed to run guest's `add-s64` function"),
+        2_999_999_999
+    );
+    assert_eq!(
+        operations
+            .add_u64(1_000_000_000, 1_000_000_000_000)
+            .expect("Failed to run guest's `add-u64` function"),
+        1_001_000_000_000
+    );
+    assert_eq!(
+        operations
+            .add_float32(0.0, -0.125)
+            .expect("Failed to run guest's `add-f32` function"),
+        -0.125
+    );
+    assert_eq!(
+        operations
+            .add_float64(128.0, 0.25)
+            .expect("Failed to run guest's `add-f64` function"),
+        128.25
+    );
+}
