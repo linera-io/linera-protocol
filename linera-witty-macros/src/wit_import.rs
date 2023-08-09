@@ -7,7 +7,7 @@ use crate::util::TokensSetItem;
 use heck::ToKebabCase;
 use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
-use quote::{quote, quote_spanned, ToTokens};
+use quote::{format_ident, quote, quote_spanned, ToTokens};
 use std::collections::HashSet;
 use syn::{
     spanned::Spanned, FnArg, Ident, ItemTrait, LitStr, ReturnType, TraitItem, TraitItemMethod,
@@ -63,21 +63,27 @@ impl<'input> WitImportGenerator<'input> {
         let function_slots = self.function_slots();
         let slot_initializations = self.slot_initializations();
         let imported_functions = self.imported_functions();
-        let instance_constraints = self.instance_constraints();
+        let (instance_trait_alias_name, instance_trait_alias) = self.instance_trait_alias();
 
         let trait_name = self.trait_name;
 
         quote! {
             #[allow(clippy::type_complexity)]
             pub struct #trait_name<Instance>
-            #instance_constraints
+            where
+                Instance: #instance_trait_alias_name,
+                <Instance::Runtime as linera_witty::Runtime>::Memory:
+                    linera_witty::RuntimeMemory<Instance>,
             {
                 instance: Instance,
                 #( #function_slots ),*
             }
 
             impl<Instance> #trait_name<Instance>
-            #instance_constraints
+            where
+                Instance: #instance_trait_alias_name,
+                <Instance::Runtime as linera_witty::Runtime>::Memory:
+                    linera_witty::RuntimeMemory<Instance>,
             {
                 pub fn new(instance: Instance) -> Self {
                     #trait_name {
@@ -88,6 +94,8 @@ impl<'input> WitImportGenerator<'input> {
 
                 #( #imported_functions )*
             }
+
+            #instance_trait_alias
         }
     }
 
@@ -166,6 +174,29 @@ impl<'input> WitImportGenerator<'input> {
         })
     }
 
+    /// Returns a trait alias for all the instance constraints necessary for the generated type.
+    fn instance_trait_alias(&self) -> (Ident, TokenStream) {
+        let name = format_ident!("InstanceFor{}", self.trait_name);
+        let constraints = self.instance_constraints();
+
+        let definition = quote! {
+            pub trait #name : #constraints
+            where
+                <<Self as linera_witty::Instance>::Runtime as linera_witty::Runtime>::Memory:
+                    linera_witty::RuntimeMemory<Self>,
+            {}
+
+            impl<AnyInstance> #name for AnyInstance
+            where
+                AnyInstance: #constraints,
+                <AnyInstance::Runtime as linera_witty::Runtime>::Memory:
+                    linera_witty::RuntimeMemory<AnyInstance>,
+            {}
+        };
+
+        (name, definition)
+    }
+
     /// Returns the instance constraints necessary for the generated type.
     fn instance_constraints(&self) -> TokenStream {
         let constraint_set: HashSet<_> = self
@@ -174,21 +205,10 @@ impl<'input> WitImportGenerator<'input> {
             .map(|function| TokensSetItem::from(&function.instance_constraint))
             .collect();
 
-        if constraint_set.is_empty() {
-            quote! {}
-        } else {
-            let constraints = constraint_set.into_iter().fold(
-                quote! { linera_witty::InstanceWithMemory },
-                |list, item| quote! { #list + #item },
-            );
-
-            quote! {
-                where
-                    Instance: #constraints,
-                    <Instance::Runtime as linera_witty::Runtime>::Memory:
-                        linera_witty::RuntimeMemory<Instance>,
-            }
-        }
+        constraint_set.into_iter().fold(
+            quote! { linera_witty::InstanceWithMemory },
+            |list, item| quote! { #list + #item },
+        )
     }
 }
 
