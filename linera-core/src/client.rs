@@ -636,7 +636,7 @@ where
             {
                 votes
             }
-            (_, _) => bail!("Unexpected response from validators"),
+            _ => bail!("Unexpected response from validators"),
         };
         // Certificate is valid because
         // * `communicate_with_quorum` ensured a sufficient "weight" of
