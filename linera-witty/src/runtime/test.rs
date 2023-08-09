@@ -22,7 +22,7 @@ use std::{
 pub struct MockRuntime;
 
 impl Runtime for MockRuntime {
-    type Export = ();
+    type Export = String;
     type Memory = Arc<Mutex<Vec<u8>>>;
 }
 
@@ -86,9 +86,9 @@ impl MockInstance {
 impl Instance for MockInstance {
     type Runtime = MockRuntime;
 
-    fn load_export(&mut self, name: &str) -> Option<()> {
+    fn load_export(&mut self, name: &str) -> Option<String> {
         match name {
-            "memory" | "cabi_realloc" | "cabi_free" => Some(()),
+            "memory" | "cabi_realloc" | "cabi_free" => Some(name.to_owned()),
             _ => None,
         }
     }
@@ -100,7 +100,7 @@ impl InstanceWithFunction<HList![i32], HList![]> for MockInstance {
 
     fn function_from_export(
         &mut self,
-        (): <Self::Runtime as Runtime>::Export,
+        _: <Self::Runtime as Runtime>::Export,
     ) -> Result<Option<Self::Function>, RuntimeError> {
         Ok(Some(()))
     }
@@ -120,7 +120,7 @@ impl InstanceWithFunction<HList![i32, i32, i32, i32], HList![i32]> for MockInsta
 
     fn function_from_export(
         &mut self,
-        (): <Self::Runtime as Runtime>::Export,
+        _: <Self::Runtime as Runtime>::Export,
     ) -> Result<Option<Self::Function>, RuntimeError> {
         Ok(Some(()))
     }
@@ -190,7 +190,14 @@ impl RuntimeMemory<MockInstance> for Arc<Mutex<Vec<u8>>> {
 }
 
 impl InstanceWithMemory for MockInstance {
-    fn memory_from_export(&self, _export: ()) -> Result<Option<Arc<Mutex<Vec<u8>>>>, RuntimeError> {
-        Ok(Some(self.memory.clone()))
+    fn memory_from_export(
+        &self,
+        export: String,
+    ) -> Result<Option<Arc<Mutex<Vec<u8>>>>, RuntimeError> {
+        if export == "memory" {
+            Ok(Some(self.memory.clone()))
+        } else {
+            Err(RuntimeError::NotMemory)
+        }
     }
 }
