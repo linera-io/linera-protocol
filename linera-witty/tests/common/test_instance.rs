@@ -28,6 +28,7 @@ impl TestInstanceFactory for MockInstanceFactory {
 
         match module {
             "simple-function" => self.simple_function(&mut instance),
+            "getters" => self.getters(&mut instance),
             _ => panic!("Attempt to load module {module:?} which has no mocked exported methods"),
         }
 
@@ -42,6 +43,82 @@ impl MockInstanceFactory {
             instance,
             "witty-macros:test-modules/simple-function#simple",
             |_: HList![]| Ok(hlist![]),
+            1,
+        );
+    }
+
+    /// Mock the exported functions for the "getters" module.
+    fn getters(&mut self, instance: &mut MockInstance) {
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/getters#get-true",
+            |_: HList![]| Ok(hlist![1_i32]),
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/getters#get-false",
+            |_: HList![]| Ok(hlist![0_i32]),
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/getters#get-s8",
+            |_: HList![]| Ok(hlist![-125_i8 as u8 as i32]),
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/getters#get-u8",
+            |_: HList![]| Ok(hlist![200_u8 as i32]),
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/getters#get-s16",
+            |_: HList![]| Ok(hlist![-410_i16 as u16 as i32]),
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/getters#get-u16",
+            |_: HList![]| Ok(hlist![60_000_u16 as i32]),
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/getters#get-s32",
+            |_: HList![]| Ok(hlist![-100_000_i32]),
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/getters#get-u32",
+            |_: HList![]| Ok(hlist![3_000_111_i32]),
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/getters#get-s64",
+            |_: HList![]| Ok(hlist![-5_000_000_i64]),
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/getters#get-u64",
+            |_: HList![]| Ok(hlist![10_000_000_000_i64]),
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/getters#get-float32",
+            |_: HList![]| Ok(hlist![-0.125_f32]),
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/getters#get-float64",
+            |_: HList![]| Ok(hlist![128.25_f64]),
             1,
         );
     }
