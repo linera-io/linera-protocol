@@ -16,7 +16,10 @@ use std::{
     any::Any,
     borrow::Cow,
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
 };
 
 /// A fake Wasm runtime.
@@ -211,5 +214,60 @@ impl InstanceWithMemory for MockInstance {
         } else {
             Err(RuntimeError::NotMemory)
         }
+    }
+}
+
+/// A helper type to verify how many times an exported function is called.
+pub struct MockExportedFunction<Parameters, Results> {
+    name: String,
+    call_counter: Arc<AtomicUsize>,
+    expected_calls: usize,
+    handler: fn(Parameters) -> Result<Results, RuntimeError>,
+}
+
+impl<Parameters, Results> MockExportedFunction<Parameters, Results>
+where
+    Parameters: 'static,
+    Results: 'static,
+{
+    /// Creates a new [`MockExportedFunction`] for the exported function with the provided `name`.
+    ///
+    /// Every call to the exported function is called is forwarded to the `handler` and an internal
+    /// counter is incremented. When the [`MockExportedFunction`] instance is dropped (which should
+    /// be done at the end of the test}, it asserts that the function was called `expected_calls`
+    /// times.
+    pub fn new(
+        name: impl Into<String>,
+        handler: fn(Parameters) -> Result<Results, RuntimeError>,
+        expected_calls: usize,
+    ) -> Self {
+        MockExportedFunction {
+            name: name.into(),
+            call_counter: Arc::default(),
+            expected_calls,
+            handler,
+        }
+    }
+
+    /// Registers this [`MockExportedFunction`] with the mock `instance`.
+    pub fn register(&self, instance: &mut MockInstance) {
+        let call_counter = self.call_counter.clone();
+        let handler = self.handler;
+
+        instance.add_exported_function(self.name.clone(), move |parameters: Parameters| {
+            call_counter.fetch_add(1, Ordering::AcqRel);
+            handler(parameters)
+        });
+    }
+}
+
+impl<Parameters, Results> Drop for MockExportedFunction<Parameters, Results> {
+    fn drop(&mut self) {
+        assert_eq!(
+            self.call_counter.load(Ordering::Acquire),
+            self.expected_calls,
+            "Unexpected number of calls to `{}`",
+            self.name
+        );
     }
 }
