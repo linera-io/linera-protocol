@@ -3165,6 +3165,7 @@ dependencies = [
  "frunk",
  "linera-witty",
  "linera-witty-macros",
+ "test-case",
  "thiserror",
 ]
 
