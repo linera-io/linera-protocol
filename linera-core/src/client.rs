@@ -618,24 +618,25 @@ where
                 let round = validity_certificate.round;
                 (validity_certificate.value.into_confirmed(), round)
             }
-            CommunicateAction::AdvanceToNextBlockHeight(_) => return Ok(None),
+            CommunicateAction::AdvanceToNextBlockHeight(_) => {
+                return match result {
+                    Ok(_) => Ok(None),
+                    Err(CommunicationError::Trusted(NodeError::InactiveChain(id)))
+                        if id == chain_id =>
+                    {
+                        Ok(None)
+                    }
+                    Err(error) => Err(error)?,
+                };
+            }
         };
-        let votes = match result {
-            Ok((Some((votes_hash, votes_round)), votes))
+        let votes = match result? {
+            (Some((votes_hash, votes_round)), votes)
                 if votes_hash == value.hash() && votes_round == round =>
             {
                 votes
             }
-            Ok((_, _)) => bail!("Unexpected response from validators"),
-            Err(CommunicationError::Trusted(err)) => {
-                bail!("Failed to communicate with a quorum of validators: {}", err)
-            }
-            Err(CommunicationError::Sample(errors)) => {
-                bail!(
-                    "Failed to communicate with a quorum of validators:\n{:#?}",
-                    errors
-                )
-            }
+            (_, _) => bail!("Unexpected response from validators"),
         };
         // Certificate is valid because
         // * `communicate_with_quorum` ensured a sufficient "weight" of

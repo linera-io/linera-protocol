@@ -17,10 +17,12 @@ use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    fmt,
     hash::Hash,
     ops::Range,
     time::{Duration, Instant},
 };
+use thiserror::Error;
 use tracing::{error, info, warn};
 
 /// The amount of time we wait for additional validators to contribute to the result, as a fraction
@@ -48,12 +50,15 @@ pub struct ValidatorUpdater<A, S> {
 }
 
 /// An error result for [`communicate_with_quorum`].
-pub enum CommunicationError<E> {
+#[derive(Error, Debug)]
+pub enum CommunicationError<E: fmt::Debug> {
     /// A single error that was returned by a sufficient number of nodes to be trusted as
     /// valid.
+    #[error("Failed to communicate with a quorum of validators: {0}")]
     Trusted(E),
     /// No single error reached the validity threshold so we're returning a sample of
     /// errors for debugging purposes.
+    #[error("Failed to communicate with a quorum of validators:\n{:#?}", .0)]
     Sample(Vec<E>),
 }
 
