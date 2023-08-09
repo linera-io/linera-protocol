@@ -3,7 +3,7 @@
 
 //! Helper code for testing using different runtimes.
 
-use frunk::{hlist, HList};
+use frunk::{hlist, hlist_pat, HList};
 use linera_witty::{InstanceWithMemory, MockExportedFunction, MockInstance, RuntimeError};
 use std::any::Any;
 
@@ -29,6 +29,7 @@ impl TestInstanceFactory for MockInstanceFactory {
         match module {
             "simple-function" => self.simple_function(&mut instance),
             "getters" => self.getters(&mut instance),
+            "setters" => self.setters(&mut instance),
             _ => panic!("Attempt to load module {module:?} which has no mocked exported methods"),
         }
 
@@ -119,6 +120,109 @@ impl MockInstanceFactory {
             instance,
             "witty-macros:test-modules/getters#get-float64",
             |_: HList![]| Ok(hlist![128.25_f64]),
+            1,
+        );
+    }
+
+    /// Mock the exported functions for the "setters" module.
+    fn setters(&mut self, instance: &mut MockInstance) {
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/setters#set-bool",
+            |hlist_pat![parameter]: HList![i32]| {
+                assert_eq!(parameter, 0);
+                Ok(hlist![])
+            },
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/setters#set-s8",
+            |hlist_pat![parameter]: HList![i32]| {
+                assert_eq!(parameter, -100_i8 as i32);
+                Ok(hlist![])
+            },
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/setters#set-u8",
+            |hlist_pat![parameter]: HList![i32]| {
+                assert_eq!(parameter, 201);
+                Ok(hlist![])
+            },
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/setters#set-s16",
+            |hlist_pat![parameter]: HList![i32]| {
+                assert_eq!(parameter, -20_000_i16 as i32);
+                Ok(hlist![])
+            },
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/setters#set-u16",
+            |hlist_pat![parameter]: HList![i32]| {
+                assert_eq!(parameter, 50_000);
+                Ok(hlist![])
+            },
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/setters#set-s32",
+            |hlist_pat![parameter]: HList![i32]| {
+                assert_eq!(parameter, -2_000_000);
+                Ok(hlist![])
+            },
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/setters#set-u32",
+            |hlist_pat![parameter]: HList![i32]| {
+                assert_eq!(parameter, 4_000_000_u32 as i32);
+                Ok(hlist![])
+            },
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/setters#set-s64",
+            |hlist_pat![parameter]: HList![i64]| {
+                assert_eq!(parameter, -25_000_000_000);
+                Ok(hlist![])
+            },
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/setters#set-u64",
+            |hlist_pat![parameter]: HList![i64]| {
+                assert_eq!(parameter, 7_000_000_000);
+                Ok(hlist![])
+            },
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/setters#set-float32",
+            |hlist_pat![parameter]: HList![f32]| {
+                assert_eq!(parameter, 10.5);
+                Ok(hlist![])
+            },
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/setters#set-float64",
+            |hlist_pat![parameter]: HList![f64]| {
+                assert_eq!(parameter, -0.000_08);
+                Ok(hlist![])
+            },
             1,
         );
     }

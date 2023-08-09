@@ -138,3 +138,67 @@ where
         128.25
     );
 }
+
+/// An interface to import functions with parameters.
+#[wit_import(package = "witty-macros:test-modules")]
+trait Setters {
+    fn set_bool(value: bool);
+    fn set_s8(value: i8);
+    fn set_u8(value: u8);
+    fn set_s16(value: i16);
+    fn set_u16(value: u16);
+    fn set_s32(value: i32);
+    fn set_u32(value: u32);
+    fn set_s64(value: i64);
+    fn set_u64(value: u64);
+    fn set_float32(value: f32);
+    fn set_float64(value: f64);
+}
+
+/// Test importing functions with parameters.
+#[test_case(MockInstanceFactory::default(); "with a mock instance")]
+fn setters<InstanceFactory>(mut factory: InstanceFactory)
+where
+    InstanceFactory: TestInstanceFactory,
+    InstanceFactory::Instance: InstanceForSetters,
+    <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
+        RuntimeMemory<InstanceFactory::Instance>,
+{
+    let instance = factory.load_test_module("setters");
+
+    let mut setters = Setters::new(instance);
+
+    setters
+        .set_bool(false)
+        .expect("Failed to run guest's `set-bool` function");
+    setters
+        .set_s8(-100)
+        .expect("Failed to run guest's `set-s8` function");
+    setters
+        .set_u8(201)
+        .expect("Failed to run guest's `set-u8` function");
+    setters
+        .set_s16(-20_000)
+        .expect("Failed to run guest's `set-s16` function");
+    setters
+        .set_u16(50_000)
+        .expect("Failed to run guest's `set-u16` function");
+    setters
+        .set_s32(-2_000_000)
+        .expect("Failed to run guest's `set-s32` function");
+    setters
+        .set_u32(4_000_000)
+        .expect("Failed to run guest's `set-u32` function");
+    setters
+        .set_s64(-25_000_000_000)
+        .expect("Failed to run guest's `set-s64` function");
+    setters
+        .set_u64(7_000_000_000)
+        .expect("Failed to run guest's `set-u64` function");
+    setters
+        .set_float32(10.5)
+        .expect("Failed to run guest's `set-f32` function");
+    setters
+        .set_float64(-0.000_08)
+        .expect("Failed to run guest's `set-f64` function");
+}
