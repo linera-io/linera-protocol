@@ -312,14 +312,40 @@ impl<'a> LiteCertificate<'a> {
     pub fn new(
         value: LiteValue,
         round: RoundNumber,
-        signatures: Vec<(ValidatorName, Signature)>,
+        mut signatures: Vec<(ValidatorName, Signature)>,
     ) -> Self {
+        if !is_strictly_ordered(&signatures) {
+            // Not enforcing no duplicates, check the documentation for is_strictly_ordered
+            // It's the responsibility of the caller to make sure signatures has no duplicates
+            signatures.sort_by_key(|&(validator_name, _)| validator_name)
+        }
+
         let signatures = Cow::Owned(signatures);
         Self {
             value,
             round,
             signatures,
         }
+    }
+
+    /// Creates a `LiteCertificate` from a list of votes, without cryptographically checking the
+    /// signatures. Returns `None` if the votes are empty or don't have matching values and rounds.
+    pub fn try_from_votes(votes: impl IntoIterator<Item = LiteVote>) -> Option<Self> {
+        let mut votes = votes.into_iter();
+        let LiteVote {
+            value,
+            round,
+            validator,
+            signature,
+        } = votes.next()?;
+        let mut signatures = vec![(validator, signature)];
+        for vote in votes {
+            if vote.value.value_hash != value.value_hash || vote.round != round {
+                return None;
+            }
+            signatures.push((vote.validator, vote.signature));
+        }
+        Some(LiteCertificate::new(value, round, signatures))
     }
 
     /// Verifies the certificate.

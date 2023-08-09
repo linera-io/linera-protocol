@@ -23,7 +23,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, HashedValue,
-        IncomingMessage, LiteVote,
+        IncomingMessage, LiteCertificate, LiteVote,
     },
     ChainManagerInfo, ChainStateView,
 };
@@ -583,7 +583,9 @@ where
             &nodes,
             committee,
             |value: &Option<LiteVote>| -> Option<_> {
-                value.as_ref().map(|vote| vote.value.value_hash)
+                value
+                    .as_ref()
+                    .map(|vote| (vote.value.value_hash, vote.round))
             },
             |name, client| {
                 let mut updater = ValidatorUpdater {
@@ -598,57 +600,53 @@ where
             },
         )
         .await;
-        let votes = match result {
-            Ok((_hash, votes)) => votes,
-            Err(CommunicationError::Trusted(NodeError::InactiveChain(id)))
-                if id == chain_id
-                    && matches!(action, CommunicateAction::AdvanceToNextBlockHeight(_)) =>
-            {
-                // The chain is visibly not active (yet or any more) so there is no need
-                // to synchronize block heights.
-                return Ok(None);
-            }
-            Err(CommunicationError::Trusted(err)) => {
-                bail!("Failed to communicate with a quorum of validators: {}", err)
-            }
-            Err(CommunicationError::Sample(errors)) => {
-                bail!(
-                    "Failed to communicate with a quorum of validators:\n{:#?}",
-                    errors
-                )
-            }
-        };
-        let signatures: Vec<_> = votes
-            .into_iter()
-            .filter_map(|vote| vote.map(|vote| (vote.validator, vote.signature)))
-            .collect();
-        match action {
+        let (value, round) = match action {
             CommunicateAction::SubmitBlockForConfirmation(proposal) => {
                 let block = proposal.content.block;
-                let round = proposal.content.round;
                 let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
-                let value = HashedValue::from(CertificateValue::ConfirmedBlock { executed_block });
-                let certificate = Certificate::new(value, round, signatures);
-                // Certificate is valid because
-                // * `communicate_with_quorum` ensured a sufficient "weight" of
-                // (non-error) answers were returned by validators.
-                // * each answer is a vote signed by the expected validator.
-                Ok(Some(certificate))
+                (
+                    HashedValue::from(CertificateValue::ConfirmedBlock { executed_block }),
+                    proposal.content.round,
+                )
             }
             CommunicateAction::SubmitBlockForValidation(proposal) => {
                 let BlockAndRound { block, round } = proposal.content;
                 let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
-                let value = HashedValue::new_validated(executed_block);
-                let certificate = Certificate::new(value, round, signatures);
-                Ok(Some(certificate))
+                (HashedValue::new_validated(executed_block), round)
             }
             CommunicateAction::FinalizeBlock(validity_certificate) => {
                 let round = validity_certificate.round;
-                let conf_value = validity_certificate.value.into_confirmed();
-                Ok(Some(Certificate::new(conf_value, round, signatures)))
+                (validity_certificate.value.into_confirmed(), round)
             }
-            CommunicateAction::AdvanceToNextBlockHeight(_) => Ok(None),
-        }
+            CommunicateAction::AdvanceToNextBlockHeight(_) => {
+                return match result {
+                    Ok(_) => Ok(None),
+                    Err(CommunicationError::Trusted(NodeError::InactiveChain(id)))
+                        if id == chain_id =>
+                    {
+                        Ok(None)
+                    }
+                    Err(error) => Err(error)?,
+                };
+            }
+        };
+        let votes = match result? {
+            (Some((votes_hash, votes_round)), votes)
+                if votes_hash == value.hash() && votes_round == round =>
+            {
+                votes
+            }
+            _ => bail!("Unexpected response from validators"),
+        };
+        // Certificate is valid because
+        // * `communicate_with_quorum` ensured a sufficient "weight" of
+        // (non-error) answers were returned by validators.
+        // * each answer is a vote signed by the expected validator.
+        let certificate = LiteCertificate::try_from_votes(votes.into_iter().flatten())
+            .ok_or_else(|| anyhow!("Vote values or rounds don't match; this is a bug"))?
+            .with_value(value)
+            .ok_or_else(|| anyhow!("A quorum voted for an unexpected value"))?;
+        Ok(Some(certificate))
     }
 
     async fn receive_certificate_internal(
