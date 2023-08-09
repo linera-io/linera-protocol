@@ -32,10 +32,45 @@ pub type ExportedFunctionHandler = Box<dyn Fn(Box<dyn Any>) -> Result<Box<dyn An
 /// A fake Wasm instance.
 ///
 /// Only contains exports for the memory and the canonical ABI allocation functions.
-#[derive(Default)]
 pub struct MockInstance {
     memory: Arc<Mutex<Vec<u8>>>,
     exported_functions: HashMap<String, ExportedFunctionHandler>,
+}
+
+impl Default for MockInstance {
+    fn default() -> Self {
+        let memory = Arc::new(Mutex::new(Vec::new()));
+
+        MockInstance {
+            memory: memory.clone(),
+            exported_functions: HashMap::new(),
+        }
+        .with_exported_function("cabi_free", |_: HList![i32]| Ok(hlist![]))
+        .with_exported_function(
+            "cabi_realloc",
+            move |hlist_pat![_old_address, _old_size, alignment, new_size]: HList![
+                i32, i32, i32, i32
+            ]| {
+                let allocation_size = usize::try_from(new_size)
+                    .expect("Failed to allocate a negative amount of memory");
+
+                let mut memory = memory
+                    .lock()
+                    .expect("Panic while holding a lock to a `MockInstance`'s memory");
+
+                let address = GuestPointer(memory.len().try_into()?).aligned_at(alignment as u32);
+
+                memory.resize(address.0 as usize + allocation_size, 0);
+
+                assert!(
+                    memory.len() <= i32::MAX as usize,
+                    "No more memory for allocations"
+                );
+
+                Ok(hlist![address.0 as i32])
+            },
+        )
+    }
 }
 
 impl MockInstance {
@@ -87,9 +122,10 @@ impl Instance for MockInstance {
     type Runtime = MockRuntime;
 
     fn load_export(&mut self, name: &str) -> Option<String> {
-        match name {
-            "memory" | "cabi_realloc" | "cabi_free" => Some(name.to_owned()),
-            _ => None,
+        if name == "memory" || self.exported_functions.contains_key(name) {
+            Some(name.to_owned())
+        } else {
+            None
         }
     }
 }
