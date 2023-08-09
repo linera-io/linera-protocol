@@ -12,7 +12,9 @@ use super::{
 };
 use frunk::{hlist, hlist_pat, HList};
 use std::{
+    any::Any,
     borrow::Cow,
+    collections::HashMap,
     sync::{Arc, Mutex},
 };
 
@@ -24,12 +26,61 @@ impl Runtime for MockRuntime {
     type Memory = Arc<Mutex<Vec<u8>>>;
 }
 
+/// A closure for handling calls to mocked exported guest functions.
+pub type ExportedFunctionHandler = Box<dyn Fn(Box<dyn Any>) -> Result<Box<dyn Any>, RuntimeError>>;
+
 /// A fake Wasm instance.
 ///
 /// Only contains exports for the memory and the canonical ABI allocation functions.
 #[derive(Default)]
 pub struct MockInstance {
     memory: Arc<Mutex<Vec<u8>>>,
+    exported_functions: HashMap<String, ExportedFunctionHandler>,
+}
+
+impl MockInstance {
+    /// Adds a mock exported function to this [`MockInstance`].
+    ///
+    /// The `handler` will be called whenever the exported function is called.
+    pub fn with_exported_function<Parameters, Results, Handler>(
+        mut self,
+        name: impl Into<String>,
+        handler: Handler,
+    ) -> Self
+    where
+        Parameters: 'static,
+        Results: 'static,
+        Handler: Fn(Parameters) -> Result<Results, RuntimeError> + 'static,
+    {
+        self.add_exported_function(name, handler);
+        self
+    }
+
+    /// Adds a mock exported function to this [`MockInstance`].
+    ///
+    /// The `handler` will be called whenever the exported function is called.
+    pub fn add_exported_function<Parameters, Results, Handler>(
+        &mut self,
+        name: impl Into<String>,
+        handler: Handler,
+    ) -> &mut Self
+    where
+        Parameters: 'static,
+        Results: 'static,
+        Handler: Fn(Parameters) -> Result<Results, RuntimeError> + 'static,
+    {
+        self.exported_functions.insert(
+            name.into(),
+            Box::new(move |boxed_parameters| {
+                let parameters = boxed_parameters
+                    .downcast()
+                    .expect("Incorrect parameters used to call handler for exported function");
+
+                handler(*parameters).map(|results| Box::new(results) as Box<dyn Any>)
+            }),
+        );
+        self
+    }
 }
 
 impl Instance for MockInstance {
