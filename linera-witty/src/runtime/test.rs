@@ -17,9 +17,9 @@ use std::{
 };
 
 /// A fake Wasm runtime.
-pub struct FakeRuntime;
+pub struct MockRuntime;
 
-impl Runtime for FakeRuntime {
+impl Runtime for MockRuntime {
     type Export = ();
     type Memory = Arc<Mutex<Vec<u8>>>;
 }
@@ -28,12 +28,12 @@ impl Runtime for FakeRuntime {
 ///
 /// Only contains exports for the memory and the canonical ABI allocation functions.
 #[derive(Default)]
-pub struct FakeInstance {
+pub struct MockInstance {
     memory: Arc<Mutex<Vec<u8>>>,
 }
 
-impl Instance for FakeInstance {
-    type Runtime = FakeRuntime;
+impl Instance for MockInstance {
+    type Runtime = MockRuntime;
 
     fn load_export(&mut self, name: &str) -> Option<()> {
         match name {
@@ -44,7 +44,7 @@ impl Instance for FakeInstance {
 }
 
 // Support for `cabi_free`.
-impl InstanceWithFunction<HList![i32], HList![]> for FakeInstance {
+impl InstanceWithFunction<HList![i32], HList![]> for MockInstance {
     type Function = ();
 
     fn function_from_export(
@@ -64,7 +64,7 @@ impl InstanceWithFunction<HList![i32], HList![]> for FakeInstance {
 }
 
 // Support for `cabi_realloc`.
-impl InstanceWithFunction<HList![i32, i32, i32, i32], HList![i32]> for FakeInstance {
+impl InstanceWithFunction<HList![i32, i32, i32, i32], HList![i32]> for MockInstance {
     type Function = ();
 
     fn function_from_export(
@@ -85,7 +85,7 @@ impl InstanceWithFunction<HList![i32, i32, i32, i32], HList![i32]> for FakeInsta
         let mut memory = self
             .memory
             .lock()
-            .expect("Panic while holding a lock to a `FakeInstance`'s memory");
+            .expect("Panic while holding a lock to a `MockInstance`'s memory");
 
         let address = GuestPointer(memory.len().try_into()?).aligned_at(alignment as u32);
 
@@ -100,17 +100,17 @@ impl InstanceWithFunction<HList![i32, i32, i32, i32], HList![i32]> for FakeInsta
     }
 }
 
-impl RuntimeMemory<FakeInstance> for Arc<Mutex<Vec<u8>>> {
+impl RuntimeMemory<MockInstance> for Arc<Mutex<Vec<u8>>> {
     fn read<'instance>(
         &self,
-        instance: &'instance FakeInstance,
+        instance: &'instance MockInstance,
         location: GuestPointer,
         length: u32,
     ) -> Result<Cow<'instance, [u8]>, RuntimeError> {
         let memory = instance
             .memory
             .lock()
-            .expect("Panic while holding a lock to a `FakeInstance`'s memory");
+            .expect("Panic while holding a lock to a `MockInstance`'s memory");
 
         let start = location.0 as usize;
         let end = start + length as usize;
@@ -120,14 +120,14 @@ impl RuntimeMemory<FakeInstance> for Arc<Mutex<Vec<u8>>> {
 
     fn write(
         &mut self,
-        instance: &mut FakeInstance,
+        instance: &mut MockInstance,
         location: GuestPointer,
         bytes: &[u8],
     ) -> Result<(), RuntimeError> {
         let mut memory = instance
             .memory
             .lock()
-            .expect("Panic while holding a lock to a `FakeInstance`'s memory");
+            .expect("Panic while holding a lock to a `MockInstance`'s memory");
 
         let start = location.0 as usize;
         let end = start + bytes.len();
@@ -138,7 +138,7 @@ impl RuntimeMemory<FakeInstance> for Arc<Mutex<Vec<u8>>> {
     }
 }
 
-impl InstanceWithMemory for FakeInstance {
+impl InstanceWithMemory for MockInstance {
     fn memory_from_export(&self, _export: ()) -> Result<Option<Arc<Mutex<Vec<u8>>>>, RuntimeError> {
         Ok(Some(self.memory.clone()))
     }

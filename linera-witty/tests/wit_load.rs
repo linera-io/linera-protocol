@@ -10,7 +10,7 @@ use self::types::{
     Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, TupleWithPadding,
     TupleWithoutPadding,
 };
-use linera_witty::{hlist, FakeInstance, InstanceWithMemory, Layout, WitLoad};
+use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, WitLoad};
 use std::fmt::Debug;
 
 /// Check that a wrapper type is properly loaded from memory and lifted from its flat layout.
@@ -176,7 +176,7 @@ fn test_load_from_memory<T>(input: &[u8], expected: T)
 where
     T: Debug + Eq + WitLoad,
 {
-    let mut instance = FakeInstance::default();
+    let mut instance = MockInstance::default();
     let mut memory = instance.memory().unwrap();
 
     let address = memory.allocate(input.len() as u32).unwrap();
@@ -192,7 +192,7 @@ fn test_lift_from_flat_layout<T>(input: <T::Layout as Layout>::Flat, expected: T
 where
     T: Debug + Eq + WitLoad,
 {
-    let mut instance = FakeInstance::default();
+    let mut instance = MockInstance::default();
     let memory = instance.memory().unwrap();
 
     assert_eq!(T::lift_from(input, &memory).unwrap(), expected);

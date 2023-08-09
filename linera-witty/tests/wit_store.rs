@@ -10,7 +10,7 @@ use self::types::{
     Branch, Enum, Leaf, RecordWithDoublePadding, SimpleWrapper, TupleWithPadding,
     TupleWithoutPadding,
 };
-use linera_witty::{hlist, FakeInstance, InstanceWithMemory, Layout, WitStore};
+use linera_witty::{hlist, InstanceWithMemory, Layout, MockInstance, WitStore};
 use std::fmt::Debug;
 
 /// Check that a wrapper type is properly stored in memory and lowered into its flat layout.
@@ -218,7 +218,7 @@ fn test_store_in_memory<T>(data: &T, expected: &[u8])
 where
     T: WitStore,
 {
-    let mut instance = FakeInstance::default();
+    let mut instance = MockInstance::default();
     let mut memory = instance.memory().unwrap();
 
     let length = expected.len() as u32;
@@ -236,7 +236,7 @@ where
     T: WitStore,
     <T::Layout as Layout>::Flat: Debug + Eq,
 {
-    let mut instance = FakeInstance::default();
+    let mut instance = MockInstance::default();
     let mut memory = instance.memory().unwrap();
 
     assert_eq!(data.lower(&mut memory).unwrap(), expected);

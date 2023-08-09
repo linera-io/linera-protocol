@@ -22,7 +22,7 @@ mod type_traits;
 mod util;
 
 #[cfg(any(test, feature = "test"))]
-pub use self::runtime::{FakeInstance, FakeRuntime};
+pub use self::runtime::{MockInstance, MockRuntime};
 pub use self::{
     imported_function_interface::ImportedFunctionInterface,
     memory_layout::{JoinFlatLayouts, Layout},
