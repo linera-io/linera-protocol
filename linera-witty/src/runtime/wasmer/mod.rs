@@ -3,9 +3,10 @@
 
 //! Support for the [Wasmer](https://wasmer.io) runtime.
 
-use super::traits::Runtime;
+use super::traits::{Instance, Runtime};
 use std::sync::{Arc, Mutex};
-use wasmer::{Extern, Memory};
+use wasmer::{AsStoreMut, AsStoreRef, Extern, Memory, Store, StoreMut, StoreRef};
+use wasmer_vm::StoreObjects;
 
 /// Representation of the [Wasmer](https://wasmer.io) runtime.
 pub struct Wasmer;
@@ -13,6 +14,36 @@ pub struct Wasmer;
 impl Runtime for Wasmer {
     type Export = Extern;
     type Memory = Memory;
+}
+
+/// Necessary data for implementing an entrypoint [`Instance`].
+pub struct EntrypointInstance {
+    store: Store,
+    instance: InstanceSlot,
+}
+
+impl AsStoreRef for EntrypointInstance {
+    fn as_store_ref(&self) -> StoreRef<'_> {
+        self.store.as_store_ref()
+    }
+}
+
+impl AsStoreMut for EntrypointInstance {
+    fn as_store_mut(&mut self) -> StoreMut<'_> {
+        self.store.as_store_mut()
+    }
+
+    fn objects_mut(&mut self) -> &mut StoreObjects {
+        self.store.objects_mut()
+    }
+}
+
+impl Instance for EntrypointInstance {
+    type Runtime = Wasmer;
+
+    fn load_export(&mut self, name: &str) -> Option<Extern> {
+        self.instance.load_export(name)
+    }
 }
 
 /// A slot to store a [`wasmer::Instance`] in a way that can be shared with reentrant calls.
