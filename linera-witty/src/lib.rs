@@ -14,6 +14,7 @@
 #[macro_use]
 mod macro_utils;
 
+mod imported_function_interface;
 mod memory_layout;
 mod primitive_types;
 mod runtime;
@@ -21,10 +22,14 @@ mod type_traits;
 mod util;
 
 #[cfg(any(test, feature = "test"))]
-pub use self::runtime::{FakeInstance, FakeRuntime};
+pub use self::runtime::{MockExportedFunction, MockInstance, MockRuntime};
 pub use self::{
+    imported_function_interface::ImportedFunctionInterface,
     memory_layout::{JoinFlatLayouts, Layout},
-    runtime::{GuestPointer, InstanceWithMemory, Memory, Runtime, RuntimeError, RuntimeMemory},
+    runtime::{
+        GuestPointer, Instance, InstanceWithFunction, InstanceWithMemory, Memory, Runtime,
+        RuntimeError, RuntimeMemory,
+    },
     type_traits::{WitLoad, WitStore, WitType},
     util::{Merge, Split},
 };

@@ -3,7 +3,7 @@
 
 //! Unit tests for implementations of the custom traits for existing types.
 
-use crate::{FakeInstance, InstanceWithMemory, Layout, WitLoad, WitStore};
+use crate::{InstanceWithMemory, Layout, MockInstance, WitLoad, WitStore};
 use frunk::hlist;
 use std::fmt::Debug;
 
@@ -102,6 +102,7 @@ fn ok_two_bytes_but_large_err() {
             0x00, 0, 0, 0, 0, 0, 0, 0, 0x34, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ],
     );
+    test_flattening_roundtrip(input, hlist![0_i32, 0x0000_1234_i64, 0_i64]);
 }
 
 /// Test roundtrip of `Err::<i16, u128>`.
@@ -116,6 +117,10 @@ fn large_err() {
             0x05, 0x04, 0x03, 0x02, 0x01, 0x00,
         ],
     );
+    test_flattening_roundtrip(
+        input,
+        hlist![1_i32, 0x0809_0a0b_0c0d_0e0f_i64, 0x0001_0203_0405_0607_i64],
+    );
 }
 
 /// Test storing an instance of `T` to memory, checking that the `memory_data` bytes are correctly
@@ -124,7 +129,7 @@ fn test_memory_roundtrip<T>(input: T, memory_data: &[u8])
 where
     T: Debug + Eq + WitLoad + WitStore,
 {
-    let mut instance = FakeInstance::default();
+    let mut instance = MockInstance::default();
     let mut memory = instance.memory().unwrap();
     let length = memory_data.len() as u32;
 
@@ -145,7 +150,7 @@ where
     T: Debug + Eq + WitLoad + WitStore,
     <T::Layout as Layout>::Flat: Debug + Eq,
 {
-    let mut instance = FakeInstance::default();
+    let mut instance = MockInstance::default();
     let mut memory = instance.memory().unwrap();
 
     let lowered_layout = input.lower(&mut memory).unwrap();

@@ -8,15 +8,17 @@
 #![deny(missing_docs)]
 
 mod util;
+mod wit_import;
 mod wit_load;
 mod wit_store;
 mod wit_type;
 
+use self::util::extract_namespace;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use proc_macro_error::{abort, proc_macro_error};
 use quote::{quote, ToTokens};
-use syn::{parse_macro_input, Data, DeriveInput, Ident};
+use syn::{parse_macro_input, Data, DeriveInput, Ident, ItemTrait};
 
 /// Derives `WitType` for a Rust type.
 ///
@@ -90,4 +92,17 @@ fn derive_trait(input: DeriveInput, body: impl ToTokens, trait_name: Ident) -> T
         }
     }
     .into()
+}
+
+/// Generates a generic type from a trait.
+///
+/// The generic type has a type parameter for the Wasm guest instance to use, and allows calling
+/// functions that the instance exports through the trait's methods.
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn wit_import(attribute: TokenStream, input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ItemTrait);
+    let namespace = extract_namespace(attribute, &input.ident);
+
+    wit_import::generate(input, &namespace).into()
 }

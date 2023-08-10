@@ -3165,6 +3165,7 @@ dependencies = [
  "frunk",
  "linera-witty",
  "linera-witty-macros",
+ "test-case",
  "thiserror",
 ]
 
@@ -3172,6 +3173,7 @@ dependencies = [
 name = "linera-witty-macros"
 version = "0.3.0"
 dependencies = [
+ "heck 0.4.1",
  "proc-macro-error",
  "proc-macro2",
  "quote",
