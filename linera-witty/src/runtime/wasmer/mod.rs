@@ -3,6 +3,7 @@
 
 //! Support for the [Wasmer](https://wasmer.io) runtime.
 
+mod function;
 mod parameters;
 mod results;
 
