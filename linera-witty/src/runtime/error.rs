@@ -53,4 +53,9 @@ pub enum RuntimeError {
     #[cfg(feature = "wasmer")]
     #[error(transparent)]
     Wasmer(#[from] wasmer::RuntimeError),
+
+    /// Attempt to access an invalid memory address using Wasmer.
+    #[cfg(feature = "wasmer")]
+    #[error(transparent)]
+    WasmerMemory(#[from] wasmer::MemoryAccessError),
 }
