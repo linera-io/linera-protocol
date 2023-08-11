@@ -11,8 +11,8 @@ mod results;
 use super::traits::{Instance, Runtime};
 use std::sync::{Arc, Mutex};
 use wasmer::{
-    AsStoreMut, AsStoreRef, Engine, Extern, FunctionEnv, Imports, InstantiationError, Memory,
-    Module, Store, StoreMut, StoreRef,
+    AsStoreMut, AsStoreRef, Engine, Extern, FunctionEnv, FunctionEnvMut, Imports,
+    InstantiationError, Memory, Module, Store, StoreMut, StoreRef,
 };
 use wasmer_vm::StoreObjects;
 
@@ -106,6 +106,18 @@ impl Instance for EntrypointInstance {
 
     fn load_export(&mut self, name: &str) -> Option<Extern> {
         self.instance.load_export(name)
+    }
+}
+
+/// Alias for the [`Instance`] implementation made available inside host functions called by the
+/// guest.
+pub type ReentrantInstance<'a> = FunctionEnvMut<'a, InstanceSlot>;
+
+impl Instance for ReentrantInstance<'_> {
+    type Runtime = Wasmer;
+
+    fn load_export(&mut self, name: &str) -> Option<Extern> {
+        self.data_mut().load_export(name)
     }
 }
 
