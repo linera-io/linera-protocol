@@ -8,6 +8,8 @@
 #[path = "common/test_instance.rs"]
 mod test_instance;
 
+#[cfg(feature = "wasmer")]
+use self::test_instance::WasmerInstanceFactory;
 use self::test_instance::{MockInstanceFactory, TestInstanceFactory};
 use linera_witty::{Instance, Runtime, RuntimeMemory};
 use linera_witty_macros::wit_import;
@@ -21,6 +23,7 @@ trait SimpleFunction {
 
 /// Test importing a simple function without parameters or return values.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
+#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 fn simple_function<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -54,6 +57,7 @@ trait Getters {
 
 /// Test importing functions with return values.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
+#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 fn getters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -157,6 +161,7 @@ trait Setters {
 
 /// Test importing functions with parameters.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
+#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 fn setters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -221,6 +226,7 @@ trait Operations {
 
 /// Test importing functions with multiple parameters and return values.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
+#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 fn operations<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
