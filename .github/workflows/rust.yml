@@ -72,6 +72,10 @@ jobs:
         cd examples
         CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=../target/debug/test-runner cargo test --target wasm32-unknown-unknown
         cargo test --locked --target x86_64-unknown-linux-gnu
+    - name: Run Witty integration tests
+      run: |
+        cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
+        cargo test -p linera-witty --features wasmer
 
   lint:
     runs-on: ubuntu-latest-4-cores
