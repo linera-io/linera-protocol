@@ -3,6 +3,7 @@
 
 //! Support for the [Wasmer](https://wasmer.io) runtime.
 
+mod parameters;
 mod results;
 
 use super::traits::{Instance, Runtime};
