@@ -1,0 +1,15 @@
+package witty-macros:test-modules
+
+interface operations {
+    and-bool: func(first: bool, second: bool) -> bool
+    add-s8: func(first: s8, second: s8) -> s8
+    add-u8: func(first: u8, second: u8) -> u8
+    add-s16: func(first: s16, second: s16) -> s16
+    add-u16: func(first: u16, second: u16) -> u16
+    add-s32: func(first: s32, second: s32) -> s32
+    add-u32: func(first: u32, second: u32) -> u32
+    add-s64: func(first: s64, second: s64) -> s64
+    add-u64: func(first: u64, second: u64) -> u64
+    add-float32: func(first: float32, second: float32) -> float32
+    add-float64: func(first: float64, second: float64) -> float64
+}

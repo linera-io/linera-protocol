@@ -1,0 +1,5 @@
+package witty-macros:test-modules
+
+interface simple-function {
+    simple: func()
+}

@@ -1,0 +1,17 @@
+package witty-macros:test-modules
+
+world export-simple-function {
+    export simple-function
+}
+
+world export-getters {
+    export getters
+}
+
+world export-setters {
+    export setters
+}
+
+world export-operations {
+    export operations
+}

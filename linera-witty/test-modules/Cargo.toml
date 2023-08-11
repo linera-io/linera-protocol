@@ -1,0 +1,28 @@
+[package]
+name = "linera-witty-test-modules"
+description = "Generation of WIT compatible host code from Rust code"
+authors = ["Linera <contact@linera.io>"]
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.io"
+license = "Apache-2.0"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "export-simple-function"
+path = "src/export/simple_function.rs"
+
+[[bin]]
+name = "export-getters"
+path = "src/export/getters.rs"
+
+[[bin]]
+name = "export-setters"
+path = "src/export/setters.rs"
+
+[[bin]]
+name = "export-operations"
+path = "src/export/operations.rs"
+
+[dependencies]
+wit-bindgen = { version = "0.7.0", features = ["macros"] }

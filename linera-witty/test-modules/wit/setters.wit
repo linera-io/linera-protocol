@@ -1,0 +1,15 @@
+package witty-macros:test-modules
+
+interface setters {
+    set-bool: func(value: bool)
+    set-s8: func(value: s8)
+    set-u8: func(value: u8)
+    set-s16: func(value: s16)
+    set-u16: func(value: u16)
+    set-s32: func(value: s32)
+    set-u32: func(value: u32)
+    set-s64: func(value: s64)
+    set-u64: func(value: u64)
+    set-float32: func(value: float32)
+    set-float64: func(value: float64)
+}
