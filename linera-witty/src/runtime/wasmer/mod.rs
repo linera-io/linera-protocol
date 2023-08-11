@@ -3,6 +3,8 @@
 
 //! Support for the [Wasmer](https://wasmer.io) runtime.
 
+mod results;
+
 use super::traits::{Instance, Runtime};
 use std::sync::{Arc, Mutex};
 use wasmer::{
