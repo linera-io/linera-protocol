@@ -15,9 +15,10 @@ default = ["macros"]
 macros = ["linera-witty-macros"]
 test = []
 wasmer = ["dep:wasmer", "wasmer-vm"]
-wasmtime = ["dep:wasmtime"]
+wasmtime = ["dep:wasmtime", "anyhow"]
 
 [dependencies]
+anyhow = { workspace = true, optional = true }
 either = { workspace = true }
 frunk = { workspace = true }
 linera-witty-macros = { workspace = true, optional = true }

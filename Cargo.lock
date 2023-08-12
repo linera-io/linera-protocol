@@ -3170,6 +3170,7 @@ dependencies = [
 name = "linera-witty"
 version = "0.3.0"
 dependencies = [
+ "anyhow",
  "either",
  "frunk",
  "linera-witty",
