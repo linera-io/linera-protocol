@@ -3178,6 +3178,7 @@ dependencies = [
  "thiserror",
  "wasmer",
  "wasmer-vm",
+ "wasmtime",
 ]
 
 [[package]]

@@ -24,6 +24,7 @@ linera-witty-macros = { workspace = true, optional = true }
 thiserror = { workspace = true }
 wasmer = { workspace = true, optional = true }
 wasmer-vm = { workspace = true, optional = true }
+wasmtime = { workspace = true, optional = true }
 
 [dev-dependencies]
 linera-witty = { workspace = true, features = ["macros", "test"] }
