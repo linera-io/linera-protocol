@@ -3,6 +3,8 @@
 
 //! Support for the [Wasmtime](https://wasmtime.dev) runtime.
 
+mod results;
+
 use super::traits::{Instance, Runtime};
 use wasmtime::{AsContext, AsContextMut, Extern, Memory, Store, StoreContext, StoreContextMut};
 
