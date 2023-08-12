@@ -75,7 +75,7 @@ jobs:
     - name: Run Witty integration tests
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
-        cargo test -p linera-witty --features wasmer
+        cargo test -p linera-witty --features wasmer,wasmtime
 
   lint:
     runs-on: ubuntu-latest-4-cores
