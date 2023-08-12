@@ -4,6 +4,7 @@
 //! Support for the [Wasmtime](https://wasmtime.dev) runtime.
 
 mod function;
+mod memory;
 mod parameters;
 mod results;
 
