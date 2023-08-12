@@ -9,7 +9,9 @@ mod parameters;
 mod results;
 
 use super::traits::{Instance, Runtime};
-use wasmtime::{AsContext, AsContextMut, Extern, Memory, Store, StoreContext, StoreContextMut};
+use wasmtime::{
+    AsContext, AsContextMut, Caller, Extern, Memory, Store, StoreContext, StoreContextMut,
+};
 
 /// Representation of the [Wasmtime](https://wasmtime.dev) runtime.
 pub struct Wasmtime;
@@ -52,5 +54,17 @@ impl Instance for EntrypointInstance {
 
     fn load_export(&mut self, name: &str) -> Option<Extern> {
         self.instance.get_export(&mut self.store, name)
+    }
+}
+
+/// Alias for the [`Instance`] implementation made available inside host functions called by the
+/// guest.
+pub type ReentrantInstance<'a> = Caller<'a, ()>;
+
+impl Instance for Caller<'_, ()> {
+    type Runtime = Wasmtime;
+
+    fn load_export(&mut self, name: &str) -> Option<Extern> {
+        Caller::get_export(self, name)
     }
 }
