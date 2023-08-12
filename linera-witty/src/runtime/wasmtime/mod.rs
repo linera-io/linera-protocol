@@ -3,6 +3,7 @@
 
 //! Support for the [Wasmtime](https://wasmtime.dev) runtime.
 
+mod parameters;
 mod results;
 
 use super::traits::{Instance, Runtime};
