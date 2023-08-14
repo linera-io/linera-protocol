@@ -11,9 +11,11 @@
 //! then the results type is stored in a heap allocated memory region instead, and the address to
 //! that region is returned as a value from the function.
 //!
-//! See the [canonical ABI's section on
+//! This is determined by the `MAX_FLAT_RESULTS` in the [canonical ABI's section on
 //! flattening](https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md#flattening)
-//! for more details.
+//! and has the value of `1`. There is no equivalent constant in Witty. Instead, the
+//! [`FlatHostResults`] implementations automatically handle flat layouts with more or less
+//! elements than the limit.
 
 use crate::{
     memory_layout::FlatLayout, primitive_types::FlatType, GuestPointer, InstanceWithMemory, Layout,

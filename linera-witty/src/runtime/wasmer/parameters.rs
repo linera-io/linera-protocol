@@ -58,7 +58,11 @@ where
 ///
 /// The maximum number of parameters is defined by the [canonical
 /// ABI](https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md#flattening)
-/// as the `MAX_FLAT_PARAMS` constant.
+/// as the `MAX_FLAT_PARAMS` constant. There is no equivalent constant defined in Witty. Instead,
+/// any attempt to use more than the limit should lead to a compiler error. Therefore, this macro
+/// only implements the trait up to the limit. The same is done in other parts of the code, like
+/// for example in
+/// [`FlatHostParameters`][`crate::imported_function_interface::FlatHostParameters`].
 macro_rules! parameters {
     ($( $names:ident : $types:ident ),*) => {
         impl<$( $types ),*> WasmerParameters for HList![$( $types ),*]
