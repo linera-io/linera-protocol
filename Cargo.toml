@@ -12,6 +12,7 @@ members = [
         "linera-views",
         "linera-views-derive",
         "linera-witty",
+        "linera-witty/test-modules",
         "linera-witty-macros",
         "linera-explorer",
 ]
@@ -104,6 +105,7 @@ tracing-subscriber = { version = "0.3.16", default-features = false, features = 
 wasm-encoder = "0.24.1"
 wasmer = { version = "=3.1.1", features = ["singlepass"] }
 wasmer-middlewares = "3.1.1"
+wasmer-vm = { version = "=3.1.1" }
 wasmparser = "0.101.1"
 wasmtime = "1.0"
 wit-bindgen-guest-rust = { version = "0.2.0", package = "linera-wit-bindgen-guest-rust" }

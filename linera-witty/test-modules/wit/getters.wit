@@ -1,0 +1,16 @@
+package witty-macros:test-modules
+
+interface getters {
+    get-true: func() -> bool
+    get-false: func() -> bool
+    get-s8: func() -> s8
+    get-u8: func() -> u8
+    get-s16: func() -> s16
+    get-u16: func() -> u16
+    get-s32: func() -> s32
+    get-u32: func() -> u32
+    get-s64: func() -> s64
+    get-u64: func() -> u64
+    get-float32: func() -> float32
+    get-float64: func() -> float64
+}

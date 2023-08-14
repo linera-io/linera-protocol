@@ -4,6 +4,8 @@
 //! Helper code for testing using different runtimes.
 
 use frunk::{hlist, hlist_pat, HList};
+#[cfg(feature = "wasmer")]
+use linera_witty::wasmer;
 use linera_witty::{InstanceWithMemory, MockExportedFunction, MockInstance, RuntimeError};
 use std::any::Any;
 
@@ -12,6 +14,28 @@ pub trait TestInstanceFactory {
     type Instance: InstanceWithMemory;
 
     fn load_test_module(&mut self, module_name: &str) -> Self::Instance;
+}
+
+/// A factory of [`wasmer::EntrypointInstance`]s.
+#[cfg(feature = "wasmer")]
+pub struct WasmerInstanceFactory;
+
+#[cfg(feature = "wasmer")]
+impl TestInstanceFactory for WasmerInstanceFactory {
+    type Instance = wasmer::EntrypointInstance;
+
+    fn load_test_module(&mut self, module: &str) -> Self::Instance {
+        let engine = ::wasmer::EngineBuilder::new(::wasmer::Singlepass::default()).engine();
+        let module = ::wasmer::Module::from_file(
+            &engine,
+            format!("../target/wasm32-unknown-unknown/debug/export-{module}.wasm"),
+        )
+        .expect("Failed to load module");
+
+        wasmer::InstanceBuilder::new(engine)
+            .instantiate(&module)
+            .expect("Failed to instantiate module")
+    }
 }
 
 /// A factory of [`MockInstance`]s.

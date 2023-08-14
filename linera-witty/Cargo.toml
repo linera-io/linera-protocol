@@ -14,12 +14,15 @@ edition = "2021"
 default = ["macros"]
 macros = ["linera-witty-macros"]
 test = []
+wasmer = ["dep:wasmer", "wasmer-vm"]
 
 [dependencies]
 either = { workspace = true }
 frunk = { workspace = true }
 linera-witty-macros = { workspace = true, optional = true }
 thiserror = { workspace = true }
+wasmer = { workspace = true, optional = true }
+wasmer-vm = { workspace = true, optional = true }
 
 [dev-dependencies]
 linera-witty = { workspace = true, features = ["macros", "test"] }

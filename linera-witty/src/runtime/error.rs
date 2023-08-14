@@ -48,4 +48,14 @@ pub enum RuntimeError {
     /// Attempt to load an `enum` type but the discriminant doesn't match any of the variants.
     #[error("Unexpected variant discriminant")]
     InvalidVariant,
+
+    /// Wasmer runtime error.
+    #[cfg(feature = "wasmer")]
+    #[error(transparent)]
+    Wasmer(#[from] wasmer::RuntimeError),
+
+    /// Attempt to access an invalid memory address using Wasmer.
+    #[cfg(feature = "wasmer")]
+    #[error(transparent)]
+    WasmerMemory(#[from] wasmer::MemoryAccessError),
 }
