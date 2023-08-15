@@ -611,7 +611,7 @@ impl Validator {
     }
 }
 
-struct TestRunner {
+struct LocalNetwork {
     network: Network,
     tmp_dir: Rc<TempDir>,
     next_client_id: usize,
@@ -619,7 +619,7 @@ struct TestRunner {
     local_net: BTreeMap<usize, Validator>,
 }
 
-impl Drop for TestRunner {
+impl Drop for LocalNetwork {
     fn drop(&mut self) {
         for validator in self.local_net.values_mut() {
             validator.assert_is_running();
@@ -627,7 +627,7 @@ impl Drop for TestRunner {
     }
 }
 
-impl TestRunner {
+impl LocalNetwork {
     fn new(network: Network, num_initial_validators: usize) -> Self {
         Self {
             tmp_dir: Rc::new(tempdir().unwrap()),
@@ -1152,10 +1152,10 @@ async fn test_end_to_end_chains_query() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 4);
-    let client = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 4);
+    let client = local_net.make_client(network);
 
-    runner.generate_initial_validator_config().await;
+    local_net.generate_initial_validator_config().await;
     client.create_genesis_config().await;
 
     let good_result = {
@@ -1166,7 +1166,7 @@ async fn test_end_to_end_chains_query() {
         format!("{{\"data\":{{\"chains\":{}}}}}", chains)
     };
 
-    runner.run_local_net().await;
+    local_net.run_local_net().await;
     let mut node_service = client.run_node_service(None).await;
 
     let query = make_graphql_query("../linera-explorer/graphql/chains.graphql", "Chains", &[]);
@@ -1179,13 +1179,13 @@ async fn test_end_to_end_applications_query() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 4);
-    let client = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 4);
+    let client = local_net.make_client(network);
 
-    runner.generate_initial_validator_config().await;
+    local_net.generate_initial_validator_config().await;
     client.create_genesis_config().await;
 
-    runner.run_local_net().await;
+    local_net.run_local_net().await;
     let chain = client.get_wallet().default_chain().unwrap();
     let mut node_service = client.run_node_service(None).await;
 
@@ -1205,13 +1205,13 @@ async fn test_end_to_end_blocks_query() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 4);
-    let client = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 4);
+    let client = local_net.make_client(network);
 
-    runner.generate_initial_validator_config().await;
+    local_net.generate_initial_validator_config().await;
     client.create_genesis_config().await;
 
-    runner.run_local_net().await;
+    local_net.run_local_net().await;
     let chain = client.get_wallet().default_chain().unwrap();
     let mut node_service = client.run_node_service(None).await;
 
@@ -1231,13 +1231,13 @@ async fn test_end_to_end_block_query() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 4);
-    let client = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 4);
+    let client = local_net.make_client(network);
 
-    runner.generate_initial_validator_config().await;
+    local_net.generate_initial_validator_config().await;
     client.create_genesis_config().await;
 
-    runner.run_local_net().await;
+    local_net.run_local_net().await;
     let chain = client.get_wallet().default_chain().unwrap();
     let mut node_service = client.run_node_service(None).await;
 
@@ -1280,17 +1280,17 @@ async fn test_end_to_end_counter() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 4);
-    let client = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 4);
+    let client = local_net.make_client(network);
 
     let original_counter_value = 35;
     let increment = 5;
 
-    runner.generate_initial_validator_config().await;
+    local_net.generate_initial_validator_config().await;
     client.create_genesis_config().await;
     let chain = client.get_wallet().default_chain().unwrap();
-    runner.run_local_net().await;
-    let (contract, service) = runner.build_example("counter").await;
+    local_net.run_local_net().await;
+    let (contract, service) = local_net.build_example("counter").await;
 
     let application_id = client
         .publish_and_create::<CounterAbi>(
@@ -1325,17 +1325,17 @@ async fn test_end_to_end_counter_publish_create() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 4);
-    let client = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 4);
+    let client = local_net.make_client(network);
 
     let original_counter_value = 35;
     let increment = 5;
 
-    runner.generate_initial_validator_config().await;
+    local_net.generate_initial_validator_config().await;
     client.create_genesis_config().await;
     let chain = client.get_wallet().default_chain().unwrap();
-    runner.run_local_net().await;
-    let (contract, service) = runner.build_example("counter").await;
+    local_net.run_local_net().await;
+    let (contract, service) = local_net.build_example("counter").await;
 
     let bytecode_id = client.publish_bytecode(contract, service, None).await;
     let application_id = client
@@ -1361,18 +1361,18 @@ async fn test_end_to_end_counter_publish_create() {
 async fn test_end_to_end_multiple_wallets() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    // Create runner and two clients.
-    let mut runner = TestRunner::new(Network::Grpc, 4);
-    let client_1 = runner.make_client(Network::Grpc);
-    let client_2 = runner.make_client(Network::Grpc);
+    // Create local_net and two clients.
+    let mut local_net = LocalNetwork::new(Network::Grpc, 4);
+    let client_1 = local_net.make_client(Network::Grpc);
+    let client_2 = local_net.make_client(Network::Grpc);
 
     // Create initial server and client config.
-    runner.generate_initial_validator_config().await;
+    local_net.generate_initial_validator_config().await;
     client_1.create_genesis_config().await;
     client_2.wallet_init(&[]).await;
 
     // Start local network.
-    runner.run_local_net().await;
+    local_net.run_local_net().await;
 
     // Get some chain owned by Client 1.
     let chain_1 = *client_1.get_wallet().chain_ids().first().unwrap();
@@ -1423,14 +1423,14 @@ async fn test_end_to_end_reconfiguration_simple() {
 }
 
 async fn test_reconfiguration(network: Network) {
-    let mut runner = TestRunner::new(network, 4);
-    let client = runner.make_client(network);
-    let client_2 = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 4);
+    let client = local_net.make_client(network);
+    let client_2 = local_net.make_client(network);
 
-    let servers = runner.generate_initial_validator_config().await;
+    let servers = local_net.generate_initial_validator_config().await;
     client.create_genesis_config().await;
     client_2.wallet_init(&[]).await;
-    runner.run_local_net().await;
+    local_net.run_local_net().await;
 
     let chain_1 = client.get_wallet().default_chain().unwrap();
 
@@ -1458,8 +1458,8 @@ async fn test_reconfiguration(network: Network) {
     client.transfer("3", chain_1, chain_2).await;
 
     // Restart last server (dropping it kills the process)
-    runner.kill_server(4, 3);
-    runner.start_server(4, 3).await;
+    local_net.kill_server(4, 3);
+    local_net.start_server(4, 3).await;
 
     // Query balances again
     assert_eq!(client.query_balance(chain_1).await.unwrap(), "7.");
@@ -1478,11 +1478,11 @@ async fn test_reconfiguration(network: Network) {
     assert!(client.is_chain_present_in_wallet(chain_3).await);
 
     // Create configurations for two more validators
-    let server_5 = runner.generate_validator_config(5).await;
-    let server_6 = runner.generate_validator_config(6).await;
+    let server_5 = local_net.generate_validator_config(5).await;
+    let server_6 = local_net.generate_validator_config(6).await;
 
     // Start the validators
-    runner.start_validators(5..=6).await;
+    local_net.start_validators(5..=6).await;
 
     // Add validator 5
     client.set_validator(&server_5, 9500, 100).await;
@@ -1495,7 +1495,7 @@ async fn test_reconfiguration(network: Network) {
 
     // Remove validator 5
     client.remove_validator(&server_5).await;
-    runner.remove_validator(5);
+    local_net.remove_validator(5);
 
     client.query_validators(None).await;
     client.query_validators(Some(chain_1)).await;
@@ -1503,7 +1503,7 @@ async fn test_reconfiguration(network: Network) {
     // Remove validators 1, 2, 3 and 4, so only 6 remains.
     for (i, server) in servers.into_iter().enumerate() {
         client.remove_validator(&server).await;
-        runner.remove_validator(i + 1);
+        local_net.remove_validator(i + 1);
     }
 
     client.transfer("5", chain_1, chain_2).await;
@@ -1531,11 +1531,11 @@ async fn test_reconfiguration(network: Network) {
 async fn test_open_chain_node_service() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 4);
-    let client = runner.make_client(network);
-    runner.generate_initial_validator_config().await;
+    let mut local_net = LocalNetwork::new(network, 4);
+    let client = local_net.make_client(network);
+    local_net.generate_initial_validator_config().await;
     client.create_genesis_config().await;
-    runner.run_local_net().await;
+    local_net.run_local_net().await;
 
     let default_chain = client.get_wallet().default_chain().unwrap();
     let public_key = client
@@ -1622,18 +1622,18 @@ async fn test_end_to_end_social_user_pub_sub() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 4);
-    let client1 = runner.make_client(network);
-    let client2 = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 4);
+    let client1 = local_net.make_client(network);
+    let client2 = local_net.make_client(network);
 
     // Create initial server and client config.
-    runner.generate_initial_validator_config().await;
+    local_net.generate_initial_validator_config().await;
     client1.create_genesis_config().await;
     client2.wallet_init(&[]).await;
 
     // Start local network.
-    runner.run_local_net().await;
-    let (contract, service) = runner.build_example("social").await;
+    local_net.run_local_net().await;
+    let (contract, service) = local_net.build_example("social").await;
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await;
@@ -1697,19 +1697,19 @@ async fn test_end_to_end_retry_notification_stream() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 1);
-    let client1 = runner.make_client(network);
-    let client2 = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 1);
+    let client1 = local_net.make_client(network);
+    let client2 = local_net.make_client(network);
 
     // Create initial server and client config.
-    runner.generate_initial_validator_config().await;
+    local_net.generate_initial_validator_config().await;
     client1.create_genesis_config().await;
     let chain = ChainId::root(0);
     let mut height = 0;
     client2.wallet_init(&[chain]).await;
 
     // Start local network.
-    runner.run_local_net().await;
+    local_net.run_local_net().await;
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
     let mut node_service2 = client2.run_node_service(8081).await;
@@ -1724,8 +1724,8 @@ async fn test_end_to_end_retry_notification_stream() {
     );
 
     // Oh no! The validator has an outage and gets restarted!
-    runner.remove_validator(1);
-    runner.start_validators(1..=1).await;
+    local_net.remove_validator(1);
+    local_net.start_validators(1..=1).await;
 
     // The node service should try to reconnect.
     'success: {
@@ -1757,17 +1757,17 @@ async fn test_end_to_end_fungible() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 4);
-    let client1 = runner.make_client(network);
-    let client2 = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 4);
+    let client1 = local_net.make_client(network);
+    let client2 = local_net.make_client(network);
 
-    runner.generate_initial_validator_config().await;
+    local_net.generate_initial_validator_config().await;
     client1.create_genesis_config().await;
     client2.wallet_init(&[]).await;
 
     // Create initial server and client config.
-    runner.run_local_net().await;
-    let (contract, service) = runner.build_example("fungible").await;
+    local_net.run_local_net().await;
+    let (contract, service) = local_net.build_example("fungible").await;
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await;
@@ -1876,15 +1876,15 @@ async fn test_end_to_end_same_wallet_fungible() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 4);
-    let client1 = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 4);
+    let client1 = local_net.make_client(network);
 
-    runner.generate_initial_validator_config().await;
+    local_net.generate_initial_validator_config().await;
     client1.create_genesis_config().await;
 
     // Create initial server and client config.
-    runner.run_local_net().await;
-    let (contract, service) = runner.build_example("fungible").await;
+    local_net.run_local_net().await;
+    let (contract, service) = local_net.build_example("fungible").await;
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
     let chain2 = ChainId::root(2);
@@ -1958,17 +1958,17 @@ async fn test_end_to_end_crowd_funding() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 4);
-    let client1 = runner.make_client(network);
-    let client2 = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 4);
+    let client1 = local_net.make_client(network);
+    let client2 = local_net.make_client(network);
 
-    runner.generate_initial_validator_config().await;
+    local_net.generate_initial_validator_config().await;
     client1.create_genesis_config().await;
     client2.wallet_init(&[]).await;
 
     // Create initial server and client config.
-    runner.run_local_net().await;
-    let (contract_fungible, service_fungible) = runner.build_example("fungible").await;
+    local_net.run_local_net().await;
+    let (contract_fungible, service_fungible) = local_net.build_example("fungible").await;
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await;
@@ -2001,7 +2001,7 @@ async fn test_end_to_end_crowd_funding() {
         deadline,
         target,
     };
-    let (contract_crowd, service_crowd) = runner.build_example("crowd-funding").await;
+    let (contract_crowd, service_crowd) = local_net.build_example("crowd-funding").await;
     let application_id_crowd = client1
         .publish_and_create::<CrowdFundingAbi>(
             contract_crowd,
@@ -2084,20 +2084,20 @@ async fn test_end_to_end_matching_engine() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 4);
-    let client_admin = runner.make_client(network);
-    let client_a = runner.make_client(network);
-    let client_b = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 4);
+    let client_admin = local_net.make_client(network);
+    let client_a = local_net.make_client(network);
+    let client_b = local_net.make_client(network);
 
-    runner.generate_initial_validator_config().await;
+    local_net.generate_initial_validator_config().await;
     client_admin.create_genesis_config().await;
     client_a.wallet_init(&[]).await;
     client_b.wallet_init(&[]).await;
 
     // Create initial server and client config.
-    runner.run_local_net().await;
-    let (contract_fungible, service_fungible) = runner.build_example("fungible").await;
-    let (contract_matching, service_matching) = runner.build_example("matching-engine").await;
+    local_net.run_local_net().await;
+    let (contract_fungible, service_fungible) = local_net.build_example("fungible").await;
+    let (contract_matching, service_matching) = local_net.build_example("matching-engine").await;
 
     let chain_admin = client_admin.get_wallet().default_chain().unwrap();
     let chain_a = client_admin.open_and_assign(&client_a).await;
@@ -2321,12 +2321,12 @@ async fn test_end_to_end_matching_engine() {
 #[test_log::test(tokio::test)]
 async fn test_project_new() {
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 0);
-    let client = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 0);
+    let client = local_net.make_client(network);
 
     let tmp_dir = client.project_new("init-test").await;
     let project_dir = tmp_dir.path().join("init-test");
-    runner
+    local_net
         .build_application(project_dir.as_path(), "init-test", false)
         .await;
 }
@@ -2334,10 +2334,10 @@ async fn test_project_new() {
 #[test_log::test(tokio::test)]
 async fn test_project_test() {
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 0);
-    let client = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 0);
+    let client = local_net.make_client(network);
     client
-        .project_test(&TestRunner::example_path("counter"))
+        .project_test(&LocalNetwork::example_path("counter"))
         .await;
 }
 
@@ -2346,12 +2346,12 @@ async fn test_project_publish() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 1);
-    let client = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 1);
+    let client = local_net.make_client(network);
 
-    runner.generate_initial_validator_config().await;
+    local_net.generate_initial_validator_config().await;
     client.create_genesis_config().await;
-    runner.run_local_net().await;
+    local_net.run_local_net().await;
 
     let tmp_dir = client.project_new("init-test").await;
     let project_dir = tmp_dir.path().join("init-test");
@@ -2369,14 +2369,14 @@ async fn test_example_publish() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut runner = TestRunner::new(network, 1);
-    let client = runner.make_client(network);
+    let mut local_net = LocalNetwork::new(network, 1);
+    let client = local_net.make_client(network);
 
-    runner.generate_initial_validator_config().await;
+    local_net.generate_initial_validator_config().await;
     client.create_genesis_config().await;
-    runner.run_local_net().await;
+    local_net.run_local_net().await;
 
-    let example_dir = TestRunner::example_path("counter");
+    let example_dir = LocalNetwork::example_path("counter");
     client.project_publish(example_dir, vec![], None, &0).await;
     let chain = client.get_wallet().default_chain().unwrap();
 
