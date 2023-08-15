@@ -13,8 +13,7 @@ use self::test_instance::WasmerInstanceFactory;
 #[cfg(feature = "wasmtime")]
 use self::test_instance::WasmtimeInstanceFactory;
 use self::test_instance::{MockInstanceFactory, TestInstanceFactory};
-use linera_witty::{Instance, Runtime, RuntimeMemory};
-use linera_witty_macros::wit_import;
+use linera_witty::{wit_import, Instance, Runtime, RuntimeMemory};
 use test_case::test_case;
 
 /// An interface to import a single function without parameters or return values.
