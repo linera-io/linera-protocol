@@ -12,6 +12,7 @@ use linera_base::{
 use linera_execution::Bytecode;
 use linera_service::{config::WalletState, node_service::Chains};
 use once_cell::sync::{Lazy, OnceCell};
+use serde::Serialize;
 use serde_json::{json, Value};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -205,14 +206,15 @@ impl Client {
         tmp
     }
 
-    async fn project_publish(
+    async fn project_publish<T: Serialize>(
         &self,
         path: PathBuf,
         required_application_ids: Vec<String>,
         publisher: impl Into<Option<ChainId>>,
+        argument: &T,
     ) -> String {
         let json_parameters = serde_json::to_string(&()).unwrap();
-        let json_argument = serde_json::to_string(&()).unwrap();
+        let json_argument = serde_json::to_string(argument).unwrap();
         let mut command = self.run_with_storage().await;
         command
             .arg("project")
@@ -2334,7 +2336,28 @@ async fn test_project_publish() {
     let tmp_dir = client.project_new("init-test").await;
     let project_dir = tmp_dir.path().join("init-test");
 
-    client.project_publish(project_dir, vec![], None).await;
+    client.project_publish(project_dir, vec![], None, &()).await;
+    let chain = client.get_wallet().default_chain().unwrap();
+
+    let node_service = client.run_node_service(None).await;
+
+    assert_eq!(node_service.try_get_applications_uri(&chain).await.len(), 1)
+}
+
+#[test_log::test(tokio::test)]
+async fn test_example_publish() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let network = Network::Grpc;
+    let mut runner = TestRunner::new(network, 1);
+    let client = runner.make_client(network);
+
+    runner.generate_initial_validator_config().await;
+    client.create_genesis_config().await;
+    runner.run_local_net().await;
+
+    let example_dir = TestRunner::example_path("counter");
+    client.project_publish(example_dir, vec![], None, &0).await;
     let chain = client.get_wallet().default_chain().unwrap();
 
     let node_service = client.run_node_service(None).await;

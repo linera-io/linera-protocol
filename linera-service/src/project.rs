@@ -107,6 +107,28 @@ impl Project {
         Ok(Self::runner_path()?.exists())
     }
 
+    /// Finds the workspace for a given crate. If the workspace
+    /// does not exist, returns the path of the crate.
+    fn workspace_root(&self) -> Result<&Path> {
+        let mut current_path = self.root.as_path();
+        loop {
+            let toml_path = current_path.join("Cargo.toml");
+            if toml_path.exists() {
+                let toml = Manifest::from_path(toml_path)?;
+                if toml.workspace.is_some() {
+                    return Ok(current_path);
+                }
+            }
+            match current_path.parent() {
+                None => {
+                    break;
+                }
+                Some(parent) => current_path = parent,
+            }
+        }
+        Ok(self.root.as_path())
+    }
+
     fn install_test_runner() -> Result<()> {
         info!("installing test runner...");
         let cargo_install = Command::new("cargo")
@@ -304,7 +326,9 @@ impl Project {
         if !cargo_build.success() {
             bail!("build failed")
         }
-        let build_path = self.root.join("target/wasm32-unknown-unknown/release");
+        let build_path = self
+            .workspace_root()?
+            .join("target/wasm32-unknown-unknown/release");
         Ok((
             build_path.join(contract_name).with_extension("wasm"),
             build_path.join(service_name).with_extension("wasm"),
