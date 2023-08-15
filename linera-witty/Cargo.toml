@@ -15,14 +15,17 @@ default = ["macros"]
 macros = ["linera-witty-macros"]
 test = []
 wasmer = ["dep:wasmer", "wasmer-vm"]
+wasmtime = ["dep:wasmtime", "anyhow"]
 
 [dependencies]
+anyhow = { workspace = true, optional = true }
 either = { workspace = true }
 frunk = { workspace = true }
 linera-witty-macros = { workspace = true, optional = true }
 thiserror = { workspace = true }
 wasmer = { workspace = true, optional = true }
 wasmer-vm = { workspace = true, optional = true }
+wasmtime = { workspace = true, optional = true }
 
 [dev-dependencies]
 linera-witty = { workspace = true, features = ["macros", "test"] }

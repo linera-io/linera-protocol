@@ -6,6 +6,8 @@
 use frunk::{hlist, hlist_pat, HList};
 #[cfg(feature = "wasmer")]
 use linera_witty::wasmer;
+#[cfg(feature = "wasmtime")]
+use linera_witty::wasmtime;
 use linera_witty::{InstanceWithMemory, MockExportedFunction, MockInstance, RuntimeError};
 use std::any::Any;
 
@@ -14,6 +16,30 @@ pub trait TestInstanceFactory {
     type Instance: InstanceWithMemory;
 
     fn load_test_module(&mut self, module_name: &str) -> Self::Instance;
+}
+
+/// A factory of [`wasmtime::Entrypoint`] instances.
+#[cfg(feature = "wasmtime")]
+pub struct WasmtimeInstanceFactory;
+
+#[cfg(feature = "wasmtime")]
+impl TestInstanceFactory for WasmtimeInstanceFactory {
+    type Instance = wasmtime::EntrypointInstance;
+
+    fn load_test_module(&mut self, module: &str) -> Self::Instance {
+        let engine = ::wasmtime::Engine::default();
+        let module = ::wasmtime::Module::from_file(
+            &engine,
+            format!("../target/wasm32-unknown-unknown/debug/export-{module}.wasm"),
+        )
+        .expect("Failed to load module");
+
+        let mut store = ::wasmtime::Store::new(&engine, ());
+        let instance = ::wasmtime::Instance::new(&mut store, &module, &[])
+            .expect("Failed to instantiate module");
+
+        wasmtime::EntrypointInstance::new(instance, store)
+    }
 }
 
 /// A factory of [`wasmer::EntrypointInstance`]s.

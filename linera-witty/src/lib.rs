@@ -23,6 +23,8 @@ mod util;
 
 #[cfg(feature = "wasmer")]
 pub use self::runtime::wasmer;
+#[cfg(feature = "wasmtime")]
+pub use self::runtime::wasmtime;
 #[cfg(any(test, feature = "test"))]
 pub use self::runtime::{MockExportedFunction, MockInstance, MockRuntime};
 pub use self::{

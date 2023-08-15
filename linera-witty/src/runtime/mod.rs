@@ -10,6 +10,8 @@ mod test;
 mod traits;
 #[cfg(feature = "wasmer")]
 pub mod wasmer;
+#[cfg(feature = "wasmtime")]
+pub mod wasmtime;
 
 #[cfg(any(test, feature = "test"))]
 pub use self::test::{MockExportedFunction, MockInstance, MockRuntime};

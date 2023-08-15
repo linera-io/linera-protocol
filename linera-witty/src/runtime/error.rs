@@ -58,4 +58,14 @@ pub enum RuntimeError {
     #[cfg(feature = "wasmer")]
     #[error(transparent)]
     WasmerMemory(#[from] wasmer::MemoryAccessError),
+
+    /// Wasmtime error.
+    #[cfg(feature = "wasmtime")]
+    #[error(transparent)]
+    Wasmtime(#[from] anyhow::Error),
+
+    /// Wasmtime trap during execution.
+    #[cfg(feature = "wasmtime")]
+    #[error(transparent)]
+    WasmtimeTrap(#[from] wasmtime::Trap),
 }
