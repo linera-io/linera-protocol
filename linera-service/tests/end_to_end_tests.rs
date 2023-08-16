@@ -999,7 +999,7 @@ async fn test_end_to_end_crowd_funding() {
 
     local_net.generate_initial_validator_config().await.unwrap();
     client1.create_genesis_config().await.unwrap();
-    client2.wallet_init(&[]).await;
+    client2.wallet_init(&[]).await.unwrap();
 
     // Create initial server and client config.
     local_net.run_local_net().await.unwrap();
@@ -1131,8 +1131,8 @@ async fn test_end_to_end_matching_engine() {
 
     local_net.generate_initial_validator_config().await.unwrap();
     client_admin.create_genesis_config().await.unwrap();
-    client_a.wallet_init(&[]).await;
-    client_b.wallet_init(&[]).await;
+    client_a.wallet_init(&[]).await.unwrap();
+    client_b.wallet_init(&[]).await.unwrap();
 
     // Create initial server and client config.
     local_net.run_local_net().await.unwrap();
