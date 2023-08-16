@@ -137,7 +137,7 @@ async fn get_blocks(
     let client = reqwest::Client::new();
     let variables = graphql::blocks::Variables {
         from,
-        chain_id: Some(chain_id),
+        chain_id,
         limit: limit.map(|x| x.into()),
     };
     let res = post_graphql::<crate::graphql::Blocks, _>(&client, node, variables)
@@ -151,9 +151,7 @@ async fn get_blocks(
 
 async fn get_applications(node: &str, chain_id: ChainId) -> Result<Vec<Application>, String> {
     let client = reqwest::Client::new();
-    let variables = graphql::applications::Variables {
-        chain_id: Some(chain_id),
-    };
+    let variables = graphql::applications::Variables { chain_id };
     let result = post_graphql::<crate::graphql::Applications, _>(&client, node, variables)
         .await
         .map_err(|e| e.to_string())?;
@@ -194,10 +192,7 @@ async fn block(
     hash: Option<CryptoHash>,
 ) -> Result<(Page, String), String> {
     let client = reqwest::Client::new();
-    let variables = graphql::block::Variables {
-        hash,
-        chain_id: Some(chain_id),
-    };
+    let variables = graphql::block::Variables { hash, chain_id };
     let result = post_graphql::<crate::graphql::Block, _>(&client, node, variables)
         .await
         .map_err(|e| e.to_string())?;

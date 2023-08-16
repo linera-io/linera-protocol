@@ -1,4 +1,4 @@
-query Block($hash: CryptoHash, $chainId: ChainId) {
+query Block($hash: CryptoHash, $chainId: ChainId!) {
   block(hash: $hash, chainId: $chainId) {
     hash
     value {

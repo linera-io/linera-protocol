@@ -1,4 +1,4 @@
-query Blocks($from: CryptoHash, $chainId: ChainId, $limit: Int) {
+query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
   blocks(from: $from, chainId: $chainId, limit: $limit) {
     hash
     value {
