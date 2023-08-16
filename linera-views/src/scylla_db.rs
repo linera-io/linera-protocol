@@ -5,45 +5,76 @@
 //! The code is functional but some aspects are missing.
 //!
 //! The current connection is done via a Session and a corresponding
-//! primary key that we name `namespace`. The maximum number of
+//! primary key that we name `table_name`. The maximum number of
 //! concurrent queries is controlled by max_concurrent_queries.
 //!
+//! We thus implement the
+//! * [`KeyValueStoreClient`][trait1] for a database access.
+//! * [`Context`][trait2] for the context.
+//!
 //! Support for ScyllaDb is experimental and is still missing important features:
-//! TODO(#936): Enable all tests using ScyllaDB
 //! TODO(#935): Read several keys at once
 //! TODO(#934): Journaling operations
-//! TODO(#933): Enable the CI.
+//!
+//! [trait1]: common::KeyValueStoreClient
+//! [trait2]: common::Context
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_upper_bound_option, KeyValueStoreClient},
+    common::{get_upper_bound_option, ContextFromDb, KeyValueStoreClient},
+    lru_caching::{LruCachingKeyValueClient, TEST_CACHE_SIZE},
+    value_splitting::DatabaseConsistencyError,
 };
-use async_lock::{Semaphore, SemaphoreGuard};
+use async_lock::{RwLock, Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
+use lazy_static::lazy_static;
 use scylla::{IntoTypedRows, Session, SessionBuilder};
 use std::{ops::Deref, sync::Arc};
 use thiserror::Error;
 
+lazy_static! {
+    static ref TEST_COUNTER: Arc<RwLock<usize>> = Arc::new(RwLock::new(0));
+}
+
 /// The creation of a ScyllaDb client that can be used for accessing it.
 /// The `Vec<u8>`is a primary key.
-type ScyllaDbClientPair = (Session, Vec<u8>);
+type ScyllaDbClientPair = (Session, String);
 
-/// We limit the number of connections that can be done.
-const SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 10;
+/// We limit the number of connections that can be done for tests.
+pub const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
-/// The number of connection in the stream is limited.
-const SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
+/// The number of connection in the stream is limited for tesst.
+pub const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
 
 /// The client itself and the keeping of the count of active connections.
-#[derive(Clone)]
-pub struct ScyllaDbClient {
+pub struct ScyllaDbClientInternal {
     client: Arc<ScyllaDbClientPair>,
     count: Arc<Semaphore>,
     max_concurrent_queries: Option<usize>,
     max_stream_queries: usize,
+    clone_level: usize,
 }
 
-/// The error type for [`ScyllaDbClient`]
+impl Clone for ScyllaDbClientInternal {
+    fn clone(&self) -> Self {
+        println!("Calling the clone operation");
+        ScyllaDbClientInternal {
+            client: self.client.clone(),
+            count: self.count.clone(),
+            max_concurrent_queries: self.max_concurrent_queries,
+            max_stream_queries: self.max_stream_queries,
+            clone_level: self.clone_level + 1,
+        }
+    }
+}
+
+impl Drop for ScyllaDbClientInternal {
+    fn drop(&mut self) {
+        println!("Droppping the object with clone_level={}", self.clone_level);
+    }
+}
+
+/// The error type for [`ScyllaDbClientInternal`]
 #[derive(Error, Debug)]
 pub enum ScyllaDbContextError {
     /// BCS serialization error.
@@ -57,10 +88,23 @@ pub enum ScyllaDbContextError {
     /// A query error in ScyllaDb
     #[error(transparent)]
     ScyllaDbNewSessionError(#[from] scylla::transport::errors::NewSessionError),
+
+    /// The database is not coherent
+    #[error(transparent)]
+    DatabaseConsistencyError(#[from] DatabaseConsistencyError),
+}
+
+impl From<ScyllaDbContextError> for crate::views::ViewError {
+    fn from(error: ScyllaDbContextError) -> Self {
+        Self::ContextError {
+            backend: "scylla_db".to_string(),
+            error: error.to_string(),
+        }
+    }
 }
 
 #[async_trait]
-impl KeyValueStoreClient for ScyllaDbClient {
+impl KeyValueStoreClient for ScyllaDbClientInternal {
     const MAX_VALUE_SIZE: usize = usize::MAX;
     type Error = ScyllaDbContextError;
     type Keys = Vec<Vec<u8>>;
@@ -117,7 +161,7 @@ impl KeyValueStoreClient for ScyllaDbClient {
     }
 }
 
-impl ScyllaDbClient {
+impl ScyllaDbClientInternal {
     /// Obtains the semaphore lock on the database if needed.
     async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
         match self.max_concurrent_queries {
@@ -131,15 +175,14 @@ impl ScyllaDbClient {
         key: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, ScyllaDbContextError> {
         let session = &client.0;
-        let namespace = &client.1;
+        let table_name = &client.1;
         // Read the value of a key
-        let values = (namespace.to_vec(), key);
-        let rows = session
-            .query(
-                "SELECT v FROM kv.pairs WHERE namespace = ? AND k = ?",
-                values,
-            )
-            .await?;
+        let values = (table_name.to_string(), key);
+        let query = format!(
+            "SELECT v FROM kv.pairs_{} WHERE table_name = ? AND k = ?",
+            table_name
+        );
+        let rows = session.query(query, values).await?;
         if let Some(rows) = rows.rows {
             if let Some(row) = rows.into_typed::<(Vec<u8>,)>().next() {
                 let value = row.unwrap();
@@ -155,9 +198,12 @@ impl ScyllaDbClient {
         value: Vec<u8>,
     ) -> Result<(), ScyllaDbContextError> {
         let session = &client.0;
-        let namespace = &client.1;
-        let query = "INSERT INTO kv.pairs (namespace, k, v) VALUES (?, ?, ?)";
-        let values = (namespace.to_vec(), key, value);
+        let table_name = &client.1;
+        let query = format!(
+            "INSERT INTO kv.pairs_{} (table_name, k, v) VALUES (?, ?, ?)",
+            table_name
+        );
+        let values = (table_name.to_string(), key, value);
         session.query(query, values).await?;
         Ok(())
     }
@@ -167,9 +213,12 @@ impl ScyllaDbClient {
         key: Vec<u8>,
     ) -> Result<(), ScyllaDbContextError> {
         let session = &client.0;
-        let namespace = &client.1;
-        let values = (namespace.to_vec(), key);
-        let query = "DELETE FROM kv.pairs WHERE namespace = ? AND k = ?";
+        let table_name = &client.1;
+        let values = (table_name.to_string(), key);
+        let query = format!(
+            "DELETE FROM kv.pairs_{} WHERE table_name = ? AND k = ?",
+            table_name
+        );
         session.query(query, values).await?;
         Ok(())
     }
@@ -179,16 +228,22 @@ impl ScyllaDbClient {
         key_prefix: Vec<u8>,
     ) -> Result<(), ScyllaDbContextError> {
         let session = &client.0;
-        let namespace = &client.1;
+        let table_name = &client.1;
         match get_upper_bound_option(&key_prefix) {
             None => {
-                let values = (namespace.to_vec(), key_prefix);
-                let query = "DELETE FROM kv.pairs WHERE namespace = ? AND k >= ?";
+                let values = (table_name.to_string(), key_prefix);
+                let query = format!(
+                    "DELETE FROM kv.pairs_{} WHERE table_name = ? AND k >= ?",
+                    table_name
+                );
                 session.query(query, values).await?;
             }
             Some(upper_bound) => {
-                let values = (namespace.to_vec(), key_prefix, upper_bound);
-                let query = "DELETE FROM kv.pairs WHERE namespace = ? AND k >= ? AND k < ?";
+                let values = (table_name.to_string(), key_prefix, upper_bound);
+                let query = format!(
+                    "DELETE FROM kv.pairs_{} WHERE table_name = ? AND k >= ? AND k < ?",
+                    table_name
+                );
                 session.query(query, values).await?;
             }
         }
@@ -220,18 +275,24 @@ impl ScyllaDbClient {
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, ScyllaDbContextError> {
         let session = &client.0;
-        let namespace = &client.1;
+        let table_name = &client.1;
         // Read the value of a key
         let len = key_prefix.len();
         let rows = match get_upper_bound_option(&key_prefix) {
             None => {
-                let values = (namespace.to_vec(), key_prefix);
-                let query = "SELECT k FROM kv.pairs WHERE namespace = ? AND k >= ?";
+                let values = (table_name.to_string(), key_prefix);
+                let query = format!(
+                    "SELECT k FROM kv.pairs_{} WHERE table_name = ? AND k >= ?",
+                    table_name
+                );
                 session.query(query, values).await?
             }
             Some(upper_bound) => {
-                let values = (namespace.to_vec(), key_prefix, upper_bound);
-                let query = "SELECT k FROM kv.pairs WHERE namespace = ? AND k >= ? AND k < ?";
+                let values = (table_name.to_string(), key_prefix, upper_bound);
+                let query = format!(
+                    "SELECT k FROM kv.pairs_{} WHERE table_name = ? AND k >= ? AND k < ?",
+                    table_name
+                );
                 session.query(query, values).await?
             }
         };
@@ -251,18 +312,25 @@ impl ScyllaDbClient {
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbContextError> {
         let session = &client.0;
-        let namespace = &client.1;
+        let table_name = &client.1;
+        //        println!("find_key_values_by_prefix_internal : table_name={}", table_name);
         // Read the value of a key
         let len = key_prefix.len();
         let rows = match get_upper_bound_option(&key_prefix) {
             None => {
-                let values = (namespace.to_vec(), key_prefix);
-                let query = "SELECT k FROM kv.pairs WHERE namespace = ? AND k >= ?";
+                let values = (table_name.to_string(), key_prefix);
+                let query = format!(
+                    "SELECT k FROM kv.pairs_{} WHERE table_name = ? AND k >= ?",
+                    table_name
+                );
                 session.query(query, values).await?
             }
             Some(upper_bound) => {
-                let values = (namespace.to_vec(), key_prefix, upper_bound);
-                let query = "SELECT k,v FROM kv.pairs WHERE namespace = ? AND k >= ? AND k < ?";
+                let values = (table_name.to_string(), key_prefix, upper_bound);
+                let query = format!(
+                    "SELECT k,v FROM kv.pairs_{} WHERE table_name = ? AND k >= ? AND k < ?",
+                    table_name
+                );
                 session.query(query, values).await?
             }
         };
@@ -277,58 +345,183 @@ impl ScyllaDbClient {
         Ok(key_values)
     }
 
+    /// Retrieves the table_name from the client.
+    pub async fn get_table_name(&self) -> String {
+        let client = self.client.deref();
+        client.1.clone()
+    }
+
     async fn new(
+        restart_database: bool,
         uri: &str,
-        namespace: Vec<u8>,
+        table_name: String,
         max_concurrent_queries: Option<usize>,
         max_stream_queries: usize,
     ) -> Result<Self, ScyllaDbContextError> {
+        println!(
+            "ScyllaDbClientInternal : Creation with table_name={}",
+            table_name
+        );
+        //        println!("ScyllaDbClientInternal : new : step 1");
         // Create a session builder and specify the ScyllaDB contact points
         let session = SessionBuilder::new().known_node(uri).build().await?;
 
-        // Create a keyspace if it doesn't exist
-        session
-            .query(
-                "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }",
-                &[],
-            )
-            .await?;
+        if restart_database {
+            // Create a keyspace if it doesn't exist
+            session
+                .query(
+                    "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }",
+                    &[],
+                )
+                .await?;
 
-        // Dropping the table
-        session.query("DROP TABLE IF EXISTS kv.pairs;", &[]).await?;
+            // Dropping the table
+            let query = format!("DROP TABLE IF EXISTS kv.pairs_{};", table_name);
+            session.query(query, &[]).await?;
 
-        // Create a table if it doesn't exist
-        session
-            .query(
-                "CREATE TABLE kv.pairs (namespace blob, k blob, v blob, primary key (namespace, k))",
-                &[],
-            )
-            .await?;
-        let client = (session, namespace);
+            // Create a table if it doesn't exist
+            let query = format!("CREATE TABLE kv.pairs_{} (table_name text, k blob, v blob, primary key (table_name, k))", table_name);
+            session.query(query, &[]).await?;
+        }
+        let client = (session, table_name);
         let client = Arc::new(client);
         let n = max_concurrent_queries.unwrap_or(1);
         let count = Arc::new(Semaphore::new(n));
-        Ok(ScyllaDbClient {
+        //        println!("ScyllaDbClientInternal : new : step 6");
+        Ok(ScyllaDbClientInternal {
             client,
             count,
             max_concurrent_queries,
             max_stream_queries,
+            clone_level: 0,
         })
     }
 }
 
+/// A shared DB client for ScyllaDb implementing LruCaching
+#[derive(Clone)]
+pub struct ScyllaDbClient {
+    client: LruCachingKeyValueClient<ScyllaDbClientInternal>,
+}
+
+#[async_trait]
+impl KeyValueStoreClient for ScyllaDbClient {
+    const MAX_VALUE_SIZE: usize = ScyllaDbClientInternal::MAX_VALUE_SIZE;
+    type Error = <ScyllaDbClientInternal as KeyValueStoreClient>::Error;
+    type Keys = <ScyllaDbClientInternal as KeyValueStoreClient>::Keys;
+    type KeyValues = <ScyllaDbClientInternal as KeyValueStoreClient>::KeyValues;
+
+    fn max_stream_queries(&self) -> usize {
+        self.client.max_stream_queries()
+    }
+
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        self.client.read_key_bytes(key).await
+    }
+
+    async fn read_multi_key_bytes(
+        &self,
+        key: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
+        self.client.read_multi_key_bytes(key).await
+    }
+
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
+        self.client.find_keys_by_prefix(key_prefix).await
+    }
+
+    async fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValues, Self::Error> {
+        self.client.find_key_values_by_prefix(key_prefix).await
+    }
+
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
+        self.client.write_batch(batch, base_key).await
+    }
+
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
+        self.client.clear_journal(base_key).await
+    }
+}
+
+impl ScyllaDbClient {
+    /// Get the table_name of a client
+    pub async fn get_table_name(&self) -> String {
+        self.client.client.get_table_name().await
+    }
+
+    /// Creates a [`ScyllaDbClient`] from the input parameters.
+    pub async fn new(
+        restart_database: bool,
+        uri: &str,
+        namespace: String,
+        max_concurrent_queries: Option<usize>,
+        max_stream_queries: usize,
+        cache_size: usize,
+    ) -> Result<Self, ScyllaDbContextError> {
+        let client = ScyllaDbClientInternal::new(
+            restart_database,
+            uri,
+            namespace,
+            max_concurrent_queries,
+            max_stream_queries,
+        )
+        .await?;
+        let client = LruCachingKeyValueClient::new(client, cache_size);
+        Ok(ScyllaDbClient { client })
+    }
+}
+
+/// Get a test table_name
+pub async fn get_table_name() -> String {
+    let mut counter = TEST_COUNTER.write().await;
+    *counter += 1;
+    format!("test_table_{}", *counter)
+}
+
 /// Creates a ScyllaDb test client
 pub async fn create_scylla_db_test_client() -> ScyllaDbClient {
+    let restart_database = true;
     let uri = "localhost:9042";
-    let dummy_namespace = vec![0];
-    let max_concurrent_queries = Some(SCYLLA_DB_MAX_CONCURRENT_QUERIES);
-    let max_stream_queries = SCYLLA_DB_MAX_STREAM_QUERIES;
+    let table_name = get_table_name().await;
+    println!(
+        "Creation of a ScyllaDbClient with table_name={}",
+        table_name
+    );
+    let max_concurrent_queries = Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES);
+    let max_stream_queries = TEST_SCYLLA_DB_MAX_STREAM_QUERIES;
+    let cache_size = TEST_CACHE_SIZE;
     ScyllaDbClient::new(
+        restart_database,
         uri,
-        dummy_namespace,
+        table_name,
         max_concurrent_queries,
         max_stream_queries,
+        cache_size,
     )
     .await
     .expect("client")
+}
+
+/// An implementation of [`crate::common::Context`] based on RocksDB
+pub type ScyllaDbContext<E> = ContextFromDb<E, ScyllaDbClient>;
+
+impl<E: Clone + Send + Sync> ScyllaDbContext<E> {
+    /// Creates a [`ScyllaDbContext`].
+    pub fn new(db: ScyllaDbClient, base_key: Vec<u8>, extra: E) -> Self {
+        Self {
+            db,
+            base_key,
+            extra,
+        }
+    }
+}
+
+/// Creates a [`crate::common::Context`] for testing purposes.
+pub async fn create_scylla_db_test_context() -> ScyllaDbContext<()> {
+    let base_key = vec![];
+    let db = create_scylla_db_test_client().await;
+    ScyllaDbContext::new(db, base_key, ())
 }

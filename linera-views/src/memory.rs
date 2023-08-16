@@ -13,7 +13,7 @@ use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use thiserror::Error;
 
 /// The number of streams for the test
-pub const MEMORY_MAX_STREAM_QUERIES: usize = 10;
+pub const TEST_MEMORY_MAX_STREAM_QUERIES: usize = 10;
 
 /// The data is serialized in memory just like for RocksDB / DynamoDB
 /// The analog of the database is the BTreeMap
@@ -145,7 +145,7 @@ pub fn create_memory_context() -> MemoryContext<()> {
     let guard = state
         .try_lock_arc()
         .expect("We should acquire the lock just after creating the object");
-    MemoryContext::new(guard, MEMORY_MAX_STREAM_QUERIES, ())
+    MemoryContext::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES, ())
 }
 
 /// Creates a test memory client for working.
@@ -159,7 +159,7 @@ pub fn create_memory_client_stream_queries(max_stream_queries: usize) -> MemoryC
 
 /// Creates a test memory client for working.
 pub fn create_memory_client() -> MemoryClient {
-    create_memory_client_stream_queries(MEMORY_MAX_STREAM_QUERIES)
+    create_memory_client_stream_queries(TEST_MEMORY_MAX_STREAM_QUERIES)
 }
 
 /// The error type for [`MemoryContext`].

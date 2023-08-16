@@ -3,14 +3,35 @@
 
 use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
 use linera_execution::WasmRuntime;
-use linera_views::rocks_db::RocksDbClient;
+use linera_views::{
+    lru_caching::TEST_CACHE_SIZE,
+    rocks_db::{RocksDbClient, TEST_ROCKS_DB_MAX_STREAM_QUERIES},
+};
 use std::{path::PathBuf, sync::Arc};
+use tempfile::TempDir;
 
 #[cfg(test)]
 #[path = "unit_tests/rocks_db.rs"]
 mod tests;
 
 type RocksDbStore = DbStore<RocksDbClient>;
+
+impl RocksDbStore {
+    pub fn new(
+        dir: PathBuf,
+        wasm_runtime: Option<WasmRuntime>,
+        max_stream_queries: usize,
+        cache_size: usize,
+    ) -> Self {
+        let client = RocksDbClient::new(dir, max_stream_queries, cache_size);
+        Self {
+            client,
+            guards: ChainGuards::default(),
+            user_applications: Arc::default(),
+            wasm_runtime,
+        }
+    }
+}
 
 pub type RocksDbStoreClient = DbStoreClient<RocksDbClient>;
 
@@ -32,19 +53,12 @@ impl RocksDbStoreClient {
     }
 }
 
-impl RocksDbStore {
-    pub fn new(
-        dir: PathBuf,
-        wasm_runtime: Option<WasmRuntime>,
-        max_stream_queries: usize,
-        cache_size: usize,
-    ) -> Self {
-        let client = RocksDbClient::new(dir, max_stream_queries, cache_size);
-        Self {
-            client,
-            guards: ChainGuards::default(),
-            user_applications: Arc::default(),
-            wasm_runtime,
-        }
-    }
+pub async fn create_rocks_db_test_store_client() -> RocksDbStoreClient {
+    let dir = TempDir::new().unwrap();
+    RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        TEST_ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    )
 }

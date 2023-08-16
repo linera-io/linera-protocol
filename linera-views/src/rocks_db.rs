@@ -17,7 +17,7 @@ use tempfile::TempDir;
 use thiserror::Error;
 
 /// The number of streams for the test
-pub const ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
+pub const TEST_ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
 
 // The maximum size of values in RocksDB is 3 GB
 // That is 3221225472 and so for offset reason we decrease by 400
@@ -195,7 +195,7 @@ impl RocksDbClient {
 /// Creates a RocksDB database client to be used for tests.
 pub fn create_rocks_db_test_client() -> RocksDbClient {
     let dir = TempDir::new().unwrap();
-    RocksDbClient::new(dir, ROCKS_DB_MAX_STREAM_QUERIES, TEST_CACHE_SIZE)
+    RocksDbClient::new(dir, TEST_ROCKS_DB_MAX_STREAM_QUERIES, TEST_CACHE_SIZE)
 }
 
 /// An implementation of [`crate::common::Context`] based on RocksDB
@@ -257,6 +257,13 @@ impl<E: Clone + Send + Sync> RocksDbContext<E> {
     }
 }
 
+/// Create a [`crate::common::Context`] that can be used for tests.
+pub fn create_rocks_db_test_context() -> RocksDbContext<()> {
+    let client = create_rocks_db_test_client();
+    let base_key = vec![];
+    RocksDbContext::new(client, base_key, ())
+}
+
 /// The error type for [`RocksDbContext`]
 #[derive(Error, Debug)]
 pub enum RocksDbContextError {
@@ -280,7 +287,7 @@ pub enum RocksDbContextError {
 impl From<RocksDbContextError> for crate::views::ViewError {
     fn from(error: RocksDbContextError) -> Self {
         Self::ContextError {
-            backend: "rocksdb".to_string(),
+            backend: "rocks_db".to_string(),
             error: error.to_string(),
         }
     }

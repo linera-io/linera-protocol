@@ -20,7 +20,7 @@ use linera_execution::{
     WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, Store};
-use linera_views::memory::MEMORY_MAX_STREAM_QUERIES;
+use linera_views::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
 use std::sync::{
     atomic::{AtomicU32, Ordering},
     Arc,
@@ -50,7 +50,7 @@ impl Default for TestValidator {
         let key_pair = KeyPair::generate();
         let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
         let client =
-            MemoryStoreClient::new(Some(WasmRuntime::default()), MEMORY_MAX_STREAM_QUERIES);
+            MemoryStoreClient::new(Some(WasmRuntime::default()), TEST_MEMORY_MAX_STREAM_QUERIES);
 
         let worker = WorkerState::new(
             "Single validator node".to_string(),

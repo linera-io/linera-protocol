@@ -19,7 +19,7 @@ use std::{
 #[cfg(any(test, feature = "test"))]
 use {
     crate::common::ContextFromDb,
-    crate::memory::{MemoryClient, MemoryStoreMap, MEMORY_MAX_STREAM_QUERIES},
+    crate::memory::{MemoryClient, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
     crate::views::ViewError,
     async_lock::MutexGuardArc,
 };
@@ -87,7 +87,8 @@ impl<'a> LruPrefixCache {
 /// We take a client, a maximum size and build a LRU-based system.
 #[derive(Clone)]
 pub struct LruCachingKeyValueClient<K> {
-    client: K,
+    /// The inner client that is called by the LRU caching one
+    pub client: K,
     lru_read_keys: Option<Arc<Mutex<LruPrefixCache>>>,
 }
 
@@ -239,7 +240,7 @@ impl<E> LruCachingMemoryContext<E> {
         extra: E,
         n: usize,
     ) -> Result<Self, ViewError> {
-        let client = MemoryClient::new(guard, MEMORY_MAX_STREAM_QUERIES);
+        let client = MemoryClient::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
         let lru_client = LruCachingKeyValueClient::new(client, n);
         Ok(Self {
             db: lru_client,

@@ -17,6 +17,9 @@ use {
     linera_views::dynamo_db::{TableName, TableStatus},
 };
 
+#[cfg(feature = "scylladb")]
+use {anyhow::anyhow, linera_storage::ScyllaDbStoreClient};
+
 /// The description of a storage implementation.
 #[derive(Debug)]
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
@@ -30,6 +33,12 @@ pub enum StorageConfig {
     DynamoDb {
         table: TableName,
         use_localstack: bool,
+    },
+    #[cfg(feature = "scylladb")]
+    ScyllaDb {
+        restart_database: bool,
+        uri: String,
+        table_name: String,
     },
 }
 
@@ -56,10 +65,19 @@ pub type MaybeDynamoDbStoreClient = DynamoDbStoreClient;
 #[cfg(not(feature = "aws"))]
 pub type MaybeDynamoDbStoreClient = MemoryStoreClient;
 
+#[doc(hidden)]
+#[cfg(feature = "scylladb")]
+pub type MaybeScyllaDbStoreClient = ScyllaDbStoreClient;
+
+#[doc(hidden)]
+#[cfg(not(feature = "scylladb"))]
+pub type MaybeScyllaDbStoreClient = MemoryStoreClient;
+
 pub trait RunnableJob<Output>:
     Runnable<MemoryStoreClient, Output = Output>
     + Runnable<MaybeRocksDbStoreClient, Output = Output>
     + Runnable<MaybeDynamoDbStoreClient, Output = Output>
+    + Runnable<MaybeScyllaDbStoreClient, Output = Output>
 {
 }
 
@@ -67,6 +85,7 @@ impl<Output, T> RunnableJob<Output> for T where
     T: Runnable<MemoryStoreClient, Output = Output>
         + Runnable<MaybeRocksDbStoreClient, Output = Output>
         + Runnable<MaybeDynamoDbStoreClient, Output = Output>
+        + Runnable<MaybeScyllaDbStoreClient, Output = Output>
 {
 }
 
@@ -144,6 +163,27 @@ impl StorageConfig {
                 }
                 job.run(client).await
             }
+            #[cfg(feature = "scylladb")]
+            ScyllaDb {
+                restart_database,
+                uri,
+                table_name,
+            } => {
+                let mut client = ScyllaDbStoreClient::new(
+                    *restart_database,
+                    uri,
+                    table_name.to_string(),
+                    max_concurrent_queries,
+                    max_stream_queries,
+                    cache_size,
+                    wasm_runtime,
+                )
+                .await?;
+                if *restart_database {
+                    config.initialize_store(&mut client).await?;
+                }
+                job.run(client).await
+            }
         }
     }
 }
@@ -153,6 +193,8 @@ const MEMORY: &str = "memory";
 const ROCKS_DB: &str = "rocksdb:";
 #[cfg(feature = "aws")]
 const DYNAMO_DB: &str = "dynamodb:";
+#[cfg(feature = "scylladb")]
+const SCYLLA_DB: &str = "scylladb:";
 
 impl FromStr for StorageConfig {
     type Err = anyhow::Error;
@@ -187,6 +229,92 @@ impl FromStr for StorageConfig {
             return Ok(Self::DynamoDb {
                 table,
                 use_localstack,
+            });
+        }
+        #[cfg(feature = "scylladb")]
+        if let Some(s) = input.strip_prefix(SCYLLA_DB) {
+            let mut restart_database: Option<bool> = None;
+            let mut host: Option<String> = None;
+            let mut port: Option<String> = None;
+            let mut table_name: Option<String> = None;
+            if !s.is_empty() {
+                let mut parts = s.split(':');
+                loop {
+                    let part = parts.next();
+                    match part {
+                        Some(part_ent) => {
+                            let mut is_matching = false;
+                            if part_ent == "https" {
+                                is_matching = true;
+                                let Some(empty) = parts.next() else {
+                                    return Err(anyhow!("no empty entry after https"));
+                                };
+                                if !empty.is_empty() {
+                                    return Err(anyhow!(
+                                        "The address should be of the form https:://address"
+                                    ));
+                                }
+                                let Some(address) = parts.next() else {
+                                    return Err(anyhow!("no empty entry after https"));
+                                };
+                                if host.is_some() {
+                                    return Err(anyhow!("The host has already been assigned"));
+                                }
+                                host = Some(format!("{}::{}", part_ent, address));
+                            }
+                            if let Ok(_num_port) = part_ent.parse::<u16>() {
+                                is_matching = true;
+                                if port.is_some() {
+                                    return Err(anyhow!("The port has already been assigned"));
+                                }
+                                port = Some(part_ent.to_string());
+                            }
+                            if part_ent.starts_with("table") {
+                                is_matching = true;
+                                if table_name.is_some() {
+                                    return Err(anyhow!(
+                                        "The table_name has already been assigned"
+                                    ));
+                                }
+                                table_name = Some(part_ent.to_string());
+                            }
+                            if part_ent == "true" {
+                                is_matching = true;
+                                if restart_database.is_some() {
+                                    return Err(anyhow!(
+                                        "The restart_database entry has already been assigned"
+                                    ));
+                                }
+                                restart_database = Some(true);
+                            }
+                            if part_ent == "false" {
+                                is_matching = true;
+                                if restart_database.is_some() {
+                                    return Err(anyhow!(
+                                        "The restart_database entry has already been assigned"
+                                    ));
+                                }
+                                restart_database = Some(false);
+                            }
+                            if !is_matching {
+                                return Err(anyhow!("the entry \"{}\" is not matching", part_ent));
+                            }
+                        }
+                        None => {
+                            break;
+                        }
+                    }
+                }
+            }
+            let restart_database = restart_database.unwrap_or(true);
+            let host = host.unwrap_or("localhost".to_string());
+            let port = port.unwrap_or("9042".to_string());
+            let table_name = table_name.unwrap_or("table_storage".to_string());
+            let uri = format!("{}:{}", host, port);
+            return Ok(Self::ScyllaDb {
+                restart_database,
+                uri,
+                table_name,
             });
         }
         Err(format_err!("Incorrect storage description: {}", input))
@@ -242,4 +370,45 @@ fn test_aws_storage_config_from_str() {
     assert!(StorageConfig::from_str("dynamodb:").is_err());
     assert!(StorageConfig::from_str("dynamodb:1").is_err());
     assert!(StorageConfig::from_str("dynamodb:wrong:endpoint").is_err());
+}
+
+#[cfg(feature = "scylladb")]
+#[test]
+fn test_scylla_db_storage_config_from_str() {
+    assert_eq!(
+        StorageConfig::from_str("scylladb:").unwrap(),
+        StorageConfig::ScyllaDb {
+            restart_database: true,
+            uri: "localhost:9042".to_string(),
+            table_name: "table_storage".to_string(),
+        }
+    );
+    assert_eq!(
+        StorageConfig::from_str("scylladb:900").unwrap(),
+        StorageConfig::ScyllaDb {
+            restart_database: true,
+            uri: "localhost:900".to_string(),
+            table_name: "table_storage".to_string(),
+        }
+    );
+    assert_eq!(
+        StorageConfig::from_str("scylladb:false").unwrap(),
+        StorageConfig::ScyllaDb {
+            restart_database: false,
+            uri: "localhost:9042".to_string(),
+            table_name: "table_storage".to_string(),
+        }
+    );
+    assert_eq!(
+        StorageConfig::from_str("scylladb:https:://my.validator.com:230").unwrap(),
+        StorageConfig::ScyllaDb {
+            restart_database: true,
+            uri: "https:://my.validator.com:230".to_string(),
+            table_name: "table_storage".to_string(),
+        }
+    );
+    assert!(StorageConfig::from_str("scylladb:-10").is_err());
+    assert!(StorageConfig::from_str("scylladb:70000").is_err());
+    assert!(StorageConfig::from_str("scylladb:230:234").is_err());
+    assert!(StorageConfig::from_str("scylladb:https:://address1:https::/address2").is_err());
 }

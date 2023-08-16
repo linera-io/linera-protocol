@@ -2996,6 +2996,7 @@ dependencies = [
  "generic-array",
  "hex",
  "http",
+ "lazy_static",
  "linera-base",
  "linera-views",
  "linera-views-derive",

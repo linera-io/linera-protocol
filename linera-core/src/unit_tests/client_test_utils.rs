@@ -21,7 +21,7 @@ use linera_execution::{
     WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, Store};
-use linera_views::{memory::MEMORY_MAX_STREAM_QUERIES, views::ViewError};
+use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     slice::SliceIndex,
@@ -30,20 +30,30 @@ use std::{
 };
 use tokio::sync::oneshot;
 
-#[cfg(any(feature = "rocksdb", feature = "aws"))]
+#[cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 use linera_views::lru_caching::TEST_CACHE_SIZE;
 
 #[cfg(feature = "rocksdb")]
 use {
-    linera_storage::RocksDbStoreClient, linera_views::rocks_db::ROCKS_DB_MAX_STREAM_QUERIES,
+    linera_storage::RocksDbStoreClient, linera_views::rocks_db::TEST_ROCKS_DB_MAX_STREAM_QUERIES,
     tokio::sync::Semaphore,
 };
 
 #[cfg(feature = "aws")]
 use {
     linera_storage::DynamoDbStoreClient,
-    linera_views::dynamo_db::{DYNAMO_DB_MAX_CONCURRENT_QUERIES, DYNAMO_DB_MAX_STREAM_QUERIES},
+    linera_views::dynamo_db::{
+        TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES, TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
+    },
     linera_views::test_utils::LocalStackTestContext,
+};
+
+#[cfg(feature = "scylladb")]
+use {
+    linera_storage::ScyllaDbStoreClient,
+    linera_views::scylla_db::{
+        get_table_name, TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES, TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
+    },
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -530,18 +540,9 @@ where
 /// Limit concurrency for rocksdb tests to avoid "too many open files" errors.
 pub static ROCKS_DB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
 
+#[derive(Default)]
 pub struct MakeMemoryStoreClient {
     wasm_runtime: Option<WasmRuntime>,
-    max_stream_queries: usize,
-}
-
-impl Default for MakeMemoryStoreClient {
-    fn default() -> Self {
-        MakeMemoryStoreClient {
-            wasm_runtime: None,
-            max_stream_queries: MEMORY_MAX_STREAM_QUERIES,
-        }
-    }
 }
 
 #[async_trait]
@@ -551,7 +552,7 @@ impl StoreBuilder for MakeMemoryStoreClient {
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         Ok(MemoryStoreClient::new(
             self.wasm_runtime,
-            self.max_stream_queries,
+            TEST_MEMORY_MAX_STREAM_QUERIES,
         ))
     }
 }
@@ -560,33 +561,18 @@ impl MakeMemoryStoreClient {
     /// Creates a [`MakeMemoryStoreClient`] that uses the specified [`WasmRuntime`] to run WASM
     /// applications.
     #[allow(dead_code)]
-    pub fn with_wasm_runtime(
-        wasm_runtime: impl Into<Option<WasmRuntime>>,
-        max_stream_queries: usize,
-    ) -> Self {
+    pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
         MakeMemoryStoreClient {
             wasm_runtime: wasm_runtime.into(),
-            max_stream_queries,
         }
     }
 }
 
 #[cfg(feature = "rocksdb")]
+#[derive(Default)]
 pub struct MakeRocksDbStoreClient {
     temp_dirs: Vec<tempfile::TempDir>,
     wasm_runtime: Option<WasmRuntime>,
-    max_stream_queries: usize,
-}
-
-#[cfg(feature = "rocksdb")]
-impl Default for MakeRocksDbStoreClient {
-    fn default() -> Self {
-        MakeRocksDbStoreClient {
-            temp_dirs: vec![],
-            wasm_runtime: None,
-            max_stream_queries: ROCKS_DB_MAX_STREAM_QUERIES,
-        }
-    }
 }
 
 #[cfg(feature = "rocksdb")]
@@ -594,13 +580,9 @@ impl MakeRocksDbStoreClient {
     /// Creates a [`MakeRocksDbStoreClient`] that uses the specified [`WasmRuntime`] to run WASM
     /// applications.
     #[allow(dead_code)]
-    pub fn with_wasm_runtime(
-        wasm_runtime: impl Into<Option<WasmRuntime>>,
-        max_stream_queries: usize,
-    ) -> Self {
+    pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
         MakeRocksDbStoreClient {
             wasm_runtime: wasm_runtime.into(),
-            max_stream_queries,
             ..MakeRocksDbStoreClient::default()
         }
     }
@@ -618,30 +600,18 @@ impl StoreBuilder for MakeRocksDbStoreClient {
         Ok(RocksDbStoreClient::new(
             path,
             self.wasm_runtime,
-            self.max_stream_queries,
+            TEST_ROCKS_DB_MAX_STREAM_QUERIES,
             TEST_CACHE_SIZE,
         ))
     }
 }
 
 #[cfg(feature = "aws")]
+#[derive(Default)]
 pub struct MakeDynamoDbStoreClient {
     instance_counter: usize,
     localstack: Option<LocalStackTestContext>,
     wasm_runtime: Option<WasmRuntime>,
-    max_stream_queries: usize,
-}
-
-#[cfg(feature = "aws")]
-impl Default for MakeDynamoDbStoreClient {
-    fn default() -> Self {
-        MakeDynamoDbStoreClient {
-            instance_counter: 0,
-            localstack: None,
-            wasm_runtime: None,
-            max_stream_queries: DYNAMO_DB_MAX_STREAM_QUERIES,
-        }
-    }
 }
 
 #[cfg(feature = "aws")]
@@ -649,13 +619,9 @@ impl MakeDynamoDbStoreClient {
     /// Creates a [`MakeDynamoDbStoreClient`] that uses the specified [`WasmRuntime`] to run WASM
     /// applications.
     #[allow(dead_code)]
-    pub fn with_wasm_runtime(
-        wasm_runtime: impl Into<Option<WasmRuntime>>,
-        max_stream_queries: usize,
-    ) -> Self {
+    pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
         MakeDynamoDbStoreClient {
             wasm_runtime: wasm_runtime.into(),
-            max_stream_queries,
             ..MakeDynamoDbStoreClient::default()
         }
     }
@@ -676,12 +642,69 @@ impl StoreBuilder for MakeDynamoDbStoreClient {
         let (store, _) = DynamoDbStoreClient::from_config(
             config,
             table,
-            Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-            self.max_stream_queries,
+            Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+            TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
             TEST_CACHE_SIZE,
             self.wasm_runtime,
         )
         .await?;
         Ok(store)
+    }
+}
+
+#[cfg(feature = "scylladb")]
+pub struct MakeScyllaDbStoreClient {
+    instance_counter: usize,
+    uri: String,
+    wasm_runtime: Option<WasmRuntime>,
+}
+
+#[cfg(feature = "scylladb")]
+impl Default for MakeScyllaDbStoreClient {
+    fn default() -> Self {
+        let instance_counter = 0;
+        let uri = "localhost:9042".to_string();
+        let wasm_runtime = None;
+        MakeScyllaDbStoreClient {
+            instance_counter,
+            uri,
+            wasm_runtime,
+        }
+    }
+}
+
+#[cfg(feature = "scylladb")]
+impl MakeScyllaDbStoreClient {
+    /// Creates a [`MakeScyllaDbStoreClient`] that uses the specified [`WasmRuntime`] to run WASM
+    /// applications.
+    #[allow(dead_code)]
+    pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
+        MakeScyllaDbStoreClient {
+            wasm_runtime: wasm_runtime.into(),
+            ..MakeScyllaDbStoreClient::default()
+        }
+    }
+}
+
+#[cfg(feature = "scylladb")]
+#[async_trait]
+impl StoreBuilder for MakeScyllaDbStoreClient {
+    type Store = ScyllaDbStoreClient;
+
+    async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
+        self.instance_counter += 1;
+        let restart_database = true;
+        let table_name = get_table_name().await;
+        let table_name = format!("{}_{}", table_name, self.instance_counter);
+        Ok(ScyllaDbStoreClient::new(
+            restart_database,
+            &self.uri,
+            table_name,
+            Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
+            TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
+            TEST_CACHE_SIZE,
+            self.wasm_runtime,
+        )
+        .await?)
     }
 }

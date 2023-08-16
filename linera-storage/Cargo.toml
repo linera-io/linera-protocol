@@ -17,8 +17,10 @@ wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
 aws = ["linera-views/aws"]
 rocksdb = ["linera-views/rocksdb"]
+scylladb = ["linera-views/scylladb"]
 
 [dependencies]
+tempfile = { workspace = true }
 async-trait = { workspace = true }
 bcs = { workspace = true }
 dashmap = { workspace = true }
@@ -35,4 +37,3 @@ tokio = { workspace = true, features = ["macros"] }
 [dev-dependencies]
 anyhow = { workspace = true }
 linera-storage = { path = ".", features = ["test"] }
-tempfile = { workspace = true }
