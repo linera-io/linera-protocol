@@ -39,6 +39,7 @@ use linera_views::views::ViewError;
 use serde_json::Value;
 use std::{
     env, fs,
+    io::Read,
     num::NonZeroU16,
     path::PathBuf,
     sync::Arc,
@@ -47,6 +48,7 @@ use std::{
 use structopt::StructOpt;
 use tracing::{debug, info, warn};
 
+use linera_service::client::{LocalNetwork, Network};
 #[cfg(feature = "benchmark")]
 use {
     linera_base::data_types::RoundNumber,
@@ -937,6 +939,15 @@ enum ClientCommand {
 
     /// Manage Linera projects.
     Project(ProjectCommand),
+
+    /// Manage a local Linera Network.
+    Net(NetCommand),
+}
+
+#[derive(StructOpt)]
+enum NetCommand {
+    /// Start a Local Linera Network
+    Up,
 }
 
 #[derive(StructOpt)]
@@ -1591,7 +1602,7 @@ where
                 _ => unreachable!("other project commands do not require storage"),
             },
 
-            CreateGenesisConfig { .. } | Keygen | Wallet(_) => unreachable!(),
+            CreateGenesisConfig { .. } | Keygen | Net(_) | Wallet(_) => unreachable!(),
         }
         Ok(())
     }
@@ -1681,6 +1692,49 @@ async fn main() -> Result<(), anyhow::Error> {
             println!("{}", public);
             Ok(())
         }
+
+        ClientCommand::Net(net_command) => match net_command {
+            NetCommand::Up => {
+                let network = Network::Grpc;
+                let mut net = LocalNetwork::new(network, 1)?;
+                let client1 = net.make_client(network);
+                let client2 = net.make_client(network);
+
+                net.generate_initial_validator_config().await?;
+                client1.create_genesis_config().await?;
+                client2.wallet_init(&[]).await?;
+
+                // Create initial server and client config.
+                net.run_local_net().await?;
+                let net_path = net.net_path();
+
+                println!(
+                    "\nLinera net directory available at: {}",
+                    net_path.display()
+                );
+                println!("To configure your Linera client for this network, run:\n");
+                println!(
+                    "{}",
+                    format!(
+                        "export LINERA_WALLET=\"{}\"",
+                        net_path.join("wallet_0.json").display()
+                    )
+                    .bold()
+                );
+                println!(
+                    "{}",
+                    format!(
+                        "export LINERA_STORAGE=\"rocksdb:{}\"",
+                        net_path.join("linera.db").display()
+                    )
+                    .bold()
+                );
+
+                std::io::stdin().bytes().next();
+
+                Ok(())
+            }
+        },
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {
             WalletCommand::Show { chain_id } => {

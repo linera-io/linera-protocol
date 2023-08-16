@@ -716,6 +716,10 @@ impl LocalNetwork {
         self.start_validators(1..=self.num_initial_validators).await
     }
 
+    pub fn net_path(&self) -> &Path {
+        self.tmp_dir.path()
+    }
+
     pub fn kill_server(&mut self, i: usize, j: usize) -> Result<()> {
         self.local_net
             .get_mut(&i)
