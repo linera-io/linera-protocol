@@ -1,4 +1,5 @@
 use crate::config::WalletState;
+use anyhow::{Context, Result};
 use async_graphql::InputType;
 use linera_base::{
     abi::ContractAbi,
@@ -88,22 +89,20 @@ impl Client {
         }
     }
 
-    pub async fn project_new(&self, project_name: &str) -> TempDir {
-        let tmp = TempDir::new().unwrap();
-        let mut command = self.run().await;
+    pub async fn project_new(&self, project_name: &str) -> Result<TempDir> {
+        let tmp = TempDir::new()?;
+        let mut command = self.run().await?;
         assert!(command
-            .current_dir(tmp.path().canonicalize().unwrap())
+            .current_dir(tmp.path().canonicalize()?)
             .kill_on_drop(true)
             .arg("project")
             .arg("new")
             .arg(project_name)
-            .spawn()
-            .unwrap()
+            .spawn()?
             .wait()
-            .await
-            .unwrap()
+            .await?
             .success());
-        tmp
+        Ok(tmp)
     }
 
     pub async fn project_publish<T: Serialize>(
@@ -112,10 +111,10 @@ impl Client {
         required_application_ids: Vec<String>,
         publisher: impl Into<Option<ChainId>>,
         argument: &T,
-    ) -> String {
-        let json_parameters = serde_json::to_string(&()).unwrap();
-        let json_argument = serde_json::to_string(argument).unwrap();
-        let mut command = self.run_with_storage().await;
+    ) -> Result<String> {
+        let json_parameters = serde_json::to_string(&())?;
+        let json_argument = serde_json::to_string(argument)?;
+        let mut command = self.run_with_storage().await?;
         command
             .arg("project")
             .arg("publish-and-create")
@@ -127,12 +126,12 @@ impl Client {
             command.arg("--required-application-ids");
             command.args(required_application_ids);
         }
-        let stdout = Self::run_command(&mut command).await;
-        stdout.trim().to_string()
+        let stdout = Self::run_command(&mut command).await?;
+        Ok(stdout.trim().to_string())
     }
 
     pub async fn project_test(&self, path: &Path) {
-        let mut command = self.run().await;
+        let mut command = self.run().await.expect("TODO");
         assert!(command
             .current_dir(path)
             .kill_on_drop(true)
@@ -146,48 +145,47 @@ impl Client {
             .success());
     }
 
-    async fn run(&self) -> Command {
+    async fn run(&self) -> Result<Command> {
         let path = cargo_build_binary("linera").await;
         let mut command = Command::new(path);
         command
-            .current_dir(&self.tmp_dir.path().canonicalize().unwrap())
+            .current_dir(&self.tmp_dir.path().canonicalize()?)
             .kill_on_drop(true)
             .args(["--wallet", &self.wallet])
             .args(["--send-timeout-us", "10000000"])
             .args(["--recv-timeout-us", "10000000"])
             .arg("--wait-for-outgoing-messages");
-        command
+        Ok(command)
     }
 
-    async fn run_with_storage(&self) -> Command {
-        let mut command = self.run().await;
+    async fn run_with_storage(&self) -> Result<Command> {
+        let mut command = self.run().await?;
         command
             .args(["--storage", &self.storage.to_string()])
             .args([
                 "--max-pending-messages",
                 &self.max_pending_messages.to_string(),
             ]);
-        command
+        Ok(command)
     }
 
-    pub async fn create_genesis_config(&self) {
+    pub async fn create_genesis_config(&self) -> Result<()> {
         assert!(self
             .run()
-            .await
+            .await?
             .args(["create-genesis-config", "10"])
             .args(["--initial-funding", "10"])
             .args(["--committee", "committee.json"])
             .args(["--genesis", "genesis.json"])
-            .spawn()
-            .unwrap()
+            .spawn()?
             .wait()
-            .await
-            .unwrap()
+            .await?
             .success());
+        Ok(())
     }
 
-    pub async fn wallet_init(&self, chain_ids: &[ChainId]) {
-        let mut command = self.run().await;
+    pub async fn wallet_init(&self, chain_ids: &[ChainId]) -> Result<()> {
+        let mut command = self.run().await?;
         command
             .args(["wallet", "init"])
             .args(["--genesis", "genesis.json"]);
@@ -195,25 +193,24 @@ impl Client {
             let ids = chain_ids.iter().map(ChainId::to_string);
             command.arg("--with-other-chains").args(ids);
         }
-        assert!(command.spawn().unwrap().wait().await.unwrap().success());
+        assert!(command.spawn()?.wait().await?.success());
+        Ok(())
     }
 
-    async fn run_command(command: &mut Command) -> String {
+    async fn run_command(command: &mut Command) -> Result<String> {
         let output = command
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn()
-            .unwrap()
+            .spawn()?
             .wait_with_output()
-            .await
-            .unwrap();
+            .await?;
         assert!(
             output.status.success(),
             "Command {:?} failed; stderr:\n{}\n(end stderr)",
             command,
             String::from_utf8_lossy(&output.stderr),
         );
-        String::from_utf8(output.stdout).unwrap()
+        Ok(String::from_utf8(output.stdout)?)
     }
 
     pub async fn publish_and_create<A: ContractAbi>(
@@ -224,10 +221,10 @@ impl Client {
         argument: &A::InitializationArgument,
         required_application_ids: Vec<String>,
         publisher: impl Into<Option<ChainId>>,
-    ) -> String {
-        let json_parameters = serde_json::to_string(parameters).unwrap();
-        let json_argument = serde_json::to_string(argument).unwrap();
-        let mut command = self.run_with_storage().await;
+    ) -> Result<String> {
+        let json_parameters = serde_json::to_string(parameters)?;
+        let json_argument = serde_json::to_string(argument)?;
+        let mut command = self.run_with_storage().await?;
         command
             .arg("publish-and-create")
             .args([contract, service])
@@ -238,8 +235,8 @@ impl Client {
             command.arg("--required-application-ids");
             command.args(required_application_ids);
         }
-        let stdout = Self::run_command(&mut command).await;
-        stdout.trim().to_string()
+        let stdout = Self::run_command(&mut command).await?;
+        Ok(stdout.trim().to_string())
     }
 
     pub async fn publish_bytecode(
@@ -247,16 +244,16 @@ impl Client {
         contract: PathBuf,
         service: PathBuf,
         publisher: impl Into<Option<ChainId>>,
-    ) -> String {
+    ) -> Result<String> {
         let stdout = Self::run_command(
             self.run_with_storage()
-                .await
+                .await?
                 .arg("publish-bytecode")
                 .args([contract, service])
                 .args(publisher.into().iter().map(ChainId::to_string)),
         )
-        .await;
-        stdout.trim().to_string()
+        .await?;
+        Ok(stdout.trim().to_string())
     }
 
     pub async fn create_application<A: ContractAbi>(
@@ -264,31 +261,30 @@ impl Client {
         bytecode_id: String,
         argument: &A::InitializationArgument,
         creator: impl Into<Option<ChainId>>,
-    ) -> String {
-        let json_argument = serde_json::to_string(argument).unwrap();
+    ) -> Result<String> {
+        let json_argument = serde_json::to_string(argument)?;
         let stdout = Self::run_command(
             self.run_with_storage()
-                .await
+                .await?
                 .arg("create-application")
                 .arg(bytecode_id)
                 .args(["--json-argument", &json_argument])
                 .args(creator.into().iter().map(ChainId::to_string)),
         )
-        .await;
-        stdout.trim().to_string()
+        .await?;
+        Ok(stdout.trim().to_string())
     }
 
-    pub async fn run_node_service(&self, port: impl Into<Option<u16>>) -> NodeService {
+    pub async fn run_node_service(&self, port: impl Into<Option<u16>>) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
-        let mut command = self.run_with_storage().await;
+        let mut command = self.run_with_storage().await?;
         command.arg("service");
         if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {
             command.args(var.split_whitespace());
         }
         let child = command
             .args(["--port".to_string(), port.to_string()])
-            .spawn()
-            .unwrap();
+            .spawn()?;
         let client = reqwest::Client::new();
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
@@ -298,7 +294,7 @@ impl Client {
                 .await;
             if request.is_ok() {
                 info!("Node service has started");
-                return NodeService { port, child };
+                return Ok(NodeService { port, child });
             } else {
                 warn!("Waiting for node service to start");
             }
@@ -306,37 +302,39 @@ impl Client {
         panic!("Failed to start node service");
     }
 
-    pub async fn query_validators(&self, chain_id: Option<ChainId>) {
-        let mut command = self.run_with_storage().await;
+    pub async fn query_validators(&self, chain_id: Option<ChainId>) -> Result<()> {
+        let mut command = self.run_with_storage().await?;
         command.arg("query-validators");
         if let Some(chain_id) = chain_id {
             command.arg(&chain_id.to_string());
         }
-        Self::run_command(&mut command).await;
+        Self::run_command(&mut command).await?;
+        Ok(())
     }
 
-    pub async fn query_balance(&self, chain_id: ChainId) -> anyhow::Result<String> {
+    pub async fn query_balance(&self, chain_id: ChainId) -> Result<String> {
         let stdout = Self::run_command(
             self.run_with_storage()
-                .await
+                .await?
                 .arg("query-balance")
                 .arg(&chain_id.to_string()),
         )
-        .await;
+        .await?;
         let amount = stdout.trim().to_string();
         Ok(amount)
     }
 
-    pub async fn transfer(&self, amount: &str, from: ChainId, to: ChainId) {
+    pub async fn transfer(&self, amount: &str, from: ChainId, to: ChainId) -> Result<()> {
         Self::run_command(
             self.run_with_storage()
-                .await
+                .await?
                 .arg("transfer")
                 .arg(amount)
                 .args(["--from", &from.to_string()])
                 .args(["--to", &to.to_string()]),
         )
-        .await;
+        .await?;
+        Ok(())
     }
 
     #[cfg(benchmark)]
@@ -358,8 +356,8 @@ impl Client {
         &self,
         from: ChainId,
         to_owner: Option<Owner>,
-    ) -> anyhow::Result<(MessageId, ChainId)> {
-        let mut command = self.run_with_storage().await;
+    ) -> Result<(MessageId, ChainId)> {
+        let mut command = self.run_with_storage().await?;
         command
             .arg("open-chain")
             .args(["--from", &from.to_string()]);
@@ -368,35 +366,38 @@ impl Client {
             command.args(["--to-public-key", &owner.to_string()]);
         }
 
-        let stdout = Self::run_command(&mut command).await;
+        let stdout = Self::run_command(&mut command).await?;
         let mut split = stdout.split('\n');
-        let message_id: MessageId = split.next().unwrap().parse()?;
+        let message_id: MessageId = split.next().context("no message found")?.parse()?;
         let chain_id = ChainId::from_str(split.next().unwrap())?;
 
         Ok((message_id, chain_id))
     }
 
-    pub async fn open_and_assign(&self, client: &Client) -> ChainId {
-        let our_chain = self.get_wallet().default_chain().unwrap();
-        let key = client.keygen().await.unwrap();
-        let (message_id, new_chain) = self.open_chain(our_chain, Some(key)).await.unwrap();
-        assert_eq!(new_chain, client.assign(key, message_id).await.unwrap());
-        new_chain
+    pub async fn open_and_assign(&self, client: &Client) -> Result<ChainId> {
+        let our_chain = self
+            .get_wallet()
+            .default_chain()
+            .context("no default chain found")?;
+        let key = client.keygen().await?;
+        let (message_id, new_chain) = self.open_chain(our_chain, Some(key)).await?;
+        assert_eq!(new_chain, client.assign(key, message_id).await?);
+        Ok(new_chain)
     }
 
     pub async fn open_multi_owner_chain(
         &self,
         from: ChainId,
         to_owners: Vec<Owner>,
-    ) -> anyhow::Result<(MessageId, ChainId)> {
-        let mut command = self.run_with_storage().await;
+    ) -> Result<(MessageId, ChainId)> {
+        let mut command = self.run_with_storage().await?;
         command
             .arg("open-multi-owner-chain")
             .args(["--from", &from.to_string()])
             .arg("--to-public-keys")
             .args(to_owners.iter().map(Owner::to_string));
 
-        let stdout = Self::run_command(&mut command).await;
+        let stdout = Self::run_command(&mut command).await?;
         let mut split = stdout.split('\n');
         let message_id: MessageId = split.next().unwrap().parse()?;
         let chain_id = ChainId::from_str(split.next().unwrap())?;
@@ -419,57 +420,60 @@ impl Client {
         self.get_wallet().get(chain).is_some()
     }
 
-    pub async fn set_validator(&self, name: &str, port: usize, votes: usize) {
+    pub async fn set_validator(&self, name: &str, port: usize, votes: usize) -> Result<()> {
         let address = format!("{}:127.0.0.1:{}", self.network.external_short(), port);
         Self::run_command(
             self.run_with_storage()
-                .await
+                .await?
                 .arg("set-validator")
                 .args(["--name", name])
                 .args(["--address", &address])
                 .args(["--votes", &votes.to_string()]),
         )
-        .await;
+        .await?;
+        Ok(())
     }
 
-    pub async fn remove_validator(&self, name: &str) {
+    pub async fn remove_validator(&self, name: &str) -> Result<()> {
         Self::run_command(
             self.run_with_storage()
-                .await
+                .await?
                 .arg("remove-validator")
                 .args(["--name", name]),
         )
-        .await;
+        .await?;
+        Ok(())
     }
 
-    pub async fn keygen(&self) -> anyhow::Result<Owner> {
-        let stdout = Self::run_command(self.run().await.arg("keygen")).await;
+    pub async fn keygen(&self) -> Result<Owner> {
+        let stdout = Self::run_command(self.run().await?.arg("keygen")).await?;
         Ok(Owner::from_str(stdout.trim())?)
     }
 
-    pub async fn assign(&self, owner: Owner, message_id: MessageId) -> anyhow::Result<ChainId> {
+    pub async fn assign(&self, owner: Owner, message_id: MessageId) -> Result<ChainId> {
         let stdout = Self::run_command(
             self.run_with_storage()
-                .await
+                .await?
                 .arg("assign")
                 .args(["--key", &owner.to_string()])
                 .args(["--message-id", &message_id.to_string()]),
         )
-        .await;
+        .await?;
 
         let chain_id = ChainId::from_str(stdout.trim())?;
 
         Ok(chain_id)
     }
 
-    pub async fn synchronize_balance(&self, chain_id: ChainId) {
+    pub async fn synchronize_balance(&self, chain_id: ChainId) -> Result<()> {
         Self::run_command(
             self.run_with_storage()
-                .await
+                .await?
                 .arg("sync-balance")
                 .arg(&chain_id.to_string()),
         )
-        .await;
+        .await?;
+        Ok(())
     }
 }
 
@@ -523,14 +527,14 @@ impl Drop for LocalNetwork {
 }
 
 impl LocalNetwork {
-    pub fn new(network: Network, num_initial_validators: usize) -> Self {
-        Self {
-            tmp_dir: Rc::new(tempdir().unwrap()),
+    pub fn new(network: Network, num_initial_validators: usize) -> Result<Self> {
+        Ok(Self {
+            tmp_dir: Rc::new(tempdir()?),
             network,
             next_client_id: 0,
             num_initial_validators,
             local_net: BTreeMap::new(),
-        }
+        })
     }
 
     pub fn make_client(&mut self, network: Network) -> Client {
@@ -539,13 +543,13 @@ impl LocalNetwork {
         client
     }
 
-    async fn command_for_binary(&self, name: &'static str) -> Command {
+    async fn command_for_binary(&self, name: &'static str) -> Result<Command> {
         let path = cargo_build_binary(name).await;
         let mut command = Command::new(path);
         command
-            .current_dir(&self.tmp_dir.path().canonicalize().unwrap())
+            .current_dir(&self.tmp_dir.path().canonicalize()?)
             .kill_on_drop(true);
-        command
+        Ok(command)
     }
 
     fn proxy_port(i: usize) -> usize {
@@ -564,13 +568,12 @@ impl LocalNetwork {
         11000 + i * 100
     }
 
-    fn configuration_string(&self, server_number: usize) -> String {
+    fn configuration_string(&self, server_number: usize) -> Result<String> {
         let n = server_number;
         let path = self
             .tmp_dir
             .path()
-            .canonicalize()
-            .unwrap()
+            .canonicalize()?
             .join(format!("validator_{n}.toml"));
         let port = Self::proxy_port(n);
         let internal_port = Self::internal_port(n);
@@ -602,55 +605,53 @@ impl LocalNetwork {
                 "#
             ));
         }
-        fs::write(&path, content).unwrap();
-        path.into_os_string().into_string().unwrap()
+        fs::write(&path, content)?;
+        Ok(path
+            .into_os_string()
+            .into_string()
+            .expect("could not parse string into os string"))
     }
 
-    pub async fn generate_initial_validator_config(&self) -> Vec<String> {
-        let mut command = self.command_for_binary("linera-server").await;
+    pub async fn generate_initial_validator_config(&self) -> Result<Vec<String>> {
+        let mut command = self.command_for_binary("linera-server").await?;
         command.arg("generate").arg("--validators");
         for i in 1..=self.num_initial_validators {
-            command.arg(&self.configuration_string(i));
+            command.arg(&self.configuration_string(i)?);
         }
         let output = command
             .args(["--committee", "committee.json"])
             .stdout(Stdio::piped())
-            .spawn()
-            .unwrap()
+            .spawn()?
             .wait_with_output()
-            .await
-            .unwrap();
+            .await?;
         assert!(output.status.success());
         let output_str = String::from_utf8_lossy(output.stdout.as_slice());
-        output_str.split_whitespace().map(str::to_string).collect()
+        Ok(output_str.split_whitespace().map(str::to_string).collect())
     }
 
-    pub async fn generate_validator_config(&self, i: usize) -> String {
+    pub async fn generate_validator_config(&self, i: usize) -> Result<String> {
         let output = self
             .command_for_binary("linera-server")
-            .await
+            .await?
             .arg("generate")
             .arg("--validators")
-            .arg(&self.configuration_string(i))
+            .arg(&self.configuration_string(i)?)
             .stdout(Stdio::piped())
-            .spawn()
-            .unwrap()
+            .spawn()?
             .wait_with_output()
-            .await
-            .unwrap();
+            .await?;
         assert!(output.status.success());
-        String::from_utf8_lossy(output.stdout.as_slice())
+        Ok(String::from_utf8_lossy(output.stdout.as_slice())
             .trim()
-            .to_string()
+            .to_string())
     }
 
-    async fn run_proxy(&self, i: usize) -> Child {
+    async fn run_proxy(&self, i: usize) -> Result<Child> {
         let child = self
             .command_for_binary("linera-proxy")
-            .await
+            .await?
             .arg(format!("server_{}.json", i))
-            .spawn()
-            .unwrap();
+            .spawn()?;
 
         match self.network {
             Network::Grpc => {
@@ -663,12 +664,12 @@ impl LocalNetwork {
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
         }
-        child
+        Ok(child)
     }
 
     async fn ensure_grpc_server_has_started(nickname: &str, port: usize) {
         let connection = tonic::transport::Endpoint::new(format!("http://127.0.0.1:{port}"))
-            .unwrap()
+            .expect("endpoint should always parse")
             .connect_lazy();
         let mut client = HealthClient::new(connection);
         for i in 0..10 {
@@ -684,8 +685,8 @@ impl LocalNetwork {
         panic!("Failed to start {nickname}");
     }
 
-    async fn run_server(&self, i: usize, j: usize) -> Child {
-        let mut command = self.command_for_binary("linera-server").await;
+    async fn run_server(&self, i: usize, j: usize) -> Result<Child> {
+        let mut command = self.command_for_binary("linera-server").await?;
         command.arg("run");
         if let Ok(var) = env::var(SERVER_ENV) {
             command.args(var.split_whitespace());
@@ -695,8 +696,7 @@ impl LocalNetwork {
             .args(["--server", &format!("server_{}.json", i)])
             .args(["--shard", &j.to_string()])
             .args(["--genesis", "genesis.json"])
-            .spawn()
-            .unwrap();
+            .spawn()?;
 
         match self.network {
             Network::Grpc => {
@@ -709,45 +709,55 @@ impl LocalNetwork {
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
         }
-        child
+        Ok(child)
     }
 
-    pub async fn run_local_net(&mut self) {
+    pub async fn run_local_net(&mut self) -> Result<()> {
         self.start_validators(1..=self.num_initial_validators).await
     }
 
-    pub fn kill_server(&mut self, i: usize, j: usize) {
-        self.local_net.get_mut(&i).unwrap().kill_server(j);
+    pub fn kill_server(&mut self, i: usize, j: usize) -> Result<()> {
+        self.local_net
+            .get_mut(&i)
+            .context("server not found")?
+            .kill_server(j);
+        Ok(())
     }
 
-    pub fn remove_validator(&mut self, i: usize) {
-        self.local_net.remove(&i).unwrap();
+    pub fn remove_validator(&mut self, i: usize) -> Result<()> {
+        self.local_net.remove(&i).context("validator not found")?;
+        Ok(())
     }
 
-    pub async fn start_server(&mut self, i: usize, j: usize) {
-        let server = self.run_server(i, j).await;
-        self.local_net.get_mut(&i).unwrap().add_server(server);
+    pub async fn start_server(&mut self, i: usize, j: usize) -> Result<()> {
+        let server = self.run_server(i, j).await?;
+        self.local_net
+            .get_mut(&i)
+            .context("could not find server")?
+            .add_server(server);
+        Ok(())
     }
 
-    pub async fn start_validators(&mut self, validator_range: RangeInclusive<usize>) {
+    pub async fn start_validators(&mut self, validator_range: RangeInclusive<usize>) -> Result<()> {
         for i in validator_range {
-            let proxy = self.run_proxy(i).await;
+            let proxy = self.run_proxy(i).await?;
             let mut validator = Validator::new(proxy);
             for j in 0..4 {
-                let server = self.run_server(i, j).await;
+                let server = self.run_server(i, j).await?;
                 validator.add_server(server);
             }
             self.local_net.insert(i, validator);
         }
+        Ok(())
     }
 
-    pub async fn build_example(&self, name: &str) -> (PathBuf, PathBuf) {
-        self.build_application(Self::example_path(name).as_path(), name, true)
+    pub async fn build_example(&self, name: &str) -> Result<(PathBuf, PathBuf)> {
+        self.build_application(Self::example_path(name)?.as_path(), name, true)
             .await
     }
 
-    pub fn example_path(name: &str) -> PathBuf {
-        env::current_dir().unwrap().join("../examples/").join(name)
+    pub fn example_path(name: &str) -> Result<PathBuf> {
+        Ok(env::current_dir().unwrap().join("../examples/").join(name))
     }
 
     pub async fn build_application(
@@ -755,20 +765,18 @@ impl LocalNetwork {
         path: &Path,
         name: &str,
         is_workspace: bool,
-    ) -> (PathBuf, PathBuf) {
+    ) -> Result<(PathBuf, PathBuf)> {
         assert!(Command::new("cargo")
-            .current_dir(self.tmp_dir.path().canonicalize().unwrap())
+            .current_dir(self.tmp_dir.path().canonicalize()?)
             .arg("build")
             .arg("--release")
             .args(["--target", "wasm32-unknown-unknown"])
             .arg("--manifest-path")
             .arg(path.join("Cargo.toml"))
             .stdout(Stdio::piped())
-            .spawn()
-            .unwrap()
+            .spawn()?
             .wait()
-            .await
-            .unwrap()
+            .await?
             .success());
 
         let release_dir = match is_workspace {
@@ -779,7 +787,7 @@ impl LocalNetwork {
         let contract = release_dir.join(format!("{}_contract.wasm", name.replace('-', "_")));
         let service = release_dir.join(format!("{}_service.wasm", name.replace('-', "_")));
 
-        (contract, service)
+        Ok((contract, service))
     }
 }
 
