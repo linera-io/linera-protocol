@@ -30,8 +30,8 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{Account, AdminOperation, Recipient, SystemChannel, SystemOperation, UserData},
-    Bytecode, Message, Operation, Query, Response, SystemMessage, SystemQuery, SystemResponse,
-    UserApplicationId,
+    Bytecode, ChainOwnership, Message, Operation, Query, Response, SystemMessage, SystemQuery,
+    SystemResponse, UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -1313,7 +1313,10 @@ where
     }
 
     /// Opens a new chain with a derived UID.
-    pub async fn open_chain(&mut self, public_key: PublicKey) -> Result<(MessageId, Certificate)> {
+    pub async fn open_chain(
+        &mut self,
+        ownership: ChainOwnership,
+    ) -> Result<(MessageId, Certificate)> {
         self.prepare_chain().await?;
         let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         let epoch = epoch.ok_or(NodeError::InactiveLocalChain(self.chain_id))?;
@@ -1322,7 +1325,7 @@ where
             .execute_block(
                 messages,
                 vec![Operation::System(SystemOperation::OpenChain {
-                    public_key,
+                    ownership,
                     committees,
                     admin_id: self.admin_id,
                     epoch,

@@ -3,11 +3,10 @@
 
 use linera_base::{crypto::PublicKey, identifiers::Owner};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Represents the owner(s) of a chain.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+#[derive(PartialEq, Eq, Clone, Hash, Debug, Default, Serialize, Deserialize)]
 pub enum ChainOwnership {
     /// The chain is not active. (No blocks can be created)
     #[default]
@@ -15,7 +14,7 @@ pub enum ChainOwnership {
     /// The chain is managed by a single owner.
     Single { owner: Owner, public_key: PublicKey },
     /// The chain is managed by multiple owners.
-    Multi { owners: HashMap<Owner, PublicKey> },
+    Multi { owners: BTreeMap<Owner, PublicKey> },
 }
 
 impl ChainOwnership {

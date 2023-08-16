@@ -2647,7 +2647,7 @@ where
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::System(SystemOperation::OpenChain {
-                    public_key: key_pair.public(),
+                    ownership: ChainOwnership::single(key_pair.public()),
                     epoch: Epoch::from(0),
                     committees: committees.clone(),
                     admin_id,
@@ -2661,7 +2661,7 @@ where
                 direct_outgoing_message(
                     user_id,
                     SystemMessage::OpenChain {
-                        public_key: key_pair.public(),
+                        ownership: ChainOwnership::single(key_pair.public()),
                         epoch: Epoch::from(0),
                         committees: committees.clone(),
                         admin_id,

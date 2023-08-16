@@ -24,7 +24,7 @@ use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
     pricing::Pricing,
     system::{Account, UserData},
-    Bytecode, UserApplicationId, WasmRuntime, WithWasmDefault,
+    Bytecode, ChainOwnership, UserApplicationId, WasmRuntime, WithWasmDefault,
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
@@ -671,6 +671,17 @@ enum ClientCommand {
         public_key: Option<PublicKey>,
     },
 
+    /// Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one.
+    OpenMultiOwnerChain {
+        /// Chain id (must be one of our chains).
+        #[structopt(long = "from")]
+        chain_id: Option<ChainId>,
+
+        /// Public keys of the new owners
+        #[structopt(long = "to-public-keys")]
+        public_keys: Vec<PublicKey>,
+    },
+
     /// Close (i.e. deactivate) an existing chain.
     // TODO: Consider `spend-and-transfer` instead for real-life use cases.
     CloseChain {
@@ -1055,12 +1066,42 @@ where
                 };
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
-                let (message_id, certificate) =
-                    chain_client.open_chain(new_public_key).await.unwrap();
+                let ownership = ChainOwnership::single(new_public_key);
+                let (message_id, certificate) = chain_client.open_chain(ownership).await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
                 info!("{:#?}", certificate);
                 context.update_wallet_from_client(&mut chain_client).await;
+                let id = ChainId::child(message_id);
+                let timestamp = match certificate.value() {
+                    CertificateValue::ConfirmedBlock {
+                        executed_block: ExecutedBlock { block, .. },
+                        ..
+                    } => block.timestamp,
+                    _ => panic!("Unexpected certificate."),
+                };
+                context.update_wallet_for_new_chain(id, key_pair, timestamp);
+                // Print the new chain ID and message ID on stdout for scripting purposes.
+                println!("{}", message_id);
+                println!("{}", ChainId::child(message_id));
+                context.save_wallet();
+            }
+
+            OpenMultiOwnerChain {
+                chain_id,
+                public_keys,
+            } => {
+                let mut chain_client = context.make_chain_client(storage, chain_id);
+                info!("Starting operation to open a new chain");
+                let time_start = Instant::now();
+                let ownership = ChainOwnership::multiple(public_keys);
+                let (message_id, certificate) = chain_client.open_chain(ownership).await.unwrap();
+                let time_total = time_start.elapsed().as_micros();
+                info!("Operation confirmed after {} us", time_total);
+                info!("{:#?}", certificate);
+                context.update_wallet_from_client(&mut chain_client).await;
+                // No key pair. This chain can be assigned explicitly using the assign command.
+                let key_pair = None;
                 let id = ChainId::child(message_id);
                 let timestamp = match certificate.value() {
                     CertificateValue::ConfirmedBlock {

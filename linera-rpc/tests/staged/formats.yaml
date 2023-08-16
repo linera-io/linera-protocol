@@ -214,6 +214,26 @@ ChainManagerInfo:
       Multi:
         NEWTYPE:
           TYPENAME: MultiOwnerManagerInfo
+ChainOwnership:
+  ENUM:
+    0:
+      None: UNIT
+    1:
+      Single:
+        STRUCT:
+          - owner:
+              TYPENAME: Owner
+          - public_key:
+              TYPENAME: PublicKey
+    2:
+      Multi:
+        STRUCT:
+          - owners:
+              MAP:
+                KEY:
+                  TYPENAME: Owner
+                VALUE:
+                  TYPENAME: PublicKey
 ChannelFullName:
   STRUCT:
     - application_id:
@@ -637,8 +657,8 @@ SystemMessage:
     2:
       OpenChain:
         STRUCT:
-          - public_key:
-              TYPENAME: PublicKey
+          - ownership:
+              TYPENAME: ChainOwnership
           - admin_id:
               TYPENAME: ChainId
           - epoch:
@@ -733,8 +753,8 @@ SystemOperation:
     2:
       OpenChain:
         STRUCT:
-          - public_key:
-              TYPENAME: PublicKey
+          - ownership:
+              TYPENAME: ChainOwnership
           - admin_id:
               TYPENAME: ChainId
           - epoch:

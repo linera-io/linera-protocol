@@ -19,7 +19,7 @@ use linera_execution::{
     committee::{Committee, Epoch},
     pricing::Pricing,
     system::{Account, Recipient, SystemOperation, UserData},
-    Operation, SystemQuery, SystemResponse,
+    ChainOwnership, Operation, SystemQuery, SystemResponse,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -481,7 +481,10 @@ where
         .await?;
     let new_key_pair = KeyPair::generate();
     // Open the new chain.
-    let (message_id, certificate) = sender.open_chain(new_key_pair.public()).await.unwrap();
+    let (message_id, certificate) = sender
+        .open_chain(ChainOwnership::single(new_key_pair.public()))
+        .await
+        .unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());
@@ -548,8 +551,10 @@ where
         .await
         .unwrap();
     // Open the new chain.
-    let (open_chain_message_id, certificate) =
-        sender.open_chain(new_key_pair.public()).await.unwrap();
+    let (open_chain_message_id, certificate) = sender
+        .open_chain(ChainOwnership::single(new_key_pair.public()))
+        .await
+        .unwrap();
     let new_id2 = ChainId::child(open_chain_message_id);
     assert_eq!(new_id, new_id2);
     assert_eq!(sender.next_block_height, BlockHeight::from(2));
@@ -624,8 +629,10 @@ where
         .await?;
     let new_key_pair = KeyPair::generate();
     // Open the new chain.
-    let (message_id, creation_certificate) =
-        sender.open_chain(new_key_pair.public()).await.unwrap();
+    let (message_id, creation_certificate) = sender
+        .open_chain(ChainOwnership::single(new_key_pair.public()))
+        .await
+        .unwrap();
     let new_id = ChainId::child(message_id);
     // Transfer after creating the chain.
     let transfer_certificate = sender

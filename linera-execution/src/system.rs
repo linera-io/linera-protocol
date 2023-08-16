@@ -100,10 +100,10 @@ pub enum SystemOperation {
         amount: Amount,
         user_data: UserData,
     },
-    /// Creates (or activates) a new chain by installing the given authentication key.
+    /// Creates (or activates) a new chain.
     /// This will automatically subscribe to the future committees created by `admin_id`.
     OpenChain {
-        public_key: PublicKey,
+        ownership: ChainOwnership,
         admin_id: ChainId,
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
@@ -176,9 +176,9 @@ pub enum SystemMessage {
         recipient: Recipient,
         user_data: UserData,
     },
-    /// Creates (or activates) a new chain by installing the given authentication key.
+    /// Creates (or activates) a new chain.
     OpenChain {
-        public_key: PublicKey,
+        ownership: ChainOwnership,
         admin_id: ChainId,
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
@@ -457,7 +457,7 @@ where
         let mut new_application = None;
         match operation {
             OpenChain {
-                public_key,
+                ownership,
                 committees,
                 admin_id,
                 epoch,
@@ -482,7 +482,7 @@ where
                     Destination::Recipient(child_id),
                     false,
                     SystemMessage::OpenChain {
-                        public_key: *public_key,
+                        ownership: ownership.clone(),
                         committees: committees.clone(),
                         admin_id: *admin_id,
                         epoch: *epoch,
@@ -882,7 +882,7 @@ where
     pub fn open_chain(
         &mut self,
         message_id: MessageId,
-        public_key: PublicKey,
+        ownership: ChainOwnership,
         epoch: Epoch,
         committees: BTreeMap<Epoch, Committee>,
         admin_id: ChainId,
@@ -903,7 +903,7 @@ where
                 name: SystemChannel::Admin.name(),
             })
             .expect("serialization failed");
-        self.ownership.set(ChainOwnership::single(public_key));
+        self.ownership.set(ownership);
         self.timestamp.set(timestamp);
     }
 

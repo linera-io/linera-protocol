@@ -15,7 +15,7 @@ use linera_core::{
     tracker::NotificationTracker,
     worker::{Notification, Reason},
 };
-use linera_execution::{Message, SystemMessage};
+use linera_execution::{ChainOwnership, Message, SystemMessage};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{sync::Arc, time::Duration};
@@ -162,7 +162,11 @@ where
                 for outgoing_message in &executed_block.messages {
                     if let OutgoingMessage {
                         destination: Destination::Recipient(new_id),
-                        message: Message::System(SystemMessage::OpenChain { public_key, .. }),
+                        message:
+                            Message::System(SystemMessage::OpenChain {
+                                ownership: ChainOwnership::Single { public_key, .. },
+                                ..
+                            }),
                         ..
                     } = outgoing_message
                     {
