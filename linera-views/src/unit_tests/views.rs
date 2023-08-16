@@ -4,25 +4,24 @@
 use crate::{
     batch::Batch,
     common::Context,
-    memory::MemoryContext,
+    memory::{create_memory_context, MemoryContext},
     queue_view::QueueView,
     views::{View, ViewError},
 };
-use async_lock::Mutex;
 use async_trait::async_trait;
-use std::{
-    collections::{BTreeMap, VecDeque},
-    sync::Arc,
-};
+use std::collections::VecDeque;
 
 #[cfg(feature = "rocksdb")]
 use {
-    crate::rocks_db::{RocksDbClient, RocksDbContext},
+    crate::rocks_db::{RocksDbClient, RocksDbContext, ROCKS_DB_MAX_STREAM_QUERIES},
     tempfile::TempDir,
 };
 
 #[cfg(feature = "aws")]
-use crate::{dynamo_db::DynamoDbContext, test_utils::LocalStackTestContext};
+use crate::{
+    dynamo_db::{DynamoDbContext, DYNAMO_DB_MAX_CONCURRENT_QUERIES, DYNAMO_DB_MAX_STREAM_QUERIES},
+    test_utils::LocalStackTestContext,
+};
 
 #[cfg(any(feature = "rocksdb", feature = "aws"))]
 use crate::lru_caching::TEST_CACHE_SIZE;
@@ -195,8 +194,7 @@ impl TestContextFactory for MemoryContextFactory {
     type Context = MemoryContext<()>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let dummy_lock = Arc::new(Mutex::new(BTreeMap::new()));
-        Ok(MemoryContext::new(dummy_lock.lock_arc().await, ()))
+        Ok(create_memory_context())
     }
 }
 
@@ -213,7 +211,11 @@ impl TestContextFactory for RocksDbContextFactory {
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let directory = TempDir::new()?;
-        let client = RocksDbClient::new(directory.path(), TEST_CACHE_SIZE);
+        let client = RocksDbClient::new(
+            directory.path(),
+            ROCKS_DB_MAX_STREAM_QUERIES,
+            TEST_CACHE_SIZE,
+        );
         let context = RocksDbContext::new(client, vec![], ());
 
         self.temporary_directories.push(directory);
@@ -244,9 +246,16 @@ impl TestContextFactory for DynamoDbContextFactory {
         self.table_counter += 1;
 
         let dummy_key_prefix = vec![0];
-        let (context, _) =
-            DynamoDbContext::from_config(config, table, TEST_CACHE_SIZE, dummy_key_prefix, ())
-                .await?;
+        let (context, _) = DynamoDbContext::from_config(
+            config,
+            table,
+            Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+            DYNAMO_DB_MAX_STREAM_QUERIES,
+            TEST_CACHE_SIZE,
+            dummy_key_prefix,
+            (),
+        )
+        .await?;
 
         Ok(context)
     }

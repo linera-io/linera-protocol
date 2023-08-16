@@ -4,7 +4,7 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient},
-    memory::{MemoryClient, MemoryContextError, MemoryStoreMap},
+    memory::{MemoryClient, MemoryContextError, MemoryStoreMap, MEMORY_MAX_STREAM_QUERIES},
 };
 use async_lock::{Mutex, MutexGuardArc};
 use async_trait::async_trait;
@@ -45,11 +45,14 @@ where
     K: KeyValueStoreClient + Send + Sync,
     K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
 {
-    const MAX_CONNECTIONS: usize = K::MAX_CONNECTIONS;
     const MAX_VALUE_SIZE: usize = usize::MAX;
     type Error = K::Error;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    fn max_stream_queries(&self) -> usize {
+        self.client.max_stream_queries()
+    }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let mut big_key = key.to_vec();
@@ -279,13 +282,16 @@ pub struct TestMemoryClientInternal {
 
 #[async_trait]
 impl KeyValueStoreClient for TestMemoryClientInternal {
-    const MAX_CONNECTIONS: usize = 1;
     // We set up the MAX_VALUE_SIZE to the artificially low value of 100
     // purely for testing purposes.
     const MAX_VALUE_SIZE: usize = 100;
     type Error = MemoryContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    fn max_stream_queries(&self) -> usize {
+        MEMORY_MAX_STREAM_QUERIES
+    }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
         self.client.read_key_bytes(key).await
@@ -328,7 +334,7 @@ impl KeyValueStoreClient for TestMemoryClientInternal {
 impl TestMemoryClientInternal {
     /// Creates a `TestMemoryClient` from the guard
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>) -> Self {
-        let client = MemoryClient::new(guard);
+        let client = MemoryClient::new(guard, MEMORY_MAX_STREAM_QUERIES);
         TestMemoryClientInternal { client }
     }
 }
@@ -341,11 +347,14 @@ pub struct TestMemoryClient {
 
 #[async_trait]
 impl KeyValueStoreClient for TestMemoryClient {
-    const MAX_CONNECTIONS: usize = TestMemoryClientInternal::MAX_CONNECTIONS;
     const MAX_VALUE_SIZE: usize = usize::MAX;
     type Error = MemoryContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    fn max_stream_queries(&self) -> usize {
+        self.client.max_stream_queries()
+    }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
         self.client.read_key_bytes(key).await

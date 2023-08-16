@@ -16,6 +16,9 @@ use std::{
 use tempfile::TempDir;
 use thiserror::Error;
 
+/// The number of streams for the test
+pub const ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
+
 // The maximum size of values in RocksDB is 3 GB
 // That is 3221225472 and so for offset reason we decrease by 400
 const MAX_VALUE_SIZE: usize = 3221225072;
@@ -24,28 +27,35 @@ const MAX_VALUE_SIZE: usize = 3221225072;
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
 /// The internal client
-pub type RocksDbClientInternal = Arc<DB>;
+#[derive(Clone)]
+pub struct RocksDbClientInternal {
+    db: Arc<DB>,
+    max_stream_queries: usize,
+}
 
 #[async_trait]
 impl KeyValueStoreClient for RocksDbClientInternal {
-    const MAX_CONNECTIONS: usize = 1;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     type Error = RocksDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
+    fn max_stream_queries(&self) -> usize {
+        self.max_stream_queries
+    }
+
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
-        let db = self.clone();
+        let client = self.clone();
         let key = key.to_vec();
-        Ok(tokio::task::spawn_blocking(move || db.get(&key)).await??)
+        Ok(tokio::task::spawn_blocking(move || client.db.get(&key)).await??)
     }
 
     async fn read_multi_key_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbContextError> {
-        let db = self.clone();
-        let entries = tokio::task::spawn_blocking(move || db.multi_get(&keys)).await?;
+        let client = self.clone();
+        let entries = tokio::task::spawn_blocking(move || client.db.multi_get(&keys)).await?;
         Ok(entries.into_iter().collect::<Result<_, _>>()?)
     }
 
@@ -53,11 +63,11 @@ impl KeyValueStoreClient for RocksDbClientInternal {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::Keys, RocksDbContextError> {
-        let db = self.clone();
+        let client = self.clone();
         let prefix = key_prefix.to_vec();
         let len = prefix.len();
         let keys = tokio::task::spawn_blocking(move || {
-            let mut iter = db.raw_iterator();
+            let mut iter = client.db.raw_iterator();
             let mut keys = Vec::new();
             iter.seek(&prefix);
             let mut next_key = iter.key();
@@ -79,11 +89,11 @@ impl KeyValueStoreClient for RocksDbClientInternal {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, RocksDbContextError> {
-        let db = self.clone();
+        let client = self.clone();
         let prefix = key_prefix.to_vec();
         let len = prefix.len();
         let key_values = tokio::task::spawn_blocking(move || {
-            let mut iter = db.raw_iterator();
+            let mut iter = client.db.raw_iterator();
             let mut key_values = Vec::new();
             iter.seek(&prefix);
             let mut next_key = iter.key();
@@ -109,7 +119,7 @@ impl KeyValueStoreClient for RocksDbClientInternal {
         mut batch: Batch,
         _base_key: &[u8],
     ) -> Result<(), RocksDbContextError> {
-        let db = self.clone();
+        let client = self.clone();
         // NOTE: The delete_range functionality of RocksDB needs to have an upper bound in order to work.
         // Thus in order to have the system working, we need to handle the unlikely case of having to
         // delete a key starting with [255, ...., 255]
@@ -143,7 +153,7 @@ impl KeyValueStoreClient for RocksDbClientInternal {
                     }
                 }
             }
-            db.write(inner_batch)?;
+            client.db.write(inner_batch)?;
             Ok(())
         })
         .await??;
@@ -163,11 +173,18 @@ pub struct RocksDbClient {
 
 impl RocksDbClient {
     /// Creates a RocksDB database from a specified path.
-    pub fn new<P: AsRef<Path>>(path: P, cache_size: usize) -> RocksDbClient {
+    pub fn new<P: AsRef<Path>>(
+        path: P,
+        max_stream_queries: usize,
+        cache_size: usize,
+    ) -> RocksDbClient {
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
         let db = DB::open(&options, path).unwrap();
-        let client = Arc::new(db);
+        let client = RocksDbClientInternal {
+            db: Arc::new(db),
+            max_stream_queries,
+        };
         let client = ValueSplittingKeyValueStoreClient::new(client);
         Self {
             client: LruCachingKeyValueClient::new(client, cache_size),
@@ -178,7 +195,7 @@ impl RocksDbClient {
 /// Creates a RocksDB database client to be used for tests.
 pub fn create_rocks_db_test_client() -> RocksDbClient {
     let dir = TempDir::new().unwrap();
-    RocksDbClient::new(dir, TEST_CACHE_SIZE)
+    RocksDbClient::new(dir, ROCKS_DB_MAX_STREAM_QUERIES, TEST_CACHE_SIZE)
 }
 
 /// An implementation of [`crate::common::Context`] based on RocksDB
@@ -186,11 +203,14 @@ pub type RocksDbContext<E> = ContextFromDb<E, RocksDbClient>;
 
 #[async_trait]
 impl KeyValueStoreClient for RocksDbClient {
-    const MAX_CONNECTIONS: usize = 1;
     const MAX_VALUE_SIZE: usize = usize::MAX;
     type Error = RocksDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    fn max_stream_queries(&self) -> usize {
+        self.client.max_stream_queries()
+    }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
         self.client.read_key_bytes(key).await

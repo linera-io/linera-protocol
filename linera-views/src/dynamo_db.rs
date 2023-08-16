@@ -8,6 +8,7 @@ use crate::{
     lru_caching::LruCachingKeyValueClient,
     value_splitting::DatabaseConsistencyError,
 };
+use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
     model::{
@@ -20,7 +21,7 @@ use aws_sdk_dynamodb::{
 };
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, mem, str::FromStr};
+use std::{collections::HashMap, mem, str::FromStr, sync::Arc};
 use thiserror::Error;
 
 use static_assertions as sa;
@@ -59,6 +60,14 @@ const MAX_VALUE_BYTES: usize = 409600;
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html
 const _MAX_TRANSACT_WRITE_ITEM_BYTES: usize = 4194304;
 
+/// The DynamoDb database is potentially handling an infinite number of connections.
+/// However, for testing or some other purpose we really need to decrease the number of
+/// connections.
+pub const DYNAMO_DB_MAX_CONCURRENT_QUERIES: usize = 10;
+
+/// The number of entries in a stream of the tests can be controled by this parameter
+pub const DYNAMO_DB_MAX_STREAM_QUERIES: usize = 10;
+
 /// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 100.
 /// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html>
 pub const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
@@ -66,10 +75,6 @@ pub const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
 /// Fundamental constants in DynamoDB: The maximum size of a BatchWriteItem is 16M.
 /// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html>
 const MAX_BATCH_WRITE_ITEM_BYTES: usize = 16777216;
-
-/// Fundamental constant of DynamoDB: The maximum number of simultaneous connections is 50.
-/// See https://stackoverflow.com/questions/13128613/amazon-dynamo-db-max-client-connections
-const MAX_CONNECTIONS: usize = 50;
 
 /// This limit guarantees that the values seen by DynamoDb are under 400 kB = 409600 bytes.
 const MAX_VALUE_SIZE: usize = 409000;
@@ -220,6 +225,7 @@ impl TransactionBuilder {
             return Err(DynamoDbContextError::TransactUpperLimitSize);
         }
         if !self.transacts.is_empty() {
+            let _guard = db.acquire().await;
             db.client
                 .transact_write_items()
                 .set_transact_items(Some(self.transacts))
@@ -508,6 +514,9 @@ impl KeyValueIterable<DynamoDbContextError> for DynamoDbKeyValues {
 pub struct DynamoDbClientInternal {
     client: Client,
     table: TableName,
+    count: Arc<Semaphore>,
+    max_concurrent_queries: Option<usize>,
+    max_stream_queries: usize,
 }
 
 #[async_trait]
@@ -523,18 +532,32 @@ impl DeletePrefixExpander for DynamoDbClientInternal {
 }
 
 impl DynamoDbClientInternal {
+    /// Obtains the semaphore lock on the database if needed.
+    async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
+        match self.max_concurrent_queries {
+            None => None,
+            Some(_max_concurrent_queries) => Some(self.count.acquire().await),
+        }
+    }
+
     /// Creates a new [`DynamoDbClientInternal`] instance using the provided `config` parameters.
     pub async fn from_config(
         config: impl Into<Config>,
         table: TableName,
+        max_concurrent_queries: Option<usize>,
+        max_stream_queries: usize,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
+        let client = Client::from_conf(config.into());
+        let n = max_concurrent_queries.unwrap_or(0);
+        let count = Arc::new(Semaphore::new(n));
         let db = DynamoDbClientInternal {
-            client: Client::from_conf(config.into()),
+            client,
             table,
+            count,
+            max_concurrent_queries,
+            max_stream_queries,
         };
-
         let table_status = db.create_table_if_needed().await?;
-
         Ok((db, table_status))
     }
 
@@ -543,6 +566,7 @@ impl DynamoDbClientInternal {
         attribute_str: &str,
         key_prefix: &[u8],
     ) -> Result<QueryOutput, DynamoDbContextError> {
+        let _guard = self.acquire().await;
         let response = self
             .client
             .query()
@@ -565,6 +589,7 @@ impl DynamoDbClientInternal {
         &self,
         key_db: HashMap<String, AttributeValue>,
     ) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
+        let _guard = self.acquire().await;
         let response = self
             .client
             .get_item()
@@ -596,6 +621,7 @@ impl DynamoDbClientInternal {
     ///
     /// Attempts to create the table and ignores errors that indicate that it already exists.
     async fn create_table_if_needed(&self) -> Result<TableStatus, DynamoDbContextError> {
+        let _guard = self.acquire().await;
         let result = self
             .client
             .create_table()
@@ -643,11 +669,14 @@ impl DynamoDbClientInternal {
 
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClientInternal {
-    const MAX_CONNECTIONS: usize = MAX_CONNECTIONS;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
+
+    fn max_stream_queries(&self) -> usize {
+        self.max_stream_queries
+    }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
         let key_db = build_key(key.to_vec());
@@ -729,11 +758,14 @@ pub struct DynamoDbClient {
 
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClient {
-    const MAX_CONNECTIONS: usize = MAX_CONNECTIONS;
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
+
+    fn max_stream_queries(&self) -> usize {
+        self.client.max_stream_queries()
+    }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbContextError> {
         self.client.read_key_bytes(key).await
@@ -774,9 +806,17 @@ impl DynamoDbClient {
     pub async fn from_config(
         config: impl Into<Config>,
         table: TableName,
+        max_concurrent_queries: Option<usize>,
+        max_stream_queries: usize,
         cache_size: usize,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (client, table_name) = DynamoDbClientInternal::from_config(config, table).await?;
+        let (client, table_name) = DynamoDbClientInternal::from_config(
+            config,
+            table,
+            max_concurrent_queries,
+            max_stream_queries,
+        )
+        .await?;
         Ok((
             Self {
                 client: LruCachingKeyValueClient::new(client, cache_size),
@@ -790,10 +830,19 @@ impl DynamoDbClient {
     /// Creates a new [`DynamoDbClientInternal`] instance.
     pub async fn new(
         table: TableName,
+        max_concurrent_queries: Option<usize>,
+        max_stream_queries: usize,
         cache_size: usize,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let config = aws_config::load_from_env().await;
-        DynamoDbClient::from_config(&config, table, cache_size).await
+        DynamoDbClient::from_config(
+            &config,
+            table,
+            max_concurrent_queries,
+            max_stream_queries,
+            cache_size,
+        )
+        .await
     }
 
     /// Creates a new [`DynamoDbClientInternal`] instance using a LocalStack endpoint.
@@ -803,13 +852,22 @@ impl DynamoDbClient {
     /// [`TableStatus`] to indicate if the table was created or if it already exists.
     pub async fn with_localstack(
         table: TableName,
+        max_concurrent_queries: Option<usize>,
+        max_stream_queries: usize,
         cache_size: usize,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let base_config = aws_config::load_from_env().await;
         let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
             .endpoint_resolver(localstack::get_endpoint()?)
             .build();
-        DynamoDbClient::from_config(config, table, cache_size).await
+        DynamoDbClient::from_config(
+            config,
+            table,
+            max_concurrent_queries,
+            max_stream_queries,
+            cache_size,
+        )
+        .await
     }
 }
 
@@ -838,11 +896,19 @@ where
     /// Creates a new [`DynamoDbContext`] instance.
     pub async fn new(
         table: TableName,
+        max_concurrent_queries: Option<usize>,
+        max_stream_queries: usize,
         cache_size: usize,
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let db_tablestatus = DynamoDbClient::new(table, cache_size).await?;
+        let db_tablestatus = DynamoDbClient::new(
+            table,
+            max_concurrent_queries,
+            max_stream_queries,
+            cache_size,
+        )
+        .await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 
@@ -850,11 +916,20 @@ where
     pub async fn from_config(
         config: impl Into<Config>,
         table: TableName,
+        max_concurrent_queries: Option<usize>,
+        max_stream_queries: usize,
         cache_size: usize,
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let db_tablestatus = DynamoDbClient::from_config(config, table, cache_size).await?;
+        let db_tablestatus = DynamoDbClient::from_config(
+            config,
+            table,
+            max_concurrent_queries,
+            max_stream_queries,
+            cache_size,
+        )
+        .await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 
@@ -865,11 +940,19 @@ where
     /// [`TableStatus`] to indicate if the table was created or if it already exists.
     pub async fn with_localstack(
         table: TableName,
+        max_concurrent_queries: Option<usize>,
+        max_stream_queries: usize,
         cache_size: usize,
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let db_tablestatus = DynamoDbClient::with_localstack(table, cache_size).await?;
+        let db_tablestatus = DynamoDbClient::with_localstack(
+            table,
+            max_concurrent_queries,
+            max_stream_queries,
+            cache_size,
+        )
+        .await?;
         Ok(Self::create_context(db_tablestatus, base_key, extra))
     }
 }

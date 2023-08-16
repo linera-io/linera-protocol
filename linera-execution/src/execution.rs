@@ -25,7 +25,7 @@ use linera_views_derive::CryptoHashView;
 use {
     crate::{system::SystemExecutionState, TestExecutionRuntimeContext, UserApplicationCode},
     async_lock::Mutex,
-    linera_views::memory::MemoryContext,
+    linera_views::memory::{MemoryContext, MEMORY_MAX_STREAM_QUERIES},
     std::collections::BTreeMap,
     std::sync::Arc,
 };
@@ -68,7 +68,7 @@ where
         let extra = TestExecutionRuntimeContext::new(
             description.expect("Chain description should be set").into(),
         );
-        let context = MemoryContext::new(guard, extra);
+        let context = MemoryContext::new(guard, MEMORY_MAX_STREAM_QUERIES, extra);
         let mut view = Self::load(context)
             .await
             .expect("Loading from memory should work");

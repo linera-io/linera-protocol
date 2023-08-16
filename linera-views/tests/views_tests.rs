@@ -14,7 +14,7 @@ use linera_views::{
     log_view::LogView,
     lru_caching::LruCachingMemoryContext,
     map_view::MapView,
-    memory::{MemoryContext, MemoryStoreMap},
+    memory::{create_memory_context, MemoryContext, MemoryStoreMap, MEMORY_MAX_STREAM_QUERIES},
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
@@ -32,10 +32,13 @@ use std::{
 };
 
 #[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::{RocksDbClient, RocksDbContext};
+use linera_views::rocks_db::{RocksDbClient, RocksDbContext, ROCKS_DB_MAX_STREAM_QUERIES};
 
 #[cfg(feature = "aws")]
-use linera_views::{dynamo_db::DynamoDbContext, test_utils::LocalStackTestContext};
+use linera_views::{
+    dynamo_db::{DynamoDbContext, DYNAMO_DB_MAX_CONCURRENT_QUERIES, DYNAMO_DB_MAX_STREAM_QUERIES},
+    test_utils::LocalStackTestContext,
+};
 
 #[cfg(any(feature = "aws", feature = "rocksdb"))]
 use {linera_views::lru_caching::TEST_CACHE_SIZE, std::collections::BTreeSet};
@@ -78,7 +81,11 @@ impl StateStore for MemoryTestStore {
             .entry(id)
             .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
         tracing::trace!("Acquiring lock on {:?}", id);
-        let context = MemoryContext::new(state.clone().lock_arc().await, id);
+        let context = MemoryContext::new(
+            state.clone().lock_arc().await,
+            MEMORY_MAX_STREAM_QUERIES,
+            id,
+        );
         StateView::load(context).await
     }
 }
@@ -186,6 +193,8 @@ impl StateStore for DynamoDbTestStore {
         let (context, _) = DynamoDbContext::from_config(
             self.localstack.dynamo_db_config(),
             "test_table".parse().expect("Invalid table name"),
+            Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+            DYNAMO_DB_MAX_STREAM_QUERIES,
             TEST_CACHE_SIZE,
             vec![0],
             id,
@@ -642,7 +651,7 @@ async fn test_views_in_key_value_store_view_memory() {
 async fn test_views_in_rocks_db_param(config: &TestConfig) {
     tracing::warn!("Testing config {:?} with rocksdb", config);
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbClient::new(&dir, TEST_CACHE_SIZE);
+    let client = RocksDbClient::new(&dir, ROCKS_DB_MAX_STREAM_QUERIES, TEST_CACHE_SIZE);
 
     let mut store = RocksDbTestStore::new(client);
     let hash = test_store(&mut store, config).await;
@@ -726,7 +735,7 @@ async fn test_store_rollback() {
     test_store_rollback_kernel(&mut store).await;
 
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbClient::new(&dir, TEST_CACHE_SIZE);
+    let client = RocksDbClient::new(&dir, ROCKS_DB_MAX_STREAM_QUERIES, TEST_CACHE_SIZE);
 
     let mut store = RocksDbTestStore::new(client);
     test_store_rollback_kernel(&mut store).await;
@@ -737,8 +746,7 @@ async fn test_collection_removal() -> anyhow::Result<()> {
     type EntryType = RegisterView<MemoryContext<()>, u8>;
     type CollectionViewType = CollectionView<MemoryContext<()>, u8, EntryType>;
 
-    let state = Arc::new(Mutex::new(BTreeMap::new()));
-    let context = MemoryContext::new(state.lock_arc().await, ());
+    let context = create_memory_context();
 
     // Write a dummy entry into the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
@@ -769,8 +777,7 @@ async fn test_removal_api_first_second_condition(
     type EntryType = RegisterView<MemoryContext<()>, u8>;
     type CollectionViewType = CollectionView<MemoryContext<()>, u8, EntryType>;
 
-    let state = Arc::new(Mutex::new(BTreeMap::new()));
-    let context = MemoryContext::new(state.lock_arc().await, ());
+    let context = create_memory_context();
 
     // First add an entry `1` with value `100` and commit
     let mut collection: CollectionViewType = CollectionView::load(context.clone()).await?;

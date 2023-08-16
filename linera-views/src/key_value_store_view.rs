@@ -21,7 +21,7 @@ use std::{
 #[cfg(any(test, feature = "test"))]
 use {
     crate::common::{ContextFromDb, KeyValueStoreClient},
-    crate::memory::{MemoryContext, MemoryStoreMap},
+    crate::memory::{MemoryContext, MemoryStoreMap, MEMORY_MAX_STREAM_QUERIES},
     async_lock::{MutexGuardArc, RwLock},
     std::sync::Arc,
 };
@@ -748,11 +748,14 @@ where
     C: Context + Sync + Send + Clone,
     ViewError: From<C::Error>,
 {
-    const MAX_CONNECTIONS: usize = C::MAX_CONNECTIONS;
     const MAX_VALUE_SIZE: usize = C::MAX_VALUE_SIZE;
     type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    fn max_stream_queries(&self) -> usize {
+        1
+    }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
         let view = self.view.read().await;
@@ -896,7 +899,7 @@ impl<E> KeyValueStoreMemoryContext<E> {
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<Self, ViewError> {
-        let context = MemoryContext::new(guard, ());
+        let context = MemoryContext::new(guard, MEMORY_MAX_STREAM_QUERIES, ());
         let key_value_store_view = ViewContainer::new(context).await?;
         Ok(Self {
             db: key_value_store_view,

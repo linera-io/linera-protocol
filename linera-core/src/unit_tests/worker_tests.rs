@@ -34,19 +34,25 @@ use linera_execution::{
     Message, Operation, Query, Response, SystemExecutionState, SystemQuery, SystemResponse,
 };
 use linera_storage::{MemoryStoreClient, Store};
-use linera_views::views::{CryptoHashView, ViewError};
+use linera_views::{
+    memory::MEMORY_MAX_STREAM_QUERIES,
+    views::{CryptoHashView, ViewError},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;
 
 #[cfg(feature = "rocksdb")]
-use linera_storage::RocksDbStoreClient;
+use {linera_storage::RocksDbStoreClient, linera_views::rocks_db::ROCKS_DB_MAX_STREAM_QUERIES};
 
 #[cfg(feature = "aws")]
 use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
 
 #[cfg(any(feature = "rocksdb", feature = "aws"))]
 use linera_views::lru_caching::TEST_CACHE_SIZE;
+
+#[cfg(feature = "aws")]
+use linera_views::dynamo_db::{DYNAMO_DB_MAX_CONCURRENT_QUERIES, DYNAMO_DB_MAX_STREAM_QUERIES};
 
 #[derive(Serialize, Deserialize)]
 struct Dummy;
@@ -296,7 +302,7 @@ fn channel_outgoing_message(name: ChannelName, message: SystemMessage) -> Outgoi
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_bad_signature() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_block_proposal_bad_signature(client).await;
 }
 
@@ -304,7 +310,12 @@ async fn test_memory_handle_block_proposal_bad_signature() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_bad_signature() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_block_proposal_bad_signature(client).await;
 }
 
@@ -316,6 +327,8 @@ async fn test_dynamo_db_handle_block_proposal_bad_signature() -> Result<(), anyh
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -372,7 +385,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_zero_amount() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_block_proposal_zero_amount(client).await;
 }
 
@@ -380,7 +393,12 @@ async fn test_memory_handle_block_proposal_zero_amount() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_zero_amount() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_block_proposal_zero_amount(client).await;
 }
 
@@ -392,6 +410,8 @@ async fn test_dynamo_db_handle_block_proposal_zero_amount() -> Result<(), anyhow
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -445,7 +465,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_ticks() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_block_proposal_ticks(client).await;
 }
 
@@ -453,7 +473,12 @@ async fn test_memory_handle_block_proposal_ticks() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_ticks() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_block_proposal_ticks(client).await;
 }
 
@@ -465,6 +490,8 @@ async fn test_dynamo_db_handle_block_proposal_ticks() -> Result<(), anyhow::Erro
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -556,7 +583,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_unknown_sender() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_block_proposal_unknown_sender(client).await;
 }
 
@@ -564,7 +591,12 @@ async fn test_memory_handle_block_proposal_unknown_sender() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_unknown_sender() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_block_proposal_unknown_sender(client).await;
 }
 
@@ -576,6 +608,8 @@ async fn test_dynamo_db_handle_block_proposal_unknown_sender() -> Result<(), any
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -632,7 +666,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_with_chaining() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_block_proposal_with_chaining(client).await;
 }
 
@@ -640,7 +674,12 @@ async fn test_memory_handle_block_proposal_with_chaining() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_with_chaining() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_block_proposal_with_chaining(client).await;
 }
 
@@ -652,6 +691,8 @@ async fn test_dynamo_db_handle_block_proposal_with_chaining() -> Result<(), anyh
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -751,7 +792,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_with_incoming_messages() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_block_proposal_with_incoming_messages(client).await;
 }
 
@@ -759,7 +800,12 @@ async fn test_memory_handle_block_proposal_with_incoming_messages() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_with_incoming_messages() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_block_proposal_with_incoming_messages(client).await;
 }
 
@@ -772,6 +818,8 @@ async fn test_dynamo_db_handle_block_proposal_with_incoming_messages() -> Result
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -1227,7 +1275,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_exceed_balance() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_block_proposal_exceed_balance(client).await;
 }
 
@@ -1235,7 +1283,12 @@ async fn test_memory_handle_block_proposal_exceed_balance() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_exceed_balance() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_block_proposal_exceed_balance(client).await;
 }
 
@@ -1247,6 +1300,8 @@ async fn test_dynamo_db_handle_block_proposal_exceed_balance() -> Result<(), any
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -1296,7 +1351,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_block_proposal(client).await;
 }
 
@@ -1304,7 +1359,12 @@ async fn test_memory_handle_block_proposal() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_block_proposal(client).await;
 }
 
@@ -1316,6 +1376,8 @@ async fn test_dynamo_db_handle_block_proposal() -> Result<(), anyhow::Error> {
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -1372,7 +1434,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_replay() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_block_proposal_replay(client).await;
 }
 
@@ -1380,7 +1442,12 @@ async fn test_memory_handle_block_proposal_replay() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_replay() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_block_proposal_replay(client).await;
 }
 
@@ -1392,6 +1459,8 @@ async fn test_dynamo_db_handle_block_proposal_replay() -> Result<(), anyhow::Err
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -1446,7 +1515,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_unknown_sender() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_certificate_unknown_sender(client).await;
 }
 
@@ -1454,7 +1523,12 @@ async fn test_memory_handle_certificate_unknown_sender() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_unknown_sender() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_certificate_unknown_sender(client).await;
 }
 
@@ -1466,6 +1540,8 @@ async fn test_dynamo_db_handle_certificate_unknown_sender() -> Result<(), anyhow
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -1505,7 +1581,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_bad_block_height() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_certificate_bad_block_height(client).await;
 }
 
@@ -1513,7 +1589,12 @@ async fn test_memory_handle_certificate_bad_block_height() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_bad_block_height() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_certificate_bad_block_height(client).await;
 }
 
@@ -1525,6 +1606,8 @@ async fn test_dynamo_db_handle_certificate_bad_block_height() -> Result<(), anyh
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -1576,7 +1659,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_with_anticipated_incoming_message() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_certificate_with_anticipated_incoming_message(client).await;
 }
 
@@ -1584,7 +1667,12 @@ async fn test_memory_handle_certificate_with_anticipated_incoming_message() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_with_anticipated_incoming_message() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_certificate_with_anticipated_incoming_message(client).await;
 }
 
@@ -1597,6 +1685,8 @@ async fn test_dynamo_db_handle_certificate_with_anticipated_incoming_message(
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -1717,7 +1807,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_receiver_balance_overflow() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_certificate_receiver_balance_overflow(client).await;
 }
 
@@ -1725,7 +1815,12 @@ async fn test_memory_handle_certificate_receiver_balance_overflow() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_receiver_balance_overflow() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_certificate_receiver_balance_overflow(client).await;
 }
 
@@ -1738,6 +1833,8 @@ async fn test_dynamo_db_handle_certificate_receiver_balance_overflow() -> Result
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -1816,7 +1913,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_receiver_equal_sender() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_certificate_receiver_equal_sender(client).await;
 }
 
@@ -1824,7 +1921,12 @@ async fn test_memory_handle_certificate_receiver_equal_sender() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_receiver_equal_sender() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_certificate_receiver_equal_sender(client).await;
 }
 
@@ -1836,6 +1938,8 @@ async fn test_dynamo_db_handle_certificate_receiver_equal_sender() -> Result<(),
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -1919,7 +2023,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_cross_chain_request() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_cross_chain_request(client).await;
 }
 
@@ -1927,7 +2031,12 @@ async fn test_memory_handle_cross_chain_request() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_cross_chain_request() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_cross_chain_request(client).await;
 }
 
@@ -1939,6 +2048,8 @@ async fn test_dynamo_db_handle_cross_chain_request() -> Result<(), anyhow::Error
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -2029,7 +2140,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_cross_chain_request_no_recipient_chain() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_cross_chain_request_no_recipient_chain(client).await;
 }
 
@@ -2037,7 +2148,12 @@ async fn test_memory_handle_cross_chain_request_no_recipient_chain() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_cross_chain_request_no_recipient_chain() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_cross_chain_request_no_recipient_chain(client).await;
 }
 
@@ -2050,6 +2166,8 @@ async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain() -> Resul
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -2095,7 +2213,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_cross_chain_request_no_recipient_chain_on_client() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
 }
 
@@ -2103,7 +2221,12 @@ async fn test_memory_handle_cross_chain_request_no_recipient_chain_on_client() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_cross_chain_request_no_recipient_chain_on_client() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
 }
 
@@ -2116,6 +2239,8 @@ async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain_on_client(
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -2173,7 +2298,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_to_active_recipient() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_certificate_to_active_recipient(client).await;
 }
 
@@ -2181,7 +2306,12 @@ async fn test_memory_handle_certificate_to_active_recipient() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_to_active_recipient() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_certificate_to_active_recipient(client).await;
 }
 
@@ -2193,6 +2323,8 @@ async fn test_dynamo_db_handle_certificate_to_active_recipient() -> Result<(), a
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -2356,7 +2488,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_to_inactive_recipient() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_certificate_to_inactive_recipient(client).await;
 }
 
@@ -2364,7 +2496,12 @@ async fn test_memory_handle_certificate_to_inactive_recipient() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_to_inactive_recipient() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_handle_certificate_to_inactive_recipient(client).await;
 }
 
@@ -2376,6 +2513,8 @@ async fn test_dynamo_db_handle_certificate_to_inactive_recipient() -> Result<(),
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -2426,7 +2565,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_chain_creation_with_committee_creation() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_chain_creation_with_committee_creation(client).await;
 }
 
@@ -2434,7 +2573,12 @@ async fn test_memory_chain_creation_with_committee_creation() {
 #[test(tokio::test)]
 async fn test_rocks_db_chain_creation_with_committee_creation() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_chain_creation_with_committee_creation(client).await;
 }
 
@@ -2446,6 +2590,8 @@ async fn test_dynamo_db_chain_creation_with_committee_creation() -> Result<(), a
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -2916,7 +3062,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfers_and_committee_creation() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_transfers_and_committee_creation(client).await;
 }
 
@@ -2924,7 +3070,12 @@ async fn test_memory_transfers_and_committee_creation() {
 #[test(tokio::test)]
 async fn test_rocks_db_transfers_and_committee_creation() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_transfers_and_committee_creation(client).await;
 }
 
@@ -2936,6 +3087,8 @@ async fn test_dynamo_db_transfers_and_committee_creation() -> Result<(), anyhow:
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -3104,7 +3257,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfers_and_committee_removal() {
-    let client = MemoryStoreClient::new(None);
+    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
     run_test_transfers_and_committee_removal(client).await;
 }
 
@@ -3112,7 +3265,12 @@ async fn test_memory_transfers_and_committee_removal() {
 #[test(tokio::test)]
 async fn test_rocks_db_transfers_and_committee_removal() {
     let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(dir.path().to_path_buf(), None, TEST_CACHE_SIZE);
+    let client = RocksDbStoreClient::new(
+        dir.path().to_path_buf(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     run_test_transfers_and_committee_removal(client).await;
 }
 
@@ -3124,6 +3282,8 @@ async fn test_dynamo_db_transfers_and_committee_removal() -> Result<(), anyhow::
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )
@@ -3361,7 +3521,10 @@ where
 #[test(tokio::test)]
 async fn test_cross_chain_helper() {
     // Make a committee and worker (only used for signing certificates)
-    let (committee, worker) = init_worker(MemoryStoreClient::new(None), true);
+    let (committee, worker) = init_worker(
+        MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES),
+        true,
+    );
     let committees = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
 
     let key_pair0 = KeyPair::generate();

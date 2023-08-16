@@ -599,6 +599,14 @@ struct ClientOptions {
     #[structopt(long)]
     wasm_runtime: Option<WasmRuntime>,
 
+    /// The maximal number of simultaneous queries to the database
+    #[structopt(long)]
+    max_concurrent_queries: Option<usize>,
+
+    /// The maximal number of simultaneous stream queries to the database
+    #[structopt(long, default_value = "10")]
+    max_stream_queries: usize,
+
     /// The maximal number of entries in the storage cache.
     #[structopt(long, default_value = "1000")]
     cache_size: usize,
@@ -1676,12 +1684,16 @@ async fn run_command_with_storage(options: ClientOptions) -> Result<(), Error> {
     let genesis_config = context.wallet_state.genesis_config().clone();
     let wasm_runtime = options.wasm_runtime.with_wasm_default();
     let cache_size = options.cache_size;
+    let max_concurrent_queries = options.max_concurrent_queries;
+    let max_stream_queries = options.max_stream_queries;
     let storage_config = ClientContext::storage_config(&options)?;
 
     storage_config
         .run_with_storage(
             &genesis_config,
             wasm_runtime,
+            max_concurrent_queries,
+            max_stream_queries,
             cache_size,
             Job(context, options.command),
         )

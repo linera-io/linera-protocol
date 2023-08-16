@@ -12,6 +12,7 @@ use std::collections::HashSet;
 #[cfg(feature = "aws")]
 use {
     crate::dynamo_db::DynamoDbClient,
+    crate::dynamo_db::{DYNAMO_DB_MAX_CONCURRENT_QUERIES, DYNAMO_DB_MAX_STREAM_QUERIES},
     crate::lru_caching::TEST_CACHE_SIZE,
     anyhow::{Context, Error},
     aws_sdk_s3::Endpoint,
@@ -144,6 +145,8 @@ pub async fn create_dynamodb_test_client() -> DynamoDbClient {
     let (key_value_operation, _) = DynamoDbClient::from_config(
         localstack.dynamo_db_config(),
         "test_table".parse().expect("Invalid table name"),
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
     )
     .await

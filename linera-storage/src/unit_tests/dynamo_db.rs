@@ -4,7 +4,11 @@
 use super::DynamoDbStoreClient;
 use crate::Store;
 use linera_base::identifiers::ChainId;
-use linera_views::{lru_caching::TEST_CACHE_SIZE, test_utils::LocalStackTestContext};
+use linera_views::{
+    dynamo_db::{DYNAMO_DB_MAX_CONCURRENT_QUERIES, DYNAMO_DB_MAX_STREAM_QUERIES},
+    lru_caching::TEST_CACHE_SIZE,
+    test_utils::LocalStackTestContext,
+};
 use std::mem;
 
 /// Tests if released guards don't use memory.
@@ -15,6 +19,8 @@ async fn guards_dont_leak() -> Result<(), anyhow::Error> {
     let (store, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
+        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         None,
     )

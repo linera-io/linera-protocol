@@ -76,6 +76,8 @@ impl StorageConfig {
         &self,
         config: &GenesisConfig,
         wasm_runtime: Option<WasmRuntime>,
+        max_concurrent_queries: Option<usize>,
+        max_stream_queries: usize,
         cache_size: usize,
         job: Job,
     ) -> Result<Output, anyhow::Error>
@@ -85,7 +87,7 @@ impl StorageConfig {
         use StorageConfig::*;
         match self {
             Memory => {
-                let mut client = MemoryStoreClient::new(wasm_runtime);
+                let mut client = MemoryStoreClient::new(wasm_runtime, max_stream_queries);
                 config.initialize_store(&mut client).await?;
                 job.run(client).await
             }
@@ -99,7 +101,12 @@ impl StorageConfig {
                     true
                 };
 
-                let mut client = RocksDbStoreClient::new(path.clone(), wasm_runtime, cache_size);
+                let mut client = RocksDbStoreClient::new(
+                    path.clone(),
+                    wasm_runtime,
+                    max_stream_queries,
+                    cache_size,
+                );
                 if is_new_dir {
                     config.initialize_store(&mut client).await?;
                 }
@@ -114,13 +121,22 @@ impl StorageConfig {
                     true => {
                         DynamoDbStoreClient::with_localstack(
                             table.clone(),
+                            max_concurrent_queries,
+                            max_stream_queries,
                             cache_size,
                             wasm_runtime,
                         )
                         .await?
                     }
                     false => {
-                        DynamoDbStoreClient::new(table.clone(), cache_size, wasm_runtime).await?
+                        DynamoDbStoreClient::new(
+                            table.clone(),
+                            max_concurrent_queries,
+                            max_stream_queries,
+                            cache_size,
+                            wasm_runtime,
+                        )
+                        .await?
                     }
                 };
                 if table_status == TableStatus::New {

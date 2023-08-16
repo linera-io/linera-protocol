@@ -4,7 +4,7 @@
 use super::RocksDbStoreClient;
 use crate::Store;
 use linera_base::identifiers::ChainId;
-use linera_views::lru_caching::TEST_CACHE_SIZE;
+use linera_views::{lru_caching::TEST_CACHE_SIZE, rocks_db::ROCKS_DB_MAX_STREAM_QUERIES};
 use std::mem;
 use tempfile::TempDir;
 
@@ -12,7 +12,12 @@ use tempfile::TempDir;
 #[tokio::test]
 async fn guards_dont_leak() -> Result<(), anyhow::Error> {
     let directory = TempDir::new()?;
-    let store = RocksDbStoreClient::new(directory.path().to_owned(), None, TEST_CACHE_SIZE);
+    let store = RocksDbStoreClient::new(
+        directory.path().to_owned(),
+        None,
+        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_CACHE_SIZE,
+    );
     let chain_id = ChainId::root(1);
     // There should be no active guards when initialized
     assert_eq!(store.client.guards.active_guards(), 0);

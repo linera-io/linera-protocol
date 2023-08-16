@@ -19,7 +19,7 @@ use std::{
 #[cfg(any(test, feature = "test"))]
 use {
     crate::common::ContextFromDb,
-    crate::memory::{MemoryClient, MemoryStoreMap},
+    crate::memory::{MemoryClient, MemoryStoreMap, MEMORY_MAX_STREAM_QUERIES},
     crate::views::ViewError,
     async_lock::MutexGuardArc,
 };
@@ -96,12 +96,15 @@ impl<K> KeyValueStoreClient for LruCachingKeyValueClient<K>
 where
     K: KeyValueStoreClient + Send + Sync,
 {
-    const MAX_CONNECTIONS: usize = K::MAX_CONNECTIONS;
     // The LRU cache does not change the underlying client's size limit.
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
     type Error = K::Error;
     type Keys = K::Keys;
     type KeyValues = K::KeyValues;
+
+    fn max_stream_queries(&self) -> usize {
+        self.client.max_stream_queries()
+    }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         match &self.lru_read_keys {
@@ -236,7 +239,7 @@ impl<E> LruCachingMemoryContext<E> {
         extra: E,
         n: usize,
     ) -> Result<Self, ViewError> {
-        let client = MemoryClient::new(guard);
+        let client = MemoryClient::new(guard, MEMORY_MAX_STREAM_QUERIES);
         let lru_client = LruCachingKeyValueClient::new(client, n);
         Ok(Self {
             db: lru_client,

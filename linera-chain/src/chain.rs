@@ -214,6 +214,7 @@ where
         let origins = self.inboxes.indices().await?;
         let inboxes = self.inboxes.try_load_entries(&origins).await?;
         let stream = origins.into_iter().zip(inboxes);
+        let max_stream_queries = self.context().max_stream_queries();
         let stream = stream::iter(stream)
             .map(|(origin, inbox)| async move {
                 if let Some(event) = inbox.removed_events.front().await? {
@@ -225,7 +226,7 @@ where
                 }
                 Ok::<(), ChainError>(())
             })
-            .buffer_unordered(C::MAX_CONNECTIONS);
+            .buffer_unordered(max_stream_queries);
         stream.try_collect::<Vec<_>>().await?;
         Ok(())
     }
@@ -556,6 +557,7 @@ where
     where
         F: Fn(E) -> Message,
     {
+        let max_stream_queries = self.context().max_stream_queries();
         // Record the messages of the execution. Messages are understood within an
         // application.
         let mut recipients = HashSet::new();
@@ -628,7 +630,7 @@ where
                     .collect::<Vec<_>>();
                 Ok::<_, ChainError>(targets)
             })
-            .buffer_unordered(C::MAX_CONNECTIONS);
+            .buffer_unordered(max_stream_queries);
         let infos = stream.try_collect::<Vec<_>>().await?;
         let targets = infos.into_iter().flatten().collect::<Vec<_>>();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
@@ -666,7 +668,7 @@ where
                 }
                 Ok::<_, ChainError>(result)
             })
-            .buffer_unordered(C::MAX_CONNECTIONS);
+            .buffer_unordered(max_stream_queries);
         let infos = stream.try_collect::<Vec<_>>().await?;
         let (targets, heights): (Vec<_>, Vec<_>) = infos.into_iter().flatten().unzip();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
