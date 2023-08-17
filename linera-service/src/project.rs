@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::util;
 use anyhow::{anyhow, bail, Context, Result};
 use cargo_toml::Manifest;
 use current_platform::CURRENT_PLATFORM;
@@ -143,17 +144,7 @@ impl Project {
     }
 
     fn runner_path() -> Result<PathBuf> {
-        Self::cargo_home().map(|cargo_home| cargo_home.join("bin").join(RUNNER_BIN_NAME))
-    }
-
-    fn cargo_home() -> Result<PathBuf> {
-        if let Ok(cargo_home) = std::env::var("CARGO_HOME") {
-            Ok(PathBuf::from(cargo_home))
-        } else if let Some(home) = dirs::home_dir() {
-            Ok(home.join(".cargo"))
-        } else {
-            bail!("could not find CARGO_HOME directory, please specify it explicitly")
-        }
+        util::resolve_cargo_binary(RUNNER_BIN_NAME)
     }
 
     fn create_source_directory(project_root: &Path) -> Result<PathBuf> {

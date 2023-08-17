@@ -37,11 +37,14 @@ linera-rpc = { workspace = true }
 linera-storage = { workspace = true }
 linera-views = { workspace = true }
 metrics-exporter-tcp = { workspace = true }
+once_cell = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
 tracing = { workspace = true }
 parse_duration = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 structopt = { workspace = true }
+tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = { workspace = true }
@@ -64,10 +67,8 @@ linera-execution = { workspace = true, features = ["test"] }
 linera-rpc = { workspace = true, features = ["test"] }
 linera-storage = { workspace = true, features = ["test"] }
 linera-views = { workspace = true, features = ["test"] }
-once_cell = { workspace = true }
 proptest = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
-tempfile = { workspace = true }
 test-log = { workspace = true, features = ["trace"] }
 test-strategy = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
