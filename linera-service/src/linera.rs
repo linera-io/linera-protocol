@@ -1705,15 +1705,15 @@ async fn main() -> Result<(), anyhow::Error> {
                 client2.wallet_init(&[]).await?;
 
                 // Create initial server and client config.
-                net.run_local_net().await?;
+                net.run().await?;
                 let net_path = net.net_path();
 
-                println!(
+                eprintln!(
                     "\nLinera net directory available at: {}",
                     net_path.display()
                 );
-                println!("To configure your Linera client for this network, run:\n");
-                println!(
+                eprintln!("To configure your Linera client for this network, run:\n");
+                eprintln!(
                     "{}",
                     format!(
                         "export LINERA_WALLET=\"{}\"",
@@ -1721,7 +1721,7 @@ async fn main() -> Result<(), anyhow::Error> {
                     )
                     .bold()
                 );
-                println!(
+                eprintln!(
                     "{}",
                     format!(
                         "export LINERA_STORAGE=\"rocksdb:{}\"",

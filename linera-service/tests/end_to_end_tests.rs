@@ -5,7 +5,7 @@
 #![cfg_attr(not(any(feature = "wasmer", feature = "wasmtime")), allow(dead_code))]
 use linera_base::identifiers::ChainId;
 use linera_service::{
-    client::{cargo_build_binary, Client, LocalNetwork, Network},
+    client::{cargo_build_binary, ClientWrapper, LocalNetwork, Network},
     node_service::Chains,
 };
 use once_cell::sync::Lazy;
@@ -27,7 +27,7 @@ use {
     tracing::{info, warn},
 };
 
-fn get_fungible_account_owner(client: &Client) -> fungible::AccountOwner {
+fn get_fungible_account_owner(client: &ClientWrapper) -> fungible::AccountOwner {
     let owner = client.get_owner().unwrap();
     fungible::AccountOwner::User(owner)
 }
@@ -179,7 +179,7 @@ async fn test_end_to_end_chains_query() {
         format!("{{\"data\":{{\"chains\":{}}}}}", chains)
     };
 
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
 
     let query = make_graphql_query("../linera-explorer/graphql/chains.graphql", "Chains", &[]);
@@ -198,7 +198,7 @@ async fn test_end_to_end_applications_query() {
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
 
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
     let chain = client.get_wallet().default_chain().unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
 
@@ -224,7 +224,7 @@ async fn test_end_to_end_blocks_query() {
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
 
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
     let chain = client.get_wallet().default_chain().unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
 
@@ -250,7 +250,7 @@ async fn test_end_to_end_block_query() {
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
 
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
     let chain = client.get_wallet().default_chain().unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
 
@@ -302,7 +302,7 @@ async fn test_end_to_end_counter() {
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
     let chain = client.get_wallet().default_chain().unwrap();
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
     let (contract, service) = local_net.build_example("counter").await.unwrap();
 
     let application_id = client
@@ -351,7 +351,7 @@ async fn test_end_to_end_counter_publish_create() {
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
     let chain = client.get_wallet().default_chain().unwrap();
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
     let (contract, service) = local_net.build_example("counter").await.unwrap();
 
     let bytecode_id = client
@@ -396,7 +396,7 @@ async fn test_end_to_end_multiple_wallets() {
     client_2.wallet_init(&[]).await.unwrap();
 
     // Start local network.
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
 
     // Get some chain owned by Client 1.
     let chain_1 = *client_1.get_wallet().chain_ids().first().unwrap();
@@ -454,7 +454,7 @@ async fn test_reconfiguration(network: Network) {
     let servers = local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
     client_2.wallet_init(&[]).await.unwrap();
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
 
     let chain_1 = client.get_wallet().default_chain().unwrap();
 
@@ -560,7 +560,7 @@ async fn test_open_chain_node_service() {
     let client = local_net.make_client(network);
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
 
     let default_chain = client.get_wallet().default_chain().unwrap();
     let public_key = client
@@ -657,7 +657,7 @@ async fn test_end_to_end_social_user_pub_sub() {
     client2.wallet_init(&[]).await.unwrap();
 
     // Start local network.
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
     let (contract, service) = local_net.build_example("social").await.unwrap();
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
@@ -740,7 +740,7 @@ async fn test_end_to_end_retry_notification_stream() {
     client2.wallet_init(&[chain]).await.unwrap();
 
     // Start local network.
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
     let mut node_service2 = client2.run_node_service(8081).await.unwrap();
@@ -800,7 +800,7 @@ async fn test_end_to_end_fungible() {
     client2.wallet_init(&[]).await.unwrap();
 
     // Create initial server and client config.
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
     let (contract, service) = local_net.build_example("fungible").await.unwrap();
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
@@ -920,7 +920,7 @@ async fn test_end_to_end_same_wallet_fungible() {
     client1.create_genesis_config().await.unwrap();
 
     // Create initial server and client config.
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
     let (contract, service) = local_net.build_example("fungible").await.unwrap();
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
@@ -1007,7 +1007,7 @@ async fn test_end_to_end_crowd_funding() {
     client2.wallet_init(&[]).await.unwrap();
 
     // Create initial server and client config.
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
     let (contract_fungible, service_fungible) = local_net.build_example("fungible").await.unwrap();
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
@@ -1140,7 +1140,7 @@ async fn test_end_to_end_matching_engine() {
     client_b.wallet_init(&[]).await.unwrap();
 
     // Create initial server and client config.
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
     let (contract_fungible, service_fungible) = local_net.build_example("fungible").await.unwrap();
     let (contract_matching, service_matching) =
         local_net.build_example("matching-engine").await.unwrap();
@@ -1407,7 +1407,7 @@ async fn test_project_publish() {
 
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
 
     let tmp_dir = client.project_new("init-test").await.unwrap();
     let project_dir = tmp_dir.path().join("init-test");
@@ -1433,7 +1433,7 @@ async fn test_example_publish() {
 
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
-    local_net.run_local_net().await.unwrap();
+    local_net.run().await.unwrap();
 
     let example_dir = LocalNetwork::example_path("counter").unwrap();
     client
@@ -1463,7 +1463,7 @@ async fn test_end_to_end_open_multi_owner_chain() {
     client2.wallet_init(&[]).await.unwrap();
 
     // Start local network.
-    runner.run_local_net().await.unwrap();
+    runner.run().await.unwrap();
 
     let chain1 = *client1.get_wallet().chain_ids().first().unwrap();
 

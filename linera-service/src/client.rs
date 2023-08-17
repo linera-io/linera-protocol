@@ -34,15 +34,15 @@ use tracing::{info, warn};
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
 /// to `cargo` when starting client, server and proxy processes.
-pub const CARGO_ENV: &str = "INTEGRATION_TEST_CARGO_PARAMS";
+pub const CARGO_ENV: &str = "LOCAL_NET_CARGO_PARAMS";
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
 /// to the binary when starting a server.
-const SERVER_ENV: &str = "INTEGRATION_TEST_SERVER_PARAMS";
+const SERVER_ENV: &str = "LOCAL_NET_SERVER_PARAMS";
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
 /// to the node-service command of the client.
-const CLIENT_SERVICE_ENV: &str = "INTEGRATION_TEST_CLIENT_SERVICE_PARAMS";
+const CLIENT_SERVICE_ENV: &str = "LOCAL_NET_CLIENT_SERVICE_PARAMS";
 
 #[derive(Copy, Clone)]
 pub enum Network {
@@ -73,7 +73,7 @@ impl Network {
     }
 }
 
-pub struct Client {
+pub struct ClientWrapper {
     tmp_dir: Rc<TempDir>,
     storage: String,
     wallet: String,
@@ -81,7 +81,7 @@ pub struct Client {
     network: Network,
 }
 
-impl Client {
+impl ClientWrapper {
     fn new(tmp_dir: Rc<TempDir>, network: Network, id: usize) -> Self {
         Self {
             tmp_dir,
@@ -377,7 +377,7 @@ impl Client {
         Ok((message_id, chain_id))
     }
 
-    pub async fn open_and_assign(&self, client: &Client) -> Result<ChainId> {
+    pub async fn open_and_assign(&self, client: &ClientWrapper) -> Result<ChainId> {
         let our_chain = self
             .get_wallet()
             .default_chain()
@@ -540,8 +540,8 @@ impl LocalNetwork {
         })
     }
 
-    pub fn make_client(&mut self, network: Network) -> Client {
-        let client = Client::new(self.tmp_dir.clone(), network, self.next_client_id);
+    pub fn make_client(&mut self, network: Network) -> ClientWrapper {
+        let client = ClientWrapper::new(self.tmp_dir.clone(), network, self.next_client_id);
         self.next_client_id += 1;
         client
     }
@@ -715,7 +715,7 @@ impl LocalNetwork {
         Ok(child)
     }
 
-    pub async fn run_local_net(&mut self) -> Result<()> {
+    pub async fn run(&mut self) -> Result<()> {
         self.start_validators(1..=self.num_initial_validators).await
     }
 
