@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use async_graphql::InputType;
 use linera_base::{
     abi::ContractAbi,
+    crypto::PublicKey,
     identifiers::{ChainId, MessageId, Owner},
 };
 use linera_execution::Bytecode;
@@ -358,15 +359,15 @@ impl ClientWrapper {
     pub async fn open_chain(
         &self,
         from: ChainId,
-        to_owner: Option<Owner>,
+        to_public_key: Option<PublicKey>,
     ) -> Result<(MessageId, ChainId)> {
         let mut command = self.run_with_storage().await?;
         command
             .arg("open-chain")
             .args(["--from", &from.to_string()]);
 
-        if let Some(owner) = to_owner {
-            command.args(["--to-public-key", &owner.to_string()]);
+        if let Some(public_key) = to_public_key {
+            command.args(["--to-public-key", &public_key.to_string()]);
         }
 
         let stdout = Self::run_command(&mut command).await?;
@@ -391,14 +392,14 @@ impl ClientWrapper {
     pub async fn open_multi_owner_chain(
         &self,
         from: ChainId,
-        to_owners: Vec<Owner>,
+        to_public_keys: Vec<PublicKey>,
     ) -> Result<(MessageId, ChainId)> {
         let mut command = self.run_with_storage().await?;
         command
             .arg("open-multi-owner-chain")
             .args(["--from", &from.to_string()])
             .arg("--to-public-keys")
-            .args(to_owners.iter().map(Owner::to_string));
+            .args(to_public_keys.iter().map(PublicKey::to_string));
 
         let stdout = Self::run_command(&mut command).await?;
         let mut split = stdout.split('\n');
@@ -448,17 +449,17 @@ impl ClientWrapper {
         Ok(())
     }
 
-    pub async fn keygen(&self) -> Result<Owner> {
+    pub async fn keygen(&self) -> Result<PublicKey> {
         let stdout = Self::run_command(self.run().await?.arg("keygen")).await?;
-        Ok(Owner::from_str(stdout.trim())?)
+        Ok(PublicKey::from_str(stdout.trim())?)
     }
 
-    pub async fn assign(&self, owner: Owner, message_id: MessageId) -> Result<ChainId> {
+    pub async fn assign(&self, key: PublicKey, message_id: MessageId) -> Result<ChainId> {
         let stdout = Self::run_command(
             self.run_with_storage()
                 .await?
                 .arg("assign")
-                .args(["--key", &owner.to_string()])
+                .args(["--key", &key.to_string()])
                 .args(["--message-id", &message_id.to_string()]),
         )
         .await?;
