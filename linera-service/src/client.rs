@@ -149,7 +149,7 @@ impl ClientWrapper {
     }
 
     async fn run(&self) -> Result<Command> {
-        let path = cargo_build_binary("linera").await;
+        let path = resolve_binary("linera").await?;
         let mut command = Command::new(path);
         command
             .current_dir(&self.tmp_dir.path().canonicalize()?)
@@ -547,7 +547,7 @@ impl LocalNetwork {
     }
 
     async fn command_for_binary(&self, name: &'static str) -> Result<Command> {
-        let path = cargo_build_binary(name).await;
+        let path = resolve_binary(name).await?;
         let mut command = Command::new(path);
         command
             .current_dir(&self.tmp_dir.path().canonicalize()?)
@@ -1006,6 +1006,16 @@ async fn cargo_force_build_binary(name: &'static str) -> PathBuf {
             .canonicalize()
             .unwrap()
     }
+}
+
+#[cfg(debug_assertions)]
+pub async fn resolve_binary(name: &'static str) -> Result<PathBuf> {
+    Ok(cargo_build_binary(name).await)
+}
+
+#[cfg(not(debug_assertions))]
+pub async fn resolve_binary(name: &'static str) -> Result<PathBuf> {
+    crate::util::resolve_cargo_binary(name)
 }
 
 pub async fn cargo_build_binary(name: &'static str) -> PathBuf {
