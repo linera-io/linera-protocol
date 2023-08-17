@@ -136,6 +136,40 @@ cargo build --release --target wasm32-unknown-unknown
 ```
 The Rust flags are suggested to reduce the size of the WASM bytecodes.
 
+## Debugging techniques
+
+The debugging of tests can be complicated and some tools can help this.
+
+### Runtime limitation
+
+A test that goes into an infinite loop will never finish which besides being difficult to resolve makes it impossible
+to see the print statements of your code. A useful tool for that is to use the crates [ntest](https://crates.io/crates/ntest) with the following
+command added just before the line declaring the test
+```
+#[ntest::timeout(600000)]
+```
+If the test lasts longer than the fixed time then it fails. The unit of time is milisecond, so the `600000` corresponds
+to `600` seconds and so to `10` minutes.
+
+## Tracking simultaneous threads in `tokio`
+
+The running of what is going on in `tokio` based programs can be difficult. The [tokio-console](https://crates.io/crates/tokio-console) crates allows to see
+the different threads going on. See [documentation of the user interface of tokio-console](https://docs.rs/tokio-console/0.1.9/tokio_console/) for more details.
+
+A simple way to use this on a laptop is the following:
+
+1. First of all install the program `tokio-console` via `cargo install --locked tokio-console`.
+2. Replace `tokio = "1.25.0"` by `tokio = { version = "1.25.0", features = ["full", "tracing"] }` in `Cargo.toml`
+3. Add `tokio-console = "0.1.9"` and `console-subscriber = "0.1.10"` to `Cargo.toml`
+4. Add `console-subscriber = { workspace = true }` to the relevant `Cargo.toml` subspace
+5. For the asynchronous tests in question, they have to be of the form `#[tokio::test]`. Tests of the form `#[test_log::test(tokio::test)]` are using a different instrumentation and we can use only one instrumentation at a time. The error is at runtime.
+6. For the test in question add the line `console_subscriber::init();` at the first line of the test.
+7. Run the test in question as usual.
+8. Then on a separate terminal, run the program tokio-console (which will listen to `http://127.0.0.1:6669/`).
+
+For example if the test blocks, it will show the line in question with `block_on`.
+See the documentation of `tokio-console` for more details.
+
 ## Adding dependencies to third-party crates
 
 Given the nature of the project, every dependency will be eventually tracked and audited.
