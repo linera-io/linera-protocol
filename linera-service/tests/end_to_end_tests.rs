@@ -3,24 +3,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg_attr(not(any(feature = "wasmer", feature = "wasmtime")), allow(dead_code))]
-use async_graphql::InputType;
 use linera_base::identifiers::ChainId;
-use linera_service::{client::cargo_build_binary, node_service::Chains};
+use linera_service::{
+    client::{cargo_build_binary, Client, LocalNetwork, Network},
+    node_service::Chains,
+};
 use once_cell::sync::Lazy;
-use serde_json::{json, Value};
-use std::{collections::BTreeMap, io::prelude::*, time::Duration};
+use std::{io::prelude::*, time::Duration};
 use tokio::{process::Command, sync::Mutex};
-use tracing::{info, warn};
 
 /// A static lock to prevent integration tests from running in parallel.
 pub static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
-use linera_base::{
-    data_types::{Amount, Timestamp},
-    identifiers::ApplicationId,
+use {
+    async_graphql::InputType,
+    linera_base::{
+        data_types::{Amount, Timestamp},
+        identifiers::ApplicationId,
+    },
+    serde_json::{json, Value},
+    std::collections::BTreeMap,
+    tracing::{info, warn},
 };
-use linera_service::client::{Client, LocalNetwork, Network};
 
 fn get_fungible_account_owner(client: &Client) -> fungible::AccountOwner {
     let owner = client.get_owner().unwrap();
