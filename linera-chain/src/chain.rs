@@ -354,7 +354,7 @@ where
         timestamp: Timestamp,
     ) -> Result<(), ChainError> {
         if let Message::System(SystemMessage::OpenChain {
-            public_key,
+            ownership,
             epoch,
             committees,
             admin_id,
@@ -363,7 +363,7 @@ where
             // Initialize ourself.
             self.execution_state.system.open_chain(
                 message_id,
-                *public_key,
+                ownership.clone(),
                 *epoch,
                 committees.clone(),
                 *admin_id,

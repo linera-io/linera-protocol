@@ -32,8 +32,8 @@ use linera_core::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{AdminOperation, Recipient, SystemChannel, UserData},
-    Bytecode, Operation, Query, Response, SystemOperation, UserApplicationDescription,
-    UserApplicationId,
+    Bytecode, ChainOwnership, Operation, Query, Response, SystemOperation,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -285,7 +285,23 @@ where
     /// This will automatically subscribe to the future committees created by `admin_id`.
     async fn open_chain(&self, chain_id: ChainId, public_key: PublicKey) -> Result<ChainId, Error> {
         let mut client = self.clients.try_client_lock(&chain_id).await?;
-        let (message_id, _) = client.open_chain(public_key).await?;
+        let ownership = ChainOwnership::single(public_key);
+        let (message_id, _) = client.open_chain(ownership).await?;
+        Ok(ChainId::child(message_id))
+    }
+
+    /// Creates (or activates) a new chain by installing the given authentication keys.
+    /// This will automatically subscribe to the future committees created by `admin_id`.
+    async fn open_multi_owner_chain(
+        &self,
+        chain_id: ChainId,
+        public_keys: Vec<PublicKey>,
+    ) -> Result<ChainId, Error> {
+        let Some(mut client) = self.clients.client_lock(&chain_id).await else {
+            return Err(Error::new("Unknown chain ID"));
+        };
+        let ownership = ChainOwnership::multiple(public_keys);
+        let (message_id, _) = client.open_chain(ownership).await?;
         Ok(ChainId::child(message_id))
     }
 

@@ -476,6 +476,26 @@ impl Client {
         Ok((message_id, chain_id))
     }
 
+    async fn open_multi_owner_chain(
+        &self,
+        from: ChainId,
+        to_owners: Vec<Owner>,
+    ) -> anyhow::Result<(MessageId, ChainId)> {
+        let mut command = self.run_with_storage().await;
+        command
+            .arg("open-multi-owner-chain")
+            .args(["--from", &from.to_string()])
+            .arg("--to-public-keys")
+            .args(to_owners.iter().map(Owner::to_string));
+
+        let stdout = Self::run_command(&mut command).await;
+        let mut split = stdout.split('\n');
+        let message_id: MessageId = split.next().unwrap().parse()?;
+        let chain_id = ChainId::from_str(split.next().unwrap())?;
+
+        Ok((message_id, chain_id))
+    }
+
     async fn open_and_assign(&self, client: &Client) -> ChainId {
         let our_chain = self.get_wallet().default_chain().unwrap();
         let key = client.keygen().await.unwrap();
@@ -2363,4 +2383,65 @@ async fn test_example_publish() {
     let node_service = client.run_node_service(None).await;
 
     assert_eq!(node_service.try_get_applications_uri(&chain).await.len(), 1)
+}
+
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_open_multi_owner_chain() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    // Create runner and two clients.
+    let mut runner = TestRunner::new(Network::Grpc, 4);
+    let client1 = runner.make_client(Network::Grpc);
+    let client2 = runner.make_client(Network::Grpc);
+
+    // Create initial server and client config.
+    runner.generate_initial_validator_config().await;
+    client1.create_genesis_config().await;
+    client2.wallet_init(&[]).await;
+
+    // Start local network.
+    runner.run_local_net().await;
+
+    let chain1 = *client1.get_wallet().chain_ids().first().unwrap();
+
+    // Generate keys for both clients.
+    let client1_key = client1.keygen().await.unwrap();
+    let client2_key = client2.keygen().await.unwrap();
+
+    // Open chain on behalf of Client 2.
+    let (message_id, chain2) = client1
+        .open_multi_owner_chain(chain1, vec![client1_key, client2_key])
+        .await
+        .unwrap();
+
+    // Assign chain2 to client1_key.
+    assert_eq!(
+        chain2,
+        client1.assign(client1_key, message_id).await.unwrap()
+    );
+
+    // Assign chain2 to client2_key.
+    assert_eq!(
+        chain2,
+        client2.assign(client2_key, message_id).await.unwrap()
+    );
+
+    // Transfer 6 units from Chain 1 to Chain 2.
+    client1.transfer("6", chain1, chain2).await;
+    client2.synchronize_balance(chain2).await;
+
+    assert_eq!(client1.query_balance(chain1).await.unwrap(), "4.");
+    assert_eq!(client1.query_balance(chain2).await.unwrap(), "6.");
+    assert_eq!(client2.query_balance(chain2).await.unwrap(), "6.");
+
+    // Transfer 2 + 1 units from Chain 2 to Chain 1 using both clients.
+    client2.transfer("2", chain2, chain1).await;
+    client1.transfer("1", chain2, chain1).await;
+    client1.synchronize_balance(chain1).await;
+    client2.synchronize_balance(chain2).await;
+
+    assert_eq!(client1.query_balance(chain1).await.unwrap(), "7.");
+    assert_eq!(client1.query_balance(chain2).await.unwrap(), "3.");
+    assert_eq!(client2.query_balance(chain2).await.unwrap(), "3.");
 }

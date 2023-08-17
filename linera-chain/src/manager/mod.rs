@@ -55,7 +55,11 @@ impl ChainManager {
                     ChainManager::Single(Box::new(SingleOwnerManager::new(*owner, *public_key)));
             }
             ChainOwnership::Multi { owners } => {
-                *self = ChainManager::Multi(Box::new(MultiOwnerManager::new(owners.clone())));
+                let owners = owners
+                    .iter()
+                    .map(|(owner, public_key)| (*owner, *public_key))
+                    .collect();
+                *self = ChainManager::Multi(Box::new(MultiOwnerManager::new(owners)));
             }
         }
     }
