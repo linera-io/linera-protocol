@@ -78,6 +78,7 @@ counter = { workspace = true }
 fungible = { workspace = true }
 crowd-funding = { workspace = true }
 matching-engine = { workspace = true }
+amm = { workspace = true }
 
 [[bin]]
 name = "linera"

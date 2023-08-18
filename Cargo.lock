@@ -77,6 +77,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "amm"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "async-graphql",
+ "async-trait",
+ "bcs",
+ "fungible",
+ "linera-sdk",
+ "linera-views",
+ "matching-engine",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -105,6 +122,15 @@ name = "anyhow"
 version = "1.0.71"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c7d0618f0e0b7e8ff11427422b64564d5fb0be1940354bfe2e0529b18a9d9b8"
+
+[[package]]
+name = "approx"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab112f0a86d568ea0e627cc1d6be74a1e9cd55214684db5561995f6dad897c6"
+dependencies = [
+ "num-traits",
+]
 
 [[package]]
 name = "arc-swap"
@@ -2919,6 +2945,7 @@ dependencies = [
 name = "linera-service"
 version = "0.4.0"
 dependencies = [
+ "amm",
  "anyhow",
  "async-graphql",
  "async-graphql-axum",
