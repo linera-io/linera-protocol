@@ -7,7 +7,7 @@ use async_graphql::InputType;
 use linera_base::{
     abi::ContractAbi,
     crypto::PublicKey,
-    identifiers::{ChainId, MessageId, Owner},
+    identifiers::{ApplicationId, ChainId, MessageId, Owner},
 };
 use linera_execution::Bytecode;
 use once_cell::sync::OnceCell;
@@ -900,14 +900,14 @@ impl NodeService {
         );
     }
 
-    pub async fn create_application(
+    async fn create_application_impl(
         &self,
         chain_id: &ChainId,
         bytecode_id: String,
         parameters: String,
         argument: String,
         required_application_ids: Vec<String>,
-    ) -> String {
+    ) -> Value {
         // TODO(#828): Avoid using the string replacement below
         let json_required_applications_ids =
             serde_json::to_string(&required_application_ids).unwrap();
@@ -922,7 +922,49 @@ impl NodeService {
                 requiredApplicationIds: {json_required_applications_ids}) \
             }}"
         );
-        let data = self.query_node(&query).await;
+        self.query_node(&query).await
+    }
+
+    pub async fn create_application_tuple(
+        &self,
+        chain_id: &ChainId,
+        bytecode_id: String,
+        parameters: String,
+        argument: String,
+        required_application_ids: Vec<String>,
+    ) -> (String, ApplicationId) {
+        let data = self
+            .create_application_impl(
+                chain_id,
+                bytecode_id,
+                parameters,
+                argument,
+                required_application_ids,
+            )
+            .await;
+        (
+            serde_json::from_value(data["createApplication"].clone()).unwrap(),
+            serde_json::from_value::<ApplicationId>(data["createApplication"].clone()).unwrap(),
+        )
+    }
+
+    pub async fn create_application(
+        &self,
+        chain_id: &ChainId,
+        bytecode_id: String,
+        parameters: String,
+        argument: String,
+        required_application_ids: Vec<String>,
+    ) -> String {
+        let data = self
+            .create_application_impl(
+                chain_id,
+                bytecode_id,
+                parameters,
+                argument,
+                required_application_ids,
+            )
+            .await;
         serde_json::from_value(data["createApplication"].clone()).unwrap()
     }
 

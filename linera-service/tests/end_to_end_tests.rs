@@ -27,9 +27,9 @@ use {
     tracing::{info, warn},
 };
 
-fn get_fungible_account_owner(client: &ClientWrapper) -> fungible::AccountOwner {
+fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     let owner = client.get_owner().unwrap();
-    fungible::AccountOwner::User(owner)
+    AccountOwner::User(owner)
 }
 
 struct Application {
@@ -160,7 +160,7 @@ impl From<String> for SocialApp {
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 impl SocialApp {
     async fn subscribe(&self, chain_id: ChainId) -> Value {
-        let query = format!("mutation {{ requestSubscribe(field0: \"{chain1}\") }}");
+        let query = format!("mutation {{ requestSubscribe(field0: \"{chain_id}\") }}");
         self.0.query(&query).await
     }
 
@@ -228,6 +228,73 @@ impl MatchingEngineApp {
     async fn order(&self, order: matching_engine::Order) -> Value {
         let query_string = format!("mutation {{ executeOrder(order: {}) }}", order.to_value());
         self.0.query(&query_string).await
+    }
+}
+
+struct AmmApp(Application);
+
+impl From<String> for AmmApp {
+    fn from(uri: String) -> Self {
+        AmmApp(Application { uri })
+    }
+}
+
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+impl AmmApp {
+    async fn add_liquidity(&self, owner: AccountOwner, token0_amount: u64, token1_amount: u64) {
+        let operation = amm::OperationType::AddLiquidity {
+            owner,
+            token0_amount,
+            token1_amount,
+        };
+
+        let query = format!(
+            "mutation {{ operation(operation: {}) }}",
+            operation.to_value(),
+        );
+        self.0.query_application(&query).await;
+    }
+
+    async fn remove_liquidity(
+        &self,
+        owner: AccountOwner,
+        input_token_idx: u32,
+        other_token_idx: u32,
+        input_amount: u64,
+    ) {
+        let operation = amm::OperationType::RemoveLiquidity {
+            owner,
+            input_token_idx,
+            other_token_idx,
+            input_amount,
+        };
+
+        let query = format!(
+            "mutation {{ operation(operation: {}) }}",
+            operation.to_value(),
+        );
+        self.0.query_application(&query).await;
+    }
+
+    async fn swap(
+        &self,
+        owner: AccountOwner,
+        input_token_idx: u32,
+        output_token_idx: u32,
+        input_amount: u64,
+    ) {
+        let operation = amm::OperationType::Swap {
+            owner,
+            input_token_idx,
+            output_token_idx,
+            input_amount,
+        };
+
+        let query = format!(
+            "mutation {{ operation(operation: {}) }}",
+            operation.to_value(),
+        );
+        self.0.query_application(&query).await;
     }
 }
 
@@ -899,7 +966,7 @@ async fn test_end_to_end_retry_notification_stream() {
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_fungible() {
-    use fungible::{Account, FungibleTokenAbi, InitialState};
+    use fungible::{FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -979,11 +1046,11 @@ async fn test_end_to_end_fungible() {
 
     // Claiming more money from chain1 to chain2.
     app2.claim(
-        Account {
+        fungible::Account {
             chain_id: chain1,
             owner: account_owner2,
         },
-        Account {
+        fungible::Account {
             chain_id: chain2,
             owner: account_owner2,
         },
@@ -1038,7 +1105,7 @@ async fn test_end_to_end_same_wallet_fungible() {
         let wallet = client1.get_wallet();
         let user_chain = wallet.get(chain2).unwrap();
         let public_key = user_chain.key_pair.as_ref().unwrap().public();
-        fungible::AccountOwner::User(public_key.into())
+        AccountOwner::User(public_key.into())
     };
     // The initial accounts on chain1
     let accounts = BTreeMap::from([
@@ -1391,29 +1458,6 @@ async fn test_end_to_end_matching_engine() {
     // Now creating orders
     for price in [1, 2] {
         // 1 is expected not to match, but 2 is expected to match
-<<<<<<< HEAD
-        let price = Price { price };
-        let insert2 = matching_engine::Order::Insert {
-            owner: owner_a,
-            amount: Amount::from_tokens(3),
-            nature: OrderNature::Bid,
-            price,
-        };
-        let query_string = format!("mutation {{ executeOrder(order: {}) }}", insert2.to_value());
-        app_matching_a.query_application(&query_string).await;
-    }
-    for price in [4, 2] {
-        // price 2 is expected to match, but not 4.
-        let price = Price { price };
-        let insert3 = matching_engine::Order::Insert {
-            owner: owner_b,
-            amount: Amount::from_tokens(4),
-            nature: OrderNature::Ask,
-            price,
-        };
-        let query_string = format!("mutation {{ executeOrder(order: {}) }}", insert3.to_value());
-        app_matching_b.query_application(&query_string).await;
-=======
         app_matching_a
             .order(matching_engine::Order::Insert {
                 owner: owner_a,
@@ -1433,7 +1477,6 @@ async fn test_end_to_end_matching_engine() {
                 price: Price { price },
             })
             .await;
->>>>>>> 076ed0d148 (Splitting App methods into different structs)
     }
     node_service_admin.process_inbox(&chain_admin).await;
     node_service_a.process_inbox(&chain_a).await;
@@ -1449,15 +1492,9 @@ async fn test_end_to_end_matching_engine() {
     // Now cancelling all the orders
     for (owner, order_ids) in [(owner_a, order_ids_a), (owner_b, order_ids_b)] {
         for order_id in order_ids {
-<<<<<<< HEAD
-            let cancel = matching_engine::Order::Cancel { owner, order_id };
-            let query_string = format!("mutation {{ executeOrder(order: {}) }}", cancel.to_value());
-            app_matching_admin.query_application(&query_string).await;
-=======
             app_matching_admin
                 .order(matching_engine::Order::Cancel { owner, order_id })
                 .await;
->>>>>>> 076ed0d148 (Splitting App methods into different structs)
         }
     }
     node_service_admin.process_inbox(&chain_admin).await;
@@ -1626,4 +1663,256 @@ async fn test_end_to_end_open_multi_owner_chain() {
     assert_eq!(client1.query_balance(chain1).await.unwrap(), "7.");
     assert_eq!(client1.query_balance(chain2).await.unwrap(), "3.");
     assert_eq!(client2.query_balance(chain2).await.unwrap(), "3.");
+}
+
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_amm() {
+    use fungible::InitialState;
+    use matching_engine::Parameters;
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    let network = Network::Grpc;
+    let mut local_net = LocalNetwork::new(network, 4).unwrap();
+    let client_admin = local_net.make_client(network);
+    let client0 = local_net.make_client(network);
+    let client1 = local_net.make_client(network);
+
+    local_net.generate_initial_validator_config().await.unwrap();
+    client_admin.create_genesis_config().await.unwrap();
+    client0.wallet_init(&[]).await.unwrap();
+    client1.wallet_init(&[]).await.unwrap();
+
+    local_net.run().await.unwrap();
+    let (contract_fungible, service_fungible) = local_net.build_example("fungible").await.unwrap();
+    let (contract_amm, service_amm) = local_net.build_example("amm").await.unwrap();
+
+    // Admin chain
+    let chain_admin = client_admin.get_wallet().default_chain().unwrap();
+
+    // User chains
+    let chain0 = client_admin.open_and_assign(&client0).await.unwrap();
+    let chain1 = client_admin.open_and_assign(&client1).await.unwrap();
+
+    // Admin user
+    let owner_admin = get_fungible_account_owner(&client_admin);
+
+    // Users
+    let owner0 = get_fungible_account_owner(&client0);
+    let owner1 = get_fungible_account_owner(&client1);
+
+    let mut node_service_admin = client_admin.run_node_service(8080).await.unwrap();
+    let mut node_service0 = client0.run_node_service(8081).await.unwrap();
+    let mut node_service1 = client1.run_node_service(8082).await.unwrap();
+
+    // Amounts of token0 that will be owned by each user
+    let state_fungible0 = InitialState {
+        accounts: BTreeMap::from([
+            (owner0, Amount::from_tokens(100)),
+            (owner1, Amount::from_tokens(150)),
+        ]),
+    };
+
+    // Amounts of token1 that will be owned by each user
+    let state_fungible1 = InitialState {
+        accounts: BTreeMap::from([
+            (owner0, Amount::from_tokens(100)),
+            (owner1, Amount::from_tokens(100)),
+        ]),
+    };
+
+    // Create fungible applications on the Admin chain, which will hold
+    // the token0 and token1 amounts
+    let fungible_bytecode_id = node_service_admin
+        .publish_bytecode(&chain_admin, contract_fungible, service_fungible)
+        .await;
+
+    let application_id_fungible0 = node_service_admin
+        .create_application(
+            &chain_admin,
+            fungible_bytecode_id.clone(),
+            serde_json::to_string(&()).unwrap(),
+            serde_json::to_string(&state_fungible0).unwrap(),
+            vec![],
+        )
+        .await;
+    let application_id_fungible1 = node_service_admin
+        .create_application(
+            &chain_admin,
+            fungible_bytecode_id,
+            serde_json::to_string(&()).unwrap(),
+            serde_json::to_string(&state_fungible1).unwrap(),
+            vec![],
+        )
+        .await;
+
+    // Create wrappers
+    let app_fungible0_admin: FungibleApp = node_service_admin
+        .make_application(&chain_admin, &application_id_fungible0)
+        .await
+        .into();
+    let app_fungible1_admin: FungibleApp = node_service_admin
+        .make_application(&chain_admin, &application_id_fungible1)
+        .await
+        .into();
+
+    // Check initial balances
+    app_fungible0_admin
+        .assert_fungible_account_balances([
+            (owner0, Amount::from_tokens(100)),
+            (owner1, Amount::from_tokens(150)),
+            (owner_admin, Amount::ZERO),
+        ])
+        .await;
+    app_fungible1_admin
+        .assert_fungible_account_balances([
+            (owner0, Amount::from_tokens(100)),
+            (owner1, Amount::from_tokens(100)),
+            (owner_admin, Amount::ZERO),
+        ])
+        .await;
+
+    let token0 = application_id_fungible0
+        .parse::<ApplicationId>()
+        .unwrap()
+        .with_abi();
+    let token1 = application_id_fungible1
+        .parse::<ApplicationId>()
+        .unwrap()
+        .with_abi();
+    let parameters = Parameters {
+        tokens: [token0, token1],
+    };
+
+    // Create AMM application on Admin chain
+    let bytecode_id = node_service_admin
+        .publish_bytecode(&chain_admin, contract_amm, service_amm)
+        .await;
+    let parameter_str = serde_json::to_string(&parameters).unwrap();
+    let argument_str = serde_json::to_string(&()).unwrap();
+    let (application_id_amm, application_id_amm_struct) = node_service_admin
+        .create_application_tuple(
+            &chain_admin,
+            bytecode_id,
+            parameter_str,
+            argument_str,
+            vec![
+                application_id_fungible0.clone(),
+                application_id_fungible1.clone(),
+            ],
+        )
+        .await;
+
+    let owner_amm = AccountOwner::Application(application_id_amm_struct);
+
+    // Create AMM wrappers
+    node_service0
+        .request_application(&chain0, &application_id_amm)
+        .await;
+    let app_amm0: AmmApp = node_service0
+        .make_application(&chain0, &application_id_amm)
+        .await
+        .into();
+    node_service1
+        .request_application(&chain1, &application_id_amm)
+        .await;
+    let app_amm1: AmmApp = node_service1
+        .make_application(&chain1, &application_id_amm)
+        .await
+        .into();
+
+    // Initial balances for both tokens are 0
+
+    // Adding liquidity for token0 and token1 by owner0
+    // We have to call it from the AAM instance in the owner0's
+    // user chain, chain0, so it's properly authenticated
+    app_amm0.add_liquidity(owner0, 100, 100).await;
+    // Processing inbox for messages from chain0 to chain_admin, where the AMM
+    // was created
+    node_service_admin.process_inbox(&chain_admin).await;
+
+    // Ownership of owner0 tokens should be with the AMM now
+    app_fungible0_admin
+        .assert_fungible_account_balances([
+            (owner0, Amount::ZERO),
+            (owner1, Amount::from_tokens(150)),
+            (owner_admin, Amount::ZERO),
+            (owner_amm, Amount::from_tokens(100)),
+        ])
+        .await;
+    app_fungible1_admin
+        .assert_fungible_account_balances([
+            (owner0, Amount::ZERO),
+            (owner1, Amount::from_tokens(100)),
+            (owner_admin, Amount::ZERO),
+            (owner_amm, Amount::from_tokens(100)),
+        ])
+        .await;
+
+    // Adding liquidity for token0 and token1 by owner1 now
+    app_amm1.add_liquidity(owner1, 100, 100).await;
+    node_service_admin.process_inbox(&chain_admin).await;
+
+    app_fungible0_admin
+        .assert_fungible_account_balances([
+            (owner0, Amount::ZERO),
+            (owner1, Amount::from_tokens(50)),
+            (owner_admin, Amount::ZERO),
+            (owner_amm, Amount::from_tokens(200)),
+        ])
+        .await;
+    app_fungible1_admin
+        .assert_fungible_account_balances([
+            (owner0, Amount::ZERO),
+            (owner1, Amount::ZERO),
+            (owner_admin, Amount::ZERO),
+            (owner_amm, Amount::from_tokens(200)),
+        ])
+        .await;
+
+    app_amm1.swap(owner1, 0, 1, 50).await;
+    node_service_admin.process_inbox(&chain_admin).await;
+
+    app_fungible0_admin
+        .assert_fungible_account_balances([
+            (owner0, Amount::ZERO),
+            (owner1, Amount::ZERO),
+            (owner_admin, Amount::ZERO),
+            (owner_amm, Amount::from_tokens(250)),
+        ])
+        .await;
+    app_fungible1_admin
+        .assert_fungible_account_balances([
+            (owner0, Amount::ZERO),
+            (owner1, Amount::from_tokens(40)),
+            (owner_admin, Amount::ZERO),
+            (owner_amm, Amount::from_tokens(160)),
+        ])
+        .await;
+
+    app_amm1.remove_liquidity(owner1, 0, 1, 62).await;
+    node_service_admin.process_inbox(&chain_admin).await;
+
+    app_fungible0_admin
+        .assert_fungible_account_balances([
+            (owner0, Amount::ZERO),
+            (owner1, Amount::from_tokens(62)),
+            (owner_admin, Amount::ZERO),
+            (owner_amm, Amount::from_tokens(188)),
+        ])
+        .await;
+    // Rounding down happens here, which is why it's 79 instead of 80
+    app_fungible1_admin
+        .assert_fungible_account_balances([
+            (owner0, Amount::ZERO),
+            (owner1, Amount::from_tokens(79)),
+            (owner_admin, Amount::ZERO),
+            (owner_amm, Amount::from_tokens(121)),
+        ])
+        .await;
+
+    node_service_admin.assert_is_running();
+    node_service0.assert_is_running();
+    node_service1.assert_is_running();
 }
