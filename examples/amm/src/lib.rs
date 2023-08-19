@@ -2,7 +2,7 @@ use std::convert::Infallible;
 
 use async_graphql::{scalar, Request, Response};
 use fungible::AccountOwner;
-use linera_sdk::base::{ArithmeticError, ContractAbi, ServiceAbi};
+use linera_sdk::base::{Amount, ArithmeticError, ContractAbi, ServiceAbi};
 use linera_views::views::ViewError;
 use matching_engine::Parameters;
 use serde::{Deserialize, Serialize};
@@ -27,64 +27,44 @@ impl ServiceAbi for AmmAbi {
     type Parameters = Parameters;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum OperationType {
+/// Operations that can be sent to the application.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Operation {
     Swap {
         owner: AccountOwner,
         input_token_idx: u32,
-        output_token_idx: u32,
-        input_amount: u64,
+        input_amount: Amount,
     },
     AddLiquidity {
         owner: AccountOwner,
-        token0_amount: u64,
-        token1_amount: u64,
+        max_token0_amount: Amount,
+        max_token1_amount: Amount,
     },
     RemoveLiquidity {
         owner: AccountOwner,
         input_token_idx: u32,
-        other_token_idx: u32,
-        input_amount: u64,
+        input_amount: Amount,
     },
 }
 
-scalar!(OperationType);
-
-/// Operations that can be sent to the application.
-#[derive(Debug, Serialize, Deserialize)]
-pub enum Operation {
-    ExecuteOperation { operation: OperationType },
-}
+scalar!(Operation);
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Message {
-    ExecuteOperation { operation: OperationType },
+    Swap {
+        owner: AccountOwner,
+        input_token_idx: u32,
+        input_amount: Amount,
+    },
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum ApplicationCall {
-    ExecuteOperation { operation: OperationType },
-}
-
-pub fn calculate_output_amount(
-    input_amount: u64,
-    input_pool_balance: u64,
-    output_pool_balance: u64,
-) -> Result<u64, AmmError> {
-    if input_pool_balance == 0 || output_pool_balance == 0 {
-        return Err(AmmError::InvalidPoolBalanceError);
-    }
-
-    let numerator = input_amount * output_pool_balance;
-    let denominator = input_pool_balance + input_amount;
-
-    if denominator == 0 {
-        return Err(AmmError::DivisionByZero);
-    }
-
-    let output_amount = numerator / denominator;
-
-    Ok(output_amount)
+    Swap {
+        owner: AccountOwner,
+        input_token_idx: u32,
+        input_amount: Amount,
+    },
 }
 
 #[derive(Debug, Error)]
@@ -92,12 +72,6 @@ pub fn calculate_output_amount(
 pub enum AmmError {
     #[error("Insufficient liquidity in the pool")]
     InsufficientLiquidityError,
-
-    #[error("Swap tokens must be different")]
-    EqualTokensError,
-
-    #[error("Adding liquidity cannot alter balance ratio")]
-    BalanceRatioAlteredError,
 
     #[error("Invalid pool balance")]
     InvalidPoolBalanceError,
@@ -114,9 +88,6 @@ pub enum AmmError {
     #[error("AMM application doesn't support any application calls")]
     ApplicationCallsNotSupported,
 
-    #[error("Cannot divide by zero")]
-    DivisionByZero,
-
     #[error("Action can only be executed on the chain that created the AMM")]
     AmmChainOnly,
 
@@ -125,6 +96,15 @@ pub enum AmmError {
 
     #[error("Invalid token index")]
     InvalidTokenIdx,
+
+    #[error("Can't remove liquidity from a remote chain")]
+    RemovingLiquidityFromRemoteChain,
+
+    #[error("Can't add liquidity from a remote chain")]
+    AddingLiquidityFromRemoteChain,
+
+    #[error("Can't swap locally")]
+    SwappingLocally,
 
     /// Invalid query.
     #[error("Invalid query")]

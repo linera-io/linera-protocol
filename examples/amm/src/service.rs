@@ -3,7 +3,7 @@
 mod state;
 
 use self::state::Amm;
-use amm::{AmmError, Operation, OperationType};
+use amm::{AmmError, Operation};
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use async_trait::async_trait;
 use linera_sdk::{base::WithServiceAbi, QueryContext, Service, ViewStateStorage};
@@ -35,7 +35,7 @@ struct MutationRoot;
 
 #[Object]
 impl MutationRoot {
-    async fn operation(&self, operation: OperationType) -> Vec<u8> {
-        bcs::to_bytes(&Operation::ExecuteOperation { operation }).unwrap()
+    async fn operation(&self, operation: Operation) -> Vec<u8> {
+        bcs::to_bytes(&operation).unwrap()
     }
 }

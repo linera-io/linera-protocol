@@ -3,7 +3,7 @@
 mod state;
 
 use self::state::Amm;
-use amm::{AmmError, ApplicationCall, Message, Operation, OperationType};
+use amm::{AmmError, ApplicationCall, Message, Operation};
 use async_trait::async_trait;
 use fungible::{Account, AccountOwner, Destination, FungibleTokenAbi};
 use linera_sdk::{
@@ -12,9 +12,8 @@ use linera_sdk::{
     ensure, ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
     OperationContext, SessionCallResult, ViewStateStorage,
 };
-
-#[macro_use]
-extern crate approx;
+use num_bigint::BigUint;
+use num_traits::{cast::FromPrimitive, ToPrimitive};
 
 linera_sdk::contract!(Amm);
 
@@ -41,14 +40,10 @@ impl Contract for Amm {
         operation: Self::Operation,
     ) -> Result<ExecutionResult<Self::Message>, AmmError> {
         let mut result = ExecutionResult::default();
-        match operation {
-            Operation::ExecuteOperation { operation } => {
-                if context.chain_id == system_api::current_application_id().creation.chain_id {
-                    self.execute_order_local(operation).await?;
-                } else {
-                    self.execute_order_remote(&mut result, operation).await?;
-                }
-            }
+        if context.chain_id == system_api::current_application_id().creation.chain_id {
+            self.execute_order_local(operation).await?;
+        } else {
+            self.execute_order_remote(&mut result, operation).await?;
         }
 
         Ok(result)
@@ -63,29 +58,44 @@ impl Contract for Amm {
             context.chain_id == system_api::current_application_id().creation.chain_id,
             AmmError::AmmChainOnly
         );
+
         match message {
-            Message::ExecuteOperation { operation } => {
-                self.execute_order_local(operation).await?;
+            Message::Swap {
+                owner,
+                input_token_idx,
+                input_amount,
+            } => {
+                self.execute_swap(owner, input_token_idx, input_amount)
+                    .await?;
             }
         }
+
         Ok(ExecutionResult::default())
     }
 
     async fn handle_application_call(
         &mut self,
         context: &CalleeContext,
-        argument: Self::ApplicationCall,
+        application_call: ApplicationCall,
         _forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult<Self::Message, Self::Response, Self::SessionState>, AmmError>
     {
         let mut result = ApplicationCallResult::default();
-        match argument {
-            ApplicationCall::ExecuteOperation { operation } => {
+        match application_call {
+            ApplicationCall::Swap {
+                owner,
+                input_token_idx,
+                input_amount,
+            } => {
                 if context.chain_id == system_api::current_application_id().creation.chain_id {
-                    self.execute_order_local(operation).await?;
-                } else {
-                    self.execute_order_remote(&mut result.execution_result, operation)
+                    self.execute_swap(owner, input_token_idx, input_amount)
                         .await?;
+                } else {
+                    self.execute_application_call_remote(
+                        &mut result.execution_result,
+                        application_call,
+                    )
+                    .await?;
                 }
             }
         }
@@ -106,59 +116,83 @@ impl Contract for Amm {
 }
 
 impl Amm {
-    async fn execute_order_local(&mut self, operation: OperationType) -> Result<(), AmmError> {
+    async fn execute_order_local(&mut self, operation: Operation) -> Result<(), AmmError> {
         match operation {
-            OperationType::Swap {
+            Operation::Swap {
+                owner: _,
+                input_token_idx: _,
+                input_amount: _,
+            } => Err(AmmError::SwappingLocally),
+            Operation::AddLiquidity {
                 owner,
-                input_token_idx,
-                output_token_idx,
-                input_amount,
+                max_token0_amount,
+                max_token1_amount,
             } => {
-                if input_amount == 0 {
-                    return Err(AmmError::NoZeroAmounts);
-                }
-
-                if input_token_idx > 1 || output_token_idx > 1 {
-                    return Err(AmmError::InvalidTokenIdx);
-                }
-
-                if input_token_idx == output_token_idx {
-                    return Err(AmmError::EqualTokensError);
-                }
-
-                let input_pool_balance = self.get_pool_balance(input_token_idx).await?;
-                let output_pool_balance = self.get_pool_balance(output_token_idx).await?;
-
-                let output_amount = amm::calculate_output_amount(
-                    input_amount,
-                    input_pool_balance,
-                    output_pool_balance,
-                )?;
-
-                self.receive_from_account(&owner, input_token_idx, input_amount)
-                    .await?;
-                self.send_to(&owner, output_token_idx, output_amount).await
-            }
-            OperationType::AddLiquidity {
-                owner,
-                token0_amount,
-                token1_amount,
-            } => {
-                if token0_amount == 0 || token1_amount == 0 {
+                if max_token0_amount == Amount::ZERO || max_token1_amount == Amount::ZERO {
                     return Err(AmmError::NoZeroAmounts);
                 }
 
                 let balance0 = self.get_pool_balance(0).await?;
                 let balance1 = self.get_pool_balance(1).await?;
 
-                if balance1 > 0
-                    && abs_diff_ne!(
-                        balance0 as f64 / balance1 as f64,
-                        token0_amount as f64 / token1_amount as f64,
-                        epsilon = 0.01
-                    )
-                {
-                    return Err(AmmError::BalanceRatioAlteredError);
+                let token0_amount;
+                let token1_amount;
+                if balance0 > Amount::ZERO && balance1 > Amount::ZERO {
+                    let balance0_bigint = BigUint::from_u128(u128::from(balance0))
+                        .expect("Couldn't generate balance0 in bigint");
+                    let balance1_bigint = BigUint::from_u128(u128::from(balance1))
+                        .expect("Couldn't generate balance1 in bigint");
+                    let max_token0_amount_bigint =
+                        BigUint::from_u128(u128::from(max_token0_amount))
+                            .expect("Couldn't generate max_token0_amount in bigint");
+                    let max_token1_amount_bigint =
+                        BigUint::from_u128(u128::from(max_token1_amount))
+                            .expect("Couldn't generate max_token1_amount in bigint");
+
+                    // This is the formula to maintain the ratio:
+                    //      balance0 / balance1 = (balance0 + max_token0_amount) / (balance1 + token1_amount)
+                    //      balance0 * (balance1 + token1_amount) = balance1 * (balance0 + max_token0_amount)
+                    //      balance0 * balance1 + balance0 * token1_amount = balance1 * balance0 + balance1 * max_token0_amount
+                    //      balance0 * token1_amount = balance1 * max_token0_amount
+                    //      token1_amount = (balance1 * max_token0_amount) / balance0
+                    //
+                    // For token0_amount, it would be this:
+                    //      token0_amount = (balance0 * max_token1_amount) / balance1
+
+                    let token0_amount_bigint =
+                        (&balance0_bigint * &max_token1_amount_bigint) / &balance1_bigint;
+                    let token1_amount_bigint =
+                        (&balance1_bigint * &max_token0_amount_bigint) / &balance0_bigint;
+
+                    if &max_token0_amount_bigint * balance1_bigint
+                        > &max_token1_amount_bigint * balance0_bigint
+                    {
+                        token0_amount = Amount::from_atto(
+                            token0_amount_bigint
+                                .to_u128()
+                                .expect("Couldn't convert token0_amount_bigint to u128"),
+                        );
+                        token1_amount = Amount::from_atto(
+                            max_token1_amount_bigint
+                                .to_u128()
+                                .expect("Couldn't convert max_token1_amount_bigint to u128"),
+                        );
+                    } else {
+                        token0_amount = Amount::from_atto(
+                            max_token0_amount_bigint
+                                .to_u128()
+                                .expect("Couldn't convert max_token0_amount_bigint to u128"),
+                        );
+                        token1_amount = Amount::from_atto(
+                            token1_amount_bigint
+                                .to_u128()
+                                .expect("Couldn't convert token1_amount_bigint to u128"),
+                        );
+                    }
+                } else {
+                    // This means we're on the first liquidity addition
+                    token0_amount = max_token0_amount;
+                    token1_amount = max_token1_amount;
                 }
 
                 self.receive_from_account(&owner, 0, token0_amount).await?;
@@ -169,20 +203,16 @@ impl Amm {
             // When removing liquidity, you'll specify one of the tokens you want to
             // remove and the amount, and we'll calculate the amount for the other token that
             // we'll remove based on the current ratio, and remove them.
-            OperationType::RemoveLiquidity {
+            Operation::RemoveLiquidity {
                 owner,
                 input_token_idx,
-                other_token_idx,
                 input_amount,
             } => {
-                if input_token_idx > 1 || other_token_idx > 1 {
+                if input_token_idx > 1 {
                     return Err(AmmError::InvalidTokenIdx);
                 }
 
-                if input_token_idx == other_token_idx {
-                    return Err(AmmError::EqualTokensError);
-                }
-
+                let other_token_idx = 1 - input_token_idx;
                 let balance0 = self.get_pool_balance(0).await?;
                 let balance1 = self.get_pool_balance(1).await?;
 
@@ -192,13 +222,28 @@ impl Amm {
                     return Err(AmmError::InsufficientLiquidityError);
                 }
 
-                let other_amount_float = if input_token_idx == 0 {
-                    (input_amount as f64) * ((balance1 as f64) / (balance0 as f64))
+                let input_amount_bigint = BigUint::from_u128(u128::from(input_amount))
+                    .expect("Couldn't generate input_amount in bigint");
+
+                let balance0_bigint = BigUint::from_u128(u128::from(balance0))
+                    .expect("Couldn't generate balance0 in bigint");
+                let balance1_bigint = BigUint::from_u128(u128::from(balance1))
+                    .expect("Couldn't generate balance1 in bigint");
+
+                let other_amount = if input_token_idx == 0 {
+                    Amount::from_atto(
+                        ((input_amount_bigint * balance1_bigint) / balance0_bigint)
+                            .to_u128()
+                            .expect("Couldn't convert other_amount to u128"),
+                    )
                 } else {
-                    (input_amount as f64) * ((balance0 as f64) / (balance1 as f64))
+                    Amount::from_atto(
+                        ((input_amount_bigint * balance0_bigint) / balance1_bigint)
+                            .to_u128()
+                            .expect("Couldn't convert other_amount to u128"),
+                    )
                 };
 
-                let other_amount = other_amount_float as u64;
                 if (other_token_idx == 1 && other_amount > balance1)
                     || (other_token_idx == 0 && other_amount > balance0)
                 {
@@ -212,20 +257,141 @@ impl Amm {
         }
     }
 
-    async fn execute_order_remote(
+    async fn execute_swap(
         &mut self,
-        result: &mut ExecutionResult<Message>,
-        operation: OperationType,
+        owner: AccountOwner,
+        input_token_idx: u32,
+        input_amount: Amount,
     ) -> Result<(), AmmError> {
-        let chain_id = system_api::current_application_id().creation.chain_id;
-        let message = Message::ExecuteOperation {
-            operation: operation.clone(),
-        };
-        result.messages.push((chain_id.into(), true, message));
+        if input_amount == Amount::ZERO {
+            return Err(AmmError::NoZeroAmounts);
+        }
+
+        if input_token_idx > 1 {
+            return Err(AmmError::InvalidTokenIdx);
+        }
+
+        let output_token_idx = 1 - input_token_idx;
+        let input_pool_balance = self.get_pool_balance(input_token_idx).await?;
+        let output_pool_balance = self.get_pool_balance(output_token_idx).await?;
+
+        let output_amount =
+            self.calculate_output_amount(input_amount, input_pool_balance, output_pool_balance)?;
+
+        self.receive_from_account(&owner, input_token_idx, input_amount)
+            .await?;
+        self.send_to(&owner, output_token_idx, output_amount)
+            .await?;
+
         Ok(())
     }
 
-    async fn get_pool_balance(&mut self, token_idx: u32) -> Result<u64, AmmError> {
+    async fn execute_order_remote(
+        &mut self,
+        result: &mut ExecutionResult<Message>,
+        operation: Operation,
+    ) -> Result<(), AmmError> {
+        match operation {
+            Operation::Swap {
+                owner,
+                input_token_idx,
+                input_amount,
+            } => {
+                let chain_id = system_api::current_application_id().creation.chain_id;
+                let message = Message::Swap {
+                    owner,
+                    input_token_idx,
+                    input_amount,
+                };
+                result.messages.push((chain_id.into(), true, message));
+            }
+            Operation::AddLiquidity {
+                owner: _,
+                max_token0_amount: _,
+                max_token1_amount: _,
+            } => {
+                return Err(AmmError::AddingLiquidityFromRemoteChain);
+            }
+            Operation::RemoveLiquidity {
+                owner: _,
+                input_token_idx: _,
+                input_amount: _,
+            } => {
+                return Err(AmmError::RemovingLiquidityFromRemoteChain);
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn execute_application_call_remote(
+        &mut self,
+        result: &mut ExecutionResult<Message>,
+        application_call: ApplicationCall,
+    ) -> Result<(), AmmError> {
+        match application_call {
+            ApplicationCall::Swap {
+                owner,
+                input_token_idx,
+                input_amount,
+            } => {
+                let chain_id = system_api::current_application_id().creation.chain_id;
+                let message = Message::Swap {
+                    owner,
+                    input_token_idx,
+                    input_amount,
+                };
+                result.messages.push((chain_id.into(), true, message));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn calculate_output_amount(
+        &mut self,
+        input_amount: Amount,
+        input_pool_balance: Amount,
+        output_pool_balance: Amount,
+    ) -> Result<Amount, AmmError> {
+        if input_pool_balance == Amount::ZERO || output_pool_balance == Amount::ZERO {
+            return Err(AmmError::InvalidPoolBalanceError);
+        }
+
+        let input_amount_bigint = BigUint::from_u128(u128::from(input_amount))
+            .expect("Couldn't generate input_amount in bigint");
+        let output_pool_balance_bigint = BigUint::from_u128(u128::from(output_pool_balance))
+            .expect("Couldn't generate output_pool_balance in bigint");
+        let input_pool_balance_bigint = BigUint::from_u128(u128::from(input_pool_balance))
+            .expect("Couldn't generate input_pool_balance in bigint");
+
+        // Logic for this is the following:
+        // This is a Constant Product Automated Market Maker, or CPAMM, so we want
+        // the product to remain constant.
+        // That means that this is the equation we need to solve to find output_amount:
+        //      (input_pool_balance + input_amount) * (output_pool_balance - output_amount) = input_pool_balance * output_pool_balance
+        //      output_pool_balance - output_amount = (input_pool_balance * output_pool_balance) / (input_pool_balance + input_amount)
+        //      output_amount = output_pool_balance - (input_pool_balance * output_pool_balance) / (input_pool_balance + input_amount)
+        //      output_amount = (output_pool_balance * (input_pool_balance + input_amount) - (input_pool_balance * output_pool_balance)) / (input_pool_balance + input_amount)
+        //      output_amount = (input_pool_balance * output_pool_balance + input_amount * output_pool_balance - input_pool_balance * output_pool_balance) / (input_pool_balance + input_amount)
+        //      output_amount = (input_amount * output_pool_balance) / (input_pool_balance + input_amount)
+
+        // Numerator will be a number with 36 decimal points here
+        let numerator_bigint = &input_amount_bigint * output_pool_balance_bigint;
+        // Denominator will have 18 decimal points
+        let denominator_bigint = input_pool_balance_bigint + input_amount_bigint;
+
+        // Dividing 36 decimal points with 18 decimal points = 18 decimal points
+        let output_amount_bigint = numerator_bigint / denominator_bigint;
+        let output_amount = Amount::from_atto(
+            output_amount_bigint
+                .to_u128()
+                .expect("Couldn't convert output_amount_bigint to u128"),
+        );
+        Ok(output_amount)
+    }
+
+    async fn get_pool_balance(&mut self, token_idx: u32) -> Result<Amount, AmmError> {
         let pool_owner = AccountOwner::Application(system_api::current_application_id());
         self.balance(&pool_owner, token_idx).await
     }
@@ -238,13 +404,13 @@ impl Amm {
     async fn transfer(
         &mut self,
         owner: &AccountOwner,
-        amount: u64,
+        amount: Amount,
         destination: Destination,
         token_idx: u32,
     ) -> Result<(), AmmError> {
         let transfer = fungible::ApplicationCall::Transfer {
             owner: *owner,
-            amount: Amount::from_tokens(amount as u128),
+            amount,
             destination,
         };
         let token = Self::fungible_id(token_idx).expect("failed to get the token");
@@ -253,21 +419,20 @@ impl Amm {
         Ok(())
     }
 
-    async fn balance(&mut self, owner: &AccountOwner, token_idx: u32) -> Result<u64, AmmError> {
+    async fn balance(&mut self, owner: &AccountOwner, token_idx: u32) -> Result<Amount, AmmError> {
         let balance = fungible::ApplicationCall::Balance { owner: *owner };
         let token = Self::fungible_id(token_idx).expect("failed to get the token");
-        let amount = self
+        Ok(self
             .call_application(true, token, &balance, vec![])
             .await?
-            .0;
-        Ok(amount.saturating_div(Amount::ONE) as u64)
+            .0)
     }
 
     async fn receive_from_account(
         &mut self,
         owner: &AccountOwner,
         token_idx: u32,
-        amount: u64,
+        amount: Amount,
     ) -> Result<(), AmmError> {
         let account = Account {
             chain_id: system_api::current_chain_id(),
@@ -281,7 +446,7 @@ impl Amm {
         &mut self,
         owner: &AccountOwner,
         token_idx: u32,
-        amount: u64,
+        amount: Amount,
     ) -> Result<(), AmmError> {
         let account = Account {
             chain_id: system_api::current_chain_id(),

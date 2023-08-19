@@ -27,9 +27,9 @@ use {
     tracing::{info, warn},
 };
 
-fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
+fn get_fungible_account_owner(client: &ClientWrapper) -> fungible::AccountOwner {
     let owner = client.get_owner().unwrap();
-    AccountOwner::User(owner)
+    fungible::AccountOwner::User(owner)
 }
 
 struct Application {
@@ -241,31 +241,34 @@ impl From<String> for AmmApp {
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 impl AmmApp {
-    async fn add_liquidity(&self, owner: AccountOwner, token0_amount: u64, token1_amount: u64) {
-        let operation = amm::OperationType::AddLiquidity {
+    async fn add_liquidity(
+        &self,
+        owner: fungible::AccountOwner,
+        max_token0_amount: Amount,
+        max_token1_amount: Amount,
+    ) {
+        let operation = amm::Operation::AddLiquidity {
             owner,
-            token0_amount,
-            token1_amount,
+            max_token0_amount,
+            max_token1_amount,
         };
 
         let query = format!(
             "mutation {{ operation(operation: {}) }}",
             operation.to_value(),
         );
-        self.0.query_application(&query).await;
+        self.0.query(&query).await;
     }
 
     async fn remove_liquidity(
         &self,
-        owner: AccountOwner,
+        owner: fungible::AccountOwner,
         input_token_idx: u32,
-        other_token_idx: u32,
-        input_amount: u64,
+        input_amount: Amount,
     ) {
-        let operation = amm::OperationType::RemoveLiquidity {
+        let operation = amm::Operation::RemoveLiquidity {
             owner,
             input_token_idx,
-            other_token_idx,
             input_amount,
         };
 
@@ -273,20 +276,18 @@ impl AmmApp {
             "mutation {{ operation(operation: {}) }}",
             operation.to_value(),
         );
-        self.0.query_application(&query).await;
+        self.0.query(&query).await;
     }
 
     async fn swap(
         &self,
-        owner: AccountOwner,
+        owner: fungible::AccountOwner,
         input_token_idx: u32,
-        output_token_idx: u32,
-        input_amount: u64,
+        input_amount: Amount,
     ) {
-        let operation = amm::OperationType::Swap {
+        let operation = amm::Operation::Swap {
             owner,
             input_token_idx,
-            output_token_idx,
             input_amount,
         };
 
@@ -294,7 +295,7 @@ impl AmmApp {
             "mutation {{ operation(operation: {}) }}",
             operation.to_value(),
         );
-        self.0.query_application(&query).await;
+        self.0.query(&query).await;
     }
 }
 
@@ -1105,7 +1106,7 @@ async fn test_end_to_end_same_wallet_fungible() {
         let wallet = client1.get_wallet();
         let user_chain = wallet.get(chain2).unwrap();
         let public_key = user_chain.key_pair.as_ref().unwrap().public();
-        AccountOwner::User(public_key.into())
+        fungible::AccountOwner::User(public_key.into())
     };
     // The initial accounts on chain1
     let accounts = BTreeMap::from([
@@ -1709,16 +1710,18 @@ async fn test_end_to_end_amm() {
     // Amounts of token0 that will be owned by each user
     let state_fungible0 = InitialState {
         accounts: BTreeMap::from([
-            (owner0, Amount::from_tokens(100)),
-            (owner1, Amount::from_tokens(150)),
+            (owner0, Amount::ZERO),
+            (owner1, Amount::from_tokens(50)),
+            (owner_admin, Amount::from_tokens(200)),
         ]),
     };
 
     // Amounts of token1 that will be owned by each user
     let state_fungible1 = InitialState {
         accounts: BTreeMap::from([
-            (owner0, Amount::from_tokens(100)),
-            (owner1, Amount::from_tokens(100)),
+            (owner0, Amount::from_tokens(50)),
+            (owner1, Amount::ZERO),
+            (owner_admin, Amount::from_tokens(200)),
         ]),
     };
 
@@ -1759,17 +1762,17 @@ async fn test_end_to_end_amm() {
 
     // Check initial balances
     app_fungible0_admin
-        .assert_fungible_account_balances([
-            (owner0, Amount::from_tokens(100)),
-            (owner1, Amount::from_tokens(150)),
-            (owner_admin, Amount::ZERO),
+        .assert_balances([
+            (owner0, Amount::ZERO),
+            (owner1, Amount::from_tokens(50)),
+            (owner_admin, Amount::from_tokens(200)),
         ])
         .await;
     app_fungible1_admin
-        .assert_fungible_account_balances([
-            (owner0, Amount::from_tokens(100)),
-            (owner1, Amount::from_tokens(100)),
-            (owner_admin, Amount::ZERO),
+        .assert_balances([
+            (owner0, Amount::from_tokens(50)),
+            (owner1, Amount::ZERO),
+            (owner_admin, Amount::from_tokens(200)),
         ])
         .await;
 
@@ -1804,9 +1807,13 @@ async fn test_end_to_end_amm() {
         )
         .await;
 
-    let owner_amm = AccountOwner::Application(application_id_amm_struct);
+    let owner_amm = fungible::AccountOwner::Application(application_id_amm_struct);
 
     // Create AMM wrappers
+    let app_amm_admin: AmmApp = node_service_admin
+        .make_application(&chain_admin, &application_id_amm)
+        .await
+        .into();
     node_service0
         .request_application(&chain0, &application_id_amm)
         .await;
@@ -1825,37 +1832,45 @@ async fn test_end_to_end_amm() {
     // Initial balances for both tokens are 0
 
     // Adding liquidity for token0 and token1 by owner0
-    // We have to call it from the AAM instance in the owner0's
+    // We have to call it from the AMM instance in the owner0's
     // user chain, chain0, so it's properly authenticated
-    app_amm0.add_liquidity(owner0, 100, 100).await;
-    // Processing inbox for messages from chain0 to chain_admin, where the AMM
-    // was created
-    node_service_admin.process_inbox(&chain_admin).await;
+    app_amm_admin
+        .add_liquidity(
+            owner_admin,
+            Amount::from_tokens(100),
+            Amount::from_tokens(100),
+        )
+        .await;
 
     // Ownership of owner0 tokens should be with the AMM now
     app_fungible0_admin
-        .assert_fungible_account_balances([
+        .assert_balances([
             (owner0, Amount::ZERO),
-            (owner1, Amount::from_tokens(150)),
-            (owner_admin, Amount::ZERO),
+            (owner1, Amount::from_tokens(50)),
+            (owner_admin, Amount::from_tokens(100)),
             (owner_amm, Amount::from_tokens(100)),
         ])
         .await;
     app_fungible1_admin
-        .assert_fungible_account_balances([
-            (owner0, Amount::ZERO),
-            (owner1, Amount::from_tokens(100)),
-            (owner_admin, Amount::ZERO),
+        .assert_balances([
+            (owner0, Amount::from_tokens(50)),
+            (owner1, Amount::ZERO),
+            (owner_admin, Amount::from_tokens(100)),
             (owner_amm, Amount::from_tokens(100)),
         ])
         .await;
 
     // Adding liquidity for token0 and token1 by owner1 now
-    app_amm1.add_liquidity(owner1, 100, 100).await;
-    node_service_admin.process_inbox(&chain_admin).await;
+    app_amm_admin
+        .add_liquidity(
+            owner_admin,
+            Amount::from_tokens(100),
+            Amount::from_tokens(100),
+        )
+        .await;
 
     app_fungible0_admin
-        .assert_fungible_account_balances([
+        .assert_balances([
             (owner0, Amount::ZERO),
             (owner1, Amount::from_tokens(50)),
             (owner_admin, Amount::ZERO),
@@ -1863,19 +1878,19 @@ async fn test_end_to_end_amm() {
         ])
         .await;
     app_fungible1_admin
-        .assert_fungible_account_balances([
-            (owner0, Amount::ZERO),
+        .assert_balances([
+            (owner0, Amount::from_tokens(50)),
             (owner1, Amount::ZERO),
             (owner_admin, Amount::ZERO),
             (owner_amm, Amount::from_tokens(200)),
         ])
         .await;
 
-    app_amm1.swap(owner1, 0, 1, 50).await;
+    app_amm1.swap(owner1, 0, Amount::from_tokens(50)).await;
     node_service_admin.process_inbox(&chain_admin).await;
 
     app_fungible0_admin
-        .assert_fungible_account_balances([
+        .assert_balances([
             (owner0, Amount::ZERO),
             (owner1, Amount::ZERO),
             (owner_admin, Amount::ZERO),
@@ -1883,32 +1898,73 @@ async fn test_end_to_end_amm() {
         ])
         .await;
     app_fungible1_admin
-        .assert_fungible_account_balances([
-            (owner0, Amount::ZERO),
+        .assert_balances([
+            (owner0, Amount::from_tokens(50)),
             (owner1, Amount::from_tokens(40)),
             (owner_admin, Amount::ZERO),
             (owner_amm, Amount::from_tokens(160)),
         ])
         .await;
 
-    app_amm1.remove_liquidity(owner1, 0, 1, 62).await;
-    node_service_admin.process_inbox(&chain_admin).await;
+    // Can only remove liquidity from main chain
+    app_amm_admin
+        .remove_liquidity(owner1, 0, Amount::from_tokens(62))
+        .await;
 
     app_fungible0_admin
-        .assert_fungible_account_balances([
+        .assert_balances([
             (owner0, Amount::ZERO),
             (owner1, Amount::from_tokens(62)),
             (owner_admin, Amount::ZERO),
             (owner_amm, Amount::from_tokens(188)),
         ])
         .await;
-    // Rounding down happens here, which is why it's 79 instead of 80
     app_fungible1_admin
-        .assert_fungible_account_balances([
-            (owner0, Amount::ZERO),
-            (owner1, Amount::from_tokens(79)),
+        .assert_balances([
+            (owner0, Amount::from_tokens(50)),
+            (owner1, Amount::from_milli(79_680)),
             (owner_admin, Amount::ZERO),
-            (owner_amm, Amount::from_tokens(121)),
+            (owner_amm, Amount::from_milli(120_320)),
+        ])
+        .await;
+
+    app_amm1.swap(owner1, 0, Amount::from_tokens(50)).await;
+    node_service_admin.process_inbox(&chain_admin).await;
+
+    app_fungible0_admin
+        .assert_balances([
+            (owner0, Amount::ZERO),
+            (owner1, Amount::from_tokens(12)),
+            (owner_admin, Amount::ZERO),
+            (owner_amm, Amount::from_tokens(238)),
+        ])
+        .await;
+    app_fungible1_admin
+        .assert_balances([
+            (owner0, Amount::from_tokens(50)),
+            (owner1, Amount::from_atto(104_957310924369747899)),
+            (owner_admin, Amount::ZERO),
+            (owner_amm, Amount::from_atto(95_042689075630252101)),
+        ])
+        .await;
+
+    app_amm0.swap(owner0, 1, Amount::from_tokens(50)).await;
+    node_service_admin.process_inbox(&chain_admin).await;
+
+    app_fungible0_admin
+        .assert_balances([
+            (owner0, Amount::from_atto(82_044810916287757646)),
+            (owner1, Amount::from_tokens(12)),
+            (owner_admin, Amount::ZERO),
+            (owner_amm, Amount::from_atto(155_955189083712242354)),
+        ])
+        .await;
+    app_fungible1_admin
+        .assert_balances([
+            (owner0, Amount::ZERO),
+            (owner1, Amount::from_atto(104_957310924369747899)),
+            (owner_admin, Amount::ZERO),
+            (owner_amm, Amount::from_atto(145_042689075630252101)),
         ])
         .await;
 

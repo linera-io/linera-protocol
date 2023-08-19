@@ -4,5 +4,5 @@ use linera_views::views::{GraphQLView, RootView};
 #[derive(RootView, GraphQLView)]
 #[view(context = "ViewStorageContext")]
 pub struct Amm {
-    pub will_remove: RegisterView<u64>,
+    pub _dummy: RegisterView<u8>,
 }
