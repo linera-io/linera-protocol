@@ -14,6 +14,7 @@
 #[macro_use]
 mod macro_utils;
 
+mod exported_function_interface;
 mod imported_function_interface;
 mod memory_layout;
 mod primitive_types;
@@ -28,6 +29,7 @@ pub use self::runtime::wasmtime;
 #[cfg(any(test, feature = "test"))]
 pub use self::runtime::{MockExportedFunction, MockInstance, MockRuntime};
 pub use self::{
+    exported_function_interface::ExportTo,
     imported_function_interface::ImportedFunctionInterface,
     memory_layout::{JoinFlatLayouts, Layout},
     runtime::{
