@@ -19,6 +19,7 @@ pub fn derive_mutation_root(input: TokenStream) -> TokenStream {
 
 fn generate_mutation_root_code(input: ItemEnum) -> TokenStream2 {
     let enum_name = input.ident;
+    let mutation_root_name = concat(&enum_name, "MutationRoot");
     let mut methods = vec![];
 
     for variant in input.variants {
@@ -66,13 +67,21 @@ fn generate_mutation_root_code(input: ItemEnum) -> TokenStream2 {
     }
 
     quote! {
+        pub struct #mutation_root_name;
+
         #[async_graphql::Object]
-        impl #enum_name {
+        impl #mutation_root_name {
             #
 
             (#methods)
 
             *
+        }
+
+        impl #enum_name {
+            pub fn mutation_root() -> #mutation_root_name {
+                #mutation_root_name
+            }
         }
     }
 }
@@ -108,8 +117,10 @@ pub mod tests {
         let output = generate_mutation_root_code(operation);
 
         let expected = quote! {
+            pub struct SomeOperationMutationRoot;
+
             #[async_graphql::Object]
-            impl SomeOperation {
+            impl SomeOperationMutationRoot {
                 async fn tuple_variant(&self, field_0: String,) -> Vec<u8> {
                     bcs::to_bytes(&SomeOperation::TupleVariant(field_0,)).unwrap()
                 }
@@ -118,6 +129,12 @@ pub mod tests {
                 }
                 async fn empty_variant(&self) -> Vec<u8> {
                     bcs::to_bytes(&SomeOperation::EmptyVariant).unwrap()
+                }
+            }
+
+            impl SomeOperation {
+                pub fn mutation_root() -> SomeOperationMutationRoot {
+                    SomeOperationMutationRoot
                 }
             }
         };
