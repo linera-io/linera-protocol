@@ -5,12 +5,9 @@
 
 mod state;
 
-use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
+use async_graphql::{EmptySubscription, Request, Response, Schema};
 use async_trait::async_trait;
-use linera_sdk::{
-    base::{ChainId, WithServiceAbi},
-    QueryContext, Service, ViewStateStorage,
-};
+use linera_sdk::{base::WithServiceAbi, QueryContext, Service, ViewStateStorage};
 use linera_views::views::ViewError;
 use social::Operation;
 use state::Social;
@@ -33,26 +30,10 @@ impl Service for Social {
         _context: &QueryContext,
         request: Request,
     ) -> Result<Response, Self::Error> {
-        let schema = Schema::build(self.clone(), MutationRoot, EmptySubscription).finish();
+        let schema =
+            Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
         let response = schema.execute(request).await;
         Ok(response)
-    }
-}
-
-struct MutationRoot;
-
-#[Object]
-impl MutationRoot {
-    async fn subscribe(&self, chain_id: ChainId) -> Vec<u8> {
-        bcs::to_bytes(&Operation::RequestSubscribe(chain_id)).unwrap()
-    }
-
-    async fn unsubscribe(&self, chain_id: ChainId) -> Vec<u8> {
-        bcs::to_bytes(&Operation::RequestUnsubscribe(chain_id)).unwrap()
-    }
-
-    async fn post(&self, text: String) -> Vec<u8> {
-        bcs::to_bytes(&Operation::Post(text)).unwrap()
     }
 }
 

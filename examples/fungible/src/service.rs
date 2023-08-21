@@ -6,13 +6,10 @@
 mod state;
 
 use self::state::FungibleToken;
-use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
+use async_graphql::{EmptySubscription, Request, Response, Schema};
 use async_trait::async_trait;
-use fungible::{Account, AccountOwner, Operation};
-use linera_sdk::{
-    base::{Amount, WithServiceAbi},
-    QueryContext, Service, ViewStateStorage,
-};
+use fungible::Operation;
+use linera_sdk::{base::WithServiceAbi, QueryContext, Service, ViewStateStorage};
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -32,42 +29,10 @@ impl Service for FungibleToken {
         _context: &QueryContext,
         request: Request,
     ) -> Result<Response, Self::Error> {
-        let schema = Schema::build(self.clone(), MutationRoot {}, EmptySubscription).finish();
+        let schema =
+            Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
         let response = schema.execute(request).await;
         Ok(response)
-    }
-}
-
-struct MutationRoot;
-
-#[Object]
-impl MutationRoot {
-    async fn transfer(
-        &self,
-        owner: AccountOwner,
-        amount: Amount,
-        target_account: Account,
-    ) -> Vec<u8> {
-        bcs::to_bytes(&Operation::Transfer {
-            owner,
-            amount,
-            target_account,
-        })
-        .unwrap()
-    }
-
-    async fn claim(
-        &self,
-        source_account: Account,
-        amount: Amount,
-        target_account: Account,
-    ) -> Vec<u8> {
-        bcs::to_bytes(&Operation::Claim {
-            source_account,
-            amount,
-            target_account,
-        })
-        .unwrap()
     }
 }
 
