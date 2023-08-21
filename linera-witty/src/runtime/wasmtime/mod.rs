@@ -3,6 +3,7 @@
 
 //! Support for the [Wasmtime](https://wasmtime.dev) runtime.
 
+mod export_function;
 mod function;
 mod memory;
 mod parameters;
