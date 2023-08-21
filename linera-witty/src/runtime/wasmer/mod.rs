@@ -3,6 +3,7 @@
 
 //! Support for the [Wasmer](https://wasmer.io) runtime.
 
+mod export_function;
 mod function;
 mod memory;
 mod parameters;
@@ -76,6 +77,22 @@ impl InstanceBuilder {
             store: self.store,
             instance: self.environment,
         })
+    }
+}
+
+impl AsStoreRef for InstanceBuilder {
+    fn as_store_ref(&self) -> StoreRef<'_> {
+        self.store.as_store_ref()
+    }
+}
+
+impl AsStoreMut for InstanceBuilder {
+    fn as_store_mut(&mut self) -> StoreMut<'_> {
+        self.store.as_store_mut()
+    }
+
+    fn objects_mut(&mut self) -> &mut StoreObjects {
+        self.store.objects_mut()
     }
 }
 
