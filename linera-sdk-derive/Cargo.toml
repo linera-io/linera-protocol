@@ -1,19 +1,19 @@
 [package]
-name = "linera-views-derive"
-version = "0.3.0"
-description = "The procedural macros for the crate `linera-views`"
+name = "linera-sdk-derive"
+version = "0.1.0"
+description = "The procedural macros for the crate `linera-sdk`"
 authors = ["Linera <contact@linera.io>"]
 repository = "https://github.com/linera-io/linera-protocol"
 homepage = "https://linera.io"
 license = "Apache-2.0"
 edition = "2021"
 
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 [lib]
 proc-macro = true
 
 [dependencies]
 syn = { workspace = true, features = ["full", "extra-traits"] }
-heck = { workspace = true }
-quote = { workspace = true }
 proc-macro2 = { workspace = true }
-convert_case = { workspace = true }
+convert_case = "0.6.0"
