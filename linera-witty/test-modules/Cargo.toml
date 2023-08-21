@@ -24,5 +24,21 @@ path = "src/export/setters.rs"
 name = "export-operations"
 path = "src/export/operations.rs"
 
+[[bin]]
+name = "import-simple-function"
+path = "src/import/simple_function.rs"
+
+[[bin]]
+name = "import-getters"
+path = "src/import/getters.rs"
+
+[[bin]]
+name = "import-setters"
+path = "src/import/setters.rs"
+
+[[bin]]
+name = "import-operations"
+path = "src/import/operations.rs"
+
 [dependencies]
 wit-bindgen = { version = "0.7.0", features = ["macros"] }
