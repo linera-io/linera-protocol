@@ -6,9 +6,10 @@
 //! These help determining the function signature the guest expects based on the host function
 //! signature.
 
+mod guest_interface;
 mod result_storage;
 
-use self::result_storage::ResultStorage;
+use self::{guest_interface::GuestInterface, result_storage::ResultStorage};
 use crate::RuntimeError;
 
 /// A type that can register some functions as exports for the target `Instance`.
