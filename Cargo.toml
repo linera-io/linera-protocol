@@ -123,6 +123,7 @@ linera-views = { version = "0.3.0", path = "./linera-views", default-features = 
 linera-views-derive = { version = "0.3.0", path = "./linera-views-derive" }
 linera-witty = { version = "0.3.0", path = "./linera-witty" }
 linera-witty-macros = { version = "0.3.0", path = "./linera-witty-macros" }
+linera-sdk-derive = { version = "0.3.0", path = "./linera-sdk-derive" }
 linera-service = { version = "0.3.0", path = "./linera-service" }
 
 counter = { path = "./examples/counter" }
