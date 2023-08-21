@@ -118,6 +118,27 @@ impl<'input> FunctionInformation<'input> {
         )
     }
 
+    /// Generates the code to export a host function using the Wasmtime runtime.
+    #[cfg(feature = "wasmtime")]
+    pub fn generate_for_wasmtime(&self, namespace: &LitStr) -> TokenStream {
+        let caller = quote! { linera_witty::wasmtime::Caller<'_, ()> };
+        let input_to_guest_parameters = quote! {
+            linera_witty::wasmtime::WasmtimeParameters::from_wasmtime(input)
+        };
+        let guest_results_to_output = quote! {
+            linera_witty::wasmtime::WasmtimeResults::into_wasmtime(guest_results)
+        };
+        let output_results_trait = quote! { linera_witty::wasmtime::WasmtimeResults };
+
+        self.generate(
+            namespace,
+            caller,
+            input_to_guest_parameters,
+            guest_results_to_output,
+            output_results_trait,
+        )
+    }
+
     /// Generates the code to export using a host function.
     fn generate(
         &self,

@@ -15,6 +15,7 @@ proc-macro = true
 
 [features]
 wasmer = []
+wasmtime = []
 
 [dependencies]
 heck = { workspace = true }
