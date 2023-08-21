@@ -41,4 +41,4 @@ pub use self::{
 };
 pub use frunk::{hlist, hlist::HList, hlist_pat, HCons, HList, HNil};
 #[cfg(feature = "macros")]
-pub use linera_witty_macros::{wit_import, WitLoad, WitStore, WitType};
+pub use linera_witty_macros::{wit_export, wit_import, WitLoad, WitStore, WitType};
