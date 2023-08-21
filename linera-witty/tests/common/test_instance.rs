@@ -13,9 +13,11 @@ use std::any::Any;
 
 /// Trait representing a type that can create instances for tests.
 pub trait TestInstanceFactory {
+    /// The type representing a guest Wasm instance.
     type Instance: InstanceWithMemory;
 
-    fn load_test_module(&mut self, module_name: &str) -> Self::Instance;
+    /// Loads a test module with the provided `module_name` from the named `group`_
+    fn load_test_module(&mut self, group: &str, module_name: &str) -> Self::Instance;
 }
 
 /// A factory of [`wasmtime::Entrypoint`] instances.
@@ -26,11 +28,11 @@ pub struct WasmtimeInstanceFactory;
 impl TestInstanceFactory for WasmtimeInstanceFactory {
     type Instance = wasmtime::EntrypointInstance;
 
-    fn load_test_module(&mut self, module: &str) -> Self::Instance {
+    fn load_test_module(&mut self, group: &str, module: &str) -> Self::Instance {
         let engine = ::wasmtime::Engine::default();
         let module = ::wasmtime::Module::from_file(
             &engine,
-            format!("../target/wasm32-unknown-unknown/debug/export-{module}.wasm"),
+            format!("../target/wasm32-unknown-unknown/debug/{group}-{module}.wasm"),
         )
         .expect("Failed to load module");
 
@@ -50,11 +52,11 @@ pub struct WasmerInstanceFactory;
 impl TestInstanceFactory for WasmerInstanceFactory {
     type Instance = wasmer::EntrypointInstance;
 
-    fn load_test_module(&mut self, module: &str) -> Self::Instance {
+    fn load_test_module(&mut self, group: &str, module: &str) -> Self::Instance {
         let engine = ::wasmer::EngineBuilder::new(::wasmer::Singlepass::default()).engine();
         let module = ::wasmer::Module::from_file(
             &engine,
-            format!("../target/wasm32-unknown-unknown/debug/export-{module}.wasm"),
+            format!("../target/wasm32-unknown-unknown/debug/{group}-{module}.wasm"),
         )
         .expect("Failed to load module");
 
@@ -73,15 +75,17 @@ pub struct MockInstanceFactory {
 impl TestInstanceFactory for MockInstanceFactory {
     type Instance = MockInstance;
 
-    fn load_test_module(&mut self, module: &str) -> Self::Instance {
+    fn load_test_module(&mut self, group: &str, module: &str) -> Self::Instance {
         let mut instance = MockInstance::default();
 
-        match module {
-            "simple-function" => self.simple_function(&mut instance),
-            "getters" => self.getters(&mut instance),
-            "setters" => self.setters(&mut instance),
-            "operations" => self.operations(&mut instance),
-            _ => panic!("Attempt to load module {module:?} which has no mocked exported methods"),
+        match (group, module) {
+            ("export", "simple-function") => self.export_simple_function(&mut instance),
+            ("export", "getters") => self.export_getters(&mut instance),
+            ("export", "setters") => self.export_setters(&mut instance),
+            ("export", "operations") => self.export_operations(&mut instance),
+            _ => panic!(
+                "Attempt to load module \"{group}-{module}\" which has no mock configuration"
+            ),
         }
 
         instance
@@ -90,7 +94,7 @@ impl TestInstanceFactory for MockInstanceFactory {
 
 impl MockInstanceFactory {
     /// Mock the exported functions for the "simple-function" module.
-    fn simple_function(&mut self, instance: &mut MockInstance) {
+    fn export_simple_function(&mut self, instance: &mut MockInstance) {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/simple-function#simple",
@@ -100,7 +104,7 @@ impl MockInstanceFactory {
     }
 
     /// Mock the exported functions for the "getters" module.
-    fn getters(&mut self, instance: &mut MockInstance) {
+    fn export_getters(&mut self, instance: &mut MockInstance) {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/getters#get-true",
@@ -176,7 +180,7 @@ impl MockInstanceFactory {
     }
 
     /// Mock the exported functions for the "setters" module.
-    fn setters(&mut self, instance: &mut MockInstance) {
+    fn export_setters(&mut self, instance: &mut MockInstance) {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/setters#set-bool",
@@ -279,7 +283,7 @@ impl MockInstanceFactory {
     }
 
     /// Mock the exported functions for the "operations" module.
-    fn operations(&mut self, instance: &mut MockInstance) {
+    fn export_operations(&mut self, instance: &mut MockInstance) {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/operations#and-bool",

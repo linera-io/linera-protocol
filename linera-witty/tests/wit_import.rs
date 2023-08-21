@@ -33,7 +33,7 @@ where
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("simple-function");
+    let instance = factory.load_test_module("export", "simple-function");
 
     SimpleFunction::new(instance)
         .simple()
@@ -68,7 +68,7 @@ where
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("getters");
+    let instance = factory.load_test_module("export", "getters");
 
     let mut getters = Getters::new(instance);
 
@@ -173,7 +173,7 @@ where
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("setters");
+    let instance = factory.load_test_module("export", "setters");
 
     let mut setters = Setters::new(instance);
 
@@ -239,7 +239,7 @@ where
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("operations");
+    let instance = factory.load_test_module("export", "operations");
 
     let mut operations = Operations::new(instance);
 
