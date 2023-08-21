@@ -13,11 +13,20 @@ use std::any::Any;
 
 /// Trait representing a type that can create instances for tests.
 pub trait TestInstanceFactory {
+    /// The type used to build a guest Wasm instance, which supports registration of exported host
+    /// functions.
+    type Builder;
+
     /// The type representing a guest Wasm instance.
     type Instance: InstanceWithMemory;
 
     /// Loads a test module with the provided `module_name` from the named `group`_
-    fn load_test_module(&mut self, group: &str, module_name: &str) -> Self::Instance;
+    fn load_test_module(
+        &mut self,
+        group: &str,
+        module_name: &str,
+        add_exports: impl Fn(&mut Self::Builder),
+    ) -> Self::Instance;
 }
 
 /// A factory of [`wasmtime::Entrypoint`] instances.
@@ -26,9 +35,15 @@ pub struct WasmtimeInstanceFactory;
 
 #[cfg(feature = "wasmtime")]
 impl TestInstanceFactory for WasmtimeInstanceFactory {
+    type Builder = ::wasmtime::Linker<()>;
     type Instance = wasmtime::EntrypointInstance;
 
-    fn load_test_module(&mut self, group: &str, module: &str) -> Self::Instance {
+    fn load_test_module(
+        &mut self,
+        group: &str,
+        module: &str,
+        add_exports: impl Fn(&mut Self::Builder),
+    ) -> Self::Instance {
         let engine = ::wasmtime::Engine::default();
         let module = ::wasmtime::Module::from_file(
             &engine,
@@ -36,8 +51,12 @@ impl TestInstanceFactory for WasmtimeInstanceFactory {
         )
         .expect("Failed to load module");
 
+        let mut linker = wasmtime::Linker::new(&engine);
+        add_exports(&mut linker);
+
         let mut store = ::wasmtime::Store::new(&engine, ());
-        let instance = ::wasmtime::Instance::new(&mut store, &module, &[])
+        let instance = linker
+            .instantiate(&mut store, &module)
             .expect("Failed to instantiate module");
 
         wasmtime::EntrypointInstance::new(instance, store)
@@ -50,9 +69,15 @@ pub struct WasmerInstanceFactory;
 
 #[cfg(feature = "wasmer")]
 impl TestInstanceFactory for WasmerInstanceFactory {
+    type Builder = wasmer::InstanceBuilder;
     type Instance = wasmer::EntrypointInstance;
 
-    fn load_test_module(&mut self, group: &str, module: &str) -> Self::Instance {
+    fn load_test_module(
+        &mut self,
+        group: &str,
+        module: &str,
+        add_exports: impl Fn(&mut Self::Builder),
+    ) -> Self::Instance {
         let engine = ::wasmer::EngineBuilder::new(::wasmer::Singlepass::default()).engine();
         let module = ::wasmer::Module::from_file(
             &engine,
@@ -60,7 +85,11 @@ impl TestInstanceFactory for WasmerInstanceFactory {
         )
         .expect("Failed to load module");
 
-        wasmer::InstanceBuilder::new(engine)
+        let mut builder = wasmer::InstanceBuilder::new(engine);
+
+        add_exports(&mut builder);
+
+        builder
             .instantiate(&module)
             .expect("Failed to instantiate module")
     }
@@ -73,9 +102,15 @@ pub struct MockInstanceFactory {
 }
 
 impl TestInstanceFactory for MockInstanceFactory {
+    type Builder = MockInstance;
     type Instance = MockInstance;
 
-    fn load_test_module(&mut self, group: &str, module: &str) -> Self::Instance {
+    fn load_test_module(
+        &mut self,
+        group: &str,
+        module: &str,
+        add_exports: impl Fn(&mut Self::Builder),
+    ) -> Self::Instance {
         let mut instance = MockInstance::default();
 
         match (group, module) {
@@ -87,6 +122,8 @@ impl TestInstanceFactory for MockInstanceFactory {
                 "Attempt to load module \"{group}-{module}\" which has no mock configuration"
             ),
         }
+
+        add_exports(&mut instance);
 
         instance
     }
