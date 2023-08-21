@@ -3,6 +3,8 @@
 
 //! Generation of code to export host functions to a Wasm guest instance.
 
+#![cfg(feature = "wasmer")]
+
 mod function_information;
 
 use self::function_information::FunctionInformation;
@@ -52,9 +54,50 @@ impl<'input> WitExportGenerator<'input> {
     /// Consumes the collected pieces to generate the final code.
     pub fn generate(mut self) -> TokenStream {
         let implementation = self.implementation;
+        let wasmer = self.generate_for_wasmer();
 
         quote! {
             #implementation
+            #wasmer
+        }
+    }
+
+    /// Generates the code to export functions using the Wasmer runtime.
+    fn generate_for_wasmer(&mut self) -> Option<TokenStream> {
+        #[cfg(feature = "wasmer")]
+        {
+            let export_target = quote! { linera_witty::wasmer::InstanceBuilder };
+            let exported_functions = self
+                .functions
+                .iter()
+                .map(|function| function.generate_for_wasmer(self.namespace));
+
+            Some(self.generate_for(export_target, exported_functions))
+        }
+        #[cfg(not(feature = "wasmer"))]
+        {
+            None
+        }
+    }
+
+    /// Generates the implementation of `ExportTo` for the `export_target` including the
+    /// `exported_functions`.
+    fn generate_for(
+        &self,
+        export_target: TokenStream,
+        exported_functions: impl Iterator<Item = TokenStream>,
+    ) -> TokenStream {
+        let type_name = &self.type_name;
+
+        quote! {
+            impl linera_witty::ExportTo<#export_target> for #type_name {
+                fn export_to(
+                    target: &mut #export_target,
+                ) -> Result<(), linera_witty::RuntimeError> {
+                    #( #exported_functions )*
+                    Ok(())
+                }
+            }
         }
     }
 }

@@ -8,8 +8,8 @@ use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
 use quote::{quote, quote_spanned, ToTokens};
 use syn::{
-    spanned::Spanned, FnArg, GenericArgument, ImplItem, ImplItemMethod, Path, PathArguments,
-    PathSegment, ReturnType, Token, Type, TypePath,
+    spanned::Spanned, FnArg, GenericArgument, ImplItem, ImplItemMethod, LitStr, Path,
+    PathArguments, PathSegment, ReturnType, Token, Type, TypePath,
 };
 
 /// Pieces of information extracted from a function's definition.
@@ -92,6 +92,84 @@ impl<'input> FunctionInformation<'input> {
                 Some(inner_type) => (inner_type.to_token_stream(), true),
                 None => (return_type.to_token_stream(), false),
             },
+        }
+    }
+
+    /// Generates the code to export a host function using the Wasmer runtime.
+    #[cfg(feature = "wasmer")]
+    pub fn generate_for_wasmer(&self, namespace: &LitStr) -> TokenStream {
+        let caller = quote! {
+            linera_witty::wasmer::FunctionEnvMut<'_, linera_witty::wasmer::InstanceSlot>
+        };
+        let input_to_guest_parameters = quote! {
+            linera_witty::wasmer::WasmerParameters::from_wasmer(input)
+        };
+        let guest_results_to_output = quote! {
+            linera_witty::wasmer::WasmerResults::into_wasmer(guest_results)
+        };
+        let output_results_trait = quote! { linera_witty::wasmer::WasmerResults };
+
+        self.generate(
+            namespace,
+            caller,
+            input_to_guest_parameters,
+            guest_results_to_output,
+            output_results_trait,
+        )
+    }
+
+    /// Generates the code to export using a host function.
+    fn generate(
+        &self,
+        namespace: &LitStr,
+        caller: TokenStream,
+        input_to_guest_parameters: TokenStream,
+        guest_results_to_output: TokenStream,
+        output_results_trait: TokenStream,
+    ) -> TokenStream {
+        let wit_name = &self.wit_name;
+        let interface_type = &self.interface_type;
+        let host_parameters = &self.parameter_bindings;
+        let call_early_return = &self.call_early_return;
+        let function_name = &self.function.sig.ident;
+
+        let output_type = quote_spanned! { self.function.sig.output.span() =>
+            <
+                <
+                    #interface_type as linera_witty::ExportedFunctionInterface
+                >::GuestResults as #output_results_trait
+            >::Results
+        };
+
+        quote_spanned! { self.function.span() =>
+            linera_witty::ExportFunction::export(
+                target,
+                #namespace,
+                #wit_name,
+                #[allow(clippy::type_complexity)]
+                |mut caller: #caller, input| -> Result<#output_type, linera_witty::RuntimeError> {
+                    type Interface = #interface_type;
+
+                    let guest_parameters = #input_to_guest_parameters;
+                    let (linera_witty::hlist_pat![#host_parameters], result_storage) =
+                        <Interface as linera_witty::ExportedFunctionInterface>::lift_parameters(
+                            guest_parameters,
+                            &linera_witty::InstanceWithMemory::memory(&mut caller)?,
+                        )?;
+
+                    #[allow(clippy::let_unit_value)]
+                    let host_results = Self::#function_name(#host_parameters) #call_early_return;
+                    let guest_results =
+                        <Interface as linera_witty::ExportedFunctionInterface>::lower_results(
+                            host_results,
+                            result_storage,
+                            &mut linera_witty::InstanceWithMemory::memory(&mut caller)?,
+                        )?;
+
+                    #[allow(clippy::unit_arg)]
+                    Ok(#guest_results_to_output)
+                }
+            )?;
         }
     }
 }

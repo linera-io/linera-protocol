@@ -14,7 +14,7 @@ edition = "2021"
 default = ["macros"]
 macros = ["linera-witty-macros"]
 test = []
-wasmer = ["dep:wasmer", "wasmer-vm"]
+wasmer = ["dep:wasmer", "linera-witty-macros?/wasmer", "wasmer-vm"]
 wasmtime = ["dep:wasmtime", "anyhow"]
 
 [dependencies]

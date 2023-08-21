@@ -9,11 +9,13 @@ mod memory;
 mod parameters;
 mod results;
 
+pub use self::{parameters::WasmerParameters, results::WasmerResults};
 use super::traits::{Instance, Runtime};
 use std::sync::{Arc, Mutex};
+pub use wasmer::FunctionEnvMut;
 use wasmer::{
-    AsStoreMut, AsStoreRef, Engine, Extern, FunctionEnv, FunctionEnvMut, Imports,
-    InstantiationError, Memory, Module, Store, StoreMut, StoreRef,
+    AsStoreMut, AsStoreRef, Engine, Extern, FunctionEnv, Imports, InstantiationError, Memory,
+    Module, Store, StoreMut, StoreRef,
 };
 use wasmer_vm::StoreObjects;
 
