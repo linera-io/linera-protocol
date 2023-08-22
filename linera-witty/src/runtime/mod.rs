@@ -14,7 +14,7 @@ pub mod wasmer;
 pub mod wasmtime;
 
 #[cfg(any(test, feature = "test"))]
-pub use self::test::{MockExportedFunction, MockInstance, MockRuntime};
+pub use self::test::{MockExportedFunction, MockInstance, MockResults, MockRuntime};
 pub use self::{
     error::RuntimeError,
     memory::{GuestPointer, Memory, RuntimeMemory},

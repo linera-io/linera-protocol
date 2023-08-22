@@ -279,6 +279,19 @@ where
     }
 }
 
+/// A helper trait to serve as an equivalent to [`crate::wasmer::WasmerResults`] and
+/// [`crate::wasmtime::WasmtimeResults`] for the [`MockInstance`].
+///
+/// This is in order to help with writing tests generic over the Wasm guest instance type.
+pub trait MockResults {
+    /// The mock native type of the results for the [`MockInstance`].
+    type Results;
+}
+
+impl<T> MockResults for T {
+    type Results = T;
+}
+
 /// A helper type to verify how many times an exported function is called.
 pub struct MockExportedFunction<Parameters, Results> {
     name: String,
