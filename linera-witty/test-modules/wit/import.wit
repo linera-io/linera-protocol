@@ -1,0 +1,21 @@
+package witty-macros:test-modules
+
+world import-simple-function {
+    import simple-function
+    export entrypoint
+}
+
+world import-getters {
+    import getters
+    export entrypoint
+}
+
+world import-setters {
+    import setters
+    export entrypoint
+}
+
+world import-operations {
+    import operations
+    export entrypoint
+}

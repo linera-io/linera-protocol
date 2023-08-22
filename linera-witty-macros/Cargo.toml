@@ -13,6 +13,11 @@ edition = "2021"
 [lib]
 proc-macro = true
 
+[features]
+mock-instance = []
+wasmer = []
+wasmtime = []
+
 [dependencies]
 heck = { workspace = true }
 proc-macro-error = { workspace = true }

@@ -14,6 +14,7 @@
 #[macro_use]
 mod macro_utils;
 
+mod exported_function_interface;
 mod imported_function_interface;
 mod memory_layout;
 mod primitive_types;
@@ -26,8 +27,9 @@ pub use self::runtime::wasmer;
 #[cfg(feature = "wasmtime")]
 pub use self::runtime::wasmtime;
 #[cfg(any(test, feature = "test"))]
-pub use self::runtime::{MockExportedFunction, MockInstance, MockRuntime};
+pub use self::runtime::{MockExportedFunction, MockInstance, MockResults, MockRuntime};
 pub use self::{
+    exported_function_interface::{ExportFunction, ExportTo, ExportedFunctionInterface},
     imported_function_interface::ImportedFunctionInterface,
     memory_layout::{JoinFlatLayouts, Layout},
     runtime::{
@@ -38,5 +40,10 @@ pub use self::{
     util::{Merge, Split},
 };
 pub use frunk::{hlist, hlist::HList, hlist_pat, HCons, HList, HNil};
+#[cfg(all(
+    feature = "macros",
+    any(feature = "test", feature = "wasmer", feature = "wasmtime")
+))]
+pub use linera_witty_macros::wit_export;
 #[cfg(feature = "macros")]
-pub use linera_witty_macros::{WitLoad, WitStore, WitType};
+pub use linera_witty_macros::{wit_import, WitLoad, WitStore, WitType};

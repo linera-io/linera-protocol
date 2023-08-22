@@ -13,9 +13,9 @@ edition = "2021"
 [features]
 default = ["macros"]
 macros = ["linera-witty-macros"]
-test = []
-wasmer = ["dep:wasmer", "wasmer-vm"]
-wasmtime = ["dep:wasmtime", "anyhow"]
+test = ["linera-witty-macros?/mock-instance"]
+wasmer = ["dep:wasmer", "linera-witty-macros?/wasmer", "wasmer-vm"]
+wasmtime = ["dep:wasmtime", "anyhow", "linera-witty-macros?/wasmtime"]
 
 [dependencies]
 anyhow = { workspace = true, optional = true }

@@ -10,7 +10,7 @@ use super::{
     GuestPointer, Instance, InstanceWithFunction, InstanceWithMemory, Runtime, RuntimeError,
     RuntimeMemory,
 };
-use crate::memory_layout::FlatLayout;
+use crate::{memory_layout::FlatLayout, ExportFunction, WitLoad, WitStore};
 use frunk::{hlist, hlist_pat, HList};
 use std::{
     any::Any,
@@ -30,15 +30,18 @@ impl Runtime for MockRuntime {
     type Memory = Arc<Mutex<Vec<u8>>>;
 }
 
-/// A closure for handling calls to mocked exported guest functions.
-pub type ExportedFunctionHandler = Box<dyn Fn(Box<dyn Any>) -> Result<Box<dyn Any>, RuntimeError>>;
+/// A closure for handling calls to mocked functions.
+pub type FunctionHandler =
+    Arc<dyn Fn(MockInstance, Box<dyn Any>) -> Result<Box<dyn Any>, RuntimeError>>;
 
 /// A fake Wasm instance.
 ///
 /// Only contains exports for the memory and the canonical ABI allocation functions.
+#[derive(Clone)]
 pub struct MockInstance {
     memory: Arc<Mutex<Vec<u8>>>,
-    exported_functions: HashMap<String, ExportedFunctionHandler>,
+    exported_functions: HashMap<String, FunctionHandler>,
+    imported_functions: HashMap<String, FunctionHandler>,
 }
 
 impl Default for MockInstance {
@@ -48,11 +51,13 @@ impl Default for MockInstance {
         MockInstance {
             memory: memory.clone(),
             exported_functions: HashMap::new(),
+            imported_functions: HashMap::new(),
         }
-        .with_exported_function("cabi_free", |_: HList![i32]| Ok(hlist![]))
+        .with_exported_function("cabi_free", |_, _: HList![i32]| Ok(hlist![]))
         .with_exported_function(
             "cabi_realloc",
-            move |hlist_pat![_old_address, _old_size, alignment, new_size]: HList![
+            move |_,
+                  hlist_pat![_old_address, _old_size, alignment, new_size]: HList![
                 i32, i32, i32, i32
             ]| {
                 let allocation_size = usize::try_from(new_size)
@@ -89,7 +94,7 @@ impl MockInstance {
     where
         Parameters: 'static,
         Results: 'static,
-        Handler: Fn(Parameters) -> Result<Results, RuntimeError> + 'static,
+        Handler: Fn(MockInstance, Parameters) -> Result<Results, RuntimeError> + 'static,
     {
         self.add_exported_function(name, handler);
         self
@@ -106,19 +111,43 @@ impl MockInstance {
     where
         Parameters: 'static,
         Results: 'static,
-        Handler: Fn(Parameters) -> Result<Results, RuntimeError> + 'static,
+        Handler: Fn(MockInstance, Parameters) -> Result<Results, RuntimeError> + 'static,
     {
         self.exported_functions.insert(
             name.into(),
-            Box::new(move |boxed_parameters| {
+            Arc::new(move |caller, boxed_parameters| {
                 let parameters = boxed_parameters
                     .downcast()
                     .expect("Incorrect parameters used to call handler for exported function");
 
-                handler(*parameters).map(|results| Box::new(results) as Box<dyn Any>)
+                handler(caller, *parameters).map(|results| Box::new(results) as Box<dyn Any>)
             }),
         );
         self
+    }
+
+    /// Calls a function that the mock instance imported from the host.
+    pub fn call_imported_function<Parameters, Results>(
+        &self,
+        function: &str,
+        parameters: Parameters,
+    ) -> Result<Results, RuntimeError>
+    where
+        Parameters: WitStore + 'static,
+        Results: WitLoad + 'static,
+    {
+        let handler = self
+            .imported_functions
+            .get(function)
+            .unwrap_or_else(|| panic!("Missing function imported from host: {function:?}"));
+
+        let flat_parameters = parameters.lower(&mut self.clone().memory()?)?;
+        let boxed_flat_results = handler(self.clone(), Box::new(flat_parameters))?;
+        let flat_results = *boxed_flat_results
+            .downcast()
+            .expect("Expected an incorrect results type from imported host function");
+
+        Results::lift_from(flat_results, &self.clone().memory()?)
     }
 }
 
@@ -158,7 +187,7 @@ where
             .get(function)
             .ok_or_else(|| RuntimeError::FunctionNotFound(function.clone()))?;
 
-        let results = handler(Box::new(parameters))?;
+        let results = handler(self.clone(), Box::new(parameters))?;
 
         Ok(*results
             .downcast()
@@ -217,12 +246,58 @@ impl InstanceWithMemory for MockInstance {
     }
 }
 
+impl<Handler, Parameters, Results> ExportFunction<Handler, Parameters, Results> for MockInstance
+where
+    Handler: Fn(MockInstance, Parameters) -> Result<Results, RuntimeError> + 'static,
+    Parameters: 'static,
+    Results: 'static,
+{
+    fn export(
+        &mut self,
+        module_name: &str,
+        function_name: &str,
+        handler: Handler,
+    ) -> Result<(), RuntimeError> {
+        let name = format!("{module_name}#{function_name}");
+
+        self.imported_functions.insert(
+            name.clone(),
+            Arc::new(move |instance, boxed_parameters| {
+                let parameters = boxed_parameters.downcast().unwrap_or_else(|_| {
+                    panic!(
+                        "Incorrect parameters used to call handler for exported function {name:?}"
+                    )
+                });
+
+                let results = handler(instance, *parameters)?;
+
+                Ok(Box::new(results))
+            }),
+        );
+
+        Ok(())
+    }
+}
+
+/// A helper trait to serve as an equivalent to [`crate::wasmer::WasmerResults`] and
+/// [`crate::wasmtime::WasmtimeResults`] for the [`MockInstance`].
+///
+/// This is in order to help with writing tests generic over the Wasm guest instance type.
+pub trait MockResults {
+    /// The mock native type of the results for the [`MockInstance`].
+    type Results;
+}
+
+impl<T> MockResults for T {
+    type Results = T;
+}
+
 /// A helper type to verify how many times an exported function is called.
 pub struct MockExportedFunction<Parameters, Results> {
     name: String,
     call_counter: Arc<AtomicUsize>,
     expected_calls: usize,
-    handler: fn(Parameters) -> Result<Results, RuntimeError>,
+    handler: fn(MockInstance, Parameters) -> Result<Results, RuntimeError>,
 }
 
 impl<Parameters, Results> MockExportedFunction<Parameters, Results>
@@ -238,7 +313,7 @@ where
     /// times.
     pub fn new(
         name: impl Into<String>,
-        handler: fn(Parameters) -> Result<Results, RuntimeError>,
+        handler: fn(MockInstance, Parameters) -> Result<Results, RuntimeError>,
         expected_calls: usize,
     ) -> Self {
         MockExportedFunction {
@@ -254,9 +329,9 @@ where
         let call_counter = self.call_counter.clone();
         let handler = self.handler;
 
-        instance.add_exported_function(self.name.clone(), move |parameters: Parameters| {
+        instance.add_exported_function(self.name.clone(), move |caller, parameters: Parameters| {
             call_counter.fetch_add(1, Ordering::AcqRel);
-            handler(parameters)
+            handler(caller, parameters)
         });
     }
 }

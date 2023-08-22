@@ -8,6 +8,7 @@
 #![deny(missing_docs)]
 
 mod util;
+mod wit_export;
 mod wit_import;
 mod wit_load;
 mod wit_store;
@@ -18,6 +19,8 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use proc_macro_error::{abort, proc_macro_error};
 use quote::{quote, ToTokens};
+#[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
+use syn::ItemImpl;
 use syn::{parse_macro_input, Data, DeriveInput, Ident, ItemTrait};
 
 /// Derives `WitType` for a Rust type.
@@ -105,4 +108,19 @@ pub fn wit_import(attribute: TokenStream, input: TokenStream) -> TokenStream {
     let namespace = extract_namespace(attribute, &input.ident);
 
     wit_import::generate(input, &namespace).into()
+}
+
+/// Registers an `impl` block's functions as callable host functions exported to guest Wasm
+/// modules.
+///
+/// The code generated depends on the enabled feature flags to determine which Wasm runtimes will
+/// be supported.
+#[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn wit_export(attribute: TokenStream, input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ItemImpl);
+    let namespace = extract_namespace(attribute, wit_export::type_name(&input));
+
+    wit_export::generate(&input, &namespace).into()
 }

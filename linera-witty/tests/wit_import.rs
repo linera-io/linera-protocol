@@ -13,8 +13,7 @@ use self::test_instance::WasmerInstanceFactory;
 #[cfg(feature = "wasmtime")]
 use self::test_instance::WasmtimeInstanceFactory;
 use self::test_instance::{MockInstanceFactory, TestInstanceFactory};
-use linera_witty::{Instance, Runtime, RuntimeMemory};
-use linera_witty_macros::wit_import;
+use linera_witty::{wit_import, Instance, Runtime, RuntimeMemory};
 use test_case::test_case;
 
 /// An interface to import a single function without parameters or return values.
@@ -34,7 +33,7 @@ where
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("simple-function");
+    let instance = factory.load_test_module("export", "simple-function", |_| {});
 
     SimpleFunction::new(instance)
         .simple()
@@ -69,7 +68,7 @@ where
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("getters");
+    let instance = factory.load_test_module("export", "getters", |_| {});
 
     let mut getters = Getters::new(instance);
 
@@ -174,7 +173,7 @@ where
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("setters");
+    let instance = factory.load_test_module("export", "setters", |_| {});
 
     let mut setters = Setters::new(instance);
 
@@ -240,7 +239,7 @@ where
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("operations");
+    let instance = factory.load_test_module("export", "operations", |_| {});
 
     let mut operations = Operations::new(instance);
 
