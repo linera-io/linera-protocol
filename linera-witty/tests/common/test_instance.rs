@@ -8,8 +8,10 @@ use frunk::{hlist, hlist_pat, HList};
 use linera_witty::wasmer;
 #[cfg(feature = "wasmtime")]
 use linera_witty::wasmtime;
-use linera_witty::{InstanceWithMemory, MockExportedFunction, MockInstance, RuntimeError};
-use std::any::Any;
+use linera_witty::{
+    InstanceWithMemory, Layout, MockExportedFunction, MockInstance, RuntimeError, WitLoad, WitStore,
+};
+use std::{any::Any, fmt::Debug, ops::Add};
 
 /// Trait representing a type that can create instances for tests.
 pub trait TestInstanceFactory {
@@ -387,6 +389,158 @@ impl MockInstanceFactory {
             instance,
             "witty-macros:test-modules/operations#add-float64",
             |_, hlist_pat![first, second]: HList![f64, f64]| Ok(hlist![first + second]),
+            1,
+        );
+    }
+
+    /// Mock the exported functions for the "simple-function" module.
+    fn import_simple_function(&mut self, instance: &mut MockInstance) {
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/entrypoint#entrypoint",
+            |caller, _: HList![]| {
+                let hlist_pat![] = caller.call_imported_function(
+                    "witty-macros:test-modules/simple-function#simple",
+                    hlist![],
+                )?;
+                Ok(hlist![])
+            },
+            1,
+        );
+    }
+
+    /// Mock the exported functions for the "import-getters" module.
+    fn import_getters(&mut self, instance: &mut MockInstance) {
+        fn check_getter<Value>(caller: &MockInstance, name: &str, expected_value: Value)
+        where
+            Value: Debug + PartialEq + WitLoad + 'static,
+        {
+            let value: Value = caller
+                .call_imported_function(
+                    &format!("witty-macros:test-modules/getters#{name}"),
+                    hlist![],
+                )
+                .unwrap_or_else(|error| panic!("Failed to call getter function {name:?}: {error}"));
+
+            assert_eq!(value, expected_value);
+        }
+
+        #[allow(clippy::bool_assert_comparison)]
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/entrypoint#entrypoint",
+            |caller, _: HList![]| {
+                check_getter(&caller, "get-true", true);
+                check_getter(&caller, "get-false", false);
+                check_getter(&caller, "get-s8", -125_i8);
+                check_getter(&caller, "get-u8", 200_u8);
+                check_getter(&caller, "get-s16", -410_i16);
+                check_getter(&caller, "get-u16", 60_000_u16);
+                check_getter(&caller, "get-s32", -100_000_i32);
+                check_getter(&caller, "get-u32", 3_000_111_u32);
+                check_getter(&caller, "get-float32", -0.125_f32);
+                check_getter(&caller, "get-float64", 128.25_f64);
+
+                Ok(hlist![])
+            },
+            1,
+        );
+    }
+
+    /// Mocks the exported functions for the "import-setters" module.
+    fn import_setters(&mut self, instance: &mut MockInstance) {
+        fn send_to_setter<Value>(caller: &MockInstance, name: &str, value: Value)
+        where
+            Value: WitStore + 'static,
+            Value::Layout: Add<HList![]>,
+            <Value::Layout as Add<HList![]>>::Output:
+                Layout<Flat = <<Value::Layout as Layout>::Flat as Add<HList![]>>::Output>,
+            <Value::Layout as Layout>::Flat: Add<HList![]>,
+        {
+            let () = caller
+                .call_imported_function(
+                    &format!("witty-macros:test-modules/setters#{name}"),
+                    hlist![value],
+                )
+                .unwrap_or_else(|error| panic!("Failed to call setter function {name:?}: {error}"));
+        }
+
+        #[allow(clippy::bool_assert_comparison)]
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/entrypoint#entrypoint",
+            |caller, _: HList![]| {
+                send_to_setter(&caller, "set-bool", false);
+                send_to_setter(&caller, "set-s8", -100_i8);
+                send_to_setter(&caller, "set-u8", 201_u8);
+                send_to_setter(&caller, "set-s16", -20_000_i16);
+                send_to_setter(&caller, "set-u16", 50_000_u16);
+                send_to_setter(&caller, "set-s32", -2_000_000_i32);
+                send_to_setter(&caller, "set-u32", 4_000_000_u32);
+                send_to_setter(&caller, "set-float32", 10.4_f32);
+                send_to_setter(&caller, "set-float64", -0.000_08_f64);
+
+                Ok(hlist![])
+            },
+            1,
+        );
+    }
+
+    /// Mocks the exported functions for the "import-operations" module.
+    fn import_operations(&mut self, instance: &mut MockInstance) {
+        fn check_operation<Value>(
+            caller: &MockInstance,
+            name: &str,
+            operands: impl WitStore + 'static,
+            expected_result: Value,
+        ) where
+            Value: Debug + PartialEq + WitLoad + 'static,
+        {
+            let result: Value = caller
+                .call_imported_function(
+                    &format!("witty-macros:test-modules/operations#{name}"),
+                    operands,
+                )
+                .unwrap_or_else(|error| panic!("Failed to call setter function {name:?}: {error}"));
+
+            assert_eq!(result, expected_result);
+        }
+
+        #[allow(clippy::bool_assert_comparison)]
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/entrypoint#entrypoint",
+            |caller, _: HList![]| {
+                check_operation(&caller, "and-bool", (true, true), true);
+                check_operation(&caller, "and-bool", (true, false), false);
+                check_operation(&caller, "add-s8", (-100_i8, 40_i8), -60_i8);
+                check_operation(&caller, "add-u8", (201_u8, 32_u8), 233_u8);
+                check_operation(&caller, "add-s16", (-20_000_i16, 30_000_i16), 10_000_i16);
+                check_operation(&caller, "add-u16", (50_000_u16, 256_u16), 50_256_u16);
+                check_operation(&caller, "add-s32", (-2_000_000_i32, -1_i32), -2_000_001_i32);
+                check_operation(&caller, "add-u32", (4_000_000_u32, 1_u32), 4_000_001_u32);
+                check_operation(
+                    &caller,
+                    "add-s64",
+                    (-16_000_000_i64, 32_000_000_i64),
+                    16_000_000_i64,
+                );
+                check_operation(
+                    &caller,
+                    "add-u64",
+                    (3_000_000_000_u64, 9_345_678_999_u64),
+                    12_345_678_999_u64,
+                );
+                check_operation(&caller, "add-float32", (10.5_f32, 120.25_f32), 130.75_f32);
+                check_operation(
+                    &caller,
+                    "add-float64",
+                    (-0.000_08_f64, 1.0_f64),
+                    0.999_92_f64,
+                );
+
+                Ok(hlist![])
+            },
             1,
         );
     }
