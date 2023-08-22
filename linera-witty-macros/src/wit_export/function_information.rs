@@ -139,6 +139,23 @@ impl<'input> FunctionInformation<'input> {
         )
     }
 
+    /// Generates the code to export a host function using a mock Wasm instance for testing.
+    #[cfg(feature = "mock-instance")]
+    pub fn generate_for_mock_instance(&self, namespace: &LitStr) -> TokenStream {
+        let caller = quote! { linera_witty::MockInstance };
+        let input_to_guest_parameters = quote! { input };
+        let guest_results_to_output = quote! { guest_results };
+        let output_results_trait = quote! { linera_witty::MockResults };
+
+        self.generate(
+            namespace,
+            caller,
+            input_to_guest_parameters,
+            guest_results_to_output,
+            output_results_trait,
+        )
+    }
+
     /// Generates the code to export using a host function.
     fn generate(
         &self,

@@ -40,7 +40,10 @@ pub use self::{
     util::{Merge, Split},
 };
 pub use frunk::{hlist, hlist::HList, hlist_pat, HCons, HList, HNil};
-#[cfg(all(feature = "macros", any(feature = "wasmer", feature = "wasmtime")))]
+#[cfg(all(
+    feature = "macros",
+    any(feature = "test", feature = "wasmer", feature = "wasmtime")
+))]
 pub use linera_witty_macros::wit_export;
 #[cfg(feature = "macros")]
 pub use linera_witty_macros::{wit_import, WitLoad, WitStore, WitType};

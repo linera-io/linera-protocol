@@ -3,7 +3,7 @@
 
 //! Generation of code to export host functions to a Wasm guest instance.
 
-#![cfg(any(feature = "wasmer", feature = "wasmtime"))]
+#![cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
 
 mod function_information;
 
@@ -56,11 +56,13 @@ impl<'input> WitExportGenerator<'input> {
         let implementation = self.implementation;
         let wasmer = self.generate_for_wasmer();
         let wasmtime = self.generate_for_wasmtime();
+        let mock_instance = self.generate_for_mock_instance();
 
         quote! {
             #implementation
             #wasmer
             #wasmtime
+            #mock_instance
         }
     }
 
@@ -95,6 +97,24 @@ impl<'input> WitExportGenerator<'input> {
             Some(self.generate_for(export_target, exported_functions))
         }
         #[cfg(not(feature = "wasmtime"))]
+        {
+            None
+        }
+    }
+
+    /// Generates the code to export functions to a mock instance for testing.
+    fn generate_for_mock_instance(&mut self) -> Option<TokenStream> {
+        #[cfg(feature = "mock-instance")]
+        {
+            let export_target = quote! { linera_witty::MockInstance };
+            let exported_functions = self
+                .functions
+                .iter()
+                .map(|function| function.generate_for_mock_instance(self.namespace));
+
+            Some(self.generate_for(export_target, exported_functions))
+        }
+        #[cfg(not(feature = "mock-instance"))]
         {
             None
         }

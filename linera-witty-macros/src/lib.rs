@@ -19,7 +19,7 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use proc_macro_error::{abort, proc_macro_error};
 use quote::{quote, ToTokens};
-#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+#[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
 use syn::ItemImpl;
 use syn::{parse_macro_input, Data, DeriveInput, Ident, ItemTrait};
 
@@ -115,7 +115,7 @@ pub fn wit_import(attribute: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// The code generated depends on the enabled feature flags to determine which Wasm runtimes will
 /// be supported.
-#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+#[cfg(any(feature = "mock-instance", feature = "wasmer", feature = "wasmtime"))]
 #[proc_macro_error]
 #[proc_macro_attribute]
 pub fn wit_export(attribute: TokenStream, input: TokenStream) -> TokenStream {

@@ -14,6 +14,7 @@ edition = "2021"
 proc-macro = true
 
 [features]
+mock-instance = []
 wasmer = []
 wasmtime = []
 
