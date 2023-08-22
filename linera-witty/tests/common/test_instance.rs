@@ -120,6 +120,10 @@ impl TestInstanceFactory for MockInstanceFactory {
             ("export", "getters") => self.export_getters(&mut instance),
             ("export", "setters") => self.export_setters(&mut instance),
             ("export", "operations") => self.export_operations(&mut instance),
+            ("import", "simple-function") => self.import_simple_function(&mut instance),
+            ("import", "getters") => self.import_getters(&mut instance),
+            ("import", "setters") => self.import_setters(&mut instance),
+            ("import", "operations") => self.import_operations(&mut instance),
             _ => panic!(
                 "Attempt to load module \"{group}-{module}\" which has no mock configuration"
             ),
