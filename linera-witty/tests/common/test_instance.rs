@@ -135,7 +135,7 @@ impl MockInstanceFactory {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/simple-function#simple",
-            |_: HList![]| Ok(hlist![]),
+            |_, _: HList![]| Ok(hlist![]),
             1,
         );
     }
@@ -145,73 +145,73 @@ impl MockInstanceFactory {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/getters#get-true",
-            |_: HList![]| Ok(hlist![1_i32]),
+            |_, _: HList![]| Ok(hlist![1_i32]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/getters#get-false",
-            |_: HList![]| Ok(hlist![0_i32]),
+            |_, _: HList![]| Ok(hlist![0_i32]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/getters#get-s8",
-            |_: HList![]| Ok(hlist![-125_i8 as u8 as i32]),
+            |_, _: HList![]| Ok(hlist![-125_i8 as u8 as i32]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/getters#get-u8",
-            |_: HList![]| Ok(hlist![200_u8 as i32]),
+            |_, _: HList![]| Ok(hlist![200_u8 as i32]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/getters#get-s16",
-            |_: HList![]| Ok(hlist![-410_i16 as u16 as i32]),
+            |_, _: HList![]| Ok(hlist![-410_i16 as u16 as i32]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/getters#get-u16",
-            |_: HList![]| Ok(hlist![60_000_u16 as i32]),
+            |_, _: HList![]| Ok(hlist![60_000_u16 as i32]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/getters#get-s32",
-            |_: HList![]| Ok(hlist![-100_000_i32]),
+            |_, _: HList![]| Ok(hlist![-100_000_i32]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/getters#get-u32",
-            |_: HList![]| Ok(hlist![3_000_111_i32]),
+            |_, _: HList![]| Ok(hlist![3_000_111_i32]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/getters#get-s64",
-            |_: HList![]| Ok(hlist![-5_000_000_i64]),
+            |_, _: HList![]| Ok(hlist![-5_000_000_i64]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/getters#get-u64",
-            |_: HList![]| Ok(hlist![10_000_000_000_i64]),
+            |_, _: HList![]| Ok(hlist![10_000_000_000_i64]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/getters#get-float32",
-            |_: HList![]| Ok(hlist![-0.125_f32]),
+            |_, _: HList![]| Ok(hlist![-0.125_f32]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/getters#get-float64",
-            |_: HList![]| Ok(hlist![128.25_f64]),
+            |_, _: HList![]| Ok(hlist![128.25_f64]),
             1,
         );
     }
@@ -221,7 +221,7 @@ impl MockInstanceFactory {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/setters#set-bool",
-            |hlist_pat![parameter]: HList![i32]| {
+            |_, hlist_pat![parameter]: HList![i32]| {
                 assert_eq!(parameter, 0);
                 Ok(hlist![])
             },
@@ -230,7 +230,7 @@ impl MockInstanceFactory {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/setters#set-s8",
-            |hlist_pat![parameter]: HList![i32]| {
+            |_, hlist_pat![parameter]: HList![i32]| {
                 assert_eq!(parameter, -100_i8 as i32);
                 Ok(hlist![])
             },
@@ -239,7 +239,7 @@ impl MockInstanceFactory {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/setters#set-u8",
-            |hlist_pat![parameter]: HList![i32]| {
+            |_, hlist_pat![parameter]: HList![i32]| {
                 assert_eq!(parameter, 201);
                 Ok(hlist![])
             },
@@ -248,7 +248,7 @@ impl MockInstanceFactory {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/setters#set-s16",
-            |hlist_pat![parameter]: HList![i32]| {
+            |_, hlist_pat![parameter]: HList![i32]| {
                 assert_eq!(parameter, -20_000_i16 as i32);
                 Ok(hlist![])
             },
@@ -257,7 +257,7 @@ impl MockInstanceFactory {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/setters#set-u16",
-            |hlist_pat![parameter]: HList![i32]| {
+            |_, hlist_pat![parameter]: HList![i32]| {
                 assert_eq!(parameter, 50_000);
                 Ok(hlist![])
             },
@@ -266,7 +266,7 @@ impl MockInstanceFactory {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/setters#set-s32",
-            |hlist_pat![parameter]: HList![i32]| {
+            |_, hlist_pat![parameter]: HList![i32]| {
                 assert_eq!(parameter, -2_000_000);
                 Ok(hlist![])
             },
@@ -275,7 +275,7 @@ impl MockInstanceFactory {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/setters#set-u32",
-            |hlist_pat![parameter]: HList![i32]| {
+            |_, hlist_pat![parameter]: HList![i32]| {
                 assert_eq!(parameter, 4_000_000_u32 as i32);
                 Ok(hlist![])
             },
@@ -284,7 +284,7 @@ impl MockInstanceFactory {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/setters#set-s64",
-            |hlist_pat![parameter]: HList![i64]| {
+            |_, hlist_pat![parameter]: HList![i64]| {
                 assert_eq!(parameter, -25_000_000_000);
                 Ok(hlist![])
             },
@@ -293,7 +293,7 @@ impl MockInstanceFactory {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/setters#set-u64",
-            |hlist_pat![parameter]: HList![i64]| {
+            |_, hlist_pat![parameter]: HList![i64]| {
                 assert_eq!(parameter, 7_000_000_000);
                 Ok(hlist![])
             },
@@ -302,7 +302,7 @@ impl MockInstanceFactory {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/setters#set-float32",
-            |hlist_pat![parameter]: HList![f32]| {
+            |_, hlist_pat![parameter]: HList![f32]| {
                 assert_eq!(parameter, 10.5);
                 Ok(hlist![])
             },
@@ -311,7 +311,7 @@ impl MockInstanceFactory {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/setters#set-float64",
-            |hlist_pat![parameter]: HList![f64]| {
+            |_, hlist_pat![parameter]: HList![f64]| {
                 assert_eq!(parameter, -0.000_08);
                 Ok(hlist![])
             },
@@ -324,7 +324,7 @@ impl MockInstanceFactory {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/operations#and-bool",
-            |hlist_pat![first, second]: HList![i32, i32]| {
+            |_, hlist_pat![first, second]: HList![i32, i32]| {
                 Ok(hlist![if first != 0 && second != 0 { 1 } else { 0 }])
             },
             2,
@@ -332,61 +332,61 @@ impl MockInstanceFactory {
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/operations#add-s8",
-            |hlist_pat![first, second]: HList![i32, i32]| Ok(hlist![first + second]),
+            |_, hlist_pat![first, second]: HList![i32, i32]| Ok(hlist![first + second]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/operations#add-u8",
-            |hlist_pat![first, second]: HList![i32, i32]| Ok(hlist![first + second]),
+            |_, hlist_pat![first, second]: HList![i32, i32]| Ok(hlist![first + second]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/operations#add-s16",
-            |hlist_pat![first, second]: HList![i32, i32]| Ok(hlist![first + second]),
+            |_, hlist_pat![first, second]: HList![i32, i32]| Ok(hlist![first + second]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/operations#add-u16",
-            |hlist_pat![first, second]: HList![i32, i32]| Ok(hlist![first + second]),
+            |_, hlist_pat![first, second]: HList![i32, i32]| Ok(hlist![first + second]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/operations#add-s32",
-            |hlist_pat![first, second]: HList![i32, i32]| Ok(hlist![first + second]),
+            |_, hlist_pat![first, second]: HList![i32, i32]| Ok(hlist![first + second]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/operations#add-u32",
-            |hlist_pat![first, second]: HList![i32, i32]| Ok(hlist![first + second]),
+            |_, hlist_pat![first, second]: HList![i32, i32]| Ok(hlist![first + second]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/operations#add-s64",
-            |hlist_pat![first, second]: HList![i64, i64]| Ok(hlist![first + second]),
+            |_, hlist_pat![first, second]: HList![i64, i64]| Ok(hlist![first + second]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/operations#add-u64",
-            |hlist_pat![first, second]: HList![i64, i64]| Ok(hlist![first + second]),
+            |_, hlist_pat![first, second]: HList![i64, i64]| Ok(hlist![first + second]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/operations#add-float32",
-            |hlist_pat![first, second]: HList![f32, f32]| Ok(hlist![first + second]),
+            |_, hlist_pat![first, second]: HList![f32, f32]| Ok(hlist![first + second]),
             1,
         );
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/operations#add-float64",
-            |hlist_pat![first, second]: HList![f64, f64]| Ok(hlist![first + second]),
+            |_, hlist_pat![first, second]: HList![f64, f64]| Ok(hlist![first + second]),
             1,
         );
     }
@@ -402,7 +402,7 @@ impl MockInstanceFactory {
         &mut self,
         instance: &mut MockInstance,
         name: &str,
-        handler: fn(Parameters) -> Result<Results, RuntimeError>,
+        handler: fn(MockInstance, Parameters) -> Result<Results, RuntimeError>,
         expected_calls: usize,
     ) where
         Parameters: 'static,
