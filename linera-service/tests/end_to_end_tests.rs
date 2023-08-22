@@ -5,6 +5,8 @@
 mod common;
 
 use common::INTEGRATION_TEST_GUARD;
+use linera_base::data_types::RoundNumber;
+
 use linera_base::identifiers::ChainId;
 use linera_service::client::{LocalNetwork, Network};
 use std::time::Duration;
@@ -427,7 +429,12 @@ async fn test_end_to_end_open_multi_owner_chain() {
 
     // Open chain on behalf of Client 2.
     let (message_id, chain2) = client1
-        .open_multi_owner_chain(chain1, vec![client1_key, client2_key])
+        .open_multi_owner_chain(
+            chain1,
+            vec![client1_key, client2_key],
+            vec![100, 100],
+            RoundNumber::MAX,
+        )
         .await
         .unwrap();
 
@@ -460,4 +467,91 @@ async fn test_end_to_end_open_multi_owner_chain() {
     assert_eq!(client1.query_balance(chain1).await.unwrap(), "7.");
     assert_eq!(client1.query_balance(chain2).await.unwrap(), "3.");
     assert_eq!(client2.query_balance(chain2).await.unwrap(), "3.");
+}
+
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_open_multi_owner_ft_chain() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    // Create runner and two clients. Put only one message in each block, to make sure we test
+    // multiple blocks.
+    let mut runner = LocalNetwork::new(Network::Grpc, 4).unwrap();
+    let client1 = runner
+        .make_client(Network::Grpc)
+        .with_max_pending_messages(1);
+    let client2 = runner
+        .make_client(Network::Grpc)
+        .with_max_pending_messages(1);
+
+    // Create initial server and client config.
+    runner.generate_initial_validator_config().await.unwrap();
+    client1.create_genesis_config().await.unwrap();
+    client2.wallet_init(&[]).await.unwrap();
+
+    // Start local network.
+    runner.run().await.unwrap();
+
+    let chain1 = *client1.get_wallet().chain_ids().first().unwrap();
+
+    // Generate keys for all clients.
+    let client1_key = client1.keygen().await.unwrap();
+    let client2_key = client2.keygen().await.unwrap();
+
+    // Open chain with two owners.
+    let (message_id, chain2) = client1
+        .open_multi_owner_chain(
+            chain1,
+            vec![client1_key, client2_key],
+            vec![100, 100],
+            RoundNumber::ZERO, // No multi-leader rounds.
+        )
+        .await
+        .unwrap();
+
+    // Assign chain2 to client1_key.
+    assert_eq!(
+        chain2,
+        client1.assign(client1_key, message_id).await.unwrap()
+    );
+
+    // Assign chain2 to client2_key.
+    assert_eq!(
+        chain2,
+        client2.assign(client2_key, message_id).await.unwrap()
+    );
+
+    // Clients 1 and 2 start a service, but client 3 remains offline.
+    let node_service1 = client1.run_node_service(8080).await.unwrap();
+    let _node_service2 = client2.run_node_service(8081).await.unwrap();
+
+    // Transfer 10 units from Chain 1 to Chain 2, one by one.
+    let query = format!(
+        "mutation {{ transfer(\
+            chainId:\"{chain1}\", \
+            recipient: {{ Account: {{ chain_id:\"{chain2}\" }} }}, \
+            amount:\"1\"\
+        ) }}"
+    );
+    for _ in 0..10 {
+        node_service1.query_node(&query).await;
+    }
+
+    // Verify that the ten incoming messages on chain2 have been processed.
+    for i in 0..10 {
+        tokio::time::sleep(Duration::from_secs(i)).await;
+        let query = format!(
+            "query {{ chain(chainId:\"{chain2}\") {{
+                executionState {{ system {{ balance }} }}
+            }} }}"
+        );
+        let response = node_service1.query_node(&query).await;
+        println!(
+            "{:?}",
+            response["chain"]["executionState"]["system"]["balance"].as_str()
+        );
+        if response["chain"]["executionState"]["system"]["balance"].as_str() == Some("10.") {
+            return;
+        }
+    }
+    panic!("Failed to receive new block");
 }

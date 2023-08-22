@@ -375,6 +375,59 @@ async fn test_end_to_end_counter_publish_create() {
 }
 
 #[test_log::test(tokio::test)]
+async fn test_end_to_end_multiple_wallets() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    // Create local_net and two clients.
+    let mut local_net = LocalNetwork::new(Network::Grpc, 4).unwrap();
+    let client_1 = local_net.make_client(Network::Grpc);
+    let client_2 = local_net.make_client(Network::Grpc);
+
+    // Create initial server and client config.
+    local_net.generate_initial_validator_config().await.unwrap();
+    client_1.create_genesis_config().await.unwrap();
+    client_2.wallet_init(&[]).await.unwrap();
+
+    // Start local network.
+    local_net.run().await.unwrap();
+
+    // Get some chain owned by Client 1.
+    let chain_1 = *client_1.get_wallet().chain_ids().first().unwrap();
+
+    // Generate a key for Client 2.
+    let client_2_key = client_2.keygen().await.unwrap();
+
+    // Open chain on behalf of Client 2.
+    let (message_id, chain_2) = client_1
+        .open_chain(chain_1, Some(client_2_key))
+        .await
+        .unwrap();
+
+    // Assign chain_2 to client_2_key.
+    assert_eq!(
+        chain_2,
+        client_2.assign(client_2_key, message_id).await.unwrap()
+    );
+
+    // Check initial balance of Chain 1.
+    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), "10.");
+
+    // Transfer 5 units from Chain 1 to Chain 2.
+    client_1.transfer("5", chain_1, chain_2).await.unwrap();
+    client_2.synchronize_balance(chain_2).await.unwrap();
+
+    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), "5.");
+    assert_eq!(client_2.query_balance(chain_2).await.unwrap(), "5.");
+
+    // Transfer 2 units from Chain 2 to Chain 1.
+    client_2.transfer("2", chain_2, chain_1).await.unwrap();
+    client_1.synchronize_balance(chain_1).await.unwrap();
+
+    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), "7.");
+    assert_eq!(client_2.query_balance(chain_2).await.unwrap(), "3.");
+}
+
+#[test_log::test(tokio::test)]
 async fn test_end_to_end_social_user_pub_sub() {
     use social::SocialAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;

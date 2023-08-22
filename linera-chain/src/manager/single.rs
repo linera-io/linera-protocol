@@ -100,7 +100,7 @@ impl SingleOwnerManager {
 
     pub fn verify_owner(&self, owner: &Owner, round: Option<RoundNumber>) -> Option<PublicKey> {
         if let Some(round) = round {
-            if round != RoundNumber::zero() {
+            if round != RoundNumber::ZERO {
                 return None;
             }
         }

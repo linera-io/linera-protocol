@@ -139,15 +139,14 @@ where
         let info = {
             // Process the inbox: For messages that are already there we won't receive a
             // notification.
-            let mut guard = client.lock().await;
-            guard.synchronize_from_validators().await?;
-            guard.try_process_inbox().await?;
-            guard.chain_info().await?
+            let mut client_guard = client.lock().await;
+            client_guard.synchronize_from_validators().await?;
+            client_guard.try_process_inbox().await?;
+            client_guard.chain_info().await?
         };
         let mut round_timeout: Option<Timestamp> = None;
         if let ChainManagerInfo::Multi(manager) = &info.manager {
             round_timeout = Some(manager.round_timeout);
-            client.lock().await.try_process_inbox().await?;
         }
         loop {
             let notification = match tokio::time::timeout(
@@ -159,14 +158,14 @@ where
             .await
             {
                 Err(_) => {
-                    let mut guard = client.lock().await;
-                    if let Err(error) = guard.request_leader_timeout().await {
+                    let mut client_guard = client.lock().await;
+                    if let Err(error) = client_guard.request_leader_timeout().await {
                         warn!(%error, "Failed to request leader timeout");
                     }
-                    let info = guard.chain_info().await?;
+                    client_guard.try_process_inbox().await?;
+                    let info = client_guard.chain_info().await?;
                     if let ChainManagerInfo::Multi(manager) = &info.manager {
                         round_timeout = Some(manager.round_timeout);
-                        guard.try_process_inbox().await?;
                     }
                     continue;
                 }
@@ -222,22 +221,29 @@ where
                                 );
                             }
                         }
-                        let info = client.lock().await.chain_info().await?;
-                        if let ChainManagerInfo::Multi(manager) = &info.manager {
-                            round_timeout = Some(manager.round_timeout);
-                            client.lock().await.try_process_inbox().await?;
-                        }
+                    }
+                    let mut client_guard = client.lock().await;
+                    client_guard.try_process_inbox().await?;
+                    let info = client_guard.chain_info().await?;
+                    if let ChainManagerInfo::Multi(manager) = &info.manager {
+                        round_timeout = Some(manager.round_timeout);
                     }
                 }
                 Reason::NewRound { .. } => {
-                    let info = client.lock().await.chain_info().await?;
+                    let mut client_guard = client.lock().await;
+                    client_guard.try_process_inbox().await?;
+                    let info = client_guard.chain_info().await?;
                     if let ChainManagerInfo::Multi(manager) = &info.manager {
                         round_timeout = Some(manager.round_timeout);
-                        client.lock().await.try_process_inbox().await?;
                     }
                 }
                 Reason::NewIncomingMessage { .. } => {
-                    client.lock().await.try_process_inbox().await?;
+                    let mut client_guard = client.lock().await;
+                    client_guard.try_process_inbox().await?;
+                    let info = client_guard.chain_info().await?;
+                    if let ChainManagerInfo::Multi(manager) = &info.manager {
+                        round_timeout = Some(manager.round_timeout);
+                    }
                 }
             }
             tracker.insert(notification);
@@ -259,7 +265,7 @@ where
                 }
             }
             Reason::NewIncomingMessage { .. } => {
-                if let Err(e) = client.process_inbox().await {
+                if let Err(e) = client.try_process_inbox().await {
                     warn!(
                         "Failed to process inbox after receiving new message: {:?} \
                         with error: {:?}",

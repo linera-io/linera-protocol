@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, Certificate, CertificateValue, LiteVote},
-    ChainManagerInfo,
+    ChainManager,
 };
 use linera_execution::committee::{Committee, Epoch, ValidatorName};
 use linera_storage::Store;
@@ -390,10 +390,9 @@ where
                 }
             }
         }
-        let query = ChainInfoQuery::new(chain_id).with_manager_values();
-        let info = self.client.handle_chain_info_query(query).await?.info;
-        if let ChainManagerInfo::Multi(manager) = info.manager {
-            if let Some(cert) = manager.requested_locked {
+        let manager = self.store.load_chain(chain_id).await?.manager.get().clone();
+        if let ChainManager::Multi(manager) = manager {
+            if let Some(cert) = manager.locked {
                 if cert.value().is_validated() && cert.value().chain_id() == chain_id {
                     self.send_certificate(cert, false).await?;
                 }
