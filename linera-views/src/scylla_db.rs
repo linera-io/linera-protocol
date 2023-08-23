@@ -445,7 +445,7 @@ impl ScyllaDbClient {
     }
 }
 
-/// Get a test table_name
+/// Returns a unique table name for testing.
 pub async fn get_table_name() -> String {
     let mut counter = *TEST_COUNTER;
     counter += 1;
