@@ -52,7 +52,7 @@ impl ExportedSimpleFunction {
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
 #[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
-fn simple_function<InstanceFactory>(mut factory: InstanceFactory)
+fn test_simple_function<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
     InstanceFactory::Instance: InstanceForEntrypoint,
@@ -196,7 +196,7 @@ impl ExportedGetters {
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
 #[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
-fn getters<InstanceFactory>(mut factory: InstanceFactory)
+fn test_getters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
     InstanceFactory::Instance: InstanceForEntrypoint,
@@ -331,7 +331,7 @@ impl ExportedSetters {
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
 #[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
-fn setters<InstanceFactory>(mut factory: InstanceFactory)
+fn test_setters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
     InstanceFactory::Instance: InstanceForEntrypoint,
@@ -466,7 +466,7 @@ impl ExportedOperations {
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
 #[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
-fn operations<InstanceFactory>(mut factory: InstanceFactory)
+fn test_operations<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
     InstanceFactory::Instance: InstanceForEntrypoint,

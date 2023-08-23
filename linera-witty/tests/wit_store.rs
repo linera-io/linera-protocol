@@ -15,7 +15,7 @@ use std::fmt::Debug;
 
 /// Check that a wrapper type is properly stored in memory and lowered into its flat layout.
 #[test]
-fn simple_bool_wrapper() {
+fn test_simple_bool_wrapper() {
     test_store_in_memory(&SimpleWrapper(true), &[1]);
     test_store_in_memory(&SimpleWrapper(false), &[0]);
 
@@ -26,7 +26,7 @@ fn simple_bool_wrapper() {
 /// Check that a type with multiple fields ordered in a way that doesn't require any padding is
 /// properly stored in memory and lowered into its flat layout.
 #[test]
-fn tuple_struct_without_padding() {
+fn test_tuple_struct_without_padding() {
     let data = TupleWithoutPadding(0x0123_4567_89ab_cdef_u64, 0x0011_2233_i32, 0x4455_i16);
 
     test_store_in_memory(
@@ -44,7 +44,7 @@ fn tuple_struct_without_padding() {
 /// Check that a type with multiple fields ordered in a way that requires padding between two of its
 /// fields is properly stored in memory and lowered into its flat layout.
 #[test]
-fn tuple_struct_with_padding() {
+fn test_tuple_struct_with_padding() {
     let data = TupleWithPadding(0x0123_u16, 0x4567_89ab_u32, 0x0011_2233_4455_6677_i64);
 
     test_store_in_memory(
@@ -63,7 +63,7 @@ fn tuple_struct_with_padding() {
 /// Check that a type with multiple named fields ordered in a way that requires padding before two
 /// fields is properly stored in memory and lowered into its flat layout.
 #[test]
-fn named_struct_with_double_padding() {
+fn test_named_struct_with_double_padding() {
     let data = RecordWithDoublePadding {
         first: 0x0123_u16,
         second: 0x0011_2233_u32,
@@ -92,7 +92,7 @@ fn named_struct_with_double_padding() {
 /// Check that a type that contains a field with a type that also has `WitStore` derived for it is
 /// properly stored in memory and lowered into its flat layout.
 #[test]
-fn nested_types() {
+fn test_nested_types() {
     let data = Branch {
         tag: 0x0123_u16,
         first_leaf: Leaf {
@@ -131,7 +131,7 @@ fn nested_types() {
 /// Check that an enum type's variants are properly stored in memory and lowered into its flat
 /// layout.
 #[test]
-fn enum_type() {
+fn test_enum_type() {
     let data = Enum::Empty;
 
     test_store_in_memory(
