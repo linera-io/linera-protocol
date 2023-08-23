@@ -309,7 +309,7 @@ impl MockInstanceFactory {
             instance,
             "witty-macros:test-modules/setters#set-float32",
             |_, hlist_pat![parameter]: HList![f32]| {
-                assert_eq!(parameter, 10.5);
+                assert_eq!(parameter, 10.4);
                 Ok(hlist![])
             },
             1,
