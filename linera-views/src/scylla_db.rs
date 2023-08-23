@@ -41,7 +41,7 @@ type ScyllaDbClientPair = (Session, String);
 /// We limit the number of connections that can be done for tests.
 pub const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
-/// The number of connection in the stream is limited for tesst.
+/// The number of connections in the stream is limited for tests.
 pub const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
 
 /// The client itself and the keeping of the count of active connections.
