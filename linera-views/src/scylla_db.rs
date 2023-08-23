@@ -472,7 +472,7 @@ pub async fn create_scylla_db_test_client() -> ScyllaDbClient {
     .expect("client")
 }
 
-/// An implementation of [`crate::common::Context`] based on RocksDB
+/// An implementation of [`crate::common::Context`] based on ScyllaDB
 pub type ScyllaDbContext<E> = ContextFromDb<E, ScyllaDbClient>;
 
 impl<E: Clone + Send + Sync> ScyllaDbContext<E> {
