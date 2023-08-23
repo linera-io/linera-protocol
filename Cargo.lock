@@ -3177,6 +3177,7 @@ dependencies = [
  "linera-witty-macros",
  "test-case",
  "thiserror",
+ "tracing",
  "wasmer",
  "wasmer-vm",
  "wasmtime",

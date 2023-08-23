@@ -124,6 +124,10 @@ impl TestInstanceFactory for MockInstanceFactory {
             ("import", "getters") => self.import_getters(&mut instance),
             ("import", "setters") => self.import_setters(&mut instance),
             ("import", "operations") => self.import_operations(&mut instance),
+            ("reentrancy", "simple-function") => self.reentrancy_simple_function(&mut instance),
+            ("reentrancy", "getters") => self.reentrancy_getters(&mut instance),
+            ("reentrancy", "setters") => self.reentrancy_setters(&mut instance),
+            ("reentrancy", "operations") => self.reentrancy_operations(&mut instance),
             _ => panic!(
                 "Attempt to load module \"{group}-{module}\" which has no mock configuration"
             ),
@@ -551,6 +555,30 @@ impl MockInstanceFactory {
             },
             1,
         );
+    }
+
+    /// Mock the behavior of the "reentrancy-simple-function" module.
+    fn reentrancy_simple_function(&mut self, instance: &mut MockInstance) {
+        self.import_simple_function(instance);
+        self.export_simple_function(instance);
+    }
+
+    /// Mock the behavior of the "reentrancy-getters" module.
+    fn reentrancy_getters(&mut self, instance: &mut MockInstance) {
+        self.import_getters(instance);
+        self.export_getters(instance);
+    }
+
+    /// Mock the behavior of the "reentrancy-setters" module.
+    fn reentrancy_setters(&mut self, instance: &mut MockInstance) {
+        self.import_setters(instance);
+        self.export_setters(instance);
+    }
+
+    /// Mock the behavior of the "reentrancy-operations" module.
+    fn reentrancy_operations(&mut self, instance: &mut MockInstance) {
+        self.import_operations(instance);
+        self.export_operations(instance);
     }
 
     /// Mocks an exported function with the provided `name`.
