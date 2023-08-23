@@ -47,31 +47,12 @@ pub const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 pub const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
 
 /// The client itself and the keeping of the count of active connections.
+#[derive(Clone)]
 pub struct ScyllaDbClientInternal {
     client: Arc<ScyllaDbClientPair>,
     count: Arc<Semaphore>,
     max_concurrent_queries: Option<usize>,
     max_stream_queries: usize,
-    clone_level: usize,
-}
-
-impl Clone for ScyllaDbClientInternal {
-    fn clone(&self) -> Self {
-        println!("Calling the clone operation");
-        ScyllaDbClientInternal {
-            client: self.client.clone(),
-            count: self.count.clone(),
-            max_concurrent_queries: self.max_concurrent_queries,
-            max_stream_queries: self.max_stream_queries,
-            clone_level: self.clone_level + 1,
-        }
-    }
-}
-
-impl Drop for ScyllaDbClientInternal {
-    fn drop(&mut self) {
-        println!("Droppping the object with clone_level={}", self.clone_level);
-    }
 }
 
 /// The error type for [`ScyllaDbClientInternal`]
@@ -313,7 +294,6 @@ impl ScyllaDbClientInternal {
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbContextError> {
         let session = &client.0;
         let table_name = &client.1;
-        //        println!("find_key_values_by_prefix_internal : table_name={}", table_name);
         // Read the value of a key
         let len = key_prefix.len();
         let rows = match get_upper_bound_option(&key_prefix) {
@@ -358,11 +338,6 @@ impl ScyllaDbClientInternal {
         max_concurrent_queries: Option<usize>,
         max_stream_queries: usize,
     ) -> Result<Self, ScyllaDbContextError> {
-        println!(
-            "ScyllaDbClientInternal : Creation with table_name={}",
-            table_name
-        );
-        //        println!("ScyllaDbClientInternal : new : step 1");
         // Create a session builder and specify the ScyllaDB contact points
         let session = SessionBuilder::new().known_node(uri).build().await?;
 
@@ -387,13 +362,11 @@ impl ScyllaDbClientInternal {
         let client = Arc::new(client);
         let n = max_concurrent_queries.unwrap_or(1);
         let count = Arc::new(Semaphore::new(n));
-        //        println!("ScyllaDbClientInternal : new : step 6");
         Ok(ScyllaDbClientInternal {
             client,
             count,
             max_concurrent_queries,
             max_stream_queries,
-            clone_level: 0,
         })
     }
 }
@@ -486,10 +459,6 @@ pub async fn create_scylla_db_test_client() -> ScyllaDbClient {
     let restart_database = true;
     let uri = "localhost:9042";
     let table_name = get_table_name().await;
-    println!(
-        "Creation of a ScyllaDbClient with table_name={}",
-        table_name
-    );
     let max_concurrent_queries = Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES);
     let max_stream_queries = TEST_SCYLLA_DB_MAX_STREAM_QUERIES;
     let cache_size = TEST_CACHE_SIZE;
