@@ -281,7 +281,7 @@ fn path_matches_segments(path: &Path, segments: &[&str]) -> bool {
     }
 
     for (index, (segment, expected)) in path.segments.iter().zip(segments).enumerate() {
-        let with_type_parameters = index == segments.len();
+        let with_type_parameters = index == segments.len() - 1;
 
         if !is_path_segment(segment, expected, with_type_parameters) {
             return false;
