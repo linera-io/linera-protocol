@@ -60,10 +60,8 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     ExportedSimpleFunction: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module("reentrancy", "simple-function", |linker| {
-        ExportedSimpleFunction::export_to(linker)
-            .expect("Failed to export reentrant simple function WIT interface")
-    });
+    let instance =
+        factory.load_test_module::<ExportedSimpleFunction>("reentrancy", "simple-function");
 
     Entrypoint::new(instance)
         .entrypoint()
@@ -204,10 +202,7 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     ExportedGetters: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module("reentrancy", "getters", |instance| {
-        ExportedGetters::export_to(instance)
-            .expect("Failed to export reentrant getters WIT interface")
-    });
+    let instance = factory.load_test_module::<ExportedGetters>("reentrancy", "getters");
 
     Entrypoint::new(instance)
         .entrypoint()
@@ -339,10 +334,7 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     ExportedSetters: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module("reentrancy", "setters", |instance| {
-        ExportedSetters::export_to(instance)
-            .expect("Failed to export reentrant setters WIT interface")
-    });
+    let instance = factory.load_test_module::<ExportedSetters>("reentrancy", "setters");
 
     Entrypoint::new(instance)
         .entrypoint()
@@ -474,10 +466,7 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     ExportedOperations: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module("reentrancy", "operations", |instance| {
-        ExportedOperations::export_to(instance)
-            .expect("Failed to export reentrant operations WIT interface")
-    });
+    let instance = factory.load_test_module::<ExportedOperations>("reentrancy", "operations");
 
     Entrypoint::new(instance)
         .entrypoint()

@@ -42,9 +42,7 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     SimpleFunction: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module("import", "simple-function", |instance| {
-        SimpleFunction::export_to(instance).expect("Failed to export simple function WIT interface")
-    });
+    let instance = factory.load_test_module::<SimpleFunction>("import", "simple-function");
 
     Entrypoint::new(instance)
         .entrypoint()
@@ -117,9 +115,7 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     Getters: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module("import", "getters", |instance| {
-        Getters::export_to(instance).expect("Failed to export getters WIT interface")
-    });
+    let instance = factory.load_test_module::<Getters>("import", "getters");
 
     Entrypoint::new(instance)
         .entrypoint()
@@ -189,9 +185,7 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     Setters: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module("import", "setters", |instance| {
-        Setters::export_to(instance).expect("Failed to export setters WIT interface")
-    });
+    let instance = factory.load_test_module::<Setters>("import", "setters");
 
     Entrypoint::new(instance)
         .entrypoint()
@@ -260,9 +254,7 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     Operations: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module("import", "operations", |instance| {
-        Operations::export_to(instance).expect("Failed to export operations WIT interface")
-    });
+    let instance = factory.load_test_module::<Operations>("import", "operations");
 
     Entrypoint::new(instance)
         .entrypoint()

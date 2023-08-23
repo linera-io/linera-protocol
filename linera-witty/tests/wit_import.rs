@@ -12,7 +12,7 @@ mod test_instance;
 use self::test_instance::WasmerInstanceFactory;
 #[cfg(feature = "wasmtime")]
 use self::test_instance::WasmtimeInstanceFactory;
-use self::test_instance::{MockInstanceFactory, TestInstanceFactory};
+use self::test_instance::{MockInstanceFactory, TestInstanceFactory, WithoutExports};
 use linera_witty::{wit_import, Instance, Runtime, RuntimeMemory};
 use test_case::test_case;
 
@@ -33,7 +33,7 @@ where
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("export", "simple-function", |_| {});
+    let instance = factory.load_test_module::<WithoutExports>("export", "simple-function");
 
     SimpleFunction::new(instance)
         .simple()
@@ -68,7 +68,7 @@ where
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("export", "getters", |_| {});
+    let instance = factory.load_test_module::<WithoutExports>("export", "getters");
 
     let mut getters = Getters::new(instance);
 
@@ -173,7 +173,7 @@ where
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("export", "setters", |_| {});
+    let instance = factory.load_test_module::<WithoutExports>("export", "setters");
 
     let mut setters = Setters::new(instance);
 
@@ -239,7 +239,7 @@ where
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("export", "operations", |_| {});
+    let instance = factory.load_test_module::<WithoutExports>("export", "operations");
 
     let mut operations = Operations::new(instance);
 
