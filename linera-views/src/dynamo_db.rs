@@ -65,7 +65,7 @@ const _MAX_TRANSACT_WRITE_ITEM_BYTES: usize = 4194304;
 /// connections.
 pub const TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
-/// The number of entries in a stream of the tests can be controled by this parameter for tests.
+/// The number of entries in a stream of the tests can be controlled by this parameter for tests.
 pub const TEST_DYNAMO_DB_MAX_STREAM_QUERIES: usize = 10;
 
 /// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 100.
