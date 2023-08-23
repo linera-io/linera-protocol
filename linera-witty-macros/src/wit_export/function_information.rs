@@ -200,6 +200,7 @@ impl<'input> FunctionInformation<'input> {
         let host_parameters = &self.parameter_bindings;
         let call_early_return = &self.call_early_return;
         let function_name = &self.function.sig.ident;
+        let caller_parameter = self.is_reentrant.then(|| quote! { &mut caller, });
 
         let output_type = quote_spanned! { self.function.sig.output.span() =>
             <
@@ -226,7 +227,10 @@ impl<'input> FunctionInformation<'input> {
                         )?;
 
                     #[allow(clippy::let_unit_value)]
-                    let host_results = Self::#function_name(#host_parameters) #call_early_return;
+                    let host_results = Self::#function_name(
+                        #caller_parameter
+                        #host_parameters
+                    ) #call_early_return;
                     let guest_results =
                         <Interface as linera_witty::ExportedFunctionInterface>::lower_results(
                             host_results,
