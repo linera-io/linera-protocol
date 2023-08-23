@@ -5,7 +5,7 @@ edition = "2021"
 description = "Block explorer for the Linera network"
 readme = "README.md"
 repository = "https://github.com/linera-io/linera-protocol"
-homepage = "https://linera.io"
+homepage = "https://linera.dev"
 documentation = "https://docs.rs/linera-explorer/latest/linera_explorer/"
 license = "Apache-2.0"
 
