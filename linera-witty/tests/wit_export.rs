@@ -42,8 +42,8 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     SimpleFunction: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module("import", "simple-function", |linker| {
-        SimpleFunction::export_to(linker).expect("Failed to export simple function WIT interface")
+    let instance = factory.load_test_module("import", "simple-function", |instance| {
+        SimpleFunction::export_to(instance).expect("Failed to export simple function WIT interface")
     });
 
     Entrypoint::new(instance)
