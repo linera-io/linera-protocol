@@ -6,6 +6,10 @@
 #[path = "common/test_instance.rs"]
 mod test_instance;
 
+#[cfg(feature = "wasmer")]
+use self::test_instance::WasmerInstanceFactory;
+#[cfg(feature = "wasmtime")]
+use self::test_instance::WasmtimeInstanceFactory;
 use self::test_instance::{MockInstanceFactory, TestInstanceFactory};
 use linera_witty::{
     wit_export, wit_import, ExportTo, Instance, Runtime, RuntimeError, RuntimeMemory,
@@ -46,6 +50,8 @@ impl ExportedSimpleFunction {
 /// The host function is called from the guest, and calls the guest back through a function with
 /// the same name.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
+#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
 fn simple_function<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -188,6 +194,8 @@ impl ExportedGetters {
 /// The host functions are called from the guest, and they return values obtained by calling back
 /// the guest through functions with the same names.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
+#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
 fn getters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -321,6 +329,8 @@ impl ExportedSetters {
 /// The host functions are called from the guest, and they forward the arguments back to the guest
 /// by calling guest functions with the same names.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
+#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
 fn setters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
@@ -454,6 +464,8 @@ impl ExportedOperations {
 /// The host functions are called from the guest, and they call the guest back through functions
 /// with the same names, forwarding the arguments and retrieving the final results.
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
+#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
 fn operations<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
