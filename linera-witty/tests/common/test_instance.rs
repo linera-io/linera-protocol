@@ -136,7 +136,7 @@ impl TestInstanceFactory for MockInstanceFactory {
 }
 
 impl MockInstanceFactory {
-    /// Mock the exported functions for the "simple-function" module.
+    /// Mock the exported functions from the "export-simple-function" module.
     fn export_simple_function(&mut self, instance: &mut MockInstance) {
         self.mock_exported_function(
             instance,
@@ -146,7 +146,7 @@ impl MockInstanceFactory {
         );
     }
 
-    /// Mock the exported functions for the "getters" module.
+    /// Mock the exported functions from the "export-getters" module.
     fn export_getters(&mut self, instance: &mut MockInstance) {
         self.mock_exported_function(
             instance,
@@ -222,7 +222,7 @@ impl MockInstanceFactory {
         );
     }
 
-    /// Mock the exported functions for the "setters" module.
+    /// Mock the exported functions from the "export-setters" module.
     fn export_setters(&mut self, instance: &mut MockInstance) {
         self.mock_exported_function(
             instance,
@@ -325,7 +325,7 @@ impl MockInstanceFactory {
         );
     }
 
-    /// Mock the exported functions for the "operations" module.
+    /// Mock the exported functions from the "operations" module.
     fn export_operations(&mut self, instance: &mut MockInstance) {
         self.mock_exported_function(
             instance,
@@ -397,7 +397,7 @@ impl MockInstanceFactory {
         );
     }
 
-    /// Mock the exported functions for the "simple-function" module.
+    /// Mock calling the imported function in the "import-simple-function" module.
     fn import_simple_function(&mut self, instance: &mut MockInstance) {
         self.mock_exported_function(
             instance,
@@ -413,7 +413,7 @@ impl MockInstanceFactory {
         );
     }
 
-    /// Mock the exported functions for the "import-getters" module.
+    /// Mock calling the imported functions in the "import-getters" module.
     fn import_getters(&mut self, instance: &mut MockInstance) {
         fn check_getter<Value>(caller: &MockInstance, name: &str, expected_value: Value)
         where
@@ -453,7 +453,7 @@ impl MockInstanceFactory {
         );
     }
 
-    /// Mocks the exported functions for the "import-setters" module.
+    /// Mock calling the imported functions in the "import-setters" module.
     fn import_setters(&mut self, instance: &mut MockInstance) {
         fn send_to_setter<Value>(caller: &MockInstance, name: &str, value: Value)
         where
@@ -494,7 +494,7 @@ impl MockInstanceFactory {
         );
     }
 
-    /// Mocks the exported functions for the "import-operations" module.
+    /// Mock calling the imported functions in the "import-operations".
     fn import_operations(&mut self, instance: &mut MockInstance) {
         fn check_operation<Value>(
             caller: &MockInstance,
