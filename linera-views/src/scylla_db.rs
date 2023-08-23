@@ -418,7 +418,7 @@ impl KeyValueStoreClient for ScyllaDbClient {
 }
 
 impl ScyllaDbClient {
-    /// Get the table_name of a client
+    /// Gets the table name of a client
     pub async fn get_table_name(&self) -> String {
         self.client.client.get_table_name().await
     }
