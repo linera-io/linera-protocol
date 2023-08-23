@@ -1,0 +1,25 @@
+package witty-macros:test-modules
+
+world reentrant-simple-function {
+    import simple-function
+    export simple-function
+    export entrypoint
+}
+
+world reentrant-getters {
+    import getters
+    export getters
+    export entrypoint
+}
+
+world reentrant-setters {
+    import setters
+    export setters
+    export entrypoint
+}
+
+world reentrant-operations {
+    import operations
+    export operations
+    export entrypoint
+}
