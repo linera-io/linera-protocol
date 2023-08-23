@@ -12,7 +12,7 @@
 //! * [`KeyValueStoreClient`][trait1] for a database access.
 //! * [`Context`][trait2] for the context.
 //!
-//! Support for ScyllaDb is experimental and is still missing important features:
+//! Support for ScyllaDB is experimental and is still missing important features:
 //! TODO(#935): Read several keys at once
 //! TODO(#934): Journaling operations
 //!
@@ -34,7 +34,7 @@ use thiserror::Error;
 
 static TEST_COUNTER: Lazy<u32> = Lazy::new(|| 0);
 
-/// The creation of a ScyllaDb client that can be used for accessing it.
+/// The creation of a ScyllaDB client that can be used for accessing it.
 /// The `Vec<u8>`is a primary key.
 type ScyllaDbClientPair = (Session, String);
 
@@ -60,11 +60,11 @@ pub enum ScyllaDbContextError {
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
 
-    /// A query error in ScyllaDb
+    /// A query error in ScyllaDB
     #[error(transparent)]
     ScyllaDbQueryError(#[from] scylla::transport::errors::QueryError),
 
-    /// A query error in ScyllaDb
+    /// A query error in ScyllaDB
     #[error(transparent)]
     ScyllaDbNewSessionError(#[from] scylla::transport::errors::NewSessionError),
 
@@ -369,7 +369,7 @@ impl ScyllaDbClientInternal {
     }
 }
 
-/// A shared DB client for ScyllaDb implementing LruCaching
+/// A shared DB client for ScyllaDB implementing LruCaching
 #[derive(Clone)]
 pub struct ScyllaDbClient {
     client: LruCachingKeyValueClient<ScyllaDbClientInternal>,
@@ -452,7 +452,7 @@ pub async fn get_table_name() -> String {
     format!("test_table_{}", counter)
 }
 
-/// Creates a ScyllaDb test client
+/// Creates a ScyllaDB test client
 pub async fn create_scylla_db_test_client() -> ScyllaDbClient {
     let restart_database = true;
     let uri = "localhost:9042";
