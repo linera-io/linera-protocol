@@ -136,7 +136,7 @@ impl TestInstanceFactory for MockInstanceFactory {
 }
 
 impl MockInstanceFactory {
-    /// Mock the exported functions for the "simple-function" module.
+    /// Mock the exported functions from the "export-simple-function" module.
     fn export_simple_function(&mut self, instance: &mut MockInstance) {
         self.mock_exported_function(
             instance,
@@ -146,7 +146,7 @@ impl MockInstanceFactory {
         );
     }
 
-    /// Mock the exported functions for the "getters" module.
+    /// Mock the exported functions from the "export-getters" module.
     fn export_getters(&mut self, instance: &mut MockInstance) {
         self.mock_exported_function(
             instance,
@@ -222,7 +222,7 @@ impl MockInstanceFactory {
         );
     }
 
-    /// Mock the exported functions for the "setters" module.
+    /// Mock the exported functions from the "export-setters" module.
     fn export_setters(&mut self, instance: &mut MockInstance) {
         self.mock_exported_function(
             instance,
@@ -309,7 +309,7 @@ impl MockInstanceFactory {
             instance,
             "witty-macros:test-modules/setters#set-float32",
             |_, hlist_pat![parameter]: HList![f32]| {
-                assert_eq!(parameter, 10.5);
+                assert_eq!(parameter, 10.4);
                 Ok(hlist![])
             },
             1,
@@ -325,7 +325,7 @@ impl MockInstanceFactory {
         );
     }
 
-    /// Mock the exported functions for the "operations" module.
+    /// Mock the exported functions from the "operations" module.
     fn export_operations(&mut self, instance: &mut MockInstance) {
         self.mock_exported_function(
             instance,
@@ -397,7 +397,7 @@ impl MockInstanceFactory {
         );
     }
 
-    /// Mock the exported functions for the "simple-function" module.
+    /// Mock calling the imported function in the "import-simple-function" module.
     fn import_simple_function(&mut self, instance: &mut MockInstance) {
         self.mock_exported_function(
             instance,
@@ -413,7 +413,7 @@ impl MockInstanceFactory {
         );
     }
 
-    /// Mock the exported functions for the "import-getters" module.
+    /// Mock calling the imported functions in the "import-getters" module.
     fn import_getters(&mut self, instance: &mut MockInstance) {
         fn check_getter<Value>(caller: &MockInstance, name: &str, expected_value: Value)
         where
@@ -442,6 +442,8 @@ impl MockInstanceFactory {
                 check_getter(&caller, "get-u16", 60_000_u16);
                 check_getter(&caller, "get-s32", -100_000_i32);
                 check_getter(&caller, "get-u32", 3_000_111_u32);
+                check_getter(&caller, "get-s64", -5_000_000_i64);
+                check_getter(&caller, "get-u64", 10_000_000_000_u64);
                 check_getter(&caller, "get-float32", -0.125_f32);
                 check_getter(&caller, "get-float64", 128.25_f64);
 
@@ -451,7 +453,7 @@ impl MockInstanceFactory {
         );
     }
 
-    /// Mocks the exported functions for the "import-setters" module.
+    /// Mock calling the imported functions in the "import-setters" module.
     fn import_setters(&mut self, instance: &mut MockInstance) {
         fn send_to_setter<Value>(caller: &MockInstance, name: &str, value: Value)
         where
@@ -481,6 +483,8 @@ impl MockInstanceFactory {
                 send_to_setter(&caller, "set-u16", 50_000_u16);
                 send_to_setter(&caller, "set-s32", -2_000_000_i32);
                 send_to_setter(&caller, "set-u32", 4_000_000_u32);
+                send_to_setter(&caller, "set-s64", -25_000_000_000_i64);
+                send_to_setter(&caller, "set-u64", 7_000_000_000_u64);
                 send_to_setter(&caller, "set-float32", 10.4_f32);
                 send_to_setter(&caller, "set-float64", -0.000_08_f64);
 
@@ -490,7 +494,7 @@ impl MockInstanceFactory {
         );
     }
 
-    /// Mocks the exported functions for the "import-operations" module.
+    /// Mock calling the imported functions in the "import-operations".
     fn import_operations(&mut self, instance: &mut MockInstance) {
         fn check_operation<Value>(
             caller: &MockInstance,

@@ -205,7 +205,7 @@ where
         .set_u64(7_000_000_000)
         .expect("Failed to run guest's `set-u64` function");
     setters
-        .set_float32(10.5)
+        .set_float32(10.4)
         .expect("Failed to run guest's `set-f32` function");
     setters
         .set_float64(-0.000_08)

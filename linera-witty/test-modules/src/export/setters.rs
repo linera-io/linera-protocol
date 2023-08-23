@@ -14,27 +14,50 @@ use self::exports::witty_macros::test_modules::setters::Setters;
 struct Implementation;
 
 impl Setters for Implementation {
-    fn set_bool(_value: bool) {}
+    #[allow(clippy::bool_assert_comparison)]
+    fn set_bool(value: bool) {
+        assert_eq!(value, false);
+    }
 
-    fn set_s8(_value: i8) {}
+    fn set_s8(value: i8) {
+        assert_eq!(value, -100);
+    }
 
-    fn set_u8(_value: u8) {}
+    fn set_u8(value: u8) {
+        assert_eq!(value, 201);
+    }
 
-    fn set_s16(_value: i16) {}
+    fn set_s16(value: i16) {
+        assert_eq!(value, -20_000);
+    }
 
-    fn set_u16(_value: u16) {}
+    fn set_u16(value: u16) {
+        assert_eq!(value, 50_000);
+    }
 
-    fn set_s32(_value: i32) {}
+    fn set_s32(value: i32) {
+        assert_eq!(value, -2_000_000);
+    }
 
-    fn set_u32(_value: u32) {}
+    fn set_u32(value: u32) {
+        assert_eq!(value, 4_000_000);
+    }
 
-    fn set_s64(_value: i64) {}
+    fn set_s64(value: i64) {
+        assert_eq!(value, -25_000_000_000);
+    }
 
-    fn set_u64(_value: u64) {}
+    fn set_u64(value: u64) {
+        assert_eq!(value, 7_000_000_000);
+    }
 
-    fn set_float32(_value: f32) {}
+    fn set_float32(value: f32) {
+        assert_eq!(value, 10.4);
+    }
 
-    fn set_float64(_value: f64) {}
+    fn set_float64(value: f64) {
+        assert_eq!(value, -0.000_08);
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

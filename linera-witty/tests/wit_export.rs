@@ -42,8 +42,8 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     SimpleFunction: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module("import", "simple-function", |linker| {
-        SimpleFunction::export_to(linker).expect("Failed to export simple function WIT interface")
+    let instance = factory.load_test_module("import", "simple-function", |instance| {
+        SimpleFunction::export_to(instance).expect("Failed to export simple function WIT interface")
     });
 
     Entrypoint::new(instance)
@@ -86,6 +86,14 @@ impl Getters {
 
     fn get_u32() -> u32 {
         3_000_111
+    }
+
+    fn get_s64() -> i64 {
+        -5_000_000
+    }
+
+    fn get_u64() -> u64 {
+        10_000_000_000
     }
 
     fn get_float32() -> f32 {
@@ -150,6 +158,14 @@ impl Setters {
 
     fn set_u32(value: u32) {
         assert_eq!(value, 4_000_000);
+    }
+
+    fn set_s64(value: i64) {
+        assert_eq!(value, -25_000_000_000);
+    }
+
+    fn set_u64(value: u64) {
+        assert_eq!(value, 7_000_000_000);
     }
 
     fn set_float32(value: f32) {
