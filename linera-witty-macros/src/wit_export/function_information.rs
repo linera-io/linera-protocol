@@ -50,7 +50,7 @@ impl<'input> FunctionInformation<'input> {
         let wit_name = function.sig.ident.to_string().to_kebab_case();
         let is_reentrant = Self::is_reentrant(&function.sig);
         let (parameter_bindings, parameter_types) =
-            Self::parse_parameters(function.sig.inputs.iter());
+            Self::parse_parameters(is_reentrant, function.sig.inputs.iter());
         let (results, is_fallible) = Self::parse_output(&function.sig.output);
 
         let interface_type = quote_spanned! { function.sig.span() =>
@@ -94,15 +94,18 @@ impl<'input> FunctionInformation<'input> {
     /// Parses a function's parameters and returns the generated code with a list ofbindings to the
     /// parameters and a list of the parameters types.
     fn parse_parameters(
+        is_reentrant: bool,
         inputs: impl Iterator<Item = &'input FnArg> + Clone,
     ) -> (TokenStream, TokenStream) {
-        let parameters = inputs.map(|input| match input {
-            FnArg::Typed(parameter) => parameter,
-            FnArg::Receiver(receiver) => abort!(
-                receiver.self_token,
-                "Exported interfaces can not have `self` parameters"
-            ),
-        });
+        let parameters = inputs
+            .skip(if is_reentrant { 1 } else { 0 })
+            .map(|input| match input {
+                FnArg::Typed(parameter) => parameter,
+                FnArg::Receiver(receiver) => abort!(
+                    receiver.self_token,
+                    "Exported interfaces can not have `self` parameters"
+                ),
+            });
 
         let bindings = parameters.clone().map(|parameter| &parameter.pat);
         let types = parameters.map(|parameter| &parameter.ty);
