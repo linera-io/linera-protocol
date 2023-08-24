@@ -189,9 +189,9 @@ where
 
         let results = handler(self.clone(), Box::new(parameters))?;
 
-        Ok(*results
-            .downcast()
-            .expect("Incorrect results type expected from handler of expected function"))
+        Ok(*results.downcast().unwrap_or_else(|_| {
+            panic!("Incorrect results type expected from handler of expected function: {function}")
+        }))
     }
 }
 
