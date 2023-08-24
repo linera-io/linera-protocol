@@ -35,7 +35,7 @@ use linera_execution::{
 };
 use linera_storage::{MemoryStoreClient, Store};
 use linera_views::{
-    memory::MEMORY_MAX_STREAM_QUERIES,
+    memory::TEST_MEMORY_MAX_STREAM_QUERIES,
     views::{CryptoHashView, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -43,16 +43,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use test_log::test;
 
 #[cfg(feature = "rocksdb")]
-use {linera_storage::RocksDbStoreClient, linera_views::rocks_db::ROCKS_DB_MAX_STREAM_QUERIES};
+use {
+    linera_core::client::client_test_utils::ROCKS_DB_SEMAPHORE, linera_storage::RocksDbStoreClient,
+};
 
 #[cfg(feature = "aws")]
-use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
+use linera_storage::DynamoDbStoreClient;
 
-#[cfg(any(feature = "rocksdb", feature = "aws"))]
-use linera_views::lru_caching::TEST_CACHE_SIZE;
-
-#[cfg(feature = "aws")]
-use linera_views::dynamo_db::{DYNAMO_DB_MAX_CONCURRENT_QUERIES, DYNAMO_DB_MAX_STREAM_QUERIES};
+#[cfg(feature = "scylladb")]
+use linera_storage::ScyllaDbStoreClient;
 
 #[derive(Serialize, Deserialize)]
 struct Dummy;
@@ -302,39 +301,30 @@ fn channel_outgoing_message(name: ChannelName, message: SystemMessage) -> Outgoi
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_bad_signature() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_block_proposal_bad_signature(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_bad_signature() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_block_proposal_bad_signature(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_bad_signature() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_block_proposal_bad_signature() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_block_proposal_bad_signature(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_block_proposal_bad_signature() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_block_proposal_bad_signature(client).await;
 }
 
 async fn run_test_handle_block_proposal_bad_signature<S>(client: S)
@@ -385,39 +375,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_zero_amount() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_block_proposal_zero_amount(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_zero_amount() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_block_proposal_zero_amount(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_zero_amount() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_block_proposal_zero_amount() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_block_proposal_zero_amount(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_block_proposal_zero_amount() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_block_proposal_zero_amount(client).await;
 }
 
 async fn run_test_handle_block_proposal_zero_amount<S>(client: S)
@@ -465,39 +446,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_ticks() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_block_proposal_ticks(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_ticks() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_block_proposal_ticks(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_ticks() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_block_proposal_ticks() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_block_proposal_ticks(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_block_proposal_ticks() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_block_proposal_ticks(client).await;
 }
 
 async fn run_test_handle_block_proposal_ticks<S>(client: S)
@@ -583,39 +555,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_unknown_sender() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_block_proposal_unknown_sender(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_unknown_sender() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_block_proposal_unknown_sender(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_unknown_sender() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_block_proposal_unknown_sender() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_block_proposal_unknown_sender(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_block_proposal_unknown_sender() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_block_proposal_unknown_sender(client).await;
 }
 
 async fn run_test_handle_block_proposal_unknown_sender<S>(client: S)
@@ -666,39 +629,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_with_chaining() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_block_proposal_with_chaining(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_with_chaining() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_block_proposal_with_chaining(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_with_chaining() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_block_proposal_with_chaining() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_block_proposal_with_chaining(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_block_proposal_with_chaining() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_block_proposal_with_chaining(client).await;
 }
 
 async fn run_test_handle_block_proposal_with_chaining<S>(client: S)
@@ -792,40 +746,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_with_incoming_messages() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_block_proposal_with_incoming_messages(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_with_incoming_messages() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_block_proposal_with_incoming_messages(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_with_incoming_messages() -> Result<(), anyhow::Error>
-{
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_block_proposal_with_incoming_messages() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_block_proposal_with_incoming_messages(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_block_proposal_with_incoming_messages() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_block_proposal_with_incoming_messages(client).await;
 }
 
 async fn run_test_handle_block_proposal_with_incoming_messages<S>(client: S)
@@ -1275,39 +1219,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_exceed_balance() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_block_proposal_exceed_balance(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_exceed_balance() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_block_proposal_exceed_balance(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_exceed_balance() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_block_proposal_exceed_balance() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_block_proposal_exceed_balance(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_block_proposal_exceed_balance() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_block_proposal_exceed_balance(client).await;
 }
 
 async fn run_test_handle_block_proposal_exceed_balance<S>(client: S)
@@ -1351,39 +1286,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_block_proposal(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_block_proposal(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_block_proposal() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_block_proposal(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_block_proposal() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_block_proposal(client).await;
 }
 
 async fn run_test_handle_block_proposal<S>(client: S)
@@ -1434,39 +1360,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_replay() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_block_proposal_replay(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_replay() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_block_proposal_replay(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_block_proposal_replay() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_block_proposal_replay() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_block_proposal_replay(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_block_proposal_replay() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_block_proposal_replay(client).await;
 }
 
 async fn run_test_handle_block_proposal_replay<S>(client: S)
@@ -1515,39 +1432,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_unknown_sender() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_certificate_unknown_sender(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_unknown_sender() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_certificate_unknown_sender(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_unknown_sender() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_certificate_unknown_sender() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_certificate_unknown_sender(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_certificate_unknown_sender() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_certificate_unknown_sender(client).await;
 }
 
 async fn run_test_handle_certificate_unknown_sender<S>(client: S)
@@ -1581,39 +1489,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_bad_block_height() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_certificate_bad_block_height(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_bad_block_height() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_certificate_bad_block_height(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_bad_block_height() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_certificate_bad_block_height() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_certificate_bad_block_height(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_certificate_bad_block_height() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_certificate_bad_block_height(client).await;
 }
 
 async fn run_test_handle_certificate_bad_block_height<S>(client: S)
@@ -1659,40 +1558,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_with_anticipated_incoming_message() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_certificate_with_anticipated_incoming_message(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_with_anticipated_incoming_message() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_certificate_with_anticipated_incoming_message(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_with_anticipated_incoming_message(
-) -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_certificate_with_anticipated_incoming_message() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_certificate_with_anticipated_incoming_message(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_certificate_with_anticipated_incoming_message() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_certificate_with_anticipated_incoming_message(client).await;
 }
 
 async fn run_test_handle_certificate_with_anticipated_incoming_message<S>(client: S)
@@ -1807,40 +1696,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_receiver_balance_overflow() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_certificate_receiver_balance_overflow(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_receiver_balance_overflow() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_certificate_receiver_balance_overflow(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_receiver_balance_overflow() -> Result<(), anyhow::Error>
-{
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_certificate_receiver_balance_overflow() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_certificate_receiver_balance_overflow(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_certificate_receiver_balance_overflow() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_certificate_receiver_balance_overflow(client).await;
 }
 
 async fn run_test_handle_certificate_receiver_balance_overflow<S>(client: S)
@@ -1913,39 +1792,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_receiver_equal_sender() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_certificate_receiver_equal_sender(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_receiver_equal_sender() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_certificate_receiver_equal_sender(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_receiver_equal_sender() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_certificate_receiver_equal_sender() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_certificate_receiver_equal_sender(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_certificate_receiver_equal_sender() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_certificate_receiver_equal_sender(client).await;
 }
 
 async fn run_test_handle_certificate_receiver_equal_sender<S>(client: S)
@@ -2023,39 +1893,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_cross_chain_request() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_cross_chain_request(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_cross_chain_request() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_cross_chain_request(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_cross_chain_request() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_cross_chain_request() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_cross_chain_request(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_cross_chain_request() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_cross_chain_request(client).await;
 }
 
 async fn run_test_handle_cross_chain_request<S>(client: S)
@@ -2140,40 +2001,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_cross_chain_request_no_recipient_chain() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_cross_chain_request_no_recipient_chain(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_cross_chain_request_no_recipient_chain() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_cross_chain_request_no_recipient_chain(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain() -> Result<(), anyhow::Error>
-{
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_cross_chain_request_no_recipient_chain(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_cross_chain_request_no_recipient_chain() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_cross_chain_request_no_recipient_chain(client).await;
 }
 
 async fn run_test_handle_cross_chain_request_no_recipient_chain<S>(client: S)
@@ -2213,40 +2064,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_cross_chain_request_no_recipient_chain_on_client() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_cross_chain_request_no_recipient_chain_on_client() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain_on_client(
-) -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain_on_client() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_cross_chain_request_no_recipient_chain_on_client() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
 }
 
 async fn run_test_handle_cross_chain_request_no_recipient_chain_on_client<S>(client: S)
@@ -2298,39 +2139,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_to_active_recipient() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_certificate_to_active_recipient(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_to_active_recipient() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_certificate_to_active_recipient(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_to_active_recipient() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_certificate_to_active_recipient() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_certificate_to_active_recipient(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_certificate_to_active_recipient() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_certificate_to_active_recipient(client).await;
 }
 
 async fn run_test_handle_certificate_to_active_recipient<S>(client: S)
@@ -2488,39 +2320,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_to_inactive_recipient() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_handle_certificate_to_inactive_recipient(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_to_inactive_recipient() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_handle_certificate_to_inactive_recipient(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_handle_certificate_to_inactive_recipient() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_handle_certificate_to_inactive_recipient() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_handle_certificate_to_inactive_recipient(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_certificate_to_inactive_recipient() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_handle_certificate_to_inactive_recipient(client).await;
 }
 
 async fn run_test_handle_certificate_to_inactive_recipient<S>(client: S)
@@ -2565,39 +2388,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_chain_creation_with_committee_creation() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_chain_creation_with_committee_creation(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_chain_creation_with_committee_creation() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_chain_creation_with_committee_creation(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_chain_creation_with_committee_creation() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_chain_creation_with_committee_creation() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_chain_creation_with_committee_creation(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_chain_creation_with_committee_creation() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_chain_creation_with_committee_creation(client).await;
 }
 
 async fn run_test_chain_creation_with_committee_creation<S>(client: S)
@@ -3062,39 +2876,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfers_and_committee_creation() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_transfers_and_committee_creation(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_transfers_and_committee_creation() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_transfers_and_committee_creation(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_transfers_and_committee_creation() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_transfers_and_committee_creation() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_transfers_and_committee_creation(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_transfers_and_committee_creation() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_transfers_and_committee_creation(client).await;
 }
 
 async fn run_test_transfers_and_committee_creation<S>(client: S)
@@ -3257,39 +3062,30 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfers_and_committee_removal() {
-    let client = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new_test().await;
     run_test_transfers_and_committee_removal(client).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_transfers_and_committee_removal() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        None,
-        ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::new_test().await;
     run_test_transfers_and_committee_removal(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_transfers_and_committee_removal() -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await?;
+async fn test_dynamo_db_transfers_and_committee_removal() {
+    let client = DynamoDbStoreClient::new_test().await;
     run_test_transfers_and_committee_removal(client).await;
-    Ok(())
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_transfers_and_committee_removal() {
+    let client = ScyllaDbStoreClient::new_test().await;
+    run_test_transfers_and_committee_removal(client).await;
 }
 
 async fn run_test_transfers_and_committee_removal<S>(client: S)
@@ -3522,7 +3318,7 @@ where
 async fn test_cross_chain_helper() {
     // Make a committee and worker (only used for signing certificates)
     let (committee, worker) = init_worker(
-        MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES),
+        MemoryStoreClient::new(None, TEST_MEMORY_MAX_STREAM_QUERIES),
         true,
     );
     let committees = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);

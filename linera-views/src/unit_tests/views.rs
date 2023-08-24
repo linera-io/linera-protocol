@@ -13,15 +13,20 @@ use std::collections::VecDeque;
 
 #[cfg(feature = "rocksdb")]
 use {
-    crate::rocks_db::{RocksDbClient, RocksDbContext, ROCKS_DB_MAX_STREAM_QUERIES},
+    crate::rocks_db::{RocksDbClient, RocksDbContext, TEST_ROCKS_DB_MAX_STREAM_QUERIES},
     tempfile::TempDir,
 };
 
 #[cfg(feature = "aws")]
 use crate::{
-    dynamo_db::{DynamoDbContext, DYNAMO_DB_MAX_CONCURRENT_QUERIES, DYNAMO_DB_MAX_STREAM_QUERIES},
+    dynamo_db::{
+        DynamoDbContext, TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES, TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
+    },
     test_utils::LocalStackTestContext,
 };
+
+#[cfg(feature = "scylladb")]
+use crate::{scylla_db::create_scylla_db_test_client, scylla_db::ScyllaDbContext};
 
 #[cfg(any(feature = "rocksdb", feature = "aws"))]
 use crate::lru_caching::TEST_CACHE_SIZE;
@@ -39,8 +44,14 @@ async fn test_queue_operations_with_rocks_db_context() -> Result<(), anyhow::Err
 
 #[cfg(feature = "aws")]
 #[tokio::test]
-async fn test_queue_operations_with_dynamodb_context() -> Result<(), anyhow::Error> {
+async fn test_queue_operations_with_dynamo_db_context() -> Result<(), anyhow::Error> {
     run_test_queue_operations_test_cases(DynamoDbContextFactory::default()).await
+}
+
+#[cfg(feature = "scylladb")]
+#[tokio::test]
+async fn test_queue_operations_with_scylla_db_context() -> Result<(), anyhow::Error> {
+    run_test_queue_operations_test_cases(ScyllaDbContextFactory::default()).await
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -213,7 +224,7 @@ impl TestContextFactory for RocksDbContextFactory {
         let directory = TempDir::new()?;
         let client = RocksDbClient::new(
             directory.path(),
-            ROCKS_DB_MAX_STREAM_QUERIES,
+            TEST_ROCKS_DB_MAX_STREAM_QUERIES,
             TEST_CACHE_SIZE,
         );
         let context = RocksDbContext::new(client, vec![], ());
@@ -249,13 +260,35 @@ impl TestContextFactory for DynamoDbContextFactory {
         let (context, _) = DynamoDbContext::from_config(
             config,
             table,
-            Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-            DYNAMO_DB_MAX_STREAM_QUERIES,
+            Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+            TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
             TEST_CACHE_SIZE,
             dummy_key_prefix,
             (),
         )
         .await?;
+
+        Ok(context)
+    }
+}
+
+#[cfg(feature = "scylladb")]
+#[derive(Default)]
+struct ScyllaDbContextFactory {
+    table_names: Vec<String>,
+}
+
+#[cfg(feature = "scylladb")]
+#[async_trait]
+impl TestContextFactory for ScyllaDbContextFactory {
+    type Context = ScyllaDbContext<()>;
+
+    async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
+        let db = create_scylla_db_test_client().await;
+        let table_name = db.get_table_name().await;
+        let context = ScyllaDbContext::new(db, vec![], ());
+
+        self.table_names.push(table_name);
 
         Ok(context)
     }

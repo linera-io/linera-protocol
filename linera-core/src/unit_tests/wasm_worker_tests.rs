@@ -28,7 +28,7 @@ use linera_execution::{
 };
 use linera_storage::{MemoryStoreClient, Store};
 use linera_views::{
-    memory::MEMORY_MAX_STREAM_QUERIES,
+    memory::TEST_MEMORY_MAX_STREAM_QUERIES,
     views::{CryptoHashView, ViewError},
 };
 use std::{
@@ -38,7 +38,9 @@ use std::{
 use test_case::test_case;
 
 #[cfg(feature = "rocksdb")]
-use {linera_storage::RocksDbStoreClient, linera_views::rocks_db::ROCKS_DB_MAX_STREAM_QUERIES};
+use {
+    linera_storage::RocksDbStoreClient, linera_views::rocks_db::TEST_ROCKS_DB_MAX_STREAM_QUERIES,
+};
 
 #[cfg(feature = "aws")]
 use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
@@ -47,7 +49,9 @@ use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTe
 use linera_views::lru_caching::TEST_CACHE_SIZE;
 
 #[cfg(feature = "aws")]
-use linera_views::dynamo_db::{DYNAMO_DB_MAX_CONCURRENT_QUERIES, DYNAMO_DB_MAX_STREAM_QUERIES};
+use linera_views::dynamo_db::{
+    TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES, TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
+};
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -55,7 +59,7 @@ use linera_views::dynamo_db::{DYNAMO_DB_MAX_CONCURRENT_QUERIES, DYNAMO_DB_MAX_ST
 async fn test_memory_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let client = MemoryStoreClient::new(Some(wasm_runtime), MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::new(Some(wasm_runtime), TEST_MEMORY_MAX_STREAM_QUERIES);
     run_test_handle_certificates_to_create_application(client, wasm_runtime).await
 }
 
@@ -70,7 +74,7 @@ async fn test_rocks_db_handle_certificates_to_create_application(
     let client = RocksDbStoreClient::new(
         dir.path().to_path_buf(),
         Some(wasm_runtime),
-        ROCKS_DB_MAX_STREAM_QUERIES,
+        TEST_ROCKS_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
     );
     run_test_handle_certificates_to_create_application(client, wasm_runtime).await
@@ -88,8 +92,8 @@ async fn test_dynamo_db_handle_certificates_to_create_application(
     let (client, _) = DynamoDbStoreClient::from_config(
         localstack.dynamo_db_config(),
         table,
-        Some(DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        DYNAMO_DB_MAX_STREAM_QUERIES,
+        Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
         TEST_CACHE_SIZE,
         Some(wasm_runtime),
     )

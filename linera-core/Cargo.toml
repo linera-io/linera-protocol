@@ -20,6 +20,7 @@ test = [
 ]
 rocksdb = ["linera-views/rocksdb", "linera-storage/rocksdb"]
 aws = ["linera-views/aws", "linera-storage/aws"]
+scylladb = ["linera-views/scylladb", "linera-storage/scylladb"]
 
 [dependencies]
 anyhow = { workspace = true }

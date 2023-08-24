@@ -4,7 +4,7 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient},
-    memory::{MemoryClient, MemoryContextError, MemoryStoreMap, MEMORY_MAX_STREAM_QUERIES},
+    memory::{MemoryClient, MemoryContextError, MemoryStoreMap, TEST_MEMORY_MAX_STREAM_QUERIES},
 };
 use async_lock::{Mutex, MutexGuardArc};
 use async_trait::async_trait;
@@ -290,7 +290,7 @@ impl KeyValueStoreClient for TestMemoryClientInternal {
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
     fn max_stream_queries(&self) -> usize {
-        MEMORY_MAX_STREAM_QUERIES
+        TEST_MEMORY_MAX_STREAM_QUERIES
     }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryContextError> {
@@ -334,7 +334,7 @@ impl KeyValueStoreClient for TestMemoryClientInternal {
 impl TestMemoryClientInternal {
     /// Creates a `TestMemoryClient` from the guard
     pub fn new(guard: MutexGuardArc<MemoryStoreMap>) -> Self {
-        let client = MemoryClient::new(guard, MEMORY_MAX_STREAM_QUERIES);
+        let client = MemoryClient::new(guard, TEST_MEMORY_MAX_STREAM_QUERIES);
         TestMemoryClientInternal { client }
     }
 }

@@ -9,12 +9,16 @@ mod dynamo_db;
 mod memory;
 #[cfg(feature = "rocksdb")]
 mod rocks_db;
+#[cfg(feature = "scylladb")]
+mod scylla_db;
 
 #[cfg(feature = "aws")]
 pub use crate::dynamo_db::DynamoDbStoreClient;
 pub use crate::memory::MemoryStoreClient;
 #[cfg(feature = "rocksdb")]
 pub use crate::rocks_db::RocksDbStoreClient;
+#[cfg(feature = "scylladb")]
+pub use crate::scylla_db::ScyllaDbStoreClient;
 
 use crate::chain_guards::ChainGuards;
 use async_trait::async_trait;

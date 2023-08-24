@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, HashSet};
 use linera_views::rocks_db::create_rocks_db_test_client;
 
 #[cfg(feature = "aws")]
-use linera_views::test_utils::create_dynamodb_test_client;
+use linera_views::test_utils::create_dynamo_db_test_client;
 
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::create_scylla_db_test_client;
@@ -173,7 +173,7 @@ async fn test_readings_rocks_db() {
 #[tokio::test]
 async fn test_readings_dynamodb() {
     for scenario in get_random_test_scenarios() {
-        let key_value_operation = create_dynamodb_test_client().await;
+        let key_value_operation = create_dynamo_db_test_client().await;
         test_readings_vec(key_value_operation, scenario).await;
     }
 }
@@ -296,7 +296,7 @@ async fn test_writings_rocks_db() {
 #[cfg(feature = "aws")]
 #[tokio::test]
 async fn test_writings_dynamodb() {
-    let key_value_operation = create_dynamodb_test_client().await;
+    let key_value_operation = create_dynamo_db_test_client().await;
     test_writings_random(key_value_operation).await;
 }
 

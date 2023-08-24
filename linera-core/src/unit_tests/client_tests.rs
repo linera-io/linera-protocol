@@ -31,6 +31,9 @@ use crate::client::client_test_utils::{MakeRocksDbStoreClient, ROCKS_DB_SEMAPHOR
 #[cfg(feature = "aws")]
 use crate::client::client_test_utils::MakeDynamoDbStoreClient;
 
+#[cfg(feature = "scylladb")]
+use crate::client::client_test_utils::MakeScyllaDbStoreClient;
+
 #[test(tokio::test)]
 pub async fn test_memory_initiating_valid_transfer() -> Result<(), anyhow::Error> {
     run_test_initiating_valid_transfer(MakeMemoryStoreClient::default()).await
@@ -47,6 +50,12 @@ async fn test_rocks_db_initiating_valid_transfer() -> Result<(), anyhow::Error> 
 #[test(tokio::test)]
 async fn test_dynamo_db_initiating_valid_transfer() -> Result<(), anyhow::Error> {
     run_test_initiating_valid_transfer(MakeDynamoDbStoreClient::default()).await
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_initiating_valid_transfer() -> Result<(), anyhow::Error> {
+    run_test_initiating_valid_transfer(MakeScyllaDbStoreClient::default()).await
 }
 
 async fn run_test_initiating_valid_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -103,6 +112,12 @@ async fn test_rocks_db_claim_amount() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_dynamo_db_claim_amount() -> Result<(), anyhow::Error> {
     run_test_claim_amount(MakeDynamoDbStoreClient::default()).await
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_claim_amount() -> Result<(), anyhow::Error> {
+    run_test_claim_amount(MakeScyllaDbStoreClient::default()).await
 }
 
 async fn run_test_claim_amount<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -189,6 +204,12 @@ async fn test_dynamo_db_rotate_key_pair() -> Result<(), anyhow::Error> {
     run_test_rotate_key_pair(MakeDynamoDbStoreClient::default()).await
 }
 
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_rotate_key_pair() -> Result<(), anyhow::Error> {
+    run_test_rotate_key_pair(MakeScyllaDbStoreClient::default()).await
+}
+
 async fn run_test_rotate_key_pair<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
@@ -251,6 +272,12 @@ async fn test_rocks_db_transfer_ownership() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_dynamo_db_transfer_ownership() -> Result<(), anyhow::Error> {
     run_test_transfer_ownership(MakeDynamoDbStoreClient::default()).await
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_transfer_ownership() -> Result<(), anyhow::Error> {
+    run_test_transfer_ownership(MakeScyllaDbStoreClient::default()).await
 }
 
 async fn run_test_transfer_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -318,6 +345,12 @@ async fn test_rocks_db_share_ownership() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_dynamo_db_share_ownership() -> Result<(), anyhow::Error> {
     run_test_share_ownership(MakeDynamoDbStoreClient::default()).await
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_share_ownership() -> Result<(), anyhow::Error> {
+    run_test_share_ownership(MakeScyllaDbStoreClient::default()).await
 }
 
 async fn run_test_share_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -466,6 +499,12 @@ async fn test_dynamo_db_open_chain_then_close_it() -> Result<(), anyhow::Error> 
     run_test_open_chain_then_close_it(MakeDynamoDbStoreClient::default()).await
 }
 
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_open_chain_then_close_it() -> Result<(), anyhow::Error> {
+    run_test_open_chain_then_close_it(MakeScyllaDbStoreClient::default()).await
+}
+
 async fn run_test_open_chain_then_close_it<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
@@ -519,6 +558,12 @@ async fn test_rocks_db_transfer_then_open_chain() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_dynamo_db_transfer_then_open_chain() -> Result<(), anyhow::Error> {
     run_test_transfer_then_open_chain(MakeDynamoDbStoreClient::default()).await
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_transfer_then_open_chain() -> Result<(), anyhow::Error> {
+    run_test_transfer_then_open_chain(MakeScyllaDbStoreClient::default()).await
 }
 
 async fn run_test_transfer_then_open_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -614,6 +659,12 @@ async fn test_dynamo_db_open_chain_then_transfer() -> Result<(), anyhow::Error> 
     run_test_open_chain_then_transfer(MakeDynamoDbStoreClient::default()).await
 }
 
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_open_chain_then_transfer() -> Result<(), anyhow::Error> {
+    run_test_open_chain_then_transfer(MakeScyllaDbStoreClient::default()).await
+}
+
 async fn run_test_open_chain_then_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
@@ -696,6 +747,12 @@ async fn test_dynamo_db_close_chain() -> Result<(), anyhow::Error> {
     run_test_close_chain(MakeDynamoDbStoreClient::default()).await
 }
 
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_close_chain() -> Result<(), anyhow::Error> {
+    run_test_close_chain(MakeScyllaDbStoreClient::default()).await
+}
+
 async fn run_test_close_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
@@ -756,6 +813,12 @@ async fn test_dynamo_db_initiating_valid_transfer_too_many_faults() -> Result<()
     run_test_initiating_valid_transfer_too_many_faults(MakeDynamoDbStoreClient::default()).await
 }
 
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
+    run_test_initiating_valid_transfer_too_many_faults(MakeScyllaDbStoreClient::default()).await
+}
+
 async fn run_test_initiating_valid_transfer_too_many_faults<B>(
     store_builder: B,
 ) -> Result<(), anyhow::Error>
@@ -801,6 +864,12 @@ async fn test_rocks_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_dynamo_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
     run_test_bidirectional_transfer(MakeDynamoDbStoreClient::default()).await
+}
+
+#[cfg(feature = "scylla")]
+#[test(tokio::test)]
+async fn test_scylla_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
+    run_test_bidirectional_transfer(MakeScyllaDbStoreClient::default()).await
 }
 
 async fn run_test_bidirectional_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -927,6 +996,12 @@ async fn test_dynamo_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::E
     run_test_receiving_unconfirmed_transfer(MakeDynamoDbStoreClient::default()).await
 }
 
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
+    run_test_receiving_unconfirmed_transfer(MakeScyllaDbStoreClient::default()).await
+}
+
 async fn run_test_receiving_unconfirmed_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
@@ -992,6 +1067,16 @@ async fn test_dynamo_db_receiving_unconfirmed_transfer_with_lagging_sender_balan
 ) -> Result<(), anyhow::Error> {
     run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
         MakeDynamoDbStoreClient::default(),
+    )
+    .await
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_receiving_unconfirmed_transfer_with_lagging_sender_balances(
+) -> Result<(), anyhow::Error> {
+    run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
+        MakeScyllaDbStoreClient::default(),
     )
     .await
 }
@@ -1104,6 +1189,12 @@ async fn test_rocks_db_change_voting_rights() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_dynamo_db_change_voting_rights() -> Result<(), anyhow::Error> {
     run_test_change_voting_rights(MakeDynamoDbStoreClient::default()).await
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_change_voting_rights() -> Result<(), anyhow::Error> {
+    run_test_change_voting_rights(MakeScyllaDbStoreClient::default()).await
 }
 
 async fn run_test_change_voting_rights<B>(store_builder: B) -> Result<(), anyhow::Error>

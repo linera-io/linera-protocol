@@ -3,7 +3,7 @@
 
 use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
-use linera_views::memory::MEMORY_MAX_STREAM_QUERIES;
+use linera_views::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
 
 use async_trait::async_trait;
 use linera_core::{
@@ -69,7 +69,7 @@ impl ValidatorNodeProvider for DummyValidatorNodeProvider {
 }
 
 fn main() -> std::io::Result<()> {
-    let store = MemoryStoreClient::new(None, MEMORY_MAX_STREAM_QUERIES);
+    let store = MemoryStoreClient::new(None, TEST_MEMORY_MAX_STREAM_QUERIES);
     let config = ChainListenerConfig {
         delay_before_ms: 0,
         delay_after_ms: 0,

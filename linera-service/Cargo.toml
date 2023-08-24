@@ -17,6 +17,7 @@ wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb", "linera-storage/rocksdb"]
 aws = ["linera-views/aws", "linera-core/aws", "linera-storage/aws"]
+scylladb = ["linera-views/scylladb", "linera-core/scylladb", "linera-storage/scylladb"]
 
 [dependencies]
 anyhow = { workspace = true }
