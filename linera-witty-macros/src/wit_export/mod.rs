@@ -151,14 +151,15 @@ pub fn type_name(implementation: &ItemImpl) -> &Ident {
     else {
         abort!(
             implementation.self_ty,
-            "`#[wit_export]` must be used on `impl` blocks of non-generic types",
+            "`#[wit_export]` must be used on `impl` blocks",
         );
     };
 
-    path_name.get_ident().unwrap_or_else(|| {
-        abort!(
-            implementation.self_ty,
-            "`#[wit_export]` must be used on `impl` blocks of non-generic types",
-        );
-    })
+    &path_name
+        .segments
+        .last()
+        .unwrap_or_else(|| {
+            abort!(implementation.self_ty, "Missing type name identifier",);
+        })
+        .ident
 }
