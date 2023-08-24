@@ -12,7 +12,15 @@ use linera_witty::{
     ExportTo, InstanceWithMemory, Layout, MockExportedFunction, MockInstance, RuntimeError,
     WitLoad, WitStore,
 };
-use std::{any::Any, fmt::Debug, ops::Add};
+use std::{
+    any::Any,
+    fmt::Debug,
+    ops::Add,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+};
 
 /// Trait representing a type that can create instances for tests.
 pub trait TestInstanceFactory {
@@ -127,6 +135,7 @@ impl TestInstanceFactory for MockInstanceFactory {
             ("reentrancy", "getters") => self.reentrancy_getters(&mut instance),
             ("reentrancy", "setters") => self.reentrancy_setters(&mut instance),
             ("reentrancy", "operations") => self.reentrancy_operations(&mut instance),
+            ("reentrancy", "global-state") => self.reentrancy_global_state(&mut instance),
             _ => panic!(
                 "Attempt to load module \"{group}-{module}\" which has no mock configuration"
             ),
@@ -579,6 +588,38 @@ impl MockInstanceFactory {
     fn reentrancy_operations(&mut self, instance: &mut MockInstance) {
         self.import_operations(instance);
         self.export_operations(instance);
+    }
+
+    /// Mock the behavior of the "reentrancy-global-state" module.
+    fn reentrancy_global_state(&mut self, instance: &mut MockInstance) {
+        let global_state_for_entrypoint = Arc::new(AtomicU32::new(0));
+        let global_state_for_getter = global_state_for_entrypoint.clone();
+
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/global-state#entrypoint",
+            move |caller, hlist_pat![value]: HList![i32]| {
+                global_state_for_entrypoint.store(value as u32, Ordering::Release);
+
+                caller
+                    .call_imported_function(
+                        "witty-macros:test-modules/get-host-value#get-host-value",
+                        (),
+                    )
+                    .map(|value: u32| hlist![value as i32])
+            },
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/global-state#get-global-state",
+            move |_, _: HList![]| {
+                Ok(hlist![
+                    global_state_for_getter.load(Ordering::Acquire) as i32
+                ])
+            },
+            1,
+        );
     }
 
     /// Mocks an exported function with the provided `name`.

@@ -1,0 +1,10 @@
+package witty-macros:test-modules
+
+interface global-state {
+    entrypoint: func(value: u32) -> u32
+    get-global-state: func() -> u32
+}
+
+interface get-host-value {
+    get-host-value: func() -> u32
+}

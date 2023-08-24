@@ -56,5 +56,9 @@ path = "src/reentrancy/setters.rs"
 name = "reentrancy-operations"
 path = "src/reentrancy/operations.rs"
 
+[[bin]]
+name = "reentrancy-global-state"
+path = "src/reentrancy/global_state.rs"
+
 [dependencies]
 wit-bindgen = { version = "0.7.0", features = ["macros"] }

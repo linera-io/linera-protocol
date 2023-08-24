@@ -472,3 +472,53 @@ where
         .entrypoint()
         .expect("Failed to call guest's `entrypoint` function");
 }
+
+/// An interface to import functions to use with a reentrancy global state test.
+#[wit_import(package = "witty-macros:test-modules", interface = "global-state")]
+trait ImportedGlobalState {
+    fn entrypoint(value: u32) -> u32;
+    fn get_global_state() -> u32;
+}
+
+/// Type to export reentrant functions to use with a global state test.
+pub struct ExportedGlobalState;
+
+#[wit_export(package = "witty-macros:test-modules", interface = "get-host-value")]
+impl ExportedGlobalState {
+    fn get_host_value<Caller>(caller: Caller) -> Result<u32, RuntimeError>
+    where
+        Caller: InstanceForImportedGlobalState,
+        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
+    {
+        ImportedGlobalState::new(caller).get_global_state()
+    }
+}
+
+/// Test global state inside a Wasm guest accessed through reentrant functions.
+///
+/// The host calls the entrypoint passing an integer argument which the guest stores in its global
+/// state. Before returning, the guest calls the host's `get-host-value` function in order to
+/// obtain the value to return. The host function calls the guest back to obtain the return value
+/// from the guest's global state.
+///
+/// The final value returned from the guest must match the initial value the host sent in.
+#[test_case(MockInstanceFactory::default(); "with a mock instance")]
+#[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
+fn test_global_state<InstanceFactory>(mut factory: InstanceFactory)
+where
+    InstanceFactory: TestInstanceFactory,
+    InstanceFactory::Instance: InstanceForImportedGlobalState,
+    <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
+        RuntimeMemory<InstanceFactory::Instance>,
+    ExportedGlobalState: ExportTo<InstanceFactory::Builder>,
+{
+    let instance = factory.load_test_module::<ExportedGlobalState>("reentrancy", "global-state");
+    let value = 100;
+
+    let result = ImportedGlobalState::new(instance)
+        .entrypoint(value)
+        .expect("Failed to call guest's `entrypoint` function");
+
+    assert_eq!(result, value);
+}

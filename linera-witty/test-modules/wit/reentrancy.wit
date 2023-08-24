@@ -23,3 +23,8 @@ world reentrant-operations {
     export operations
     export entrypoint
 }
+
+world reentrant-global-state {
+    import get-host-value
+    export global-state
+}
