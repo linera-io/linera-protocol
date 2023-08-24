@@ -18,7 +18,7 @@ use {
 };
 
 #[cfg(feature = "scylladb")]
-use {anyhow::anyhow, linera_storage::ScyllaDbStoreClient};
+use {anyhow::bail, linera_storage::ScyllaDbStoreClient};
 
 /// The description of a storage implementation.
 #[derive(Debug)]
@@ -247,57 +247,49 @@ impl FromStr for StorageConfig {
                             if part_ent == "https" {
                                 is_matching = true;
                                 let Some(empty) = parts.next() else {
-                                    return Err(anyhow!("no empty entry after https"));
+                                    bail!("no empty entry after https");
                                 };
                                 if !empty.is_empty() {
-                                    return Err(anyhow!(
-                                        "The address should be of the form https:://address"
-                                    ));
+                                    bail!("The address should be of the form https:://address");
                                 }
                                 let Some(address) = parts.next() else {
-                                    return Err(anyhow!("no empty entry after https"));
+                                    bail!("no empty entry after https");
                                 };
                                 if host.is_some() {
-                                    return Err(anyhow!("The host has already been assigned"));
+                                    bail!("The host has already been assigned");
                                 }
                                 host = Some(format!("{}::{}", part_ent, address));
                             }
                             if let Ok(_num_port) = part_ent.parse::<u16>() {
                                 is_matching = true;
                                 if port.is_some() {
-                                    return Err(anyhow!("The port has already been assigned"));
+                                    bail!("The port has already been assigned");
                                 }
                                 port = Some(part_ent.to_string());
                             }
                             if part_ent.starts_with("table") {
                                 is_matching = true;
                                 if table_name.is_some() {
-                                    return Err(anyhow!(
-                                        "The table_name has already been assigned"
-                                    ));
+                                    bail!("The table_name has already been assigned");
                                 }
                                 table_name = Some(part_ent.to_string());
                             }
                             if part_ent == "true" {
                                 is_matching = true;
                                 if restart_database.is_some() {
-                                    return Err(anyhow!(
-                                        "The restart_database entry has already been assigned"
-                                    ));
+                                    bail!("The restart_database entry has already been assigned");
                                 }
                                 restart_database = Some(true);
                             }
                             if part_ent == "false" {
                                 is_matching = true;
                                 if restart_database.is_some() {
-                                    return Err(anyhow!(
-                                        "The restart_database entry has already been assigned"
-                                    ));
+                                    bail!("The restart_database entry has already been assigned");
                                 }
                                 restart_database = Some(false);
                             }
                             if !is_matching {
-                                return Err(anyhow!("the entry \"{}\" is not matching", part_ent));
+                                bail!("the entry \"{}\" is not matching", part_ent);
                             }
                         }
                         None => {
