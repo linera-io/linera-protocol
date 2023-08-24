@@ -239,53 +239,50 @@ impl FromStr for StorageConfig {
             if !s.is_empty() {
                 let mut parts = s.split(':');
                 while let Some(part_ent) = parts.next() {
-                    let mut is_matching = false;
-                    if part_ent == "https" {
-                        is_matching = true;
-                        let err_msg = "Correct format is https:://my.validator.com:port";
-                        let Some(empty) = parts.next() else {
-                            bail!(err_msg);
-                        };
-                        if !empty.is_empty() {
-                            bail!(err_msg);
+                    match part_ent {
+                        "https" => {
+                            let err_msg = "Correct format is https:://my.validator.com:port";
+                            let Some(empty) = parts.next() else {
+                                bail!(err_msg);
+                            };
+                            if !empty.is_empty() {
+                                bail!(err_msg);
+                            }
+                            let Some(address) = parts.next() else {
+                                bail!(err_msg);
+                            };
+                            let Some(port_str) = parts.next() else {
+                                bail!(err_msg);
+                            };
+                            let Ok(_num_port) = port_str.parse::<u16>() else {
+                                bail!(err_msg);
+                            };
+                            if uri.is_some() {
+                                bail!("The uri has already been assigned");
+                            }
+                            uri = Some(format!("https::{}:{}", address, port_str));
+                        },
+                        _ if part_ent.starts_with("table") => {
+                            if table_name.is_some() {
+                                bail!("The table_name has already been assigned");
+                            }
+                            table_name = Some(part_ent.to_string());
+                        },
+                        "true" => {
+                            if restart_database.is_some() {
+                                bail!("The restart_database entry has already been assigned");
+                            }
+                            restart_database = Some(true);
+                        },
+                        "false" => {
+                            if restart_database.is_some() {
+                                bail!("The restart_database entry has already been assigned");
+                            }
+                            restart_database = Some(false);
+                        },
+                        _ => {
+                            bail!("the entry \"{}\" is not matching", part_ent);
                         }
-                        let Some(address) = parts.next() else {
-                            bail!(err_msg);
-                        };
-                        let Some(port_str) = parts.next() else {
-                            bail!(err_msg);
-                        };
-                        let Ok(_num_port) = port_str.parse::<u16>() else {
-                            bail!(err_msg);
-                        };
-                        if uri.is_some() {
-                            bail!("The uri has already been assigned");
-                        }
-                        uri = Some(format!("https::{}:{}", address, port_str));
-                    }
-                    if part_ent.starts_with("table") {
-                        is_matching = true;
-                        if table_name.is_some() {
-                            bail!("The table_name has already been assigned");
-                        }
-                        table_name = Some(part_ent.to_string());
-                    }
-                    if part_ent == "true" {
-                        is_matching = true;
-                        if restart_database.is_some() {
-                            bail!("The restart_database entry has already been assigned");
-                        }
-                        restart_database = Some(true);
-                    }
-                    if part_ent == "false" {
-                        is_matching = true;
-                        if restart_database.is_some() {
-                            bail!("The restart_database entry has already been assigned");
-                        }
-                        restart_database = Some(false);
-                    }
-                    if !is_matching {
-                        bail!("the entry \"{}\" is not matching", part_ent);
                     }
                 }
             }
@@ -385,4 +382,5 @@ fn test_scylla_db_storage_config_from_str() {
     assert!(StorageConfig::from_str("scylladb:230:234").is_err());
     assert!(StorageConfig::from_str("scylladb:https:://address1").is_err());
     assert!(StorageConfig::from_str("scylladb:https:://address1:https::/address2").is_err());
+    assert!(StorageConfig::from_str("scylladb:wrong").is_err());
 }
