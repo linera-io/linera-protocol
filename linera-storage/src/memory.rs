@@ -25,13 +25,13 @@ impl MemoryStore {
 pub type MemoryStoreClient = DbStoreClient<MemoryClient>;
 
 impl MemoryStoreClient {
+    pub async fn new_test() -> MemoryStoreClient {
+        MemoryStoreClient::new(None, TEST_MEMORY_MAX_STREAM_QUERIES)
+    }
+
     pub fn new(wasm_runtime: Option<WasmRuntime>, max_stream_queries: usize) -> Self {
         Self {
             client: Arc::new(MemoryStore::new(wasm_runtime, max_stream_queries)),
         }
     }
-}
-
-pub async fn create_memory_test_store_client() -> MemoryStoreClient {
-    MemoryStoreClient::new(None, TEST_MEMORY_MAX_STREAM_QUERIES)
 }

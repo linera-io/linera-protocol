@@ -110,6 +110,24 @@ impl DynamoDbStore {
 pub type DynamoDbStoreClient = DbStoreClient<DynamoDbClient>;
 
 impl DynamoDbStoreClient {
+
+    #[cfg(any(test, feature = "test"))]
+    pub async fn new_test() -> Self {
+        let table = "linera".parse().expect("Invalid table name");
+        let localstack = LocalStackTestContext::new().await.expect("localstack");
+        let (client, _) = DynamoDbStoreClient::from_config(
+            localstack.dynamo_db_config(),
+            table,
+            Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+            TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
+            TEST_CACHE_SIZE,
+            None,
+        )
+            .await
+            .expect("client and table_name");
+        client
+    }
+
     pub async fn new(
         table: TableName,
         max_concurrent_queries: Option<usize>,
@@ -172,20 +190,4 @@ impl DynamoDbStoreClient {
         };
         Ok((client, table_status))
     }
-}
-
-pub async fn create_dynamo_db_test_store_client() -> DynamoDbStoreClient {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await.expect("localstack");
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        None,
-    )
-    .await
-    .expect("client and table_name");
-    client
 }

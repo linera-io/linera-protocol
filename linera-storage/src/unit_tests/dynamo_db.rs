@@ -1,14 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{create_dynamo_db_test_store_client, Store};
+use crate::{DynamoDbStoreClient, Store};
 use linera_base::identifiers::ChainId;
 use std::mem;
 
 /// Tests if released guards don't use memory.
 #[tokio::test]
 async fn guards_dont_leak() -> Result<(), anyhow::Error> {
-    let store = create_dynamo_db_test_store_client().await;
+    let store = DynamoDbStoreClient::new_test().await;
     let chain_id = ChainId::root(1);
     // There should be no active guards when initialized
     assert_eq!(store.client.guards.active_guards(), 0);

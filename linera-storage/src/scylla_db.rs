@@ -49,6 +49,28 @@ impl ScyllaDbStore {
 pub type ScyllaDbStoreClient = DbStoreClient<ScyllaDbClient>;
 
 impl ScyllaDbStoreClient {
+    #[cfg(any(test, feature = "test"))]
+    pub async fn new_test() -> ScyllaDbStoreClient {
+        let restart_database = true;
+        let uri = "localhost:9042";
+        let table_name = get_table_name().await;
+        let max_concurrent_queries = Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES);
+        let max_stream_queries = TEST_SCYLLA_DB_MAX_STREAM_QUERIES;
+        let cache_size = TEST_CACHE_SIZE;
+        let wasm_runtime = None;
+        ScyllaDbStoreClient::new(
+            restart_database,
+            uri,
+            table_name,
+            max_concurrent_queries,
+            max_stream_queries,
+            cache_size,
+            wasm_runtime,
+        )
+            .await
+            .expect("client")
+    }
+
     pub async fn new(
         restart_database: bool,
         uri: &str,
@@ -74,23 +96,3 @@ impl ScyllaDbStoreClient {
     }
 }
 
-pub async fn create_scylla_db_test_store_client() -> ScyllaDbStoreClient {
-    let restart_database = true;
-    let uri = "localhost:9042";
-    let table_name = get_table_name().await;
-    let max_concurrent_queries = Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES);
-    let max_stream_queries = TEST_SCYLLA_DB_MAX_STREAM_QUERIES;
-    let cache_size = TEST_CACHE_SIZE;
-    let wasm_runtime = None;
-    ScyllaDbStoreClient::new(
-        restart_database,
-        uri,
-        table_name,
-        max_concurrent_queries,
-        max_stream_queries,
-        cache_size,
-        wasm_runtime,
-    )
-    .await
-    .expect("client")
-}
