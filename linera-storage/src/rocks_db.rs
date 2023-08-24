@@ -3,13 +3,11 @@
 
 use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
 use linera_execution::WasmRuntime;
+use linera_views::rocks_db::RocksDbClient;
 use std::{path::PathBuf, sync::Arc};
 #[cfg(any(test, feature = "test"))]
 use {
-    linera_views::{
-        lru_caching::TEST_CACHE_SIZE,
-        rocks_db::{RocksDbClient, TEST_ROCKS_DB_MAX_STREAM_QUERIES},
-    },
+    linera_views::{lru_caching::TEST_CACHE_SIZE, rocks_db::TEST_ROCKS_DB_MAX_STREAM_QUERIES},
     tempfile::TempDir,
 };
 

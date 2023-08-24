@@ -261,25 +261,25 @@ impl FromStr for StorageConfig {
                                 bail!("The uri has already been assigned");
                             }
                             uri = Some(format!("https::{}:{}", address, port_str));
-                        },
+                        }
                         _ if part_ent.starts_with("table") => {
                             if table_name.is_some() {
                                 bail!("The table_name has already been assigned");
                             }
                             table_name = Some(part_ent.to_string());
-                        },
+                        }
                         "true" => {
                             if restart_database.is_some() {
                                 bail!("The restart_database entry has already been assigned");
                             }
                             restart_database = Some(true);
-                        },
+                        }
                         "false" => {
                             if restart_database.is_some() {
                                 bail!("The restart_database entry has already been assigned");
                             }
                             restart_database = Some(false);
-                        },
+                        }
                         _ => {
                             bail!("the entry \"{}\" is not matching", part_ent);
                         }
