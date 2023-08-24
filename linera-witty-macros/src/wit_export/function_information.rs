@@ -8,8 +8,9 @@ use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
 use quote::{quote, quote_spanned, ToTokens};
 use syn::{
-    spanned::Spanned, FnArg, GenericArgument, GenericParam, ImplItem, ImplItemMethod, LitStr, Path,
-    PathArguments, PathSegment, ReturnType, Signature, Token, Type, TypePath,
+    spanned::Spanned, FnArg, GenericArgument, GenericParam, ImplItem, ImplItemMethod, LitStr,
+    PatType, Path, PathArguments, PathSegment, ReturnType, Signature, Token, Type, TypePath,
+    TypeReference,
 };
 
 /// Pieces of information extracted from a function's definition.
@@ -80,15 +81,35 @@ impl<'input> FunctionInformation<'input> {
             return false;
         };
 
-        let Some(FnArg::Typed(first_parameter)) = signature.inputs.first() else {
+        let Some(first_parameter) = signature.inputs.first() else {
             return false;
         };
 
-        let Type::Path(first_parameter_type) = &*first_parameter.ty else {
+        let FnArg::Typed(PatType {
+            ty: first_parameter_type,
+            ..
+        }) = first_parameter
+        else {
+            abort!(
+                first_parameter,
+                "`self` parameters aren't supported by Witty"
+            );
+        };
+
+        let Type::Reference(TypeReference {
+            mutability: Some(_),
+            elem: referenced_type,
+            ..
+        }) = &**first_parameter_type
+        else {
             return false;
         };
 
-        first_parameter_type.path == generic_type.ident.clone().into()
+        let Type::Path(TypePath { path, .. }) = &**referenced_type else {
+            return false;
+        };
+
+        path.is_ident(&generic_type.ident)
     }
 
     /// Parses a function's parameters and returns the generated code with a list ofbindings to the

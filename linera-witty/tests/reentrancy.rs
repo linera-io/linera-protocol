@@ -33,7 +33,7 @@ pub struct ExportedSimpleFunction;
 
 #[wit_export(package = "witty-macros:test-modules", interface = "simple-function")]
 impl ExportedSimpleFunction {
-    fn simple<Caller>(caller: Caller) -> Result<(), RuntimeError>
+    fn simple<Caller>(caller: &mut Caller) -> Result<(), RuntimeError>
     where
         Caller: InstanceForImportedSimpleFunction,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -90,7 +90,7 @@ pub struct ExportedGetters;
 
 #[wit_export(package = "witty-macros:test-modules", interface = "getters")]
 impl ExportedGetters {
-    fn get_true<Caller>(caller: Caller) -> Result<bool, RuntimeError>
+    fn get_true<Caller>(caller: &mut Caller) -> Result<bool, RuntimeError>
     where
         Caller: InstanceForImportedGetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -98,7 +98,7 @@ impl ExportedGetters {
         ImportedGetters::new(caller).get_true()
     }
 
-    fn get_false<Caller>(caller: Caller) -> Result<bool, RuntimeError>
+    fn get_false<Caller>(caller: &mut Caller) -> Result<bool, RuntimeError>
     where
         Caller: InstanceForImportedGetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -106,7 +106,7 @@ impl ExportedGetters {
         ImportedGetters::new(caller).get_false()
     }
 
-    fn get_s8<Caller>(caller: Caller) -> Result<i8, RuntimeError>
+    fn get_s8<Caller>(caller: &mut Caller) -> Result<i8, RuntimeError>
     where
         Caller: InstanceForImportedGetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -114,7 +114,7 @@ impl ExportedGetters {
         ImportedGetters::new(caller).get_s8()
     }
 
-    fn get_u8<Caller>(caller: Caller) -> Result<u8, RuntimeError>
+    fn get_u8<Caller>(caller: &mut Caller) -> Result<u8, RuntimeError>
     where
         Caller: InstanceForImportedGetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -122,7 +122,7 @@ impl ExportedGetters {
         ImportedGetters::new(caller).get_u8()
     }
 
-    fn get_s16<Caller>(caller: Caller) -> Result<i16, RuntimeError>
+    fn get_s16<Caller>(caller: &mut Caller) -> Result<i16, RuntimeError>
     where
         Caller: InstanceForImportedGetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -130,7 +130,7 @@ impl ExportedGetters {
         ImportedGetters::new(caller).get_s16()
     }
 
-    fn get_u16<Caller>(caller: Caller) -> Result<u16, RuntimeError>
+    fn get_u16<Caller>(caller: &mut Caller) -> Result<u16, RuntimeError>
     where
         Caller: InstanceForImportedGetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -138,7 +138,7 @@ impl ExportedGetters {
         ImportedGetters::new(caller).get_u16()
     }
 
-    fn get_s32<Caller>(caller: Caller) -> Result<i32, RuntimeError>
+    fn get_s32<Caller>(caller: &mut Caller) -> Result<i32, RuntimeError>
     where
         Caller: InstanceForImportedGetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -146,7 +146,7 @@ impl ExportedGetters {
         ImportedGetters::new(caller).get_s32()
     }
 
-    fn get_u32<Caller>(caller: Caller) -> Result<u32, RuntimeError>
+    fn get_u32<Caller>(caller: &mut Caller) -> Result<u32, RuntimeError>
     where
         Caller: InstanceForImportedGetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -154,7 +154,7 @@ impl ExportedGetters {
         ImportedGetters::new(caller).get_u32()
     }
 
-    fn get_s64<Caller>(caller: Caller) -> Result<i64, RuntimeError>
+    fn get_s64<Caller>(caller: &mut Caller) -> Result<i64, RuntimeError>
     where
         Caller: InstanceForImportedGetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -162,7 +162,7 @@ impl ExportedGetters {
         ImportedGetters::new(caller).get_s64()
     }
 
-    fn get_u64<Caller>(caller: Caller) -> Result<u64, RuntimeError>
+    fn get_u64<Caller>(caller: &mut Caller) -> Result<u64, RuntimeError>
     where
         Caller: InstanceForImportedGetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -170,7 +170,7 @@ impl ExportedGetters {
         ImportedGetters::new(caller).get_u64()
     }
 
-    fn get_float32<Caller>(caller: Caller) -> Result<f32, RuntimeError>
+    fn get_float32<Caller>(caller: &mut Caller) -> Result<f32, RuntimeError>
     where
         Caller: InstanceForImportedGetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -178,7 +178,7 @@ impl ExportedGetters {
         ImportedGetters::new(caller).get_float32()
     }
 
-    fn get_float64<Caller>(caller: Caller) -> Result<f64, RuntimeError>
+    fn get_float64<Caller>(caller: &mut Caller) -> Result<f64, RuntimeError>
     where
         Caller: InstanceForImportedGetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -230,7 +230,7 @@ pub struct ExportedSetters;
 
 #[wit_export(package = "witty-macros:test-modules", interface = "setters")]
 impl ExportedSetters {
-    fn set_bool<Caller>(caller: Caller, value: bool) -> Result<(), RuntimeError>
+    fn set_bool<Caller>(caller: &mut Caller, value: bool) -> Result<(), RuntimeError>
     where
         Caller: InstanceForImportedSetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -238,7 +238,7 @@ impl ExportedSetters {
         ImportedSetters::new(caller).set_bool(value)
     }
 
-    fn set_s8<Caller>(caller: Caller, value: i8) -> Result<(), RuntimeError>
+    fn set_s8<Caller>(caller: &mut Caller, value: i8) -> Result<(), RuntimeError>
     where
         Caller: InstanceForImportedSetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -246,7 +246,7 @@ impl ExportedSetters {
         ImportedSetters::new(caller).set_s8(value)
     }
 
-    fn set_u8<Caller>(caller: Caller, value: u8) -> Result<(), RuntimeError>
+    fn set_u8<Caller>(caller: &mut Caller, value: u8) -> Result<(), RuntimeError>
     where
         Caller: InstanceForImportedSetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -254,7 +254,7 @@ impl ExportedSetters {
         ImportedSetters::new(caller).set_u8(value)
     }
 
-    fn set_s16<Caller>(caller: Caller, value: i16) -> Result<(), RuntimeError>
+    fn set_s16<Caller>(caller: &mut Caller, value: i16) -> Result<(), RuntimeError>
     where
         Caller: InstanceForImportedSetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -262,7 +262,7 @@ impl ExportedSetters {
         ImportedSetters::new(caller).set_s16(value)
     }
 
-    fn set_u16<Caller>(caller: Caller, value: u16) -> Result<(), RuntimeError>
+    fn set_u16<Caller>(caller: &mut Caller, value: u16) -> Result<(), RuntimeError>
     where
         Caller: InstanceForImportedSetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -270,7 +270,7 @@ impl ExportedSetters {
         ImportedSetters::new(caller).set_u16(value)
     }
 
-    fn set_s32<Caller>(caller: Caller, value: i32) -> Result<(), RuntimeError>
+    fn set_s32<Caller>(caller: &mut Caller, value: i32) -> Result<(), RuntimeError>
     where
         Caller: InstanceForImportedSetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -278,7 +278,7 @@ impl ExportedSetters {
         ImportedSetters::new(caller).set_s32(value)
     }
 
-    fn set_u32<Caller>(caller: Caller, value: u32) -> Result<(), RuntimeError>
+    fn set_u32<Caller>(caller: &mut Caller, value: u32) -> Result<(), RuntimeError>
     where
         Caller: InstanceForImportedSetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -286,7 +286,7 @@ impl ExportedSetters {
         ImportedSetters::new(caller).set_u32(value)
     }
 
-    fn set_s64<Caller>(caller: Caller, value: i64) -> Result<(), RuntimeError>
+    fn set_s64<Caller>(caller: &mut Caller, value: i64) -> Result<(), RuntimeError>
     where
         Caller: InstanceForImportedSetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -294,7 +294,7 @@ impl ExportedSetters {
         ImportedSetters::new(caller).set_s64(value)
     }
 
-    fn set_u64<Caller>(caller: Caller, value: u64) -> Result<(), RuntimeError>
+    fn set_u64<Caller>(caller: &mut Caller, value: u64) -> Result<(), RuntimeError>
     where
         Caller: InstanceForImportedSetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -302,7 +302,7 @@ impl ExportedSetters {
         ImportedSetters::new(caller).set_u64(value)
     }
 
-    fn set_float32<Caller>(caller: Caller, value: f32) -> Result<(), RuntimeError>
+    fn set_float32<Caller>(caller: &mut Caller, value: f32) -> Result<(), RuntimeError>
     where
         Caller: InstanceForImportedSetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -310,7 +310,7 @@ impl ExportedSetters {
         ImportedSetters::new(caller).set_float32(value)
     }
 
-    fn set_float64<Caller>(caller: Caller, value: f64) -> Result<(), RuntimeError>
+    fn set_float64<Caller>(caller: &mut Caller, value: f64) -> Result<(), RuntimeError>
     where
         Caller: InstanceForImportedSetters,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -362,7 +362,7 @@ pub struct ExportedOperations;
 
 #[wit_export(package = "witty-macros:test-modules", interface = "operations")]
 impl ExportedOperations {
-    fn and_bool<Caller>(caller: Caller, first: bool, second: bool) -> Result<bool, RuntimeError>
+    fn and_bool<Caller>(caller: &mut Caller, first: bool, second: bool) -> Result<bool, RuntimeError>
     where
         Caller: InstanceForImportedOperations,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -370,7 +370,7 @@ impl ExportedOperations {
         ImportedOperations::new(caller).and_bool(first, second)
     }
 
-    fn add_s8<Caller>(caller: Caller, first: i8, second: i8) -> Result<i8, RuntimeError>
+    fn add_s8<Caller>(caller: &mut Caller, first: i8, second: i8) -> Result<i8, RuntimeError>
     where
         Caller: InstanceForImportedOperations,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -378,7 +378,7 @@ impl ExportedOperations {
         ImportedOperations::new(caller).add_s8(first, second)
     }
 
-    fn add_u8<Caller>(caller: Caller, first: u8, second: u8) -> Result<u8, RuntimeError>
+    fn add_u8<Caller>(caller: &mut Caller, first: u8, second: u8) -> Result<u8, RuntimeError>
     where
         Caller: InstanceForImportedOperations,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -386,7 +386,7 @@ impl ExportedOperations {
         ImportedOperations::new(caller).add_u8(first, second)
     }
 
-    fn add_s16<Caller>(caller: Caller, first: i16, second: i16) -> Result<i16, RuntimeError>
+    fn add_s16<Caller>(caller: &mut Caller, first: i16, second: i16) -> Result<i16, RuntimeError>
     where
         Caller: InstanceForImportedOperations,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -394,7 +394,7 @@ impl ExportedOperations {
         ImportedOperations::new(caller).add_s16(first, second)
     }
 
-    fn add_u16<Caller>(caller: Caller, first: u16, second: u16) -> Result<u16, RuntimeError>
+    fn add_u16<Caller>(caller: &mut Caller, first: u16, second: u16) -> Result<u16, RuntimeError>
     where
         Caller: InstanceForImportedOperations,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -402,7 +402,7 @@ impl ExportedOperations {
         ImportedOperations::new(caller).add_u16(first, second)
     }
 
-    fn add_s32<Caller>(caller: Caller, first: i32, second: i32) -> Result<i32, RuntimeError>
+    fn add_s32<Caller>(caller: &mut Caller, first: i32, second: i32) -> Result<i32, RuntimeError>
     where
         Caller: InstanceForImportedOperations,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -410,7 +410,7 @@ impl ExportedOperations {
         ImportedOperations::new(caller).add_s32(first, second)
     }
 
-    fn add_u32<Caller>(caller: Caller, first: u32, second: u32) -> Result<u32, RuntimeError>
+    fn add_u32<Caller>(caller: &mut Caller, first: u32, second: u32) -> Result<u32, RuntimeError>
     where
         Caller: InstanceForImportedOperations,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -418,7 +418,7 @@ impl ExportedOperations {
         ImportedOperations::new(caller).add_u32(first, second)
     }
 
-    fn add_s64<Caller>(caller: Caller, first: i64, second: i64) -> Result<i64, RuntimeError>
+    fn add_s64<Caller>(caller: &mut Caller, first: i64, second: i64) -> Result<i64, RuntimeError>
     where
         Caller: InstanceForImportedOperations,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -426,7 +426,7 @@ impl ExportedOperations {
         ImportedOperations::new(caller).add_s64(first, second)
     }
 
-    fn add_u64<Caller>(caller: Caller, first: u64, second: u64) -> Result<u64, RuntimeError>
+    fn add_u64<Caller>(caller: &mut Caller, first: u64, second: u64) -> Result<u64, RuntimeError>
     where
         Caller: InstanceForImportedOperations,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -434,7 +434,7 @@ impl ExportedOperations {
         ImportedOperations::new(caller).add_u64(first, second)
     }
 
-    fn add_float32<Caller>(caller: Caller, first: f32, second: f32) -> Result<f32, RuntimeError>
+    fn add_float32<Caller>(caller: &mut Caller, first: f32, second: f32) -> Result<f32, RuntimeError>
     where
         Caller: InstanceForImportedOperations,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -442,7 +442,7 @@ impl ExportedOperations {
         ImportedOperations::new(caller).add_float32(first, second)
     }
 
-    fn add_float64<Caller>(caller: Caller, first: f64, second: f64) -> Result<f64, RuntimeError>
+    fn add_float64<Caller>(caller: &mut Caller, first: f64, second: f64) -> Result<f64, RuntimeError>
     where
         Caller: InstanceForImportedOperations,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
@@ -485,7 +485,7 @@ pub struct ExportedGlobalState;
 
 #[wit_export(package = "witty-macros:test-modules", interface = "get-host-value")]
 impl ExportedGlobalState {
-    fn get_host_value<Caller>(caller: Caller) -> Result<u32, RuntimeError>
+    fn get_host_value<Caller>(caller: &mut Caller) -> Result<u32, RuntimeError>
     where
         Caller: InstanceForImportedGlobalState,
         <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
