@@ -15,7 +15,7 @@ use std::fmt::Debug;
 
 /// Check that a wrapper type is properly loaded from memory and lifted from its flat layout.
 #[test]
-fn simple_bool_wrapper() {
+fn test_simple_bool_wrapper() {
     test_load_from_memory(&[1], SimpleWrapper(true));
     test_load_from_memory(&[0], SimpleWrapper(false));
 
@@ -26,7 +26,7 @@ fn simple_bool_wrapper() {
 /// Check that a type with multiple fields ordered in a way that doesn't require any padding is
 /// properly loaded from memory and lifted from its flat layout.
 #[test]
-fn tuple_struct_without_padding() {
+fn test_tuple_struct_without_padding() {
     let expected = TupleWithoutPadding(0x0807_0605_0403_0201_u64, 0x0c0b_0a09_i32, 0x0e0d_i16);
 
     test_load_from_memory(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], expected);
@@ -39,7 +39,7 @@ fn tuple_struct_without_padding() {
 /// Check that a type with multiple fields ordered in a way that requires padding between two of its
 /// fields is properly loaded from memory and lifted from its flat layout.
 #[test]
-fn tuple_struct_with_padding() {
+fn test_tuple_struct_with_padding() {
     let expected = TupleWithPadding(0x0201_u16, 0x0807_0605_u32, 0x100f_0e0d_0c0b_0a09_i64);
 
     test_load_from_memory(
@@ -55,7 +55,7 @@ fn tuple_struct_with_padding() {
 /// Check that a type with multiple named fields ordered in a way that requires padding before two
 /// fields is properly loaded from memory and lifted from its flat layout.
 #[test]
-fn named_struct_with_double_padding() {
+fn test_named_struct_with_double_padding() {
     let expected = RecordWithDoublePadding {
         first: 0x0201_u16,
         second: 0x0807_0605_u32,
@@ -83,7 +83,7 @@ fn named_struct_with_double_padding() {
 /// Check that a type that contains a field with a type that also has `WitStore` derived for it is
 /// properly loaded from memory and lifted from its flat layout.
 #[test]
-fn nested_types() {
+fn test_nested_types() {
     let expected = Branch {
         tag: 0x0201_u16,
         first_leaf: Leaf {
@@ -121,7 +121,7 @@ fn nested_types() {
 /// Check that an enum type's variants are properly loaded from memory and lifted from its flat
 /// layout.
 #[test]
-fn enum_type() {
+fn test_enum_type() {
     let expected = Enum::Empty;
 
     test_load_from_memory(

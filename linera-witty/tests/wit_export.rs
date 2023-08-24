@@ -34,7 +34,7 @@ impl SimpleFunction {
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
 #[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
-fn simple_function<InstanceFactory>(mut factory: InstanceFactory)
+fn test_simple_function<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
     InstanceFactory::Instance: InstanceForEntrypoint,
@@ -42,9 +42,7 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     SimpleFunction: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module("import", "simple-function", |instance| {
-        SimpleFunction::export_to(instance).expect("Failed to export simple function WIT interface")
-    });
+    let instance = factory.load_test_module::<SimpleFunction>("import", "simple-function");
 
     Entrypoint::new(instance)
         .entrypoint()
@@ -109,7 +107,7 @@ impl Getters {
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
 #[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
-fn getters<InstanceFactory>(mut factory: InstanceFactory)
+fn test_getters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
     InstanceFactory::Instance: InstanceForEntrypoint,
@@ -117,9 +115,7 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     Getters: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module("import", "getters", |instance| {
-        Getters::export_to(instance).expect("Failed to export getters WIT interface")
-    });
+    let instance = factory.load_test_module::<Getters>("import", "getters");
 
     Entrypoint::new(instance)
         .entrypoint()
@@ -181,7 +177,7 @@ impl Setters {
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
 #[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
-fn setters<InstanceFactory>(mut factory: InstanceFactory)
+fn test_setters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
     InstanceFactory::Instance: InstanceForEntrypoint,
@@ -189,9 +185,7 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     Setters: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module("import", "setters", |instance| {
-        Setters::export_to(instance).expect("Failed to export setters WIT interface")
-    });
+    let instance = factory.load_test_module::<Setters>("import", "setters");
 
     Entrypoint::new(instance)
         .entrypoint()
@@ -252,7 +246,7 @@ impl Operations {
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
 #[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
-fn operations<InstanceFactory>(mut factory: InstanceFactory)
+fn test_operations<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
     InstanceFactory::Instance: InstanceForEntrypoint,
@@ -260,9 +254,7 @@ where
         RuntimeMemory<InstanceFactory::Instance>,
     Operations: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module("import", "operations", |instance| {
-        Operations::export_to(instance).expect("Failed to export operations WIT interface")
-    });
+    let instance = factory.load_test_module::<Operations>("import", "operations");
 
     Entrypoint::new(instance)
         .entrypoint()

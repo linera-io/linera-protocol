@@ -8,14 +8,15 @@ use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
 use quote::{quote, quote_spanned, ToTokens};
 use syn::{
-    spanned::Spanned, FnArg, GenericArgument, ImplItem, ImplItemMethod, LitStr, Path,
-    PathArguments, PathSegment, ReturnType, Token, Type, TypePath,
+    spanned::Spanned, FnArg, GenericArgument, GenericParam, ImplItem, ImplItemMethod, LitStr, Path,
+    PathArguments, PathSegment, ReturnType, Signature, Token, Type, TypePath,
 };
 
 /// Pieces of information extracted from a function's definition.
 pub struct FunctionInformation<'input> {
     function: &'input ImplItemMethod,
     wit_name: String,
+    is_reentrant: bool,
     parameter_bindings: TokenStream,
     call_early_return: Option<Token![?]>,
     interface_type: TokenStream,
@@ -47,8 +48,9 @@ impl<'input> FunctionInformation<'input> {
     /// [`FunctionInformation`] instance.
     pub fn new(function: &'input ImplItemMethod) -> Self {
         let wit_name = function.sig.ident.to_string().to_kebab_case();
+        let is_reentrant = Self::is_reentrant(&function.sig);
         let (parameter_bindings, parameter_types) =
-            Self::parse_parameters(function.sig.inputs.iter());
+            Self::parse_parameters(is_reentrant, function.sig.inputs.iter());
         let (results, is_fallible) = Self::parse_output(&function.sig.output);
 
         let interface_type = quote_spanned! { function.sig.span() =>
@@ -58,24 +60,52 @@ impl<'input> FunctionInformation<'input> {
         FunctionInformation {
             function,
             wit_name,
+            is_reentrant,
             parameter_bindings,
             call_early_return: is_fallible.then(|| Token![?](Span::call_site())),
             interface_type,
         }
     }
 
+    /// Checks if a function should be considered as a reentrant function.
+    ///
+    /// A reentrant function has a generic type parameter that's used as the type of the first
+    /// parameter.
+    fn is_reentrant(signature: &Signature) -> bool {
+        if signature.generics.params.len() != 1 {
+            return false;
+        }
+
+        let Some(GenericParam::Type(generic_type)) = signature.generics.params.first() else {
+            return false;
+        };
+
+        let Some(FnArg::Typed(first_parameter)) = signature.inputs.first() else {
+            return false;
+        };
+
+        let Type::Path(first_parameter_type) = &*first_parameter.ty else {
+            return false;
+        };
+
+        first_parameter_type.path == generic_type.ident.clone().into()
+    }
+
     /// Parses a function's parameters and returns the generated code with a list ofbindings to the
     /// parameters and a list of the parameters types.
     fn parse_parameters(
+        is_reentrant: bool,
         inputs: impl Iterator<Item = &'input FnArg> + Clone,
     ) -> (TokenStream, TokenStream) {
-        let parameters = inputs.map(|input| match input {
-            FnArg::Typed(parameter) => parameter,
-            FnArg::Receiver(receiver) => abort!(
-                receiver.self_token,
-                "Exported interfaces can not have `self` parameters"
-            ),
-        });
+        let parameters = inputs
+            .skip(if is_reentrant { 1 } else { 0 })
+            .map(|input| match input {
+                FnArg::Typed(parameter) => parameter,
+                FnArg::Receiver(receiver) => abort!(
+                    receiver.self_token,
+                    "Exported interfaces can not have `self` parameters"
+                ),
+            });
 
         let bindings = parameters.clone().map(|parameter| &parameter.pat);
         let types = parameters.map(|parameter| &parameter.ty);
@@ -170,6 +200,7 @@ impl<'input> FunctionInformation<'input> {
         let host_parameters = &self.parameter_bindings;
         let call_early_return = &self.call_early_return;
         let function_name = &self.function.sig.ident;
+        let caller_parameter = self.is_reentrant.then(|| quote! { &mut caller, });
 
         let output_type = quote_spanned! { self.function.sig.output.span() =>
             <
@@ -196,7 +227,10 @@ impl<'input> FunctionInformation<'input> {
                         )?;
 
                     #[allow(clippy::let_unit_value)]
-                    let host_results = Self::#function_name(#host_parameters) #call_early_return;
+                    let host_results = Self::#function_name(
+                        #caller_parameter
+                        #host_parameters
+                    ) #call_early_return;
                     let guest_results =
                         <Interface as linera_witty::ExportedFunctionInterface>::lower_results(
                             host_results,

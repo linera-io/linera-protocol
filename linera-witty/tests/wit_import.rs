@@ -12,7 +12,7 @@ mod test_instance;
 use self::test_instance::WasmerInstanceFactory;
 #[cfg(feature = "wasmtime")]
 use self::test_instance::WasmtimeInstanceFactory;
-use self::test_instance::{MockInstanceFactory, TestInstanceFactory};
+use self::test_instance::{MockInstanceFactory, TestInstanceFactory, WithoutExports};
 use linera_witty::{wit_import, Instance, Runtime, RuntimeMemory};
 use test_case::test_case;
 
@@ -26,14 +26,14 @@ trait SimpleFunction {
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
 #[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
-fn simple_function<InstanceFactory>(mut factory: InstanceFactory)
+fn test_simple_function<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
     InstanceFactory::Instance: InstanceForSimpleFunction,
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("export", "simple-function", |_| {});
+    let instance = factory.load_test_module::<WithoutExports>("export", "simple-function");
 
     SimpleFunction::new(instance)
         .simple()
@@ -61,14 +61,14 @@ trait Getters {
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
 #[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
-fn getters<InstanceFactory>(mut factory: InstanceFactory)
+fn test_getters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
     InstanceFactory::Instance: InstanceForGetters,
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("export", "getters", |_| {});
+    let instance = factory.load_test_module::<WithoutExports>("export", "getters");
 
     let mut getters = Getters::new(instance);
 
@@ -166,14 +166,14 @@ trait Setters {
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
 #[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
-fn setters<InstanceFactory>(mut factory: InstanceFactory)
+fn test_setters<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
     InstanceFactory::Instance: InstanceForSetters,
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("export", "setters", |_| {});
+    let instance = factory.load_test_module::<WithoutExports>("export", "setters");
 
     let mut setters = Setters::new(instance);
 
@@ -232,14 +232,14 @@ trait Operations {
 #[test_case(MockInstanceFactory::default(); "with a mock instance")]
 #[cfg_attr(feature = "wasmer", test_case(WasmerInstanceFactory; "with Wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmtimeInstanceFactory; "with Wasmtime"))]
-fn operations<InstanceFactory>(mut factory: InstanceFactory)
+fn test_operations<InstanceFactory>(mut factory: InstanceFactory)
 where
     InstanceFactory: TestInstanceFactory,
     InstanceFactory::Instance: InstanceForOperations,
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
 {
-    let instance = factory.load_test_module("export", "operations", |_| {});
+    let instance = factory.load_test_module::<WithoutExports>("export", "operations");
 
     let mut operations = Operations::new(instance);
 

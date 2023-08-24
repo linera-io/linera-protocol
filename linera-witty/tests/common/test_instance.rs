@@ -9,9 +9,18 @@ use linera_witty::wasmer;
 #[cfg(feature = "wasmtime")]
 use linera_witty::wasmtime;
 use linera_witty::{
-    InstanceWithMemory, Layout, MockExportedFunction, MockInstance, RuntimeError, WitLoad, WitStore,
+    ExportTo, InstanceWithMemory, Layout, MockExportedFunction, MockInstance, RuntimeError,
+    WitLoad, WitStore,
 };
-use std::{any::Any, fmt::Debug, ops::Add};
+use std::{
+    any::Any,
+    fmt::Debug,
+    ops::Add,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+};
 
 /// Trait representing a type that can create instances for tests.
 pub trait TestInstanceFactory {
@@ -23,12 +32,13 @@ pub trait TestInstanceFactory {
     type Instance: InstanceWithMemory;
 
     /// Loads a test module with the provided `module_name` from the named `group`_
-    fn load_test_module(
+    fn load_test_module<ExportedFunctions>(
         &mut self,
         group: &str,
         module_name: &str,
-        add_exports: impl Fn(&mut Self::Builder),
-    ) -> Self::Instance;
+    ) -> Self::Instance
+    where
+        ExportedFunctions: ExportTo<Self::Builder>;
 }
 
 /// A factory of [`wasmtime::Entrypoint`] instances.
@@ -40,12 +50,10 @@ impl TestInstanceFactory for WasmtimeInstanceFactory {
     type Builder = ::wasmtime::Linker<()>;
     type Instance = wasmtime::EntrypointInstance;
 
-    fn load_test_module(
-        &mut self,
-        group: &str,
-        module: &str,
-        add_exports: impl Fn(&mut Self::Builder),
-    ) -> Self::Instance {
+    fn load_test_module<ExportedFunctions>(&mut self, group: &str, module: &str) -> Self::Instance
+    where
+        ExportedFunctions: ExportTo<Self::Builder>,
+    {
         let engine = ::wasmtime::Engine::default();
         let module = ::wasmtime::Module::from_file(
             &engine,
@@ -54,7 +62,9 @@ impl TestInstanceFactory for WasmtimeInstanceFactory {
         .expect("Failed to load module");
 
         let mut linker = wasmtime::Linker::new(&engine);
-        add_exports(&mut linker);
+
+        ExportedFunctions::export_to(&mut linker)
+            .expect("Failed to export functions to Wasmtime linker");
 
         let mut store = ::wasmtime::Store::new(&engine, ());
         let instance = linker
@@ -74,12 +84,10 @@ impl TestInstanceFactory for WasmerInstanceFactory {
     type Builder = wasmer::InstanceBuilder;
     type Instance = wasmer::EntrypointInstance;
 
-    fn load_test_module(
-        &mut self,
-        group: &str,
-        module: &str,
-        add_exports: impl Fn(&mut Self::Builder),
-    ) -> Self::Instance {
+    fn load_test_module<ExportedFunctions>(&mut self, group: &str, module: &str) -> Self::Instance
+    where
+        ExportedFunctions: ExportTo<Self::Builder>,
+    {
         let engine = ::wasmer::EngineBuilder::new(::wasmer::Singlepass::default()).engine();
         let module = ::wasmer::Module::from_file(
             &engine,
@@ -89,7 +97,8 @@ impl TestInstanceFactory for WasmerInstanceFactory {
 
         let mut builder = wasmer::InstanceBuilder::new(engine);
 
-        add_exports(&mut builder);
+        ExportedFunctions::export_to(&mut builder)
+            .expect("Failed to export functions to Wasmer instance builder");
 
         builder
             .instantiate(&module)
@@ -107,12 +116,10 @@ impl TestInstanceFactory for MockInstanceFactory {
     type Builder = MockInstance;
     type Instance = MockInstance;
 
-    fn load_test_module(
-        &mut self,
-        group: &str,
-        module: &str,
-        add_exports: impl Fn(&mut Self::Builder),
-    ) -> Self::Instance {
+    fn load_test_module<ExportedFunctions>(&mut self, group: &str, module: &str) -> Self::Instance
+    where
+        ExportedFunctions: ExportTo<Self::Builder>,
+    {
         let mut instance = MockInstance::default();
 
         match (group, module) {
@@ -124,12 +131,18 @@ impl TestInstanceFactory for MockInstanceFactory {
             ("import", "getters") => self.import_getters(&mut instance),
             ("import", "setters") => self.import_setters(&mut instance),
             ("import", "operations") => self.import_operations(&mut instance),
+            ("reentrancy", "simple-function") => self.reentrancy_simple_function(&mut instance),
+            ("reentrancy", "getters") => self.reentrancy_getters(&mut instance),
+            ("reentrancy", "setters") => self.reentrancy_setters(&mut instance),
+            ("reentrancy", "operations") => self.reentrancy_operations(&mut instance),
+            ("reentrancy", "global-state") => self.reentrancy_global_state(&mut instance),
             _ => panic!(
                 "Attempt to load module \"{group}-{module}\" which has no mock configuration"
             ),
         }
 
-        add_exports(&mut instance);
+        ExportedFunctions::export_to(&mut instance)
+            .expect("Failed to export functions to mock instance");
 
         instance
     }
@@ -553,6 +566,62 @@ impl MockInstanceFactory {
         );
     }
 
+    /// Mock the behavior of the "reentrancy-simple-function" module.
+    fn reentrancy_simple_function(&mut self, instance: &mut MockInstance) {
+        self.import_simple_function(instance);
+        self.export_simple_function(instance);
+    }
+
+    /// Mock the behavior of the "reentrancy-getters" module.
+    fn reentrancy_getters(&mut self, instance: &mut MockInstance) {
+        self.import_getters(instance);
+        self.export_getters(instance);
+    }
+
+    /// Mock the behavior of the "reentrancy-setters" module.
+    fn reentrancy_setters(&mut self, instance: &mut MockInstance) {
+        self.import_setters(instance);
+        self.export_setters(instance);
+    }
+
+    /// Mock the behavior of the "reentrancy-operations" module.
+    fn reentrancy_operations(&mut self, instance: &mut MockInstance) {
+        self.import_operations(instance);
+        self.export_operations(instance);
+    }
+
+    /// Mock the behavior of the "reentrancy-global-state" module.
+    fn reentrancy_global_state(&mut self, instance: &mut MockInstance) {
+        let global_state_for_entrypoint = Arc::new(AtomicU32::new(0));
+        let global_state_for_getter = global_state_for_entrypoint.clone();
+
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/global-state#entrypoint",
+            move |caller, hlist_pat![value]: HList![i32]| {
+                global_state_for_entrypoint.store(value as u32, Ordering::Release);
+
+                caller
+                    .call_imported_function(
+                        "witty-macros:test-modules/get-host-value#get-host-value",
+                        (),
+                    )
+                    .map(|value: u32| hlist![value as i32])
+            },
+            1,
+        );
+        self.mock_exported_function(
+            instance,
+            "witty-macros:test-modules/global-state#get-global-state",
+            move |_, _: HList![]| {
+                Ok(hlist![
+                    global_state_for_getter.load(Ordering::Acquire) as i32
+                ])
+            },
+            1,
+        );
+    }
+
     /// Mocks an exported function with the provided `name`.
     ///
     /// The `handler` is used when the exported function is called, which expected to happen
@@ -564,7 +633,7 @@ impl MockInstanceFactory {
         &mut self,
         instance: &mut MockInstance,
         name: &str,
-        handler: fn(MockInstance, Parameters) -> Result<Results, RuntimeError>,
+        handler: impl Fn(MockInstance, Parameters) -> Result<Results, RuntimeError> + 'static,
         expected_calls: usize,
     ) where
         Parameters: 'static,
@@ -576,5 +645,14 @@ impl MockInstanceFactory {
 
         self.deferred_assertions
             .push(Box::new(mock_exported_function));
+    }
+}
+
+/// Marker type to indicate no extra functions should be exported to the Wasm instance.
+pub struct WithoutExports;
+
+impl<T> ExportTo<T> for WithoutExports {
+    fn export_to(_target: &mut T) -> Result<(), RuntimeError> {
+        Ok(())
     }
 }

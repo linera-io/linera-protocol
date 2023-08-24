@@ -3,6 +3,7 @@
 
 //! Code to interface with different runtimes.
 
+mod borrowed_instance;
 mod error;
 mod memory;
 #[cfg(any(test, feature = "test"))]
