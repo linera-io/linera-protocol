@@ -67,8 +67,8 @@ impl ScyllaDbStoreClient {
             cache_size,
             wasm_runtime,
         )
-            .await
-            .expect("client")
+        .await
+        .expect("client")
     }
 
     pub async fn new(
@@ -95,4 +95,3 @@ impl ScyllaDbStoreClient {
         })
     }
 }
-

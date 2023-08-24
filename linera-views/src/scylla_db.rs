@@ -25,14 +25,14 @@ use crate::{
     lru_caching::{LruCachingKeyValueClient, TEST_CACHE_SIZE},
     value_splitting::DatabaseConsistencyError,
 };
-use async_lock::{Semaphore, SemaphoreGuard};
+use async_lock::{RwLock, Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use once_cell::sync::Lazy;
 use scylla::{IntoTypedRows, Session, SessionBuilder};
 use std::{ops::Deref, sync::Arc};
 use thiserror::Error;
 
-static TEST_COUNTER: Lazy<u32> = Lazy::new(|| 0);
+static TEST_COUNTER: Lazy<Arc<RwLock<u32>>> = Lazy::new(|| Arc::new(RwLock::new(0)));
 
 /// The creation of a ScyllaDB client that can be used for accessing it.
 /// The `Vec<u8>`is a primary key.
@@ -447,9 +447,9 @@ impl ScyllaDbClient {
 
 /// Returns a unique table name for testing.
 pub async fn get_table_name() -> String {
-    let mut counter = *TEST_COUNTER;
-    counter += 1;
-    format!("test_table_{}", counter)
+    let mut counter = TEST_COUNTER.write().await;
+    *counter += 1;
+    format!("test_table_{}", *counter)
 }
 
 /// Creates a ScyllaDB test client

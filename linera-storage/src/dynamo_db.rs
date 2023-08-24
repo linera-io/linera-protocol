@@ -110,7 +110,6 @@ impl DynamoDbStore {
 pub type DynamoDbStoreClient = DbStoreClient<DynamoDbClient>;
 
 impl DynamoDbStoreClient {
-
     #[cfg(any(test, feature = "test"))]
     pub async fn new_test() -> Self {
         let table = "linera".parse().expect("Invalid table name");
@@ -123,8 +122,8 @@ impl DynamoDbStoreClient {
             TEST_CACHE_SIZE,
             None,
         )
-            .await
-            .expect("client and table_name");
+        .await
+        .expect("client and table_name");
         client
     }
 

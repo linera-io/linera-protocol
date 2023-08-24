@@ -44,8 +44,7 @@ use test_log::test;
 
 #[cfg(feature = "rocksdb")]
 use {
-    linera_core::client::client_test_utils::ROCKS_DB_SEMAPHORE,
-    linera_storage::RocksDbStoreClient,
+    linera_core::client::client_test_utils::ROCKS_DB_SEMAPHORE, linera_storage::RocksDbStoreClient,
 };
 
 #[cfg(feature = "aws")]
