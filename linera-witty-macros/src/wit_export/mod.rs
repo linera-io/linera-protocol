@@ -74,7 +74,7 @@ impl<'input> WitExportGenerator<'input> {
             let exported_functions = self
                 .functions
                 .iter()
-                .map(|function| function.generate_for_wasmer(self.namespace));
+                .map(|function| function.generate_for_wasmer(self.namespace, self.type_name));
 
             Some(self.generate_for(export_target, exported_functions))
         }
@@ -92,7 +92,7 @@ impl<'input> WitExportGenerator<'input> {
             let exported_functions = self
                 .functions
                 .iter()
-                .map(|function| function.generate_for_wasmtime(self.namespace));
+                .map(|function| function.generate_for_wasmtime(self.namespace, self.type_name));
 
             Some(self.generate_for(export_target, exported_functions))
         }
@@ -107,10 +107,9 @@ impl<'input> WitExportGenerator<'input> {
         #[cfg(feature = "mock-instance")]
         {
             let export_target = quote! { linera_witty::MockInstance };
-            let exported_functions = self
-                .functions
-                .iter()
-                .map(|function| function.generate_for_mock_instance(self.namespace));
+            let exported_functions = self.functions.iter().map(|function| {
+                function.generate_for_mock_instance(self.namespace, self.type_name)
+            });
 
             Some(self.generate_for(export_target, exported_functions))
         }
