@@ -37,14 +37,15 @@ Compile the `social` example and create an application with it:
 
 ```bash
 alias linera="$PWD/target/debug/linera"
-export LINERA_WALLET="$(realpath target/debug/wallet.json)"
-export LINERA_STORAGE="rocksdb:$(dirname "$LINERA_WALLET")/linera.db"
-export LINERA_WALLET_2="$(realpath target/debug/wallet_2.json)"
-export LINERA_STORAGE_2="rocksdb:$(dirname "$LINERA_WALLET_2")/linera_2.db"
+export LINERA_WALLET1="$(realpath target/debug/wallet.json)"
+export LINERA_STORAGE1="rocksdb:$(dirname "$LINERA_WALLET1")/linera.db"
+export LINERA_WALLET2="$(realpath target/debug/wallet_2.json)"
+export LINERA_STORAGE2="rocksdb:$(dirname "$LINERA_WALLET2")/linera_2.db"
 
 cd examples/social && cargo build --release && cd ../..
 
-linera publish-and-create examples/target/wasm32-unknown-unknown/release/social_{contract,service}.wasm
+linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" \
+  publish-and-create examples/target/wasm32-unknown-unknown/release/social_{contract,service}.wasm
 ```
 
 This will output the new application ID, e.g.:
@@ -56,7 +57,7 @@ e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a650100000000000000
 With the `wallet show` command you can find the ID of the application creator's chain:
 
 ```bash
-linera wallet show
+linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" wallet show
 ```
 
 ```rust
@@ -67,8 +68,8 @@ e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65
 Now start a node service for each wallet, using two different ports:
 
 ```bash
-linera service --port 8080 &
-linera --wallet "$LINERA_WALLET_2" --storage "$LINERA_STORAGE_2" service --port 8081 &
+linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" service --port 8080 &
+linera --wallet "$LINERA_WALLET2" --storage "$LINERA_STORAGE2" service --port 8081 &
 ```
 
 Point your browser to http://localhost:8081. This is the wallet that didn't create the

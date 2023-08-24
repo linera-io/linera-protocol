@@ -50,15 +50,15 @@
 //!
 //! ```bash
 //! alias linera="$PWD/target/debug/linera"
-//! export LINERA_WALLET="$PWD/target/debug/wallet.json"
-//! export LINERA_STORAGE="rocksdb:$(dirname "$LINERA_WALLET1")/linera.db"
+//! export LINERA_WALLET1="$PWD/target/debug/wallet.json"
+//! export LINERA_STORAGE1="rocksdb:$(dirname "$LINERA_WALLET1")/linera.db"
 //! export LINERA_WALLET2="$PWD/target/debug/wallet_2.json"
 //! export LINERA_STORAGE2="rocksdb:$(dirname "$LINERA_WALLET2")/linera_2.db"
 //!
 //! (cargo build && cd examples && cargo build --release)
-//! linera publish-bytecode \
+//! linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" publish-bytecode \
 //!   examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm
-//! linera publish-bytecode \
+//! linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" publish-bytecode \
 //!   examples/target/wasm32-unknown-unknown/release/crowd_funding_{contract,service}.wasm
 //! ```
 //!
@@ -82,8 +82,8 @@
 //! the chains created for the test as known by each wallet:
 //!
 //! ```bash
-//! linera wallet show
-//! linera --storage "$LINERA_STORAGE2" --wallet "$LINERA_WALLET2" wallet show
+//! linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" wallet show
+//! linera --wallet "$LINERA_WALLET2" --storage "$LINERA_STORAGE2" wallet show
 //! ```
 //!
 //! A table will be shown with the chains registered in the wallet and their meta-data:
@@ -110,7 +110,8 @@
 //! one with 100 of them and another with 200 of them:
 //!
 //! ```bash
-//! linera create-application $BYTECODE_ID1 \
+//! linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" \
+//!     create-application $BYTECODE_ID1 \
 //!     --json-argument '{ "accounts": { "User:'$OWNER1'": "100", "User:'$OWNER2'": "200" } }'
 //! ```
 //!
@@ -128,7 +129,8 @@
 //! We have to specify our fungible application as a dependency and a parameter:
 //!
 //! ```bash
-//! linera create-application $BYTECODE_ID2 \
+//! linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" \
+//!    create-application $BYTECODE_ID2 \
 //!    --json-argument '{ "owner": "User:'$OWNER1'", "deadline": 4102473600000000, "target": "100." }'  --required-application-ids=$APP_ID1  --json-parameters='"'$APP_ID1'"'
 //! ```
 //!
@@ -139,7 +141,7 @@
 //! First, a node service has to be started for each wallet, using two different ports:
 //!
 //! ```bash
-//! linera service --port 8080 &
+//! linera --wallet "$LINERA_WALLET1" --storage "$LINERA_STORAGE1" service --port 8080 &
 //! linera --wallet "$LINERA_WALLET2" --storage "$LINERA_STORAGE2" service --port 8081 &
 //! ```
 //!
