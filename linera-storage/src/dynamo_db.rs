@@ -6,12 +6,13 @@ use dashmap::DashMap;
 use futures::Future;
 use linera_execution::WasmRuntime;
 use linera_views::{
-    dynamo_db::{
-        Config, DynamoDbClient, DynamoDbContextError, TableName, TableStatus,
-        TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES, TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
-    },
-    lru_caching::TEST_CACHE_SIZE,
+    dynamo_db::{Config, DynamoDbClient, DynamoDbContextError, TableName, TableStatus},
     test_utils::LocalStackTestContext,
+};
+#[cfg(any(test, feature = "test"))]
+use linera_views::{
+    dynamo_db::{TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES, TEST_DYNAMO_DB_MAX_STREAM_QUERIES},
+    lru_caching::TEST_CACHE_SIZE,
 };
 use std::sync::Arc;
 
