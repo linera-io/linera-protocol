@@ -592,7 +592,7 @@ impl MockInstanceFactory {
         &mut self,
         instance: &mut MockInstance,
         name: &str,
-        handler: fn(MockInstance, Parameters) -> Result<Results, RuntimeError>,
+        handler: impl Fn(MockInstance, Parameters) -> Result<Results, RuntimeError> + 'static,
         expected_calls: usize,
     ) where
         Parameters: 'static,

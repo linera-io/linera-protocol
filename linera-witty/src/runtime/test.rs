@@ -297,7 +297,7 @@ pub struct MockExportedFunction<Parameters, Results> {
     name: String,
     call_counter: Arc<AtomicUsize>,
     expected_calls: usize,
-    handler: fn(MockInstance, Parameters) -> Result<Results, RuntimeError>,
+    handler: Arc<dyn Fn(MockInstance, Parameters) -> Result<Results, RuntimeError>>,
 }
 
 impl<Parameters, Results> MockExportedFunction<Parameters, Results>
@@ -313,21 +313,21 @@ where
     /// times.
     pub fn new(
         name: impl Into<String>,
-        handler: fn(MockInstance, Parameters) -> Result<Results, RuntimeError>,
+        handler: impl Fn(MockInstance, Parameters) -> Result<Results, RuntimeError> + 'static,
         expected_calls: usize,
     ) -> Self {
         MockExportedFunction {
             name: name.into(),
             call_counter: Arc::default(),
             expected_calls,
-            handler,
+            handler: Arc::new(handler),
         }
     }
 
     /// Registers this [`MockExportedFunction`] with the mock `instance`.
     pub fn register(&self, instance: &mut MockInstance) {
         let call_counter = self.call_counter.clone();
-        let handler = self.handler;
+        let handler = self.handler.clone();
 
         instance.add_exported_function(self.name.clone(), move |caller, parameters: Parameters| {
             call_counter.fetch_add(1, Ordering::AcqRel);
