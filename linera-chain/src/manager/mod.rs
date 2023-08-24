@@ -136,7 +136,7 @@ impl ChainManager {
     pub fn create_final_vote(&mut self, certificate: Certificate, key_pair: Option<&KeyPair>) {
         match self {
             ChainManager::Multi(manager) => manager.create_final_vote(certificate, key_pair),
-            _ => panic!("unexpected chain manager"),
+            ChainManager::None | ChainManager::Single(_) => panic!("unexpected chain manager"),
         }
     }
 
@@ -187,7 +187,7 @@ impl ChainManagerInfo {
         match self {
             ChainManagerInfo::Single(single) => single.pending.as_ref(),
             ChainManagerInfo::Multi(multi) => multi.pending.as_ref(),
-            _ => None,
+            ChainManagerInfo::None => None,
         }
     }
 
@@ -201,7 +201,7 @@ impl ChainManagerInfo {
     pub fn next_round(&self) -> RoundNumber {
         match self {
             ChainManagerInfo::Multi(multi) => multi.next_round(),
-            _ => RoundNumber::default(),
+            ChainManagerInfo::None | ChainManagerInfo::Single(_) => RoundNumber::default(),
         }
     }
 }

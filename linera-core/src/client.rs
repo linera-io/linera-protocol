@@ -368,7 +368,7 @@ where
         Ok(self.key_pair().await?.public())
     }
 
-    async fn get_local_chain_info(
+    async fn local_chain_info(
         this: Arc<Mutex<Self>>,
         chain_id: ChainId,
         local_node: &mut LocalNodeClient<S>,
@@ -383,12 +383,12 @@ where
         Some(info)
     }
 
-    async fn get_local_next_block_height(
+    async fn local_next_block_height(
         this: Arc<Mutex<Self>>,
         chain_id: ChainId,
         local_node: &mut LocalNodeClient<S>,
     ) -> Option<BlockHeight> {
-        let info = Self::get_local_chain_info(this, chain_id, local_node).await?;
+        let info = Self::local_chain_info(this, chain_id, local_node).await?;
         Some(info.next_block_height)
     }
 
@@ -404,8 +404,7 @@ where
     {
         match notification.reason {
             Reason::NewIncomingMessage { origin, height } => {
-                if Self::get_local_next_block_height(this.clone(), origin.sender, &mut local_node)
-                    .await
+                if Self::local_next_block_height(this.clone(), origin.sender, &mut local_node).await
                     > Some(height)
                 {
                     debug!("Accepting redundant notification for new message");
@@ -417,7 +416,7 @@ where
                     error!("Fail to process notification: {e}");
                     return false;
                 }
-                if Self::get_local_next_block_height(this, origin.sender, &mut local_node).await
+                if Self::local_next_block_height(this, origin.sender, &mut local_node).await
                     <= Some(height)
                 {
                     error!("Fail to synchronize new message after notification");
@@ -426,7 +425,7 @@ where
             }
             Reason::NewBlock { height, hash } => {
                 let chain_id = notification.chain_id;
-                if Self::get_local_next_block_height(this.clone(), chain_id, &mut local_node).await
+                if Self::local_next_block_height(this.clone(), chain_id, &mut local_node).await
                     > Some(height)
                 {
                     debug!("Accepting redundant notification for new block");
@@ -437,7 +436,7 @@ where
                     .await
                 {
                     Ok(()) => {
-                        if Self::get_local_next_block_height(this, chain_id, &mut local_node).await
+                        if Self::local_next_block_height(this, chain_id, &mut local_node).await
                             <= Some(height)
                         {
                             error!("Fail to synchronize new block after notification");
@@ -472,9 +471,9 @@ where
             Reason::NewRound { height, round } => {
                 let chain_id = notification.chain_id;
                 if let Some(info) =
-                    Self::get_local_chain_info(this.clone(), chain_id, &mut local_node).await
+                    Self::local_chain_info(this.clone(), chain_id, &mut local_node).await
                 {
-                    if info.next_block_height > height || info.manager.next_round() > round {
+                    if (info.next_block_height, info.manager.next_round()) >= (height, round) {
                         debug!("Accepting redundant notification for new round");
                         return true;
                     }
@@ -487,12 +486,12 @@ where
                     return false;
                 }
                 let Some(info) =
-                    Self::get_local_chain_info(this.clone(), chain_id, &mut local_node).await
+                    Self::local_chain_info(this.clone(), chain_id, &mut local_node).await
                 else {
                     error!("Fail to read local chain info for {chain_id}");
                     return false;
                 };
-                if info.next_block_height < height || info.manager.next_round() < round {
+                if (info.next_block_height, info.manager.next_round()) < (height, round) {
                     error!("Fail to synchronize new block after notification");
                     return false;
                 }
