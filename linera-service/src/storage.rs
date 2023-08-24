@@ -268,13 +268,13 @@ impl FromStr for StorageConfig {
                             }
                             table_name = Some(part_ent.to_string());
                         }
-                        "true" => {
+                        "restart_database" => {
                             if restart_database.is_some() {
                                 bail!("The restart_database entry has already been assigned");
                             }
                             restart_database = Some(true);
                         }
-                        "false" => {
+                        "dont_restart_database" => {
                             if restart_database.is_some() {
                                 bail!("The restart_database entry has already been assigned");
                             }
@@ -362,9 +362,17 @@ fn test_scylla_db_storage_config_from_str() {
         }
     );
     assert_eq!(
-        StorageConfig::from_str("scylladb:false").unwrap(),
+        StorageConfig::from_str("scylladb:dont_restart_database").unwrap(),
         StorageConfig::ScyllaDb {
             restart_database: false,
+            uri: "localhost:9042".to_string(),
+            table_name: "table_storage".to_string(),
+        }
+    );
+    assert_eq!(
+        StorageConfig::from_str("scylladb:restart_database").unwrap(),
+        StorageConfig::ScyllaDb {
+            restart_database: true,
             uri: "localhost:9042".to_string(),
             table_name: "table_storage".to_string(),
         }
