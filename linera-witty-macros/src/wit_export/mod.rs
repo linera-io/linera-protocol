@@ -40,7 +40,7 @@ impl<'input> WitExportGenerator<'input> {
         let functions = implementation
             .items
             .iter()
-            .map(FunctionInformation::from)
+            .map(FunctionInformation::from_item)
             .collect();
 
         WitExportGenerator {

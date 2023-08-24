@@ -23,8 +23,10 @@ pub struct FunctionInformation<'input> {
     interface_type: TokenStream,
 }
 
-impl<'input> From<&'input ImplItem> for FunctionInformation<'input> {
-    fn from(item: &'input ImplItem) -> Self {
+impl<'input> FunctionInformation<'input> {
+    /// Parses a function definition from an [`ImplItem`] and collects pieces of information into a
+    /// [`FunctionInformation`] instance.
+    pub fn from_item(item: &'input ImplItem) -> Self {
         match item {
             ImplItem::Method(function) => FunctionInformation::new(function),
             ImplItem::Const(const_item) => abort!(
@@ -42,9 +44,7 @@ impl<'input> From<&'input ImplItem> for FunctionInformation<'input> {
             _ => abort!(item, "Only function items are supported in exported types"),
         }
     }
-}
 
-impl<'input> FunctionInformation<'input> {
     /// Parses a function definition and collects pieces of information into a
     /// [`FunctionInformation`] instance.
     pub fn new(function: &'input ImplItemMethod) -> Self {
