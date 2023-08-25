@@ -653,14 +653,7 @@ where
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok((ChainInfoResponse::new(&chain, self.key_pair()), actions));
         }
-        if self
-            .cache_recent_value(Cow::Borrowed(&certificate.value))
-            .await
-        {
-            if let Some(value) = certificate.value.clone().into_confirmed() {
-                self.cache_recent_value(Cow::Owned(value)).await;
-            }
-        }
+        self.cache_validated(&certificate.value).await;
         chain
             .manager
             .get_mut()
@@ -676,14 +669,7 @@ where
                 },
             })
         }
-        if self
-            .cache_recent_value(Cow::Borrowed(&certificate.value))
-            .await
-        {
-            if let Some(value) = certificate.value.into_confirmed() {
-                self.cache_recent_value(Cow::Owned(value)).await;
-            }
-        }
+        self.cache_validated(&certificate.value).await;
         Ok((info, actions))
     }
 
@@ -795,6 +781,15 @@ where
         // Cache the certificate so that clients don't have to send the value again.
         recent_values.push(hash, value.into_owned());
         true
+    }
+
+    /// Caches the validated block and the corresponding confirmed block.
+    async fn cache_validated(&mut self, value: &HashedValue) {
+        if self.cache_recent_value(Cow::Borrowed(value)).await {
+            if let Some(value) = value.clone().into_confirmed() {
+                self.cache_recent_value(Cow::Owned(value)).await;
+            }
+        }
     }
 
     /// Returns a stored [`Certificate`] for a chain's block.
