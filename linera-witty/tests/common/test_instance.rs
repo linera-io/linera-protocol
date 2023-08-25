@@ -31,6 +31,9 @@ pub trait TestInstanceFactory {
     /// The type representing a guest Wasm instance.
     type Instance: InstanceWithMemory;
 
+    /// The type received by host functions to use for reentrant calls.
+    type Caller<'caller>;
+
     /// Loads a test module with the provided `module_name` from the named `group`_
     fn load_test_module<ExportedFunctions>(
         &mut self,
@@ -49,6 +52,7 @@ pub struct WasmtimeInstanceFactory;
 impl TestInstanceFactory for WasmtimeInstanceFactory {
     type Builder = ::wasmtime::Linker<()>;
     type Instance = wasmtime::EntrypointInstance;
+    type Caller<'caller> = ::wasmtime::Caller<'caller, ()>;
 
     fn load_test_module<ExportedFunctions>(&mut self, group: &str, module: &str) -> Self::Instance
     where
@@ -83,6 +87,7 @@ pub struct WasmerInstanceFactory;
 impl TestInstanceFactory for WasmerInstanceFactory {
     type Builder = wasmer::InstanceBuilder;
     type Instance = wasmer::EntrypointInstance;
+    type Caller<'caller> = ::wasmer::FunctionEnvMut<'caller, wasmer::InstanceSlot>;
 
     fn load_test_module<ExportedFunctions>(&mut self, group: &str, module: &str) -> Self::Instance
     where
@@ -115,6 +120,7 @@ pub struct MockInstanceFactory {
 impl TestInstanceFactory for MockInstanceFactory {
     type Builder = MockInstance;
     type Instance = MockInstance;
+    type Caller<'caller> = MockInstance;
 
     fn load_test_module<ExportedFunctions>(&mut self, group: &str, module: &str) -> Self::Instance
     where
