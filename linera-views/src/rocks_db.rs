@@ -142,8 +142,8 @@ impl KeyValueStoreClient for RocksDbClientInternal {
         }
         tokio::task::spawn_blocking(move || -> Result<(), RocksDbContextError> {
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
-            for e_ent in batch.operations {
-                match e_ent {
+            for operation in batch.operations {
+                match operation {
                     WriteOperation::Delete { key } => inner_batch.delete(&key),
                     WriteOperation::Put { key, value } => inner_batch.put(&key, value),
                     WriteOperation::DeletePrefix { key_prefix } => {

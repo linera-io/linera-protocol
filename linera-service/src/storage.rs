@@ -238,10 +238,10 @@ impl FromStr for StorageConfig {
             let mut table_name: Option<String> = None;
             if !s.is_empty() {
                 let mut parts = s.split(':');
-                while let Some(part_ent) = parts.next() {
-                    match part_ent {
+                while let Some(part) = parts.next() {
+                    match part {
                         "https" => {
-                            let err_msg = "Correct format is https:://my.validator.com:port";
+                            let err_msg = "Correct format is https:://db_hostname:port";
                             let Some(empty) = parts.next() else {
                                 bail!(err_msg);
                             };
@@ -262,11 +262,11 @@ impl FromStr for StorageConfig {
                             }
                             uri = Some(format!("https::{}:{}", address, port_str));
                         }
-                        _ if part_ent.starts_with("table") => {
+                        _ if part.starts_with("table") => {
                             if table_name.is_some() {
                                 bail!("The table_name has already been assigned");
                             }
-                            table_name = Some(part_ent.to_string());
+                            table_name = Some(part.to_string());
                         }
                         "restart_database" => {
                             if restart_database.is_some() {
@@ -281,7 +281,7 @@ impl FromStr for StorageConfig {
                             restart_database = Some(false);
                         }
                         _ => {
-                            bail!("the entry \"{}\" is not matching", part_ent);
+                            bail!("the entry \"{}\" is not matching", part);
                         }
                     }
                 }
@@ -378,10 +378,10 @@ fn test_scylla_db_storage_config_from_str() {
         }
     );
     assert_eq!(
-        StorageConfig::from_str("scylladb:https:://my.validator.com:230").unwrap(),
+        StorageConfig::from_str("scylladb:https:://db_hostname:230").unwrap(),
         StorageConfig::ScyllaDb {
             restart_database: true,
-            uri: "https:://my.validator.com:230".to_string(),
+            uri: "https:://db_hostname:230".to_string(),
             table_name: "table_storage".to_string(),
         }
     );
