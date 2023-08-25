@@ -14,6 +14,7 @@ use self::test_instance::{MockInstanceFactory, TestInstanceFactory};
 use linera_witty::{
     wit_export, wit_import, ExportTo, Instance, Runtime, RuntimeError, RuntimeMemory,
 };
+use std::marker::PhantomData;
 use test_case::test_case;
 
 /// An interface to call into the test modules.
@@ -86,103 +87,59 @@ trait ImportedGetters {
 }
 
 /// Type to export reentrant functions with return values.
-pub struct ExportedGetters;
+pub struct ExportedGetters<Caller>(PhantomData<Caller>);
 
 #[wit_export(package = "witty-macros:test-modules", interface = "getters")]
-impl ExportedGetters {
-    fn get_true<Caller>(caller: &mut Caller) -> Result<bool, RuntimeError>
-    where
-        Caller: InstanceForImportedGetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+impl<Caller> ExportedGetters<Caller>
+where
+    Caller: InstanceForImportedGetters,
+    <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
+{
+    fn get_true(caller: &mut Caller) -> Result<bool, RuntimeError> {
         ImportedGetters::new(caller).get_true()
     }
 
-    fn get_false<Caller>(caller: &mut Caller) -> Result<bool, RuntimeError>
-    where
-        Caller: InstanceForImportedGetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn get_false(caller: &mut Caller) -> Result<bool, RuntimeError> {
         ImportedGetters::new(caller).get_false()
     }
 
-    fn get_s8<Caller>(caller: &mut Caller) -> Result<i8, RuntimeError>
-    where
-        Caller: InstanceForImportedGetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn get_s8(caller: &mut Caller) -> Result<i8, RuntimeError> {
         ImportedGetters::new(caller).get_s8()
     }
 
-    fn get_u8<Caller>(caller: &mut Caller) -> Result<u8, RuntimeError>
-    where
-        Caller: InstanceForImportedGetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn get_u8(caller: &mut Caller) -> Result<u8, RuntimeError> {
         ImportedGetters::new(caller).get_u8()
     }
 
-    fn get_s16<Caller>(caller: &mut Caller) -> Result<i16, RuntimeError>
-    where
-        Caller: InstanceForImportedGetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn get_s16(caller: &mut Caller) -> Result<i16, RuntimeError> {
         ImportedGetters::new(caller).get_s16()
     }
 
-    fn get_u16<Caller>(caller: &mut Caller) -> Result<u16, RuntimeError>
-    where
-        Caller: InstanceForImportedGetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn get_u16(caller: &mut Caller) -> Result<u16, RuntimeError> {
         ImportedGetters::new(caller).get_u16()
     }
 
-    fn get_s32<Caller>(caller: &mut Caller) -> Result<i32, RuntimeError>
-    where
-        Caller: InstanceForImportedGetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn get_s32(caller: &mut Caller) -> Result<i32, RuntimeError> {
         ImportedGetters::new(caller).get_s32()
     }
 
-    fn get_u32<Caller>(caller: &mut Caller) -> Result<u32, RuntimeError>
-    where
-        Caller: InstanceForImportedGetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn get_u32(caller: &mut Caller) -> Result<u32, RuntimeError> {
         ImportedGetters::new(caller).get_u32()
     }
 
-    fn get_s64<Caller>(caller: &mut Caller) -> Result<i64, RuntimeError>
-    where
-        Caller: InstanceForImportedGetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn get_s64(caller: &mut Caller) -> Result<i64, RuntimeError> {
         ImportedGetters::new(caller).get_s64()
     }
 
-    fn get_u64<Caller>(caller: &mut Caller) -> Result<u64, RuntimeError>
-    where
-        Caller: InstanceForImportedGetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn get_u64(caller: &mut Caller) -> Result<u64, RuntimeError> {
         ImportedGetters::new(caller).get_u64()
     }
 
-    fn get_float32<Caller>(caller: &mut Caller) -> Result<f32, RuntimeError>
-    where
-        Caller: InstanceForImportedGetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn get_float32(caller: &mut Caller) -> Result<f32, RuntimeError> {
         ImportedGetters::new(caller).get_float32()
     }
 
-    fn get_float64<Caller>(caller: &mut Caller) -> Result<f64, RuntimeError>
-    where
-        Caller: InstanceForImportedGetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn get_float64(caller: &mut Caller) -> Result<f64, RuntimeError> {
         ImportedGetters::new(caller).get_float64()
     }
 }
@@ -200,9 +157,9 @@ where
     InstanceFactory::Instance: InstanceForEntrypoint,
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
-    ExportedGetters: ExportTo<InstanceFactory::Builder>,
+    ExportedGetters<InstanceFactory::Caller<'static>>: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module::<ExportedGetters>("reentrancy", "getters");
+    let instance = factory.load_test_module::<ExportedGetters<_>>("reentrancy", "getters");
 
     Entrypoint::new(instance)
         .entrypoint()
@@ -226,95 +183,55 @@ trait ImportedSetters {
 }
 
 /// Type to export reentrant functions with parameters.
-pub struct ExportedSetters;
+pub struct ExportedSetters<Caller>(PhantomData<Caller>);
 
 #[wit_export(package = "witty-macros:test-modules", interface = "setters")]
-impl ExportedSetters {
-    fn set_bool<Caller>(caller: &mut Caller, value: bool) -> Result<(), RuntimeError>
-    where
-        Caller: InstanceForImportedSetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+impl<Caller> ExportedSetters<Caller>
+where
+    Caller: InstanceForImportedSetters,
+    <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
+{
+    fn set_bool(caller: &mut Caller, value: bool) -> Result<(), RuntimeError> {
         ImportedSetters::new(caller).set_bool(value)
     }
 
-    fn set_s8<Caller>(caller: &mut Caller, value: i8) -> Result<(), RuntimeError>
-    where
-        Caller: InstanceForImportedSetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn set_s8(caller: &mut Caller, value: i8) -> Result<(), RuntimeError> {
         ImportedSetters::new(caller).set_s8(value)
     }
 
-    fn set_u8<Caller>(caller: &mut Caller, value: u8) -> Result<(), RuntimeError>
-    where
-        Caller: InstanceForImportedSetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn set_u8(caller: &mut Caller, value: u8) -> Result<(), RuntimeError> {
         ImportedSetters::new(caller).set_u8(value)
     }
 
-    fn set_s16<Caller>(caller: &mut Caller, value: i16) -> Result<(), RuntimeError>
-    where
-        Caller: InstanceForImportedSetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn set_s16(caller: &mut Caller, value: i16) -> Result<(), RuntimeError> {
         ImportedSetters::new(caller).set_s16(value)
     }
 
-    fn set_u16<Caller>(caller: &mut Caller, value: u16) -> Result<(), RuntimeError>
-    where
-        Caller: InstanceForImportedSetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn set_u16(caller: &mut Caller, value: u16) -> Result<(), RuntimeError> {
         ImportedSetters::new(caller).set_u16(value)
     }
 
-    fn set_s32<Caller>(caller: &mut Caller, value: i32) -> Result<(), RuntimeError>
-    where
-        Caller: InstanceForImportedSetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn set_s32(caller: &mut Caller, value: i32) -> Result<(), RuntimeError> {
         ImportedSetters::new(caller).set_s32(value)
     }
 
-    fn set_u32<Caller>(caller: &mut Caller, value: u32) -> Result<(), RuntimeError>
-    where
-        Caller: InstanceForImportedSetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn set_u32(caller: &mut Caller, value: u32) -> Result<(), RuntimeError> {
         ImportedSetters::new(caller).set_u32(value)
     }
 
-    fn set_s64<Caller>(caller: &mut Caller, value: i64) -> Result<(), RuntimeError>
-    where
-        Caller: InstanceForImportedSetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn set_s64(caller: &mut Caller, value: i64) -> Result<(), RuntimeError> {
         ImportedSetters::new(caller).set_s64(value)
     }
 
-    fn set_u64<Caller>(caller: &mut Caller, value: u64) -> Result<(), RuntimeError>
-    where
-        Caller: InstanceForImportedSetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn set_u64(caller: &mut Caller, value: u64) -> Result<(), RuntimeError> {
         ImportedSetters::new(caller).set_u64(value)
     }
 
-    fn set_float32<Caller>(caller: &mut Caller, value: f32) -> Result<(), RuntimeError>
-    where
-        Caller: InstanceForImportedSetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn set_float32(caller: &mut Caller, value: f32) -> Result<(), RuntimeError> {
         ImportedSetters::new(caller).set_float32(value)
     }
 
-    fn set_float64<Caller>(caller: &mut Caller, value: f64) -> Result<(), RuntimeError>
-    where
-        Caller: InstanceForImportedSetters,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn set_float64(caller: &mut Caller, value: f64) -> Result<(), RuntimeError> {
         ImportedSetters::new(caller).set_float64(value)
     }
 }
@@ -332,9 +249,9 @@ where
     InstanceFactory::Instance: InstanceForEntrypoint,
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
-    ExportedSetters: ExportTo<InstanceFactory::Builder>,
+    ExportedSetters<InstanceFactory::Caller<'static>>: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module::<ExportedSetters>("reentrancy", "setters");
+    let instance = factory.load_test_module::<ExportedSetters<_>>("reentrancy", "setters");
 
     Entrypoint::new(instance)
         .entrypoint()
@@ -358,95 +275,55 @@ trait ImportedOperations {
 }
 
 /// Type to export reentrant functions with multiple parameters and return values.
-pub struct ExportedOperations;
+pub struct ExportedOperations<Caller>(PhantomData<Caller>);
 
 #[wit_export(package = "witty-macros:test-modules", interface = "operations")]
-impl ExportedOperations {
-    fn and_bool<Caller>(caller: &mut Caller, first: bool, second: bool) -> Result<bool, RuntimeError>
-    where
-        Caller: InstanceForImportedOperations,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+impl<Caller> ExportedOperations<Caller>
+where
+    Caller: InstanceForImportedOperations,
+    <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
+{
+    fn and_bool(caller: &mut Caller, first: bool, second: bool) -> Result<bool, RuntimeError> {
         ImportedOperations::new(caller).and_bool(first, second)
     }
 
-    fn add_s8<Caller>(caller: &mut Caller, first: i8, second: i8) -> Result<i8, RuntimeError>
-    where
-        Caller: InstanceForImportedOperations,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn add_s8(caller: &mut Caller, first: i8, second: i8) -> Result<i8, RuntimeError> {
         ImportedOperations::new(caller).add_s8(first, second)
     }
 
-    fn add_u8<Caller>(caller: &mut Caller, first: u8, second: u8) -> Result<u8, RuntimeError>
-    where
-        Caller: InstanceForImportedOperations,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn add_u8(caller: &mut Caller, first: u8, second: u8) -> Result<u8, RuntimeError> {
         ImportedOperations::new(caller).add_u8(first, second)
     }
 
-    fn add_s16<Caller>(caller: &mut Caller, first: i16, second: i16) -> Result<i16, RuntimeError>
-    where
-        Caller: InstanceForImportedOperations,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn add_s16(caller: &mut Caller, first: i16, second: i16) -> Result<i16, RuntimeError> {
         ImportedOperations::new(caller).add_s16(first, second)
     }
 
-    fn add_u16<Caller>(caller: &mut Caller, first: u16, second: u16) -> Result<u16, RuntimeError>
-    where
-        Caller: InstanceForImportedOperations,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn add_u16(caller: &mut Caller, first: u16, second: u16) -> Result<u16, RuntimeError> {
         ImportedOperations::new(caller).add_u16(first, second)
     }
 
-    fn add_s32<Caller>(caller: &mut Caller, first: i32, second: i32) -> Result<i32, RuntimeError>
-    where
-        Caller: InstanceForImportedOperations,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn add_s32(caller: &mut Caller, first: i32, second: i32) -> Result<i32, RuntimeError> {
         ImportedOperations::new(caller).add_s32(first, second)
     }
 
-    fn add_u32<Caller>(caller: &mut Caller, first: u32, second: u32) -> Result<u32, RuntimeError>
-    where
-        Caller: InstanceForImportedOperations,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn add_u32(caller: &mut Caller, first: u32, second: u32) -> Result<u32, RuntimeError> {
         ImportedOperations::new(caller).add_u32(first, second)
     }
 
-    fn add_s64<Caller>(caller: &mut Caller, first: i64, second: i64) -> Result<i64, RuntimeError>
-    where
-        Caller: InstanceForImportedOperations,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn add_s64(caller: &mut Caller, first: i64, second: i64) -> Result<i64, RuntimeError> {
         ImportedOperations::new(caller).add_s64(first, second)
     }
 
-    fn add_u64<Caller>(caller: &mut Caller, first: u64, second: u64) -> Result<u64, RuntimeError>
-    where
-        Caller: InstanceForImportedOperations,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn add_u64(caller: &mut Caller, first: u64, second: u64) -> Result<u64, RuntimeError> {
         ImportedOperations::new(caller).add_u64(first, second)
     }
 
-    fn add_float32<Caller>(caller: &mut Caller, first: f32, second: f32) -> Result<f32, RuntimeError>
-    where
-        Caller: InstanceForImportedOperations,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn add_float32(caller: &mut Caller, first: f32, second: f32) -> Result<f32, RuntimeError> {
         ImportedOperations::new(caller).add_float32(first, second)
     }
 
-    fn add_float64<Caller>(caller: &mut Caller, first: f64, second: f64) -> Result<f64, RuntimeError>
-    where
-        Caller: InstanceForImportedOperations,
-        <Caller::Runtime as Runtime>::Memory: RuntimeMemory<Caller>,
-    {
+    fn add_float64(caller: &mut Caller, first: f64, second: f64) -> Result<f64, RuntimeError> {
         ImportedOperations::new(caller).add_float64(first, second)
     }
 }
@@ -464,9 +341,9 @@ where
     InstanceFactory::Instance: InstanceForEntrypoint,
     <<InstanceFactory::Instance as Instance>::Runtime as Runtime>::Memory:
         RuntimeMemory<InstanceFactory::Instance>,
-    ExportedOperations: ExportTo<InstanceFactory::Builder>,
+    ExportedOperations<InstanceFactory::Caller<'static>>: ExportTo<InstanceFactory::Builder>,
 {
-    let instance = factory.load_test_module::<ExportedOperations>("reentrancy", "operations");
+    let instance = factory.load_test_module::<ExportedOperations<_>>("reentrancy", "operations");
 
     Entrypoint::new(instance)
         .entrypoint()
