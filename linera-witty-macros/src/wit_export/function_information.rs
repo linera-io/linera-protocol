@@ -26,9 +26,9 @@ pub struct FunctionInformation<'input> {
 impl<'input> FunctionInformation<'input> {
     /// Parses a function definition from an [`ImplItem`] and collects pieces of information into a
     /// [`FunctionInformation`] instance.
-    pub fn from_item(item: &'input ImplItem) -> Self {
+    pub fn from_item(item: &'input ImplItem, caller_type_parameter: Option<&'input Ident>) -> Self {
         match item {
-            ImplItem::Method(function) => FunctionInformation::new(function),
+            ImplItem::Method(function) => FunctionInformation::new(function, caller_type_parameter),
             ImplItem::Const(const_item) => abort!(
                 const_item.ident,
                 "Const items are not supported in exported types"
@@ -47,9 +47,10 @@ impl<'input> FunctionInformation<'input> {
 
     /// Parses a function definition and collects pieces of information into a
     /// [`FunctionInformation`] instance.
-    pub fn new(function: &'input ImplItemMethod) -> Self {
+    pub fn new(function: &'input ImplItemMethod, caller_type: Option<&'input Ident>) -> Self {
         let wit_name = function.sig.ident.to_string().to_kebab_case();
-        let is_reentrant = Self::is_reentrant(&function.sig);
+        let is_reentrant = Self::is_reentrant(&function.sig)
+            || Self::uses_caller_parameter(&function.sig, caller_type);
         let (parameter_bindings, parameter_types) =
             Self::parse_parameters(is_reentrant, function.sig.inputs.iter());
         let (results, is_fallible) = Self::parse_output(&function.sig.output);
@@ -81,6 +82,22 @@ impl<'input> FunctionInformation<'input> {
             return false;
         };
 
+        Self::first_parameter_is_caller(signature, &generic_type.ident)
+    }
+
+    /// Checks if a function uses a `caller_type` in the first parameter.
+    ///
+    /// If it does, the function is assumed to be reentrant.
+    fn uses_caller_parameter(signature: &Signature, caller_type: Option<&Ident>) -> bool {
+        if let Some(caller_type) = caller_type {
+            Self::first_parameter_is_caller(signature, caller_type)
+        } else {
+            false
+        }
+    }
+
+    /// Checks if the type of a function's first parameter is the `caller_type`.
+    fn first_parameter_is_caller(signature: &Signature, caller_type: &Ident) -> bool {
         let Some(first_parameter) = signature.inputs.first() else {
             return false;
         };
@@ -109,7 +126,7 @@ impl<'input> FunctionInformation<'input> {
             return false;
         };
 
-        path.is_ident(&generic_type.ident)
+        path.is_ident(caller_type)
     }
 
     /// Parses a function's parameters and returns the generated code with a list ofbindings to the
