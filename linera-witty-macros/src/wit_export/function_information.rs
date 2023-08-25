@@ -8,8 +8,9 @@ use proc_macro2::{Span, TokenStream};
 use proc_macro_error::abort;
 use quote::{quote, quote_spanned, ToTokens};
 use syn::{
-    spanned::Spanned, FnArg, GenericArgument, GenericParam, ImplItem, ImplItemMethod, LitStr, Path,
-    PathArguments, PathSegment, ReturnType, Signature, Token, Type, TypePath,
+    spanned::Spanned, FnArg, GenericArgument, GenericParam, Ident, ImplItem, ImplItemMethod,
+    LitStr, PatType, Path, PathArguments, PathSegment, ReturnType, Signature, Token, Type,
+    TypePath, TypeReference,
 };
 
 /// Pieces of information extracted from a function's definition.
@@ -22,10 +23,12 @@ pub struct FunctionInformation<'input> {
     interface_type: TokenStream,
 }
 
-impl<'input> From<&'input ImplItem> for FunctionInformation<'input> {
-    fn from(item: &'input ImplItem) -> Self {
+impl<'input> FunctionInformation<'input> {
+    /// Parses a function definition from an [`ImplItem`] and collects pieces of information into a
+    /// [`FunctionInformation`] instance.
+    pub fn from_item(item: &'input ImplItem, caller_type_parameter: Option<&'input Ident>) -> Self {
         match item {
-            ImplItem::Method(function) => FunctionInformation::new(function),
+            ImplItem::Method(function) => FunctionInformation::new(function, caller_type_parameter),
             ImplItem::Const(const_item) => abort!(
                 const_item.ident,
                 "Const items are not supported in exported types"
@@ -41,14 +44,13 @@ impl<'input> From<&'input ImplItem> for FunctionInformation<'input> {
             _ => abort!(item, "Only function items are supported in exported types"),
         }
     }
-}
 
-impl<'input> FunctionInformation<'input> {
     /// Parses a function definition and collects pieces of information into a
     /// [`FunctionInformation`] instance.
-    pub fn new(function: &'input ImplItemMethod) -> Self {
+    pub fn new(function: &'input ImplItemMethod, caller_type: Option<&'input Ident>) -> Self {
         let wit_name = function.sig.ident.to_string().to_kebab_case();
-        let is_reentrant = Self::is_reentrant(&function.sig);
+        let is_reentrant = Self::is_reentrant(&function.sig)
+            || Self::uses_caller_parameter(&function.sig, caller_type);
         let (parameter_bindings, parameter_types) =
             Self::parse_parameters(is_reentrant, function.sig.inputs.iter());
         let (results, is_fallible) = Self::parse_output(&function.sig.output);
@@ -80,15 +82,51 @@ impl<'input> FunctionInformation<'input> {
             return false;
         };
 
-        let Some(FnArg::Typed(first_parameter)) = signature.inputs.first() else {
+        Self::first_parameter_is_caller(signature, &generic_type.ident)
+    }
+
+    /// Checks if a function uses a `caller_type` in the first parameter.
+    ///
+    /// If it does, the function is assumed to be reentrant.
+    fn uses_caller_parameter(signature: &Signature, caller_type: Option<&Ident>) -> bool {
+        if let Some(caller_type) = caller_type {
+            Self::first_parameter_is_caller(signature, caller_type)
+        } else {
+            false
+        }
+    }
+
+    /// Checks if the type of a function's first parameter is the `caller_type`.
+    fn first_parameter_is_caller(signature: &Signature, caller_type: &Ident) -> bool {
+        let Some(first_parameter) = signature.inputs.first() else {
             return false;
         };
 
-        let Type::Path(first_parameter_type) = &*first_parameter.ty else {
+        let FnArg::Typed(PatType {
+            ty: first_parameter_type,
+            ..
+        }) = first_parameter
+        else {
+            abort!(
+                first_parameter,
+                "`self` parameters aren't supported by Witty"
+            );
+        };
+
+        let Type::Reference(TypeReference {
+            mutability: Some(_),
+            elem: referenced_type,
+            ..
+        }) = &**first_parameter_type
+        else {
             return false;
         };
 
-        first_parameter_type.path == generic_type.ident.clone().into()
+        let Type::Path(TypePath { path, .. }) = &**referenced_type else {
+            return false;
+        };
+
+        path.is_ident(caller_type)
     }
 
     /// Parses a function's parameters and returns the generated code with a list ofbindings to the
@@ -127,7 +165,7 @@ impl<'input> FunctionInformation<'input> {
 
     /// Generates the code to export a host function using the Wasmer runtime.
     #[cfg(feature = "wasmer")]
-    pub fn generate_for_wasmer(&self, namespace: &LitStr) -> TokenStream {
+    pub fn generate_for_wasmer(&self, namespace: &LitStr, type_name: &Ident) -> TokenStream {
         let caller = quote! {
             linera_witty::wasmer::FunctionEnvMut<'_, linera_witty::wasmer::InstanceSlot>
         };
@@ -141,6 +179,7 @@ impl<'input> FunctionInformation<'input> {
 
         self.generate(
             namespace,
+            type_name,
             caller,
             input_to_guest_parameters,
             guest_results_to_output,
@@ -150,7 +189,7 @@ impl<'input> FunctionInformation<'input> {
 
     /// Generates the code to export a host function using the Wasmtime runtime.
     #[cfg(feature = "wasmtime")]
-    pub fn generate_for_wasmtime(&self, namespace: &LitStr) -> TokenStream {
+    pub fn generate_for_wasmtime(&self, namespace: &LitStr, type_name: &Ident) -> TokenStream {
         let caller = quote! { linera_witty::wasmtime::Caller<'_, ()> };
         let input_to_guest_parameters = quote! {
             linera_witty::wasmtime::WasmtimeParameters::from_wasmtime(input)
@@ -162,6 +201,7 @@ impl<'input> FunctionInformation<'input> {
 
         self.generate(
             namespace,
+            type_name,
             caller,
             input_to_guest_parameters,
             guest_results_to_output,
@@ -171,7 +211,7 @@ impl<'input> FunctionInformation<'input> {
 
     /// Generates the code to export a host function using a mock Wasm instance for testing.
     #[cfg(feature = "mock-instance")]
-    pub fn generate_for_mock_instance(&self, namespace: &LitStr) -> TokenStream {
+    pub fn generate_for_mock_instance(&self, namespace: &LitStr, type_name: &Ident) -> TokenStream {
         let caller = quote! { linera_witty::MockInstance };
         let input_to_guest_parameters = quote! { input };
         let guest_results_to_output = quote! { guest_results };
@@ -179,6 +219,7 @@ impl<'input> FunctionInformation<'input> {
 
         self.generate(
             namespace,
+            type_name,
             caller,
             input_to_guest_parameters,
             guest_results_to_output,
@@ -190,6 +231,7 @@ impl<'input> FunctionInformation<'input> {
     fn generate(
         &self,
         namespace: &LitStr,
+        type_name: &Ident,
         caller: TokenStream,
         input_to_guest_parameters: TokenStream,
         guest_results_to_output: TokenStream,
@@ -227,7 +269,7 @@ impl<'input> FunctionInformation<'input> {
                         )?;
 
                     #[allow(clippy::let_unit_value)]
-                    let host_results = Self::#function_name(
+                    let host_results = #type_name::#function_name(
                         #caller_parameter
                         #host_parameters
                     ) #call_early_return;
