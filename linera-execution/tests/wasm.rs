@@ -29,7 +29,7 @@ use test_case::test_case;
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, 30_453; "wasmer_with_sanitizer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, 30_453; "wasmtime"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer, 30_453; "wasmtime_with_sanitizer"))]
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_fuel_for_counter_wasm_application(
     wasm_runtime: WasmRuntime,
     expected_fuel: u64,

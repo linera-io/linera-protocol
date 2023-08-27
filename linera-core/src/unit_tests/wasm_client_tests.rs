@@ -36,7 +36,7 @@ use crate::client::client_tests::MakeScyllaDbStoreClient;
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
     run_test_create_application(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
@@ -44,7 +44,7 @@ async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> Result<(),
 #[cfg(feature = "rocksdb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_rocks_db_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
     run_test_create_application(MakeRocksDbStoreClient::with_wasm_runtime(wasm_runtime)).await
@@ -54,7 +54,7 @@ async fn test_rocks_db_create_application(wasm_runtime: WasmRuntime) -> Result<(
 #[cfg(feature = "aws")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_dynamo_db_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
     run_test_create_application(MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
@@ -63,7 +63,7 @@ async fn test_dynamo_db_create_application(wasm_runtime: WasmRuntime) -> Result<
 #[cfg(feature = "scylladb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_scylla_db_create_application(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
     run_test_create_application(MakeScyllaDbStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
@@ -143,7 +143,7 @@ where
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_memory_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
@@ -154,7 +154,7 @@ async fn test_memory_run_application_with_dependency(
 #[cfg(feature = "rocksdb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_rocks_db_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
@@ -169,7 +169,7 @@ async fn test_rocks_db_run_application_with_dependency(
 #[cfg(feature = "aws")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_dynamo_db_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
@@ -183,7 +183,7 @@ async fn test_dynamo_db_run_application_with_dependency(
 #[cfg(feature = "scylladb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_scylla_db_run_application_with_dependency(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
@@ -293,7 +293,7 @@ where
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_memory_run_reentrant_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
@@ -303,7 +303,7 @@ async fn test_memory_run_reentrant_application(
 #[cfg(feature = "rocksdb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_rocks_db_run_reentrant_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
@@ -315,7 +315,7 @@ async fn test_rocks_db_run_reentrant_application(
 #[cfg(feature = "aws")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_dynamo_db_run_reentrant_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
@@ -326,7 +326,7 @@ async fn test_dynamo_db_run_reentrant_application(
 #[cfg(feature = "scylladb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_scylla_db_run_reentrant_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
