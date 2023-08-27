@@ -21,8 +21,8 @@ use linera_base::{
 use linera_execution::{
     system::{Account, SystemMessage},
     ApplicationId, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, Message,
-    MessageContext, OperationContext, Query, QueryContext, RawExecutionResult, Response,
-    UserApplicationDescription, UserApplicationId,
+    MessageContext, OperationContext, Query, QueryContext, RawExecutionResult, RawOutgoingMessage,
+    Response, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     common::Context,
@@ -562,7 +562,12 @@ where
         // application.
         let mut recipients = HashSet::new();
         let mut channel_broadcasts = HashSet::new();
-        for (destination, authenticated, message) in raw_result.messages {
+        for RawOutgoingMessage {
+            destination,
+            authenticated,
+            message,
+        } in raw_result.messages
+        {
             match &destination {
                 Destination::Recipient(id) => {
                     recipients.insert(*id);

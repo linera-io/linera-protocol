@@ -113,8 +113,14 @@ record session-call-result {
     new-state: option<session-state>,
 }
 
+record outgoing-message {
+    destination: destination,
+    authenticated: bool,
+    message: list<u8>,
+}
+
 record execution-result {
-    messages: list<tuple<destination, bool, message>>,
+    messages: list<outgoing-message>,
     subscribe: list<tuple<channel-name, chain-id>>,
     unsubscribe: list<tuple<channel-name, chain-id>>,
 }
@@ -129,7 +135,6 @@ record channel-name {
 }
 
 type session-state = list<u8>
-type message = list<u8>
 
 record crypto-hash {
     part1: u64,

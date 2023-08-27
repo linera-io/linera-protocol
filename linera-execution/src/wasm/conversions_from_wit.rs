@@ -10,8 +10,8 @@
 
 use super::{contract, contract_system_api, service_system_api};
 use crate::{
-    ApplicationCallResult, ChannelName, Destination, RawExecutionResult, SessionCallResult,
-    SessionId, UserApplicationId,
+    ApplicationCallResult, ChannelName, Destination, RawExecutionResult, RawOutgoingMessage,
+    SessionCallResult, SessionId, UserApplicationId,
 };
 use linera_base::{
     crypto::CryptoHash,
@@ -42,14 +42,22 @@ impl From<contract::ApplicationCallResult> for ApplicationCallResult {
     }
 }
 
+impl From<contract::OutgoingMessage> for RawOutgoingMessage<Vec<u8>> {
+    fn from(message: contract::OutgoingMessage) -> Self {
+        Self {
+            destination: message.destination.into(),
+            authenticated: message.authenticated,
+            message: message.message,
+        }
+    }
+}
+
 impl From<contract::ExecutionResult> for RawExecutionResult<Vec<u8>> {
     fn from(result: contract::ExecutionResult) -> Self {
         let messages = result
             .messages
             .into_iter()
-            .map(|(destination, authenticated, message)| {
-                (destination.into(), authenticated, message)
-            })
+            .map(RawOutgoingMessage::from)
             .collect();
 
         let subscribe = result

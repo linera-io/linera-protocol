@@ -5,8 +5,8 @@ use crate::{
     runtime::{ApplicationStatus, ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
     ContractRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Message,
-    MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response,
-    SystemMessage, UserApplicationDescription, UserApplicationId,
+    MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
+    RawOutgoingMessage, Response, SystemMessage, UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
     ensure,
@@ -230,13 +230,13 @@ where
             .describe_applications_with_dependencies(vec![application_id], &Default::default())
             .await?;
         for message in &result.messages {
-            system_result.messages.push((
-                message.0.clone(),
-                false,
-                SystemMessage::RegisterApplications {
+            system_result.messages.push(RawOutgoingMessage {
+                destination: message.destination.clone(),
+                authenticated: false,
+                message: SystemMessage::RegisterApplications {
                     applications: applications.clone(),
                 },
-            ));
+            });
         }
         if !system_result.messages.is_empty() {
             results.push(ExecutionResult::System(system_result));

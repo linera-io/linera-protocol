@@ -403,6 +403,18 @@ pub enum Response {
     ),
 }
 
+/// A message together with routing information.
+#[derive(Debug)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct RawOutgoingMessage<Message> {
+    /// The destination of the message.
+    pub destination: Destination,
+    /// Whether the message is authenticated.
+    pub authenticated: bool,
+    /// The message itself.
+    pub message: Message,
+}
+
 /// Externally visible results of an execution. These results are meant in the context of
 /// the application that created them.
 #[derive(Debug)]
@@ -412,7 +424,7 @@ pub struct RawExecutionResult<Message> {
     pub authenticated_signer: Option<Owner>,
     /// Sends messages to the given destinations, possibly forwarding the authenticated
     /// signer.
-    pub messages: Vec<(Destination, bool, Message)>,
+    pub messages: Vec<RawOutgoingMessage<Message>>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(ChannelName, ChainId)>,
     /// Unsubscribe chains to channels.
