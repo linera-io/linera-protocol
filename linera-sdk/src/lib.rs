@@ -405,7 +405,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
         self.messages.push(OutgoingMessage {
             destination: destination.into(),
             authenticated: false,
-            is_skippable: true,
+            is_skippable: false,
             message,
         });
         self
@@ -420,7 +420,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
         self.messages.push(OutgoingMessage {
             destination: destination.into(),
             authenticated: true,
-            is_skippable: true,
+            is_skippable: false,
             message,
         });
         self
