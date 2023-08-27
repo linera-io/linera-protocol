@@ -79,7 +79,7 @@ A unique identifier for an application bytecode
 scalar BytecodeId
 
 type CertificateValue {
-	executedBlock: ExecutedBlock!
+	executedBlock: ExecutedBlock
 	status: String!
 }
 

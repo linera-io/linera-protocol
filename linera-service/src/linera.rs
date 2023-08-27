@@ -1195,12 +1195,7 @@ where
                     .await
                     .unwrap()
                     .into_iter()
-                    .map(|c| match c.value() {
-                        CertificateValue::ConfirmedBlock { executed_block, .. } => {
-                            executed_block.messages.len()
-                        }
-                        CertificateValue::ValidatedBlock { .. } => 0,
-                    })
+                    .filter_map(|c| c.value().executed_block().map(|e| e.messages.len()))
                     .sum::<usize>();
                 info!("Subscribed {} chains to new committees", n);
 

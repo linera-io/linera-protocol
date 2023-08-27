@@ -190,6 +190,7 @@ where
                     | CertificateValue::ValidatedBlock { executed_block, .. } => {
                         executed_block.block.bytecode_locations()
                     }
+                    CertificateValue::LeaderTimeout { .. } => HashMap::new(),
                 };
                 for location in locations {
                     if !required.contains_key(location) {

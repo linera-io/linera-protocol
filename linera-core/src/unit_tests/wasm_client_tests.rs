@@ -490,7 +490,8 @@ where
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await?;
 
-    assert!(cert.value().messages().iter().any(
+    let messages = cert.value().messages().unwrap();
+    assert!(messages.iter().any(
         |OutgoingMessage {
              destination,
              message,
@@ -513,7 +514,7 @@ where
         CertificateValue::ConfirmedBlock { executed_block, .. } => {
             &executed_block.block.incoming_messages
         }
-        CertificateValue::ValidatedBlock { .. } => panic!("Unexpected value"),
+        _ => panic!("Unexpected value"),
     };
     assert!(messages.iter().any(|msg| matches!(
         &msg.event.message,
@@ -544,7 +545,7 @@ where
         CertificateValue::ConfirmedBlock { executed_block, .. } => {
             &executed_block.block.incoming_messages
         }
-        CertificateValue::ValidatedBlock { .. } => panic!("Unexpected value"),
+        _ => panic!("Unexpected value"),
     };
     // The new block should _not_ contain another `RegisterApplications` message, because the
     // application is already registered.
@@ -692,7 +693,7 @@ where
         CertificateValue::ConfirmedBlock { executed_block, .. } => {
             &executed_block.block.incoming_messages
         }
-        CertificateValue::ValidatedBlock { .. } => panic!("Unexpected value"),
+        _ => panic!("Unexpected value"),
     };
     assert!(messages
         .iter()

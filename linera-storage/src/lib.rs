@@ -313,7 +313,10 @@ where
                 break;
             };
             let value = self.read_value(next_hash).await?;
-            hash = value.inner().executed_block().block.previous_block_hash;
+            let Some(executed_block) = value.inner().executed_block() else {
+                break;
+            };
+            hash = executed_block.block.previous_block_hash;
             result.push(value);
         }
         Ok(result)

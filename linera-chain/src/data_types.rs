@@ -183,21 +183,31 @@ pub struct ExecutedBlock {
 /// A statement to be certified by the validators.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
 pub enum CertificateValue {
-    ValidatedBlock { executed_block: ExecutedBlock },
-    ConfirmedBlock { executed_block: ExecutedBlock },
+    ValidatedBlock {
+        executed_block: ExecutedBlock,
+    },
+    ConfirmedBlock {
+        executed_block: ExecutedBlock,
+    },
+    LeaderTimeout {
+        chain_id: ChainId,
+        height: BlockHeight,
+        epoch: Epoch,
+    },
 }
 
 #[Object]
 impl CertificateValue {
     #[graphql(derived(name = "executed_block"))]
-    async fn _executed_block(&self) -> ExecutedBlock {
-        self.executed_block().clone()
+    async fn _executed_block(&self) -> Option<ExecutedBlock> {
+        self.executed_block().cloned()
     }
 
     async fn status(&self) -> String {
         match self {
             CertificateValue::ValidatedBlock { .. } => "validated".to_string(),
             CertificateValue::ConfirmedBlock { .. } => "confirmed".to_string(),
+            CertificateValue::LeaderTimeout { .. } => "timeout".to_string(),
         }
     }
 }
@@ -454,15 +464,31 @@ impl From<HashedValue> for CertificateValue {
 
 impl CertificateValue {
     pub fn chain_id(&self) -> ChainId {
-        self.executed_block().block.chain_id
+        match self {
+            CertificateValue::ConfirmedBlock { executed_block, .. }
+            | CertificateValue::ValidatedBlock { executed_block, .. } => {
+                executed_block.block.chain_id
+            }
+            CertificateValue::LeaderTimeout { chain_id, .. } => *chain_id,
+        }
     }
 
     pub fn height(&self) -> BlockHeight {
-        self.executed_block().block.height
+        match self {
+            CertificateValue::ConfirmedBlock { executed_block, .. }
+            | CertificateValue::ValidatedBlock { executed_block, .. } => {
+                executed_block.block.height
+            }
+            CertificateValue::LeaderTimeout { height, .. } => *height,
+        }
     }
 
     pub fn epoch(&self) -> Epoch {
-        self.executed_block().block.epoch
+        match self {
+            CertificateValue::ConfirmedBlock { executed_block, .. }
+            | CertificateValue::ValidatedBlock { executed_block, .. } => executed_block.block.epoch,
+            CertificateValue::LeaderTimeout { epoch, .. } => *epoch,
+        }
     }
 
     /// Creates a `HashedValue` without checking that this is the correct hash!
@@ -472,10 +498,15 @@ impl CertificateValue {
 
     /// Returns whether this value contains the message with the specified ID.
     pub fn has_message(&self, message_id: &MessageId) -> bool {
+        let Some(executed_block) = self.executed_block() else {
+            return false;
+        };
+        let Ok(index) = usize::try_from(message_id.index) else {
+            return false;
+        };
         self.height() == message_id.height
             && self.chain_id() == message_id.chain_id
-            && self.executed_block().messages.len()
-                > usize::try_from(message_id.index).unwrap_or(usize::MAX)
+            && executed_block.messages.len() > index
     }
 
     /// Skip `n-1` messages from the end of the block and return the message ID, if any.
@@ -483,7 +514,7 @@ impl CertificateValue {
         if n == 0 {
             return None;
         }
-        let message_count = self.executed_block().messages.len();
+        let message_count = self.executed_block()?.messages.len();
         Some(MessageId {
             chain_id: self.chain_id(),
             height: self.height(),
@@ -499,16 +530,26 @@ impl CertificateValue {
         matches!(self, CertificateValue::ValidatedBlock { .. })
     }
 
-    #[cfg(any(test, feature = "test"))]
-    pub fn messages(&self) -> &Vec<OutgoingMessage> {
-        &self.executed_block().messages
+    pub fn is_timeout(&self) -> bool {
+        matches!(self, CertificateValue::LeaderTimeout { .. })
     }
 
-    pub fn executed_block(&self) -> &ExecutedBlock {
+    #[cfg(any(test, feature = "test"))]
+    pub fn messages(&self) -> Option<&Vec<OutgoingMessage>> {
+        Some(&self.executed_block()?.messages)
+    }
+
+    pub fn executed_block(&self) -> Option<&ExecutedBlock> {
         match self {
             CertificateValue::ConfirmedBlock { executed_block, .. }
-            | CertificateValue::ValidatedBlock { executed_block, .. } => executed_block,
+            | CertificateValue::ValidatedBlock { executed_block, .. } => Some(executed_block),
+            CertificateValue::LeaderTimeout { .. } => None,
         }
+    }
+
+    pub fn block(&self) -> Option<&Block> {
+        self.executed_block()
+            .map(|executed_block| &executed_block.block)
     }
 }
 
@@ -534,15 +575,16 @@ impl HashedValue {
         }
     }
 
-    pub fn into_confirmed(self) -> HashedValue {
+    pub fn into_confirmed(self) -> Option<HashedValue> {
         match self.value {
-            value @ CertificateValue::ConfirmedBlock { .. } => HashedValue {
+            value @ CertificateValue::ConfirmedBlock { .. } => Some(HashedValue {
                 hash: self.hash,
                 value,
-            },
+            }),
             CertificateValue::ValidatedBlock { executed_block } => {
-                CertificateValue::ConfirmedBlock { executed_block }.into()
+                Some(CertificateValue::ConfirmedBlock { executed_block }.into())
             }
+            CertificateValue::LeaderTimeout { .. } => None,
         }
     }
 

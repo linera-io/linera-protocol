@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::{future, FutureExt};
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, BlockHeight, Timestamp},
+    data_types::{ArithmeticError, BlockHeight, RoundNumber, Timestamp},
     doc_scalar, ensure,
     identifiers::{ChainId, Owner},
 };
@@ -125,6 +125,10 @@ pub enum Reason {
     NewIncomingMessage {
         origin: Origin,
         height: BlockHeight,
+    },
+    NewRound {
+        height: BlockHeight,
+        round: RoundNumber,
     },
 }
 
@@ -615,7 +619,7 @@ where
     async fn process_validated_block(
         &mut self,
         certificate: Certificate,
-    ) -> Result<ChainInfoResponse, WorkerError> {
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let block = match certificate.value() {
             CertificateValue::ValidatedBlock {
                 executed_block: ExecutedBlock { block, .. },
@@ -638,33 +642,68 @@ where
             }
         );
         certificate.check(committee)?;
+        let mut actions = NetworkActions::default();
+        let next_round = chain.manager.get().next_round();
         if chain
             .tip_state
             .get()
             .already_validated_block(block.height)?
-            || chain
-                .manager
-                .get_mut()
-                .check_validated_block(&certificate)?
-                == ChainManagerOutcome::Skip
+            || chain.manager.get().check_validated_block(&certificate)? == ChainManagerOutcome::Skip
         {
             // If we just processed the same pending block, return the chain info unchanged.
-            return Ok(ChainInfoResponse::new(&chain, self.key_pair()));
+            return Ok((ChainInfoResponse::new(&chain, self.key_pair()), actions));
         }
-        if self
-            .cache_recent_value(Cow::Borrowed(&certificate.value))
-            .await
-        {
-            let value = certificate.value.clone().into_confirmed();
-            self.cache_recent_value(Cow::Owned(value)).await;
-        }
+        self.cache_validated(&certificate.value).await;
         chain
             .manager
             .get_mut()
-            .create_final_vote(certificate, self.key_pair());
+            .create_final_vote(certificate.clone(), self.key_pair());
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
-        Ok(info)
+        if chain.manager.get().next_round() > next_round {
+            actions.notifications.push(Notification {
+                chain_id: block.chain_id,
+                reason: Reason::NewRound {
+                    height: block.height,
+                    round: chain.manager.get().next_round(),
+                },
+            })
+        }
+        self.cache_validated(&certificate.value).await;
+        Ok((info, actions))
+    }
+
+    /// Processes a leader timeout issued from a multi-owner chain.
+    async fn process_leader_timeout(
+        &mut self,
+        certificate: Certificate,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        let (chain_id, _height, epoch) = match certificate.value() {
+            CertificateValue::LeaderTimeout {
+                chain_id,
+                height,
+                epoch,
+                ..
+            } => (*chain_id, *height, *epoch),
+            _ => panic!("Expecting a leader timeout certificate"),
+        };
+        // Check that the chain is active and ready for this confirmation.
+        // Verify the certificate. Returns a catch-all error to make client code more robust.
+        let chain = self.storage.load_active_chain(chain_id).await?;
+        let (current_epoch, committee) = chain
+            .execution_state
+            .system
+            .current_committee()
+            .expect("chain is active");
+        ensure!(
+            epoch == current_epoch,
+            WorkerError::InvalidEpoch { chain_id, epoch }
+        );
+        certificate.check(committee)?;
+        // TODO(#464): Handle timeout in chain manager.
+        let actions = NetworkActions::default();
+        let info = ChainInfoResponse::new(&chain, self.key_pair());
+        Ok((info, actions))
     }
 
     async fn process_cross_chain_update(
@@ -744,6 +783,15 @@ where
         true
     }
 
+    /// Caches the validated block and the corresponding confirmed block.
+    async fn cache_validated(&mut self, value: &HashedValue) {
+        if self.cache_recent_value(Cow::Borrowed(value)).await {
+            if let Some(value) = value.clone().into_confirmed() {
+                self.cache_recent_value(Cow::Owned(value)).await;
+            }
+        }
+    }
+
     /// Returns a stored [`Certificate`] for a chain's block.
     #[cfg(any(test, feature = "test"))]
     pub async fn read_certificate(
@@ -783,29 +831,29 @@ where
         chain_id: ChainId,
         message_id: MessageId,
     ) -> Result<Option<IncomingMessage>, WorkerError> {
-        let Some(certificate) = self
-            .read_certificate(message_id.chain_id, message_id.height)
-            .await?
-        else {
-            return Ok(None);
-        };
-
+        let sender = message_id.chain_id;
         let index = usize::try_from(message_id.index).map_err(|_| ArithmeticError::Overflow)?;
-        let Some(outgoing_message) = certificate.value().messages().get(index).cloned() else {
+        let Some(certificate) = self.read_certificate(sender, message_id.height).await? else {
+            return Ok(None);
+        };
+        let Some(messages) = certificate.value().messages() else {
+            return Ok(None);
+        };
+        let Some(outgoing_message) = messages.get(index).cloned() else {
             return Ok(None);
         };
 
-        let application_id = outgoing_message.message.application_id();
-        let origin = Origin {
-            sender: message_id.chain_id,
-            medium: match outgoing_message.destination {
-                Destination::Recipient(_) => Medium::Direct,
-                Destination::Subscribers(name) => Medium::Channel(ChannelFullName {
+        let medium = match outgoing_message.destination {
+            Destination::Recipient(_) => Medium::Direct,
+            Destination::Subscribers(name) => {
+                let application_id = outgoing_message.message.application_id();
+                Medium::Channel(ChannelFullName {
                     application_id,
                     name,
-                }),
-            },
+                })
+            }
         };
+        let origin = Origin { sender, medium };
 
         let mut chain = self.storage.load_active_chain(chain_id).await?;
         let mut inbox = chain.inboxes.try_load_entry_mut(&origin).await?;
@@ -962,9 +1010,7 @@ where
         let (info, actions) = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                self.process_validated_block(certificate)
-                    .await
-                    .map(|info| (info, NetworkActions::default()))?
+                self.process_validated_block(certificate).await?
             }
             CertificateValue::ConfirmedBlock { .. } => {
                 // Execute the confirmed block.
@@ -974,6 +1020,10 @@ where
                     notify_when_messages_are_delivered,
                 )
                 .await?
+            }
+            CertificateValue::LeaderTimeout { .. } => {
+                // Handle the leader timeout.
+                self.process_leader_timeout(certificate).await?
             }
         };
         Ok((info, actions))

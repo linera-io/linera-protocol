@@ -375,7 +375,11 @@ impl ActiveChain {
                 .expect("Failed to load certificate to search for bytecode location")
                 .expect("Bytecode location not found");
 
-            let message_index = certificate.value().messages().iter().position(|message| {
+            let messages = certificate
+                .value()
+                .messages()
+                .expect("Unexpected certificate value");
+            let message_index = messages.iter().position(|message| {
                 matches!(
                     &message.message,
                     Message::System(SystemMessage::BytecodeLocations { locations })

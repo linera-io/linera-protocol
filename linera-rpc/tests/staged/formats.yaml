@@ -115,6 +115,15 @@ CertificateValue:
         STRUCT:
           - executed_block:
               TYPENAME: ExecutedBlock
+    2:
+      LeaderTimeout:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - height:
+              TYPENAME: BlockHeight
+          - epoch:
+              TYPENAME: Epoch
 ChainAndHeight:
   STRUCT:
     - chain_id:

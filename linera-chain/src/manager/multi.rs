@@ -17,6 +17,7 @@ use linera_base::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tracing::error;
 
 /// The specific state of a chain managed by multiple owners.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -78,7 +79,9 @@ impl MultiOwnerManager {
             .chain(&self.locked)
             .max_by_key(|cert| cert.round)
         {
-            let block = &locked.value().executed_block().block;
+            let block = locked.value().block().ok_or_else(|| {
+                ChainError::InternalError("locked certificate must contain block".to_string())
+            })?;
             ensure!(
                 locked.round < new_round && block == new_block,
                 ChainError::HasLockedBlock(block.height, locked.round)
@@ -88,12 +91,12 @@ impl MultiOwnerManager {
     }
 
     pub fn check_validated_block(&self, certificate: &Certificate) -> Result<Outcome, ChainError> {
-        let new_block = &certificate.value().executed_block().block;
+        let new_block = certificate.value().block();
         let new_round = certificate.round;
         if let Some(Vote { value, round, .. }) = &self.pending {
             match value.inner() {
                 CertificateValue::ConfirmedBlock { executed_block } => {
-                    if executed_block.block == *new_block && *round == new_round {
+                    if Some(&executed_block.block) == new_block && *round == new_round {
                         return Ok(Outcome::Skip);
                     }
                 }
@@ -101,6 +104,11 @@ impl MultiOwnerManager {
                     new_round >= *round,
                     ChainError::InsufficientRound(round.try_sub_one().unwrap())
                 ),
+                CertificateValue::LeaderTimeout { .. } => {
+                    return Err(ChainError::InternalError(
+                        "pending can only be validated or confirmed block".to_string(),
+                    ))
+                }
             }
         }
         if let Some(Certificate { round, .. }) = &self.locked {
@@ -138,7 +146,10 @@ impl MultiOwnerManager {
     pub fn create_final_vote(&mut self, certificate: Certificate, key_pair: Option<&KeyPair>) {
         // Record validity certificate. This is important to keep track of rounds
         // for non-voting nodes.
-        let value = certificate.value.clone().into_confirmed();
+        let Some(value) = certificate.value.clone().into_confirmed() else {
+            error!("Unexpected certificate; expected ValidatedBlock");
+            return;
+        };
         let round = certificate.round;
         self.locked = Some(certificate);
         if let Some(key_pair) = key_pair {

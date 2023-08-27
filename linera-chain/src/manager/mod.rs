@@ -139,6 +139,13 @@ impl ChainManager {
             ChainManager::None | ChainManager::Single(_) => panic!("unexpected chain manager"),
         }
     }
+
+    pub fn handle_timeout_certificate(&mut self, _: Certificate) {
+        match self {
+            ChainManager::Multi(_) => {}
+            ChainManager::None | ChainManager::Single(_) => panic!("unexpected chain manager"),
+        }
+    }
 }
 
 /// Chain manager information that is included in `ChainInfo` sent to clients.
@@ -180,7 +187,7 @@ impl ChainManagerInfo {
         match self {
             ChainManagerInfo::Single(single) => single.pending.as_ref(),
             ChainManagerInfo::Multi(multi) => multi.pending.as_ref(),
-            _ => None,
+            ChainManagerInfo::None => None,
         }
     }
 
@@ -194,7 +201,7 @@ impl ChainManagerInfo {
     pub fn next_round(&self) -> RoundNumber {
         match self {
             ChainManagerInfo::Multi(multi) => multi.next_round(),
-            _ => RoundNumber::default(),
+            ChainManagerInfo::None | ChainManagerInfo::Single(_) => RoundNumber::default(),
         }
     }
 }

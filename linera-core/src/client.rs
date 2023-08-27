@@ -368,11 +368,11 @@ where
         Ok(self.key_pair().await?.public())
     }
 
-    async fn get_local_next_block_height(
+    async fn local_chain_info(
         this: Arc<Mutex<Self>>,
         chain_id: ChainId,
         local_node: &mut LocalNodeClient<S>,
-    ) -> Option<BlockHeight> {
+    ) -> Option<ChainInfo> {
         let mut guard = this.lock().await;
         let Ok(info) = local_node.local_chain_info(chain_id).await else {
             error!("Fail to read local chain info for {chain_id}");
@@ -380,6 +380,15 @@ where
         };
         // Useful in case `chain_id` is the same as the local chain.
         guard.update_from_info(&info);
+        Some(info)
+    }
+
+    async fn local_next_block_height(
+        this: Arc<Mutex<Self>>,
+        chain_id: ChainId,
+        local_node: &mut LocalNodeClient<S>,
+    ) -> Option<BlockHeight> {
+        let info = Self::local_chain_info(this, chain_id, local_node).await?;
         Some(info.next_block_height)
     }
 
@@ -395,8 +404,7 @@ where
     {
         match notification.reason {
             Reason::NewIncomingMessage { origin, height } => {
-                if Self::get_local_next_block_height(this.clone(), origin.sender, &mut local_node)
-                    .await
+                if Self::local_next_block_height(this.clone(), origin.sender, &mut local_node).await
                     > Some(height)
                 {
                     debug!("Accepting redundant notification for new message");
@@ -408,7 +416,7 @@ where
                     error!("Fail to process notification: {e}");
                     return false;
                 }
-                if Self::get_local_next_block_height(this, origin.sender, &mut local_node).await
+                if Self::local_next_block_height(this, origin.sender, &mut local_node).await
                     <= Some(height)
                 {
                     error!("Fail to synchronize new message after notification");
@@ -417,7 +425,7 @@ where
             }
             Reason::NewBlock { height, hash } => {
                 let chain_id = notification.chain_id;
-                if Self::get_local_next_block_height(this.clone(), chain_id, &mut local_node).await
+                if Self::local_next_block_height(this.clone(), chain_id, &mut local_node).await
                     > Some(height)
                 {
                     debug!("Accepting redundant notification for new block");
@@ -428,7 +436,7 @@ where
                     .await
                 {
                     Ok(()) => {
-                        if Self::get_local_next_block_height(this, chain_id, &mut local_node).await
+                        if Self::local_next_block_height(this, chain_id, &mut local_node).await
                             <= Some(height)
                         {
                             error!("Fail to synchronize new block after notification");
@@ -458,6 +466,34 @@ where
                         error!("Fail to process notification: {e}");
                         return false;
                     }
+                }
+            }
+            Reason::NewRound { height, round } => {
+                let chain_id = notification.chain_id;
+                if let Some(info) =
+                    Self::local_chain_info(this.clone(), chain_id, &mut local_node).await
+                {
+                    if (info.next_block_height, info.manager.next_round()) >= (height, round) {
+                        debug!("Accepting redundant notification for new round");
+                        return true;
+                    }
+                }
+                if let Err(error) = local_node
+                    .try_synchronize_chain_state_from(name, node, chain_id)
+                    .await
+                {
+                    error!("Fail to process notification: {error}");
+                    return false;
+                }
+                let Some(info) =
+                    Self::local_chain_info(this.clone(), chain_id, &mut local_node).await
+                else {
+                    error!("Fail to read local chain info for {chain_id}");
+                    return false;
+                };
+                if (info.next_block_height, info.manager.next_round()) < (height, round) {
+                    error!("Fail to synchronize new block after notification");
+                    return false;
                 }
             }
         }
@@ -616,7 +652,10 @@ where
             }
             CommunicateAction::FinalizeBlock(validity_certificate) => {
                 let round = validity_certificate.round;
-                (validity_certificate.value.into_confirmed(), round)
+                let Some(conf_value) = validity_certificate.value.into_confirmed() else {
+                    bail!("Unexpected certificate value for finalized block");
+                };
+                (conf_value, round)
             }
             CommunicateAction::AdvanceToNextBlockHeight(_) => {
                 return match result {
@@ -1002,7 +1041,7 @@ where
         // TODO(#66): return the block that should be proposed instead
         if let Some(validated) = &validated {
             ensure!(
-                validated.value().executed_block().block == block,
+                validated.value().block() == Some(&block),
                 "A different block has already been validated at this height"
             );
         }
