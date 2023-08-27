@@ -81,6 +81,8 @@ pub(crate) enum InboxError {
     UnexpectedEvent { event: Event, previous_event: Event },
     #[error("{event:?} is out of order. Block and height should be at least: {next_cursor:?}")]
     IncorrectOrder { event: Event, next_cursor: Cursor },
+    #[error("{event:?} cannot be skipped: it must be received before the next messages from the same origin")]
+    UnskippableEvent { event: Event },
 }
 
 impl From<&Event> for Cursor {
@@ -127,6 +129,11 @@ impl From<(ChainId, Origin, InboxError)> for ChainError {
                     next_index: next_cursor.index,
                 }
             }
+            InboxError::UnskippableEvent { event } => ChainError::UnskippableMessage {
+                chain_id,
+                origin: origin.into(),
+                event,
+            },
         }
     }
 }
@@ -147,6 +154,7 @@ where
         }
     }
 
+    /// Consume an event from the inbox.
     pub(crate) async fn remove_event(&mut self, event: &Event) -> Result<(), InboxError> {
         // Record the latest cursor.
         let cursor = Cursor::from(event);
@@ -162,6 +170,12 @@ where
             if Cursor::from(&previous_event) >= cursor {
                 break;
             }
+            ensure!(
+                previous_event.is_skippable,
+                InboxError::UnskippableEvent {
+                    event: previous_event
+                }
+            );
             self.added_events.delete_front();
             tracing::trace!("Skipping previously received event {:?}", previous_event);
         }
@@ -169,7 +183,7 @@ where
         match self.added_events.front().await? {
             Some(previous_event) => {
                 // Rationale: If the two cursors are equal, then the events should match.
-                // Otherwise, we have that `self.next_cursor_to_add >
+                // Otherwise, at this point we know that `self.next_cursor_to_add >
                 // Cursor::from(&previous_event) > cursor`. Notably, `event` will never be
                 // added in the future. Therefore, we should fail instead of adding
                 // it to `self.removed_events`.
@@ -192,6 +206,8 @@ where
         Ok(())
     }
 
+    /// Push an event to the inbox. The verifications should not fail in production unless
+    /// many validators are faulty.
     pub(crate) async fn add_event(&mut self, event: Event) -> Result<(), InboxError> {
         // Record the latest cursor.
         let cursor = Cursor::from(&event);
@@ -220,7 +236,7 @@ where
                     // The receiver has already executed a later event from the same
                     // sender ahead of time so we should skip this one.
                     ensure!(
-                        cursor < Cursor::from(&previous_event),
+                        cursor < Cursor::from(&previous_event) && event.is_skippable,
                         InboxError::UnexpectedEvent {
                             previous_event,
                             event,
