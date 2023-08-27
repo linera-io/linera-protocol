@@ -43,9 +43,9 @@ use {
 use {
     linera_storage::DynamoDbStoreClient,
     linera_views::dynamo_db::{
-        TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES, TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
+        LocalStackTestContext, TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES,
+        TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
     },
-    linera_views::test_utils::LocalStackTestContext,
 };
 
 #[cfg(feature = "scylladb")]

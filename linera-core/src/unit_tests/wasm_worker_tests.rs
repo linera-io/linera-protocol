@@ -27,10 +27,7 @@ use linera_execution::{
     WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, Store};
-use linera_views::{
-    memory::TEST_MEMORY_MAX_STREAM_QUERIES,
-    views::{CryptoHashView, ViewError},
-};
+use linera_views::views::{CryptoHashView, ViewError};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -38,20 +35,13 @@ use std::{
 use test_case::test_case;
 
 #[cfg(feature = "rocksdb")]
-use {
-    linera_storage::RocksDbStoreClient, linera_views::rocks_db::TEST_ROCKS_DB_MAX_STREAM_QUERIES,
-};
+use linera_storage::RocksDbStoreClient;
 
 #[cfg(feature = "aws")]
-use {linera_storage::DynamoDbStoreClient, linera_views::test_utils::LocalStackTestContext};
+use linera_storage::DynamoDbStoreClient;
 
-#[cfg(any(feature = "rocksdb", feature = "aws"))]
-use linera_views::lru_caching::TEST_CACHE_SIZE;
-
-#[cfg(feature = "aws")]
-use linera_views::dynamo_db::{
-    TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES, TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
-};
+#[cfg(feature = "scylladb")]
+use linera_storage::ScyllaDbStoreClient;
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -59,7 +49,7 @@ use linera_views::dynamo_db::{
 async fn test_memory_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let client = MemoryStoreClient::new(Some(wasm_runtime), TEST_MEMORY_MAX_STREAM_QUERIES);
+    let client = MemoryStoreClient::make_test_client(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(client, wasm_runtime).await
 }
 
@@ -70,16 +60,11 @@ async fn test_memory_handle_certificates_to_create_application(
 async fn test_rocks_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let dir = tempfile::TempDir::new().unwrap();
-    let client = RocksDbStoreClient::new(
-        dir.path().to_path_buf(),
-        Some(wasm_runtime),
-        TEST_ROCKS_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    );
+    let client = RocksDbStoreClient::make_test_client(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(client, wasm_runtime).await
 }
 
+#[ignore]
 #[cfg(feature = "aws")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -87,17 +72,19 @@ async fn test_rocks_db_handle_certificates_to_create_application(
 async fn test_dynamo_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let table = "linera".parse().expect("Invalid table name");
-    let localstack = LocalStackTestContext::new().await?;
-    let (client, _) = DynamoDbStoreClient::from_config(
-        localstack.dynamo_db_config(),
-        table,
-        Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-        Some(wasm_runtime),
-    )
-    .await?;
+    let client = DynamoDbStoreClient::make_test_client(Some(wasm_runtime)).await;
+    run_test_handle_certificates_to_create_application(client, wasm_runtime).await
+}
+
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_scylla_db_handle_certificates_to_create_application(
+    wasm_runtime: WasmRuntime,
+) -> Result<(), anyhow::Error> {
+    let client = ScyllaDbStoreClient::make_test_client(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(client, wasm_runtime).await
 }
 

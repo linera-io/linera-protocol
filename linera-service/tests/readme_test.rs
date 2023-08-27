@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(feature = "aws")]
-use linera_views::test_utils::LocalStackTestContext;
+use linera_views::dynamo_db::LocalStackTestContext;
 use once_cell::sync::Lazy;
 use std::io::Write;
 use tempfile::tempdir;

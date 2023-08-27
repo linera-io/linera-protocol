@@ -48,8 +48,7 @@ pub const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
 #[derive(Clone)]
 pub struct ScyllaDbClientInternal {
     client: Arc<ScyllaDbClientPair>,
-    count: Arc<Semaphore>,
-    max_concurrent_queries: Option<usize>,
+    semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
 }
 
@@ -143,9 +142,9 @@ impl KeyValueStoreClient for ScyllaDbClientInternal {
 impl ScyllaDbClientInternal {
     /// Obtains the semaphore lock on the database if needed.
     async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
-        match self.max_concurrent_queries {
+        match &self.semaphore {
             None => None,
-            Some(_max_concurrent_queries) => Some(self.count.acquire().await),
+            Some(count) => Some(count.acquire().await),
         }
     }
 
@@ -358,12 +357,10 @@ impl ScyllaDbClientInternal {
         }
         let client = (session, table_name);
         let client = Arc::new(client);
-        let n = max_concurrent_queries.unwrap_or(1);
-        let count = Arc::new(Semaphore::new(n));
+        let semaphore = max_concurrent_queries.map(|n| Arc::new(Semaphore::new(n)));
         Ok(ScyllaDbClientInternal {
             client,
-            count,
-            max_concurrent_queries,
+            semaphore,
             max_stream_queries,
         })
     }
