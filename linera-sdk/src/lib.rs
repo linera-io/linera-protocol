@@ -360,6 +360,18 @@ pub struct QueryContext {
     pub chain_id: ChainId,
 }
 
+/// A message together with routing information.
+#[derive(Debug, Deserialize, Serialize)]
+#[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
+pub struct OutgoingMessage<Message> {
+    /// The destination of the message.
+    pub destination: Destination,
+    /// Whether the message is authenticated.
+    pub authenticated: bool,
+    /// The message itself.
+    pub message: Message,
+}
+
 /// Externally visible results of an execution. These results are meant in the context of
 /// the application that created them.
 #[derive(Debug, Deserialize, Serialize)]
@@ -367,7 +379,7 @@ pub struct QueryContext {
 pub struct ExecutionResult<Message> {
     /// Sends messages to the given destinations, possibly forwarding the authenticated
     /// signer.
-    pub messages: Vec<(Destination, bool, Message)>,
+    pub messages: Vec<OutgoingMessage<Message>>,
     /// Subscribe chains to channels.
     pub subscribe: Vec<(ChannelName, ChainId)>,
     /// Unsubscribe chains to channels.
@@ -387,7 +399,11 @@ impl<Message> Default for ExecutionResult<Message> {
 impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
     /// Adds a message to the execution result.
     pub fn with_message(mut self, destination: impl Into<Destination>, message: Message) -> Self {
-        self.messages.push((destination.into(), false, message));
+        self.messages.push(OutgoingMessage {
+            destination: destination.into(),
+            authenticated: false,
+            message,
+        });
         self
     }
 
@@ -397,7 +413,11 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
         destination: impl Into<Destination>,
         message: Message,
     ) -> Self {
-        self.messages.push((destination.into(), true, message));
+        self.messages.push(OutgoingMessage {
+            destination: destination.into(),
+            authenticated: true,
+            message,
+        });
         self
     }
 }

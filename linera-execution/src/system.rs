@@ -6,7 +6,7 @@ use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChainOwnership, ChannelName,
     ChannelSubscription, Destination, MessageContext, OperationContext, QueryContext,
-    RawExecutionResult, UserApplicationDescription, UserApplicationId,
+    RawExecutionResult, RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
 };
 use async_graphql::Enum;
 use custom_debug_derive::Debug;
@@ -478,28 +478,28 @@ where
                         epoch: *epoch
                     }
                 );
-                let e1 = (
-                    Destination::Recipient(child_id),
-                    false,
-                    SystemMessage::OpenChain {
+                let e1 = RawOutgoingMessage {
+                    destination: Destination::Recipient(child_id),
+                    authenticated: false,
+                    message: SystemMessage::OpenChain {
                         ownership: ownership.clone(),
                         committees: committees.clone(),
                         admin_id: *admin_id,
                         epoch: *epoch,
                     },
-                );
+                };
                 let subscription = ChannelSubscription {
                     chain_id: *admin_id,
                     name: SystemChannel::Admin.name(),
                 };
-                let e2 = (
-                    Destination::Recipient(*admin_id),
-                    false,
-                    SystemMessage::Subscribe {
+                let e2 = RawOutgoingMessage {
+                    destination: Destination::Recipient(*admin_id),
+                    authenticated: false,
+                    message: SystemMessage::Subscribe {
                         id: child_id,
                         subscription,
                     },
-                );
+                };
                 result.messages.extend([e1, e2]);
             }
             ChangeOwner { new_public_key } => {
@@ -514,14 +514,15 @@ where
                 // Unsubscribe to all channels.
                 self.subscriptions
                     .for_each_index(|subscription| {
-                        result.messages.push((
-                            Destination::Recipient(subscription.chain_id),
-                            false,
-                            SystemMessage::Unsubscribe {
+                        let message = RawOutgoingMessage {
+                            destination: Destination::Recipient(subscription.chain_id),
+                            authenticated: false,
+                            message: SystemMessage::Unsubscribe {
                                 id: context.chain_id,
                                 subscription,
                             },
-                        ));
+                        };
+                        result.messages.push(message);
                         Ok(())
                     })
                     .await?;
@@ -555,14 +556,15 @@ where
                 );
                 balance.try_sub_assign(*amount)?;
                 if let Recipient::Account(account) = recipient {
-                    result.messages.push((
-                        Destination::Recipient(account.chain_id),
-                        false,
-                        SystemMessage::Credit {
+                    let message = RawOutgoingMessage {
+                        destination: Destination::Recipient(account.chain_id),
+                        authenticated: false,
+                        message: SystemMessage::Credit {
                             amount: *amount,
                             account: *account,
                         },
-                    ));
+                    };
+                    result.messages.push(message);
                 }
             }
             Claim {
@@ -580,10 +582,10 @@ where
                     *amount > Amount::zero(),
                     SystemExecutionError::IncorrectClaimAmount
                 );
-                result.messages.push((
-                    Destination::Recipient(*target),
-                    true,
-                    SystemMessage::Withdraw {
+                let message = RawOutgoingMessage {
+                    destination: Destination::Recipient(*target),
+                    authenticated: true,
+                    message: SystemMessage::Withdraw {
                         amount: *amount,
                         account: Account {
                             chain_id: *target,
@@ -592,7 +594,8 @@ where
                         user_data: user_data.clone(),
                         recipient: *recipient,
                     },
-                ));
+                };
+                result.messages.push(message);
             }
             Admin(admin_operation) => {
                 ensure!(
@@ -607,28 +610,30 @@ where
                         );
                         self.committees.get_mut().insert(*epoch, committee.clone());
                         self.epoch.set(Some(*epoch));
-                        result.messages.push((
-                            Destination::Subscribers(SystemChannel::Admin.name()),
-                            false,
-                            SystemMessage::SetCommittees {
+                        let message = RawOutgoingMessage {
+                            destination: Destination::Subscribers(SystemChannel::Admin.name()),
+                            authenticated: false,
+                            message: SystemMessage::SetCommittees {
                                 epoch: *epoch,
                                 committees: self.committees.get().clone(),
                             },
-                        ));
+                        };
+                        result.messages.push(message);
                     }
                     AdminOperation::RemoveCommittee { epoch } => {
                         ensure!(
                             self.committees.get_mut().remove(epoch).is_some(),
                             SystemExecutionError::InvalidCommitteeRemoval
                         );
-                        result.messages.push((
-                            Destination::Subscribers(SystemChannel::Admin.name()),
-                            false,
-                            SystemMessage::SetCommittees {
+                        let message = RawOutgoingMessage {
+                            destination: Destination::Subscribers(SystemChannel::Admin.name()),
+                            authenticated: false,
+                            message: SystemMessage::SetCommittees {
                                 epoch: self.epoch.get().expect("chain is active"),
                                 committees: self.committees.get().clone(),
                             },
-                        ));
+                        };
+                        result.messages.push(message);
                     }
                 }
             }
@@ -652,14 +657,15 @@ where
                     SystemExecutionError::NoSuchChannel(context.chain_id, *channel)
                 );
                 self.subscriptions.insert(&subscription)?;
-                result.messages.push((
-                    Destination::Recipient(*chain_id),
-                    false,
-                    SystemMessage::Subscribe {
+                let message = RawOutgoingMessage {
+                    destination: Destination::Recipient(*chain_id),
+                    authenticated: false,
+                    message: SystemMessage::Subscribe {
                         id: context.chain_id,
                         subscription,
                     },
-                ));
+                };
+                result.messages.push(message);
             }
             Unsubscribe { chain_id, channel } => {
                 let subscription = ChannelSubscription {
@@ -671,25 +677,27 @@ where
                     SystemExecutionError::InvalidUnsubscription(context.chain_id, *channel)
                 );
                 self.subscriptions.remove(&subscription)?;
-                result.messages.push((
-                    Destination::Recipient(*chain_id),
-                    false,
-                    SystemMessage::Unsubscribe {
+                let message = RawOutgoingMessage {
+                    destination: Destination::Recipient(*chain_id),
+                    authenticated: false,
+                    message: SystemMessage::Unsubscribe {
                         id: context.chain_id,
                         subscription,
                     },
-                ));
+                };
+                result.messages.push(message);
             }
             PublishBytecode { .. } => {
                 // Send a `BytecodePublished` message to ourself so that we can broadcast
                 // the bytecode-id next.
-                result.messages.push((
-                    Destination::Recipient(context.chain_id),
-                    false,
-                    SystemMessage::BytecodePublished {
+                let message = RawOutgoingMessage {
+                    destination: Destination::Recipient(context.chain_id),
+                    authenticated: false,
+                    message: SystemMessage::BytecodePublished {
                         operation_index: context.index,
                     },
-                ));
+                };
+                result.messages.push(message);
             }
             CreateApplication {
                 bytecode_id,
@@ -709,21 +717,25 @@ where
                     )
                     .await?;
                 // Send a message to ourself to increment the message ID.
-                result.messages.push((
-                    Destination::Recipient(context.chain_id),
-                    false,
-                    SystemMessage::ApplicationCreated,
-                ));
+                let message = RawOutgoingMessage {
+                    destination: Destination::Recipient(context.chain_id),
+                    authenticated: false,
+                    message: SystemMessage::ApplicationCreated,
+                };
+                result.messages.push(message);
                 new_application = Some((id, initialization_argument.clone()));
             }
             RequestApplication {
                 chain_id,
                 application_id,
-            } => result.messages.push((
-                Destination::Recipient(*chain_id),
-                false,
-                SystemMessage::RequestApplication(*application_id),
-            )),
+            } => {
+                let message = RawOutgoingMessage {
+                    destination: Destination::Recipient(*chain_id),
+                    authenticated: false,
+                    message: SystemMessage::RequestApplication(*application_id),
+                };
+                result.messages.push(message);
+            }
         }
 
         Ok((result, new_application))
@@ -773,14 +785,15 @@ where
                 let balance = self.balances.get_mut_or_default(owner).await?;
                 if balance.try_sub_assign(*amount).is_ok() {
                     if let Recipient::Account(account) = recipient {
-                        result.messages.push((
-                            Destination::Recipient(account.chain_id),
-                            false,
-                            SystemMessage::Credit {
+                        let message = RawOutgoingMessage {
+                            destination: Destination::Recipient(account.chain_id),
+                            authenticated: false,
+                            message: SystemMessage::Credit {
                                 amount: *amount,
                                 account: *account,
                             },
-                        ));
+                        };
+                        result.messages.push(message);
                     }
                 } else {
                     tracing::info!("Withdrawal request was skipped due to lack of funds.");
@@ -797,19 +810,21 @@ where
             Subscribe { id, subscription } if subscription.chain_id == context.chain_id => {
                 // Notify the subscriber about this block, so that it is included in the
                 // receive_log of the subscriber and correctly synchronized.
-                result.messages.push((
-                    Destination::Recipient(*id),
-                    false,
-                    SystemMessage::Notify { id: *id },
-                ));
+                let message = RawOutgoingMessage {
+                    destination: Destination::Recipient(*id),
+                    authenticated: false,
+                    message: SystemMessage::Notify { id: *id },
+                };
+                result.messages.push(message);
                 result.subscribe.push((subscription.name.clone(), *id));
             }
             Unsubscribe { id, subscription } if subscription.chain_id == context.chain_id => {
-                result.messages.push((
-                    Destination::Recipient(*id),
-                    false,
-                    SystemMessage::Notify { id: *id },
-                ));
+                let message = RawOutgoingMessage {
+                    destination: Destination::Recipient(*id),
+                    authenticated: false,
+                    message: SystemMessage::Notify { id: *id },
+                };
+                result.messages.push(message);
                 result.unsubscribe.push((subscription.name.clone(), *id));
             }
             BytecodePublished { operation_index } => {
@@ -821,11 +836,12 @@ where
                 self.registry
                     .register_published_bytecode(bytecode_id, bytecode_location)?;
                 let locations = self.registry.bytecode_locations().await?;
-                result.messages.push((
-                    Destination::Subscribers(SystemChannel::PublishedBytecodes.name()),
-                    false,
-                    SystemMessage::BytecodeLocations { locations },
-                ));
+                let message = RawOutgoingMessage {
+                    destination: Destination::Subscribers(SystemChannel::PublishedBytecodes.name()),
+                    authenticated: false,
+                    message: SystemMessage::BytecodeLocations { locations },
+                };
+                result.messages.push(message);
             }
             BytecodeLocations { locations } => {
                 for (id, location) in locations {
@@ -860,11 +876,12 @@ where
                     }
                     Err(err) => return Err(err),
                     Ok(applications) => {
-                        result.messages.push((
-                            Destination::Recipient(context.message_id.chain_id),
-                            false,
-                            SystemMessage::RegisterApplications { applications },
-                        ));
+                        let message = RawOutgoingMessage {
+                            destination: Destination::Recipient(context.message_id.chain_id),
+                            authenticated: false,
+                            message: SystemMessage::RegisterApplications { applications },
+                        };
+                        result.messages.push(message);
                     }
                 }
             }

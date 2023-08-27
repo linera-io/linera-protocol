@@ -5,7 +5,7 @@
 //! [`wit-bindgen-guest-rust`].
 
 use super::{contract_system_api as wit_system_api, wit_types};
-use crate::{ApplicationCallResult, ExecutionResult, SessionCallResult};
+use crate::{ApplicationCallResult, ExecutionResult, OutgoingMessage, SessionCallResult};
 use linera_base::{
     crypto::CryptoHash,
     identifiers::{ApplicationId, ChannelName, Destination, MessageId, SessionId},
@@ -127,6 +127,20 @@ where
     }
 }
 
+impl<Message> From<OutgoingMessage<Message>> for wit_types::OutgoingMessage
+where
+    Message: Debug + Serialize + DeserializeOwned,
+{
+    fn from(message: OutgoingMessage<Message>) -> Self {
+        Self {
+            destination: message.destination.into(),
+            authenticated: message.authenticated,
+            // TODO(#743): Do we need explicit error handling?
+            message: bcs::to_bytes(&message.message).expect("message serialization failed"),
+        }
+    }
+}
+
 impl<Message> From<ExecutionResult<Message>> for wit_types::ExecutionResult
 where
     Message: Debug + Serialize + DeserializeOwned,
@@ -135,14 +149,7 @@ where
         let messages = result
             .messages
             .into_iter()
-            .map(|(destination, authenticated, message)| {
-                (
-                    destination.into(),
-                    authenticated,
-                    // TODO(#743): Do we need explicit error handling?
-                    bcs::to_bytes(&message).expect("message serialization failed"),
-                )
-            })
+            .map(wit_types::OutgoingMessage::from)
             .collect();
 
         let subscribe = result

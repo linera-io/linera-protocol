@@ -12,7 +12,7 @@ use linera_sdk::{
     base::{Amount, ApplicationId, SessionId, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
-    OperationContext, SessionCallResult, ViewStateStorage,
+    OperationContext, OutgoingMessage, SessionCallResult, ViewStateStorage,
 };
 use linera_views::views::View;
 use state::{CrowdFunding, Status};
@@ -161,11 +161,11 @@ impl CrowdFunding {
         .await?;
         // Second, schedule the attribution of the funds to the (remote) campaign.
         let message = Message::PledgeWithAccount { owner, amount };
-        result.messages.push((
-            chain_id.into(),
-            /* authenticated by owner */ true,
+        result.messages.push(OutgoingMessage {
+            destination: chain_id.into(),
+            authenticated: true,
             message,
-        ));
+        });
         Ok(())
     }
 
