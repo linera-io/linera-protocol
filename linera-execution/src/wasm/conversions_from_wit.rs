@@ -47,6 +47,7 @@ impl From<contract::OutgoingMessage> for RawOutgoingMessage<Vec<u8>> {
         Self {
             destination: message.destination.into(),
             authenticated: message.authenticated,
+            is_skippable: message.is_skippable,
             message: message.message,
         }
     }

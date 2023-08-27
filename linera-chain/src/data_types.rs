@@ -101,14 +101,16 @@ pub struct IncomingMessage {
 /// particular inbox.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Event {
-    /// The hash of the certificate that created the event
+    /// The hash of the certificate that created the event.
     pub certificate_hash: CryptoHash,
     /// The height of the block that created the event.
     pub height: BlockHeight,
     /// The index of the message.
     pub index: u32,
-    /// The authenticated signer for the operation that created the event, if any
+    /// The authenticated signer for the operation that created the event, if any.
     pub authenticated_signer: Option<Owner>,
+    /// Whether the message can be skipped.
+    pub is_skippable: bool,
     /// The timestamp of the block that caused the message.
     pub timestamp: Timestamp,
     /// The message of the event (i.e. the actual payload of a message).
@@ -167,8 +169,13 @@ pub struct BlockProposal {
 /// A message together with routing information.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct OutgoingMessage {
+    /// The destination of the message.
     pub destination: Destination,
+    /// The user authentication carried by the message, if any.
     pub authenticated_signer: Option<Owner>,
+    /// Whether the message can be skipped.
+    pub is_skippable: bool,
+    /// The message itself.
     pub message: Message,
 }
 

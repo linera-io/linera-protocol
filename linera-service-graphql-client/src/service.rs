@@ -150,11 +150,13 @@ mod from {
             let block::BlockBlockValueExecutedBlockMessages {
                 destination,
                 authenticated_signer,
+                is_skippable,
                 message,
             } = val;
             OutgoingMessage {
                 destination,
                 authenticated_signer,
+                is_skippable,
                 message,
             }
         }

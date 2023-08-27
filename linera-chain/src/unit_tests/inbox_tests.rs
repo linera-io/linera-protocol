@@ -29,6 +29,7 @@ fn make_event(
         height: BlockHeight::from(height),
         index,
         authenticated_signer: None,
+        is_skippable: true,
         timestamp: Timestamp::default(),
         message: Message::User {
             application_id: UserApplicationId::default(),

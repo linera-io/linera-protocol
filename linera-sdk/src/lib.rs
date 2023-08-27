@@ -369,6 +369,8 @@ pub struct OutgoingMessage<Message> {
     pub destination: Destination,
     /// Whether the message is authenticated.
     pub authenticated: bool,
+    /// Whether the message can skipped by the receiving chain.
+    pub is_skippable: bool,
     /// The message itself.
     pub message: Message,
 }
@@ -403,6 +405,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
         self.messages.push(OutgoingMessage {
             destination: destination.into(),
             authenticated: false,
+            is_skippable: true,
             message,
         });
         self
@@ -417,6 +420,7 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
         self.messages.push(OutgoingMessage {
             destination: destination.into(),
             authenticated: true,
+            is_skippable: true,
             message,
         });
         self

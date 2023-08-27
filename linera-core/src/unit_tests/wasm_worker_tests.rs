@@ -148,6 +148,7 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
+            is_skippable: true,
             message: Message::System(publish_message.clone()),
         }],
         state_hash: publisher_state_hash,
@@ -174,6 +175,7 @@ where
             height: publish_block_height,
             index: 0,
             authenticated_signer: None,
+            is_skippable: true,
             timestamp: Timestamp::from(1),
             message: Message::System(publish_message),
         },
@@ -205,6 +207,7 @@ where
         messages: vec![OutgoingMessage {
             destination: broadcast_channel,
             authenticated_signer: None,
+            is_skippable: true,
             message: Message::System(broadcast_message.clone()),
         }],
         state_hash: publisher_state_hash,
@@ -253,6 +256,7 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(publisher_chain.into()),
             authenticated_signer: None,
+            is_skippable: true,
             message: Message::System(subscribe_message.clone()),
         }],
         state_hash: creator_state.crypto_hash().await?,
@@ -279,6 +283,7 @@ where
             height: subscribe_block_height,
             index: 0,
             authenticated_signer: None,
+            is_skippable: true,
             timestamp: Timestamp::from(2),
             message: subscribe_message.into(),
         },
@@ -293,6 +298,7 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
+            is_skippable: true,
             message: Message::System(SystemMessage::Notify {
                 id: creator_chain.into(),
             }),
@@ -351,6 +357,7 @@ where
                 height: broadcast_block_height,
                 index: 0,
                 authenticated_signer: None,
+                is_skippable: true,
                 timestamp: Timestamp::from(1),
                 message: Message::System(broadcast_message),
             },
@@ -377,6 +384,7 @@ where
         messages: vec![OutgoingMessage {
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
+            is_skippable: true,
             message: Message::System(SystemMessage::ApplicationCreated),
         }],
         state_hash: creator_state.crypto_hash().await?,

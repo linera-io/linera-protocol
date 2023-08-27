@@ -279,6 +279,7 @@ where
             let OutgoingMessage {
                 destination,
                 authenticated_signer,
+                is_skippable,
                 message,
             } = outgoing_message;
             // Skip events that do not belong to this origin OR have no effect on this
@@ -315,6 +316,7 @@ where
                 height,
                 index,
                 authenticated_signer,
+                is_skippable,
                 timestamp,
                 message,
             });
@@ -565,6 +567,7 @@ where
         for RawOutgoingMessage {
             destination,
             authenticated,
+            is_skippable,
             message,
         } in raw_result.messages
         {
@@ -584,6 +587,7 @@ where
             messages.push(OutgoingMessage {
                 destination,
                 authenticated_signer,
+                is_skippable,
                 message: lift(message),
             });
         }
