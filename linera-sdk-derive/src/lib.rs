@@ -45,7 +45,7 @@ fn generate_mutation_root_code(input: ItemEnum) -> TokenStream2 {
                 let mut fields = vec![];
                 let mut field_names = vec![];
                 for (i, field) in unnamed.unnamed.iter().enumerate() {
-                    let name = concat(&syn::parse_str::<Ident>("field_").unwrap(), &i.to_string());
+                    let name = concat(&syn::parse_str::<Ident>("field").unwrap(), &i.to_string());
                     let ty = &field.ty;
                     fields.push(quote! {#name: #ty});
                     field_names.push(name);
@@ -121,8 +121,8 @@ pub mod tests {
 
             #[async_graphql::Object]
             impl SomeOperationMutationRoot {
-                async fn tuple_variant(&self, field_0: String,) -> Vec<u8> {
-                    bcs::to_bytes(&SomeOperation::TupleVariant(field_0,)).unwrap()
+                async fn tuple_variant(&self, field0: String,) -> Vec<u8> {
+                    bcs::to_bytes(&SomeOperation::TupleVariant(field0,)).unwrap()
                 }
                 async fn struct_variant(&self, a: u32, b: u64,) -> Vec<u8> {
                     bcs::to_bytes(&SomeOperation::StructVariant { a, b, }).unwrap()
