@@ -30,6 +30,7 @@ impl ServiceAbi for AmmAbi {
 /// Operations that can be sent to the application.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Operation {
+    // TODO(#969): Need to also implement Swap Bids here
     Swap {
         owner: AccountOwner,
         input_token_idx: u32,
