@@ -1,0 +1,191 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: server-1-shard-0
+  labels:
+    app: server-1-shard-0
+spec:
+  clusterIP: None
+  selector:
+    app: server-1-shard-0
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: server-1-shard-0
+spec:
+  selector:
+    matchLabels:
+      app: server-1-shard-0
+  serviceName: server-1-shard-0
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: server-1-shard-0
+    spec:
+      serviceAccountName: linera-serviceaccount
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: linera-server
+          image: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/zefchain-gcp-test:0.1
+          imagePullPolicy: Always
+          command: ["./linera-server"]
+          args: ["run", "--storage", "rocksdb:shard_data.db", "--server", "server_1.json", "--shard", "0", "--genesis", "genesis.json", "--kube"]
+          env:
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MY_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server-1-shard-1
+  labels:
+    app: server-1-shard-1
+spec:
+  clusterIP: None
+  selector:
+    app: server-1-shard-1
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: server-1-shard-1
+spec:
+  selector:
+    matchLabels:
+      app: server-1-shard-1
+  serviceName: server-1-shard-1
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: server-1-shard-1
+    spec:
+      serviceAccountName: linera-serviceaccount
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: linera-server
+          image: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/zefchain-gcp-test:0.1
+          imagePullPolicy: Always
+          command: ["./linera-server"]
+          args: ["run", "--storage", "rocksdb:shard_data.db", "--server", "server_1.json", "--shard", "1", "--genesis", "genesis.json", "--kube"]
+          env:
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MY_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server-1-shard-2
+  labels:
+    app: server-1-shard-2
+spec:
+  clusterIP: None
+  selector:
+    app: server-1-shard-2
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: server-1-shard-2
+spec:
+  selector:
+    matchLabels:
+      app: server-1-shard-2
+  serviceName: server-1-shard-2
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: server-1-shard-2
+    spec:
+      serviceAccountName: linera-serviceaccount
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: linera-server
+          image: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/zefchain-gcp-test:0.1
+          imagePullPolicy: Always
+          command: ["./linera-server"]
+          args: ["run", "--storage", "rocksdb:shard_data.db", "--server", "server_1.json", "--shard", "2", "--genesis", "genesis.json", "--kube"]
+          env:
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MY_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server-1-shard-3
+  labels:
+    app: server-1-shard-3
+spec:
+  clusterIP: None
+  selector:
+    app: server-1-shard-3
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: server-1-shard-3
+spec:
+  selector:
+    matchLabels:
+      app: server-1-shard-3
+  serviceName: server-1-shard-3
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: server-1-shard-3
+    spec:
+      serviceAccountName: linera-serviceaccount
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: linera-server
+          image: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/zefchain-gcp-test:0.1
+          imagePullPolicy: Always
+          command: ["./linera-server"]
+          args: ["run", "--storage", "rocksdb:shard_data.db", "--server", "server_1.json", "--shard", "3", "--genesis", "genesis.json", "--kube"]
+          env:
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MY_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
