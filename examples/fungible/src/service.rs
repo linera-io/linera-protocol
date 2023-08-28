@@ -9,7 +9,9 @@ use self::state::FungibleToken;
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use async_trait::async_trait;
 use fungible::Operation;
-use linera_sdk::{base::WithServiceAbi, QueryContext, Service, ViewStateStorage};
+use linera_sdk::{
+    base::WithServiceAbi, graphql::GraphQLMutationRoot, QueryContext, Service, ViewStateStorage,
+};
 use std::sync::Arc;
 use thiserror::Error;
 

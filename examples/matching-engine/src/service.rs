@@ -8,7 +8,9 @@ mod state;
 use crate::state::{MatchingEngine, MatchingEngineError};
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use async_trait::async_trait;
-use linera_sdk::{base::WithServiceAbi, QueryContext, Service, ViewStateStorage};
+use linera_sdk::{
+    base::WithServiceAbi, graphql::GraphQLMutationRoot, QueryContext, Service, ViewStateStorage,
+};
 use matching_engine::Operation;
 use std::sync::Arc;
 

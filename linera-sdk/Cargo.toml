@@ -24,6 +24,7 @@ test = []
 
 [dependencies]
 async-trait = { workspace = true }
+async-graphql = { workspace = true }
 bcs = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }

@@ -78,8 +78,10 @@ fn generate_mutation_root_code(input: ItemEnum) -> TokenStream2 {
             *
         }
 
-        impl #enum_name {
-            pub fn mutation_root() -> #mutation_root_name {
+        impl linera_sdk::graphql::GraphQLMutationRoot for #enum_name {
+            type MutationRoot = #mutation_root_name;
+
+            fn mutation_root() -> Self::MutationRoot {
                 #mutation_root_name
             }
         }
@@ -132,8 +134,10 @@ pub mod tests {
                 }
             }
 
-            impl SomeOperation {
-                pub fn mutation_root() -> SomeOperationMutationRoot {
+            impl linera_sdk::graphql::GraphQLMutationRoot for SomeOperation {
+                type MutationRoot = SomeOperationMutationRoot;
+
+                fn mutation_root() -> Self::MutationRoot {
                     SomeOperationMutationRoot
                 }
             }
