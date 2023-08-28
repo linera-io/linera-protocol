@@ -41,6 +41,7 @@ pub mod base;
 pub mod contract;
 mod exported_future;
 mod extensions;
+pub mod graphql;
 mod log;
 pub mod service;
 #[cfg(feature = "test")]

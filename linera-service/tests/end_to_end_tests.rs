@@ -685,7 +685,7 @@ async fn test_end_to_end_social_user_pub_sub() {
         .make_application(&chain2, &application_id)
         .await
         .into();
-    let subscribe = format!("mutation {{ subscribe(chainId: \"{chain1}\") }}");
+    let subscribe = format!("mutation {{ requestSubscribe(field0: \"{chain1}\") }}");
     let hash = app2.query_application(&subscribe).await;
 
     // The returned hash should now be the latest one.
@@ -697,7 +697,7 @@ async fn test_end_to_end_social_user_pub_sub() {
         .make_application(&chain1, &application_id)
         .await
         .into();
-    let post = "mutation { post(text: \"Linera Social is the new Mastodon!\") }";
+    let post = "mutation { post(field0: \"Linera Social is the new Mastodon!\") }";
     app1.query_application(post).await;
 
     // Instead of retrying, we could call `node_service1.process_inbox(chain1).await` here.
@@ -1302,7 +1302,7 @@ async fn test_end_to_end_matching_engine() {
             nature: OrderNature::Bid,
             price,
         };
-        let query_string = format!("mutation {{ order(order: {}) }}", insert2.to_value());
+        let query_string = format!("mutation {{ executeOrder(order: {}) }}", insert2.to_value());
         app_matching_a.query_application(&query_string).await;
     }
     for price in [4, 2] {
@@ -1314,7 +1314,7 @@ async fn test_end_to_end_matching_engine() {
             nature: OrderNature::Ask,
             price,
         };
-        let query_string = format!("mutation {{ order(order: {}) }}", insert3.to_value());
+        let query_string = format!("mutation {{ executeOrder(order: {}) }}", insert3.to_value());
         app_matching_b.query_application(&query_string).await;
     }
     node_service_admin.process_inbox(&chain_admin).await;
@@ -1336,7 +1336,7 @@ async fn test_end_to_end_matching_engine() {
     for (owner, order_ids) in [(owner_a, order_ids_a), (owner_b, order_ids_b)] {
         for order_id in order_ids {
             let cancel = matching_engine::Order::Cancel { owner, order_id };
-            let query_string = format!("mutation {{ order(order: {}) }}", cancel.to_value());
+            let query_string = format!("mutation {{ executeOrder(order: {}) }}", cancel.to_value());
             app_matching_admin.query_application(&query_string).await;
         }
     }

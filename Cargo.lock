@@ -2880,6 +2880,7 @@ dependencies = [
  "linera-chain",
  "linera-core",
  "linera-execution",
+ "linera-sdk-derive",
  "linera-storage",
  "linera-views",
  "linera-wit-bindgen-guest-rust",
@@ -2890,6 +2891,15 @@ dependencies = [
  "tokio",
  "tokio-test",
  "wasmtime",
+]
+
+[[package]]
+name = "linera-sdk-derive"
+version = "0.3.0"
+dependencies = [
+ "convert_case 0.6.0",
+ "proc-macro2",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -3019,12 +3029,10 @@ dependencies = [
 name = "linera-views-derive"
 version = "0.3.0"
 dependencies = [
- "async-graphql",
  "convert_case 0.6.0",
  "heck 0.4.1",
  "proc-macro2",
  "quote",
- "serde",
  "syn 1.0.109",
 ]
 

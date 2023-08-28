@@ -129,7 +129,10 @@
 //! automatically update.
 
 use async_graphql::{scalar, InputObject, Request, Response};
-use linera_sdk::base::{Amount, ApplicationId, ChainId, ContractAbi, Owner, ServiceAbi};
+use linera_sdk::{
+    base::{Amount, ApplicationId, ChainId, ContractAbi, Owner, ServiceAbi},
+    graphql::MutationRoot,
+};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::BTreeMap, str::FromStr};
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
@@ -162,7 +165,7 @@ impl ServiceAbi for FungibleTokenAbi {
 }
 
 /// An operation.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, MutationRoot)]
 pub enum Operation {
     /// A transfer from a (locally owned) account to a (possibly remote) account.
     Transfer {

@@ -3,7 +3,10 @@
 
 use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
 use fungible::{AccountOwner, FungibleTokenAbi};
-use linera_sdk::base::{Amount, ApplicationId, ContractAbi, ServiceAbi};
+use linera_sdk::{
+    base::{Amount, ApplicationId, ContractAbi, ServiceAbi},
+    graphql::MutationRoot,
+};
 use linera_views::{common::CustomSerialize, views::ViewError};
 use serde::{Deserialize, Serialize};
 
@@ -132,7 +135,7 @@ pub struct Parameters {
 scalar!(Parameters);
 
 /// Operations that can be sent to the application.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, MutationRoot)]
 pub enum Operation {
     /// The order that is going to be executed on the chain of the order book.
     ExecuteOrder { order: Order },

@@ -6,10 +6,12 @@
 mod state;
 
 use crate::state::{MatchingEngine, MatchingEngineError};
-use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
+use async_graphql::{EmptySubscription, Request, Response, Schema};
 use async_trait::async_trait;
-use linera_sdk::{base::WithServiceAbi, QueryContext, Service, ViewStateStorage};
-use matching_engine::{Operation, Order};
+use linera_sdk::{
+    base::WithServiceAbi, graphql::GraphQLMutationRoot, QueryContext, Service, ViewStateStorage,
+};
+use matching_engine::Operation;
 use std::sync::Arc;
 
 linera_sdk::service!(MatchingEngine);
@@ -28,17 +30,9 @@ impl Service for MatchingEngine {
         _context: &QueryContext,
         request: Request,
     ) -> Result<Response, Self::Error> {
-        let schema = Schema::build(self.clone(), MutationRoot, EmptySubscription).finish();
+        let schema =
+            Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
         let response = schema.execute(request).await;
         Ok(response)
-    }
-}
-
-struct MutationRoot;
-
-#[Object]
-impl MutationRoot {
-    async fn order(&self, order: Order) -> Vec<u8> {
-        bcs::to_bytes(&Operation::ExecuteOrder { order }).unwrap()
     }
 }
