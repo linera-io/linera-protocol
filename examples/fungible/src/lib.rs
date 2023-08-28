@@ -131,7 +131,7 @@
 use async_graphql::{scalar, InputObject, Request, Response};
 use linera_sdk::{
     base::{Amount, ApplicationId, ChainId, ContractAbi, Owner, ServiceAbi},
-    graphql::MutationRoot,
+    graphql::GraphQLMutationRoot,
 };
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::BTreeMap, str::FromStr};
@@ -165,7 +165,7 @@ impl ServiceAbi for FungibleTokenAbi {
 }
 
 /// An operation.
-#[derive(Debug, Deserialize, Serialize, MutationRoot)]
+#[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum Operation {
     /// A transfer from a (locally owned) account to a (possibly remote) account.
     Transfer {
