@@ -18,6 +18,7 @@ wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb", "linera-storage/rocksdb"]
 aws = ["linera-views/aws", "linera-core/aws", "linera-storage/aws"]
 scylladb = ["linera-views/scylladb", "linera-core/scylladb", "linera-storage/scylladb"]
+kube = ["dep:k8s-openapi", "dep:kube"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -56,8 +57,8 @@ tower-http = { workspace = true, features = ["cors"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 comfy-table = { workspace = true }
 dirs = { workspace = true }
-kube = { workspace = true }
-k8s-openapi = { workspace = true }
+kube = { workspace = true, optional = true }
+k8s-openapi = { workspace = true, optional = true }
 file-lock = "2.1.9"
 current_platform = "0.2.0"
 cargo_toml = "0.15.3"

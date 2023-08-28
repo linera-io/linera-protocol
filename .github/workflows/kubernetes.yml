@@ -56,14 +56,14 @@ jobs:
           cd docker/local-tests
           cp ../../target/release/{linera,linera-proxy,linera-server} .
           for image in linera linera-proxy linera-server setup; do
-              docker build -t "zefchain-test-$image" --target "$image" .
-              kind load docker-image "zefchain-test-$image"
+              docker build -t "linera-test-$image" --target "$image" .
+              kind load docker-image "linera-test-$image"
           done
       - name: Deploy cluster
         run: |
           cd docker/local-tests
           ./integration-test.sh 4 5
-          kubectl apply -f zefchain-k8s.yml
+          kubectl apply -f linera-k8s.yml
       - name: Wait for client test
         run: |
           kubectl wait --for condition=Complete --timeout 180s job/client
@@ -74,7 +74,7 @@ jobs:
       - name: Clean cluster
         if: always()
         run: |
-          kubectl delete -f docker/local-tests/zefchain-k8s.yml
+          kubectl delete -f docker/local-tests/linera-k8s.yml
       - name: Delete cluster
         if: always()
         run: |

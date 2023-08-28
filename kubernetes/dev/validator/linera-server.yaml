@@ -31,7 +31,19 @@ spec:
           image: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/zefchain-gcp-test:0.1
           imagePullPolicy: Always
           command: ["./linera-server"]
-          args: ["run", "--storage", "rocksdb:shard_data.db", "--server", "server_1.json", "--shard", "0", "--genesis", "genesis.json", "--kube"]
+          args:
+            [
+              "run",
+              "--storage",
+              "rocksdb:shard_data.db",
+              "--server",
+              "server_1.json",
+              "--shard",
+              "0",
+              "--genesis",
+              "genesis.json",
+              "--kube",
+            ]
           env:
             - name: MY_POD_NAME
               valueFrom:
@@ -79,7 +91,19 @@ spec:
           image: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/zefchain-gcp-test:0.1
           imagePullPolicy: Always
           command: ["./linera-server"]
-          args: ["run", "--storage", "rocksdb:shard_data.db", "--server", "server_1.json", "--shard", "1", "--genesis", "genesis.json", "--kube"]
+          args:
+            [
+              "run",
+              "--storage",
+              "rocksdb:shard_data.db",
+              "--server",
+              "server_1.json",
+              "--shard",
+              "1",
+              "--genesis",
+              "genesis.json",
+              "--kube",
+            ]
           env:
             - name: MY_POD_NAME
               valueFrom:
@@ -127,7 +151,19 @@ spec:
           image: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/zefchain-gcp-test:0.1
           imagePullPolicy: Always
           command: ["./linera-server"]
-          args: ["run", "--storage", "rocksdb:shard_data.db", "--server", "server_1.json", "--shard", "2", "--genesis", "genesis.json", "--kube"]
+          args:
+            [
+              "run",
+              "--storage",
+              "rocksdb:shard_data.db",
+              "--server",
+              "server_1.json",
+              "--shard",
+              "2",
+              "--genesis",
+              "genesis.json",
+              "--kube",
+            ]
           env:
             - name: MY_POD_NAME
               valueFrom:
@@ -175,7 +211,19 @@ spec:
           image: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/zefchain-gcp-test:0.1
           imagePullPolicy: Always
           command: ["./linera-server"]
-          args: ["run", "--storage", "rocksdb:shard_data.db", "--server", "server_1.json", "--shard", "3", "--genesis", "genesis.json", "--kube"]
+          args:
+            [
+              "run",
+              "--storage",
+              "rocksdb:shard_data.db",
+              "--server",
+              "server_1.json",
+              "--shard",
+              "3",
+              "--genesis",
+              "genesis.json",
+              "--kube",
+            ]
           env:
             - name: MY_POD_NAME
               valueFrom:

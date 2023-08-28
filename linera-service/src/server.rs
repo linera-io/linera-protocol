@@ -16,11 +16,12 @@ use linera_rpc::{
     simple_network,
     transport::TransportProtocol,
 };
+#[cfg(feature = "kube")]
+use linera_service::kubernetes::get_ips_from_k8s;
 use linera_service::{
     config::{
         CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig, ValidatorServerConfig,
     },
-    kubernetes::{fetch_pod_ips, find_value_with_key_prefix},
     storage::{Runnable, StorageConfig},
 };
 use linera_storage::Store;
@@ -37,6 +38,7 @@ struct ServerContext {
     notification_config: NotificationConfig,
     shard: Option<usize>,
     grace_period_micros: u64,
+    #[cfg(feature = "kube")]
     kube: bool,
 }
 
@@ -171,6 +173,22 @@ impl ServerContext {
             }
         }
     }
+
+    #[cfg(feature = "kube")]
+    fn get_listen_address(&self) -> String {
+        if self.kube {
+            std::env::var("MY_POD_IP").expect("Could not get env variable MY_POD_IP")
+        } else {
+            // Allow local IP address to be different from the public one.
+            "0.0.0.0".to_string()
+        }
+    }
+
+    #[cfg(not(feature = "kube"))]
+    fn get_listen_address(&self) -> String {
+        // Allow local IP address to be different from the public one.
+        "0.0.0.0".to_string()
+    }
 }
 
 #[async_trait]
@@ -182,35 +200,28 @@ where
     type Output = ();
 
     async fn run(self, storage: S) -> Result<(), anyhow::Error> {
-        let tmp_listen_address = if !self.kube {
-            // Allow local IP address to be different from the public one.
-            "0.0.0.0".to_string()
-        } else {
-            std::env::var("MY_POD_IP").expect("Could not get env variable MY_POD_IP")
-        };
-
-        let listen_address = tmp_listen_address.as_str();
+        let listen_address = self.get_listen_address();
 
         // Run the server
         let states = match self.shard {
             Some(shard) => {
                 info!("Running shard number {}", shard);
-                vec![self.make_shard_state(listen_address, shard, storage)]
+                vec![self.make_shard_state(&listen_address, shard, storage)]
             }
             None => {
                 info!("Running all shards");
                 let num_shards = self.server_config.internal_network.shards.len();
                 (0..num_shards)
-                    .map(|shard| self.make_shard_state(listen_address, shard, storage.clone()))
+                    .map(|shard| self.make_shard_state(&listen_address, shard, storage.clone()))
                     .collect()
             }
         };
 
         match self.server_config.internal_network.protocol {
             NetworkProtocol::Simple(protocol) => {
-                self.spawn_simple(listen_address, states, protocol).await?
+                self.spawn_simple(&listen_address, states, protocol).await?
             }
-            NetworkProtocol::Grpc => self.spawn_grpc(listen_address, states).await?,
+            NetworkProtocol::Grpc => self.spawn_grpc(&listen_address, states).await?,
         };
 
         Ok(())
@@ -330,6 +341,7 @@ enum ServerCommand {
         /// Use this when running from a Kubernetes cluster (including from within GCP)
         /// Won't use config files to determine host IPs, but will do it dynamically
         /// based on cluster info
+        #[cfg(feature = "kube")]
         #[structopt(long)]
         kube: bool,
     },
@@ -379,45 +391,32 @@ async fn main() {
             max_concurrent_queries,
             max_stream_queries,
             cache_size,
+            #[cfg(feature = "kube")]
             kube,
         } => {
             let genesis_config = GenesisConfig::read(&genesis_config_path)
                 .expect("Fail to read initial chain config");
-            let mut tmp_server_config = ValidatorServerConfig::read(&server_config_path)
+            #[cfg(not(feature = "kube"))]
+            let server_config = ValidatorServerConfig::read(&server_config_path)
+                .expect("Fail to read server config");
+            #[cfg(feature = "kube")]
+            let mut server_config = ValidatorServerConfig::read(&server_config_path)
                 .expect("Fail to read server config");
 
+            #[cfg(feature = "kube")]
             if kube {
-                let pod_name_to_ip = fetch_pod_ips().await.expect("Failed to fetch pod IPs");
-
-                // Assumes that each service will have just one pod. Since we have one service per shard, the first pod will always have
-                // -0 at the end of it for servers and some hash for the validators. So we check the prefix and assume only one entry
-                // will have that prefix.
-                tmp_server_config.validator.network.host = find_value_with_key_prefix(
-                    &pod_name_to_ip,
-                    &tmp_server_config.validator.network.host,
-                )
-                .expect("All hosts should be a prefix of a pod name!");
-                tmp_server_config.internal_network.host = find_value_with_key_prefix(
-                    &pod_name_to_ip,
-                    &tmp_server_config.internal_network.host,
-                )
-                .expect("All hosts should be a prefix of a pod name!");
-                for shard in &mut tmp_server_config.internal_network.shards {
-                    shard.host = find_value_with_key_prefix(&pod_name_to_ip, &shard.host)
-                        .expect("All hosts should be a prefix of a pod name!");
-                    shard.metrics_host =
-                        find_value_with_key_prefix(&pod_name_to_ip, &shard.metrics_host)
-                            .expect("All hosts should be a prefix of a pod name!");
-                }
+                get_ips_from_k8s(&mut server_config)
+                    .await
+                    .expect("Failed to get IPs from k8s");
             }
 
-            let server_config = tmp_server_config;
             let job = ServerContext {
                 server_config,
                 cross_chain_config,
                 notification_config,
                 shard,
                 grace_period_micros: grace_period,
+                #[cfg(feature = "kube")]
                 kube,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();

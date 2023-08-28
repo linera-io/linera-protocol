@@ -12,7 +12,7 @@ cp target/release/{linera,linera-proxy,linera-server} docker/local-tests
 cd docker/local-tests
 
 for image in client proxy server setup; do
-    docker build -t "zefchain-test-$image" . --target "$image"
+    docker build -t "linera-test-$image" . --target "$image"
 done
 ```
 
@@ -23,11 +23,11 @@ To run the test on a local Kubernetes cluster simulated by KinD, the following s
 kind create cluster
 
 for image in client proxy server setup; do
-    kind load docker-image "zefchain-test-$image"
+    kind load docker-image "linera-test-$image"
 done
 
 $repo/docker/local-tests/integration_test.sh $NUM_VALIDATORS $NUM_SHARDS
-kubectl apply -f zefchain-k8s.yml
+kubectl apply -f linera-k8s.yml
 ```
 
 To see the logs of the test, use:

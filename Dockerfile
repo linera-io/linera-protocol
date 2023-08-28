@@ -1,10 +1,10 @@
 ##############################################################################
-################## Meant to be run with Google Clould Build ##################
+################## Meant to be run with Google Cloud Build ##################
 ##############################################################################
 
 # From the root of the repo, use the following command to run:
 #   gcloud builds submit --tag us-docker.pkg.dev/linera-io-dev/linera-docker-repo/<PACKAGE_NAME>:<VERSION_TAG> --timeout="3h" --machine-type=e2-highcpu-32
-# The package tag needs that prefix so it stores it in the proper Docker image repo on GCP.
+# The package name needs that prefix so it stores it in the proper Docker container registry on GCP (Google Cloud Platform).
 # Make sure you specify the <PACKAGE_NAME> and <VERSION_TAG> you want though.
 # The --timeout and --machine-type flags are optional, but building with the default machine type
 # takes considerably longer. The default timeout is 1h, which you'll likely hit if you run with
@@ -13,8 +13,8 @@
 # Stage 1 - Generate recipe file for dependencies
 FROM lukemathwalker/cargo-chef:latest-rust-slim AS chef
 
-RUN mkdir -p /opt/zefchain/build
-WORKDIR /opt/zefchain/build
+RUN mkdir -p /opt/linera/build
+WORKDIR /opt/linera/build
 
 FROM chef as planner
 
@@ -25,7 +25,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS cacher
 
 COPY . .
-COPY --from=planner /opt/zefchain/build/recipe.json recipe.json
+COPY --from=planner /opt/linera/build/recipe.json recipe.json
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -33,7 +33,7 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler \
     clang
 
-RUN cargo chef cook --release --recipe-path recipe.json --target x86_64-unknown-linux-gnu
+RUN cargo chef cook --release --recipe-path recipe.json --target x86_64-unknown-linux-gnu --features kube
 
 # Stage 3 - Do actual build
 FROM chef as builder
@@ -46,10 +46,10 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler \
     clang
 
-COPY --from=cacher /opt/zefchain/build/target target
+COPY --from=cacher /opt/linera/build/target target
 COPY --from=cacher /usr/local/cargo /usr/local/cargo
 
-RUN cargo build --release --target x86_64-unknown-linux-gnu --bin linera --bin linera-proxy --bin linera-server \
+RUN cargo build --release --target x86_64-unknown-linux-gnu --bin linera --bin linera-proxy --bin linera-server --features kube \
     && strip target/x86_64-unknown-linux-gnu/release/linera \
     && strip target/x86_64-unknown-linux-gnu/release/linera-proxy \
     && strip target/x86_64-unknown-linux-gnu/release/linera-server
@@ -57,9 +57,11 @@ RUN cargo build --release --target x86_64-unknown-linux-gnu --bin linera --bin l
 # Stage 4 - Setup running environment for container
 FROM debian:latest
 
-WORKDIR /opt/zefchain
+WORKDIR /opt/linera
 
-ENV BUILD_PATH=/opt/zefchain/build
+RUN apt-get update && apt-get install -y libssl-dev
+
+ENV BUILD_PATH=/opt/linera/build
 
 # Copying binaries
 COPY --from=builder $BUILD_PATH/target/x86_64-unknown-linux-gnu/release/linera ./

@@ -41,7 +41,7 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: server
-          image: zefchain-test-server
+          image: linera-test-server
           imagePullPolicy: Never
           command: ["./run-server.sh"]
           args:
@@ -60,7 +60,7 @@ spec:
   ports:
     - name: zef
       protocol: TCP
-      port: 9100
+      port: 19100
       targetPort: linera-port
 ---
 apiVersion: apps/v1
@@ -80,10 +80,10 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: proxy
-          image: zefchain-test-proxy
+          image: linera-test-proxy
           imagePullPolicy: Never
           ports:
-            - containerPort: 9100
+            - containerPort: 19100
               name: linera-port
           command: ["./run-proxy.sh"]
 EOF
@@ -91,7 +91,7 @@ EOF
 }
 
 # Generate final Kubernetes description
-cat > zefchain-k8s.yml << EOF
+cat > linera-k8s.yml << EOF
 $(generate_validators)
 ---
 apiVersion: v1
@@ -118,7 +118,7 @@ metadata:
 spec:
   containers:
     - name: setup
-      image: zefchain-test-setup
+      image: linera-test-setup
       imagePullPolicy: Never
       ports:
         - containerPort: 8080
@@ -144,7 +144,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: client
-          image: zefchain-test-client
+          image: linera-test-client
           imagePullPolicy: Never
           command: ["./run-client.sh"]
 EOF
