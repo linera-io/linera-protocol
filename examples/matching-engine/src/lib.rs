@@ -5,7 +5,7 @@ use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
 use fungible::{AccountOwner, FungibleTokenAbi};
 use linera_sdk::{
     base::{Amount, ApplicationId, ContractAbi, ServiceAbi},
-    MutationRoot,
+    graphql::MutationRoot,
 };
 use linera_views::{common::CustomSerialize, views::ViewError};
 use serde::{Deserialize, Serialize};

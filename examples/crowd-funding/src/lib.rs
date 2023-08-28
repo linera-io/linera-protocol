@@ -243,7 +243,7 @@ use async_graphql::{Request, Response, SimpleObject};
 use fungible::AccountOwner;
 use linera_sdk::{
     base::{Amount, ApplicationId, ContractAbi, ServiceAbi, Timestamp},
-    MutationRoot,
+    graphql::MutationRoot,
 };
 use serde::{Deserialize, Serialize};
 

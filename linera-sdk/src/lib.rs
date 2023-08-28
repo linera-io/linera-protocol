@@ -69,7 +69,6 @@ pub use self::{
     log::{ContractLogger, ServiceLogger},
 };
 pub use linera_base::ensure;
-pub use linera_sdk_derive::MutationRoot;
 #[doc(hidden)]
 pub use wit_bindgen_guest_rust;
 

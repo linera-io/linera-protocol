@@ -147,7 +147,7 @@
 use async_graphql::{InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
     base::{ChainId, ContractAbi, ServiceAbi, Timestamp},
-    MutationRoot,
+    graphql::MutationRoot,
 };
 use linera_views::{common::CustomSerialize, views};
 use serde::{Deserialize, Serialize};

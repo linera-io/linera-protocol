@@ -131,7 +131,7 @@
 use async_graphql::{scalar, InputObject, Request, Response};
 use linera_sdk::{
     base::{Amount, ApplicationId, ChainId, ContractAbi, Owner, ServiceAbi},
-    MutationRoot,
+    graphql::MutationRoot,
 };
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::BTreeMap, str::FromStr};

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! GraphQL traits for generating interfaces into applications.
-
+pub use linera_sdk_derive::MutationRoot;
 /// A trait which is derived by the `MutationRoot` proc macro.
 pub trait GraphQLMutationRoot {
     /// The associated `MutationRoot` type which is code-generated.
