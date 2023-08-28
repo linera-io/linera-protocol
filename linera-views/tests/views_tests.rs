@@ -38,11 +38,11 @@ use linera_views::rocks_db::{create_rocks_db_test_client, RocksDbClient, RocksDb
 
 #[cfg(feature = "aws")]
 use linera_views::{
+    dynamo_db::LocalStackTestContext,
     dynamo_db::{
         DynamoDbContext, TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES, TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
     },
     lru_caching::TEST_CACHE_SIZE,
-    test_utils::LocalStackTestContext,
 };
 
 #[cfg(feature = "scylladb")]

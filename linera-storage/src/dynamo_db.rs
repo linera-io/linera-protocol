@@ -5,9 +5,8 @@ use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
 use dashmap::DashMap;
 use futures::Future;
 use linera_execution::WasmRuntime;
-use linera_views::{
-    dynamo_db::{Config, DynamoDbClient, DynamoDbContextError, TableName, TableStatus},
-    test_utils::LocalStackTestContext,
+use linera_views::dynamo_db::{
+    Config, DynamoDbClient, DynamoDbContextError, LocalStackTestContext, TableName, TableStatus,
 };
 #[cfg(any(test, feature = "test"))]
 use linera_views::{
@@ -112,7 +111,7 @@ pub type DynamoDbStoreClient = DbStoreClient<DynamoDbClient>;
 
 impl DynamoDbStoreClient {
     #[cfg(any(test, feature = "test"))]
-    pub async fn new_test() -> Self {
+    pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> Self {
         let table = "linera".parse().expect("Invalid table name");
         let localstack = LocalStackTestContext::new().await.expect("localstack");
         let (client, _) = DynamoDbStoreClient::from_config(
@@ -121,7 +120,7 @@ impl DynamoDbStoreClient {
             Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
             TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
             TEST_CACHE_SIZE,
-            None,
+            wasm_runtime,
         )
         .await
         .expect("client and table_name");

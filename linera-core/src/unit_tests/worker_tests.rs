@@ -301,7 +301,7 @@ fn channel_outgoing_message(name: ChannelName, message: SystemMessage) -> Outgoi
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_bad_signature() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_bad_signature(client).await;
 }
 
@@ -309,21 +309,21 @@ async fn test_memory_handle_block_proposal_bad_signature() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_bad_signature() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_bad_signature(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_bad_signature() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_bad_signature(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_bad_signature() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_bad_signature(client).await;
 }
 
@@ -375,7 +375,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_zero_amount() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_zero_amount(client).await;
 }
 
@@ -383,21 +383,21 @@ async fn test_memory_handle_block_proposal_zero_amount() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_zero_amount() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_zero_amount(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_zero_amount() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_zero_amount(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_zero_amount() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_zero_amount(client).await;
 }
 
@@ -446,7 +446,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_ticks() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_ticks(client).await;
 }
 
@@ -454,21 +454,21 @@ async fn test_memory_handle_block_proposal_ticks() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_ticks() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_ticks(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_ticks() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_ticks(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_ticks() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_ticks(client).await;
 }
 
@@ -555,7 +555,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_unknown_sender() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_unknown_sender(client).await;
 }
 
@@ -563,21 +563,21 @@ async fn test_memory_handle_block_proposal_unknown_sender() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_unknown_sender() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_unknown_sender(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_unknown_sender() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_unknown_sender(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_unknown_sender() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_unknown_sender(client).await;
 }
 
@@ -629,7 +629,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_with_chaining() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_with_chaining(client).await;
 }
 
@@ -637,21 +637,21 @@ async fn test_memory_handle_block_proposal_with_chaining() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_with_chaining() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_with_chaining(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_with_chaining() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_with_chaining(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_with_chaining() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_with_chaining(client).await;
 }
 
@@ -746,7 +746,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_with_incoming_messages() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_with_incoming_messages(client).await;
 }
 
@@ -754,21 +754,21 @@ async fn test_memory_handle_block_proposal_with_incoming_messages() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_with_incoming_messages() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_with_incoming_messages(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_with_incoming_messages() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_with_incoming_messages(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_with_incoming_messages() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_with_incoming_messages(client).await;
 }
 
@@ -1219,7 +1219,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_exceed_balance() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_exceed_balance(client).await;
 }
 
@@ -1227,21 +1227,21 @@ async fn test_memory_handle_block_proposal_exceed_balance() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_exceed_balance() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_exceed_balance(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_exceed_balance() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_exceed_balance(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_exceed_balance() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_exceed_balance(client).await;
 }
 
@@ -1286,7 +1286,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal(client).await;
 }
 
@@ -1294,21 +1294,21 @@ async fn test_memory_handle_block_proposal() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal(client).await;
 }
 
@@ -1360,7 +1360,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_replay() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_replay(client).await;
 }
 
@@ -1368,21 +1368,21 @@ async fn test_memory_handle_block_proposal_replay() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_replay() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_replay(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_replay() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_replay(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_replay() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_block_proposal_replay(client).await;
 }
 
@@ -1432,7 +1432,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_unknown_sender() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_certificate_unknown_sender(client).await;
 }
 
@@ -1440,21 +1440,21 @@ async fn test_memory_handle_certificate_unknown_sender() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_unknown_sender() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_unknown_sender(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_certificate_unknown_sender() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_unknown_sender(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_certificate_unknown_sender() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_unknown_sender(client).await;
 }
 
@@ -1489,7 +1489,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_bad_block_height() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_certificate_bad_block_height(client).await;
 }
 
@@ -1497,21 +1497,21 @@ async fn test_memory_handle_certificate_bad_block_height() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_bad_block_height() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_bad_block_height(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_certificate_bad_block_height() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_bad_block_height(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_certificate_bad_block_height() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_bad_block_height(client).await;
 }
 
@@ -1558,7 +1558,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_with_anticipated_incoming_message() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_certificate_with_anticipated_incoming_message(client).await;
 }
 
@@ -1566,21 +1566,21 @@ async fn test_memory_handle_certificate_with_anticipated_incoming_message() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_with_anticipated_incoming_message() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_with_anticipated_incoming_message(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_certificate_with_anticipated_incoming_message() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_with_anticipated_incoming_message(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_certificate_with_anticipated_incoming_message() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_with_anticipated_incoming_message(client).await;
 }
 
@@ -1696,7 +1696,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_receiver_balance_overflow() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_certificate_receiver_balance_overflow(client).await;
 }
 
@@ -1704,21 +1704,21 @@ async fn test_memory_handle_certificate_receiver_balance_overflow() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_receiver_balance_overflow() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_receiver_balance_overflow(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_certificate_receiver_balance_overflow() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_receiver_balance_overflow(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_certificate_receiver_balance_overflow() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_receiver_balance_overflow(client).await;
 }
 
@@ -1792,7 +1792,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_receiver_equal_sender() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_certificate_receiver_equal_sender(client).await;
 }
 
@@ -1800,21 +1800,21 @@ async fn test_memory_handle_certificate_receiver_equal_sender() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_receiver_equal_sender() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_receiver_equal_sender(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_certificate_receiver_equal_sender() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_receiver_equal_sender(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_certificate_receiver_equal_sender() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_receiver_equal_sender(client).await;
 }
 
@@ -1893,7 +1893,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_cross_chain_request() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_cross_chain_request(client).await;
 }
 
@@ -1901,21 +1901,21 @@ async fn test_memory_handle_cross_chain_request() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_cross_chain_request() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_cross_chain_request(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_cross_chain_request() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_cross_chain_request(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_cross_chain_request() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_cross_chain_request(client).await;
 }
 
@@ -2001,7 +2001,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_cross_chain_request_no_recipient_chain() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_cross_chain_request_no_recipient_chain(client).await;
 }
 
@@ -2009,21 +2009,21 @@ async fn test_memory_handle_cross_chain_request_no_recipient_chain() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_cross_chain_request_no_recipient_chain() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_cross_chain_request_no_recipient_chain(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_cross_chain_request_no_recipient_chain(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_cross_chain_request_no_recipient_chain() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_cross_chain_request_no_recipient_chain(client).await;
 }
 
@@ -2064,7 +2064,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_cross_chain_request_no_recipient_chain_on_client() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
 }
 
@@ -2072,21 +2072,21 @@ async fn test_memory_handle_cross_chain_request_no_recipient_chain_on_client() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_cross_chain_request_no_recipient_chain_on_client() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain_on_client() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_cross_chain_request_no_recipient_chain_on_client() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
 }
 
@@ -2139,7 +2139,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_to_active_recipient() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_certificate_to_active_recipient(client).await;
 }
 
@@ -2147,21 +2147,21 @@ async fn test_memory_handle_certificate_to_active_recipient() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_to_active_recipient() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_to_active_recipient(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_certificate_to_active_recipient() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_to_active_recipient(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_certificate_to_active_recipient() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_to_active_recipient(client).await;
 }
 
@@ -2320,7 +2320,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_to_inactive_recipient() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_certificate_to_inactive_recipient(client).await;
 }
 
@@ -2328,21 +2328,21 @@ async fn test_memory_handle_certificate_to_inactive_recipient() {
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_to_inactive_recipient() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_to_inactive_recipient(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_certificate_to_inactive_recipient() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_to_inactive_recipient(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_certificate_to_inactive_recipient() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_handle_certificate_to_inactive_recipient(client).await;
 }
 
@@ -2388,7 +2388,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_chain_creation_with_committee_creation() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_chain_creation_with_committee_creation(client).await;
 }
 
@@ -2396,21 +2396,21 @@ async fn test_memory_chain_creation_with_committee_creation() {
 #[test(tokio::test)]
 async fn test_rocks_db_chain_creation_with_committee_creation() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_chain_creation_with_committee_creation(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_chain_creation_with_committee_creation() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_chain_creation_with_committee_creation(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_chain_creation_with_committee_creation() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_chain_creation_with_committee_creation(client).await;
 }
 
@@ -2876,7 +2876,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfers_and_committee_creation() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_transfers_and_committee_creation(client).await;
 }
 
@@ -2884,21 +2884,21 @@ async fn test_memory_transfers_and_committee_creation() {
 #[test(tokio::test)]
 async fn test_rocks_db_transfers_and_committee_creation() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_transfers_and_committee_creation(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_transfers_and_committee_creation() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_transfers_and_committee_creation(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_transfers_and_committee_creation() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_transfers_and_committee_creation(client).await;
 }
 
@@ -3062,7 +3062,7 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfers_and_committee_removal() {
-    let client = MemoryStoreClient::new_test().await;
+    let client = MemoryStoreClient::make_test_client(None).await;
     run_test_transfers_and_committee_removal(client).await;
 }
 
@@ -3070,21 +3070,21 @@ async fn test_memory_transfers_and_committee_removal() {
 #[test(tokio::test)]
 async fn test_rocks_db_transfers_and_committee_removal() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::new_test().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
     run_test_transfers_and_committee_removal(client).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_transfers_and_committee_removal() {
-    let client = DynamoDbStoreClient::new_test().await;
+    let client = DynamoDbStoreClient::make_test_client(None).await;
     run_test_transfers_and_committee_removal(client).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_transfers_and_committee_removal() {
-    let client = ScyllaDbStoreClient::new_test().await;
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
     run_test_transfers_and_committee_removal(client).await;
 }
 

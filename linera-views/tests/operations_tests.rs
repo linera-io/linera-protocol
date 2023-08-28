@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, HashSet};
 use linera_views::rocks_db::create_rocks_db_test_client;
 
 #[cfg(feature = "aws")]
-use linera_views::test_utils::create_dynamo_db_test_client;
+use linera_views::dynamo_db::create_dynamo_db_test_client;
 
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::create_scylla_db_test_client;

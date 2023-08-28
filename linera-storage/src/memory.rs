@@ -25,8 +25,8 @@ impl MemoryStore {
 pub type MemoryStoreClient = DbStoreClient<MemoryClient>;
 
 impl MemoryStoreClient {
-    pub async fn new_test() -> MemoryStoreClient {
-        MemoryStoreClient::new(None, TEST_MEMORY_MAX_STREAM_QUERIES)
+    pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> MemoryStoreClient {
+        MemoryStoreClient::new(wasm_runtime, TEST_MEMORY_MAX_STREAM_QUERIES)
     }
 
     pub fn new(wasm_runtime: Option<WasmRuntime>, max_stream_queries: usize) -> Self {

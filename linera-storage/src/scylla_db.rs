@@ -50,14 +50,13 @@ pub type ScyllaDbStoreClient = DbStoreClient<ScyllaDbClient>;
 
 impl ScyllaDbStoreClient {
     #[cfg(any(test, feature = "test"))]
-    pub async fn new_test() -> ScyllaDbStoreClient {
+    pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> ScyllaDbStoreClient {
         let restart_database = true;
         let uri = "localhost:9042";
         let table_name = get_table_name().await;
         let max_concurrent_queries = Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES);
         let max_stream_queries = TEST_SCYLLA_DB_MAX_STREAM_QUERIES;
         let cache_size = TEST_CACHE_SIZE;
-        let wasm_runtime = None;
         ScyllaDbStoreClient::new(
             restart_database,
             uri,

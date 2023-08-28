@@ -38,11 +38,11 @@ pub type RocksDbStoreClient = DbStoreClient<RocksDbClient>;
 
 impl RocksDbStoreClient {
     #[cfg(any(test, feature = "test"))]
-    pub async fn new_test() -> RocksDbStoreClient {
+    pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> RocksDbStoreClient {
         let dir = TempDir::new().unwrap();
         RocksDbStoreClient::new(
             dir.path().to_path_buf(),
-            None,
+            wasm_runtime,
             TEST_ROCKS_DB_MAX_STREAM_QUERIES,
             TEST_CACHE_SIZE,
         )

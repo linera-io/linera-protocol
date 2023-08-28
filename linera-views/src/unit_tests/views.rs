@@ -19,10 +19,10 @@ use {
 
 #[cfg(feature = "aws")]
 use crate::{
+    dynamo_db::LocalStackTestContext,
     dynamo_db::{
         DynamoDbContext, TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES, TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
     },
-    test_utils::LocalStackTestContext,
 };
 
 #[cfg(feature = "scylladb")]
