@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! The procedural macros for the crate `linera-sdk`.
+
 mod utils;
 
 use crate::utils::{concat, snakify};
