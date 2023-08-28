@@ -13,7 +13,7 @@ use syn::{
     __private::{quote::quote, TokenStream2},
 };
 
-#[proc_macro_derive(MutationRoot)]
+#[proc_macro_derive(GraphQLMutationRoot)]
 pub fn derive_mutation_root(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemEnum);
     generate_mutation_root_code(input).into()

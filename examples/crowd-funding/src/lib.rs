@@ -245,7 +245,7 @@ use async_graphql::{Request, Response, SimpleObject};
 use fungible::AccountOwner;
 use linera_sdk::{
     base::{Amount, ApplicationId, ContractAbi, ServiceAbi, Timestamp},
-    graphql::MutationRoot,
+    graphql::GraphQLMutationRoot,
 };
 use serde::{Deserialize, Serialize};
 
@@ -290,7 +290,7 @@ impl std::fmt::Display for InitializationArgument {
 }
 
 /// Operations that can be executed by the application.
-#[derive(Debug, Deserialize, Serialize, MutationRoot)]
+#[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 #[allow(clippy::large_enum_variant)]
 pub enum Operation {
     /// Pledge some tokens to the campaign (from an account on the current chain to the campaign chain).

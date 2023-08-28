@@ -148,7 +148,7 @@
 use async_graphql::{InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
     base::{ChainId, ContractAbi, ServiceAbi, Timestamp},
-    graphql::MutationRoot,
+    graphql::GraphQLMutationRoot,
 };
 use linera_views::{common::CustomSerialize, views};
 use serde::{Deserialize, Serialize};
@@ -173,7 +173,7 @@ impl ServiceAbi for SocialAbi {
 }
 
 /// An operation that can be executed by the application.
-#[derive(Debug, Serialize, Deserialize, MutationRoot)]
+#[derive(Debug, Serialize, Deserialize, GraphQLMutationRoot)]
 pub enum Operation {
     /// Request to be subscribed to another chain.
     RequestSubscribe(ChainId),
