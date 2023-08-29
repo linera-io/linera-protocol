@@ -4,9 +4,9 @@
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    node::{NodeError, NotificationStream, ValidatorNode},
+    node::{NotificationStream, ValidatorNode},
     notifier::Notifier,
-    worker::{Notification, ValidatorWorker, WorkerState},
+    worker::{Notification, ValidatorWorker, WorkerError, WorkerState},
 };
 use futures::{future, lock::Mutex};
 use linera_base::{
@@ -25,17 +25,47 @@ use linera_storage::Store;
 use linera_views::views::ViewError;
 use rand::prelude::SliceRandom;
 use std::{borrow::Cow, sync::Arc};
+use thiserror::Error;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-/// A local replica, typically used by clients.
+/// A local node with a single worker, typically used by clients.
 pub struct LocalNode<S> {
     state: WorkerState<S>,
 }
 
+/// A client to a local node.
 #[derive(Clone)]
 pub struct LocalNodeClient<S> {
     node: Arc<Mutex<LocalNode<S>>>,
     notifier: Notifier<Notification>,
+}
+
+/// Error type for the operations on a local node.
+#[derive(Debug, Error)]
+pub enum LocalNodeError {
+    #[error(transparent)]
+    ArithmeticError(#[from] ArithmeticError),
+
+    #[error(transparent)]
+    ViewError(#[from] linera_views::views::ViewError),
+
+    #[error("Local node operation failed: {0}")]
+    WorkerError(#[from] WorkerError),
+
+    #[error(
+        "Failed to download certificates and update local node to the next height \
+         {target_next_block_height} of chain {chain_id:?}"
+    )]
+    CannotDownloadCertificates {
+        chain_id: ChainId,
+        target_next_block_height: BlockHeight,
+    },
+
+    #[error("The local node doesn't have an active chain {0:?}")]
+    InactiveChain(ChainId),
+
+    #[error("The chain info response received from the local node is invalid")]
+    InvalidChainInfoResponse,
 }
 
 impl<S> LocalNodeClient<S>
@@ -46,7 +76,7 @@ where
     pub async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
-    ) -> Result<ChainInfoResponse, NodeError> {
+    ) -> Result<ChainInfoResponse, LocalNodeError> {
         let mut node = self.node.lock().await;
         // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
         let (response, _actions) = node.state.handle_block_proposal(proposal).await?;
@@ -56,7 +86,7 @@ where
     pub async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
-    ) -> Result<ChainInfoResponse, NodeError> {
+    ) -> Result<ChainInfoResponse, LocalNodeError> {
         let mut node = self.node.lock().await;
         let mut notifications = Vec::new();
         let full_cert = node.state.full_certificate(certificate).await?;
@@ -79,7 +109,7 @@ where
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
-    ) -> Result<ChainInfoResponse, NodeError> {
+    ) -> Result<ChainInfoResponse, LocalNodeError> {
         let mut node = self.node.lock().await;
         let mut notifications = Vec::new();
         let response = node
@@ -100,7 +130,7 @@ where
     pub async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
-    ) -> Result<ChainInfoResponse, NodeError> {
+    ) -> Result<ChainInfoResponse, LocalNodeError> {
         let node = self.node.lock().await;
         // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
         let (response, _actions) = node.state.handle_chain_info_query(query).await?;
@@ -110,7 +140,7 @@ where
     pub async fn subscribe(
         &mut self,
         chains: Vec<ChainId>,
-    ) -> Result<NotificationStream, NodeError> {
+    ) -> Result<NotificationStream, LocalNodeError> {
         let rx = self.notifier.subscribe(chains);
         Ok(Box::pin(UnboundedReceiverStream::new(rx)))
     }
@@ -144,7 +174,7 @@ where
     pub(crate) async fn stage_block_execution(
         &self,
         block: Block,
-    ) -> Result<(ExecutedBlock, ChainInfoResponse), NodeError> {
+    ) -> Result<(ExecutedBlock, ChainInfoResponse), LocalNodeError> {
         let mut node = self.node.lock().await;
         let (executed_block, info) = node.state.stage_block_execution(block).await?;
         Ok((executed_block, info))
@@ -169,7 +199,10 @@ where
                 return info;
             }
             let mut result = self.handle_certificate(certificate.clone(), vec![]).await;
-            if let Err(NodeError::ApplicationBytecodesNotFound(locations)) = &result {
+            if let Err(LocalNodeError::WorkerError(WorkerError::ApplicationBytecodesNotFound(
+                locations,
+            ))) = &result
+            {
                 let chain_id = certificate.value().chain_id();
                 let mut blobs = Vec::new();
                 for maybe_blob in future::join_all(locations.iter().map(|location| {
@@ -206,7 +239,7 @@ where
     pub(crate) async fn local_chain_info(
         &mut self,
         chain_id: ChainId,
-    ) -> Result<ChainInfo, NodeError> {
+    ) -> Result<ChainInfo, LocalNodeError> {
         let query = ChainInfoQuery::new(chain_id);
         Ok(self.handle_chain_info_query(query).await?.info)
     }
@@ -215,7 +248,7 @@ where
         &self,
         chain_id: ChainId,
         query: &Query,
-    ) -> Result<Response, NodeError> {
+    ) -> Result<Response, LocalNodeError> {
         let mut node = self.node.lock().await;
         let response = node.state.query_application(chain_id, query).await?;
         Ok(response)
@@ -225,7 +258,7 @@ where
         &self,
         chain_id: ChainId,
         application_id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, NodeError> {
+    ) -> Result<UserApplicationDescription, LocalNodeError> {
         let mut node = self.node.lock().await;
         let response = node
             .state
@@ -239,7 +272,7 @@ where
         mut validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
-    ) -> Result<ChainInfo, NodeError>
+    ) -> Result<ChainInfo, LocalNodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
@@ -263,7 +296,7 @@ where
         if target_next_block_height <= info.next_block_height {
             Ok(info)
         } else {
-            Err(NodeError::CannotDownloadCertificates {
+            Err(LocalNodeError::CannotDownloadCertificates {
                 chain_id,
                 target_next_block_height,
             })
@@ -277,7 +310,7 @@ where
         &mut self,
         validators: Vec<(ValidatorName, A)>,
         blob_locations: impl IntoIterator<Item = (BytecodeLocation, ChainId)>,
-    ) -> Result<Vec<HashedValue>, NodeError>
+    ) -> Result<Vec<HashedValue>, LocalNodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
@@ -315,7 +348,7 @@ where
         validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
         location: BytecodeLocation,
-    ) -> Result<Option<HashedValue>, NodeError>
+    ) -> Result<Option<HashedValue>, LocalNodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
@@ -337,7 +370,7 @@ where
     pub async fn certificate_for(
         &mut self,
         message_id: &MessageId,
-    ) -> Result<Certificate, NodeError> {
+    ) -> Result<Certificate, LocalNodeError> {
         let query = ChainInfoQuery::new(message_id.chain_id)
             .with_sent_certificates_in_range(BlockHeightRange::single(message_id.height));
         let info = self.handle_chain_info_query(query).await?.info;
@@ -358,7 +391,7 @@ where
         chain_id: ChainId,
         start: BlockHeight,
         stop: BlockHeight,
-    ) -> Result<(), NodeError>
+    ) -> Result<(), LocalNodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
@@ -392,7 +425,7 @@ where
         &mut self,
         validators: Vec<(ValidatorName, A)>,
         chain_id: ChainId,
-    ) -> Result<ChainInfo, NodeError>
+    ) -> Result<ChainInfo, LocalNodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
@@ -416,7 +449,7 @@ where
         name: ValidatorName,
         mut client: A,
         chain_id: ChainId,
-    ) -> Result<(), NodeError>
+    ) -> Result<(), LocalNodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {

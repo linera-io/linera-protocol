@@ -104,9 +104,6 @@ pub enum NodeError {
     #[error("Worker error: {error}")]
     WorkerError { error: String },
 
-    #[error("Grpc error: {error}")]
-    GrpcError { error: String },
-
     // This error must be normalized during conversions.
     #[error("The chain {0:?} is not active in validator")]
     InactiveChain(ChainId),
@@ -126,30 +123,19 @@ pub enum NodeError {
     #[error("The following values containing application bytecode are missing: {0:?}.")]
     ApplicationBytecodesNotFound(Vec<BytecodeLocation>),
 
-    #[error(
-        "Failed to download the requested certificate(s) for chain {chain_id:?} \
-         in order to advance to the next height {target_next_block_height}"
-    )]
-    CannotDownloadCertificates {
-        chain_id: ChainId,
-        target_next_block_height: BlockHeight,
-    },
+    // This error must be normalized during conversions.
+    #[error("We don't have the value for the certificate.")]
+    MissingCertificateValue,
 
     #[error("Validator's response to block proposal failed to include a vote")]
     MissingVoteInValidatorResponse,
 
-    // This should go to ClientError.
     #[error(
         "Failed to update validator because our local node doesn't have an active chain {0:?}"
     )]
     InactiveLocalChain(ChainId),
 
-    // This should go to ClientError.
-    #[error("The block does contain the hash that we expected for the previous block")]
-    InvalidLocalBlockChaining,
-
-    // This should go to ClientError.
-    #[error("The given chain info response is invalid")]
+    #[error("The received chain info response is invalid")]
     InvalidChainInfoResponse,
 
     #[error(
@@ -170,12 +156,14 @@ pub enum NodeError {
     )]
     ProposedBlockWithLaggingBytecode { chain_id: ChainId, retries: usize },
 
-    // Networking and sharding.
-    // TODO(#258): Those probably belong to linera-service.
+    // Networking errors.
+    // TODO(#258): These errors should be defined in linera-rpc.
     #[error("Cannot deserialize")]
     InvalidDecoding,
     #[error("Unexpected message")]
     UnexpectedMessage,
+    #[error("Grpc error: {error}")]
+    GrpcError { error: String },
     #[error("Network error while querying service: {error}")]
     ClientIoError { error: String },
     #[error("Failed to resolve validator address: {address}")]
@@ -184,8 +172,6 @@ pub enum NodeError {
     SubscriptionError { transport: String },
     #[error("Failed to subscribe; tonic status: {status}")]
     SubscriptionFailed { status: String },
-    #[error("We don't have the value for the certificate.")]
-    MissingCertificateValue,
 }
 
 impl From<ViewError> for NodeError {
