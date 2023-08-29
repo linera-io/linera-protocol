@@ -4,7 +4,8 @@
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery},
-    node::{LocalNodeClient, NodeError, NotificationStream, ValidatorNode},
+    local_node::LocalNodeClient,
+    node::{NodeError, NotificationStream, ValidatorNode},
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::{Notification, Reason, WorkerState},
 };

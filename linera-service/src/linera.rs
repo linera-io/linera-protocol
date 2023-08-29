@@ -16,7 +16,8 @@ use linera_chain::data_types::{Certificate, CertificateValue, ExecutedBlock};
 use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
     data_types::ChainInfoQuery,
-    node::{LocalNodeClient, ValidatorNode},
+    local_node::LocalNodeClient,
+    node::ValidatorNode,
     tracker::NotificationTracker,
     worker::WorkerState,
 };
