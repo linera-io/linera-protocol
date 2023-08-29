@@ -1,0 +1,82 @@
+query Chains {
+  chains {
+    list
+    default
+  }
+}
+
+query Applications($chainId: ChainId!) {
+  applications(chainId: $chainId) {
+    id
+    link
+    description
+  }
+}
+
+query Block($hash: CryptoHash, $chainId: ChainId!) {
+  block(hash: $hash, chainId: $chainId) {
+    hash
+    value {
+      status
+      executedBlock {
+        block {
+          chainId
+          epoch
+          height
+          timestamp
+          authenticatedSigner
+          previousBlockHash
+          incomingMessages {
+            origin
+            event
+          }
+          operations
+        }
+        messages {
+          destination
+          authenticatedSigner
+          message
+        }
+        stateHash
+      }
+    }
+  }
+}
+
+query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
+  blocks(from: $from, chainId: $chainId, limit: $limit) {
+    hash
+    value {
+      status
+      executedBlock {
+        block {
+          chainId
+          epoch
+          height
+          timestamp
+          authenticatedSigner
+          previousBlockHash
+          incomingMessages {
+            origin
+            event
+          }
+          operations
+        }
+        messages {
+          destination
+          authenticatedSigner
+          message
+        }
+        stateHash
+      }
+    }
+  }
+}
+
+subscription Notifications($chainId: ChainId!) {
+  notifications(chainId: $chainId)
+}
+
+mutation Transfer($chainId: ChainId!, $recipient: ChainId!, $amount: Amount!) {
+  transfer(chainId: $chainId, recipient: { Account: { chain_id: $recipient } }, amount: $amount)
+}

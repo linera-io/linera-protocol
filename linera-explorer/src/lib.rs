@@ -12,20 +12,27 @@ mod js_utils;
 
 use anyhow::{anyhow, Result};
 use futures::prelude::*;
-use graphql::{
-    applications::ApplicationsApplications as Application,
-    block::BlockBlock as Block,
-    blocks::BlocksBlocks as Blocks,
-    get_operation::{GetOperationOperation as Operation, OperationKeyKind},
-    operations::{OperationKeyKind as OperationsKeyKind, OperationsOperations as Operations},
-    Chains, OperationKey,
-};
-use graphql_client::{reqwest::post_graphql, Response};
+use graphql_client::Response;
 use js_utils::{getf, log_str, parse, setf, stringify, SER};
 use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
     identifiers::{ChainDescription, ChainId},
+};
+use linera_graphql_client::{
+    operations::{
+        get_operation,
+        get_operation::{GetOperationOperation as Operation, OperationKeyKind},
+        operations,
+        operations::{OperationKeyKind as OperationsKeyKind, OperationsOperations as Operations},
+        OperationKey,
+    },
+    request,
+    service::{
+        applications, applications::ApplicationsApplications as Application, block,
+        block::BlockBlock as Block, blocks, blocks::BlocksBlocks as Blocks, chains, notifications,
+        Chains, Reason,
+    },
 };
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
@@ -53,7 +60,7 @@ enum Page {
     Block(Box<Block>),
     Applications(Vec<Application>),
     Application {
-        app: Application,
+        app: Box<Application>,
         queries: Value,
         mutations: Value,
         subscriptions: Value,
@@ -153,42 +160,42 @@ async fn get_blocks(
     limit: Option<u32>,
 ) -> Result<Vec<Blocks>> {
     let client = reqwest::Client::new();
-    let variables = graphql::blocks::Variables {
+    let variables = blocks::Variables {
         from,
         chain_id,
         limit: limit.map(|x| x.into()),
     };
-    let res = post_graphql::<crate::graphql::Blocks, _>(&client, node, variables).await?;
-    match res.data {
-        None => Err(anyhow!("null blocks data: {:?}", res.errors)),
-        Some(data) => Ok(data.blocks),
-    }
+    Ok(
+        request::<linera_graphql_client::service::Blocks, _>(&client, node, variables)
+            .await?
+            .blocks,
+    )
 }
 
 async fn get_applications(node: &str, chain_id: ChainId) -> Result<Vec<Application>> {
     let client = reqwest::Client::new();
-    let variables = graphql::applications::Variables { chain_id };
-    let result = post_graphql::<crate::graphql::Applications, _>(&client, node, variables).await?;
-    match result.data {
-        None => Err(anyhow!("null applications data: {:?}", result.errors)),
-        Some(data) => Ok(data.applications),
-    }
+    let variables = applications::Variables { chain_id };
+    Ok(
+        request::<linera_graphql_client::service::Applications, _>(&client, node, variables)
+            .await?
+            .applications,
+    )
 }
 
 async fn get_operations(indexer: &str, chain_id: ChainId) -> Result<Vec<Operations>> {
     let client = reqwest::Client::new();
     let operations_indexer = format!("{}/operations", indexer);
-    let variables = graphql::operations::Variables {
+    let variables = operations::Variables {
         from: OperationsKeyKind::Last(chain_id),
         limit: None,
     };
-    let result =
-        post_graphql::<crate::graphql::Operations, _>(&client, &operations_indexer, variables)
-            .await?;
-    result
-        .data
-        .ok_or_else(|| anyhow!("null operations data: {:?}", result.errors))
-        .map(|data| data.operations)
+    Ok(request::<linera_graphql_client::operations::Operations, _>(
+        &client,
+        &operations_indexer,
+        variables,
+    )
+    .await?
+    .operations)
 }
 
 /// Returns the error page.
@@ -218,10 +225,11 @@ async fn blocks(
 /// Returns the block page.
 async fn block(node: &str, chain_id: ChainId, hash: Option<CryptoHash>) -> Result<(Page, String)> {
     let client = reqwest::Client::new();
-    let variables = graphql::block::Variables { hash, chain_id };
-    let result = post_graphql::<crate::graphql::Block, _>(&client, node, variables).await?;
-    let data = result.data.ok_or_else(|| anyhow!("no block data found"))?;
-    let block = data.block.ok_or_else(|| anyhow!("no block found"))?;
+    let variables = block::Variables { hash, chain_id };
+    let block = request::<linera_graphql_client::service::Block, _>(&client, node, variables)
+        .await?
+        .block
+        .ok_or_else(|| anyhow!("no block found"))?;
     let hash = block.hash;
     Ok((
         Page::Block(Box::new(block)),
@@ -232,12 +240,8 @@ async fn block(node: &str, chain_id: ChainId, hash: Option<CryptoHash>) -> Resul
 /// Queries wallet chains.
 async fn chains(app: &JsValue, node: &str) -> Result<ChainId> {
     let client = reqwest::Client::new();
-    let variables = graphql::chains::Variables;
-    let result = post_graphql::<Chains, _>(&client, node, variables).await?;
-    let chains = result
-        .data
-        .ok_or_else(|| anyhow!("no data in chains query"))?
-        .chains;
+    let variables = chains::Variables;
+    let chains = request::<Chains, _>(&client, node, variables).await?.chains;
     let chains_js = chains
         .list
         .serialize(&SER)
@@ -279,16 +283,15 @@ async fn operation(
         Some(key) => OperationKeyKind::Key(key),
         None => OperationKeyKind::Last(chain_id),
     };
-    let variables = graphql::get_operation::Variables { key };
-    let result =
-        post_graphql::<crate::graphql::GetOperation, _>(&client, operations_indexer, variables)
-            .await?;
-    let data = result
-        .data
-        .ok_or_else(|| anyhow!("no operation data found"))?;
-    let operation = data
-        .operation
-        .ok_or_else(|| anyhow!("no operation found"))?;
+    let variables = get_operation::Variables { key };
+    let operation = request::<linera_graphql_client::operations::GetOperation, _>(
+        &client,
+        &operations_indexer,
+        variables,
+    )
+    .await?
+    .operation
+    .ok_or_else(|| anyhow!("no operation found"))?;
     Ok((
         Page::Operation(operation.clone()),
         format!(
@@ -389,6 +392,16 @@ fn fill_type(element: &Value, types: &Vec<Value>) -> Value {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+fn application_id(app: &Application) -> &str {
+    app.id.as_str()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn application_id(_app: &Application) -> &str {
+    panic!("explorer not compiled in wasm32 architecture")
+}
+
 /// Returns the application page.
 async fn application(app: Application) -> Result<(Page, String)> {
     let schema = graphql::introspection(&app.link).await?;
@@ -406,10 +419,10 @@ async fn application(app: Application) -> Result<(Page, String)> {
     let subscriptions = list_entrypoints(&types, &sch["subscriptionType"]["name"])
         .unwrap_or(Value::Array(Vec::new()));
     let subscriptions = fill_type(&subscriptions, &types);
-    let pathname = format!("/application/{}", app.id);
+    let pathname = format!("/application/{}", application_id(&app));
     Ok((
         Page::Application {
-            app,
+            app: Box::new(app),
             queries,
             mutations,
             subscriptions,
@@ -659,16 +672,14 @@ async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
             match evt {
                 WsMessage::Text(message) => {
                     let graphql_message = serde_json::from_str::<
-                        GQuery<Response<graphql::notifications::ResponseData>>,
+                        GQuery<Response<notifications::ResponseData>>,
                     >(&message)
                     .expect("unexpected websocket response");
                     if let Some(payload) = graphql_message.payload {
                         if let Some(message_data) = payload.data {
                             let data =
                                 from_value::<Data>(app.clone()).expect("cannot parse vue data");
-                            if let graphql::Reason::NewBlock { hash: _hash, .. } =
-                                message_data.notifications.reason
-                            {
+                            if let Reason::NewBlock { .. } = message_data.notifications.reason {
                                 if message_data.notifications.chain_id == chain {
                                     route_aux(&app, &data, &None, &Vec::new(), false).await
                                 }

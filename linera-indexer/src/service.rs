@@ -3,11 +3,7 @@
 
 //! This module defines the service client for the indexer.
 
-use crate::{
-    common::IndexerError,
-    graphql::{block, chains, notifications, Block, Chains, Notifications},
-    indexer::Indexer,
-};
+use crate::{common::IndexerError, indexer::Indexer};
 use async_tungstenite::{
     tokio::connect_async,
     tungstenite::{client::IntoClientRequest, http::HeaderValue},
@@ -21,6 +17,7 @@ use graphql_ws_client::{graphql::StreamingOperation, GraphQLClientClientBuilder}
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
 use linera_chain::data_types::HashedValue;
 use linera_core::worker::Reason;
+use linera_graphql_client::service::{block, chains, notifications, Block, Chains, Notifications};
 use linera_views::{
     common::KeyValueStoreClient, value_splitting::DatabaseConsistencyError, views::ViewError,
 };
@@ -91,7 +88,9 @@ impl Service {
         match response.data {
             None => Err(IndexerError::NullData(response.errors)),
             Some(data) => match data.block {
-                Some(block) => block.try_into(),
+                Some(block) => block
+                    .try_into()
+                    .map_err(IndexerError::UnknownCertificateStatus),
                 None => Err(IndexerError::NotFound(hash)),
             },
         }
