@@ -11,7 +11,8 @@ use linera_base::{
 };
 use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
-    client::{ChainClient, ValidatorNodeProvider},
+    client::ChainClient,
+    node::ValidatorNodeProvider,
     tracker::NotificationTracker,
     worker::{Notification, Reason},
 };

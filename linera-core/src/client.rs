@@ -5,7 +5,7 @@
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery},
     local_node::LocalNodeClient,
-    node::{NodeError, NotificationStream, ValidatorNode},
+    node::{NodeError, NotificationStream, ValidatorNode, ValidatorNodeProvider},
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::{Notification, Reason, WorkerState},
 };
@@ -90,28 +90,6 @@ pub struct ChainClient<ValidatorNodeProvider, StorageClient> {
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
     node_client: LocalNodeClient<StorageClient>,
-}
-
-/// Turn an address into a validator node (local node or client to a remote node).
-#[allow(clippy::result_large_err)]
-pub trait ValidatorNodeProvider {
-    type Node: ValidatorNode + Clone + Send + Sync + 'static;
-
-    fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
-
-    fn make_nodes<I>(&self, committee: &Committee) -> Result<I, NodeError>
-    where
-        I: FromIterator<(ValidatorName, Self::Node)>,
-    {
-        committee
-            .validators()
-            .iter()
-            .map(|(name, validator)| {
-                let node = self.make_node(&validator.network_address)?;
-                Ok((*name, node))
-            })
-            .collect()
-    }
 }
 
 impl<P, S> ChainClient<P, S> {

@@ -17,7 +17,10 @@ use linera_chain::{
     data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate, Origin},
     ChainError,
 };
-use linera_execution::BytecodeLocation;
+use linera_execution::{
+    committee::{Committee, ValidatorName},
+    BytecodeLocation,
+};
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
@@ -56,6 +59,28 @@ pub trait ValidatorNode {
 
     /// Subscribes to receiving notifications for a collection of chains.
     async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError>;
+}
+
+/// Turn an address into a validator node (local node or client to a remote node).
+#[allow(clippy::result_large_err)]
+pub trait ValidatorNodeProvider {
+    type Node: ValidatorNode + Clone + Send + Sync + 'static;
+
+    fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
+
+    fn make_nodes<I>(&self, committee: &Committee) -> Result<I, NodeError>
+    where
+        I: FromIterator<(ValidatorName, Self::Node)>,
+    {
+        committee
+            .validators()
+            .iter()
+            .map(|(name, validator)| {
+                let node = self.make_node(&validator.network_address)?;
+                Ok((*name, node))
+            })
+            .collect()
+    }
 }
 
 /// Error type for node queries.

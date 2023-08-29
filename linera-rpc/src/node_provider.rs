@@ -7,7 +7,7 @@ use crate::{
     grpc_network::GrpcClient,
     simple_network::SimpleClient,
 };
-use linera_core::{client::ValidatorNodeProvider, node::NodeError};
+use linera_core::node::{NodeError, ValidatorNodeProvider};
 use std::{str::FromStr, time::Duration};
 
 /// A general node provider which delegates node provision to the underlying
