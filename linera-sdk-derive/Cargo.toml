@@ -1,6 +1,6 @@
 [package]
 name = "linera-sdk-derive"
-version = "0.3.0"
+version = "0.4.0"
 description = "The procedural macros for the crate `linera-sdk`"
 authors = ["Linera <contact@linera.io>"]
 repository = "https://github.com/linera-io/linera-protocol"
