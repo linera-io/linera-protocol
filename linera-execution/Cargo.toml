@@ -39,7 +39,7 @@ serde = { workspace = true }
 serde_bytes = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["fs"] }
+tokio = { workspace = true, features = ["fs", "rt-multi-thread"] }
 tracing = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
 wasmer = { workspace = true, optional = true }

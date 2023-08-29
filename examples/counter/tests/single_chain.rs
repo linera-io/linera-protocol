@@ -11,7 +11,7 @@ use linera_sdk::test::TestValidator;
 ///
 /// Creates the application on a `chain`, initializing it with a 42 then add 15 and obtain 57.
 /// which is then checked.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn single_chain_test() {
     let (validator, bytecode_id) = TestValidator::with_current_bytecode().await;
     let mut chain = validator.new_chain().await;

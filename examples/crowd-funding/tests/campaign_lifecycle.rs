@@ -18,7 +18,7 @@ use std::iter;
 /// Creates a campaign on a `campaign_chain` and sets up the fungible token to use with three
 /// backer chains. Pledges part of each backer's balance to the campaign and then completes it,
 /// collecting the pledges. The final balance of each backer and the campaign owner is checked.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn collect_pledges() {
     let initial_amount = Amount::from_tokens(100);
     let target_amount = Amount::from_tokens(220);
@@ -115,7 +115,7 @@ async fn collect_pledges() {
 /// Creates a campaign on a `campaign_chain` and sets up the fungible token to use with three
 /// backer chains. Pledges part of each backer's balance to the campaign and then completes it,
 /// collecting the pledges. The final balance of each backer and the campaign owner is checked.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn cancel_successful_campaign() {
     let initial_amount = Amount::from_tokens(100);
     let target_amount = Amount::from_tokens(220);

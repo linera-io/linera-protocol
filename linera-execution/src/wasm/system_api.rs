@@ -159,10 +159,12 @@ macro_rules! impl_contract_system_api {
                 let runtime = tokio::runtime::Handle::current();
 
                 std::thread::scope(|scope| {
-                    scope
-                        .spawn(|| runtime.block_on(future))
-                        .join()
-                        .expect("Panic when running a future in a blocking manner")
+                    tokio::task::block_in_place(|| {
+                        scope
+                            .spawn(|| runtime.block_on(future))
+                            .join()
+                            .expect("Panic when running a future in a blocking manner")
+                    })
                 })
             }
         }
