@@ -31,20 +31,40 @@ impl ServiceAbi for AmmAbi {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Operation {
     // TODO(#969): Need to also implement Swap Bids here
+    /// Swap operation
+    /// Given an input token idx (can be 0 or 1), and an input amount,
+    /// Swap that token amount for an amount of the other token,
+    /// calculated based on the current AMM ratio
+    /// Owner here is the user executing the Swap
     Swap {
         owner: AccountOwner,
         input_token_idx: u32,
         input_amount: Amount,
     },
+    /// Add liquidity operation
+    /// Given a maximum token0 and token1 amount that you're willing to add,
+    /// add liquidity to the AMM such that you'll be adding AT MOST
+    /// `max_token0_amount` of token0, and `max_token1_amount` of token1,
+    /// which will be calculated based on the current AMM ratio
+    /// Owner here is the user adding liquidity, which currently can only
+    /// be a chain owner
     AddLiquidity {
         owner: AccountOwner,
         max_token0_amount: Amount,
         max_token1_amount: Amount,
     },
+    /// Remove liquidity operation
+    /// Given a token idx of the token you'd like to remove (can be 0 or 1),
+    /// and an amount of that token that you'd like to remove, we'll calculate
+    /// how much of the other token will also be removed, which will be calculated
+    /// based on the current AMM ratio. Then remove the amounts from both tokens
+    /// as a removal of liquidity
+    /// Owner here is the user removing liquidity, which currently can only
+    /// be a chain owner
     RemoveLiquidity {
         owner: AccountOwner,
-        input_token_idx: u32,
-        input_amount: Amount,
+        token_to_remove_idx: u32,
+        token_to_remove_amount: Amount,
     },
 }
 
@@ -71,9 +91,6 @@ pub enum ApplicationCall {
 #[derive(Debug, Error)]
 #[allow(dead_code)]
 pub enum AmmError {
-    #[error("Insufficient liquidity in the pool")]
-    InsufficientLiquidityError,
-
     #[error("Invalid pool balance")]
     InvalidPoolBalanceError,
 

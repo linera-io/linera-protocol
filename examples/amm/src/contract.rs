@@ -10,7 +10,7 @@ use linera_sdk::{
     base::{Amount, ApplicationId, SessionId, WithContractAbi},
     contract::system_api,
     ensure, ApplicationCallResult, CalleeContext, Contract, ExecutionResult, MessageContext,
-    OperationContext, SessionCallResult, ViewStateStorage,
+    OperationContext, OutgoingMessage, SessionCallResult, ViewStateStorage,
 };
 use num_bigint::BigUint;
 use num_traits::{cast::FromPrimitive, ToPrimitive};
@@ -159,14 +159,11 @@ impl Amm {
                     // For token0_amount, it would be this:
                     //      token0_amount = (balance0 * max_token1_amount) / balance1
 
-                    let token0_amount_bigint =
-                        (&balance0_bigint * &max_token1_amount_bigint) / &balance1_bigint;
-                    let token1_amount_bigint =
-                        (&balance1_bigint * &max_token0_amount_bigint) / &balance0_bigint;
-
-                    if &max_token0_amount_bigint * balance1_bigint
-                        > &max_token1_amount_bigint * balance0_bigint
+                    if &max_token0_amount_bigint * &balance1_bigint
+                        > &max_token1_amount_bigint * &balance0_bigint
                     {
+                        let token0_amount_bigint =
+                            (&balance0_bigint * &max_token1_amount_bigint) / &balance1_bigint;
                         token0_amount = Amount::from_atto(
                             token0_amount_bigint
                                 .to_u128()
@@ -178,6 +175,8 @@ impl Amm {
                                 .expect("Couldn't convert max_token1_amount_bigint to u128"),
                         );
                     } else {
+                        let token1_amount_bigint =
+                            (&balance1_bigint * &max_token0_amount_bigint) / &balance0_bigint;
                         token0_amount = Amount::from_atto(
                             max_token0_amount_bigint
                                 .to_u128()
@@ -205,53 +204,50 @@ impl Amm {
             // we'll remove based on the current ratio, and remove them.
             Operation::RemoveLiquidity {
                 owner,
-                input_token_idx,
-                input_amount,
+                token_to_remove_idx,
+                mut token_to_remove_amount,
             } => {
-                if input_token_idx > 1 {
+                if token_to_remove_idx > 1 {
                     return Err(AmmError::InvalidTokenIdx);
                 }
 
-                let other_token_idx = 1 - input_token_idx;
+                let other_token_to_remove_idx = 1 - token_to_remove_idx;
                 let balance0 = self.get_pool_balance(0).await?;
                 let balance1 = self.get_pool_balance(1).await?;
 
-                if (input_token_idx == 0 && input_amount > balance0)
-                    || (input_token_idx == 1 && input_amount > balance1)
-                {
-                    return Err(AmmError::InsufficientLiquidityError);
+                if token_to_remove_idx == 0 && token_to_remove_amount > balance0 {
+                    token_to_remove_amount = balance0;
+                } else if token_to_remove_idx == 1 && token_to_remove_amount > balance1 {
+                    token_to_remove_amount = balance1;
                 }
 
-                let input_amount_bigint = BigUint::from_u128(u128::from(input_amount))
-                    .expect("Couldn't generate input_amount in bigint");
+                let token_to_remove_amount_bigint =
+                    BigUint::from_u128(u128::from(token_to_remove_amount))
+                        .expect("Couldn't generate token_to_remove_amount in bigint");
 
                 let balance0_bigint = BigUint::from_u128(u128::from(balance0))
                     .expect("Couldn't generate balance0 in bigint");
                 let balance1_bigint = BigUint::from_u128(u128::from(balance1))
                     .expect("Couldn't generate balance1 in bigint");
 
-                let other_amount = if input_token_idx == 0 {
+                let other_amount = if token_to_remove_idx == 0 {
                     Amount::from_atto(
-                        ((input_amount_bigint * balance1_bigint) / balance0_bigint)
+                        ((token_to_remove_amount_bigint * balance1_bigint) / balance0_bigint)
                             .to_u128()
                             .expect("Couldn't convert other_amount to u128"),
                     )
                 } else {
                     Amount::from_atto(
-                        ((input_amount_bigint * balance0_bigint) / balance1_bigint)
+                        ((token_to_remove_amount_bigint * balance0_bigint) / balance1_bigint)
                             .to_u128()
                             .expect("Couldn't convert other_amount to u128"),
                     )
                 };
 
-                if (other_token_idx == 1 && other_amount > balance1)
-                    || (other_token_idx == 0 && other_amount > balance0)
-                {
-                    return Err(AmmError::InsufficientLiquidityError);
-                }
-
-                self.send_to(&owner, input_token_idx, input_amount).await?;
-                self.send_to(&owner, other_token_idx, other_amount).await?;
+                self.send_to(&owner, token_to_remove_idx, token_to_remove_amount)
+                    .await?;
+                self.send_to(&owner, other_token_to_remove_idx, other_amount)
+                    .await?;
                 Ok(())
             }
         }
@@ -303,7 +299,11 @@ impl Amm {
                     input_token_idx,
                     input_amount,
                 };
-                result.messages.push((chain_id.into(), true, message));
+                result.messages.push(OutgoingMessage {
+                    destination: chain_id.into(),
+                    authenticated: true,
+                    message,
+                });
             }
             Operation::AddLiquidity {
                 owner: _,
@@ -314,8 +314,8 @@ impl Amm {
             }
             Operation::RemoveLiquidity {
                 owner: _,
-                input_token_idx: _,
-                input_amount: _,
+                token_to_remove_idx: _,
+                token_to_remove_amount: _,
             } => {
                 return Err(AmmError::RemovingLiquidityFromRemoteChain);
             }
@@ -341,7 +341,11 @@ impl Amm {
                     input_token_idx,
                     input_amount,
                 };
-                result.messages.push((chain_id.into(), true, message));
+                result.messages.push(OutgoingMessage {
+                    destination: chain_id.into(),
+                    authenticated: true,
+                    message,
+                });
             }
         }
 

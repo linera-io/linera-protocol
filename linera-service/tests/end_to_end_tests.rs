@@ -263,13 +263,13 @@ impl AmmApp {
     async fn remove_liquidity(
         &self,
         owner: fungible::AccountOwner,
-        input_token_idx: u32,
-        input_amount: Amount,
+        token_to_remove_idx: u32,
+        token_to_remove_amount: Amount,
     ) {
         let operation = amm::Operation::RemoveLiquidity {
             owner,
-            input_token_idx,
-            input_amount,
+            token_to_remove_idx,
+            token_to_remove_amount,
         };
 
         let query = format!(
@@ -1794,8 +1794,8 @@ async fn test_end_to_end_amm() {
         .await;
     let parameter_str = serde_json::to_string(&parameters).unwrap();
     let argument_str = serde_json::to_string(&()).unwrap();
-    let (application_id_amm, application_id_amm_struct) = node_service_admin
-        .create_application_tuple(
+    let application_id_amm = node_service_admin
+        .create_application(
             &chain_admin,
             bytecode_id,
             parameter_str,
@@ -1806,6 +1806,10 @@ async fn test_end_to_end_amm() {
             ],
         )
         .await;
+    let application_id_amm_struct = application_id_amm
+        .parse::<ApplicationId>()
+        .unwrap()
+        .with_abi();
 
     let owner_amm = fungible::AccountOwner::Application(application_id_amm_struct);
 
