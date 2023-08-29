@@ -8,7 +8,6 @@ use crate::{
     notifier::Notifier,
     worker::{Notification, ValidatorWorker, WorkerState},
 };
-use async_trait::async_trait;
 use futures::{future, lock::Mutex};
 use linera_base::{
     data_types::{ArithmeticError, BlockHeight},
@@ -39,13 +38,12 @@ pub struct LocalNodeClient<S> {
     notifier: Notifier<Notification>,
 }
 
-#[async_trait]
-impl<S> ValidatorNode for LocalNodeClient<S>
+impl<S> LocalNodeClient<S>
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    async fn handle_block_proposal(
+    pub async fn handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
@@ -55,7 +53,7 @@ where
         Ok(response)
     }
 
-    async fn handle_lite_certificate(
+    pub async fn handle_lite_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,
     ) -> Result<ChainInfoResponse, NodeError> {
@@ -77,7 +75,7 @@ where
         Ok(response)
     }
 
-    async fn handle_certificate(
+    pub async fn handle_certificate(
         &mut self,
         certificate: Certificate,
         blobs: Vec<HashedValue>,
@@ -99,7 +97,7 @@ where
         Ok(response)
     }
 
-    async fn handle_chain_info_query(
+    pub async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, NodeError> {
@@ -109,7 +107,10 @@ where
         Ok(response)
     }
 
-    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+    pub async fn subscribe(
+        &mut self,
+        chains: Vec<ChainId>,
+    ) -> Result<NotificationStream, NodeError> {
         let rx = self.notifier.subscribe(chains);
         Ok(Box::pin(UnboundedReceiverStream::new(rx)))
     }

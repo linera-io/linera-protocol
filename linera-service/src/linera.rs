@@ -17,7 +17,6 @@ use linera_core::{
     client::{ChainClient, ValidatorNodeProvider},
     data_types::ChainInfoQuery,
     local_node::LocalNodeClient,
-    node::ValidatorNode,
     tracker::NotificationTracker,
     worker::WorkerState,
 };
