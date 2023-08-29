@@ -205,14 +205,14 @@ where
             {
                 let chain_id = certificate.value().chain_id();
                 let mut blobs = Vec::new();
-                for maybe_blob in future::join_all(locations.iter().map(|location| {
+                let maybe_blobs = future::join_all(locations.iter().map(|location| {
                     let mut client = client.clone();
                     async move {
                         Self::try_download_blob_from(name, &mut client, chain_id, *location).await
                     }
                 }))
-                .await
-                {
+                .await;
+                for maybe_blob in maybe_blobs {
                     if let Some(blob) = maybe_blob {
                         blobs.push(blob);
                     } else {

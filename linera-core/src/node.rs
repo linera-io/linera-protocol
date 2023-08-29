@@ -29,7 +29,7 @@ use thiserror::Error;
 /// A pinned [`Stream`] of Notifications.
 pub type NotificationStream = Pin<Box<dyn Stream<Item = Notification> + Send>>;
 
-/// How to communicate with a validator or a local node.
+/// How to communicate with a validator node.
 #[async_trait]
 pub trait ValidatorNode {
     /// Proposes a new block.
@@ -61,7 +61,7 @@ pub trait ValidatorNode {
     async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError>;
 }
 
-/// Turn an address into a validator node (local node or client to a remote node).
+/// Turn an address into a validator node.
 #[allow(clippy::result_large_err)]
 pub trait ValidatorNodeProvider {
     type Node: ValidatorNode + Clone + Send + Sync + 'static;
