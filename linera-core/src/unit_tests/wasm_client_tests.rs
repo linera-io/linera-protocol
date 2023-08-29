@@ -50,7 +50,6 @@ async fn test_rocks_db_create_application(wasm_runtime: WasmRuntime) -> Result<(
     run_test_create_application(MakeRocksDbStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -59,7 +58,6 @@ async fn test_dynamo_db_create_application(wasm_runtime: WasmRuntime) -> Result<
     run_test_create_application(MakeDynamoDbStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
 
-#[ignore]
 #[cfg(feature = "scylladb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -165,7 +163,6 @@ async fn test_rocks_db_run_application_with_dependency(
     .await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -179,7 +176,6 @@ async fn test_dynamo_db_run_application_with_dependency(
     .await
 }
 
-#[ignore]
 #[cfg(feature = "scylladb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
