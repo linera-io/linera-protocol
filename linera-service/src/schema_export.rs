@@ -7,9 +7,8 @@ use linera_views::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
 
 use async_trait::async_trait;
 use linera_core::{
-    client::ValidatorNodeProvider,
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{NodeError, NotificationStream, ValidatorNode},
+    node::{NodeError, NotificationStream, ValidatorNode, ValidatorNodeProvider},
 };
 use linera_execution::committee::Committee;
 use linera_service::{chain_listener::ChainListenerConfig, node_service::NodeService};

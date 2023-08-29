@@ -13,7 +13,7 @@ use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{ChainDescription, ChainId, Owner},
 };
-use linera_core::client::{ChainClient, ValidatorNodeProvider};
+use linera_core::{client::ChainClient, node::ValidatorNodeProvider};
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
     pricing::Pricing,

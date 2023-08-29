@@ -25,10 +25,7 @@ use linera_base::{
     BcsHexParseError,
 };
 use linera_chain::{data_types::HashedValue, ChainStateView};
-use linera_core::{
-    client::{ChainClient, ValidatorNodeProvider},
-    worker::Notification,
-};
+use linera_core::{client::ChainClient, node::ValidatorNodeProvider, worker::Notification};
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{AdminOperation, Recipient, SystemChannel, UserData},

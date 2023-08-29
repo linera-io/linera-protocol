@@ -137,10 +137,13 @@ pub enum Reason {
 pub enum WorkerError {
     #[error(transparent)]
     CryptoError(#[from] linera_base::crypto::CryptoError),
+
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
+
     #[error(transparent)]
     ViewError(#[from] linera_views::views::ViewError),
+
     #[error(transparent)]
     ChainError(#[from] Box<linera_chain::ChainError>),
 

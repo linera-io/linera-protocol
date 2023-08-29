@@ -14,11 +14,8 @@ use linera_base::{
 };
 use linera_chain::data_types::{Certificate, CertificateValue, ExecutedBlock};
 use linera_core::{
-    client::{ChainClient, ValidatorNodeProvider},
-    data_types::ChainInfoQuery,
-    node::{LocalNodeClient, ValidatorNode},
-    tracker::NotificationTracker,
-    worker::WorkerState,
+    client::ChainClient, data_types::ChainInfoQuery, local_node::LocalNodeClient,
+    node::ValidatorNodeProvider, tracker::NotificationTracker, worker::WorkerState,
 };
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},

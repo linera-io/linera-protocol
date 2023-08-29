@@ -6,6 +6,7 @@
 
 pub mod client;
 pub mod data_types;
+pub mod local_node;
 pub mod node;
 pub mod notifier;
 pub mod tracker;

@@ -455,14 +455,10 @@ NodeError:
         STRUCT:
           - error: STR
     5:
-      GrpcError:
-        STRUCT:
-          - error: STR
-    6:
       InactiveChain:
         NEWTYPE:
           TYPENAME: ChainId
-    7:
+    6:
       MissingCrossChainUpdate:
         STRUCT:
           - chain_id:
@@ -471,68 +467,63 @@ NodeError:
               TYPENAME: Origin
           - height:
               TYPENAME: BlockHeight
-    8:
+    7:
       ApplicationBytecodesNotFound:
         NEWTYPE:
           SEQ:
             TYPENAME: BytecodeLocation
+    8:
+      MissingCertificateValue: UNIT
     9:
-      CannotDownloadCertificates:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - target_next_block_height:
-              TYPENAME: BlockHeight
-    10:
       MissingVoteInValidatorResponse: UNIT
-    11:
+    10:
       InactiveLocalChain:
         NEWTYPE:
           TYPENAME: ChainId
-    12:
-      InvalidLocalBlockChaining: UNIT
-    13:
+    11:
       InvalidChainInfoResponse: UNIT
-    14:
+    12:
       ProposedBlockToInactiveChain:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - retries: U64
-    15:
+    13:
       ProposedBlockWithLaggingMessages:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - retries: U64
-    16:
+    14:
       ProposedBlockWithLaggingBytecode:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - retries: U64
-    17:
+    15:
       InvalidDecoding: UNIT
-    18:
+    16:
       UnexpectedMessage: UNIT
-    19:
+    17:
+      GrpcError:
+        STRUCT:
+          - error: STR
+    18:
       ClientIoError:
         STRUCT:
           - error: STR
-    20:
+    19:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    21:
+    20:
       SubscriptionError:
         STRUCT:
           - transport: STR
-    22:
+    21:
       SubscriptionFailed:
         STRUCT:
           - status: STR
-    23:
-      MissingCertificateValue: UNIT
 Operation:
   ENUM:
     0:
