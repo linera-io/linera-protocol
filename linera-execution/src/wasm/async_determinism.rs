@@ -181,27 +181,27 @@ impl<'futures> QueuedHostFutureFactory<'futures> {
         let (result_sender, result_receiver) = oneshot::channel();
         let future_sender = self.sender.clone();
 
-        HostFuture::new(async move {
-            future_sender
-                .unbounded_send(
-                    future
-                        .map(move |result| -> Box<dyn FnOnce() + Send> {
-                            Box::new(move || {
-                                // An error when sending the result indicates that the user
-                                // application dropped the `HostFuture`, and no longer needs the
-                                // result
-                                let _ = result_sender.send(result);
-                            })
+        future_sender
+            .unbounded_send(
+                future
+                    .map(move |result| -> Box<dyn FnOnce() + Send> {
+                        Box::new(move || {
+                            // An error when sending the result indicates that the user
+                            // application dropped the `HostFuture`, and no longer needs the
+                            // result
+                            let _ = result_sender.send(result);
                         })
-                        .boxed(),
-                )
-                .unwrap_or_else(|_| {
-                    panic!(
-                        "`HostFutureQueue` should not be dropped while `QueuedHostFutureFactory` \
+                    })
+                    .boxed(),
+            )
+            .unwrap_or_else(|_| {
+                panic!(
+                    "`HostFutureQueue` should not be dropped while `QueuedHostFutureFactory` \
                         is still enqueuing futures",
-                    )
-                });
+                )
+            });
 
+        HostFuture::new(async move {
             result_receiver.await.expect(
                 "`HostFutureQueue` should not be dropped while the `HostFuture`s of the queued \
                 futures are still alive",
