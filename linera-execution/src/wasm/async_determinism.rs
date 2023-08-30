@@ -33,7 +33,6 @@ use super::async_boundary::HostFuture;
 use futures::{
     channel::{mpsc, oneshot},
     future::{self, BoxFuture, FutureExt},
-    sink::SinkExt,
     stream::{FuturesOrdered, Stream, StreamExt},
 };
 use std::{
@@ -55,7 +54,7 @@ use std::{
 /// that only one is completed after each item produced by the [`HostFutureQueue`]'s implementation
 /// of [`Stream`].
 pub struct HostFutureQueue<'futures> {
-    new_futures: mpsc::Receiver<BoxFuture<'futures, Box<dyn FnOnce() + Send>>>,
+    new_futures: mpsc::UnboundedReceiver<BoxFuture<'futures, Box<dyn FnOnce() + Send>>>,
     queue: FuturesOrdered<BoxFuture<'futures, Box<dyn FnOnce() + Send>>>,
 }
 
@@ -65,7 +64,7 @@ impl<'futures> HostFutureQueue<'futures> {
     /// An initial empty future is added to the queue so that the first time the queue is polled it
     /// returns an item, allowing the guest Wasm module to be polled for the first time.
     pub fn new() -> (Self, QueuedHostFutureFactory<'futures>) {
-        let (sender, receiver) = mpsc::channel(25);
+        let (sender, receiver) = mpsc::unbounded();
 
         let empty_completion: Box<dyn FnOnce() + Send> = Box::new(|| ());
         let initial_future = future::ready(empty_completion).boxed();
@@ -96,9 +95,9 @@ impl<'futures> HostFutureQueue<'futures> {
         }
     }
 
-    /// Polls the [`mpsc::Receiver`] of futures to add to the queue.
+    /// Polls the [`mpsc::UnboundedReceiver`] of futures to add to the queue.
     ///
-    /// Returns true if the [`mpsc::Sender`] endpoint has been closed.
+    /// Returns true if the [`mpsc::UnboundedSender`] endpoint has been closed.
     fn poll_incoming(&mut self, context: &mut Context<'_>) -> bool {
         match self.new_futures.poll_next_unpin(context) {
             Poll::Pending => false,
@@ -123,9 +122,9 @@ impl<'futures> Stream for HostFutureQueue<'futures> {
     ///
     /// This function returns [`Poll::Pending`] correctly, because it's only returned if either:
     ///
-    /// - No new futures were received (the [`mpsc::Receiver`] returned [`Poll::Pending`]) and the
-    ///   queue is empty, which means that this task will receive a wakeup when a new future is
-    ///   received;
+    /// - No new futures were received (the [`mpsc::UnboundedReceiver`] returned [`Poll::Pending`])
+    ///   and the queue is empty, which means that this task will receive a wakeup when a new future
+    ///   is received;
     /// - No queued future was completed (the [`FuturesOrdered`] returned [`Poll::Pending`]), which
     ///   which means that all futures in the queue have scheduled wakeups for this task;
     fn poll_next(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -152,7 +151,7 @@ impl<'futures> Stream for HostFutureQueue<'futures> {
 /// deterministically.
 #[derive(Clone)]
 pub struct QueuedHostFutureFactory<'futures> {
-    sender: mpsc::Sender<BoxFuture<'futures, Box<dyn FnOnce() + Send>>>,
+    sender: mpsc::UnboundedSender<BoxFuture<'futures, Box<dyn FnOnce() + Send>>>,
 }
 
 impl<'futures> QueuedHostFutureFactory<'futures> {
@@ -180,11 +179,11 @@ impl<'futures> QueuedHostFutureFactory<'futures> {
         Output: Send + 'static,
     {
         let (result_sender, result_receiver) = oneshot::channel();
-        let mut future_sender = self.sender.clone();
+        let future_sender = self.sender.clone();
 
         HostFuture::new(async move {
             future_sender
-                .send(
+                .unbounded_send(
                     future
                         .map(move |result| -> Box<dyn FnOnce() + Send> {
                             Box::new(move || {
@@ -196,11 +195,12 @@ impl<'futures> QueuedHostFutureFactory<'futures> {
                         })
                         .boxed(),
                 )
-                .await
-                .expect(
-                    "`HostFutureQueue` should not be dropped while `QueuedHostFutureFactory` is \
-                    still enqueuing futures",
-                );
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "`HostFutureQueue` should not be dropped while `QueuedHostFutureFactory` \
+                        is still enqueuing futures",
+                    )
+                });
 
             result_receiver.await.expect(
                 "`HostFutureQueue` should not be dropped while the `HostFuture`s of the queued \
