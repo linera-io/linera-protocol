@@ -21,18 +21,21 @@
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_upper_bound_option, ContextFromDb, KeyValueStoreClient},
+    common::{
+        get_table_name, get_upper_bound_option, CommonStoreConfig, ContextFromDb,
+        KeyValueStoreClient, TableStatus,
+    },
     lru_caching::{LruCachingKeyValueClient, TEST_CACHE_SIZE},
     value_splitting::DatabaseConsistencyError,
 };
-use async_lock::{RwLock, Semaphore, SemaphoreGuard};
+use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
-use once_cell::sync::Lazy;
-use scylla::{IntoTypedRows, Session, SessionBuilder};
+use scylla::{
+    transport::errors::{DbError, QueryError},
+    IntoTypedRows, Session, SessionBuilder,
+};
 use std::{ops::Deref, sync::Arc};
 use thiserror::Error;
-
-static TEST_COUNTER: Lazy<Arc<RwLock<u32>>> = Lazy::new(|| Arc::new(RwLock::new(0)));
 
 /// The creation of a ScyllaDB client that can be used for accessing it.
 /// The `Vec<u8>`is a primary key.
@@ -66,6 +69,10 @@ pub enum ScyllaDbContextError {
     /// A query error in ScyllaDB
     #[error(transparent)]
     ScyllaDbNewSessionError(#[from] scylla::transport::errors::NewSessionError),
+
+    /// Missing database
+    #[error("Missing database")]
+    MissingDatabase,
 
     /// The database is not coherent
     #[error(transparent)]
@@ -328,41 +335,147 @@ impl ScyllaDbClientInternal {
         client.1.clone()
     }
 
-    async fn new(
-        restart_database: bool,
+    /// Tests if a table is present in the database or not
+    pub async fn test_table_existence(
+        session: &Session,
+        table_name: &String,
+    ) -> Result<bool, ScyllaDbContextError> {
+        // We check the way the test can fail. It can fail in different ways.
+        let query = format!("SELECT table_name FROM kv.pairs_{}", table_name);
+
+        // Execute the query
+        let result = session.query(query, &[]).await;
+
+        // The missing table translates into a very specific error that we matched
+        let mesg_miss1 = format!("unconfigured table pairs_{}", table_name);
+        let mesg_miss1 = mesg_miss1.as_str();
+        let mesg_miss2 = "Undefined name table_name in selection clause";
+        let mesg_miss3 = "Keyspace kv does not exist";
+        let Err(error) = result else {
+            // If ok, then the table exists
+            return Ok(true);
+        };
+        let test = match &error {
+            QueryError::DbError(db_error, mesg) => {
+                if *db_error != DbError::Invalid {
+                    false
+                } else {
+                    mesg.as_str() == mesg_miss1
+                        || mesg.as_str() == mesg_miss2
+                        || mesg.as_str() == mesg_miss3
+                }
+            }
+            _ => false,
+        };
+        if test {
+            Ok(false)
+        } else {
+            Err(ScyllaDbContextError::ScyllaDbQueryError(error))
+        }
+    }
+
+    /// Creates a table, the keyspace might or might not be existing.
+    ///
+    /// For the table itself, we return true if the table already exists
+    /// and false otherwise.
+    /// If `stop_if_table_exists` is true then the existence of a table
+    /// triggers an error.
+    ///
+    /// This is done since if `new` is called two times, `test_table_existence`
+    /// might be called two times which would lead to `create_table` called
+    /// two times.
+    async fn create_table(
+        session: &Session,
+        table_name: &String,
+        stop_if_table_exists: bool,
+    ) -> Result<bool, ScyllaDbContextError> {
+        // Create a keyspace if it doesn't exist
+        let query = "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }";
+        session.query(query, &[]).await?;
+
+        // Create a table if it doesn't exist
+        let query = format!("CREATE TABLE kv.pairs_{} (table_name text, k blob, v blob, primary key (table_name, k))", table_name);
+        let result = session.query(query, &[]).await;
+
+        let Err(error) = result else {
+            return Ok(false);
+        };
+        if stop_if_table_exists {
+            return Err(error.into());
+        }
+        let test = match &error {
+            QueryError::DbError(DbError::AlreadyExists { keyspace, table }, mesg) => {
+                keyspace == "kv"
+                    && *table == format!("table_{}", table_name)
+                    && mesg.starts_with("Cannot add already existing table")
+            }
+            _ => false,
+        };
+        if test {
+            Ok(true)
+        } else {
+            Err(error.into())
+        }
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    async fn new_for_testing(
         uri: &str,
         table_name: String,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-    ) -> Result<Self, ScyllaDbContextError> {
-        // Create a session builder and specify the ScyllaDB contact points
+        common_config: CommonStoreConfig,
+    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let session = SessionBuilder::new().known_node(uri).build().await?;
-
-        if restart_database {
-            // Create a keyspace if it doesn't exist
-            session
-                .query(
-                    "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }",
-                    &[],
-                )
-                .await?;
-
-            // Dropping the table
-            let query = format!("DROP TABLE IF EXISTS kv.pairs_{};", table_name);
-            session.query(query, &[]).await?;
-
-            // Create a table if it doesn't exist
-            let query = format!("CREATE TABLE kv.pairs_{} (table_name text, k blob, v blob, primary key (table_name, k))", table_name);
+        if Self::test_table_existence(&session, &table_name).await? {
+            let query = format!("DROP TABLE kv.pairs_{};", table_name);
             session.query(query, &[]).await?;
         }
+        let stop_if_table_exists = true;
+        Self::new_internal(session, table_name, common_config, stop_if_table_exists).await
+    }
+
+    async fn new(
+        uri: &str,
+        table_name: String,
+        common_config: CommonStoreConfig,
+    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
+        let session = SessionBuilder::new().known_node(uri).build().await?;
+        let stop_if_table_exists = false;
+        Self::new_internal(session, table_name, common_config, stop_if_table_exists).await
+    }
+
+    async fn new_internal(
+        session: Session,
+        table_name: String,
+        common_config: CommonStoreConfig,
+        stop_if_table_exists: bool,
+    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
+        // Create a session builder and specify the ScyllaDB contact points
+        let mut existing_table = Self::test_table_existence(&session, &table_name).await?;
+        if !existing_table {
+            if common_config.create_if_missing {
+                existing_table =
+                    Self::create_table(&session, &table_name, stop_if_table_exists).await?;
+            } else {
+                return Err(ScyllaDbContextError::MissingDatabase);
+            }
+        }
+        let table_status = if existing_table {
+            TableStatus::Existing
+        } else {
+            TableStatus::New
+        };
         let client = (session, table_name);
         let client = Arc::new(client);
-        let semaphore = max_concurrent_queries.map(|n| Arc::new(Semaphore::new(n)));
-        Ok(ScyllaDbClientInternal {
+        let semaphore = common_config
+            .max_concurrent_queries
+            .map(|n| Arc::new(Semaphore::new(n)));
+        let max_stream_queries = common_config.max_stream_queries;
+        let client = Self {
             client,
             semaphore,
             max_stream_queries,
-        })
+        };
+        Ok((client, table_status))
     }
 }
 
@@ -421,52 +534,54 @@ impl ScyllaDbClient {
     }
 
     /// Creates a [`ScyllaDbClient`] from the input parameters.
-    pub async fn new(
-        restart_database: bool,
+    #[cfg(any(test, feature = "test"))]
+    pub async fn new_for_testing(
         uri: &str,
         namespace: String,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
-    ) -> Result<Self, ScyllaDbContextError> {
-        let client = ScyllaDbClientInternal::new(
-            restart_database,
-            uri,
-            namespace,
-            max_concurrent_queries,
-            max_stream_queries,
-        )
-        .await?;
-        let client = LruCachingKeyValueClient::new(client, cache_size);
-        Ok(ScyllaDbClient { client })
+        common_config: CommonStoreConfig,
+    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
+        let (client, table_status) =
+            ScyllaDbClientInternal::new_for_testing(uri, namespace, common_config.clone()).await?;
+        let client = LruCachingKeyValueClient::new(client, common_config.cache_size);
+        let client = ScyllaDbClient { client };
+        Ok((client, table_status))
+    }
+
+    /// Creates a [`ScyllaDbClient`] from the input parameters.
+    pub async fn new(
+        uri: &str,
+        namespace: String,
+        common_config: CommonStoreConfig,
+    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
+        let (client, table_status) =
+            ScyllaDbClientInternal::new(uri, namespace, common_config.clone()).await?;
+        let client = LruCachingKeyValueClient::new(client, common_config.cache_size);
+        let client = ScyllaDbClient { client };
+        Ok((client, table_status))
     }
 }
 
-/// Returns a unique table name for testing.
-pub async fn get_table_name() -> String {
-    let mut counter = TEST_COUNTER.write().await;
-    *counter += 1;
-    format!("test_table_{}", *counter)
+/// Creates the common initialization for RocksDB
+#[cfg(any(test, feature = "test"))]
+pub fn create_scylla_db_common_config() -> CommonStoreConfig {
+    CommonStoreConfig {
+        max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
+        max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
+        cache_size: TEST_CACHE_SIZE,
+        create_if_missing: true,
+    }
 }
 
 /// Creates a ScyllaDB test client
+#[cfg(any(test, feature = "test"))]
 pub async fn create_scylla_db_test_client() -> ScyllaDbClient {
-    let restart_database = true;
     let uri = "localhost:9042";
     let table_name = get_table_name().await;
-    let max_concurrent_queries = Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES);
-    let max_stream_queries = TEST_SCYLLA_DB_MAX_STREAM_QUERIES;
-    let cache_size = TEST_CACHE_SIZE;
-    ScyllaDbClient::new(
-        restart_database,
-        uri,
-        table_name,
-        max_concurrent_queries,
-        max_stream_queries,
-        cache_size,
-    )
-    .await
-    .expect("client")
+    let common_config = create_scylla_db_common_config();
+    let (client, _) = ScyllaDbClient::new_for_testing(uri, table_name, common_config)
+        .await
+        .expect("client");
+    client
 }
 
 /// An implementation of [`crate::common::Context`] based on ScyllaDB
@@ -484,6 +599,7 @@ impl<E: Clone + Send + Sync> ScyllaDbContext<E> {
 }
 
 /// Creates a [`crate::common::Context`] for testing purposes.
+#[cfg(any(test, feature = "test"))]
 pub async fn create_scylla_db_test_context() -> ScyllaDbContext<()> {
     let base_key = vec![];
     let db = create_scylla_db_test_client().await;

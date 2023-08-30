@@ -3,7 +3,10 @@
 
 use crate::{
     batch::{Batch, DeletePrefixExpander, SimpleUnorderedBatch},
-    common::{ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient, MIN_VIEW_TAG},
+    common::{
+        CommonStoreConfig, ContextFromDb, KeyIterable, KeyValueIterable, KeyValueStoreClient,
+        TableStatus, MIN_VIEW_TAG,
+    },
     localstack,
     lru_caching::LruCachingKeyValueClient,
     value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStoreClient},
@@ -11,6 +14,7 @@ use crate::{
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{
+    error::GetItemErrorKind,
     model::{
         AttributeDefinition, AttributeValue, Delete, KeySchemaElement, KeyType,
         ProvisionedThroughput, Put, ScalarAttributeType, TransactWriteItem,
@@ -28,6 +32,7 @@ use static_assertions as sa;
 
 #[cfg(any(test, feature = "test"))]
 use {
+    crate::common::get_table_name,
     crate::lru_caching::TEST_CACHE_SIZE,
     anyhow::{Context, Error},
     aws_sdk_s3::Endpoint,
@@ -52,6 +57,9 @@ const PARTITION_ATTRIBUTE: &str = "item_partition";
 
 /// A dummy value to use as the partition key.
 const DUMMY_PARTITION_KEY: &[u8] = &[0];
+
+/// A key being used for testing existence of tables
+const DB_KEY: &[u8] = &[0];
 
 /// The attribute name of the primary key (used as a sort key).
 const KEY_ATTRIBUTE: &str = "item_key";
@@ -549,22 +557,94 @@ impl DynamoDbClientInternal {
         }
     }
 
-    /// Creates a new [`DynamoDbClientInternal`] instance using the provided `config` parameters.
-    pub async fn from_config(
+    /// Testing the existence of a table
+    pub async fn test_table_existence(
+        client: &Client,
+        table: &TableName,
+    ) -> Result<bool, DynamoDbContextError> {
+        let key_db = build_key(DB_KEY.to_vec());
+        let response = client
+            .get_item()
+            .table_name(table.as_ref())
+            .set_key(Some(key_db))
+            .send()
+            .await;
+        let Err(error) = response else {
+            return Ok(true);
+        };
+        let test = match &error {
+            SdkError::ServiceError { err, raw: _ } => match &err.kind {
+                GetItemErrorKind::ResourceNotFoundException(inner_error) => {
+                    inner_error.message
+                        == Some("Cannot do operations on a non-existent table".to_string())
+                }
+                _ => false,
+            },
+            _ => false,
+        };
+        if test {
+            Ok(false)
+        } else {
+            Err(error.into())
+        }
+    }
+
+    /// Creates a new [`DynamoDbClientInternal`] instance from scratch using the provided `config` parameters.
+    #[cfg(any(test, feature = "test"))]
+    pub async fn new_for_testing(
         config: impl Into<Config>,
         table: TableName,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
+        common_config: CommonStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let client = Client::from_conf(config.into());
-        let semaphore = max_concurrent_queries.map(|n| Arc::new(Semaphore::new(n)));
-        let db = DynamoDbClientInternal {
+        if Self::test_table_existence(&client, &table).await? {
+            client.delete_table().table_name(&table.0).send().await?;
+        }
+        let stop_if_table_exists = true;
+        Self::new_internal(client, table, common_config, stop_if_table_exists).await
+    }
+
+    /// Creates a new [`DynamoDbClientInternal`] instance using the provided `config` parameters.
+    pub async fn new(
+        config: impl Into<Config>,
+        table: TableName,
+        common_config: CommonStoreConfig,
+    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
+        let client = Client::from_conf(config.into());
+        let stop_if_table_exists = false;
+        Self::new_internal(client, table, common_config, stop_if_table_exists).await
+    }
+
+    /// Creates a new [`DynamoDbClientInternal`] instance using the provided `config` parameters.
+    async fn new_internal(
+        client: Client,
+        table: TableName,
+        common_config: CommonStoreConfig,
+        stop_if_table_exists: bool,
+    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
+        let mut existing_table = Self::test_table_existence(&client, &table).await?;
+        let semaphore = common_config
+            .max_concurrent_queries
+            .map(|n| Arc::new(Semaphore::new(n)));
+        let max_stream_queries = common_config.max_stream_queries;
+        let db = Self {
             client,
             table,
             semaphore,
             max_stream_queries,
         };
-        let table_status = db.create_table_if_needed().await?;
+        if !existing_table {
+            if common_config.create_if_missing {
+                existing_table = db.create_table(stop_if_table_exists).await?;
+            } else {
+                return Err(DynamoDbContextError::MissingDatabase);
+            }
+        }
+        let table_status = if existing_table {
+            TableStatus::Existing
+        } else {
+            TableStatus::New
+        };
         Ok((db, table_status))
     }
 
@@ -624,10 +704,12 @@ impl DynamoDbClientInternal {
         tb.submit(self).await
     }
 
-    /// Creates the storage table if it doesn't exist.
+    /// Creates the table. Returns whether there was already a table.
+    /// If `stop_if_exists` is true then an already present table raises an error.
     ///
-    /// Attempts to create the table and ignores errors that indicate that it already exists.
-    async fn create_table_if_needed(&self) -> Result<TableStatus, DynamoDbContextError> {
+    /// We need that because the `test_table_existence` might return `false`
+    /// from several processes but only one creates it.
+    async fn create_table(&self, stop_if_table_exists: bool) -> Result<bool, DynamoDbContextError> {
         let _guard = self.acquire().await;
         let result = self
             .client
@@ -665,11 +747,16 @@ impl DynamoDbClientInternal {
             )
             .send()
             .await;
-
-        match result {
-            Ok(_) => Ok(TableStatus::New),
-            Err(error) if error.is_resource_in_use_exception() => Ok(TableStatus::Existing),
-            Err(error) => Err(error.into()),
+        let Err(error) = result else {
+            return Ok(false);
+        };
+        if stop_if_table_exists {
+            return Err(error.into());
+        }
+        if error.is_resource_in_use_exception() {
+            Ok(true)
+        } else {
+            Err(error.into())
         }
     }
 }
@@ -809,70 +896,50 @@ impl KeyValueStoreClient for DynamoDbClient {
 }
 
 impl DynamoDbClient {
-    /// Creation of the DynamoDbClient with an LRU caching
-    pub async fn from_config(
+    /// Creates a `DynamoDbClient` from scratch with an LRU cache
+    #[cfg(any(test, feature = "test"))]
+    pub async fn new_for_testing(
         config: impl Into<Config>,
         table: TableName,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
+        common_config: CommonStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (client, table_name) = DynamoDbClientInternal::from_config(
-            config,
-            table,
-            max_concurrent_queries,
-            max_stream_queries,
-        )
-        .await?;
+        let (client, table_name) =
+            DynamoDbClientInternal::new_for_testing(config, table, common_config.clone()).await?;
         let client = ValueSplittingKeyValueStoreClient::new(client);
-        let client = DynamoDbClient {
-            client: LruCachingKeyValueClient::new(client, cache_size),
+        let client = Self {
+            client: LruCachingKeyValueClient::new(client, common_config.cache_size),
         };
         Ok((client, table_name))
     }
 
-    /// Creates a new [`DynamoDbClientInternal`] instance.
+    /// Creates a `DynamoDbClient` with an LRU cache
     pub async fn new(
+        config: impl Into<Config>,
         table: TableName,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
+        common_config: CommonStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let config = aws_config::load_from_env().await;
-        DynamoDbClient::from_config(
-            &config,
-            table,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        )
-        .await
+        let (client, table_name) =
+            DynamoDbClientInternal::new(config, table, common_config.clone()).await?;
+        let client = ValueSplittingKeyValueStoreClient::new(client);
+        let client = Self {
+            client: LruCachingKeyValueClient::new(client, common_config.cache_size),
+        };
+        Ok((client, table_name))
     }
+}
 
-    /// Creates a new [`DynamoDbClientInternal`] instance using a LocalStack endpoint.
-    ///
-    /// Requires a `LOCALSTACK_ENDPOINT` environment variable with the endpoint address to connect
-    /// to the LocalStack instance. Creates the table if it doesn't exist yet, reporting a
-    /// [`TableStatus`] to indicate if the table was created or if it already exists.
-    pub async fn with_localstack(
-        table: TableName,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let base_config = aws_config::load_from_env().await;
-        let config = aws_sdk_dynamodb::config::Builder::from(&base_config)
-            .endpoint_resolver(localstack::get_endpoint()?)
-            .build();
-        DynamoDbClient::from_config(
-            config,
-            table,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        )
-        .await
-    }
+/// Gets the AWS configuration from the environment
+pub async fn get_base_config() -> Result<SdkConfig, DynamoDbContextError> {
+    let base_config = aws_config::load_from_env().await;
+    Ok(base_config)
+}
+
+/// Gets the localstack config
+pub async fn get_localstack_config() -> Result<Config, DynamoDbContextError> {
+    let base_config = aws_config::load_from_env().await;
+    Ok(aws_sdk_dynamodb::config::Builder::from(&base_config)
+        .endpoint_resolver(localstack::get_endpoint()?)
+        .build())
 }
 
 /// An implementation of [`Context`][trait1] based on [`DynamoDbClient`].
@@ -884,90 +951,40 @@ impl<E> DynamoDbContext<E>
 where
     E: Clone + Sync + Send,
 {
-    fn create_context(
-        db_tablestatus: (DynamoDbClient, TableStatus),
+    /// Creates a new [`DynamoDbContext`] instance from scratch from the given AWS configuration.
+    pub async fn new_for_testing(
+        config: impl Into<Config>,
+        table: TableName,
+        common_config: CommonStoreConfig,
         base_key: Vec<u8>,
         extra: E,
-    ) -> (Self, TableStatus) {
+    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
+        let (db, table_status) =
+            DynamoDbClient::new_for_testing(config, table, common_config).await?;
         let storage = DynamoDbContext {
-            db: db_tablestatus.0,
+            db,
             base_key,
             extra,
         };
-        (storage, db_tablestatus.1)
-    }
-
-    /// Creates a new [`DynamoDbContext`] instance.
-    pub async fn new(
-        table: TableName,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
-        base_key: Vec<u8>,
-        extra: E,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let db_tablestatus = DynamoDbClient::new(
-            table,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        )
-        .await?;
-        Ok(Self::create_context(db_tablestatus, base_key, extra))
+        Ok((storage, table_status))
     }
 
     /// Creates a new [`DynamoDbContext`] instance from the given AWS configuration.
-    pub async fn from_config(
+    pub async fn new(
         config: impl Into<Config>,
         table: TableName,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
+        common_config: CommonStoreConfig,
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let db_tablestatus = DynamoDbClient::from_config(
-            config,
-            table,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        )
-        .await?;
-        Ok(Self::create_context(db_tablestatus, base_key, extra))
+        let (db, table_status) = DynamoDbClient::new(config, table, common_config).await?;
+        let storage = DynamoDbContext {
+            db,
+            base_key,
+            extra,
+        };
+        Ok((storage, table_status))
     }
-
-    /// Creates a new [`DynamoDbContext`] instance using a LocalStack endpoint.
-    ///
-    /// Requires a `LOCALSTACK_ENDPOINT` environment variable with the endpoint address to connect
-    /// to the LocalStack instance. Creates the table if it doesn't exist yet, reporting a
-    /// [`TableStatus`] to indicate if the table was created or if it already exists.
-    pub async fn with_localstack(
-        table: TableName,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
-        base_key: Vec<u8>,
-        extra: E,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let db_tablestatus = DynamoDbClient::with_localstack(
-            table,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        )
-        .await?;
-        Ok(Self::create_context(db_tablestatus, base_key, extra))
-    }
-}
-
-/// Status of a table at the creation time of a [`DynamoDbContext`] instance.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TableStatus {
-    /// Table was created during the construction of the [`DynamoDbContext`] instance.
-    New,
-    /// Table already existed when the [`DynamoDbContext`] instance was created.
-    Existing,
 }
 
 /// A DynamoDB table name.
@@ -1041,6 +1058,14 @@ pub enum DynamoDbContextError {
     #[error(transparent)]
     Query(#[from] Box<SdkError<aws_sdk_dynamodb::error::QueryError>>),
 
+    /// An error occurred while deleting a table
+    #[error(transparent)]
+    DeleteTable(#[from] Box<SdkError<aws_sdk_dynamodb::error::DeleteTableError>>),
+
+    /// An error occurred while listing tables
+    #[error(transparent)]
+    ListTables(#[from] Box<SdkError<aws_sdk_dynamodb::error::ListTablesError>>),
+
     /// The transact maximum size is MAX_TRANSACT_WRITE_ITEM_SIZE.
     #[error("The transact must have length at most MAX_TRANSACT_WRITE_ITEM_SIZE")]
     TransactUpperLimitSize,
@@ -1060,6 +1085,10 @@ pub enum DynamoDbContextError {
     /// The database is not coherent
     #[error(transparent)]
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
+
+    /// Missing database
+    #[error("Missing database")]
+    MissingDatabase,
 
     /// The length of the value should be at most 400KB.
     #[error("The DynamoDB value should be less than 400KB")]
@@ -1208,8 +1237,6 @@ impl LocalStackTestContext {
             _guard,
         };
 
-        context.clear().await?;
-
         Ok(context)
     }
 
@@ -1229,61 +1256,22 @@ impl LocalStackTestContext {
         Ok(Endpoint::immutable(endpoint_address))
     }
 
-    /// Creates a new [`aws_sdk_s3::Config`] for tests, using a LocalStack instance.
-    pub fn s3_config(&self) -> aws_sdk_s3::Config {
-        aws_sdk_s3::config::Builder::from(&self.base_config)
-            .endpoint_resolver(self.endpoint.clone())
-            .build()
-    }
-
     /// Creates a new [`aws_sdk_dynamodb::Config`] for tests, using a LocalStack instance.
     pub fn dynamo_db_config(&self) -> aws_sdk_dynamodb::Config {
         aws_sdk_dynamodb::config::Builder::from(&self.base_config)
             .endpoint_resolver(self.endpoint.clone())
             .build()
     }
+}
 
-    /// Removes all stored data from LocalStack storage.
-    async fn clear(&self) -> Result<(), Error> {
-        self.remove_buckets().await?;
-        self.remove_tables().await?;
-
-        Ok(())
-    }
-
-    /// Removes all buckets from the LocalStack S3 storage.
-    async fn remove_buckets(&self) -> Result<(), Error> {
-        let client = aws_sdk_s3::Client::from_conf(self.s3_config());
-
-        for bucket in list_buckets(&client).await.unwrap_or_default() {
-            let objects = client.list_objects().bucket(&bucket).send().await?;
-
-            for object in objects.contents().into_iter().flatten() {
-                if let Some(key) = object.key.as_ref() {
-                    client
-                        .delete_object()
-                        .bucket(&bucket)
-                        .key(key)
-                        .send()
-                        .await?;
-                }
-            }
-
-            client.delete_bucket().bucket(bucket).send().await?;
-        }
-
-        Ok(())
-    }
-
-    /// Removes all tables from the LocalStack DynamoDB storage.
-    async fn remove_tables(&self) -> Result<(), Error> {
-        let client = aws_sdk_dynamodb::Client::from_conf(self.dynamo_db_config());
-
-        for table in list_tables(&client).await.unwrap_or_default() {
-            client.delete_table().table_name(table).send().await?;
-        }
-
-        Ok(())
+/// Creates the common initialization for RocksDB
+#[cfg(any(test, feature = "test"))]
+pub fn create_dynamo_db_common_config() -> CommonStoreConfig {
+    CommonStoreConfig {
+        max_concurrent_queries: Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+        max_stream_queries: TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
+        cache_size: TEST_CACHE_SIZE,
+        create_if_missing: true,
     }
 }
 
@@ -1291,39 +1279,33 @@ impl LocalStackTestContext {
 #[cfg(any(test, feature = "test"))]
 pub async fn create_dynamo_db_test_client() -> DynamoDbClient {
     let localstack = LocalStackTestContext::new().await.expect("localstack");
-    let (key_value_operation, _) = DynamoDbClient::from_config(
-        localstack.dynamo_db_config(),
-        "test_table".parse().expect("Invalid table name"),
-        Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
-        TEST_CACHE_SIZE,
-    )
-    .await
-    .expect("key_value_operation");
+    let common_config = create_dynamo_db_common_config();
+    let table = get_table_name().await;
+    let table_name = table.parse().expect("Invalid table name");
+    let (key_value_operation, _) =
+        DynamoDbClient::new_for_testing(localstack.dynamo_db_config(), table_name, common_config)
+            .await
+            .expect("key_value_operation");
     key_value_operation
-}
-
-/// Helper function to list the names of buckets registered on S3.
-#[cfg(any(test, feature = "test"))]
-async fn list_buckets(client: &aws_sdk_s3::Client) -> Result<Vec<String>, Error> {
-    Ok(client
-        .list_buckets()
-        .send()
-        .await?
-        .buckets
-        .expect("List of buckets was not returned")
-        .into_iter()
-        .filter_map(|bucket| bucket.name)
-        .collect())
 }
 
 /// Helper function to list the names of tables registered on DynamoDB.
 #[cfg(any(test, feature = "test"))]
-async fn list_tables(client: &aws_sdk_dynamodb::Client) -> Result<Vec<String>, Error> {
+pub async fn list_tables(client: &aws_sdk_dynamodb::Client) -> Result<Vec<String>, Error> {
     Ok(client
         .list_tables()
         .send()
         .await?
         .table_names
         .expect("List of tables was not returned"))
+}
+
+/// Helper function to clear all the tables from the database
+#[cfg(any(test, feature = "test"))]
+pub async fn clear_tables(client: &aws_sdk_dynamodb::Client) -> Result<(), Error> {
+    let tables = list_tables(client).await?;
+    for table in tables {
+        client.delete_table().table_name(&table).send().await?;
+    }
+    Ok(())
 }

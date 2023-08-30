@@ -32,7 +32,7 @@ use linera_service::{
     storage::{Runnable, StorageConfig},
 };
 use linera_storage::Store;
-use linera_views::views::ViewError;
+use linera_views::{common::CommonStoreConfig, views::ViewError};
 use serde_json::Value;
 use std::{
     env, fs,
@@ -609,6 +609,10 @@ struct ClientOptions {
     /// The maximal number of entries in the storage cache.
     #[structopt(long, default_value = "1000")]
     cache_size: usize,
+
+    /// Do not create a table if one is missing
+    #[structopt(long = "do not create a database if missing")]
+    skip_table_creation_when_missing: bool,
 
     /// Subcommand.
     #[structopt(subcommand)]
@@ -1770,18 +1774,22 @@ async fn run_command_with_storage(options: ClientOptions) -> Result<(), Error> {
     let context = ClientContext::from_options(&options)?;
     let genesis_config = context.wallet_state.genesis_config().clone();
     let wasm_runtime = options.wasm_runtime.with_wasm_default();
-    let cache_size = options.cache_size;
     let max_concurrent_queries = options.max_concurrent_queries;
     let max_stream_queries = options.max_stream_queries;
+    let cache_size = options.cache_size;
+    let create_if_missing = !options.skip_table_creation_when_missing;
     let storage_config = ClientContext::storage_config(&options)?;
-
+    let common_config = CommonStoreConfig {
+        max_concurrent_queries,
+        max_stream_queries,
+        cache_size,
+        create_if_missing,
+    };
     storage_config
         .run_with_storage(
             &genesis_config,
             wasm_runtime,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
+            common_config,
             Job(context, options.command),
         )
         .await?;

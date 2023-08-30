@@ -38,11 +38,11 @@ use linera_views::rocks_db::{create_rocks_db_test_client, RocksDbClient, RocksDb
 
 #[cfg(feature = "aws")]
 use linera_views::{
+    common::{get_table_name, CommonStoreConfig},
+    dynamo_db::create_dynamo_db_common_config,
+    dynamo_db::DynamoDbContext,
     dynamo_db::LocalStackTestContext,
-    dynamo_db::{
-        DynamoDbContext, TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES, TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
-    },
-    lru_caching::TEST_CACHE_SIZE,
+    dynamo_db::TableName,
 };
 
 #[cfg(feature = "scylladb")]
@@ -172,7 +172,7 @@ impl StateStore for RocksDbTestStore {
     type Context = RocksDbContext<usize>;
 
     async fn new() -> Self {
-        let client = create_rocks_db_test_client();
+        let client = create_rocks_db_test_client().await;
         let accessed_chains = BTreeSet::new();
         RocksDbTestStore {
             client,
@@ -223,6 +223,9 @@ impl StateStore for ScyllaDbTestStore {
 #[cfg(feature = "aws")]
 pub struct DynamoDbTestStore {
     localstack: LocalStackTestContext,
+    table_name: TableName,
+    is_created: bool,
+    common_config: CommonStoreConfig,
     accessed_chains: BTreeSet<usize>,
 }
 
@@ -233,9 +236,16 @@ impl StateStore for DynamoDbTestStore {
 
     async fn new() -> Self {
         let localstack = LocalStackTestContext::new().await.expect("localstack");
+        let table = get_table_name().await;
+        let table_name = table.parse().expect("Invalid table name");
+        let is_created = false;
+        let common_config = create_dynamo_db_common_config();
         let accessed_chains = BTreeSet::new();
         DynamoDbTestStore {
             localstack,
+            table_name,
+            is_created,
+            common_config,
             accessed_chains,
         }
     }
@@ -245,17 +255,28 @@ impl StateStore for DynamoDbTestStore {
         // TODO(#643): Actually acquire a lock.
         tracing::trace!("Acquiring lock on {:?}", id);
         let base_key = bcs::to_bytes(&id)?;
-        let (context, _) = DynamoDbContext::from_config(
-            self.localstack.dynamo_db_config(),
-            "test_table".parse().expect("Invalid table name"),
-            Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-            TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
-            TEST_CACHE_SIZE,
-            base_key,
-            id,
-        )
-        .await
+        let (context, _) = if self.is_created {
+            DynamoDbContext::new(
+                self.localstack.dynamo_db_config(),
+                self.table_name.clone(),
+                self.common_config.clone(),
+                base_key,
+                id,
+            )
+            .await
+        } else {
+            DynamoDbContext::new_for_testing(
+                self.localstack.dynamo_db_config(),
+                self.table_name.clone(),
+                self.common_config.clone(),
+                base_key,
+                id,
+            )
+            .await
+        }
         .expect("Failed to create DynamoDB context");
+        self.common_config.create_if_missing = false;
+        self.is_created = true;
         StateView::load(context).await
     }
 }

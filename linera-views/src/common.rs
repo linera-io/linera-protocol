@@ -23,6 +23,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(any(test, feature = "test"))]
+use {async_lock::RwLock, once_cell::sync::Lazy, std::sync::Arc};
+
 #[cfg(test)]
 #[path = "unit_tests/common_tests.rs"]
 mod common_tests;
@@ -36,6 +39,37 @@ pub type HasherOutput = generic_array::GenericArray<u8, HasherOutputSize>;
 pub(crate) enum Update<T> {
     Removed,
     Set(T),
+}
+
+/// Status of a table at the creation time of a [`KeyValueStoreClient`] instance.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TableStatus {
+    /// Table was created during the construction of the [`KeyValueStoreClient`] instance.
+    New,
+    /// Table already existed when the [`KeyValueStoreClient`] instance was created.
+    Existing,
+}
+
+/// Returns a unique table name for testing.
+#[cfg(any(test, feature = "test"))]
+pub async fn get_table_name() -> String {
+    static TEST_COUNTER: Lazy<Arc<RwLock<u32>>> = Lazy::new(|| Arc::new(RwLock::new(0)));
+    let mut counter = TEST_COUNTER.write().await;
+    *counter += 1;
+    format!("test_table_{}", *counter)
+}
+
+/// The common initialization parameters for the `KeyValueStore`
+#[derive(Debug, Clone)]
+pub struct CommonStoreConfig {
+    /// The number of concurrent to a database
+    pub max_concurrent_queries: Option<usize>,
+    /// The number of streams used for the async streams.
+    pub max_stream_queries: usize,
+    /// The cache size being used.
+    pub cache_size: usize,
+    /// Creates the database if missing
+    pub create_if_missing: bool,
 }
 
 /// The minimum value for the view tags. Values in 0..MIN_VIEW_TAG are used for other purposes.

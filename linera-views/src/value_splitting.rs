@@ -36,7 +36,8 @@ pub enum DatabaseConsistencyError {
 /// See the README.md for additional details.
 #[derive(Clone)]
 pub struct ValueSplittingKeyValueStoreClient<K> {
-    client: K,
+    /// The underlying client of the transformed client.
+    pub client: K,
 }
 
 #[async_trait]

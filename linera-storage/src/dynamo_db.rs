@@ -3,15 +3,12 @@
 
 use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
 use dashmap::DashMap;
-use futures::Future;
 use linera_execution::WasmRuntime;
-use linera_views::dynamo_db::{
-    Config, DynamoDbClient, DynamoDbContextError, LocalStackTestContext, TableName, TableStatus,
-};
 #[cfg(any(test, feature = "test"))]
+use linera_views::{common::get_table_name, dynamo_db::create_dynamo_db_common_config};
 use linera_views::{
-    dynamo_db::{TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES, TEST_DYNAMO_DB_MAX_STREAM_QUERIES},
-    lru_caching::TEST_CACHE_SIZE,
+    common::{CommonStoreConfig, TableStatus},
+    dynamo_db::{Config, DynamoDbClient, DynamoDbContextError, LocalStackTestContext, TableName},
 };
 use std::sync::Arc;
 
@@ -22,88 +19,38 @@ mod tests;
 type DynamoDbStore = DbStore<DynamoDbClient>;
 
 impl DynamoDbStore {
-    pub async fn new(
-        table: TableName,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_client(
-            || {
-                DynamoDbClient::new(
-                    table,
-                    max_concurrent_queries,
-                    max_stream_queries,
-                    cache_size,
-                )
-            },
-            wasm_runtime,
-        )
-        .await
-    }
-
-    pub async fn from_config(
+    #[cfg(any(test, feature = "test"))]
+    pub async fn new_for_testing(
         config: Config,
         table: TableName,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
+        common_config: CommonStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_client(
-            || {
-                DynamoDbClient::from_config(
-                    config,
-                    table,
-                    max_concurrent_queries,
-                    max_stream_queries,
-                    cache_size,
-                )
-            },
+        let (client, table_status) =
+            DynamoDbClient::new_for_testing(config, table, common_config).await?;
+        let store = Self {
+            client,
+            guards: ChainGuards::default(),
+            user_applications: Arc::new(DashMap::new()),
             wasm_runtime,
-        )
-        .await
+        };
+        Ok((store, table_status))
     }
 
-    pub async fn with_localstack(
+    pub async fn new(
+        config: Config,
         table: TableName,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
+        common_config: CommonStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_client(
-            || {
-                DynamoDbClient::with_localstack(
-                    table,
-                    max_concurrent_queries,
-                    max_stream_queries,
-                    cache_size,
-                )
-            },
+        let (client, table_status) = DynamoDbClient::new(config, table, common_config).await?;
+        let store = Self {
+            client,
+            guards: ChainGuards::default(),
+            user_applications: Arc::new(DashMap::new()),
             wasm_runtime,
-        )
-        .await
-    }
-
-    async fn with_client<F, E>(
-        create_client: impl FnOnce() -> F,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<(Self, TableStatus), E>
-    where
-        F: Future<Output = Result<(DynamoDbClient, TableStatus), E>>,
-    {
-        let (client, table_status) = create_client().await?;
-        Ok((
-            Self {
-                client,
-                guards: ChainGuards::default(),
-                user_applications: Arc::new(DashMap::new()),
-                wasm_runtime,
-            },
-            table_status,
-        ))
+        };
+        Ok((store, table_status))
     }
 }
 
@@ -112,14 +59,14 @@ pub type DynamoDbStoreClient = DbStoreClient<DynamoDbClient>;
 impl DynamoDbStoreClient {
     #[cfg(any(test, feature = "test"))]
     pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> Self {
-        let table = "linera".parse().expect("Invalid table name");
+        let table = get_table_name().await;
+        let table_name = table.parse().expect("Invalid table name");
         let localstack = LocalStackTestContext::new().await.expect("localstack");
-        let (client, _) = DynamoDbStoreClient::from_config(
+        let common_config = create_dynamo_db_common_config();
+        let (client, _) = DynamoDbStoreClient::new_for_testing(
             localstack.dynamo_db_config(),
-            table,
-            Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-            TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
-            TEST_CACHE_SIZE,
+            table_name,
+            common_config,
             wasm_runtime,
         )
         .await
@@ -127,66 +74,33 @@ impl DynamoDbStoreClient {
         client
     }
 
-    pub async fn new(
-        table: TableName,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_store(DynamoDbStore::new(
-            table,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-            wasm_runtime,
-        ))
-        .await
-    }
-
-    pub async fn from_config(
+    #[cfg(any(test, feature = "test"))]
+    pub async fn new_for_testing(
         config: impl Into<Config>,
         table: TableName,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
+        common_config: CommonStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_store(DynamoDbStore::from_config(
-            config.into(),
-            table,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-            wasm_runtime,
-        ))
-        .await
-    }
-
-    pub async fn with_localstack(
-        table: TableName,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        Self::with_store(DynamoDbStore::with_localstack(
-            table,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-            wasm_runtime,
-        ))
-        .await
-    }
-
-    async fn with_store<E>(
-        store_creator: impl Future<Output = Result<(DynamoDbStore, TableStatus), E>>,
-    ) -> Result<(Self, TableStatus), E> {
-        let (store, table_status) = store_creator.await?;
-        let client = DynamoDbStoreClient {
+        let (store, table_status) =
+            DynamoDbStore::new_for_testing(config.into(), table, common_config, wasm_runtime)
+                .await?;
+        let store_client = DynamoDbStoreClient {
             client: Arc::new(store),
         };
-        Ok((client, table_status))
+        Ok((store_client, table_status))
+    }
+
+    pub async fn new(
+        config: impl Into<Config>,
+        table: TableName,
+        common_config: CommonStoreConfig,
+        wasm_runtime: Option<WasmRuntime>,
+    ) -> Result<(Self, TableStatus), DynamoDbContextError> {
+        let (store, table_status) =
+            DynamoDbStore::new(config.into(), table, common_config, wasm_runtime).await?;
+        let store_client = DynamoDbStoreClient {
+            client: Arc::new(store),
+        };
+        Ok((store_client, table_status))
     }
 }
