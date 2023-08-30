@@ -37,7 +37,7 @@ input OperationKeyKind @oneOf {
 	last: ChainId
 }
 
-type OperationsRoot {
+type OperationsPlugin {
 	"""
 	Gets the operation associated to its hash
 	"""
@@ -58,6 +58,6 @@ type OperationsRoot {
 
 
 schema {
-	query: OperationsRoot
+	query: OperationsPlugin
 }
 

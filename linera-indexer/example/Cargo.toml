@@ -1,0 +1,36 @@
+[package]
+name = "linera-indexer-example"
+version = "0.4.0"
+description = "Indexer example."
+authors = ["Linera <contact@linera.io>"]
+readme = "README.md"
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.io"
+documentation = "https://docs.rs/linera-indexer/latest/linera_indexer/"
+license = "Apache-2.0"
+edition = "2021"
+
+[dependencies]
+linera-indexer = { workspace = true }
+linera-indexer-plugins = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+tracing-subscriber = { workspace = true, features = ["fmt"] }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+async-graphql = { workspace = true }
+linera-base = { workspace = true }
+linera-indexer-graphql-client = { workspace = true }
+linera-service-graphql-client = { workspace = true }
+linera-service = { workspace = true, features = ["rocksdb"] }
+once_cell = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+test-log = { workspace = true, features = ["trace"] }
+tracing = { workspace = true }
+
+[[bin]]
+name = "linera-indexer"
+path = "src/main.rs"

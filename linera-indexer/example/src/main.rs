@@ -1,11 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module defines the linera-indexer executable using the RocksDB client.
+//! This module proposes an example of indexer with the operations plugin.
 
-use linera_indexer::{
-    common::IndexerError, operations::OperationsPlugin, plugin::Plugin, rocks_db::RocksDbRunner,
-};
+use linera_indexer::{common::IndexerError, plugin::Plugin, rocks_db::RocksDbRunner};
+use linera_indexer_plugins::operations::OperationsPlugin;
 
 #[tokio::main]
 async fn main() -> Result<(), IndexerError> {
@@ -19,7 +18,7 @@ async fn main() -> Result<(), IndexerError> {
 
     let mut runner = RocksDbRunner::load().await?;
     runner
-        .add_plugin(OperationsPlugin::load(runner.client.clone(), "operations").await?)
+        .add_plugin(OperationsPlugin::load(runner.client.clone()).await?)
         .await?;
     runner.run().await
 }

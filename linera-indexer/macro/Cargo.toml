@@ -1,0 +1,20 @@
+[package]
+name = "linera-indexer-macro"
+version = "0.4.0"
+description = "Deriver for indexer plugins."
+authors = ["Linera <contact@linera.io>"]
+readme = "README.md"
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.io"
+documentation = "https://docs.rs/linera-indexer/latest/linera_indexer/"
+license = "Apache-2.0"
+edition = "2021"
+
+[dependencies]
+convert_case = "0"
+proc-macro2 = "1"
+quote = "1"
+syn = {version="2", features=["full", "extra-traits", "visit-mut"]}
+
+[lib]
+proc-macro = true

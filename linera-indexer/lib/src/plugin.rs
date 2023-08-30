@@ -19,7 +19,7 @@ where
     ViewError: From<DB::Error>,
 {
     /// Loads the plugin from a context
-    async fn from_context(context: ContextFromDb<(), DB>, name: &str) -> Result<Self, IndexerError>
+    async fn from_context(context: ContextFromDb<(), DB>) -> Result<Self, IndexerError>
     where
         Self: Sized;
 
@@ -30,19 +30,29 @@ where
     fn sdl(&self) -> String;
 
     /// Gets the name of the plugin
-    fn name(&self) -> String;
+    fn name(&self) -> String
+    where
+        Self: Sized,
+    {
+        Self::static_name()
+    }
+
+    /// Defines the name of the plugin
+    fn static_name() -> String
+    where
+        Self: Sized;
 
     /// Registers the plugin to an Axum router
     fn route(&self, app: Router) -> Router;
 
     /// Loads the plugin from a client
-    async fn load(client: DB, name: &str) -> Result<Self, IndexerError>
+    async fn load(client: DB) -> Result<Self, IndexerError>
     where
         Self: Sized,
     {
-        let context = ContextFromDb::create(client, name.as_bytes().to_vec(), ())
+        let context = ContextFromDb::create(client, Self::static_name().as_bytes().to_vec(), ())
             .await
             .map_err(|e| IndexerError::ViewError(e.into()))?;
-        Self::from_context(context, name).await
+        Self::from_context(context).await
     }
 }

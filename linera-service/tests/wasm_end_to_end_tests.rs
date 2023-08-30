@@ -288,7 +288,7 @@ async fn test_end_to_end_counter() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 4).unwrap();
+    let mut local_net = LocalNetwork::new(network, 4, None).unwrap();
     let client = local_net.make_client(network);
 
     let original_counter_value = 35;
@@ -336,7 +336,7 @@ async fn test_end_to_end_counter_publish_create() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 4).unwrap();
+    let mut local_net = LocalNetwork::new(network, 4, None).unwrap();
     let client = local_net.make_client(network);
 
     let original_counter_value = 35;
@@ -380,7 +380,7 @@ async fn test_end_to_end_social_user_pub_sub() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 4).unwrap();
+    let mut local_net = LocalNetwork::new(network, 4, None).unwrap();
     let client1 = local_net.make_client(network);
     let client2 = local_net.make_client(network);
 
@@ -460,7 +460,7 @@ async fn test_end_to_end_fungible() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 4).unwrap();
+    let mut local_net = LocalNetwork::new(network, 4, None).unwrap();
     let client1 = local_net.make_client(network);
     let client2 = local_net.make_client(network);
 
@@ -574,7 +574,7 @@ async fn test_end_to_end_same_wallet_fungible() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 4).unwrap();
+    let mut local_net = LocalNetwork::new(network, 4, None).unwrap();
     let client1 = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
@@ -654,7 +654,7 @@ async fn test_end_to_end_crowd_funding() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 4).unwrap();
+    let mut local_net = LocalNetwork::new(network, 4, None).unwrap();
     let client1 = local_net.make_client(network);
     let client2 = local_net.make_client(network);
 
@@ -778,7 +778,7 @@ async fn test_end_to_end_matching_engine() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 4).unwrap();
+    let mut local_net = LocalNetwork::new(network, 4, None).unwrap();
     let client_admin = local_net.make_client(network);
     let client_a = local_net.make_client(network);
     let client_b = local_net.make_client(network);
@@ -1024,7 +1024,7 @@ async fn test_end_to_end_amm() {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 4).unwrap();
+    let mut local_net = LocalNetwork::new(network, 4, None).unwrap();
     let client_admin = local_net.make_client(network);
     let client0 = local_net.make_client(network);
     let client1 = local_net.make_client(network);

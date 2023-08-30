@@ -2881,7 +2881,6 @@ dependencies = [
 name = "linera-indexer"
 version = "0.4.0"
 dependencies = [
- "anyhow",
  "async-graphql",
  "async-graphql-axum",
  "async-trait",
@@ -2895,21 +2894,37 @@ dependencies = [
  "linera-base",
  "linera-chain",
  "linera-core",
- "linera-execution",
- "linera-indexer-graphql-client",
- "linera-service",
+ "linera-indexer-macro",
  "linera-service-graphql-client",
  "linera-views",
+ "reqwest",
+ "serde",
+ "structopt",
+ "thiserror",
+ "tokio",
+ "tower-http",
+ "tracing",
+]
+
+[[package]]
+name = "linera-indexer-example"
+version = "0.4.0"
+dependencies = [
+ "anyhow",
+ "async-graphql",
+ "linera-base",
+ "linera-indexer",
+ "linera-indexer-graphql-client",
+ "linera-indexer-plugins",
+ "linera-service",
+ "linera-service-graphql-client",
  "once_cell",
  "reqwest",
  "serde",
  "serde_json",
- "structopt",
  "tempfile",
  "test-log",
- "thiserror",
  "tokio",
- "tower-http",
  "tracing",
  "tracing-subscriber",
 ]
@@ -2929,6 +2944,35 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "linera-indexer-macro"
+version = "0.4.0"
+dependencies = [
+ "convert_case 0.4.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.31",
+]
+
+[[package]]
+name = "linera-indexer-plugins"
+version = "0.4.0"
+dependencies = [
+ "async-graphql",
+ "async-graphql-axum",
+ "async-trait",
+ "axum",
+ "bcs",
+ "linera-base",
+ "linera-chain",
+ "linera-execution",
+ "linera-indexer",
+ "linera-views",
+ "serde",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

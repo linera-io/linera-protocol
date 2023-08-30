@@ -7,7 +7,6 @@ use axum::{
     response::{self, IntoResponse},
 };
 use linera_base::crypto::CryptoHash;
-use linera_views::rocks_db::RocksDbContextError;
 use reqwest::header::InvalidHeaderValue;
 use std::net::AddrParseError;
 use thiserror::Error;
@@ -28,8 +27,6 @@ pub enum IndexerError {
     ParserError(#[from] AddrParseError),
     #[error(transparent)]
     ServerError(#[from] hyper::Error),
-    #[error(transparent)]
-    RocksDbError(#[from] RocksDbContextError),
     #[error("Null GraphQL data: {0:?}")]
     NullData(Option<Vec<graphql_client::Error>>),
     #[error("Block not found: {0}")]
@@ -46,6 +43,10 @@ pub enum IndexerError {
     PluginAlreadyRegistered,
     #[error("Invalid certificate content: {0:?}")]
     InvalidCertificateValue(CryptoHash),
+
+    #[cfg(feature = "rocksdb")]
+    #[error(transparent)]
+    RocksDbError(#[from] linera_views::rocks_db::RocksDbContextError),
 }
 
 pub async fn graphiql(uri: Uri) -> impl IntoResponse {

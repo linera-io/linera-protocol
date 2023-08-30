@@ -9,10 +9,11 @@
 
 pub mod common;
 pub mod indexer;
-pub mod operations;
 pub mod plugin;
 pub mod runner;
 pub mod service;
 
 #[cfg(feature = "rocksdb")]
 pub mod rocks_db;
+
+pub use linera_indexer_macro::plugin;
