@@ -42,7 +42,7 @@ use crate::{Bytecode, ContractRuntime, ExecutionError, ServiceRuntime, SessionId
 use bytes::Bytes;
 use linera_views::{batch::Batch, views::ViewError};
 use once_cell::sync::Lazy;
-use std::{future::Future, marker::PhantomData, mem, sync::Arc, task::Poll};
+use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use wasmer::{
     imports, wasmparser::Operator, CompilerConfig, Engine, EngineBuilder, Instance, Module,
@@ -579,13 +579,6 @@ impl ViewSystemApi<&'static dyn ContractRuntime, QueuedHostFutureFactory<'static
             .expect("Application called runtime after it should have stopped")
     }
 
-    /// Same as [`Self::runtime`].
-    fn runtime_with_writable_storage(
-        &self,
-    ) -> Result<&'static dyn ContractRuntime, ExecutionError> {
-        Ok(self.runtime())
-    }
-
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
     fn waker(&mut self) -> MappedMutexGuard<'_, WakerForwarder> {
         MutexGuard::map(
@@ -594,17 +587,6 @@ impl ViewSystemApi<&'static dyn ContractRuntime, QueuedHostFutureFactory<'static
                 .expect("Unexpected concurrent system API access by application"),
             |system_api| &mut system_api.waker,
         )
-    }
-
-    /// Creates a new [`HostFuture`] instance with the provided `future`.
-    fn new_host_future<Output>(
-        &mut self,
-        future: impl Future<Output = Output> + Send + 'static,
-    ) -> HostFuture<'static, Output>
-    where
-        Output: Send + 'static,
-    {
-        self.queued_future_factory.enqueue(future)
     }
 }
 
@@ -629,13 +611,6 @@ impl ViewSystemApi<&'static dyn ServiceRuntime, ()> {
             .expect("Application called runtime after it should have stopped")
     }
 
-    /// Returns an error due to an attempt to write to storage from a service.
-    fn runtime_with_writable_storage(
-        &self,
-    ) -> Result<&'static dyn ContractRuntime, ExecutionError> {
-        Err(WasmExecutionError::WriteAttemptToReadOnlyStorage.into())
-    }
-
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
     fn waker(&mut self) -> MappedMutexGuard<'_, WakerForwarder> {
         MutexGuard::map(
@@ -645,20 +620,12 @@ impl ViewSystemApi<&'static dyn ServiceRuntime, ()> {
             |system_api| &mut system_api.waker,
         )
     }
-
-    /// Enqueues a `future` to be executed deterministically.
-    fn new_host_future<Output>(
-        &mut self,
-        future: impl Future<Output = Output> + Send + 'static,
-    ) -> HostFuture<'static, Output> {
-        HostFuture::new(future)
-    }
 }
 
-impl_view_system_api!(
+impl_view_system_api_for_contract!(
     ViewSystemApi<&'static dyn ContractRuntime, QueuedHostFutureFactory<'static>>
 );
-impl_view_system_api!(ViewSystemApi<&'static dyn ServiceRuntime, ()>);
+impl_view_system_api_for_service!(ViewSystemApi<&'static dyn ServiceRuntime, ()>);
 
 /// Extra parameters necessary when cleaning up after contract execution.
 pub struct WasmerContractExtra<'runtime> {

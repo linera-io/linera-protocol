@@ -45,7 +45,7 @@ use super::{
 use crate::{Bytecode, ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
 use linera_views::{batch::Batch, views::ViewError};
 use once_cell::sync::Lazy;
-use std::{error::Error, future::Future, task::Poll};
+use std::{error::Error, task::Poll};
 use tokio::sync::Mutex;
 use wasmtime::{Config, Engine, Linker, Module, Store, Trap};
 use wit_bindgen_host_wasmtime_rust::Le;
@@ -470,32 +470,14 @@ impl<'runtime> ContractSystemApi<'runtime> {
         self.shared.runtime
     }
 
-    /// Same as [`Self::runtime`].
-    fn runtime_with_writable_storage(
-        &self,
-    ) -> Result<&'runtime dyn ContractRuntime, ExecutionError> {
-        Ok(self.runtime())
-    }
-
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
     fn waker(&mut self) -> &mut WakerForwarder {
         &mut self.shared.waker
     }
-
-    /// Enqueues a `future` to be executed deterministically.
-    fn new_host_future<Output>(
-        &mut self,
-        future: impl Future<Output = Output> + Send + 'runtime,
-    ) -> HostFuture<'runtime, Output>
-    where
-        Output: Send + 'static,
-    {
-        self.queued_future_factory.enqueue(future)
-    }
 }
 
 impl_contract_system_api!(ContractSystemApi<'runtime>);
-impl_view_system_api!(ContractSystemApi<'runtime>);
+impl_view_system_api_for_contract!(ContractSystemApi<'runtime>);
 
 /// Implementation to forward service system calls from the guest Wasm module to the host
 /// implementation.
@@ -517,29 +499,14 @@ impl<'runtime> ServiceSystemApi<'runtime> {
         self.shared.runtime
     }
 
-    /// Returns an error due to an attempt to use a contract system API from a service.
-    fn runtime_with_writable_storage(
-        &self,
-    ) -> Result<&'runtime dyn ContractRuntime, ExecutionError> {
-        Err(WasmExecutionError::WriteAttemptToReadOnlyStorage.into())
-    }
-
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
     fn waker(&mut self) -> &mut WakerForwarder {
         &mut self.shared.waker
     }
-
-    /// Enqueues a `future` to be executed deterministically.
-    fn new_host_future<Output>(
-        &mut self,
-        future: impl Future<Output = Output> + Send + 'runtime,
-    ) -> HostFuture<'runtime, Output> {
-        HostFuture::new(future)
-    }
 }
 
 impl_service_system_api!(ServiceSystemApi<'runtime>);
-impl_view_system_api!(ServiceSystemApi<'runtime>);
+impl_view_system_api_for_service!(ServiceSystemApi<'runtime>);
 
 impl From<ExecutionError> for wasmtime::Trap {
     fn from(error: ExecutionError) -> Self {
