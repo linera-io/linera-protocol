@@ -149,7 +149,7 @@ impl WasmApplication {
         let system_api = Arc::new(Mutex::new(system_api));
         let contract_system_api =
             ContractSystemApi::new(system_api.clone(), queued_future_factory.clone());
-        let view_system_api = ViewSystemApi::new(system_api, queued_future_factory);
+        let view_system_api = ContractViewSystemApi::new(system_api, queued_future_factory);
         let system_api_setup =
             contract_system_api::add_to_imports(&mut store, &mut imports, contract_system_api);
         let views_api_setup =
@@ -191,7 +191,7 @@ impl WasmApplication {
         let (system_api, runtime_guard) = SystemApi::new(waker_forwarder.clone(), runtime);
         let system_api = Arc::new(Mutex::new(system_api));
         let service_system_api = ServiceSystemApi::new(system_api.clone());
-        let view_system_api = ViewSystemApi::new(system_api, ());
+        let view_system_api = ServiceViewSystemApi::new(system_api);
         let system_api_setup =
             service_system_api::add_to_imports(&mut store, &mut imports, service_system_api);
         let views_api_setup =
@@ -539,27 +539,25 @@ impl ServiceSystemApi {
 
 impl_service_system_api!(ServiceSystemApi);
 
-/// Implementation to forward view system calls from the guest Wasm module to the host
+/// Implementation to forward view system calls from the contract guest Wasm module to the host
 /// implementation.
-pub struct ViewSystemApi<Runtime, MaybeQueuedFutureFactory> {
-    shared: Arc<Mutex<SystemApi<Runtime>>>,
-    queued_future_factory: MaybeQueuedFutureFactory,
+pub struct ContractViewSystemApi {
+    shared: Arc<Mutex<SystemApi<&'static dyn ContractRuntime>>>,
+    queued_future_factory: QueuedHostFutureFactory<'static>,
 }
 
-impl<Runtime, MaybeQueuedFutureFactory> ViewSystemApi<Runtime, MaybeQueuedFutureFactory> {
-    /// Creates a new [`ViewSystemApi`] instance.
+impl ContractViewSystemApi {
+    /// Creates a new [`ContractViewSystemApi`] instance.
     pub fn new(
-        shared: Arc<Mutex<SystemApi<Runtime>>>,
-        queued_future_factory: MaybeQueuedFutureFactory,
+        shared: Arc<Mutex<SystemApi<&'static dyn ContractRuntime>>>,
+        queued_future_factory: QueuedHostFutureFactory<'static>,
     ) -> Self {
-        ViewSystemApi {
+        ContractViewSystemApi {
             shared,
             queued_future_factory,
         }
     }
-}
 
-impl ViewSystemApi<&'static dyn ContractRuntime, QueuedHostFutureFactory<'static>> {
     /// Safely obtains the [`ContractRuntime`] trait object instance to handle a system call.
     ///
     /// # Panics
@@ -591,7 +589,18 @@ impl ViewSystemApi<&'static dyn ContractRuntime, QueuedHostFutureFactory<'static
     }
 }
 
-impl ViewSystemApi<&'static dyn ServiceRuntime, ()> {
+/// Implementation to forward view system calls from the guest WASM module to the host
+/// implementation.
+pub struct ServiceViewSystemApi {
+    shared: Arc<Mutex<SystemApi<&'static dyn ServiceRuntime>>>,
+}
+
+impl ServiceViewSystemApi {
+    /// Creates a new [`ServiceViewSystemApi`] instance.
+    pub fn new(shared: Arc<Mutex<SystemApi<&'static dyn ServiceRuntime>>>) -> Self {
+        ServiceViewSystemApi { shared }
+    }
+
     /// Safely obtains the [`ServiceRuntime`] trait object instance to handle a system call.
     ///
     /// # Panics
@@ -623,10 +632,8 @@ impl ViewSystemApi<&'static dyn ServiceRuntime, ()> {
     }
 }
 
-impl_view_system_api_for_contract!(
-    ViewSystemApi<&'static dyn ContractRuntime, QueuedHostFutureFactory<'static>>
-);
-impl_view_system_api_for_service!(ViewSystemApi<&'static dyn ServiceRuntime, ()>);
+impl_view_system_api_for_contract!(ContractViewSystemApi);
+impl_view_system_api_for_service!(ServiceViewSystemApi);
 
 /// Extra parameters necessary when cleaning up after contract execution.
 pub struct WasmerContractExtra<'runtime> {
