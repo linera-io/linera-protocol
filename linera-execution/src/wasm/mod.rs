@@ -219,7 +219,7 @@ impl UserApplication for WasmApplication {
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, ExecutionError> {
-        let result = match self {
+        let (result, updated_session_state) = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
                 Self::prepare_contract_runtime_with_wasmtime(contract, runtime)?
@@ -233,6 +233,7 @@ impl UserApplication for WasmApplication {
                     .await?
             }
         };
+        *session_state = updated_session_state;
         Ok(result)
     }
 

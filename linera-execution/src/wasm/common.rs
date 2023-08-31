@@ -12,7 +12,6 @@ use crate::{
     ApplicationCallResult, CalleeContext, MessageContext, OperationContext, QueryContext,
     RawExecutionResult, SessionCallResult, SessionId,
 };
-use futures::future::{self, TryFutureExt};
 
 /// Types that are specific to the context of an application ready to be executedy by a WebAssembly
 /// runtime.
@@ -331,27 +330,18 @@ where
     /// pub async fn handle_session_call(
     ///     mut self,
     ///     context: &CalleeContext,
-    ///     session_state: &mut Vec<u8>,
+    ///     session_state: &[u8],
     ///     argument: &[u8],
     ///     forwarded_sessions: Vec<SessionId>,
-    /// ) -> Result<SessionCallResult, ExecutionError>
+    /// ) -> Result<(SessionCallResult, Vec<u8>), ExecutionError>
     /// ```
     pub fn handle_session_call<'session_state>(
         mut self,
         context: &CalleeContext,
-        session_state: &'session_state mut Vec<u8>,
+        session_state: &'session_state [u8],
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> future::MapOk<
-        GuestFuture<'context, A::HandleSessionCall, A>,
-        impl FnOnce((SessionCallResult, Vec<u8>)) -> SessionCallResult + 'session_state,
-    >
-    where
-        A: Unpin + 'session_state,
-        A::Store: Unpin,
-        A::Error: Unpin,
-        A::Extra: Unpin,
-    {
+    ) -> GuestFuture<'context, A::HandleSessionCall, A> {
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
             .map(A::SessionId::from)
@@ -360,15 +350,12 @@ where
         let future = self.application.handle_session_call_new(
             &mut self.store,
             (*context).into(),
-            &*session_state,
+            session_state,
             argument,
             &forwarded_sessions,
         );
 
-        GuestFuture::new(future, self).map_ok(|(session_call_result, updated_data)| {
-            *session_state = updated_data;
-            session_call_result
-        })
+        GuestFuture::new(future, self)
     }
 }
 
