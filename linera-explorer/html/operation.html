@@ -2,10 +2,10 @@
   <div class="card-body">
     <h5 class="card-title">
       <span>Operation</span>
-      <button class="btn btn-link btn-sm" data-bs-toggle="modal" :data-bs-target="'#'+op.hash+'-modal'" @click="json_load(op.hash+'-json', op)">
+      <button class="btn btn-link btn-sm" data-bs-toggle="modal" :data-bs-target="'#'+operation_id(op.key)+'-modal'" @click="json_load(operation_id(op.key)+'-json', op)">
         <i class="bi bi-braces"></i>
       </button>
-      <div :id="op.hash+'-modal'" class="modal fade">
+      <div :id="operation_id(op.key)+'-modal'" class="modal fade">
         <div class="modal-dialog modal-xl">
           <div class="modal-content">
             <div class="modal-header">
@@ -13,7 +13,7 @@
               <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-              <div :id="op.hash+'-json'" style="overflow-x: auto"></div>
+              <div :id="operation_id(op.key)+'-json'" style="overflow-x: auto"></div>
             </div>
           </div>
         </div>
@@ -21,29 +21,25 @@
     </h5>
     <ul class="list-group">
       <li class="list-group-item d-flex justify-content-between">
-        <span><strong>Hash</strong></span>
-        {{ op.hash }}
-      </li>
-      <li class="list-group-item d-flex justify-content-between">
         <span><strong>Index</strong></span>
-        <span>{{ op.operationIndex }}</span>
+        <span>{{ op.index }}</span>
       </li>
 
       <li class="list-group-item d-flex justify-content-between">
         <span><strong>Block</strong></span>
-        <a @click="route('block', [['block', op.operation.block]])" class="btn btn-link">{{ op.operation.block }} ({{ op.operation.index }})</a>
+        <a @click="route('block', [['block', op.block]])" class="btn btn-link">{{ op.block }} ({{ op.key.index }})</a>
       </li>
       <li class="list-group-item d-flex justify-content-between">
         <span><strong>Height</strong></span>
-        <span>{{ op.height }}</span>
+        <span>{{ op.key.height }}</span>
       </li>
       <li class="list-group-item d-flex justify-content-between">
         <span><strong>Previous Operation</strong></span>
-        <a v-if="op.previousOperation!==undefined" @click="route('operation', [['operation', op.previousOperation]])" class="btn btn-link">{{ op.previousOperation }}</a>
+        <a v-if="op.previousOperation" @click="route('operation', [['height', op.previousOperation.height.toString()], ['index', op.previousOperation.index.toString()]])" class="btn btn-link">{{ operation_id(op.previousOperation) }}</a>
         <span v-else>--</span>
       </li>
       <li class="list-group-item p-0">
-        <v-op :op="op.operation.content" :id="op.hash" :index="op.operatonIndex" :route="route"></v-op>
+        <v-op :op="op.content" :id="operation_id(op.key)" :index="op.index" :route="route"></v-op>
       </li>
     </ul>
   </div>

@@ -15,6 +15,14 @@
         <li class="nav-item">
           <a class="nav-link" :class="page.operations ? 'active' : ''" @click="route('operations')" role="button">Operations</a>
         </li>
+        <li v-if="plugins.length!=0" class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" role="button" data-bs-toggle="dropdown">
+            Indexer
+          </a>
+          <ul class="dropdown-menu">
+            <li v-for="plugin in plugins"><a class="dropdown-item" @click="route('plugin', [['plugin', plugin]])">{{ plugin }}</a></li>
+          </ul>
+        </li>
       </ul>
       <ul class="navbar-nav ms-auto">
         <li class="nav-item mx-2">
@@ -91,9 +99,12 @@
   </div>
 
   <div v-else-if="page.operation">
-    <v-operation :route="route" :op="page.operation" :id="page.operation.hash" :index="page.operation.operation.index"></v-operation>
+    <v-operation :route="route" :op="page.operation" :id="operation_id(page.operation.key)" :index="page.operation.index"></v-operation>
   </div>
 
+  <div v-else-if="page.plugin">
+    <v-plugin :route="route" :plugin="page.plugin"></v-plugin>
+  </div>
 
   <div v-else-if="page.error">
     <div class="m-5 p-5 text-center">
