@@ -19,7 +19,7 @@ macro_rules! impl_contract_system_api {
         impl$(<$param>)? contract_system_api::ContractSystemApi for $contract_system_api {
             type Error = ExecutionError;
 
-            type Lock = HostFuture<$runtime, Result<(), ExecutionError>>;
+            type Lock = Mutex<oneshot::Receiver<Result<(), ExecutionError>>>;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -67,9 +67,9 @@ macro_rules! impl_contract_system_api {
             }
 
             fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
-                Ok(self
+                Ok(Mutex::new(self
                     .queued_future_factory
-                    .enqueue(self.runtime().lock_view_user_state()))
+                    .enqueue(self.runtime().lock_view_user_state())))
             }
 
             fn lock_poll(
@@ -77,13 +77,19 @@ macro_rules! impl_contract_system_api {
                 future: &Self::Lock,
             ) -> Result<contract_system_api::PollLock, Self::Error> {
                 use contract_system_api::PollLock;
-                match future.poll(&mut *self.waker()) {
+                let mut receiver = future
+                    .try_lock()
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
+                match self.waker().with_context(|context| receiver.poll_unpin(context)) {
                     Poll::Pending => Ok(PollLock::Pending),
-                    Poll::Ready(Ok(())) => Ok(PollLock::ReadyLocked),
-                    Poll::Ready(Err(ExecutionError::ViewError(ViewError::TryLockError(_)))) => {
+                    Poll::Ready(Ok(Ok(()))) => Ok(PollLock::ReadyLocked),
+                    Poll::Ready(Ok(Err(ExecutionError::ViewError(ViewError::TryLockError(_))))) => {
                         Ok(PollLock::ReadyNotLocked)
                     }
-                    Poll::Ready(Err(error)) => Err(error),
+                    Poll::Ready(Ok(Err(error))) => Err(error),
+                    Poll::Ready(Err(_)) => panic!(
+                        "`HostFutureQueue` dropped while guest Wasm instance is still executing",
+                    ),
                 }
             }
 
@@ -410,11 +416,11 @@ macro_rules! impl_view_system_api_for_contract {
         impl$(<$param>)? view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
-            type ReadKeyBytes = HostFuture<$runtime, Result<Option<Vec<u8>>, ExecutionError>>;
-            type FindKeys = HostFuture<$runtime, Result<Vec<Vec<u8>>, ExecutionError>>;
+            type ReadKeyBytes = Mutex<oneshot::Receiver<Result<Option<Vec<u8>>, ExecutionError>>>;
+            type FindKeys = Mutex<oneshot::Receiver<Result<Vec<Vec<u8>>, ExecutionError>>>;
             type FindKeyValues =
-                HostFuture<$runtime, Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>;
-            type WriteBatch = HostFuture<$runtime, Result<(), ExecutionError>>;
+                Mutex<oneshot::Receiver<Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>>>;
+            type WriteBatch = Mutex<oneshot::Receiver<Result<(), ExecutionError>>>;
 
             fn error_to_trap(&mut self, error: Self::Error) -> $trap {
                 error.into()
@@ -424,9 +430,9 @@ macro_rules! impl_view_system_api_for_contract {
                 &mut self,
                 key: &[u8],
             ) -> Result<Self::ReadKeyBytes, Self::Error> {
-                Ok(self
+                Ok(Mutex::new(self
                     .queued_future_factory
-                    .enqueue(self.runtime().read_key_bytes(key.to_owned())))
+                    .enqueue(self.runtime().read_key_bytes(key.to_owned()))))
             }
 
             fn read_key_bytes_poll(
@@ -434,16 +440,22 @@ macro_rules! impl_view_system_api_for_contract {
                 future: &Self::ReadKeyBytes,
             ) -> Result<view_system_api::PollReadKeyBytes, Self::Error> {
                 use view_system_api::PollReadKeyBytes;
-                match future.poll(&mut self.waker()) {
+                let mut receiver = future
+                    .try_lock()
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
+                match self.waker().with_context(|context| receiver.poll_unpin(context)) {
                     Poll::Pending => Ok(PollReadKeyBytes::Pending),
-                    Poll::Ready(Ok(opt_list)) => Ok(PollReadKeyBytes::Ready(opt_list)),
-                    Poll::Ready(Err(error)) => Err(error),
+                    Poll::Ready(Ok(Ok(opt_list))) => Ok(PollReadKeyBytes::Ready(opt_list)),
+                    Poll::Ready(Ok(Err(error))) => Err(error),
+                    Poll::Ready(Err(_)) => panic!(
+                        "`HostFutureQueue` dropped while guest Wasm instance is still executing",
+                    ),
                 }
             }
 
             fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
-                Ok(self.queued_future_factory.enqueue(
-                        self.runtime().find_keys_by_prefix(key_prefix.to_owned())))
+                Ok(Mutex::new(self.queued_future_factory.enqueue(
+                        self.runtime().find_keys_by_prefix(key_prefix.to_owned()))))
             }
 
             fn find_keys_poll(
@@ -451,10 +463,16 @@ macro_rules! impl_view_system_api_for_contract {
                 future: &Self::FindKeys,
             ) -> Result<view_system_api::PollFindKeys, Self::Error> {
                 use view_system_api::PollFindKeys;
-                match future.poll(&mut self.waker()) {
+                let mut receiver = future
+                    .try_lock()
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
+                match self.waker().with_context(|context| receiver.poll_unpin(context)) {
                     Poll::Pending => Ok(PollFindKeys::Pending),
-                    Poll::Ready(Ok(keys)) => Ok(PollFindKeys::Ready(keys)),
-                    Poll::Ready(Err(error)) => Err(error),
+                    Poll::Ready(Ok(Ok(keys))) => Ok(PollFindKeys::Ready(keys)),
+                    Poll::Ready(Ok(Err(error))) => Err(error),
+                    Poll::Ready(Err(_)) => panic!(
+                        "`HostFutureQueue` dropped while guest Wasm instance is still executing",
+                    ),
                 }
             }
 
@@ -462,9 +480,9 @@ macro_rules! impl_view_system_api_for_contract {
                 &mut self,
                 key_prefix: &[u8],
             ) -> Result<Self::FindKeyValues, Self::Error> {
-                Ok(self
+                Ok(Mutex::new(self
                     .queued_future_factory
-                    .enqueue(self.runtime().find_key_values_by_prefix(key_prefix.to_owned())))
+                    .enqueue(self.runtime().find_key_values_by_prefix(key_prefix.to_owned()))))
             }
 
             fn find_key_values_poll(
@@ -472,10 +490,16 @@ macro_rules! impl_view_system_api_for_contract {
                 future: &Self::FindKeyValues,
             ) -> Result<view_system_api::PollFindKeyValues, Self::Error> {
                 use view_system_api::PollFindKeyValues;
-                match future.poll(&mut self.waker()) {
+                let mut receiver = future
+                    .try_lock()
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
+                match self.waker().with_context(|context| receiver.poll_unpin(context)) {
                     Poll::Pending => Ok(PollFindKeyValues::Pending),
-                    Poll::Ready(Ok(key_values)) => Ok(PollFindKeyValues::Ready(key_values)),
-                    Poll::Ready(Err(error)) => Err(error),
+                    Poll::Ready(Ok(Ok(key_values))) => Ok(PollFindKeyValues::Ready(key_values)),
+                    Poll::Ready(Ok(Err(error))) => Err(error),
+                    Poll::Ready(Err(_)) => panic!(
+                        "`HostFutureQueue` dropped while guest Wasm instance is still executing",
+                    ),
                 }
             }
 
@@ -497,9 +521,9 @@ macro_rules! impl_view_system_api_for_contract {
                         }
                     }
                 }
-                Ok(self
+                Ok(Mutex::new(self
                     .queued_future_factory
-                    .enqueue(self.runtime().write_batch_and_unlock(batch)))
+                    .enqueue(self.runtime().write_batch_and_unlock(batch))))
             }
 
             fn write_batch_poll(
@@ -507,10 +531,16 @@ macro_rules! impl_view_system_api_for_contract {
                 future: &Self::WriteBatch,
             ) -> Result<view_system_api::PollUnit, Self::Error> {
                 use view_system_api::PollUnit;
-                match future.poll(&mut *self.waker()) {
+                let mut receiver = future
+                    .try_lock()
+                    .expect("Unexpected reentrant locking of `oneshot::Receiver`");
+                match self.waker().with_context(|context| receiver.poll_unpin(context)) {
                     Poll::Pending => Ok(PollUnit::Pending),
-                    Poll::Ready(Ok(())) => Ok(PollUnit::Ready),
-                    Poll::Ready(Err(error)) => Err(error),
+                    Poll::Ready(Ok(Ok(()))) => Ok(PollUnit::Ready),
+                    Poll::Ready(Ok(Err(error))) => Err(error),
+                    Poll::Ready(Err(_)) => panic!(
+                        "`HostFutureQueue` dropped while guest Wasm instance is still executing",
+                    ),
                 }
             }
         }

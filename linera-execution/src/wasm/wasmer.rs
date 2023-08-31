@@ -40,6 +40,7 @@ use super::{
 };
 use crate::{Bytecode, ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
 use bytes::Bytes;
+use futures::{channel::oneshot, FutureExt};
 use linera_views::{batch::Batch, views::ViewError};
 use once_cell::sync::Lazy;
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
