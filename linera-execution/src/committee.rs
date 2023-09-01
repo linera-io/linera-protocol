@@ -7,9 +7,10 @@ use async_graphql::InputObject;
 use linera_base::{
     crypto::{CryptoError, PublicKey},
     data_types::ArithmeticError,
+    doc_scalar,
 };
-use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::BTreeMap};
+use serde::{de::Error, Deserialize, Serialize};
+use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 
 /// A number identifying the configuration of the chain (aka the committee).
 #[derive(
@@ -30,11 +31,46 @@ pub struct ValidatorState {
     pub votes: u64,
 }
 
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub struct Validators(pub BTreeMap<ValidatorName, ValidatorState>);
+
+impl Serialize for Validators {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        let mut map = BTreeMap::new();
+        for (key, value) in self.0.iter() {
+            map.insert(format!("{}", key), value.clone());
+        }
+        map.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Validators {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let map = BTreeMap::<String, ValidatorState>::deserialize(deserializer)?;
+        let mut validators = BTreeMap::new();
+        for (key, value) in map.iter() {
+            validators.insert(
+                ValidatorName(PublicKey::from_str(key).map_err(D::Error::custom)?),
+                value.clone(),
+            );
+        }
+        Ok(Validators(validators))
+    }
+}
+
+doc_scalar!(Validators, "validators in the committee");
+
 /// A set of validators (identified by their public keys) and their voting rights.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Default, InputObject)]
 pub struct Committee {
     /// The validators in the committee.
-    validators: BTreeMap<ValidatorName, ValidatorState>,
+    validators: Validators,
     /// The sum of all voting rights.
     total_votes: u64,
     /// The threshold to form a quorum.
@@ -76,7 +112,7 @@ impl<'de> Deserialize<'de> for Committee {
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "Committee")]
 struct CommitteeFull<'a> {
-    validators: Cow<'a, BTreeMap<ValidatorName, ValidatorState>>,
+    validators: Cow<'a, Validators>,
     total_votes: u64,
     quorum_threshold: u64,
     validity_threshold: u64,
@@ -86,7 +122,7 @@ struct CommitteeFull<'a> {
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "Committee")]
 struct CommitteeMinimal<'a> {
-    validators: Cow<'a, BTreeMap<ValidatorName, ValidatorState>>,
+    validators: Cow<'a, Validators>,
     pricing: Cow<'a, Pricing>,
 }
 
@@ -101,7 +137,7 @@ impl TryFrom<CommitteeFull<'static>> for Committee {
             validity_threshold,
             pricing,
         } = committee_full;
-        let committee = Committee::new(validators.into_owned(), pricing.into_owned());
+        let committee = Committee::new(validators.into_owned().0, pricing.into_owned());
         if total_votes != committee.total_votes {
             Err(format!(
                 "invalid committee: total_votes is {}; should be {}",
@@ -148,7 +184,7 @@ impl From<CommitteeMinimal<'static>> for Committee {
             validators,
             pricing,
         } = committee_min;
-        Committee::new(validators.into_owned(), pricing.into_owned())
+        Committee::new(validators.into_owned().0, pricing.into_owned())
     }
 }
 
@@ -233,7 +269,7 @@ impl Committee {
         let validity_threshold = (total_votes + 2) / 3;
 
         Committee {
-            validators,
+            validators: Validators(validators),
             total_votes,
             quorum_threshold,
             validity_threshold,
@@ -259,7 +295,7 @@ impl Committee {
     }
 
     pub fn weight(&self, author: &ValidatorName) -> u64 {
-        match self.validators.get(author) {
+        match self.validators.0.get(author) {
             Some(state) => state.votes,
             None => 0,
         }
@@ -267,6 +303,7 @@ impl Committee {
 
     pub fn network_address(&self, author: &ValidatorName) -> Option<&str> {
         self.validators
+            .0
             .get(author)
             .map(|state| state.network_address.as_ref())
     }
@@ -280,7 +317,7 @@ impl Committee {
     }
 
     pub fn validators(&self) -> &BTreeMap<ValidatorName, ValidatorState> {
-        &self.validators
+        &self.validators.0
     }
 
     pub fn total_votes(&self) -> u64 {

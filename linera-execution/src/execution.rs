@@ -81,7 +81,7 @@ where
                 .insert(&subscription)
                 .expect("serialization of subscription should not fail");
         }
-        view.system.committees.set(committees);
+        view.system.committees.set(committees.0);
         view.system.ownership.set(ownership);
         view.system.balance.set(balance);
         for (owner, balance) in balances {

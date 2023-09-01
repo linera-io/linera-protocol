@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    committee::{Committee, Epoch, ValidatorName, ValidatorState},
+    committee::{Committee, Epoch, ValidatorName, Validators},
     system::{Recipient, UserData},
     ApplicationId, Bytecode, ChainOwnership, ChannelSubscription, ExecutionStateView,
     SystemExecutionStateView, UserApplicationDescription,
@@ -34,8 +34,8 @@ doc_scalar!(ValidatorName, "The identity of a validator");
 #[Object]
 impl Committee {
     #[graphql(derived(name = "validators"))]
-    async fn _validators(&self) -> &BTreeMap<ValidatorName, ValidatorState> {
-        self.validators()
+    async fn _validators(&self) -> Validators {
+        Validators(self.validators().clone())
     }
 
     #[graphql(derived(name = "total_votes"))]
@@ -91,8 +91,12 @@ where
     }
 
     #[graphql(derived(name = "committees"))]
-    async fn _committees(&self) -> &BTreeMap<Epoch, Committee> {
-        self.committees.get()
+    async fn _committees(&self) -> BTreeMap<String, Committee> {
+        let mut map = BTreeMap::new();
+        for (key, value) in self.committees.get().iter() {
+            map.insert(key.to_string(), value.clone());
+        }
+        map
     }
 
     #[graphql(derived(name = "ownership"))]

@@ -23,7 +23,7 @@ use linera_views::{
     set_view::SetView,
     views::{HashableView, View, ViewError},
 };
-use serde::{Deserialize, Serialize};
+use serde::{de::Error, Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     fmt::{self, Display, Formatter},
@@ -34,6 +34,39 @@ use thiserror::Error;
 
 #[cfg(any(test, feature = "test"))]
 use {crate::applications::ApplicationRegistry, std::collections::BTreeSet};
+
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub struct Committees(pub BTreeMap<Epoch, Committee>);
+
+impl Serialize for Committees {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        let mut map = BTreeMap::new();
+        for (key, value) in self.0.iter() {
+            map.insert(key.0.to_string(), value.clone());
+        }
+        map.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Committees {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let map = BTreeMap::<String, Committee>::deserialize(deserializer)?;
+        let mut committees = BTreeMap::new();
+        for (key, value) in map.iter() {
+            committees.insert(
+                Epoch::from_str(key).map_err(D::Error::custom)?,
+                value.clone(),
+            );
+        }
+        Ok(Committees(committees))
+    }
+}
 
 /// A view accessing the execution state of the system of a chain.
 #[derive(Debug, HashableView)]
@@ -71,7 +104,7 @@ pub struct SystemExecutionState {
     pub epoch: Option<Epoch>,
     pub admin_id: Option<ChainId>,
     pub subscriptions: BTreeSet<ChannelSubscription>,
-    pub committees: BTreeMap<Epoch, Committee>,
+    pub committees: Committees,
     pub ownership: ChainOwnership,
     pub balance: Amount,
     pub balances: BTreeMap<Owner, Amount>,
@@ -106,7 +139,7 @@ pub enum SystemOperation {
         ownership: ChainOwnership,
         admin_id: ChainId,
         epoch: Epoch,
-        committees: BTreeMap<Epoch, Committee>,
+        committees: Committees,
     },
     /// Closes the chain.
     CloseChain,
@@ -181,12 +214,12 @@ pub enum SystemMessage {
         ownership: ChainOwnership,
         admin_id: ChainId,
         epoch: Epoch,
-        committees: BTreeMap<Epoch, Committee>,
+        committees: Committees,
     },
     /// Sets the current epoch and the recognized committees.
     SetCommittees {
         epoch: Epoch,
-        committees: BTreeMap<Epoch, Committee>,
+        committees: Committees,
     },
     /// Subscribes to a channel.
     Subscribe {
@@ -468,7 +501,7 @@ where
                     SystemExecutionError::InvalidNewChainAdminId(child_id)
                 );
                 ensure!(
-                    self.committees.get() == committees,
+                    self.committees.get() == &committees.0,
                     SystemExecutionError::InvalidCommittees
                 );
                 ensure!(
@@ -615,7 +648,7 @@ where
                             authenticated: false,
                             message: SystemMessage::SetCommittees {
                                 epoch: *epoch,
-                                committees: self.committees.get().clone(),
+                                committees: Committees(self.committees.get().clone()),
                             },
                         };
                         result.messages.push(message);
@@ -630,7 +663,7 @@ where
                             authenticated: false,
                             message: SystemMessage::SetCommittees {
                                 epoch: self.epoch.get().expect("chain is active"),
-                                committees: self.committees.get().clone(),
+                                committees: Committees(self.committees.get().clone()),
                             },
                         };
                         result.messages.push(message);
@@ -805,7 +838,7 @@ where
                     SystemExecutionError::CannotRewindEpoch
                 );
                 self.epoch.set(Some(*epoch));
-                self.committees.set(committees.clone());
+                self.committees.set(committees.0.clone());
             }
             Subscribe { id, subscription } if subscription.chain_id == context.chain_id => {
                 // Notify the subscriber about this block, so that it is included in the

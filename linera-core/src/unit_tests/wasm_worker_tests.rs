@@ -20,7 +20,7 @@ use linera_chain::data_types::{
 };
 use linera_execution::{
     committee::Epoch,
-    system::{SystemChannel, SystemMessage, SystemOperation},
+    system::{Committees, SystemChannel, SystemMessage, SystemOperation},
     ApplicationId, ApplicationRegistry, Bytecode, BytecodeLocation, ChainOwnership,
     ChannelSubscription, ExecutionStateView, Message, Operation, OperationContext,
     SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmApplication,
@@ -145,7 +145,7 @@ where
         description: Some(publisher_chain),
         admin_id: Some(admin_id.into()),
         subscriptions: BTreeSet::new(),
-        committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
+        committees: Committees([(Epoch::from(0), committee.clone())].into_iter().collect()),
         ownership: ChainOwnership::single(publisher_key_pair.public()),
         balance: Amount::ZERO,
         balances: BTreeMap::new(),
@@ -267,7 +267,7 @@ where
         description: Some(creator_chain),
         admin_id: Some(admin_id.into()),
         subscriptions: [publisher_channel].into_iter().collect(),
-        committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
+        committees: Committees([(Epoch::from(0), committee.clone())].into_iter().collect()),
         ownership: ChainOwnership::single(creator_key_pair.public()),
         balance: Amount::ZERO,
         balances: BTreeMap::new(),

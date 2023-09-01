@@ -1351,7 +1351,7 @@ where
                 messages,
                 vec![Operation::System(SystemOperation::OpenChain {
                     ownership,
-                    committees,
+                    committees: linera_execution::system::Committees(committees),
                     admin_id: self.admin_id,
                     epoch,
                 })],

@@ -365,7 +365,7 @@ where
                 message_id,
                 ownership.clone(),
                 *epoch,
-                committees.clone(),
+                committees.0.clone(),
                 *admin_id,
                 timestamp,
             );
