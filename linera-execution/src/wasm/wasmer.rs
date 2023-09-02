@@ -162,8 +162,6 @@ impl WasmApplication {
             _lifetime: PhantomData,
         };
 
-        metering::set_remaining_points(&mut store, &instance, runtime.remaining_fuel());
-
         system_api_setup(&instance, &store).map_err(WasmExecutionError::LoadContractModule)?;
         views_api_setup(&instance, &store).map_err(WasmExecutionError::LoadContractModule)?;
 
@@ -247,6 +245,24 @@ impl<'runtime> common::Contract for Contract<'runtime> {
     type PollExecutionResult = contract::PollExecutionResult;
     type PollApplicationCallResult = contract::PollApplicationCallResult;
     type PollSessionCallResult = contract::PollSessionCallResult;
+
+    fn configure_fuel(context: &mut WasmRuntimeContext<Self>) {
+        let runtime_guard = context
+            .extra
+            .runtime_guard
+            .runtime
+            .try_lock()
+            .expect("Unexpected concurrent access to ContractRuntime");
+        let runtime = runtime_guard
+            .as_ref()
+            .expect("Runtime guard dropped prematurely");
+
+        metering::set_remaining_points(
+            &mut context.store,
+            &context.extra.instance,
+            runtime.remaining_fuel(),
+        );
+    }
 
     fn initialize_new(
         &self,

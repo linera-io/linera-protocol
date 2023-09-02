@@ -80,6 +80,9 @@ pub trait Contract: ApplicationRuntimeContext {
     /// The WIT type eqivalent for [`Poll<Result<SessionCallResult, String>>`].
     type PollSessionCallResult;
 
+    /// Configures the amount of fuel available before executing the contract.
+    fn configure_fuel(context: &mut WasmRuntimeContext<Self>);
+
     /// Creates a new future for the user application to initialize itself on the owner chain.
     fn initialize_new(
         &self,
@@ -232,6 +235,8 @@ where
         context: &OperationContext,
         argument: &[u8],
     ) -> GuestFuture<'context, A::Initialize, A> {
+        A::configure_fuel(&mut self);
+
         let future = self
             .application
             .initialize_new(&mut self.store, (*context).into(), argument);
@@ -256,6 +261,8 @@ where
         context: &OperationContext,
         operation: &[u8],
     ) -> GuestFuture<'context, A::ExecuteOperation, A> {
+        A::configure_fuel(&mut self);
+
         let future =
             self.application
                 .execute_operation_new(&mut self.store, (*context).into(), operation);
@@ -280,6 +287,8 @@ where
         context: &MessageContext,
         message: &[u8],
     ) -> GuestFuture<'context, A::ExecuteMessage, A> {
+        A::configure_fuel(&mut self);
+
         let future =
             self.application
                 .execute_message_new(&mut self.store, (*context).into(), message);
@@ -306,6 +315,8 @@ where
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> GuestFuture<'context, A::HandleApplicationCall, A> {
+        A::configure_fuel(&mut self);
+
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
             .map(A::SessionId::from)
@@ -342,6 +353,8 @@ where
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> GuestFuture<'context, A::HandleSessionCall, A> {
+        A::configure_fuel(&mut self);
+
         let forwarded_sessions: Vec<_> = forwarded_sessions
             .into_iter()
             .map(A::SessionId::from)

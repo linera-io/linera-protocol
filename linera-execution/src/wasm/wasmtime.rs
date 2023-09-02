@@ -151,10 +151,6 @@ impl WasmApplication {
         .map_err(WasmExecutionError::LoadContractModule)?;
         let application = Contract { contract };
 
-        store
-            .add_fuel(runtime.remaining_fuel())
-            .expect("Fuel consumption wasn't properly enabled");
-
         Ok(WasmRuntimeContext {
             waker_forwarder,
             application,
@@ -312,6 +308,15 @@ impl<'runtime> common::Contract for Contract<'runtime> {
     type PollExecutionResult = contract::PollExecutionResult;
     type PollApplicationCallResult = contract::PollApplicationCallResult;
     type PollSessionCallResult = contract::PollSessionCallResult;
+
+    fn configure_fuel(context: &mut WasmRuntimeContext<Self>) {
+        let runtime = context.store.data().system_api.runtime();
+
+        context
+            .store
+            .add_fuel(runtime.remaining_fuel())
+            .expect("Fuel consumption wasn't properly enabled");
+    }
 
     fn initialize_new(
         &self,
