@@ -14,6 +14,7 @@ mod async_boundary;
 mod async_determinism;
 mod common;
 mod module_cache;
+mod runtime_actor;
 mod sanitizer;
 #[macro_use]
 mod system_api;
