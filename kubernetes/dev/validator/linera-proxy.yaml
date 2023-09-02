@@ -4,7 +4,7 @@ metadata:
   name: validator-1
   labels:
     app: validator-1
-spec: 
+spec:
   type: LoadBalancer
   loadBalancerIP: 34.151.215.158
   selector:

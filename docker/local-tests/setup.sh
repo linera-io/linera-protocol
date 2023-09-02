@@ -17,9 +17,9 @@ validator_options() {
         cat << EOF > "validator_${server}.toml"
 server_config_path = "server_${server}.json"
 host = "validator-${server}"
-port = 9100
+port = 19100
 internal_host = "validator-${server}"
-internal_port = 10100
+internal_port = 20100
 external_protocol = { Simple = "Tcp" }
 internal_protocol = { Simple = "Tcp" }
 EOF
@@ -28,9 +28,9 @@ EOF
 
 [[shards]]
 host = "server-${server}-shard-${shard}.server-${server}"
-port = 9100
+port = 19100
 metrics_host = "server-${server}-shard-${shard}.server-${server}"
-metrics_port = 11100
+metrics_port = 21100
 EOF
         done
         echo "validator_${server}.toml"
@@ -48,7 +48,7 @@ VALIDATORS=($(validator_options))
 # * `genesis.json` will contain the initial balances of chains as well as the initial committee.
 ./linera \
     --wallet wallet.json \
-    create_genesis_config 1000 \
+    create-genesis-config 1000 \
     --genesis genesis.json \
     --initial-funding 100 \
     --committee committee.json

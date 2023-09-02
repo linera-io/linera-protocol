@@ -12,6 +12,8 @@ use linera_rpc::{
     transport::{MessageHandler, TransportProtocol},
     RpcMessage,
 };
+#[cfg(feature = "kube")]
+use linera_service::kubernetes::get_ips_from_k8s;
 use linera_service::{
     config::{Import, ValidatorServerConfig},
     grpc_proxy::GrpcProxy,
@@ -37,6 +39,13 @@ pub struct ProxyOptions {
     /// Timeout for receiving responses (us)
     #[structopt(long, default_value = "4000000")]
     recv_timeout_us: u64,
+
+    /// Use this when running from a Kubernetes cluster (including from within GCP)
+    /// Won't use config files to determine host IPs, but will do it dynamically
+    /// based on cluster info
+    #[cfg(feature = "kube")]
+    #[structopt(long)]
+    kube: bool,
 }
 
 /// A Linera Proxy, either gRPC or over 'Simple Transport', meaning TCP or UDP.
@@ -57,8 +66,19 @@ impl Proxy {
     }
 
     /// Constructs and configures the [`Proxy`] given [`ProxyOptions`].
-    fn from_options(options: ProxyOptions) -> Result<Self> {
+    async fn from_options(options: ProxyOptions) -> Result<Self> {
+        #[cfg(not(feature = "kube"))]
         let config = ValidatorServerConfig::read(&options.config_path)?;
+        #[cfg(feature = "kube")]
+        let mut config = ValidatorServerConfig::read(&options.config_path)?;
+
+        #[cfg(feature = "kube")]
+        if options.kube {
+            get_ips_from_k8s(&mut config)
+                .await
+                .expect("Failed to get IPs from k8s");
+        }
+
         let internal_protocol = config.internal_network.protocol;
         let external_protocol = config.validator.network.protocol;
 
@@ -82,6 +102,8 @@ impl Proxy {
                     .clone_with_protocol(public_transport),
                 send_timeout: Duration::from_micros(options.send_timeout_us),
                 recv_timeout: Duration::from_micros(options.recv_timeout_us),
+                #[cfg(feature = "kube")]
+                kube: options.kube,
             }),
             _ => {
                 bail!(
@@ -102,6 +124,8 @@ pub struct SimpleProxy {
     internal_config: ValidatorInternalNetworkPreConfig<TransportProtocol>,
     send_timeout: Duration,
     recv_timeout: Duration,
+    #[cfg(feature = "kube")]
+    kube: bool,
 }
 
 #[async_trait]
@@ -137,7 +161,7 @@ impl SimpleProxy {
     #[instrument(skip_all, fields(port = self.public_config.port), err)]
     async fn run(self) -> Result<()> {
         info!("Starting simple server");
-        let address = format!("0.0.0.0:{}", self.public_config.port);
+        let address = self.get_listen_address(self.public_config.port);
         self.public_config
             .protocol
             .spawn_server(&address, self)
@@ -145,6 +169,24 @@ impl SimpleProxy {
             .join()
             .await?;
         Ok(())
+    }
+
+    #[cfg(feature = "kube")]
+    fn get_listen_address(&self, port: u16) -> String {
+        if self.kube {
+            format!(
+                "{}:{}",
+                std::env::var("MY_POD_IP").expect("Could not get env variable MY_POD_IP"),
+                port
+            )
+        } else {
+            format!("0.0.0.0:{}", port)
+        }
+    }
+
+    #[cfg(not(feature = "kube"))]
+    fn get_listen_address(&self, port: u16) -> String {
+        format!("0.0.0.0:{}", port)
     }
 
     async fn try_proxy_message(
@@ -174,6 +216,6 @@ async fn main() -> Result<()> {
         .with_env_filter(env_filter)
         .init();
 
-    let proxy = Proxy::from_options(ProxyOptions::from_args())?;
+    let proxy = Proxy::from_options(ProxyOptions::from_args()).await?;
     proxy.run().await
 }
