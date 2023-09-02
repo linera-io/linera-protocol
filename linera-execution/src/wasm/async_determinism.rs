@@ -97,13 +97,12 @@ impl<'futures> HostFutureQueue<'futures> {
     ///
     /// Returns true if the [`mpsc::UnboundedSender`] endpoint has been closed.
     fn poll_incoming(&mut self, context: &mut Context<'_>) -> bool {
-        match self.new_futures.poll_next_unpin(context) {
-            Poll::Pending => false,
-            Poll::Ready(Some(new_future)) => {
-                self.queue.push_back(new_future);
-                false
+        loop {
+            match self.new_futures.poll_next_unpin(context) {
+                Poll::Pending => break false,
+                Poll::Ready(Some(new_future)) => self.queue.push_back(new_future),
+                Poll::Ready(None) => break true,
             }
-            Poll::Ready(None) => true,
         }
     }
 }
