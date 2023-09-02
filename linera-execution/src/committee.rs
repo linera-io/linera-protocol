@@ -9,17 +9,80 @@ use linera_base::{
     data_types::ArithmeticError,
 };
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::BTreeMap};
+use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 
 /// A number identifying the configuration of the chain (aka the committee).
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
 pub struct Epoch(pub u64);
 
+impl Serialize for Epoch {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.0.to_string())
+        } else {
+            serializer.serialize_newtype_struct("Epoch", &self.0)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Epoch {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            Ok(Epoch(u64::from_str(&s).map_err(serde::de::Error::custom)?))
+        } else {
+            #[derive(Deserialize)]
+            #[serde(rename = "Epoch")]
+            struct EpochDerived(u64);
+
+            let value = EpochDerived::deserialize(deserializer)?;
+            Ok(Self(value.0))
+        }
+    }
+}
+
 /// The identity of a validator.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug)]
 pub struct ValidatorName(pub PublicKey);
+
+impl Serialize for ValidatorName {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.to_string())
+        } else {
+            serializer.serialize_newtype_struct("ValidatorName", &self.0)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ValidatorName {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let value = Self::from_str(&s).map_err(serde::de::Error::custom)?;
+            Ok(value)
+        } else {
+            #[derive(Deserialize)]
+            #[serde(rename = "ValidatorName")]
+            struct ValidatorNameDerived(PublicKey);
+
+            let value = ValidatorNameDerived::deserialize(deserializer)?;
+            Ok(Self(value.0))
+        }
+    }
+}
 
 /// Public state of validator.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Serialize, Deserialize)]
