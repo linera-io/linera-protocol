@@ -5,7 +5,8 @@ use crate::{
     client::{ChainClient, ValidatorNodeProvider},
     data_types::*,
     node::{NodeError, NotificationStream, ValidatorNode},
-    worker::{ValidatorWorker, WorkerState},
+    notifier::Notifier,
+    worker::{Notification, ValidatorWorker, WorkerState},
 };
 use async_trait::async_trait;
 use futures::{lock::Mutex, Future};
@@ -29,6 +30,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::oneshot;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 #[cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 use linera_views::lru_caching::TEST_CACHE_SIZE;
@@ -70,8 +72,9 @@ pub enum FaultType {
 /// the validator's tasks to be canceled: In a real network, a validator also wouldn't cancel
 /// tasks if the client stopped waiting for the response.
 struct LocalValidator<S> {
-    fault_type: FaultType,
     state: WorkerState<S>,
+    fault_type: FaultType,
+    notifier: Notifier<Notification>,
 }
 
 #[derive(Clone)]
@@ -128,10 +131,9 @@ where
         .await
     }
 
-    async fn subscribe(&mut self, _chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
-        Err(NodeError::SubscriptionError {
-            transport: "local".to_string(),
-        })
+    async fn subscribe(&mut self, chains: Vec<ChainId>) -> Result<NotificationStream, NodeError> {
+        self.spawn_and_receive(move |validator, sender| validator.do_subscribe(chains, sender))
+            .await
     }
 }
 
@@ -144,6 +146,7 @@ where
         let client = LocalValidator {
             fault_type: FaultType::Honest,
             state,
+            notifier: Notifier::default(),
         };
         Self {
             name,
@@ -205,8 +208,18 @@ where
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.client.lock().await;
         let result = async move {
+            let mut notifications = Vec::new();
             let cert = validator.state.full_certificate(certificate).await?;
-            validator.state.fully_handle_certificate(cert, vec![]).await
+            let result = validator
+                .state
+                .fully_handle_certificate_with_notifications(cert, vec![], Some(&mut notifications))
+                .await;
+            for notification in notifications {
+                validator
+                    .notifier
+                    .notify(&notification.chain_id.clone(), notification);
+            }
+            result
         }
         .await;
         sender.send(result.map_err(Into::into))
@@ -219,10 +232,20 @@ where
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.client.lock().await;
+        let mut notifications = Vec::new();
         let result = validator
             .state
-            .fully_handle_certificate(certificate, blobs)
+            .fully_handle_certificate_with_notifications(
+                certificate,
+                blobs,
+                Some(&mut notifications),
+            )
             .await;
+        for notification in notifications {
+            validator
+                .notifier
+                .notify(&notification.chain_id.clone(), notification);
+        }
         sender.send(result.map_err(Into::into))
     }
 
@@ -235,6 +258,17 @@ where
         let result = validator.state.handle_chain_info_query(query).await;
         // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
         sender.send(result.map_err(Into::into).map(|(info, _actions)| info))
+    }
+
+    async fn do_subscribe(
+        self,
+        chains: Vec<ChainId>,
+        sender: oneshot::Sender<Result<NotificationStream, NodeError>>,
+    ) -> Result<(), Result<NotificationStream, NodeError>> {
+        let validator = self.client.lock().await;
+        let rx = validator.notifier.subscribe(chains);
+        let stream: NotificationStream = Box::pin(UnboundedReceiverStream::new(rx));
+        sender.send(Ok(stream))
     }
 }
 
