@@ -46,7 +46,7 @@
 //!
 //! ```bash
 //! alias linera="$PWD/target/debug/linera"
-//! export LINERA_WALLET="$(realpath target/debug/wallet.json)"
+//! export LINERA_WALLET="$PWD/target/debug/wallet.json"
 //! export LINERA_STORAGE="rocksdb:$(dirname "$LINERA_WALLET")/linera.db"
 //!
 //! cd examples/fungible && cargo build --release && cd ../..

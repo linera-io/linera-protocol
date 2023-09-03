@@ -38,9 +38,9 @@
 //!
 //! ```bash
 //! alias linera="$PWD/target/debug/linera"
-//! export LINERA_WALLET1="$(realpath target/debug/wallet.json)"
+//! export LINERA_WALLET1="$PWD/target/debug/wallet.json"
 //! export LINERA_STORAGE1="rocksdb:$(dirname "$LINERA_WALLET1")/linera.db"
-//! export LINERA_WALLET2="$(realpath target/debug/wallet_2.json)"
+//! export LINERA_WALLET2="$PWD/target/debug/wallet_2.json"
 //! export LINERA_STORAGE2="rocksdb:$(dirname "$LINERA_WALLET2")/linera_2.db"
 //!
 //! cd examples/social && cargo build --release && cd ../..
