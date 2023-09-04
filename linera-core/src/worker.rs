@@ -681,7 +681,7 @@ where
         &mut self,
         certificate: Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let (chain_id, _height, epoch) = match certificate.value() {
+        let (chain_id, height, epoch) = match certificate.value() {
             CertificateValue::LeaderTimeout {
                 chain_id,
                 height,
@@ -692,7 +692,7 @@ where
         };
         // Check that the chain is active and ready for this confirmation.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
-        let chain = self.storage.load_active_chain(chain_id).await?;
+        let mut chain = self.storage.load_active_chain(chain_id).await?;
         let (current_epoch, committee) = chain
             .execution_state
             .system
@@ -703,9 +703,26 @@ where
             WorkerError::InvalidEpoch { chain_id, epoch }
         );
         certificate.check(committee)?;
-        // TODO(#464): Handle timeout in chain manager.
-        let actions = NetworkActions::default();
+        let mut actions = NetworkActions::default();
+        if chain.tip_state.get().already_validated_block(height)? {
+            return Ok((ChainInfoResponse::new(&chain, self.key_pair()), actions));
+        }
+        let next_round = chain.manager.get().next_round();
+        chain
+            .manager
+            .get_mut()
+            .handle_timeout_certificate(certificate.clone());
+        if chain.manager.get().next_round() > next_round {
+            actions.notifications.push(Notification {
+                chain_id,
+                reason: Reason::NewRound {
+                    height,
+                    round: chain.manager.get().next_round(),
+                },
+            })
+        }
         let info = ChainInfoResponse::new(&chain, self.key_pair());
+        chain.save().await?;
         Ok((info, actions))
     }
 
@@ -1042,6 +1059,18 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, query);
         let mut chain = self.storage.load_chain(query.chain_id).await?;
+        if query.request_leader_timeout {
+            if let Some(epoch) = chain.execution_state.system.epoch.get() {
+                if chain.manager.get_mut().vote_leader_timeout(
+                    query.chain_id,
+                    chain.tip_state.get().next_block_height,
+                    *epoch,
+                    self.key_pair(),
+                ) {
+                    chain.save().await?;
+                }
+            }
+        }
         let mut info = ChainInfo::from(&chain);
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());

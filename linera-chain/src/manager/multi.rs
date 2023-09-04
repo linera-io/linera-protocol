@@ -11,10 +11,11 @@ use crate::{
 };
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
-    data_types::RoundNumber,
+    data_types::{BlockHeight, RoundNumber},
     ensure,
-    identifiers::Owner,
+    identifiers::{ChainId, Owner},
 };
+use linera_execution::committee::Epoch;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::error;
@@ -57,6 +58,7 @@ impl MultiOwnerManager {
         current_round
     }
 
+    /// Returns the most recent vote we cast.
     pub fn pending(&self) -> Option<&Vote> {
         self.pending.as_ref()
     }
@@ -67,12 +69,15 @@ impl MultiOwnerManager {
         let new_round = proposal.content.round;
         if let Some(old_proposal) = &self.proposed {
             if old_proposal.content.block == *new_block && old_proposal.content.round == new_round {
-                return Ok(Outcome::Skip);
+                return Ok(Outcome::Skip); // We already voted for this proposal; nothing to do.
             }
             if new_round <= old_proposal.content.round {
+                // We already accepted a proposal in this or a higher round.
                 return Err(ChainError::InsufficientRound(old_proposal.content.round));
             }
         }
+        // If we have a locked block, it must either match the proposal, or the proposal must
+        // include a higher certificate that validates the proposed block.
         if let Some(locked) = proposal
             .validated
             .iter()
@@ -80,6 +85,8 @@ impl MultiOwnerManager {
             .max_by_key(|cert| cert.round)
         {
             let block = locked.value().block().ok_or_else(|| {
+                // Should be unreachable: We only put validated block certificates into the locked
+                // field, and we checked that the proposal includes only validated blocks.
                 ChainError::InternalError("locked certificate must contain block".to_string())
             })?;
             ensure!(
@@ -90,6 +97,18 @@ impl MultiOwnerManager {
         Ok(Outcome::Accept)
     }
 
+    /// Checks if the current round has timed out, and signs a `LeaderTimeout`.
+    pub fn vote_leader_timeout(
+        &mut self,
+        _chain_id: ChainId,
+        _height: BlockHeight,
+        _epoch: Epoch,
+        _key_pair: Option<&KeyPair>,
+    ) -> bool {
+        false // TODO(#464)
+    }
+
+    /// Verifies that we can vote to confirm a validated block.
     pub fn check_validated_block(&self, certificate: &Certificate) -> Result<Outcome, ChainError> {
         let new_block = certificate.value().block();
         let new_round = certificate.round;
@@ -97,7 +116,7 @@ impl MultiOwnerManager {
             match value.inner() {
                 CertificateValue::ConfirmedBlock { executed_block } => {
                     if Some(&executed_block.block) == new_block && *round == new_round {
-                        return Ok(Outcome::Skip);
+                        return Ok(Outcome::Skip); // We already voted to confirm this block.
                     }
                 }
                 CertificateValue::ValidatedBlock { .. } => ensure!(
@@ -105,9 +124,10 @@ impl MultiOwnerManager {
                     ChainError::InsufficientRound(round.try_sub_one().unwrap())
                 ),
                 CertificateValue::LeaderTimeout { .. } => {
+                    // Unreachable: We only put validated or confirmed blocks in pending.
                     return Err(ChainError::InternalError(
                         "pending can only be validated or confirmed block".to_string(),
-                    ))
+                    ));
                 }
             }
         }
@@ -120,6 +140,7 @@ impl MultiOwnerManager {
         Ok(Outcome::Accept)
     }
 
+    /// Signs a vote to validate the proposed block.
     pub fn create_vote(
         &mut self,
         proposal: BlockProposal,
@@ -127,8 +148,7 @@ impl MultiOwnerManager {
         state_hash: CryptoHash,
         key_pair: Option<&KeyPair>,
     ) {
-        // Record the proposed block. This is important to keep track of rounds
-        // for non-voting nodes.
+        // Record the proposed block, so it can be supplied to clients that request it.
         self.proposed = Some(proposal.clone());
         if let Some(key_pair) = key_pair {
             // Vote to validate.
@@ -143,10 +163,10 @@ impl MultiOwnerManager {
         }
     }
 
+    /// Signs a vote to confirm the validated block.
     pub fn create_final_vote(&mut self, certificate: Certificate, key_pair: Option<&KeyPair>) {
-        // Record validity certificate. This is important to keep track of rounds
-        // for non-voting nodes.
         let Some(value) = certificate.value.clone().into_confirmed() else {
+            // Unreachable: This is only called with validated blocks.
             error!("Unexpected certificate; expected ValidatedBlock");
             return;
         };
@@ -158,6 +178,12 @@ impl MultiOwnerManager {
             // Ok to overwrite validation votes with confirmation votes at equal or higher round.
             self.pending = Some(vote);
         }
+    }
+
+    /// Updates the round number and timer if the timeout certificate is from a higher round than
+    /// any known certificate.
+    pub fn handle_timeout_certificate(&mut self, _certificate: Certificate) {
+        // TODO(#464)
     }
 
     pub fn verify_owner(&self, proposal: &BlockProposal) -> Option<PublicKey> {
@@ -179,6 +205,8 @@ pub struct MultiOwnerManagerInfo {
     pub requested_locked: Option<Certificate>,
     /// Latest vote we cast (either to validate or to confirm a block).
     pub pending: Option<LiteVote>,
+    /// Latest timeout vote we cast.
+    pub timeout_vote: Option<LiteVote>,
     /// The value we voted for, if requested.
     pub requested_pending_value: Option<HashedValue>,
     /// The current round.
@@ -192,6 +220,7 @@ impl From<&MultiOwnerManager> for MultiOwnerManagerInfo {
             requested_proposed: None,
             requested_locked: None,
             pending: manager.pending.as_ref().map(|vote| vote.lite()),
+            timeout_vote: None,
             requested_pending_value: None,
             round: manager.round(),
         }

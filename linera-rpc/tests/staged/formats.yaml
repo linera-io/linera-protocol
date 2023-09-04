@@ -428,6 +428,9 @@ MultiOwnerManagerInfo:
     - pending:
         OPTION:
           TYPENAME: LiteVote
+    - timeout_vote:
+        OPTION:
+          TYPENAME: LiteVote
     - requested_pending_value:
         OPTION:
           TYPENAME: CertificateValue
