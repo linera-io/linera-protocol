@@ -55,23 +55,12 @@ impl<'future, Output> HostFuture<'future, Output> {
     /// If the `context` does not contain a valid exclusive task [`Waker`] reference, or if this
     /// future is polled concurrently in different tasks.
     pub fn poll(&self, waker: &mut WakerForwarder) -> Poll<Output> {
-        let waker_reference = waker
-            .0
-            .try_lock()
-            .expect("Unexpected concurrent application call");
-
-        let mut context = Context::from_waker(
-            waker_reference
-                .as_ref()
-                .expect("Application called without an async task context"),
-        );
-
         let mut future = self
             .future
             .try_lock()
             .expect("Application can't call the future concurrently because it's single threaded");
 
-        future.as_mut().poll(&mut context)
+        waker.with_context(|context| future.as_mut().poll(context))
     }
 }
 
@@ -204,6 +193,26 @@ impl WakerForwarder {
             waker: self.0.clone(),
             lifetime: PhantomData,
         }
+    }
+
+    /// Runs a `closure` with a [`Context`] using the forwarded waker.
+    ///
+    /// # Panics
+    ///
+    /// If no waker has been forwarded.
+    pub fn with_context<Output>(&mut self, closure: impl FnOnce(&mut Context) -> Output) -> Output {
+        let waker_reference = self
+            .0
+            .try_lock()
+            .expect("Unexpected concurrent application call");
+
+        let mut context = Context::from_waker(
+            waker_reference
+                .as_ref()
+                .expect("Application called without an async task context"),
+        );
+
+        closure(&mut context)
     }
 }
 
