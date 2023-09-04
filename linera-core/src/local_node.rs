@@ -98,10 +98,7 @@ where
                 Some(&mut notifications),
             )
             .await?;
-        for notification in notifications {
-            node.notifier
-                .notify(&notification.chain_id.clone(), notification);
-        }
+        node.notifier.handle_notifications(&notifications);
         Ok(response)
     }
 
@@ -120,10 +117,7 @@ where
                 Some(&mut notifications),
             )
             .await?;
-        for notification in notifications {
-            node.notifier
-                .notify(&notification.chain_id.clone(), notification);
-        }
+        node.notifier.handle_notifications(&notifications);
         Ok(response)
     }
 

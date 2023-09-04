@@ -6,7 +6,7 @@ use linera_base::identifiers::ChainId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::trace;
 
-/// The `Notifier` holds references to clients waiting to receive notifications
+/// A `Notifier` holds references to clients waiting to receive notifications
 /// from the validator.
 /// Clients will be evicted if their connections are terminated.
 #[derive(Clone)]
@@ -14,8 +14,6 @@ pub struct Notifier<N> {
     inner: DashMap<ChainId, Vec<UnboundedSender<N>>>,
 }
 
-// This is here because #[derive(Default)] does not seem to work
-// Is this a compiler bug?
 impl<N> Default for Notifier<N> {
     fn default() -> Self {
         Self {
@@ -24,7 +22,7 @@ impl<N> Default for Notifier<N> {
     }
 }
 
-impl<N: Clone> Notifier<N> {
+impl<N> Notifier<N> {
     /// Creates a subscription given a collection of ChainIds and a sender to the client.
     pub fn subscribe(&self, chain_ids: Vec<ChainId>) -> UnboundedReceiver<N> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -34,9 +32,14 @@ impl<N: Clone> Notifier<N> {
         }
         rx
     }
+}
 
+impl<N> Notifier<N>
+where
+    N: Clone,
+{
     /// Notifies all the clients waiting for a notification from a given chain.
-    pub fn notify(&self, chain_id: &ChainId, notification: N) {
+    pub fn notify(&self, chain_id: &ChainId, notification: &N) {
         let senders_is_empty = {
             let Some(mut senders) = self.inner.get_mut(chain_id) else {
                 trace!("Chain {chain_id:?} has no subscribers.");
@@ -62,6 +65,15 @@ impl<N: Clone> Notifier<N> {
         if senders_is_empty {
             trace!("No more subscribers for chain {chain_id:?}. Removing entry.");
             self.inner.remove(chain_id);
+        }
+    }
+}
+
+impl Notifier<crate::worker::Notification> {
+    /// Process multiple notifications of type [`crate::worker::Notification`].
+    pub fn handle_notifications(&self, notifications: &[crate::worker::Notification]) {
+        for notification in notifications {
+            self.notify(&notification.chain_id, notification);
         }
     }
 }
@@ -120,14 +132,14 @@ pub mod tests {
         let handle_a = std::thread::spawn(move || {
             let chain_a = chain_a;
             for _ in 0..NOTIFICATIONS_A {
-                a_notifier.notify(&chain_a, ());
+                a_notifier.notify(&chain_a, &());
             }
         });
 
         let handle_b = std::thread::spawn(move || {
             let chain_b = chain_b;
             for _ in 0..NOTIFICATIONS_B {
-                notifier.notify(&chain_b, ());
+                notifier.notify(&chain_b, &());
             }
         });
 
@@ -168,22 +180,22 @@ pub mod tests {
         assert_eq!(notifier.inner.len(), 4);
 
         rx_c.close();
-        notifier.notify(&chain_c, ());
+        notifier.notify(&chain_c, &());
         assert_eq!(notifier.inner.len(), 3);
 
         rx_a.close();
-        notifier.notify(&chain_a, ());
+        notifier.notify(&chain_a, &());
         assert_eq!(notifier.inner.len(), 3);
 
         rx_b.close();
-        notifier.notify(&chain_b, ());
+        notifier.notify(&chain_b, &());
         assert_eq!(notifier.inner.len(), 2);
 
-        notifier.notify(&chain_a, ());
+        notifier.notify(&chain_a, &());
         assert_eq!(notifier.inner.len(), 1);
 
         rx_d.close();
-        notifier.notify(&chain_d, ());
+        notifier.notify(&chain_d, &());
         assert_eq!(notifier.inner.len(), 0);
     }
 }

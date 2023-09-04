@@ -214,11 +214,7 @@ where
                 .state
                 .fully_handle_certificate_with_notifications(cert, vec![], Some(&mut notifications))
                 .await;
-            for notification in notifications {
-                validator
-                    .notifier
-                    .notify(&notification.chain_id.clone(), notification);
-            }
+            validator.notifier.handle_notifications(&notifications);
             result
         }
         .await;
@@ -241,11 +237,7 @@ where
                 Some(&mut notifications),
             )
             .await;
-        for notification in notifications {
-            validator
-                .notifier
-                .notify(&notification.chain_id.clone(), notification);
-        }
+        validator.notifier.handle_notifications(&notifications);
         sender.send(result.map_err(Into::into))
     }
 
