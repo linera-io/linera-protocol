@@ -47,6 +47,10 @@ impl SingleOwnerManager {
         let new_block = &proposal.content.block;
         let new_round = proposal.content.round;
         ensure!(
+            proposal.validated.is_none(),
+            ChainError::InvalidBlockProposal
+        );
+        ensure!(
             new_round == RoundNumber::default() && proposal.validated.is_none(),
             ChainError::InvalidBlockProposal
         );

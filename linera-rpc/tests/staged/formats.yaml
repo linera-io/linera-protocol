@@ -626,6 +626,8 @@ SingleOwnerManagerInfo:
   STRUCT:
     - owner:
         TYPENAME: Owner
+    - public_key:
+        TYPENAME: PublicKey
     - pending:
         OPTION:
           TYPENAME: LiteVote
