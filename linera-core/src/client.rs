@@ -38,6 +38,7 @@ use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{
     collections::{hash_map, BTreeMap, HashMap},
+    iter,
     pin::Pin,
     sync::Arc,
     time::Duration,
@@ -604,7 +605,7 @@ where
     }
 
     /// Prepares the chain for the next operation.
-    async fn prepare_chain(&mut self) -> Result<(), ChainClientError> {
+    async fn prepare_chain(&mut self) -> Result<ChainInfo, ChainClientError> {
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
         // network.
@@ -634,7 +635,7 @@ where
                 .await?;
         }
         self.update_from_info(&info);
-        Ok(())
+        Ok(info)
     }
 
     /// Broadcasts certified blocks and optionally one more block proposal.
@@ -1407,13 +1408,26 @@ where
         &mut self,
         new_public_key: PublicKey,
     ) -> Result<Certificate, ChainClientError> {
-        self.prepare_chain().await?;
-        let public_key = self.public_key().await?;
+        let info = self.prepare_chain().await?;
         let messages = self.pending_messages().await?;
+        let new_public_keys = match info.manager {
+            ChainManagerInfo::None => {
+                return Err(ChainError::InactiveChain(self.chain_id).into());
+            }
+            ChainManagerInfo::Single(manager) => {
+                vec![manager.public_key, new_public_key]
+            }
+            ChainManagerInfo::Multi(manager) => manager
+                .owners
+                .values()
+                .cloned()
+                .chain(iter::once(new_public_key))
+                .collect(),
+        };
         self.execute_block(
             messages,
             vec![Operation::System(SystemOperation::ChangeMultipleOwners {
-                new_public_keys: vec![public_key, new_public_key],
+                new_public_keys,
             })],
         )
         .await
