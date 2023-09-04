@@ -903,7 +903,7 @@ where
             owner,
             signature,
             blobs,
-            validated: _,
+            validated,
         } = &proposal;
         let chain_id = block.chain_id;
         let mut chain = self.storage.load_active_chain(chain_id).await?;
@@ -917,7 +917,7 @@ where
             block.epoch == epoch,
             WorkerError::InvalidEpoch { chain_id, epoch }
         );
-        if let Some(validated) = &proposal.validated {
+        if let Some(validated) = validated {
             validated.check(committee)?;
         }
         // Check the authentication of the block.

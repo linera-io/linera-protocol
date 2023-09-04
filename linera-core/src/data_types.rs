@@ -60,6 +60,8 @@ pub struct ChainInfoQuery {
     pub request_received_log_excluding_first_nth: Option<u64>,
     /// Query values from the chain manager, not just votes.
     pub request_manager_values: bool,
+    /// Include a timeout vote for the current round, if appropriate.
+    pub request_leader_timeout: bool,
     /// Query a value that contains a binary blob (e.g. bytecode) required by this chain.
     pub request_blob: Option<CryptoHash>,
 }
@@ -74,6 +76,7 @@ impl ChainInfoQuery {
             request_sent_certificates_in_range: None,
             request_received_log_excluding_first_nth: None,
             request_manager_values: false,
+            request_leader_timeout: false,
             request_blob: None,
         }
     }
@@ -105,6 +108,11 @@ impl ChainInfoQuery {
 
     pub fn with_manager_values(mut self) -> Self {
         self.request_manager_values = true;
+        self
+    }
+
+    pub fn with_leader_timeout(mut self) -> Self {
+        self.request_leader_timeout = true;
         self
     }
 

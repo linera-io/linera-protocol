@@ -201,6 +201,7 @@ ChainInfoQuery:
     - request_received_log_excluding_first_nth:
         OPTION: U64
     - request_manager_values: BOOL
+    - request_leader_timeout: BOOL
     - request_blob:
         OPTION:
           TYPENAME: CryptoHash
