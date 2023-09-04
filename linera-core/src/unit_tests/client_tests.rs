@@ -8,13 +8,14 @@ mod wasm;
 use crate::{
     client::{
         client_test_utils::{FaultType, MakeMemoryStoreClient, StoreBuilder, TestBuilder},
-        ChainClientError, CommunicateAction,
+        ChainClient, ChainClientError, CommunicateAction,
     },
     local_node::LocalNodeError,
     node::NodeError::ClientIoError,
     updater::CommunicationError,
-    worker::WorkerError,
+    worker::{Notification, Reason, WorkerError},
 };
+use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::*,
     data_types::*,
@@ -32,6 +33,7 @@ use linera_execution::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
+use std::sync::Arc;
 use test_log::test;
 
 #[cfg(feature = "rocksdb")]
@@ -44,30 +46,35 @@ use crate::client::client_test_utils::MakeDynamoDbStoreClient;
 use crate::client::client_test_utils::MakeScyllaDbStoreClient;
 
 #[test(tokio::test)]
-pub async fn test_memory_initiating_valid_transfer() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer(MakeMemoryStoreClient::default()).await
+pub async fn test_memory_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
+{
+    run_test_initiating_valid_transfer_with_notifications(MakeMemoryStoreClient::default()).await
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
-async fn test_rocks_db_initiating_valid_transfer() -> Result<(), anyhow::Error> {
+async fn test_rocks_db_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_initiating_valid_transfer(MakeRocksDbStoreClient::default()).await
+    run_test_initiating_valid_transfer_with_notifications(MakeRocksDbStoreClient::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
-async fn test_dynamo_db_initiating_valid_transfer() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer(MakeDynamoDbStoreClient::default()).await
+async fn test_dynamo_db_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
+{
+    run_test_initiating_valid_transfer_with_notifications(MakeDynamoDbStoreClient::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
-async fn test_scylla_db_initiating_valid_transfer() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer(MakeScyllaDbStoreClient::default()).await
+async fn test_scylla_db_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
+{
+    run_test_initiating_valid_transfer_with_notifications(MakeScyllaDbStoreClient::default()).await
 }
 
-async fn run_test_initiating_valid_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
+async fn run_test_initiating_valid_transfer_with_notifications<B>(
+    store_builder: B,
+) -> Result<(), anyhow::Error>
 where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
@@ -75,33 +82,46 @@ where
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
         .with_pricing(Pricing::fuel_and_certificate());
-    let mut sender = builder
+    let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
-    let certificate = sender
-        .transfer_to_account(
-            None,
-            Amount::from_tokens(3),
-            Account::chain(ChainId::root(2)),
-            UserData(Some(*b"I paid 0.001 to pay you these 3!")),
-        )
-        .await
-        .unwrap();
-    assert_eq!(sender.next_block_height, BlockHeight::from(1));
-    assert!(sender.pending_block.is_none());
-    // `local_balance` stages another block execution, which costs another 0.001.
-    assert_eq!(
-        sender.local_balance().await.unwrap(),
-        Amount::from_milli(998)
-    );
-    assert_eq!(
-        builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
+    let sender = Arc::new(Mutex::new(sender));
+    // Listen to the notifications on the sender chain.
+    let mut notifications = ChainClient::listen(sender.clone()).await.unwrap();
+    {
+        let mut sender = sender.lock().await;
+        let certificate = sender
+            .transfer_to_account(
+                None,
+                Amount::from_tokens(3),
+                Account::chain(ChainId::root(2)),
+                UserData(Some(*b"I paid 0.001 to pay you these 3!")),
+            )
             .await
-            .unwrap()
-            .value,
-        certificate.value
-    );
+            .unwrap();
+        assert_eq!(sender.next_block_height, BlockHeight::from(1));
+        assert!(sender.pending_block.is_none());
+        // `local_balance` stages another block execution, which costs another 0.001.
+        assert_eq!(
+            sender.local_balance().await.unwrap(),
+            Amount::from_milli(998)
+        );
+        assert_eq!(
+            builder
+                .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
+                .await
+                .unwrap()
+                .value,
+            certificate.value
+        );
+    }
+    assert!(matches!(
+        notifications.next().await,
+        Some(Notification {
+            reason: Reason::NewBlock { height, .. },
+            chain_id,
+        }) if chain_id == ChainId::root(1) && height == BlockHeight::from(0)
+    ));
     Ok(())
 }
 

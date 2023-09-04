@@ -318,6 +318,9 @@ where
         mut notifications: Option<&mut Vec<Notification>>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let (response, actions) = self.handle_certificate(certificate, blobs, None).await?;
+        if let Some(notifications) = notifications.as_mut() {
+            notifications.extend(actions.notifications);
+        }
         let mut requests = VecDeque::from(actions.cross_chain_requests);
         while let Some(request) = requests.pop_front() {
             let actions = self.handle_cross_chain_request(request).await?;
