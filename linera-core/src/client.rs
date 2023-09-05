@@ -371,7 +371,7 @@ where
             }
             ChainManagerInfo::Multi(manager) => {
                 let mut identities = manager
-                    .owners
+                    .public_keys
                     .keys()
                     .filter(|owner| self.known_key_pairs.contains_key(owner));
                 let Some(identity) = identities.next() else {
@@ -1418,7 +1418,7 @@ where
                 vec![manager.public_key, new_public_key]
             }
             ChainManagerInfo::Multi(manager) => manager
-                .owners
+                .public_keys
                 .values()
                 .cloned()
                 .chain(iter::once(new_public_key))

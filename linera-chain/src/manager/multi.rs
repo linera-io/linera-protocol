@@ -23,8 +23,8 @@ use tracing::error;
 /// The specific state of a chain managed by multiple owners.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MultiOwnerManager {
-    /// The co-owners of the chain.
-    pub owners: HashMap<Owner, PublicKey>,
+    /// The public keys of the chain's co-owners.
+    pub public_keys: HashMap<Owner, PublicKey>,
     /// Latest authenticated block that we have received (and voted to validate).
     pub proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have seen (and voted to confirm).
@@ -34,9 +34,9 @@ pub struct MultiOwnerManager {
 }
 
 impl MultiOwnerManager {
-    pub fn new(owners: HashMap<Owner, PublicKey>) -> Self {
+    pub fn new(public_keys: HashMap<Owner, PublicKey>) -> Self {
         MultiOwnerManager {
-            owners,
+            public_keys,
             proposed: None,
             locked: None,
             pending: None,
@@ -187,7 +187,7 @@ impl MultiOwnerManager {
     }
 
     pub fn verify_owner(&self, proposal: &BlockProposal) -> Option<PublicKey> {
-        self.owners.get(&proposal.owner).copied()
+        self.public_keys.get(&proposal.owner).copied()
     }
 }
 
@@ -196,9 +196,9 @@ impl MultiOwnerManager {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct MultiOwnerManagerInfo {
-    /// The co-owners of the chain.
+    /// The public keys of the chain's co-owners.
     /// Using a map instead a hashset because Serde treats HashSet's as vectors.
-    pub owners: HashMap<Owner, PublicKey>,
+    pub public_keys: HashMap<Owner, PublicKey>,
     /// Latest authenticated block that we have received, if requested.
     pub requested_proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have seen (and voted to confirm), if requested.
@@ -216,7 +216,7 @@ pub struct MultiOwnerManagerInfo {
 impl From<&MultiOwnerManager> for MultiOwnerManagerInfo {
     fn from(manager: &MultiOwnerManager) -> Self {
         MultiOwnerManagerInfo {
-            owners: manager.owners.clone(),
+            public_keys: manager.public_keys.clone(),
             requested_proposed: None,
             requested_locked: None,
             pending: manager.pending.as_ref().map(|vote| vote.lite()),
