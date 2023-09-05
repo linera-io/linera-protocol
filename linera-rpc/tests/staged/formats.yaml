@@ -238,7 +238,7 @@ ChainOwnership:
     2:
       Multi:
         STRUCT:
-          - owners:
+          - public_keys:
               MAP:
                 KEY:
                   TYPENAME: Owner
@@ -413,7 +413,7 @@ MessageId:
     - index: U32
 MultiOwnerManagerInfo:
   STRUCT:
-    - owners:
+    - public_keys:
         MAP:
           KEY:
             TYPENAME: Owner
@@ -626,6 +626,8 @@ SingleOwnerManagerInfo:
   STRUCT:
     - owner:
         TYPENAME: Owner
+    - public_key:
+        TYPENAME: PublicKey
     - pending:
         OPTION:
           TYPENAME: LiteVote

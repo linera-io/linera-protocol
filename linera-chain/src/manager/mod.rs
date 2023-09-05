@@ -55,7 +55,9 @@ impl ChainManager {
                 *self =
                     ChainManager::Single(Box::new(SingleOwnerManager::new(*owner, *public_key)));
             }
-            ChainOwnership::Multi { owners } => {
+            ChainOwnership::Multi {
+                public_keys: owners,
+            } => {
                 let owners = owners
                     .iter()
                     .map(|(owner, public_key)| (*owner, *public_key))

@@ -47,6 +47,10 @@ impl SingleOwnerManager {
         let new_block = &proposal.content.block;
         let new_round = proposal.content.round;
         ensure!(
+            proposal.validated.is_none(),
+            ChainError::InvalidBlockProposal
+        );
+        ensure!(
             new_round == RoundNumber::default() && proposal.validated.is_none(),
             ChainError::InvalidBlockProposal
         );
@@ -106,6 +110,8 @@ impl SingleOwnerManager {
 pub struct SingleOwnerManagerInfo {
     /// The owner of the chain.
     pub owner: Owner,
+    /// The owner's public key.
+    pub public_key: PublicKey,
     /// Latest vote we cast.
     pub pending: Option<LiteVote>,
     /// The value we voted for, if requested.
@@ -116,6 +122,7 @@ impl From<&SingleOwnerManager> for SingleOwnerManagerInfo {
     fn from(manager: &SingleOwnerManager) -> Self {
         SingleOwnerManagerInfo {
             owner: manager.owner,
+            public_key: manager.public_key,
             pending: manager.pending.as_ref().map(|vote| vote.lite()),
             requested_pending_value: None,
         }
