@@ -15,8 +15,9 @@ use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{BlockHeight, RoundNumber},
     doc_scalar, ensure,
+    identifiers::ChainId,
 };
-use linera_execution::ChainOwnership;
+use linera_execution::{committee::Epoch, ChainOwnership};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
@@ -94,6 +95,21 @@ impl ChainManager {
         }
     }
 
+    pub fn vote_leader_timeout(
+        &mut self,
+        chain_id: ChainId,
+        height: BlockHeight,
+        epoch: Epoch,
+        key_pair: Option<&KeyPair>,
+    ) -> bool {
+        match self {
+            ChainManager::Multi(manager) => {
+                manager.vote_leader_timeout(chain_id, height, epoch, key_pair)
+            }
+            ChainManager::Single(_) | ChainManager::None => false,
+        }
+    }
+
     /// Verifies the safety of the block w.r.t. voting rules.
     pub fn check_proposed_block(&self, proposal: &BlockProposal) -> Result<Outcome, ChainError> {
         // When a block is certified, incrementing its height must succeed.
@@ -140,9 +156,9 @@ impl ChainManager {
         }
     }
 
-    pub fn handle_timeout_certificate(&mut self, _: Certificate) {
+    pub fn handle_timeout_certificate(&mut self, certificate: Certificate) {
         match self {
-            ChainManager::Multi(_) => {}
+            ChainManager::Multi(manager) => manager.handle_timeout_certificate(certificate),
             ChainManager::None | ChainManager::Single(_) => panic!("unexpected chain manager"),
         }
     }
@@ -188,6 +204,13 @@ impl ChainManagerInfo {
             ChainManagerInfo::Single(single) => single.pending.as_ref(),
             ChainManagerInfo::Multi(multi) => multi.pending.as_ref(),
             ChainManagerInfo::None => None,
+        }
+    }
+
+    pub fn timeout_vote(&self) -> Option<&LiteVote> {
+        match self {
+            ChainManagerInfo::Multi(multi) => multi.timeout_vote.as_ref(),
+            ChainManagerInfo::Single(_) | ChainManagerInfo::None => None,
         }
     }
 

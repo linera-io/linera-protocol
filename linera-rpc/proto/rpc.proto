@@ -117,8 +117,11 @@ message ChainInfoQuery {
   // Query values from the chain manager, not just votes.
   bool request_manager_values = 7;
 
+  // Request a signed vote for a leader timeout.
+  bool request_leader_timeout = 8;
+
   // Query a value that contains a binary blob (e.g. bytecode) required by this chain.
-  optional bytes request_blob = 8;
+  optional bytes request_blob = 9;
 }
 
 // An authenticated proposal for a new block.
