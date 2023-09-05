@@ -13,7 +13,7 @@ use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 
 /// A number identifying the configuration of the chain (aka the committee).
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
-pub struct Epoch(pub u64);
+pub struct Epoch(pub u32);
 
 impl Serialize for Epoch {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -35,11 +35,11 @@ impl<'de> Deserialize<'de> for Epoch {
     {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            Ok(Epoch(u64::from_str(&s).map_err(serde::de::Error::custom)?))
+            Ok(Epoch(u32::from_str(&s).map_err(serde::de::Error::custom)?))
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "Epoch")]
-            struct EpochDerived(u64);
+            struct EpochDerived(u32);
 
             let value = EpochDerived::deserialize(deserializer)?;
             Ok(Self(value.0))
@@ -259,8 +259,8 @@ impl std::str::FromStr for Epoch {
     }
 }
 
-impl From<u64> for Epoch {
-    fn from(value: u64) -> Self {
+impl From<u32> for Epoch {
+    fn from(value: u32) -> Self {
         Epoch(value)
     }
 }
