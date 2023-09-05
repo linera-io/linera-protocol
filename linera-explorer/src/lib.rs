@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module provides web files to run a block explorer from linera service node.
+//! This module provides web files to run a block explorer from Linera service node and Linera indexer.
 
 #![recursion_limit = "256"]
 
@@ -259,16 +259,16 @@ async fn chains(app: &JsValue, node: &str) -> Result<ChainId> {
 }
 
 /// Queries indexer plugins.
-async fn plugins(app: &JsValue, indexer: &str) -> Result<()> {
+async fn plugins(app: &JsValue, indexer: &str) {
     let client = reqwest::Client::new();
-    let plugins = request::<Plugins, _>(&client, indexer, plugins::Variables)
-        .await?
-        .plugins;
-    let plugins_js = plugins
+    let Ok(data) = request::<Plugins, _>(&client, indexer, plugins::Variables).await else {
+        return;
+    };
+    let plugins_js = data
+        .plugins
         .serialize(&SER)
         .expect("failed to serialize plugins");
-    setf(app, "plugins", &plugins_js);
-    Ok(())
+    setf(app, "plugins", &plugins_js)
 }
 
 /// Returns the applications page.
@@ -733,7 +733,7 @@ async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
 
 /// Initializes pages and subscribes to notifications.
 #[wasm_bindgen]
-pub async fn init(app: JsValue, uri: String) {
+pub async fn start(app: JsValue) {
     console_error_panic_hook::set_once();
     set_onpopstate(app.clone());
     let data = from_value::<Data>(app.clone()).expect("cannot parse vue data");
@@ -753,6 +753,11 @@ pub async fn init(app: JsValue, uri: String) {
         Ok(default_chain) => {
             let indexer = url(&data.config, Protocol::Http, AddressKind::Indexer);
             let _ = plugins(&app, &indexer).await;
+            let uri = web_sys::window()
+                .expect("window object not found")
+                .location()
+                .href()
+                .unwrap();
             let uri = Url::parse(&uri).expect("failed to parse url");
             let pathname = uri.path();
             let mut args: Vec<(String, String)> = uri.query_pairs().into_owned().collect();
