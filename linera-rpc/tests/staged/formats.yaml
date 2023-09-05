@@ -314,7 +314,7 @@ Destination:
         NEWTYPE:
           TYPENAME: ChannelName
 Epoch:
-  NEWTYPESTRUCT: U64
+  NEWTYPESTRUCT: U32
 Event:
   STRUCT:
     - certificate_hash:
