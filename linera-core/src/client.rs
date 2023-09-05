@@ -9,7 +9,6 @@ use crate::{
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::{Notification, Reason, WorkerError, WorkerState},
 };
-use anyhow::{anyhow, bail, ensure, Result};
 use futures::{
     future,
     lock::Mutex,
@@ -18,7 +17,8 @@ use futures::{
 use linera_base::{
     abi::{Abi, ContractAbi},
     crypto::{CryptoHash, KeyPair, PublicKey},
-    data_types::{Amount, BlockHeight, RoundNumber, Timestamp},
+    data_types::{Amount, ArithmeticError, BlockHeight, RoundNumber, Timestamp},
+    ensure,
     identifiers::{BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_chain::{
@@ -42,6 +42,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use thiserror::Error;
 use tokio_stream::Stream;
 use tracing::{debug, error, info};
 
@@ -90,6 +91,61 @@ pub struct ChainClient<ValidatorNodeProvider, StorageClient> {
     /// Local node to manage the execution state and the local storage of the chains that we are
     /// tracking.
     node_client: LocalNodeClient<StorageClient>,
+}
+
+/// Error type for [`ChainClient`].
+#[derive(Debug, Error)]
+pub enum ChainClientError {
+    #[error("Local node operation failed: {0}")]
+    LocalNodeError(#[from] LocalNodeError),
+
+    #[error("Remote node operation failed: {0}")]
+    RemoteNodeError(#[from] NodeError),
+
+    #[error(transparent)]
+    ArithmeticError(#[from] ArithmeticError),
+
+    #[error("JSON (de)serialization error: {0}")]
+    JsonError(#[from] serde_json::Error),
+
+    #[error("Chain operation failed: {0}")]
+    ChainError(#[from] ChainError),
+
+    #[error(transparent)]
+    CommunicationError(#[from] CommunicationError<NodeError>),
+
+    #[error("Internal error within chain client: {0}")]
+    InternalError(&'static str),
+
+    #[error(
+        "Cannot accept a certificate from an unknown committee in the future. \
+         Please synchronize the local view of the admin chain"
+    )]
+    CommitteeSynchronizationError,
+
+    #[error("The local node is behind the trusted state in wallet and needs synchronization with validators")]
+    WalletSynchronizationError,
+
+    #[error("The state of the client is incompatible with the proposed block: {0}")]
+    BlockProposalError(&'static str),
+
+    #[error(
+        "Cannot accept a certificate from a committee that was retired. \
+         Try a newer certificate from the same origin"
+    )]
+    CommitteeDeprecationError,
+
+    #[error("Protocol error within chain client: {0}")]
+    ProtocolError(&'static str),
+
+    #[error("No key available to interact with single-owner chain {0}")]
+    CannotFindKeyForSingleOwnerChain(ChainId),
+
+    #[error("No key available to interact with multi-owner chain {0}")]
+    CannotFindKeyForMultiOwnerChain(ChainId),
+
+    #[error("Found several possible identities to interact with multi-owner chain {0}")]
+    FoundMultipleKeysForMultiOwnerChain(ChainId),
 }
 
 impl<P, S> ChainClient<P, S> {
@@ -279,7 +335,7 @@ where
     }
 
     /// Obtains the validators trusted by the local chain.
-    async fn validator_nodes(&mut self) -> Result<Vec<(ValidatorName, P::Node)>> {
+    async fn validator_nodes(&mut self) -> Result<Vec<(ValidatorName, P::Node)>, ChainClientError> {
         match self.local_committee().await {
             Ok(committee) => Ok(self.validator_node_provider.make_nodes(&committee)?),
             Err(LocalNodeError::InactiveChain(_)) => Ok(Vec::new()),
@@ -302,14 +358,13 @@ where
 
     /// Obtains the identity of the current owner of the chain. HACK: In the case of a
     /// multi-owner chain, we pick one identity for which we know the private key.
-    pub async fn identity(&mut self) -> Result<Owner> {
+    pub async fn identity(&mut self) -> Result<Owner, ChainClientError> {
         match self.chain_info().await?.manager {
             ChainManagerInfo::Single(manager) => {
                 if !self.known_key_pairs.contains_key(&manager.owner) {
-                    bail!(
-                        "No key available to interact with single-owner chain {}",
-                        self.chain_id
-                    );
+                    return Err(ChainClientError::CannotFindKeyForSingleOwnerChain(
+                        self.chain_id,
+                    ));
                 }
                 Ok(manager.owner)
             }
@@ -319,17 +374,13 @@ where
                     .keys()
                     .filter(|owner| self.known_key_pairs.contains_key(owner));
                 let Some(identity) = identities.next() else {
-                    bail!(
-                        "Cannot find suitable identity to interact with multi-owner chain {}",
-                        self.chain_id
-                    );
+                    return Err(ChainClientError::CannotFindKeyForMultiOwnerChain(
+                        self.chain_id,
+                    ));
                 };
                 ensure!(
                     identities.next().is_none(),
-                    anyhow!(
-                        "Found several possible identities to interact with multi-owner chain {}",
-                        self.chain_id
-                    )
+                    ChainClientError::FoundMultipleKeysForMultiOwnerChain(self.chain_id)
                 );
                 Ok(*identity)
             }
@@ -338,7 +389,7 @@ where
     }
 
     /// Obtains the key pair associated to the current identity.
-    pub async fn key_pair(&mut self) -> Result<&KeyPair> {
+    pub async fn key_pair(&mut self) -> Result<&KeyPair, ChainClientError> {
         let id = self.identity().await?;
         Ok(self
             .known_key_pairs
@@ -347,7 +398,7 @@ where
     }
 
     /// Obtains the public key associated to the current identity.
-    pub async fn public_key(&mut self) -> Result<PublicKey> {
+    pub async fn public_key(&mut self) -> Result<PublicKey, ChainClientError> {
         Ok(self.key_pair().await?.public())
     }
 
@@ -485,7 +536,7 @@ where
     }
 
     /// Listens to notifications about the current chain from all validators.
-    pub async fn listen(this: Arc<Mutex<Self>>) -> Result<NotificationStream>
+    pub async fn listen(this: Arc<Mutex<Self>>) -> Result<NotificationStream, ChainClientError>
     where
         P: Send + 'static,
     {
@@ -512,7 +563,7 @@ where
     async fn update_streams(
         this: &Arc<Mutex<Self>>,
         streams: &mut HashMap<ValidatorName, Pin<Box<dyn Stream<Item = Notification> + Send>>>,
-    ) -> Result<()>
+    ) -> Result<(), ChainClientError>
     where
         P: Send + 'static,
     {
@@ -553,7 +604,7 @@ where
     }
 
     /// Prepares the chain for the next operation.
-    async fn prepare_chain(&mut self) -> Result<()> {
+    async fn prepare_chain(&mut self) -> Result<(), ChainClientError> {
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
         // network.
@@ -566,7 +617,7 @@ where
             // Check that our local node has the expected block hash.
             ensure!(
                 self.block_hash == info.block_hash,
-                "Invalid chain of blocks in local node"
+                ChainClientError::InternalError("Invalid chain of blocks in local node")
             );
         }
         if !matches!(
@@ -593,7 +644,7 @@ where
         committee: &Committee,
         chain_id: ChainId,
         action: CommunicateAction,
-    ) -> Result<Option<Certificate>> {
+    ) -> Result<Option<Certificate>, ChainClientError> {
         let storage_client = self.node_client.storage_client().await;
         let cross_chain_delay = self.cross_chain_delay;
         let cross_chain_retries = self.cross_chain_retries;
@@ -636,7 +687,9 @@ where
             CommunicateAction::FinalizeBlock(validity_certificate) => {
                 let round = validity_certificate.round;
                 let Some(conf_value) = validity_certificate.value.into_confirmed() else {
-                    bail!("Unexpected certificate value for finalized block");
+                    return Err(ChainClientError::ProtocolError(
+                        "Unexpected certificate value for finalized block",
+                    ));
                 };
                 (conf_value, round)
             }
@@ -648,7 +701,7 @@ where
                     {
                         Ok(None)
                     }
-                    Err(error) => Err(error)?,
+                    Err(error) => Err(error.into()),
                 };
             }
         };
@@ -658,16 +711,24 @@ where
             {
                 votes
             }
-            _ => bail!("Unexpected response from validators"),
+            _ => {
+                return Err(ChainClientError::ProtocolError(
+                    "Unexpected response from validators",
+                ))
+            }
         };
         // Certificate is valid because
         // * `communicate_with_quorum` ensured a sufficient "weight" of
         // (non-error) answers were returned by validators.
         // * each answer is a vote signed by the expected validator.
         let certificate = LiteCertificate::try_from_votes(votes.into_iter().flatten())
-            .ok_or_else(|| anyhow!("Vote values or rounds don't match; this is a bug"))?
+            .ok_or_else(|| {
+                ChainClientError::InternalError("Vote values or rounds don't match; this is a bug")
+            })?
             .with_value(value)
-            .ok_or_else(|| anyhow!("A quorum voted for an unexpected value"))?;
+            .ok_or_else(|| {
+                ChainClientError::ProtocolError("A quorum voted for an unexpected value")
+            })?;
         Ok(Some(certificate))
     }
 
@@ -675,24 +736,22 @@ where
         &mut self,
         certificate: Certificate,
         mode: ReceiveCertificateMode,
-    ) -> Result<()> {
+    ) -> Result<(), ChainClientError> {
         let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
-            bail!("Was expecting a confirmed chain operation");
+            return Err(ChainClientError::InternalError(
+                "Was expecting a confirmed chain operation",
+            ));
         };
         let block = &executed_block.block;
         // Verify the certificate before doing any expensive networking.
         let (committees, max_epoch) = self.known_committees().await?;
         ensure!(
             block.epoch <= max_epoch,
-            "Cannot accept a certificate from an unknown committee in the future. \
-             Please synchronize the local view of the admin chain",
+            ChainClientError::CommitteeSynchronizationError
         );
-        let remote_committee = committees.get(&block.epoch).ok_or_else(|| {
-            anyhow!(
-                "Cannot accept a certificate from a committee that was retired. \
-                 Try a newer certificate from the same origin"
-            )
-        })?;
+        let remote_committee = committees
+            .get(&block.epoch)
+            .ok_or_else(|| ChainClientError::CommitteeDeprecationError)?;
         if let ReceiveCertificateMode::NeedsCheck = mode {
             certificate.check(remote_committee)?;
         }
@@ -842,7 +901,7 @@ where
     ///
     /// However, this should be the case whenever a sender's chain is still in use and
     /// is regularly upgraded to new committees.
-    async fn find_received_certificates(&mut self) -> Result<()> {
+    async fn find_received_certificates(&mut self) -> Result<(), ChainClientError> {
         // Use network information from the local chain.
         let chain_id = self.chain_id;
         let local_committee = self.local_committee().await?;
@@ -875,14 +934,8 @@ where
                 // to synchronize received certificates.
                 return Ok(());
             }
-            Err(CommunicationError::Trusted(err)) => {
-                bail!("Failed to communicate with a quorum of validators: {}", err)
-            }
-            Err(CommunicationError::Sample(errors)) => {
-                bail!(
-                    "Failed to communicate with a quorum of validators:\n{:#?}",
-                    errors
-                )
+            Err(error) => {
+                return Err(error.into());
             }
         };
         for (name, tracker, certificates) in responses {
@@ -901,7 +954,7 @@ where
         this: Arc<Mutex<Self>>,
         name: ValidatorName,
         client: A,
-    ) -> Result<()>
+    ) -> Result<(), ChainClientError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
@@ -939,7 +992,7 @@ where
         amount: Amount,
         recipient: Recipient,
         user_data: UserData,
-    ) -> Result<Certificate> {
+    ) -> Result<Certificate, ChainClientError> {
         // TODO(#467): check the balance of `owner` before signing any block proposal.
         self.execute_operation(Operation::System(SystemOperation::Transfer {
             owner,
@@ -958,7 +1011,7 @@ where
         recipient: Recipient,
         amount: Amount,
         user_data: UserData,
-    ) -> Result<Certificate> {
+    ) -> Result<Certificate, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Claim {
             owner,
             target,
@@ -998,20 +1051,20 @@ where
 
     /// Executes (or retries) a regular block proposal. Updates local balance.
     /// If `with_confirmation` is false, we stop short of executing the finalized block.
-    async fn propose_block(&mut self, block: Block) -> Result<Certificate> {
+    async fn propose_block(&mut self, block: Block) -> Result<Certificate, ChainClientError> {
         let next_round = self.next_round;
         ensure!(
             matches!(&self.pending_block, None)
                 || matches!(&self.pending_block, Some(r) if *r == block),
-            "Client state has a different pending block",
+            ChainClientError::BlockProposalError("Client state has a different pending block")
         );
         ensure!(
             block.height == self.next_block_height,
-            "Unexpected block height"
+            ChainClientError::BlockProposalError("Unexpected block height")
         );
         ensure!(
             block.previous_block_hash == self.block_hash,
-            "Unexpected previous block hash"
+            ChainClientError::BlockProposalError("Unexpected previous block hash")
         );
         // Collect blobs required for execution.
         let committee = self.local_committee().await?;
@@ -1028,7 +1081,9 @@ where
         if let Some(validated) = &validated {
             ensure!(
                 validated.value().block() == Some(&block),
-                "A different block has already been validated at this height"
+                ChainClientError::BlockProposalError(
+                    "A different block has already been validated at this height"
+                )
             );
         }
         let proposal = BlockProposal::new(
@@ -1089,7 +1144,9 @@ where
                 final_certificate.value(), CertificateValue::ConfirmedBlock { executed_block, .. }
                     if executed_block.block == proposal.content.block
             ),
-            "A different operation was executed in parallel (consider retrying the operation)"
+            ChainClientError::BlockProposalError(
+                "A different operation was executed in parallel (consider retrying the operation)"
+            )
         );
         // Since `handle_block_proposal` succeeded, we have the needed bytecode.
         // Leaving blobs empty.
@@ -1119,14 +1176,20 @@ where
     }
 
     /// Executes a list of operations.
-    pub async fn execute_operations(&mut self, operations: Vec<Operation>) -> Result<Certificate> {
+    pub async fn execute_operations(
+        &mut self,
+        operations: Vec<Operation>,
+    ) -> Result<Certificate, ChainClientError> {
         self.prepare_chain().await?;
         let messages = self.pending_messages().await?;
         self.execute_block(messages, operations).await
     }
 
     /// Executes an operation.
-    pub async fn execute_operation(&mut self, operation: Operation) -> Result<Certificate> {
+    pub async fn execute_operation(
+        &mut self,
+        operation: Operation,
+    ) -> Result<Certificate, ChainClientError> {
         self.execute_operations(vec![operation]).await
     }
 
@@ -1137,7 +1200,7 @@ where
         &mut self,
         incoming_messages: Vec<IncomingMessage>,
         operations: Vec<Operation>,
-    ) -> Result<Certificate> {
+    ) -> Result<Certificate, ChainClientError> {
         let timestamp = self.next_timestamp(&incoming_messages);
         let block = Block {
             epoch: self.epoch().await?,
@@ -1167,7 +1230,7 @@ where
     }
 
     /// Queries an application.
-    pub async fn query_application(&self, query: &Query) -> Result<Response> {
+    pub async fn query_application(&self, query: &Query) -> Result<Response, ChainClientError> {
         let response = self
             .node_client
             .query_application(self.chain_id, query)
@@ -1176,14 +1239,19 @@ where
     }
 
     /// Queries a system application.
-    pub async fn query_system_application(&mut self, query: SystemQuery) -> Result<SystemResponse> {
+    pub async fn query_system_application(
+        &mut self,
+        query: SystemQuery,
+    ) -> Result<SystemResponse, ChainClientError> {
         let response = self
             .node_client
             .query_application(self.chain_id, &Query::System(query))
             .await?;
         match response {
             Response::System(response) => Ok(response),
-            _ => bail!("Unexpected response for system query"),
+            _ => Err(ChainClientError::InternalError(
+                "Unexpected response for system query",
+            )),
         }
     }
 
@@ -1192,7 +1260,7 @@ where
         &mut self,
         application_id: UserApplicationId<A>,
         query: &A::Query,
-    ) -> Result<A::QueryResponse> {
+    ) -> Result<A::QueryResponse, ChainClientError> {
         let query = Query::user(application_id, query)?;
         let response = self
             .node_client
@@ -1200,14 +1268,16 @@ where
             .await?;
         match response {
             Response::User(response) => Ok(serde_json::from_slice(&response)?),
-            _ => bail!("Unexpected response for user query"),
+            _ => Err(ChainClientError::InternalError(
+                "Unexpected response for user query",
+            )),
         }
     }
 
-    pub async fn local_balance(&mut self) -> Result<Amount> {
+    pub async fn local_balance(&mut self) -> Result<Amount, ChainClientError> {
         ensure!(
             self.chain_info().await?.next_block_height == self.next_block_height,
-            "The local node is behind the trusted state in wallet and needs synchronization with validators"
+            ChainClientError::WalletSynchronizationError
         );
         let incoming_messages = self.pending_messages().await?;
         let timestamp = self.next_timestamp(&incoming_messages);
@@ -1226,7 +1296,7 @@ where
     }
 
     /// Attempts to update all validators about the local chain.
-    pub async fn update_validators(&mut self) -> Result<()> {
+    pub async fn update_validators(&mut self) -> Result<(), ChainClientError> {
         let committee = self.local_committee().await?;
         self.communicate_chain_updates(
             &committee,
@@ -1243,7 +1313,7 @@ where
         &mut self,
         application_id: UserApplicationId,
         chain_id: Option<ChainId>,
-    ) -> Result<Certificate> {
+    ) -> Result<Certificate, ChainClientError> {
         let chain_id = chain_id.unwrap_or(application_id.creation.chain_id);
         self.execute_operation(Operation::System(SystemOperation::RequestApplication {
             application_id,
@@ -1259,7 +1329,7 @@ where
         amount: Amount,
         account: Account,
         user_data: UserData,
-    ) -> Result<Certificate> {
+    ) -> Result<Certificate, ChainClientError> {
         self.transfer(owner, amount, Recipient::Account(account), user_data)
             .await
     }
@@ -1270,20 +1340,20 @@ where
         owner: Option<Owner>,
         amount: Amount,
         user_data: UserData,
-    ) -> Result<Certificate> {
+    ) -> Result<Certificate, ChainClientError> {
         self.transfer(owner, amount, Recipient::Burn, user_data)
             .await
     }
 
     /// Attempts to synchronize with validators and re-compute our balance.
-    pub async fn synchronize_from_validators(&mut self) -> Result<Amount> {
+    pub async fn synchronize_from_validators(&mut self) -> Result<Amount, ChainClientError> {
         self.find_received_certificates().await?;
         self.prepare_chain().await?;
         self.local_balance().await
     }
 
     /// Retries the last pending block
-    pub async fn retry_pending_block(&mut self) -> Result<Option<Certificate>> {
+    pub async fn retry_pending_block(&mut self) -> Result<Option<Certificate>, ChainClientError> {
         self.find_received_certificates().await?;
         self.prepare_chain().await?;
         match &self.pending_block {
@@ -1303,20 +1373,29 @@ where
     }
 
     /// Processes confirmed operation for which this chain is a recipient.
-    pub async fn receive_certificate(&mut self, certificate: Certificate) -> Result<()> {
+    pub async fn receive_certificate(
+        &mut self,
+        certificate: Certificate,
+    ) -> Result<(), ChainClientError> {
         self.receive_certificate_internal(certificate, ReceiveCertificateMode::NeedsCheck)
             .await
     }
 
     /// Rotates the key of the chain.
-    pub async fn rotate_key_pair(&mut self, key_pair: KeyPair) -> Result<Certificate> {
+    pub async fn rotate_key_pair(
+        &mut self,
+        key_pair: KeyPair,
+    ) -> Result<Certificate, ChainClientError> {
         let new_public_key = key_pair.public();
         self.known_key_pairs.insert(new_public_key.into(), key_pair);
         self.transfer_ownership(new_public_key).await
     }
 
     /// Transfers ownership of the chain.
-    pub async fn transfer_ownership(&mut self, new_public_key: PublicKey) -> Result<Certificate> {
+    pub async fn transfer_ownership(
+        &mut self,
+        new_public_key: PublicKey,
+    ) -> Result<Certificate, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::ChangeOwner {
             new_public_key,
         }))
@@ -1324,7 +1403,10 @@ where
     }
 
     /// Adds another owner to the chain.
-    pub async fn share_ownership(&mut self, new_public_key: PublicKey) -> Result<Certificate> {
+    pub async fn share_ownership(
+        &mut self,
+        new_public_key: PublicKey,
+    ) -> Result<Certificate, ChainClientError> {
         self.prepare_chain().await?;
         let public_key = self.public_key().await?;
         let messages = self.pending_messages().await?;
@@ -1341,7 +1423,7 @@ where
     pub async fn open_chain(
         &mut self,
         ownership: ChainOwnership,
-    ) -> Result<(MessageId, Certificate)> {
+    ) -> Result<(MessageId, Certificate), ChainClientError> {
         self.prepare_chain().await?;
         let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         let epoch = epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
@@ -1361,12 +1443,12 @@ where
         let message_id = certificate
             .value
             .nth_last_message_id(2)
-            .ok_or_else(|| anyhow!("Failed to open a new chain"))?;
+            .ok_or_else(|| ChainClientError::InternalError("Failed to open a new chain"))?;
         Ok((message_id, certificate))
     }
 
     /// Closes the chain (and loses everything in it!!).
-    pub async fn close_chain(&mut self) -> Result<Certificate> {
+    pub async fn close_chain(&mut self) -> Result<Certificate, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::CloseChain))
             .await
     }
@@ -1376,7 +1458,7 @@ where
         &mut self,
         contract: Bytecode,
         service: Bytecode,
-    ) -> Result<(BytecodeId, Certificate)> {
+    ) -> Result<(BytecodeId, Certificate), ChainClientError> {
         let certificate = self
             .execute_operation(Operation::System(SystemOperation::PublishBytecode {
                 contract,
@@ -1387,7 +1469,7 @@ where
         let message_id = certificate
             .value
             .nth_last_message_id(1)
-            .ok_or_else(|| anyhow!("Failed to publish bytecode"))?;
+            .ok_or_else(|| ChainClientError::InternalError("Failed to publish bytecode"))?;
         let id = BytecodeId::new(message_id);
         Ok((id, certificate))
     }
@@ -1399,7 +1481,7 @@ where
         parameters: &<A as ContractAbi>::Parameters,
         initialization_argument: &A::InitializationArgument,
         required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<(UserApplicationId<A>, Certificate)> {
+    ) -> Result<(UserApplicationId<A>, Certificate), ChainClientError> {
         let initialization_argument = serde_json::to_vec(initialization_argument)?;
         let parameters = serde_json::to_vec(parameters)?;
         let (app_id, cert) = self
@@ -1420,7 +1502,7 @@ where
         parameters: Vec<u8>,
         initialization_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<(UserApplicationId, Certificate)> {
+    ) -> Result<(UserApplicationId, Certificate), ChainClientError> {
         let certificate = self
             .execute_operation(Operation::System(SystemOperation::CreateApplication {
                 bytecode_id,
@@ -1433,7 +1515,7 @@ where
         let creation = certificate
             .value
             .nth_last_message_id(1)
-            .ok_or_else(|| anyhow!("Failed to create application"))?;
+            .ok_or_else(|| ChainClientError::InternalError("Failed to create application"))?;
         let id = UserApplicationId {
             bytecode_id,
             creation,
@@ -1442,7 +1524,10 @@ where
     }
 
     /// Creates a new committee and starts using it (admin chains only).
-    pub async fn stage_new_committee(&mut self, committee: Committee) -> Result<Certificate> {
+    pub async fn stage_new_committee(
+        &mut self,
+        committee: Committee,
+    ) -> Result<Certificate, ChainClientError> {
         self.prepare_chain().await?;
         let epoch = self.epoch().await?;
         let messages = self.pending_messages().await?;
@@ -1459,7 +1544,7 @@ where
     }
 
     /// Creates an empty block to process all incoming messages. This may require several blocks.
-    pub async fn process_inbox(&mut self) -> Result<Vec<Certificate>> {
+    pub async fn process_inbox(&mut self) -> Result<Vec<Certificate>, ChainClientError> {
         self.prepare_chain().await?;
         let mut certificates = Vec::new();
         loop {
@@ -1475,7 +1560,7 @@ where
 
     /// Starts listening to the admin chain for new committees. (This is only useful for
     /// other genesis chains or for testing.)
-    pub async fn subscribe_to_new_committees(&mut self) -> Result<Certificate> {
+    pub async fn subscribe_to_new_committees(&mut self) -> Result<Certificate, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Subscribe {
             chain_id: self.admin_id,
             channel: SystemChannel::Admin,
@@ -1485,7 +1570,9 @@ where
 
     /// Stops listening to the admin chain for new committees. (This is only useful for
     /// testing.)
-    pub async fn unsubscribe_from_new_committees(&mut self) -> Result<Certificate> {
+    pub async fn unsubscribe_from_new_committees(
+        &mut self,
+    ) -> Result<Certificate, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
             chain_id: self.admin_id,
             channel: SystemChannel::Admin,
@@ -1497,7 +1584,7 @@ where
     pub async fn subscribe_to_published_bytecodes(
         &mut self,
         chain_id: ChainId,
-    ) -> Result<Certificate> {
+    ) -> Result<Certificate, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Subscribe {
             chain_id,
             channel: SystemChannel::PublishedBytecodes,
@@ -1509,7 +1596,7 @@ where
     pub async fn unsubscribe_from_published_bytecodes(
         &mut self,
         chain_id: ChainId,
-    ) -> Result<Certificate> {
+    ) -> Result<Certificate, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
             chain_id,
             channel: SystemChannel::PublishedBytecodes,
@@ -1521,7 +1608,7 @@ where
     /// only). Currently, each individual chain is still entitled to wait before accepting
     /// this command. However, it is expected that deprecated validators stop functioning
     /// shortly after such command is issued.
-    pub async fn finalize_committee(&mut self) -> Result<Certificate> {
+    pub async fn finalize_committee(&mut self) -> Result<Certificate, ChainClientError> {
         self.prepare_chain().await?;
         let (current_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         let current_epoch = current_epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
@@ -1550,7 +1637,7 @@ where
         amount: Amount,
         account: Account,
         user_data: UserData,
-    ) -> Result<Certificate> {
+    ) -> Result<Certificate, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Transfer {
             owner,
             recipient: Recipient::Account(account),

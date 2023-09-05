@@ -25,7 +25,11 @@ use linera_base::{
     BcsHexParseError,
 };
 use linera_chain::{data_types::HashedValue, ChainStateView};
-use linera_core::{client::ChainClient, node::ValidatorNodeProvider, worker::Notification};
+use linera_core::{
+    client::{ChainClient, ChainClientError},
+    node::ValidatorNodeProvider,
+    worker::Notification,
+};
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{AdminOperation, Recipient, SystemChannel, UserData},
@@ -108,6 +112,8 @@ pub struct MutationRoot<P, S> {
 #[derive(Debug, ThisError)]
 enum NodeServiceError {
     #[error(transparent)]
+    ChainClientError(#[from] ChainClientError),
+    #[error(transparent)]
     BcsHexError(#[from] BcsHexParseError),
     #[error("could not decode query string")]
     QueryStringError(#[from] hex::FromHexError),
@@ -115,8 +121,6 @@ enum NodeServiceError {
     BcsError(#[from] bcs::Error),
     #[error(transparent)]
     JsonError(#[from] serde_json::Error),
-    #[error(transparent)]
-    Internal(#[from] anyhow::Error),
     #[error("missing graphql operation")]
     MissingOperation,
     #[error("unsupported query type: subscription")]
@@ -148,13 +152,13 @@ impl IntoResponse for NodeServiceError {
         let tuple = match self {
             NodeServiceError::BcsHexError(e) => (StatusCode::BAD_REQUEST, vec![e.to_string()]),
             NodeServiceError::QueryStringError(e) => (StatusCode::BAD_REQUEST, vec![e.to_string()]),
+            NodeServiceError::ChainClientError(e) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
+            }
             NodeServiceError::BcsError(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
             }
             NodeServiceError::JsonError(e) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
-            }
-            NodeServiceError::Internal(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
             }
             NodeServiceError::MalformedApplicationResponse => {

@@ -15,7 +15,7 @@ default = ["wasmer", "rocksdb"]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 test = [
-    "linera-base/test", "linera-chain/test", "linera-execution/test", "linera-storage/test",
+    "anyhow", "linera-base/test", "linera-chain/test", "linera-execution/test", "linera-storage/test",
     "linera-views/test", "proptest", "tempfile", "test-log", "test-strategy", "tokio/parking_lot",
 ]
 rocksdb = ["linera-views/rocksdb", "linera-storage/rocksdb"]
@@ -23,7 +23,7 @@ aws = ["linera-views/aws", "linera-storage/aws"]
 scylladb = ["linera-views/scylladb", "linera-storage/scylladb"]
 
 [dependencies]
-anyhow = { workspace = true }
+anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true }
 async-graphql = { workspace = true }
 bcs = { workspace = true }
