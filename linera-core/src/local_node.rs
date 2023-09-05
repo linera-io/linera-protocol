@@ -31,13 +31,13 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 /// A local node with a single worker, typically used by clients.
 pub struct LocalNode<S> {
     state: WorkerState<S>,
+    notifier: Notifier<Notification>,
 }
 
 /// A client to a local node.
 #[derive(Clone)]
 pub struct LocalNodeClient<S> {
     node: Arc<Mutex<LocalNode<S>>>,
-    notifier: Notifier<Notification>,
 }
 
 /// Error type for the operations on a local node.
@@ -98,10 +98,7 @@ where
                 Some(&mut notifications),
             )
             .await?;
-        for notification in notifications {
-            self.notifier
-                .notify(&notification.chain_id.clone(), notification);
-        }
+        node.notifier.handle_notifications(&notifications);
         Ok(response)
     }
 
@@ -120,10 +117,7 @@ where
                 Some(&mut notifications),
             )
             .await?;
-        for notification in notifications {
-            self.notifier
-                .notify(&notification.chain_id.clone(), notification);
-        }
+        node.notifier.handle_notifications(&notifications);
         Ok(response)
     }
 
@@ -141,17 +135,20 @@ where
         &mut self,
         chains: Vec<ChainId>,
     ) -> Result<NotificationStream, LocalNodeError> {
-        let rx = self.notifier.subscribe(chains);
+        let node = self.node.lock().await;
+        let rx = node.notifier.subscribe(chains);
         Ok(Box::pin(UnboundedReceiverStream::new(rx)))
     }
 }
 
 impl<S> LocalNodeClient<S> {
     pub fn new(state: WorkerState<S>) -> Self {
-        let node = LocalNode { state };
+        let node = LocalNode {
+            state,
+            notifier: Notifier::default(),
+        };
         Self {
             node: Arc::new(Mutex::new(node)),
-            notifier: Notifier::default(),
         }
     }
 }

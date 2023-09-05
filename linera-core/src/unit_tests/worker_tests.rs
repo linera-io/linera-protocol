@@ -8,8 +8,9 @@ mod wasm;
 use crate::{
     data_types::*,
     worker::{
-        CrossChainUpdateHelper, Notification, Reason, Reason::NewIncomingMessage, ValidatorWorker,
-        WorkerError, WorkerState,
+        CrossChainUpdateHelper, Notification, Reason,
+        Reason::{NewBlock, NewIncomingMessage},
+        ValidatorWorker, WorkerError, WorkerState,
     },
 };
 use linera_base::{
@@ -926,10 +927,24 @@ where
         notifications,
         vec![
             Notification {
+                chain_id: ChainId::root(1),
+                reason: NewBlock {
+                    height: BlockHeight(0),
+                    hash: certificate0.hash(),
+                }
+            },
+            Notification {
                 chain_id: ChainId::root(2),
                 reason: NewIncomingMessage {
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight(0)
+                }
+            },
+            Notification {
+                chain_id: ChainId::root(1),
+                reason: NewBlock {
+                    height: BlockHeight(1),
+                    hash: certificate1.hash(),
                 }
             },
             Notification {

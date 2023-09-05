@@ -198,7 +198,7 @@ impl NotifierService for GrpcProxy {
             .clone()
             .ok_or_else(|| Status::invalid_argument("Missing field: chain_id."))?
             .try_into()?;
-        self.0.notifier.notify(&chain_id, Ok(notification));
+        self.0.notifier.notify(&chain_id, &Ok(notification));
         Ok(Response::new(()))
     }
 }
