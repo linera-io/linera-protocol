@@ -105,7 +105,7 @@ pub enum ChainClientError {
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
 
-    #[error("Json (de)serialization error: {0}")]
+    #[error("JSON (de)serialization error: {0}")]
     JsonError(#[from] serde_json::Error),
 
     #[error("Chain operation failed: {0}")]

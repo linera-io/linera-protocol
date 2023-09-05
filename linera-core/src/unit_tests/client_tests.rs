@@ -5,21 +5,30 @@
 #[path = "./wasm_client_tests.rs"]
 mod wasm;
 
-use crate::client::{
-    client_test_utils::{FaultType, MakeMemoryStoreClient, StoreBuilder, TestBuilder},
-    CommunicateAction,
+use crate::{
+    client::{
+        client_test_utils::{FaultType, MakeMemoryStoreClient, StoreBuilder, TestBuilder},
+        ChainClientError, CommunicateAction,
+    },
+    local_node::LocalNodeError,
+    node::NodeError::ClientIoError,
+    updater::CommunicationError,
+    worker::WorkerError,
 };
 use linera_base::{
     crypto::*,
     data_types::*,
     identifiers::{ChainDescription, ChainId, MessageId, Owner},
 };
-use linera_chain::data_types::{CertificateValue, ExecutedBlock};
+use linera_chain::{
+    data_types::{CertificateValue, ExecutedBlock},
+    ChainError,
+};
 use linera_execution::{
     committee::{Committee, Epoch},
     pricing::Pricing,
     system::{Account, Recipient, SystemOperation, UserData},
-    ChainOwnership, Operation, SystemQuery, SystemResponse,
+    ChainOwnership, ExecutionError, Operation, SystemExecutionError, SystemQuery, SystemResponse,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -299,7 +308,10 @@ where
         .unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
-    assert!(sender.key_pair().await.is_err());
+    assert!(matches!(
+        sender.key_pair().await,
+        Err(ChainClientError::CannotFindKeyForSingleOwnerChain(_))
+    ));
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
@@ -317,15 +329,17 @@ where
         Amount::from_milli(3998)
     );
     // Cannot use the chain any more.
-    assert!(sender
-        .transfer_to_account(
-            None,
-            Amount::from_tokens(3),
-            Account::chain(ChainId::root(2)),
-            UserData::default()
-        )
-        .await
-        .is_err());
+    assert!(matches!(
+        sender
+            .transfer_to_account(
+                None,
+                Amount::from_tokens(3),
+                Account::chain(ChainId::root(2)),
+                UserData::default()
+            )
+            .await,
+        Err(ChainClientError::CannotFindKeyForSingleOwnerChain(_))
+    ));
     Ok(())
 }
 
@@ -405,7 +419,10 @@ where
         .await?;
     // Local balance fails because the client has block height 2 but we haven't downloaded
     // the blocks yet.
-    assert!(client.local_balance().await.is_err());
+    assert!(matches!(
+        client.local_balance().await,
+        Err(ChainClientError::WalletSynchronizationError)
+    ));
     assert_eq!(
         client.synchronize_from_validators().await.unwrap(),
         Amount::from_tokens(2)
@@ -417,26 +434,34 @@ where
 
     // We need at least three validators for making a transfer.
     builder.set_fault_type(..2, FaultType::Offline).await;
-    assert!(client
-        .transfer_to_account(
-            None,
-            Amount::ONE,
-            Account::chain(ChainId::root(3)),
-            UserData::default(),
-        )
-        .await
-        .is_err());
+    assert!(matches!(
+        client
+            .transfer_to_account(
+                None,
+                Amount::ONE,
+                Account::chain(ChainId::root(3)),
+                UserData::default(),
+            )
+            .await,
+        Err(ChainClientError::CommunicationError(
+            CommunicationError::Trusted(ClientIoError { .. })
+        ))
+    ));
     builder.set_fault_type(..2, FaultType::Honest).await;
     builder.set_fault_type(2.., FaultType::Offline).await;
-    assert!(sender
-        .transfer_to_account(
-            None,
-            Amount::ONE,
-            Account::chain(ChainId::root(3)),
-            UserData::default(),
-        )
-        .await
-        .is_err());
+    assert!(matches!(
+        sender
+            .transfer_to_account(
+                None,
+                Amount::ONE,
+                Account::chain(ChainId::root(3)),
+                UserData::default(),
+            )
+            .await,
+        Err(ChainClientError::CommunicationError(
+            CommunicationError::Trusted(ClientIoError { .. })
+        ))
+    ));
 
     // Half the validators voted for one block, half for the other. We need to make a proposal in
     // the next round to succeed.
@@ -773,7 +798,12 @@ where
     ));
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
-    assert!(sender.key_pair().await.is_err());
+    assert!(matches!(
+        sender.key_pair().await,
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::InactiveChain(_)
+        ))
+    ));
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
@@ -783,15 +813,19 @@ where
         certificate.value
     );
     // Cannot use the chain any more.
-    assert!(sender
-        .transfer_to_account(
-            None,
-            Amount::from_tokens(3),
-            Account::chain(ChainId::root(2)),
-            UserData::default()
-        )
-        .await
-        .is_err());
+    assert!(matches!(
+        sender
+            .transfer_to_account(
+                None,
+                Amount::from_tokens(3),
+                Account::chain(ChainId::root(2)),
+                UserData::default()
+            )
+            .await,
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::InactiveChain(_)
+        ))
+    ));
     Ok(())
 }
 
@@ -830,15 +864,19 @@ where
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
-    assert!(sender
-        .transfer_to_account_unsafe_unconfirmed(
-            None,
-            Amount::from_tokens(3),
-            Account::chain(ChainId::root(2)),
-            UserData(Some(*b"hello...........hello...........")),
-        )
-        .await
-        .is_err());
+    assert!(matches!(
+        sender
+            .transfer_to_account_unsafe_unconfirmed(
+                None,
+                Amount::from_tokens(3),
+                Account::chain(ChainId::root(2)),
+                UserData(Some(*b"hello...........hello...........")),
+            )
+            .await,
+        Err(ChainClientError::CommunicationError(
+            CommunicationError::Trusted(crate::node::NodeError::ArithmeticError { .. })
+        ))
+    ));
     assert_eq!(sender.next_block_height, BlockHeight::from(0));
     assert!(sender.pending_block.is_some());
     assert_eq!(
@@ -1130,15 +1168,16 @@ where
     // Client2 does not know about the money yet.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Sending money from client2 fails, as a consequence.
-    assert!(client2
+    assert!(matches!(client2
         .transfer_to_account_unsafe_unconfirmed(
             None,
             Amount::from_tokens(2),
             Account::chain(client3.chain_id),
             UserData::default(),
         )
-        .await
-        .is_err());
+        .await,
+        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. })))
+    ));
     // There is no pending block, since the proposal wasn't valid at the time.
     assert!(client2.retry_pending_block().await.unwrap().is_none());
     // Retrying the whole command works after synchronization.
@@ -1241,7 +1280,10 @@ where
 
     // User is still at the initial epoch, but we can receive transfers from future
     // epochs AFTER synchronizing the client with the admin chain.
-    assert!(user.receive_certificate(cert).await.is_err());
+    assert!(matches!(
+        user.receive_certificate(cert).await,
+        Err(ChainClientError::CommitteeSynchronizationError)
+    ));
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(0));
     assert_eq!(
         user.synchronize_from_validators().await.unwrap(),
@@ -1270,7 +1312,10 @@ where
         )
         .await
         .unwrap();
-    assert!(admin.receive_certificate(cert).await.is_err());
+    assert!(matches!(
+        admin.receive_certificate(cert).await,
+        Err(ChainClientError::CommitteeDeprecationError)
+    ));
     // Transfer is blocked because the epoch #0 has been retired by admin.
     assert_eq!(
         admin.synchronize_from_validators().await.unwrap(),
@@ -1317,14 +1362,15 @@ where
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
         .await?;
-    assert!(sender
+    assert!(matches!(sender
         .transfer_to_account(
             None,
             Amount::from_tokens(3),
             Account::chain(ChainId::root(2)),
             UserData(Some(*b"I'm giving away all of my money!")),
         )
-        .await
-        .is_err());
+        .await,
+        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. })))
+    ));
     Ok(())
 }
