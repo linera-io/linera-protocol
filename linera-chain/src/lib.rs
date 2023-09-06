@@ -20,7 +20,10 @@ use linera_base::{
 };
 use linera_execution::{pricing::PricingError, ExecutionError};
 use linera_views::views::ViewError;
-pub use manager::{ChainManager, ChainManagerInfo, Outcome as ChainManagerOutcome};
+pub use manager::{
+    ChainManager, ChainManagerInfo, MultiOwnerManagerInfo, Outcome as ChainManagerOutcome,
+    SingleOwnerManagerInfo,
+};
 use rand_distr::WeightedError;
 use thiserror::Error;
 

@@ -5,7 +5,7 @@
 
 use linera_base::{
     crypto::KeyPair,
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, RoundNumber, Timestamp},
     identifiers::ChainId,
 };
 use linera_execution::{committee::Epoch, system::Recipient, Operation, SystemOperation};
@@ -59,8 +59,12 @@ pub trait BlockTestExt: Sized {
     /// Returns the block with the specified epoch.
     fn with_epoch(self, epoch: impl Into<Epoch>) -> Self;
 
-    /// Returns a block proposal with round 0, without any blobs or validated block.
-    fn into_simple_proposal(self, key_pair: &KeyPair) -> BlockProposal;
+    /// Returns a block proposal without any blobs or validated block.
+    fn into_simple_proposal(
+        self,
+        key_pair: &KeyPair,
+        round: impl Into<RoundNumber>,
+    ) -> BlockProposal;
 }
 
 impl BlockTestExt for Block {
@@ -93,15 +97,15 @@ impl BlockTestExt for Block {
         self
     }
 
-    fn into_simple_proposal(self, key_pair: &KeyPair) -> BlockProposal {
-        BlockProposal::new(
-            BlockAndRound {
-                block: self,
-                round: Default::default(),
-            },
-            key_pair,
-            vec![],
-            None,
-        )
+    fn into_simple_proposal(
+        self,
+        key_pair: &KeyPair,
+        round: impl Into<RoundNumber>,
+    ) -> BlockProposal {
+        let content = BlockAndRound {
+            block: self,
+            round: round.into(),
+        };
+        BlockProposal::new(content, key_pair, vec![], None)
     }
 }
