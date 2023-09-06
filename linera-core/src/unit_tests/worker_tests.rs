@@ -16,16 +16,16 @@ use crate::{
 use linera_base::{
     crypto::{BcsSignable, CryptoHash, *},
     data_types::*,
-    identifiers::{ChainDescription, ChainId, ChannelName, Destination, MessageId},
+    identifiers::{ChainDescription, ChainId, ChannelName, Destination, MessageId, Owner},
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, ChainAndHeight, ChannelFullName, Event, ExecutedBlock,
-        HashedValue, IncomingMessage, LiteVote, Medium, Origin, OutgoingMessage,
-        SignatureAggregator,
+        Block, BlockProposal, Certificate, CertificateValue, ChainAndHeight, ChannelFullName,
+        Event, ExecutedBlock, HashedValue, IncomingMessage, LiteVote, Medium, Origin,
+        OutgoingMessage, SignatureAggregator,
     },
     test::{make_child_block, make_first_block, BlockTestExt},
-    ChainError, ChainManager,
+    ChainError, ChainManager, ChainManagerInfo, MultiOwnerManagerInfo,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
@@ -41,7 +41,7 @@ use linera_views::{
     views::{CryptoHashView, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, iter, time::Duration};
 use test_log::test;
 
 #[cfg(feature = "rocksdb")]
@@ -253,6 +253,21 @@ fn direct_credit_message(recipient: ChainId, amount: Amount) -> OutgoingMessage 
     direct_outgoing_message(recipient, message)
 }
 
+/// Creates `count` key pairs and returns them, sorted by the `Owner` created from their public key.
+fn generate_key_pairs(count: usize) -> Vec<KeyPair> {
+    let mut key_pairs: Vec<_> = iter::repeat_with(KeyPair::generate).take(count).collect();
+    key_pairs.sort_by_key(|key_pair| Owner::from(key_pair.public()));
+    key_pairs
+}
+
+/// Returns the `MultiOwnerManagerInfo`; panics if there is a different kind of chain manager.
+fn multi_manager(info: &ChainInfo) -> &MultiOwnerManagerInfo {
+    match &info.manager {
+        ChainManagerInfo::Multi(multi) => multi,
+        _ => panic!("Expected multi-owner chain manager."),
+    }
+}
+
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_bad_signature() {
     let client = MemoryStoreClient::make_test_client(None).await;
@@ -301,7 +316,7 @@ where
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::from_tokens(5))
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
     let unknown_key_pair = KeyPair::generate();
     let mut bad_signature_block_proposal = block_proposal.clone();
     bad_signature_block_proposal.signature =
@@ -370,7 +385,7 @@ where
     // test block non-positive amount
     let zero_amount_block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::ZERO)
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
     assert!(worker
         .handle_block_proposal(zero_amount_block_proposal)
         .await
@@ -431,7 +446,7 @@ where
     {
         let block_proposal = make_first_block(ChainId::root(1))
             .with_timestamp(Timestamp::from(TEST_GRACE_PERIOD_MICROS + 1_000_000))
-            .into_simple_proposal(&key_pair);
+            .into_simple_proposal(&key_pair, 0);
         // Timestamp too far in the future
         assert!(worker.handle_block_proposal(block_proposal).await.is_err());
     }
@@ -439,7 +454,7 @@ where
     let block_0_time = Timestamp::from(TEST_GRACE_PERIOD_MICROS);
     let certificate = {
         let block = make_first_block(ChainId::root(1)).with_timestamp(block_0_time);
-        let block_proposal = block.clone().into_simple_proposal(&key_pair);
+        let block_proposal = block.clone().into_simple_proposal(&key_pair, 0);
         assert!(worker.handle_block_proposal(block_proposal).await.is_ok());
 
         let system_state = SystemExecutionState {
@@ -464,7 +479,7 @@ where
     {
         let block_proposal = make_child_block(&certificate.value)
             .with_timestamp(block_0_time.saturating_sub_micros(1))
-            .into_simple_proposal(&key_pair);
+            .into_simple_proposal(&key_pair, 0);
         // Timestamp older than previous one
         assert!(worker.handle_block_proposal(block_proposal).await.is_err());
     }
@@ -518,7 +533,7 @@ where
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::from_tokens(5))
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
     let unknown_key = KeyPair::generate();
 
     let unknown_sender_block_proposal =
@@ -584,7 +599,7 @@ where
     .await;
     let block_proposal0 = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::ONE)
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
     let certificate0 = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
@@ -599,7 +614,7 @@ where
     .await;
     let block_proposal1 = make_child_block(&certificate0.value)
         .with_simple_transfer(Recipient::root(2), Amount::from_tokens(2))
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
 
     assert!(worker
         .handle_block_proposal(block_proposal1.clone())
@@ -798,7 +813,7 @@ where
     {
         let block_proposal = make_first_block(ChainId::root(2))
             .with_simple_transfer(Recipient::root(3), Amount::from_tokens(6))
-            .into_simple_proposal(&recipient_key_pair);
+            .into_simple_proposal(&recipient_key_pair, 0);
         // Insufficient funding
         assert!(worker.handle_block_proposal(block_proposal).await.is_err());
     }
@@ -850,7 +865,7 @@ where
                     }),
                 },
             })
-            .into_simple_proposal(&recipient_key_pair);
+            .into_simple_proposal(&recipient_key_pair, 0);
         // Inconsistent received messages.
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
@@ -876,7 +891,7 @@ where
                     }),
                 },
             })
-            .into_simple_proposal(&recipient_key_pair);
+            .into_simple_proposal(&recipient_key_pair, 0);
         // Skipped message.
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
@@ -932,7 +947,7 @@ where
                     }),
                 },
             })
-            .into_simple_proposal(&recipient_key_pair);
+            .into_simple_proposal(&recipient_key_pair, 0);
         // Inconsistent order in received messages (heights).
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
@@ -958,7 +973,7 @@ where
                     }),
                 },
             })
-            .into_simple_proposal(&recipient_key_pair);
+            .into_simple_proposal(&recipient_key_pair, 0);
         // Taking the first message only is ok.
         worker
             .handle_block_proposal(block_proposal.clone())
@@ -1016,7 +1031,7 @@ where
                     }),
                 },
             })
-            .into_simple_proposal(&recipient_key_pair);
+            .into_simple_proposal(&recipient_key_pair, 0);
         worker
             .handle_block_proposal(block_proposal.clone())
             .await
@@ -1072,7 +1087,7 @@ where
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::from_tokens(1000))
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
     assert!(worker.handle_block_proposal(block_proposal).await.is_err());
     assert!(worker
         .storage
@@ -1130,7 +1145,7 @@ where
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::from_tokens(5))
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
 
     let (chain_info_response, _actions) =
         worker.handle_block_proposal(block_proposal).await.unwrap();
@@ -1201,7 +1216,7 @@ where
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::from_tokens(5))
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
 
     let (response, _actions) = worker
         .handle_block_proposal(block_proposal.clone())
@@ -3137,4 +3152,101 @@ async fn test_cross_chain_helper() {
             .unwrap(),
         vec![certificate0.clone(), certificate1.clone()]
     );
+}
+
+#[test(tokio::test)]
+async fn test_memory_leader_timeouts() {
+    let client = MemoryStoreClient::make_test_client(None).await;
+    run_test_leader_timeouts(client).await;
+}
+
+#[cfg(feature = "rocksdb")]
+#[test(tokio::test)]
+async fn test_rocks_db_leader_timeouts() {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let client = RocksDbStoreClient::make_test_client(None).await;
+    run_test_leader_timeouts(client).await;
+}
+
+#[cfg(feature = "aws")]
+#[test(tokio::test)]
+async fn test_dynamo_db_leader_timeouts() {
+    let client = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_leader_timeouts(client).await;
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_leader_timeouts() {
+    let client = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_leader_timeouts(client).await;
+}
+
+async fn run_test_leader_timeouts<S>(client: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
+    let chain_desc = ChainDescription::Root(0);
+    let chain_id = ChainId::from(chain_desc);
+    let key_pairs = generate_key_pairs(2);
+    let pub_key0 = key_pairs[0].public();
+    let pub_key1 = key_pairs[1].public();
+    let (committee, mut worker) = init_worker_with_chains(
+        client,
+        vec![(chain_desc, key_pairs[0].public(), Amount::from_tokens(2))],
+    )
+    .await;
+
+    let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeMultipleOwners {
+        new_public_keys: vec![(pub_key0, 100), (pub_key1, 100)],
+        multi_leader_rounds: RoundNumber::from(0),
+    });
+    let (executed_block0, _) = worker.stage_block_execution(block0).await.unwrap();
+    let value0 = HashedValue::new_confirmed(executed_block0);
+    let certificate0 = make_certificate(&committee, &worker, value0.clone());
+    let response = worker
+        .fully_handle_certificate(certificate0, vec![])
+        .await
+        .unwrap();
+    let leader = multi_manager(&response.info).leader.unwrap();
+    assert_eq!(leader, Owner::from(pub_key1));
+
+    let proposal1 = make_child_block(&value0).into_simple_proposal(&key_pairs[0], 1);
+    assert!(worker
+        .handle_block_proposal(proposal1.clone())
+        .await
+        .is_err());
+
+    let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
+    let (response, _) = worker.handle_chain_info_query(query).await.unwrap();
+    assert!(multi_manager(&response.info).timeout_vote.is_none());
+
+    tokio::time::sleep(Duration::from_secs(11)).await;
+
+    let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
+    let (response, _) = worker.handle_chain_info_query(query).await.unwrap();
+    let vote = multi_manager(&response.info).timeout_vote.clone().unwrap();
+    let value_timeout = HashedValue::from(CertificateValue::LeaderTimeout {
+        chain_id,
+        height: BlockHeight::from(1),
+        epoch: Epoch::from(0),
+    });
+    let mut builder = SignatureAggregator::new(value_timeout, RoundNumber(0), &committee);
+    let certificate_timeout = builder
+        .append(vote.validator, vote.signature)
+        .unwrap()
+        .unwrap();
+    let (response, _) = worker
+        .handle_certificate(certificate_timeout, vec![], None)
+        .await
+        .unwrap();
+
+    let leader = multi_manager(&response.info).leader.unwrap();
+    assert_eq!(leader, Owner::from(pub_key0));
+
+    worker
+        .handle_block_proposal(proposal1.clone())
+        .await
+        .unwrap();
 }
