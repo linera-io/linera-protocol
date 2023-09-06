@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 fn message_id(index: u32) -> MessageId {
     MessageId {
         chain_id: ChainId::root(0),
-        height: BlockHeight::from(0),
+        height: BlockHeight::ZERO,
         index,
     }
 }

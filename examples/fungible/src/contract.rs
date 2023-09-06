@@ -217,7 +217,7 @@ impl FungibleToken {
             .try_sub_assign(amount)
             .map_err(|_| Error::InsufficientSessionBalance)?;
 
-        let updated_session = (balance > Amount::zero()).then_some(balance);
+        let updated_session = (balance > Amount::ZERO).then_some(balance);
 
         Ok(SessionCallResult {
             inner: self

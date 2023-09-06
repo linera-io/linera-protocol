@@ -159,12 +159,12 @@ pub trait Store: Sized {
         assert!(!chain.is_active(), "Attempting to create a chain twice");
         let system_state = &mut chain.execution_state.system;
         system_state.description.set(Some(description));
-        system_state.epoch.set(Some(Epoch::from(0)));
+        system_state.epoch.set(Some(Epoch::ZERO));
         system_state.admin_id.set(Some(admin_id));
         system_state
             .committees
             .get_mut()
-            .insert(Epoch::from(0), committee);
+            .insert(Epoch::ZERO, committee);
         system_state
             .ownership
             .set(ChainOwnership::single(public_key));

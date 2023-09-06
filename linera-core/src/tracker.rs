@@ -182,7 +182,7 @@ pub mod tests {
     fn test_application_origin() {
         let reason_0 = Reason::NewIncomingMessage {
             origin: Origin::chain(ChainId::root(0)),
-            height: BlockHeight::from(0),
+            height: BlockHeight::ZERO,
         };
         let reason_1 = Reason::NewIncomingMessage {
             origin: Origin::chain(ChainId::root(0)),

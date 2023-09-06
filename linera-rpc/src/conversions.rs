@@ -470,7 +470,7 @@ pub mod tests {
             epoch: Epoch::default(),
             incoming_messages: vec![],
             operations: vec![],
-            height: BlockHeight::from(0),
+            height: BlockHeight::ZERO,
             authenticated_signer: None,
             timestamp: Timestamp::default(),
             previous_block_hash: None,
@@ -540,7 +540,7 @@ pub mod tests {
             system_balance: Amount::ZERO,
             block_hash: None,
             timestamp: Timestamp::default(),
-            next_block_height: BlockHeight::from(0),
+            next_block_height: BlockHeight::ZERO,
             state_hash: None,
             requested_committees: None,
             requested_pending_messages: vec![],
@@ -668,7 +668,7 @@ pub mod tests {
         let block_proposal = BlockProposal {
             content: BlockAndRound {
                 block: get_block(),
-                round: RoundNumber::zero(),
+                round: RoundNumber::ZERO,
             },
             owner: Owner::from(KeyPair::generate().public()),
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),

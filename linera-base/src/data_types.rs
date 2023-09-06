@@ -122,16 +122,11 @@ pub enum ArithmeticError {
     Underflow,
 }
 
-macro_rules! impl_strictly_wrapped_number {
+macro_rules! impl_wrapped_number {
     ($name:ident, $wrapped:ident) => {
         impl $name {
-            pub fn zero() -> Self {
-                Self(0)
-            }
-
-            pub fn max() -> Self {
-                Self($wrapped::MAX)
-            }
+            pub const ZERO: Self = Self(0);
+            pub const MAX: Self = Self($wrapped::MAX);
 
             pub fn try_add(self, other: Self) -> Result<Self, ArithmeticError> {
                 let val = self
@@ -215,7 +210,7 @@ macro_rules! impl_strictly_wrapped_number {
             }
         }
 
-        // Cannot directly create values for a strictly wrapped type, except for testing.
+        // Cannot directly create values for a wrapped type, except for testing.
         #[cfg(any(test, feature = "test"))]
         impl From<$wrapped> for $name {
             fn from(value: $wrapped) -> Self {
@@ -225,40 +220,24 @@ macro_rules! impl_strictly_wrapped_number {
     };
 }
 
-macro_rules! impl_wrapped_number {
-    ($name:ident, $wrapped:ident) => {
-        impl_strictly_wrapped_number!($name, $wrapped);
+impl TryInto<usize> for BlockHeight {
+    type Error = ArithmeticError;
 
-        #[cfg(not(any(test, feature = "test")))]
-        impl From<$wrapped> for $name {
-            fn from(value: $wrapped) -> Self {
-                Self(value)
-            }
-        }
+    fn try_into(self) -> Result<usize, ArithmeticError> {
+        usize::try_from(self.0).map_err(|_| ArithmeticError::Overflow)
+    }
+}
 
-        impl TryInto<usize> for $name {
-            type Error = ArithmeticError;
-
-            fn try_into(self) -> Result<usize, ArithmeticError> {
-                usize::try_from(self.0).map_err(|_| ArithmeticError::Overflow)
-            }
-        }
-
-        impl TryFrom<usize> for $name {
-            type Error = ArithmeticError;
-
-            fn try_from(value: usize) -> Result<$name, ArithmeticError> {
-                $wrapped::try_from(value)
-                    .map_err(|_| ArithmeticError::Overflow)
-                    .map(Self)
-            }
-        }
-    };
+#[cfg(not(any(test, feature = "test")))]
+impl From<u64> for BlockHeight {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
 }
 
 impl_wrapped_number!(Amount, u128);
 impl_wrapped_number!(BlockHeight, u64);
-impl_strictly_wrapped_number!(RoundNumber, u32);
+impl_wrapped_number!(RoundNumber, u32);
 
 impl fmt::Display for Amount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -368,15 +347,13 @@ impl std::str::FromStr for RoundNumber {
 
 impl<'a> std::iter::Sum<&'a Amount> for Amount {
     fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
-        iter.fold(Self::zero(), |a, b| a.saturating_add(*b))
+        iter.fold(Self::ZERO, |a, b| a.saturating_add(*b))
     }
 }
 
 impl Amount {
     pub const DECIMAL_PLACES: u8 = 18;
     pub const ONE: Amount = Amount(10u128.pow(Amount::DECIMAL_PLACES as u32));
-    pub const ZERO: Amount = Amount(0);
-    pub const MAX: Amount = Amount(u128::MAX);
 
     /// Returns an `Amount` corresponding to that many tokens, or `Amount::MAX` if saturated.
     pub fn from_tokens(tokens: u128) -> Amount {

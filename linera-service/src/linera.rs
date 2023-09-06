@@ -299,7 +299,7 @@ impl ClientContext {
                 None => continue,
             };
             let block = Block {
-                epoch: Epoch::from(0),
+                epoch: Epoch::ZERO,
                 chain_id: chain.chain_id,
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::System(SystemOperation::Transfer {
@@ -439,7 +439,7 @@ impl ClientContext {
                 key_pair: key_pair.as_ref().map(|kp| kp.copy()),
                 block_hash: None,
                 timestamp,
-                next_block_height: BlockHeight::from(0),
+                next_block_height: BlockHeight::ZERO,
             });
         }
     }

@@ -13,7 +13,7 @@ fn test_signed_values() {
     let name1 = ValidatorName(key1.public());
 
     let block = Block {
-        epoch: Epoch::from(0),
+        epoch: Epoch::ZERO,
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
         operations: vec![Operation::System(SystemOperation::Transfer {
@@ -22,7 +22,7 @@ fn test_signed_values() {
             amount: Amount::ONE,
             user_data: UserData::default(),
         })],
-        height: BlockHeight::from(0),
+        height: BlockHeight::ZERO,
         timestamp: Timestamp::default(),
         authenticated_signer: None,
         previous_block_hash: None,
@@ -53,7 +53,7 @@ fn test_certificates() {
     let committee = Committee::make_simple(vec![name1, name2]);
 
     let block = Block {
-        epoch: Epoch::from(0),
+        epoch: Epoch::ZERO,
         chain_id: ChainId::root(1),
         incoming_messages: Vec::new(),
         operations: vec![Operation::System(SystemOperation::Transfer {
@@ -63,7 +63,7 @@ fn test_certificates() {
             user_data: UserData::default(),
         })],
         previous_block_hash: None,
-        height: BlockHeight::from(0),
+        height: BlockHeight::ZERO,
         authenticated_signer: None,
         timestamp: Timestamp::default(),
     };

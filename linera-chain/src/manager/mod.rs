@@ -116,7 +116,7 @@ impl ChainManager {
     pub fn check_proposed_block(&self, proposal: &BlockProposal) -> Result<Outcome, ChainError> {
         // When a block is certified, incrementing its height must succeed.
         ensure!(
-            proposal.content.block.height < BlockHeight::max(),
+            proposal.content.block.height < BlockHeight::MAX,
             ChainError::InvalidBlockHeight
         );
         match self {

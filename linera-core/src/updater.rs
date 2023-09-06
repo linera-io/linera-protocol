@@ -346,7 +346,7 @@ where
                             height,
                             index: _,
                         })) => {
-                            jobs.push((chain_id, BlockHeight::from(0), target_block_height, true));
+                            jobs.push((chain_id, BlockHeight::ZERO, target_block_height, true));
                             chain_id = parent_id;
                             target_block_height = height.try_add_one()?;
                         }
@@ -441,7 +441,7 @@ where
             }
             CommunicateAction::FinalizeBlock(certificate) => {
                 // The only cause for a retry here is the first certificate of a newly opened chain.
-                let retryable = target_block_height == BlockHeight::from(0);
+                let retryable = target_block_height == BlockHeight::ZERO;
                 let info = self.send_certificate(certificate, retryable).await?;
                 match info.manager.pending() {
                     Some(vote) if vote.validator == self.name => {
