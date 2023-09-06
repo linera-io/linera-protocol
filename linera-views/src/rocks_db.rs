@@ -3,8 +3,8 @@
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_upper_bound, ContextFromDb, KeyValueStoreClient},
-    lru_caching::{LruCachingKeyValueClient, TEST_CACHE_SIZE},
+    common::{get_upper_bound, CommonStoreConfig, ContextFromDb, KeyValueStoreClient, TableStatus},
+    lru_caching::LruCachingKeyValueClient,
     value_splitting::{DatabaseConsistencyError, ValueSplittingKeyValueStoreClient},
 };
 use async_trait::async_trait;
@@ -13,8 +13,9 @@ use std::{
     path::Path,
     sync::Arc,
 };
-use tempfile::TempDir;
 use thiserror::Error;
+#[cfg(any(test, feature = "test"))]
+use {crate::lru_caching::TEST_CACHE_SIZE, std::fs, tempfile::TempDir};
 
 /// The number of streams for the test
 pub const TEST_ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
@@ -172,30 +173,82 @@ pub struct RocksDbClient {
 }
 
 impl RocksDbClient {
-    /// Creates a RocksDB database from a specified path.
-    pub fn new<P: AsRef<Path>>(
+    /// Returns whether a table already exists.
+    pub async fn test_existence<P: AsRef<Path>>(path: &P) -> Result<bool, RocksDbContextError> {
+        let options = rocksdb::Options::default();
+        let result = DB::open(&options, path);
+        match result {
+            Ok(_) => Ok(true),
+            Err(error) => match error.kind() {
+                rocksdb::ErrorKind::InvalidArgument => Ok(false),
+                _ => Err(RocksDbContextError::RocksDb(error)),
+            },
+        }
+    }
+
+    /// Creates a RocksDB database for unit tests from a specified path.
+    #[cfg(any(test, feature = "test"))]
+    pub async fn new_for_testing<P: AsRef<Path>>(
         path: P,
-        max_stream_queries: usize,
-        cache_size: usize,
-    ) -> RocksDbClient {
+        common_config: CommonStoreConfig,
+    ) -> Result<(RocksDbClient, TableStatus), RocksDbContextError> {
+        fs::remove_dir_all(&path)?;
+        Self::new(path, common_config).await
+    }
+
+    /// Creates a RocksDB database from a specified path.
+    pub async fn new<P: AsRef<Path>>(
+        path: P,
+        common_config: CommonStoreConfig,
+    ) -> Result<(RocksDbClient, TableStatus), RocksDbContextError> {
         let mut options = rocksdb::Options::default();
-        options.create_if_missing(true);
-        let db = DB::open(&options, path).unwrap();
+        let test = Self::test_existence(&path).await?;
+        let table_status = if test {
+            TableStatus::Existing
+        } else {
+            TableStatus::New
+        };
+        let db = if common_config.create_if_missing {
+            options.create_if_missing(true);
+            DB::open(&options, path)?
+        } else {
+            if !test {
+                return Err(RocksDbContextError::MissingDatabase);
+            }
+            DB::open(&options, path)?
+        };
         let client = RocksDbClientInternal {
             db: Arc::new(db),
-            max_stream_queries,
+            max_stream_queries: common_config.max_stream_queries,
         };
         let client = ValueSplittingKeyValueStoreClient::new(client);
-        Self {
-            client: LruCachingKeyValueClient::new(client, cache_size),
-        }
+        let client = Self {
+            client: LruCachingKeyValueClient::new(client, common_config.cache_size),
+        };
+        Ok((client, table_status))
+    }
+}
+
+/// Creates the common initialization for RocksDB
+#[cfg(any(test, feature = "test"))]
+pub fn create_rocks_db_common_config() -> CommonStoreConfig {
+    CommonStoreConfig {
+        max_concurrent_queries: None,
+        max_stream_queries: TEST_ROCKS_DB_MAX_STREAM_QUERIES,
+        cache_size: TEST_CACHE_SIZE,
+        create_if_missing: true,
     }
 }
 
 /// Creates a RocksDB database client to be used for tests.
-pub fn create_rocks_db_test_client() -> RocksDbClient {
+#[cfg(any(test, feature = "test"))]
+pub async fn create_rocks_db_test_client() -> RocksDbClient {
     let dir = TempDir::new().unwrap();
-    RocksDbClient::new(dir, TEST_ROCKS_DB_MAX_STREAM_QUERIES, TEST_CACHE_SIZE)
+    let common_config = create_rocks_db_common_config();
+    let (client, _) = RocksDbClient::new_for_testing(dir, common_config)
+        .await
+        .expect("client");
+    client
 }
 
 /// An implementation of [`crate::common::Context`] based on RocksDB
@@ -258,8 +311,9 @@ impl<E: Clone + Send + Sync> RocksDbContext<E> {
 }
 
 /// Create a [`crate::common::Context`] that can be used for tests.
-pub fn create_rocks_db_test_context() -> RocksDbContext<()> {
-    let client = create_rocks_db_test_client();
+#[cfg(any(test, feature = "test"))]
+pub async fn create_rocks_db_test_context() -> RocksDbContext<()> {
+    let client = create_rocks_db_test_client().await;
     let base_key = vec![];
     RocksDbContext::new(client, base_key, ())
 }
@@ -274,6 +328,14 @@ pub enum RocksDbContextError {
     /// RocksDb error.
     #[error("RocksDb error: {0}")]
     RocksDb(#[from] rocksdb::Error),
+
+    /// Missing database
+    #[error("Missing database")]
+    MissingDatabase,
+
+    /// Filesystem error
+    #[error("Filesystem error")]
+    FsError(#[from] std::io::Error),
 
     /// BCS serialization error.
     #[error("BCS error: {0}")]

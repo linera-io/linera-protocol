@@ -87,7 +87,7 @@ impl<'a> LruPrefixCache {
 /// We take a client, a maximum size and build a LRU-based system.
 #[derive(Clone)]
 pub struct LruCachingKeyValueClient<K> {
-    /// The inner client that is called by the LRU caching one
+    /// The inner client that is called by the LRU cache one
     pub client: K,
     lru_read_keys: Option<Arc<Mutex<LruPrefixCache>>>,
 }
@@ -210,7 +210,7 @@ impl<K> LruCachingKeyValueClient<K>
 where
     K: KeyValueStoreClient,
 {
-    /// Creates a new key-value store client that implements LRU caching.
+    /// Creates a new key-value store client that implements an LRU cache.
     pub fn new(client: K, max_size: usize) -> Self {
         if max_size == 0 {
             Self {

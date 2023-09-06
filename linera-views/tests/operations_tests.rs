@@ -164,7 +164,7 @@ async fn test_readings_memory() {
 #[tokio::test]
 async fn test_readings_rocks_db() {
     for scenario in get_random_test_scenarios() {
-        let key_value_operation = create_rocks_db_test_client();
+        let key_value_operation = create_rocks_db_test_client().await;
         test_readings_vec(key_value_operation, scenario).await;
     }
 }
@@ -289,7 +289,7 @@ async fn test_writings_key_value_store_view_memory() {
 #[cfg(feature = "rocksdb")]
 #[tokio::test]
 async fn test_writings_rocks_db() {
-    let key_value_operation = create_rocks_db_test_client();
+    let key_value_operation = create_rocks_db_test_client().await;
     test_writings_random(key_value_operation).await;
 }
 

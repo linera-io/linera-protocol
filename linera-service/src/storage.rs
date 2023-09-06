@@ -6,19 +6,22 @@ use anyhow::format_err;
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
 use linera_storage::MemoryStoreClient;
+use linera_views::common::CommonStoreConfig;
+#[cfg(feature = "aws")]
+use linera_views::dynamo_db::{get_base_config, get_localstack_config};
 use std::str::FromStr;
 
 #[cfg(feature = "rocksdb")]
 use {linera_storage::RocksDbStoreClient, std::path::PathBuf};
 
 #[cfg(feature = "aws")]
-use {
-    linera_storage::DynamoDbStoreClient,
-    linera_views::dynamo_db::{TableName, TableStatus},
-};
+use {linera_storage::DynamoDbStoreClient, linera_views::dynamo_db::TableName};
 
 #[cfg(feature = "scylladb")]
 use {anyhow::bail, linera_storage::ScyllaDbStoreClient};
+
+#[cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
+use linera_views::common::TableStatus;
 
 /// The description of a storage implementation.
 #[derive(Debug)]
@@ -36,7 +39,6 @@ pub enum StorageConfig {
     },
     #[cfg(feature = "scylladb")]
     ScyllaDb {
-        restart_database: bool,
         uri: String,
         table_name: String,
     },
@@ -95,9 +97,7 @@ impl StorageConfig {
         &self,
         config: &GenesisConfig,
         wasm_runtime: Option<WasmRuntime>,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
+        common_config: CommonStoreConfig,
         job: Job,
     ) -> Result<Output, anyhow::Error>
     where
@@ -106,27 +106,19 @@ impl StorageConfig {
         use StorageConfig::*;
         match self {
             Memory => {
-                let mut client = MemoryStoreClient::new(wasm_runtime, max_stream_queries);
+                let mut client =
+                    MemoryStoreClient::new(wasm_runtime, common_config.max_stream_queries);
                 config.initialize_store(&mut client).await?;
                 job.run(client).await
             }
             #[cfg(feature = "rocksdb")]
             RocksDb { path } => {
-                let is_new_dir = if path.is_dir() {
-                    tracing::warn!("Using existing database {:?}", path);
-                    false
-                } else {
+                if !common_config.create_if_missing {
                     std::fs::create_dir_all(path)?;
-                    true
-                };
-
-                let mut client = RocksDbStoreClient::new(
-                    path.clone(),
-                    wasm_runtime,
-                    max_stream_queries,
-                    cache_size,
-                );
-                if is_new_dir {
+                }
+                let (mut client, table_status) =
+                    RocksDbStoreClient::new(path.clone(), wasm_runtime, common_config).await?;
+                if table_status == TableStatus::New {
                     config.initialize_store(&mut client).await?;
                 }
                 job.run(client).await
@@ -136,27 +128,14 @@ impl StorageConfig {
                 table,
                 use_localstack,
             } => {
-                let (mut client, table_status) = match use_localstack {
-                    true => {
-                        DynamoDbStoreClient::with_localstack(
-                            table.clone(),
-                            max_concurrent_queries,
-                            max_stream_queries,
-                            cache_size,
-                            wasm_runtime,
-                        )
+                let (mut client, table_status) = if *use_localstack {
+                    let config = get_localstack_config().await?;
+                    DynamoDbStoreClient::new(config, table.clone(), common_config, wasm_runtime)
                         .await?
-                    }
-                    false => {
-                        DynamoDbStoreClient::new(
-                            table.clone(),
-                            max_concurrent_queries,
-                            max_stream_queries,
-                            cache_size,
-                            wasm_runtime,
-                        )
+                } else {
+                    let config = get_base_config().await?;
+                    DynamoDbStoreClient::new(&config, table.clone(), common_config, wasm_runtime)
                         .await?
-                    }
                 };
                 if table_status == TableStatus::New {
                     config.initialize_store(&mut client).await?;
@@ -164,22 +143,15 @@ impl StorageConfig {
                 job.run(client).await
             }
             #[cfg(feature = "scylladb")]
-            ScyllaDb {
-                restart_database,
-                uri,
-                table_name,
-            } => {
-                let mut client = ScyllaDbStoreClient::new(
-                    *restart_database,
+            ScyllaDb { uri, table_name } => {
+                let (mut client, table_status) = ScyllaDbStoreClient::new(
                     uri,
                     table_name.to_string(),
-                    max_concurrent_queries,
-                    max_stream_queries,
-                    cache_size,
+                    common_config,
                     wasm_runtime,
                 )
                 .await?;
-                if *restart_database {
+                if table_status == TableStatus::New {
                     config.initialize_store(&mut client).await?;
                 }
                 job.run(client).await
@@ -233,7 +205,6 @@ impl FromStr for StorageConfig {
         }
         #[cfg(feature = "scylladb")]
         if let Some(s) = input.strip_prefix(SCYLLA_DB) {
-            let mut restart_database: Option<bool> = None;
             let mut uri: Option<String> = None;
             let mut table_name: Option<String> = None;
             if !s.is_empty() {
@@ -268,32 +239,15 @@ impl FromStr for StorageConfig {
                             }
                             table_name = Some(part.to_string());
                         }
-                        "restart_database" => {
-                            if restart_database.is_some() {
-                                bail!("The restart_database entry has already been assigned");
-                            }
-                            restart_database = Some(true);
-                        }
-                        "dont_restart_database" => {
-                            if restart_database.is_some() {
-                                bail!("The restart_database entry has already been assigned");
-                            }
-                            restart_database = Some(false);
-                        }
                         _ => {
                             bail!("the entry \"{}\" is not matching", part);
                         }
                     }
                 }
             }
-            let restart_database = restart_database.unwrap_or(true);
             let uri = uri.unwrap_or("localhost:9042".to_string());
             let table_name = table_name.unwrap_or("table_storage".to_string());
-            return Ok(Self::ScyllaDb {
-                restart_database,
-                uri,
-                table_name,
-            });
+            return Ok(Self::ScyllaDb { uri, table_name });
         }
         Err(format_err!("Incorrect storage description: {}", input))
     }
@@ -314,7 +268,7 @@ fn test_rocks_db_storage_config_from_str() {
     assert_eq!(
         StorageConfig::from_str("rocksdb:foo.db").unwrap(),
         StorageConfig::RocksDb {
-            path: "foo.db".into()
+            path: "foo.db".into(),
         }
     );
     assert!(StorageConfig::from_str("rocksdb_foo.db").is_err());
@@ -356,23 +310,6 @@ fn test_scylla_db_storage_config_from_str() {
     assert_eq!(
         StorageConfig::from_str("scylladb:").unwrap(),
         StorageConfig::ScyllaDb {
-            restart_database: true,
-            uri: "localhost:9042".to_string(),
-            table_name: "table_storage".to_string(),
-        }
-    );
-    assert_eq!(
-        StorageConfig::from_str("scylladb:dont_restart_database").unwrap(),
-        StorageConfig::ScyllaDb {
-            restart_database: false,
-            uri: "localhost:9042".to_string(),
-            table_name: "table_storage".to_string(),
-        }
-    );
-    assert_eq!(
-        StorageConfig::from_str("scylladb:restart_database").unwrap(),
-        StorageConfig::ScyllaDb {
-            restart_database: true,
             uri: "localhost:9042".to_string(),
             table_name: "table_storage".to_string(),
         }
@@ -380,7 +317,6 @@ fn test_scylla_db_storage_config_from_str() {
     assert_eq!(
         StorageConfig::from_str("scylladb:https:://db_hostname:230").unwrap(),
         StorageConfig::ScyllaDb {
-            restart_database: true,
             uri: "https:://db_hostname:230".to_string(),
             table_name: "table_storage".to_string(),
         }

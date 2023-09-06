@@ -25,7 +25,7 @@ use linera_service::{
     storage::{Runnable, StorageConfig},
 };
 use linera_storage::Store;
-use linera_views::views::ViewError;
+use linera_views::{common::CommonStoreConfig, views::ViewError};
 use serde::Deserialize;
 use std::{net::SocketAddr, path::PathBuf};
 use structopt::StructOpt;
@@ -338,6 +338,10 @@ enum ServerCommand {
         #[structopt(long, default_value = "1000")]
         cache_size: usize,
 
+        /// Do not create a table if one is missing
+        #[structopt(long = "do not create a database if missing")]
+        skip_table_creation_when_missing: bool,
+
         /// Use this when running from a Kubernetes cluster (including from within GCP)
         /// Won't use config files to determine host IPs, but will do it dynamically
         /// based on cluster info
@@ -393,6 +397,7 @@ async fn main() {
             cache_size,
             #[cfg(feature = "kube")]
             kube,
+            skip_table_creation_when_missing,
         } => {
             let genesis_config = GenesisConfig::read(&genesis_config_path)
                 .expect("Fail to read initial chain config");
@@ -420,15 +425,15 @@ async fn main() {
                 kube,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
+            let create_if_missing = !skip_table_creation_when_missing;
+            let common_config = CommonStoreConfig {
+                max_concurrent_queries,
+                max_stream_queries,
+                cache_size,
+                create_if_missing,
+            };
             storage_config
-                .run_with_storage(
-                    &genesis_config,
-                    wasm_runtime,
-                    max_concurrent_queries,
-                    max_stream_queries,
-                    cache_size,
-                    job,
-                )
+                .run_with_storage(&genesis_config, wasm_runtime, common_config, job)
                 .await
                 .unwrap();
         }

@@ -13,23 +13,20 @@ use std::collections::VecDeque;
 
 #[cfg(feature = "rocksdb")]
 use {
-    crate::rocks_db::{RocksDbClient, RocksDbContext, TEST_ROCKS_DB_MAX_STREAM_QUERIES},
+    crate::rocks_db::create_rocks_db_common_config,
+    crate::rocks_db::{RocksDbClient, RocksDbContext},
     tempfile::TempDir,
 };
 
 #[cfg(feature = "aws")]
 use crate::{
+    common::get_table_name,
     dynamo_db::LocalStackTestContext,
-    dynamo_db::{
-        DynamoDbContext, TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES, TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
-    },
+    dynamo_db::{create_dynamo_db_common_config, DynamoDbContext},
 };
 
 #[cfg(feature = "scylladb")]
 use crate::{scylla_db::create_scylla_db_test_client, scylla_db::ScyllaDbContext};
-
-#[cfg(any(feature = "rocksdb", feature = "aws"))]
-use crate::lru_caching::TEST_CACHE_SIZE;
 
 #[tokio::test]
 async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error> {
@@ -222,11 +219,10 @@ impl TestContextFactory for RocksDbContextFactory {
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let directory = TempDir::new()?;
-        let client = RocksDbClient::new(
-            directory.path(),
-            TEST_ROCKS_DB_MAX_STREAM_QUERIES,
-            TEST_CACHE_SIZE,
-        );
+        let common_config = create_rocks_db_common_config();
+        let (client, _) = RocksDbClient::new(directory.path(), common_config)
+            .await
+            .expect("client");
         let context = RocksDbContext::new(client, vec![], ());
 
         self.temporary_directories.push(directory);
@@ -253,20 +249,14 @@ impl TestContextFactory for DynamoDbContextFactory {
         }
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
 
-        let table = format!("linera{}", self.table_counter).parse()?;
+        let table = get_table_name().await;
+        let table = format!("{}_{}", table, self.table_counter);
+        let table_name = table.parse()?;
         self.table_counter += 1;
-
+        let common_config = create_dynamo_db_common_config();
         let dummy_key_prefix = vec![0];
-        let (context, _) = DynamoDbContext::from_config(
-            config,
-            table,
-            Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-            TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
-            TEST_CACHE_SIZE,
-            dummy_key_prefix,
-            (),
-        )
-        .await?;
+        let (context, _) =
+            DynamoDbContext::new(config, table_name, common_config, dummy_key_prefix, ()).await?;
 
         Ok(context)
     }

@@ -3,13 +3,15 @@
 
 use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
 use linera_execution::WasmRuntime;
-use linera_views::scylla_db::{get_table_name, ScyllaDbClient, ScyllaDbContextError};
+use linera_views::{
+    common::{CommonStoreConfig, TableStatus},
+    scylla_db::{ScyllaDbClient, ScyllaDbContextError},
+};
 use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
-use linera_views::{
-    lru_caching::TEST_CACHE_SIZE,
-    scylla_db::{TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES, TEST_SCYLLA_DB_MAX_STREAM_QUERIES},
+use {
+    linera_views::common::get_table_name, linera_views::scylla_db::create_scylla_db_common_config,
 };
 
 #[cfg(test)]
@@ -19,30 +21,38 @@ mod tests;
 type ScyllaDbStore = DbStore<ScyllaDbClient>;
 
 impl ScyllaDbStore {
-    pub async fn new(
-        restart_database: bool,
+    #[cfg(any(test, feature = "test"))]
+    pub async fn new_for_testing(
         uri: &str,
         table_name: String,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
+        common_config: CommonStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, ScyllaDbContextError> {
-        let client = ScyllaDbClient::new(
-            restart_database,
-            uri,
-            table_name,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-        )
-        .await?;
-        Ok(Self {
+    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
+        let (client, table_status) =
+            ScyllaDbClient::new_for_testing(uri, table_name, common_config).await?;
+        let store = Self {
             client,
             guards: ChainGuards::default(),
             user_applications: Arc::default(),
             wasm_runtime,
-        })
+        };
+        Ok((store, table_status))
+    }
+
+    pub async fn new(
+        uri: &str,
+        table_name: String,
+        common_config: CommonStoreConfig,
+        wasm_runtime: Option<WasmRuntime>,
+    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
+        let (client, table_status) = ScyllaDbClient::new(uri, table_name, common_config).await?;
+        let store = Self {
+            client,
+            guards: ChainGuards::default(),
+            user_applications: Arc::default(),
+            wasm_runtime,
+        };
+        Ok((store, table_status))
     }
 }
 
@@ -51,46 +61,42 @@ pub type ScyllaDbStoreClient = DbStoreClient<ScyllaDbClient>;
 impl ScyllaDbStoreClient {
     #[cfg(any(test, feature = "test"))]
     pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> ScyllaDbStoreClient {
-        let restart_database = true;
         let uri = "localhost:9042";
         let table_name = get_table_name().await;
-        let max_concurrent_queries = Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES);
-        let max_stream_queries = TEST_SCYLLA_DB_MAX_STREAM_QUERIES;
-        let cache_size = TEST_CACHE_SIZE;
-        ScyllaDbStoreClient::new(
-            restart_database,
-            uri,
-            table_name,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-            wasm_runtime,
-        )
-        .await
-        .expect("client")
+        let common_config = create_scylla_db_common_config();
+        let (client, _) =
+            ScyllaDbStoreClient::new_for_testing(uri, table_name, common_config, wasm_runtime)
+                .await
+                .expect("client");
+        client
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    pub async fn new_for_testing(
+        uri: &str,
+        table_name: String,
+        common_config: CommonStoreConfig,
+        wasm_runtime: Option<WasmRuntime>,
+    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
+        let (store, table_status) =
+            ScyllaDbStore::new_for_testing(uri, table_name, common_config, wasm_runtime).await?;
+        let store_client = ScyllaDbStoreClient {
+            client: Arc::new(store),
+        };
+        Ok((store_client, table_status))
     }
 
     pub async fn new(
-        restart_database: bool,
         uri: &str,
         table_name: String,
-        max_concurrent_queries: Option<usize>,
-        max_stream_queries: usize,
-        cache_size: usize,
+        common_config: CommonStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, ScyllaDbContextError> {
-        let store = ScyllaDbStore::new(
-            restart_database,
-            uri,
-            table_name,
-            max_concurrent_queries,
-            max_stream_queries,
-            cache_size,
-            wasm_runtime,
-        )
-        .await?;
-        Ok(ScyllaDbStoreClient {
+    ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
+        let (store, table_status) =
+            ScyllaDbStore::new(uri, table_name, common_config, wasm_runtime).await?;
+        let store_client = ScyllaDbStoreClient {
             client: Arc::new(store),
-        })
+        };
+        Ok((store_client, table_status))
     }
 }

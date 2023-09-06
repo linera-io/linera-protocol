@@ -32,31 +32,25 @@ use std::{
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-#[cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
-use linera_views::lru_caching::TEST_CACHE_SIZE;
-
 #[cfg(feature = "rocksdb")]
 use {
-    linera_storage::RocksDbStoreClient, linera_views::rocks_db::TEST_ROCKS_DB_MAX_STREAM_QUERIES,
+    linera_storage::RocksDbStoreClient, linera_views::rocks_db::create_rocks_db_common_config,
     tokio::sync::Semaphore,
 };
 
 #[cfg(feature = "aws")]
 use {
     linera_storage::DynamoDbStoreClient,
-    linera_views::dynamo_db::{
-        LocalStackTestContext, TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES,
-        TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
-    },
+    linera_views::dynamo_db::{create_dynamo_db_common_config, LocalStackTestContext},
 };
 
 #[cfg(feature = "scylladb")]
 use {
-    linera_storage::ScyllaDbStoreClient,
-    linera_views::scylla_db::{
-        get_table_name, TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES, TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
-    },
+    linera_storage::ScyllaDbStoreClient, linera_views::scylla_db::create_scylla_db_common_config,
 };
+
+#[cfg(any(feature = "aws", feature = "scylladb"))]
+use linera_views::common::get_table_name;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum FaultType {
@@ -623,12 +617,10 @@ impl StoreBuilder for MakeRocksDbStoreClient {
         let dir = tempfile::TempDir::new()?;
         let path = dir.path().to_path_buf();
         self.temp_dirs.push(dir);
-        Ok(RocksDbStoreClient::new(
-            path,
-            self.wasm_runtime,
-            TEST_ROCKS_DB_MAX_STREAM_QUERIES,
-            TEST_CACHE_SIZE,
-        ))
+        let common_config = create_rocks_db_common_config();
+        let (store_client, _) =
+            RocksDbStoreClient::new(path, self.wasm_runtime, common_config).await?;
+        Ok(store_client)
     }
 }
 
@@ -663,18 +655,14 @@ impl StoreBuilder for MakeDynamoDbStoreClient {
             self.localstack = Some(LocalStackTestContext::new().await?);
         }
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
-        let table = format!("linera{}", self.instance_counter).parse()?;
+        let table = get_table_name().await;
+        let table = format!("{}_{}", table, self.instance_counter);
+        let table_name = table.parse()?;
+        let common_config = create_dynamo_db_common_config();
         self.instance_counter += 1;
-        let (store, _) = DynamoDbStoreClient::from_config(
-            config,
-            table,
-            Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-            TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
-            TEST_CACHE_SIZE,
-            self.wasm_runtime,
-        )
-        .await?;
-        Ok(store)
+        let (store_client, _) =
+            DynamoDbStoreClient::new(config, table_name, common_config, self.wasm_runtime).await?;
+        Ok(store_client)
     }
 }
 
@@ -719,18 +707,12 @@ impl StoreBuilder for MakeScyllaDbStoreClient {
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         self.instance_counter += 1;
-        let restart_database = true;
         let table_name = get_table_name().await;
         let table_name = format!("{}_{}", table_name, self.instance_counter);
-        Ok(ScyllaDbStoreClient::new(
-            restart_database,
-            &self.uri,
-            table_name,
-            Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
-            TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
-            TEST_CACHE_SIZE,
-            self.wasm_runtime,
-        )
-        .await?)
+        let common_config = create_scylla_db_common_config();
+        let (store_client, _) =
+            ScyllaDbStoreClient::new(&self.uri, table_name, common_config, self.wasm_runtime)
+                .await?;
+        Ok(store_client)
     }
 }
