@@ -619,7 +619,7 @@ impl StoreBuilder for MakeRocksDbStoreClient {
         self.temp_dirs.push(dir);
         let common_config = create_rocks_db_common_config();
         let (store_client, _) =
-            RocksDbStoreClient::new(path, self.wasm_runtime, common_config).await?;
+            RocksDbStoreClient::new_for_testing(path, self.wasm_runtime, common_config).await?;
         Ok(store_client)
     }
 }
@@ -660,8 +660,13 @@ impl StoreBuilder for MakeDynamoDbStoreClient {
         let table_name = table.parse()?;
         let common_config = create_dynamo_db_common_config();
         self.instance_counter += 1;
-        let (store_client, _) =
-            DynamoDbStoreClient::new(config, table_name, common_config, self.wasm_runtime).await?;
+        let (store_client, _) = DynamoDbStoreClient::new_for_testing(
+            config,
+            table_name,
+            common_config,
+            self.wasm_runtime,
+        )
+        .await?;
         Ok(store_client)
     }
 }
@@ -710,9 +715,13 @@ impl StoreBuilder for MakeScyllaDbStoreClient {
         let table_name = get_table_name().await;
         let table_name = format!("{}_{}", table_name, self.instance_counter);
         let common_config = create_scylla_db_common_config();
-        let (store_client, _) =
-            ScyllaDbStoreClient::new(&self.uri, table_name, common_config, self.wasm_runtime)
-                .await?;
+        let (store_client, _) = ScyllaDbStoreClient::new_for_testing(
+            &self.uri,
+            table_name,
+            common_config,
+            self.wasm_runtime,
+        )
+        .await?;
         Ok(store_client)
     }
 }
