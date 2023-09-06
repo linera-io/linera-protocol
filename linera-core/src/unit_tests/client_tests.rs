@@ -108,7 +108,7 @@ where
         );
         assert_eq!(
             builder
-                .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
+                .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
                 .await
                 .unwrap()
                 .value,
@@ -120,7 +120,7 @@ where
         Some(Notification {
             reason: Reason::NewBlock { height, .. },
             chain_id,
-        }) if chain_id == ChainId::root(1) && height == BlockHeight::from(0)
+        }) if chain_id == ChainId::root(1) && height == BlockHeight::ZERO
     ));
     Ok(())
 }
@@ -258,7 +258,7 @@ where
     assert_eq!(sender.identity().await.unwrap(), new_owner);
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
             .unwrap()
             .value,
@@ -334,7 +334,7 @@ where
     ));
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
             .unwrap()
             .value,
@@ -403,7 +403,7 @@ where
     assert!(sender.key_pair().await.is_ok());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
             .unwrap()
             .value,
@@ -575,7 +575,7 @@ where
     // Make a client to try the new chain.
     let new_id = ChainId::child(message_id);
     let mut client = builder
-        .make_client(new_id, new_key_pair, None, BlockHeight::from(0))
+        .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
     client.receive_certificate(certificate).await.unwrap();
     assert_eq!(
@@ -667,7 +667,7 @@ where
     ));
     // Make a client to try the new chain.
     let mut client = builder
-        .make_client(new_id, new_key_pair, None, BlockHeight::from(0))
+        .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
     client.receive_certificate(certificate).await.unwrap();
     assert_eq!(
@@ -745,7 +745,7 @@ where
     assert!(sender.key_pair().await.is_ok());
     // Make a client to try the new chain.
     let mut client = builder
-        .make_client(new_id, new_key_pair, None, BlockHeight::from(0))
+        .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
     // Must process the creation certificate before using the new chain.
     client
@@ -826,7 +826,7 @@ where
     ));
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(0), 3)
+            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
             .unwrap()
             .value,
@@ -897,7 +897,7 @@ where
             CommunicationError::Trusted(crate::node::NodeError::ArithmeticError { .. })
         ))
     ));
-    assert_eq!(sender.next_block_height, BlockHeight::from(0));
+    assert_eq!(sender.next_block_height, BlockHeight::ZERO);
     assert!(sender.pending_block.is_some());
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -977,7 +977,7 @@ where
 
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::from(0), 3)
+            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
             .await
             .unwrap()
             .value,
@@ -1005,7 +1005,7 @@ where
     );
 
     // Send back some money.
-    assert_eq!(client2.next_block_height, BlockHeight::from(0));
+    assert_eq!(client2.next_block_height, BlockHeight::ZERO);
     client2
         .transfer_to_account(
             None,
@@ -1304,7 +1304,7 @@ where
         user.receive_certificate(cert).await,
         Err(ChainClientError::CommitteeSynchronizationError)
     ));
-    assert_eq!(user.epoch().await.unwrap(), Epoch::from(0));
+    assert_eq!(user.epoch().await.unwrap(), Epoch::ZERO);
     assert_eq!(
         user.synchronize_from_validators().await.unwrap(),
         Amount::from_tokens(3)
@@ -1312,7 +1312,7 @@ where
 
     // User is a genesis chain so the migration message is not even in the inbox yet.
     user.process_inbox().await.unwrap();
-    assert_eq!(user.epoch().await.unwrap(), Epoch::from(0));
+    assert_eq!(user.epoch().await.unwrap(), Epoch::ZERO);
 
     // Now subscribe explicitly to migrations.
     let cert = user.subscribe_to_new_committees().await.unwrap();

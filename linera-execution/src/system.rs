@@ -541,7 +541,7 @@ where
                     );
                 }
                 ensure!(
-                    *amount > Amount::zero(),
+                    *amount > Amount::ZERO,
                     SystemExecutionError::IncorrectTransferAmount
                 );
                 let balance = match &owner {
@@ -579,7 +579,7 @@ where
                     SystemExecutionError::UnauthenticatedClaimOwner
                 );
                 ensure!(
-                    *amount > Amount::zero(),
+                    *amount > Amount::ZERO,
                     SystemExecutionError::IncorrectClaimAmount
                 );
                 let message = RawOutgoingMessage {

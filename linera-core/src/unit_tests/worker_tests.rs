@@ -136,7 +136,7 @@ fn make_block(
 ) -> Block {
     let previous_block_hash = previous_confirmed_block.as_ref().map(|cert| cert.hash());
     let height = match &previous_confirmed_block {
-        None => BlockHeight::from(0),
+        None => BlockHeight::ZERO,
         Some(cert) => cert.value().height().try_add_one().unwrap(),
     };
     Block {
@@ -160,7 +160,7 @@ fn make_transfer_block_proposal(
     previous_confirmed_block: Option<&Certificate>,
 ) -> BlockProposal {
     let block = make_block(
-        Epoch::from(0),
+        Epoch::ZERO,
         chain_id,
         vec![SystemOperation::Transfer {
             owner: None,
@@ -219,7 +219,7 @@ async fn make_transfer_certificate<S>(
         recipient,
         amount,
         incoming_messages,
-        Epoch::from(0),
+        Epoch::ZERO,
         committee,
         balance,
         worker,
@@ -426,7 +426,7 @@ where
         ChainId::root(1),
         &sender_key_pair,
         recipient,
-        Amount::zero(),
+        Amount::ZERO,
         Vec::new(),
         None,
     );
@@ -481,7 +481,7 @@ where
     let key_pair = KeyPair::generate();
     let balance: Amount = Amount::from_tokens(5);
     let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
-    let epoch = Epoch::from(0);
+    let epoch = Epoch::ZERO;
     let (committee, mut worker) = init_worker_with_chains(client, balances).await;
 
     let make_tick_block = |micros: u64, parent: Option<&Certificate>| {
@@ -798,7 +798,7 @@ where
     )
     .await;
 
-    let epoch = Epoch::from(0);
+    let epoch = Epoch::ZERO;
     let certificate0 = make_certificate(
         &committee,
         &worker,
@@ -822,7 +822,7 @@ where
                     }),
                 ],
                 previous_block_hash: None,
-                height: BlockHeight::from(0),
+                height: BlockHeight::ZERO,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
@@ -979,7 +979,7 @@ where
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
-                        height: BlockHeight::from(0),
+                        height: BlockHeight::ZERO,
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
@@ -993,7 +993,7 @@ where
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
-                        height: BlockHeight::from(0),
+                        height: BlockHeight::ZERO,
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
@@ -1038,7 +1038,7 @@ where
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
-                        height: BlockHeight::from(0),
+                        height: BlockHeight::ZERO,
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
@@ -1052,7 +1052,7 @@ where
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
-                        height: BlockHeight::from(0),
+                        height: BlockHeight::ZERO,
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
@@ -1111,7 +1111,7 @@ where
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
-                        height: BlockHeight::from(0),
+                        height: BlockHeight::ZERO,
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
@@ -1125,7 +1125,7 @@ where
                     origin: Origin::chain(ChainId::root(1)),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
-                        height: BlockHeight::from(0),
+                        height: BlockHeight::ZERO,
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
@@ -1155,7 +1155,7 @@ where
                 origin: Origin::chain(ChainId::root(1)),
                 event: Event {
                     certificate_hash: certificate0.value.hash(),
-                    height: BlockHeight::from(0),
+                    height: BlockHeight::ZERO,
                     index: 0,
                     authenticated_signer: None,
                     timestamp: Timestamp::from(0),
@@ -1627,7 +1627,7 @@ where
             origin: Origin::chain(ChainId::root(3)),
             event: Event {
                 certificate_hash: CryptoHash::new(&Dummy),
-                height: BlockHeight::from(0),
+                height: BlockHeight::ZERO,
                 index: 0,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
@@ -1658,7 +1658,7 @@ where
         chain.tip_state.get().next_block_height
     );
     assert_eq!(
-        BlockHeight::from(0),
+        BlockHeight::ZERO,
         chain
             .inboxes
             .try_load_entry_mut(&Origin::chain(ChainId::root(3)))
@@ -1696,7 +1696,7 @@ where
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. }),
         } if certificate_hash == CryptoHash::new(&Dummy)
-            && height == BlockHeight::from(0)
+            && height == BlockHeight::ZERO
             && timestamp == Timestamp::from(0)
             && amount == Amount::from_tokens(995),
     ));
@@ -1751,11 +1751,7 @@ where
                 sender_key_pair.public(),
                 Amount::ONE,
             ),
-            (
-                ChainDescription::Root(2),
-                PublicKey::debug(2),
-                Amount::max(),
-            ),
+            (ChainDescription::Root(2), PublicKey::debug(2), Amount::MAX),
         ],
     )
     .await;
@@ -1800,7 +1796,7 @@ where
         .await
         .unwrap();
     assert_eq!(
-        Amount::max(),
+        Amount::MAX,
         *new_recipient_chain.execution_state.system.balance.get()
     );
 }
@@ -1894,7 +1890,7 @@ where
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. })
         } if certificate_hash == certificate.hash()
-            && height == BlockHeight::from(0)
+            && height == BlockHeight::ZERO
             && timestamp == Timestamp::from(0)
             && amount == Amount::ONE,
     ));
@@ -1972,10 +1968,7 @@ where
         .await
         .unwrap();
     assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
-    assert_eq!(
-        BlockHeight::from(0),
-        chain.tip_state.get().next_block_height
-    );
+    assert_eq!(BlockHeight::ZERO, chain.tip_state.get().next_block_height);
     assert_eq!(
         BlockHeight::from(1),
         chain
@@ -2005,7 +1998,7 @@ where
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. })
         } if certificate_hash == certificate.hash()
-            && height == BlockHeight::from(0)
+            && height == BlockHeight::ZERO
             && timestamp == Timestamp::from(0)
             && amount == Amount::from_tokens(10),
     ));
@@ -2144,7 +2137,7 @@ where
             chain_id: ChainId::root(2),
             reason: Reason::NewIncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
-                height: BlockHeight::from(0),
+                height: BlockHeight::ZERO,
             }
         }]
     );
@@ -2268,7 +2261,7 @@ where
             origin: Origin::chain(ChainId::root(1)),
             event: Event {
                 certificate_hash: certificate.hash(),
-                height: BlockHeight::from(0),
+                height: BlockHeight::ZERO,
                 index: 0,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
@@ -2328,7 +2321,7 @@ where
         response.info.requested_received_log[0],
         ChainAndHeight {
             chain_id: ChainId::root(1),
-            height: BlockHeight::from(0)
+            height: BlockHeight::ZERO
         }
     );
 }
@@ -2445,7 +2438,7 @@ where
     )
     .await;
     let mut committees = BTreeMap::new();
-    committees.insert(Epoch::from(0), committee.clone());
+    committees.insert(Epoch::ZERO, committee.clone());
     let admin_id = ChainId::root(0);
     let admin_channel_subscription = ChannelSubscription {
         chain_id: admin_id,
@@ -2459,12 +2452,12 @@ where
     // Have the admin chain create a user chain.
     let user_id = ChainId::child(MessageId {
         chain_id: admin_id,
-        height: BlockHeight::from(0),
+        height: BlockHeight::ZERO,
         index: 0,
     });
     let user_description = ChainDescription::Child(MessageId {
         chain_id: admin_id,
-        height: BlockHeight::from(0),
+        height: BlockHeight::ZERO,
         index: 0,
     });
     let certificate0 = make_certificate(
@@ -2472,17 +2465,17 @@ where
         &worker,
         HashedValue::new_confirmed(ExecutedBlock {
             block: Block {
-                epoch: Epoch::from(0),
+                epoch: Epoch::ZERO,
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::System(SystemOperation::OpenChain {
                     ownership: ChainOwnership::single(key_pair.public()),
-                    epoch: Epoch::from(0),
+                    epoch: Epoch::ZERO,
                     committees: committees.clone(),
                     admin_id,
                 })],
                 previous_block_hash: None,
-                height: BlockHeight::from(0),
+                height: BlockHeight::ZERO,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
@@ -2491,7 +2484,7 @@ where
                     user_id,
                     SystemMessage::OpenChain {
                         ownership: ChainOwnership::single(key_pair.public()),
-                        epoch: Epoch::from(0),
+                        epoch: Epoch::ZERO,
                         committees: committees.clone(),
                         admin_id,
                     },
@@ -2505,7 +2498,7 @@ where
                 ),
             ],
             state_hash: make_state_hash(SystemExecutionState {
-                epoch: Some(Epoch::from(0)),
+                epoch: Some(Epoch::ZERO),
                 description: Some(ChainDescription::Root(0)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeSet::new(),
@@ -2546,7 +2539,7 @@ where
 
     // Create a new committee and transfer money before accepting the subscription.
     let committees2 = BTreeMap::from_iter([
-        (Epoch::from(0), committee.clone()),
+        (Epoch::ZERO, committee.clone()),
         (Epoch::from(1), committee.clone()),
     ]);
     let certificate1 = make_certificate(
@@ -2554,7 +2547,7 @@ where
         &worker,
         HashedValue::new_confirmed(ExecutedBlock {
             block: Block {
-                epoch: Epoch::from(0),
+                epoch: Epoch::ZERO,
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
                 operations: vec![
@@ -2623,7 +2616,7 @@ where
                     origin: Origin::chain(admin_id),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
-                        height: BlockHeight::from(0),
+                        height: BlockHeight::ZERO,
                         index: 1,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
@@ -2685,7 +2678,7 @@ where
         // The child is active and has not migrated yet.
         let mut user_chain = worker.storage.load_active_chain(user_id).await.unwrap();
         assert_eq!(
-            BlockHeight::from(0),
+            BlockHeight::ZERO,
             user_chain.tip_state.get().next_block_height
         );
         assert_eq!(
@@ -2762,7 +2755,7 @@ where
         &worker,
         HashedValue::new_confirmed(ExecutedBlock {
             block: Block {
-                epoch: Epoch::from(0),
+                epoch: Epoch::ZERO,
                 chain_id: user_id,
                 incoming_messages: vec![
                     IncomingMessage {
@@ -2807,7 +2800,7 @@ where
                 ],
                 operations: Vec::new(),
                 previous_block_hash: None,
-                height: BlockHeight::from(0),
+                height: BlockHeight::ZERO,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
@@ -2937,7 +2930,7 @@ where
     )
     .await;
     let mut committees = BTreeMap::new();
-    committees.insert(Epoch::from(0), committee.clone());
+    committees.insert(Epoch::ZERO, committee.clone());
     let admin_id = ChainId::root(0);
     let user_id = ChainId::root(1);
 
@@ -2947,7 +2940,7 @@ where
         &worker,
         HashedValue::new_confirmed(ExecutedBlock {
             block: Block {
-                epoch: Epoch::from(0),
+                epoch: Epoch::ZERO,
                 chain_id: user_id,
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::System(SystemOperation::Transfer {
@@ -2957,7 +2950,7 @@ where
                     user_data: UserData::default(),
                 })],
                 previous_block_hash: None,
-                height: BlockHeight::from(0),
+                height: BlockHeight::ZERO,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
@@ -2969,7 +2962,7 @@ where
                 },
             )],
             state_hash: make_state_hash(SystemExecutionState {
-                epoch: Some(Epoch::from(0)),
+                epoch: Some(Epoch::ZERO),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeSet::new(),
@@ -2985,7 +2978,7 @@ where
     );
     // Have the admin chain create a new epoch without retiring the old one.
     let committees2 = BTreeMap::from_iter([
-        (Epoch::from(0), committee.clone()),
+        (Epoch::ZERO, committee.clone()),
         (Epoch::from(1), committee.clone()),
     ]);
     let certificate1 = make_certificate(
@@ -2993,7 +2986,7 @@ where
         &worker,
         HashedValue::new_confirmed(ExecutedBlock {
             block: Block {
-                epoch: Epoch::from(0),
+                epoch: Epoch::ZERO,
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::System(SystemOperation::Admin(
@@ -3003,7 +2996,7 @@ where
                     },
                 ))],
                 previous_block_hash: None,
-                height: BlockHeight::from(0),
+                height: BlockHeight::ZERO,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
@@ -3052,7 +3045,7 @@ where
     );
     assert_eq!(
         *user_chain.execution_state.system.epoch.get(),
-        Some(Epoch::from(0))
+        Some(Epoch::ZERO)
     );
 
     // .. and the message has gone through.
@@ -3123,7 +3116,7 @@ where
     )
     .await;
     let mut committees = BTreeMap::new();
-    committees.insert(Epoch::from(0), committee.clone());
+    committees.insert(Epoch::ZERO, committee.clone());
     let admin_id = ChainId::root(0);
     let user_id = ChainId::root(1);
 
@@ -3133,7 +3126,7 @@ where
         &worker,
         HashedValue::new_confirmed(ExecutedBlock {
             block: Block {
-                epoch: Epoch::from(0),
+                epoch: Epoch::ZERO,
                 chain_id: user_id,
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::System(SystemOperation::Transfer {
@@ -3143,7 +3136,7 @@ where
                     user_data: UserData::default(),
                 })],
                 previous_block_hash: None,
-                height: BlockHeight::from(0),
+                height: BlockHeight::ZERO,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
@@ -3155,7 +3148,7 @@ where
                 },
             )],
             state_hash: make_state_hash(SystemExecutionState {
-                epoch: Some(Epoch::from(0)),
+                epoch: Some(Epoch::ZERO),
                 description: Some(ChainDescription::Root(1)),
                 admin_id: Some(admin_id),
                 subscriptions: BTreeSet::new(),
@@ -3171,7 +3164,7 @@ where
     );
     // Have the admin chain create a new epoch and retire the old one immediately.
     let committees2 = BTreeMap::from_iter([
-        (Epoch::from(0), committee.clone()),
+        (Epoch::ZERO, committee.clone()),
         (Epoch::from(1), committee.clone()),
     ]);
     let committees3 = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
@@ -3180,7 +3173,7 @@ where
         &worker,
         HashedValue::new_confirmed(ExecutedBlock {
             block: Block {
-                epoch: Epoch::from(0),
+                epoch: Epoch::ZERO,
                 chain_id: admin_id,
                 incoming_messages: Vec::new(),
                 operations: vec![
@@ -3189,11 +3182,11 @@ where
                         committee: committee.clone(),
                     })),
                     Operation::System(SystemOperation::Admin(AdminOperation::RemoveCommittee {
-                        epoch: Epoch::from(0),
+                        epoch: Epoch::ZERO,
                     })),
                 ],
                 previous_block_hash: None,
-                height: BlockHeight::from(0),
+                height: BlockHeight::ZERO,
                 authenticated_signer: None,
                 timestamp: Timestamp::from(0),
             },
@@ -3252,7 +3245,7 @@ where
         );
         assert_eq!(
             *user_chain.execution_state.system.epoch.get(),
-            Some(Epoch::from(0))
+            Some(Epoch::ZERO)
         );
 
         // .. but the message hasn't gone through.
@@ -3272,7 +3265,7 @@ where
                     origin: Origin::chain(user_id),
                     event: Event {
                         certificate_hash: certificate0.value.hash(),
-                        height: BlockHeight::from(0),
+                        height: BlockHeight::ZERO,
                         index: 0,
                         authenticated_signer: None,
                         timestamp: Timestamp::from(0),
@@ -3348,7 +3341,7 @@ async fn test_cross_chain_helper() {
         Recipient::Account(Account::chain(id1)),
         Amount::ONE,
         Vec::new(),
-        Epoch::from(0),
+        Epoch::ZERO,
         &committee,
         Amount::ONE,
         &worker,
@@ -3361,7 +3354,7 @@ async fn test_cross_chain_helper() {
         Recipient::Account(Account::chain(id1)),
         Amount::ONE,
         Vec::new(),
-        Epoch::from(0),
+        Epoch::ZERO,
         &committee,
         Amount::ONE,
         &worker,
@@ -3388,7 +3381,7 @@ async fn test_cross_chain_helper() {
         Recipient::Account(Account::chain(id1)),
         Amount::ONE,
         Vec::new(),
-        Epoch::from(0),
+        Epoch::ZERO,
         &committee,
         Amount::ONE,
         &worker,
@@ -3408,7 +3401,7 @@ async fn test_cross_chain_helper() {
             .select_certificates(
                 &Origin::chain(id0),
                 id1,
-                BlockHeight::from(0),
+                BlockHeight::ZERO,
                 None,
                 vec![certificate0.clone(), certificate1.clone()]
             )
@@ -3445,7 +3438,7 @@ async fn test_cross_chain_helper() {
         .select_certificates(
             &Origin::chain(id0),
             id1,
-            BlockHeight::from(0),
+            BlockHeight::ZERO,
             None,
             vec![certificate1.clone(), certificate0.clone()]
         )
@@ -3455,7 +3448,7 @@ async fn test_cross_chain_helper() {
         .select_certificates(
             &Origin::chain(id1),
             id0,
-            BlockHeight::from(0),
+            BlockHeight::ZERO,
             None,
             vec![certificate0.clone()]
         )
@@ -3473,7 +3466,7 @@ async fn test_cross_chain_helper() {
             .select_certificates(
                 &Origin::chain(id0),
                 id1,
-                BlockHeight::from(0),
+                BlockHeight::ZERO,
                 None,
                 vec![certificate0.clone(), certificate1.clone()]
             )
@@ -3486,7 +3479,7 @@ async fn test_cross_chain_helper() {
             .select_certificates(
                 &Origin::chain(id0),
                 id1,
-                BlockHeight::from(0),
+                BlockHeight::ZERO,
                 None,
                 vec![
                     certificate0.clone(),
@@ -3537,7 +3530,7 @@ async fn test_cross_chain_helper() {
             .select_certificates(
                 &Origin::chain(id0),
                 id1,
-                BlockHeight::from(0),
+                BlockHeight::ZERO,
                 Some(BlockHeight::from(1)),
                 vec![certificate0.clone(), certificate1.clone()]
             )

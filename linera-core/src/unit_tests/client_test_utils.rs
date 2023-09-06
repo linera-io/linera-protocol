@@ -485,7 +485,7 @@ where
                 .await
                 .unwrap();
         }
-        self.make_client(description.into(), key_pair, None, BlockHeight::from(0))
+        self.make_client(description.into(), key_pair, None, BlockHeight::ZERO)
             .await
     }
 

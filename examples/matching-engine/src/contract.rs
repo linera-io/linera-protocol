@@ -335,7 +335,7 @@ impl MatchingEngine {
             .find(|order| order.order_id == order_id)
             .ok_or(MatchingEngineError::OrderNotPresent)?;
         let new_amount = match cancel_amount {
-            ModifyAmount::All => Amount::zero(),
+            ModifyAmount::All => Amount::ZERO,
             ModifyAmount::Partial(cancel_amount) => {
                 if cancel_amount > state_order.amount {
                     return Err(MatchingEngineError::TooLargeModifyOrder);
@@ -346,7 +346,7 @@ impl MatchingEngine {
         let corr_cancel_amount = state_order.amount.try_sub(new_amount).unwrap();
         state_order.amount = new_amount;
         Self::remove_zero_orders_from_level(view).await?;
-        Ok((corr_cancel_amount, new_amount == Amount::zero()))
+        Ok((corr_cancel_amount, new_amount == Amount::ZERO))
     }
 
     /// Modification of the order from the order_id.
@@ -515,7 +515,7 @@ impl MatchingEngine {
             let fill = min(order.amount, *amount);
             amount.try_sub_assign(fill).unwrap();
             order.amount.try_sub_assign(fill).unwrap();
-            if fill > Amount::zero() {
+            if fill > Amount::ZERO {
                 transfers.extend_from_slice(&Self::get_transfers(
                     nature,
                     fill,
@@ -525,10 +525,10 @@ impl MatchingEngine {
                     price_insert,
                 ));
             }
-            if order.amount == Amount::zero() {
+            if order.amount == Amount::ZERO {
                 remove_order.push((order.owner, order.order_id));
             }
-            if *amount == Amount::zero() {
+            if *amount == Amount::ZERO {
                 break;
             }
         }
@@ -635,12 +635,12 @@ impl MatchingEngine {
                         self.asks.remove_entry(&price_ask)?;
                     }
                     self.remove_order_ids(remove_entry).await?;
-                    if final_amount == Amount::zero() {
+                    if final_amount == Amount::ZERO {
                         break;
                     }
                 }
                 let price_revert = price.revert();
-                if final_amount != Amount::zero() {
+                if final_amount != Amount::ZERO {
                     let view = self.bids.load_entry_mut(&price_revert).await?;
                     let order = OrderEntry {
                         amount: final_amount,
@@ -681,11 +681,11 @@ impl MatchingEngine {
                         self.bids.remove_entry(&price_bid.revert())?;
                     }
                     self.remove_order_ids(remove_entry).await?;
-                    if final_amount == Amount::zero() {
+                    if final_amount == Amount::ZERO {
                         break;
                     }
                 }
-                if final_amount != Amount::zero() {
+                if final_amount != Amount::ZERO {
                     let view = self.asks.load_entry_mut(price).await?;
                     let order = OrderEntry {
                         amount: final_amount,

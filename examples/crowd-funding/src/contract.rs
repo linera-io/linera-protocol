@@ -140,7 +140,7 @@ impl CrowdFunding {
         owner: AccountOwner,
         amount: Amount,
     ) -> Result<(), Error> {
-        ensure!(amount > Amount::zero(), Error::EmptyPledge);
+        ensure!(amount > Amount::ZERO, Error::EmptyPledge);
         // The campaign chain.
         let chain_id = system_api::current_application_id().creation.chain_id;
         // First, move the funds to the campaign chain (under the same owner).
@@ -175,7 +175,7 @@ impl CrowdFunding {
         owner: AccountOwner,
         amount: Amount,
     ) -> Result<(), Error> {
-        ensure!(amount > Amount::zero(), Error::EmptyPledge);
+        ensure!(amount > Amount::ZERO, Error::EmptyPledge);
         self.receive_from_account(owner, amount).await?;
         self.finish_pledge(owner, amount).await
     }
@@ -191,7 +191,7 @@ impl CrowdFunding {
         let session_balances = self.query_session_balances(&sessions).await?;
         let amount = session_balances.iter().sum();
 
-        ensure!(amount > Amount::zero(), Error::EmptyPledge);
+        ensure!(amount > Amount::ZERO, Error::EmptyPledge);
 
         self.collect_session_tokens(sessions, session_balances)
             .await?;

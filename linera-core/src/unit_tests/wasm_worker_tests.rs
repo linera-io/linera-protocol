@@ -131,7 +131,7 @@ where
     };
     let publish_message = SystemMessage::BytecodePublished { operation_index: 0 };
     let publish_block = make_block(
-        Epoch::from(0),
+        Epoch::ZERO,
         publisher_chain.into(),
         vec![publish_operation],
         vec![],
@@ -141,11 +141,11 @@ where
     );
     let publish_block_height = publish_block.height;
     let mut publisher_system_state = SystemExecutionState {
-        epoch: Some(Epoch::from(0)),
+        epoch: Some(Epoch::ZERO),
         description: Some(publisher_chain),
         admin_id: Some(admin_id.into()),
         subscriptions: BTreeSet::new(),
-        committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
+        committees: [(Epoch::ZERO, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(publisher_key_pair.public()),
         balance: Amount::ZERO,
         balances: BTreeMap::new(),
@@ -189,7 +189,7 @@ where
         },
     };
     let broadcast_block = make_block(
-        Epoch::from(0),
+        Epoch::ZERO,
         publisher_chain.into(),
         Vec::<SystemOperation>::new(),
         vec![broadcast_message],
@@ -253,7 +253,7 @@ where
         subscription: publisher_channel.clone(),
     };
     let subscribe_block = make_block(
-        Epoch::from(0),
+        Epoch::ZERO,
         creator_chain.into(),
         vec![subscribe_operation],
         vec![],
@@ -263,11 +263,11 @@ where
     );
     let subscribe_block_height = subscribe_block.height;
     let mut creator_system_state = SystemExecutionState {
-        epoch: Some(Epoch::from(0)),
+        epoch: Some(Epoch::ZERO),
         description: Some(creator_chain),
         admin_id: Some(admin_id.into()),
         subscriptions: [publisher_channel].into_iter().collect(),
-        committees: [(Epoch::from(0), committee.clone())].into_iter().collect(),
+        committees: [(Epoch::ZERO, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(creator_key_pair.public()),
         balance: Amount::ZERO,
         balances: BTreeMap::new(),
@@ -311,7 +311,7 @@ where
         },
     };
     let accept_block = make_block(
-        Epoch::from(0),
+        Epoch::ZERO,
         publisher_chain.into(),
         Vec::<SystemOperation>::new(),
         vec![accept_message],
@@ -375,7 +375,7 @@ where
         name: SystemChannel::PublishedBytecodes.name(),
     };
     let create_block = make_block(
-        Epoch::from(0),
+        Epoch::ZERO,
         creator_chain.into(),
         vec![create_operation],
         vec![IncomingMessage {
@@ -437,7 +437,7 @@ where
     let increment = 5_u64;
     let user_operation = bcs::to_bytes(&increment)?;
     let run_block = make_block(
-        Epoch::from(0),
+        Epoch::ZERO,
         creator_chain.into(),
         vec![Operation::User {
             application_id,

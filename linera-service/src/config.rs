@@ -112,7 +112,7 @@ impl UserChain {
             key_pair: Some(key_pair),
             block_hash: None,
             timestamp,
-            next_block_height: BlockHeight::from(0),
+            next_block_height: BlockHeight::ZERO,
         }
     }
 }

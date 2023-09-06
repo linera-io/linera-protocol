@@ -15,6 +15,10 @@ use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug)]
 pub struct Epoch(pub u32);
 
+impl Epoch {
+    pub const ZERO: Epoch = Epoch(0);
+}
+
 impl Serialize for Epoch {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
