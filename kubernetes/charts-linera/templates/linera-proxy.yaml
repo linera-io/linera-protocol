@@ -31,7 +31,7 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: linera-proxy
-          imagePullPolicy: Never
+          imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
           image: {{ .Values.lineraImage }}
           ports:
             - containerPort: 19100

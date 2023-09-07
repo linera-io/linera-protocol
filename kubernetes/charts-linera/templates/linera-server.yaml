@@ -29,7 +29,7 @@ spec:
       containers:
         - name: linera-server
           image: {{ .Values.lineraImage }}
-          imagePullPolicy: Never
+          imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
           command: ["./linera-server"]
           args:
             [
@@ -89,7 +89,7 @@ spec:
       containers:
         - name: linera-server
           image: {{ .Values.lineraImage }}
-          imagePullPolicy: Never
+          imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
           command: ["./linera-server"]
           args:
             [
@@ -149,7 +149,7 @@ spec:
       containers:
         - name: linera-server
           image: {{ .Values.lineraImage }}
-          imagePullPolicy: Never
+          imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
           command: ["./linera-server"]
           args:
             [
@@ -209,7 +209,7 @@ spec:
       containers:
         - name: linera-server
           image: {{ .Values.lineraImage }}
-          imagePullPolicy: Never
+          imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
           command: ["./linera-server"]
           args:
             [
