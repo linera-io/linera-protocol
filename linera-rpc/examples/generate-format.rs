@@ -2,6 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Needed for arg_enum!
+#![allow(clippy::useless_vec)]
+
 use linera_base::identifiers::{ChainDescription, Destination};
 use linera_chain::{
     data_types::{CertificateValue, HashedValue, Medium},
