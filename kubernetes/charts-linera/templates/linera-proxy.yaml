@@ -29,7 +29,7 @@ spec:
       labels:
         app: validator-1
     spec:
-      serviceAccountName: linera-adminserviceaccount
+      serviceAccountName: linera-admin
       terminationGracePeriodSeconds: 10
       containers:
         - name: linera-proxy
