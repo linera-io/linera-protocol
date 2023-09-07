@@ -1,9 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: validator-1
-  labels:
-    app: validator-1
+  name: validator-ingress
 spec:
   type: LoadBalancer
   loadBalancerIP: 34.151.215.158
@@ -22,12 +20,12 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: validator-1
+      app: validator
   replicas: 1
   template:
     metadata:
       labels:
-        app: validator-1
+        app: validator
     spec:
       serviceAccountName: linera-admin
       terminationGracePeriodSeconds: 10
