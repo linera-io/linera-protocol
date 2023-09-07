@@ -326,7 +326,7 @@ async fn run_end_to_end_counter(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client = local_net.make_client(network);
+    let mut client = local_net.make_client(network);
 
     let original_counter_value = 35;
     let increment = 5;
@@ -398,7 +398,7 @@ async fn run_end_to_end_counter_publish_create(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client = local_net.make_client(network);
+    let mut client = local_net.make_client(network);
 
     let original_counter_value = 35;
     let increment = 5;
@@ -462,8 +462,8 @@ async fn run_end_to_end_social_user_pub_sub(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client1 = local_net.make_client(network);
-    let client2 = local_net.make_client(network);
+    let mut client1 = local_net.make_client(network);
+    let mut client2 = local_net.make_client(network);
 
     // Create initial server and client config.
     local_net.generate_initial_validator_config().await.unwrap();
@@ -475,7 +475,7 @@ async fn run_end_to_end_social_user_pub_sub(database: Database) {
     let (contract, service) = local_net.build_example("social").await.unwrap();
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
-    let chain2 = client1.open_and_assign(&client2).await.unwrap();
+    let chain2 = client1.open_and_assign(&mut client2).await.unwrap();
     let bytecode_id = client1
         .publish_bytecode(contract, service, None)
         .await
@@ -562,8 +562,8 @@ async fn run_end_to_end_fungible(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client1 = local_net.make_client(network);
-    let client2 = local_net.make_client(network);
+    let mut client1 = local_net.make_client(network);
+    let mut client2 = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
     client1.create_genesis_config().await.unwrap();
@@ -574,7 +574,7 @@ async fn run_end_to_end_fungible(database: Database) {
     let (contract, service) = local_net.build_example("fungible").await.unwrap();
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
-    let chain2 = client1.open_and_assign(&client2).await.unwrap();
+    let chain2 = client1.open_and_assign(&mut client2).await.unwrap();
 
     // The players
     let account_owner1 = get_fungible_account_owner(&client1);
@@ -700,7 +700,7 @@ async fn run_end_to_end_same_wallet_fungible(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client1 = local_net.make_client(network);
+    let mut client1 = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
     client1.create_genesis_config().await.unwrap();
@@ -800,8 +800,8 @@ async fn run_end_to_end_crowd_funding(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client1 = local_net.make_client(network);
-    let client2 = local_net.make_client(network);
+    let mut client1 = local_net.make_client(network);
+    let mut client2 = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
     client1.create_genesis_config().await.unwrap();
@@ -812,7 +812,7 @@ async fn run_end_to_end_crowd_funding(database: Database) {
     let (contract_fungible, service_fungible) = local_net.build_example("fungible").await.unwrap();
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
-    let chain2 = client1.open_and_assign(&client2).await.unwrap();
+    let chain2 = client1.open_and_assign(&mut client2).await.unwrap();
 
     // The players
     let account_owner1 = get_fungible_account_owner(&client1); // operator
@@ -944,9 +944,9 @@ async fn run_end_to_end_matching_engine(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client_admin = local_net.make_client(network);
-    let client_a = local_net.make_client(network);
-    let client_b = local_net.make_client(network);
+    let mut client_admin = local_net.make_client(network);
+    let mut client_a = local_net.make_client(network);
+    let mut client_b = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
     client_admin.create_genesis_config().await.unwrap();
@@ -960,8 +960,8 @@ async fn run_end_to_end_matching_engine(database: Database) {
         local_net.build_example("matching-engine").await.unwrap();
 
     let chain_admin = client_admin.get_wallet().default_chain().unwrap();
-    let chain_a = client_admin.open_and_assign(&client_a).await.unwrap();
-    let chain_b = client_admin.open_and_assign(&client_b).await.unwrap();
+    let chain_a = client_admin.open_and_assign(&mut client_a).await.unwrap();
+    let chain_b = client_admin.open_and_assign(&mut client_b).await.unwrap();
 
     // The players
     let owner_admin = get_fungible_account_owner(&client_admin);
@@ -1210,9 +1210,9 @@ async fn run_end_to_end_amm(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client_admin = local_net.make_client(network);
-    let client0 = local_net.make_client(network);
-    let client1 = local_net.make_client(network);
+    let mut client_admin = local_net.make_client(network);
+    let mut client0 = local_net.make_client(network);
+    let mut client1 = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
     client_admin.create_genesis_config().await.unwrap();
@@ -1227,8 +1227,8 @@ async fn run_end_to_end_amm(database: Database) {
     let chain_admin = client_admin.get_wallet().default_chain().unwrap();
 
     // User chains
-    let chain0 = client_admin.open_and_assign(&client0).await.unwrap();
-    let chain1 = client_admin.open_and_assign(&client1).await.unwrap();
+    let chain0 = client_admin.open_and_assign(&mut client0).await.unwrap();
+    let chain1 = client_admin.open_and_assign(&mut client1).await.unwrap();
 
     // Admin user
     let owner_admin = get_fungible_account_owner(&client_admin);

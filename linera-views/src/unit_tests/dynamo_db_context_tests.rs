@@ -4,23 +4,21 @@
 use super::{DynamoDbContext, TableName, TableStatus};
 use crate::dynamo_db::{
     clear_tables, create_dynamo_db_common_config, list_tables, DynamoDbContextError,
-    LocalStackTestContext,
+    DynamoDbKvStoreConfig, LocalStackTestContext,
 };
 use anyhow::Error;
 
 async fn get_table_status(
     localstack: &LocalStackTestContext,
-    table: &TableName,
+    table_name: &TableName,
 ) -> Result<TableStatus, DynamoDbContextError> {
     let common_config = create_dynamo_db_common_config();
-    let (_storage, table_status) = DynamoDbContext::new(
-        localstack.dynamo_db_config(),
-        table.clone(),
+    let kv_config = DynamoDbKvStoreConfig {
+        config: localstack.dynamo_db_config(),
+        table_name: table_name.clone(),
         common_config,
-        vec![],
-        (),
-    )
-    .await?;
+    };
+    let (_storage, table_status) = DynamoDbContext::new_for_testing(kv_config, vec![], ()).await?;
     Ok(table_status)
 }
 

@@ -25,12 +25,13 @@ use linera_execution::{
 };
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
+    aggregator::StorageConfig,
     chain_listener::{self, ChainListenerConfig},
     client::Database,
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     node_service::NodeService,
     project::{self, Project},
-    storage::{Runnable, StorageConfig},
+    storage::{full_initialize_storage, run_with_storage, Runnable},
 };
 use linera_storage::Store;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
@@ -611,10 +612,6 @@ struct ClientOptions {
     #[structopt(long, default_value = "1000")]
     cache_size: usize,
 
-    /// Do not create a table if one is missing
-    #[structopt(long = "do not create a database if missing")]
-    skip_table_creation_when_missing: bool,
-
     /// Subcommand.
     #[structopt(subcommand)]
     command: ClientCommand,
@@ -944,6 +941,9 @@ enum ClientCommand {
 
     /// Manage a local Linera Network.
     Net(NetCommand),
+
+    /// Initialize the database
+    Initialize,
 }
 
 #[derive(StructOpt)]
@@ -1599,7 +1599,7 @@ impl Runnable for Job {
                 _ => unreachable!("other project commands do not require storage"),
             },
 
-            CreateGenesisConfig { .. } | Keygen | Net(_) | Wallet(_) => unreachable!(),
+            CreateGenesisConfig { .. } | Initialize | Keygen | Net(_) | Wallet(_) => unreachable!(),
         }
         Ok(())
     }
@@ -1767,6 +1767,8 @@ async fn main() -> Result<(), anyhow::Error> {
             }
         },
 
+        ClientCommand::Initialize => initialize_storage(options).await,
+
         _ => run_command_with_storage(options).await,
     }
 }
@@ -1778,21 +1780,36 @@ async fn run_command_with_storage(options: ClientOptions) -> Result<(), Error> {
     let max_concurrent_queries = options.max_concurrent_queries;
     let max_stream_queries = options.max_stream_queries;
     let cache_size = options.cache_size;
-    let create_if_missing = !options.skip_table_creation_when_missing;
     let storage_config = ClientContext::storage_config(&options)?;
     let common_config = CommonStoreConfig {
         max_concurrent_queries,
         max_stream_queries,
         cache_size,
-        create_if_missing,
     };
-    storage_config
-        .run_with_storage(
-            &genesis_config,
-            wasm_runtime,
-            common_config,
-            Job(context, options.command),
-        )
-        .await?;
+    let full_storage_config = storage_config.add_common_config(common_config).await?;
+    run_with_storage(
+        full_storage_config,
+        &genesis_config,
+        wasm_runtime,
+        Job(context, options.command),
+    )
+    .await?;
+    Ok(())
+}
+
+async fn initialize_storage(options: ClientOptions) -> Result<(), Error> {
+    let context = ClientContext::from_options(&options)?;
+    let genesis_config = context.wallet_state.genesis_config().clone();
+    let max_concurrent_queries = options.max_concurrent_queries;
+    let max_stream_queries = options.max_stream_queries;
+    let cache_size = options.cache_size;
+    let storage_config = ClientContext::storage_config(&options)?;
+    let common_config = CommonStoreConfig {
+        max_concurrent_queries,
+        max_stream_queries,
+        cache_size,
+    };
+    let full_storage_config = storage_config.add_common_config(common_config).await?;
+    full_initialize_storage(full_storage_config, &genesis_config).await?;
     Ok(())
 }

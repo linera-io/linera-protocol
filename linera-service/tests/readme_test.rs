@@ -2,19 +2,19 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(any(feature = "aws", feature = "rocksdb"))]
+#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 mod common;
 
-#[cfg(feature = "aws")]
-use linera_views::dynamo_db::LocalStackTestContext;
-#[cfg(any(feature = "aws", feature = "rocksdb"))]
-use {common::INTEGRATION_TEST_GUARD, std::io::Write, tempfile::tempdir, tokio::process::Command};
+#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
+use {
+    common::INTEGRATION_TEST_GUARD,
+    std::{io::Write, process::ExitStatus},
+    tempfile::tempdir,
+    tokio::process::Command,
+};
 
-#[cfg(feature = "rocksdb")]
-#[test_log::test(tokio::test)]
-async fn test_examples_in_readme() -> std::io::Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
+#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
+async fn run_test_command(storage: &str) -> std::io::Result<ExitStatus> {
     let dir = tempdir().unwrap();
     let file = std::io::BufReader::new(std::fs::File::open("../README.md")?);
     let mut quotes = get_bash_quotes(file)?;
@@ -22,22 +22,22 @@ async fn test_examples_in_readme() -> std::io::Result<()> {
     assert_eq!(quotes.len(), 1);
     let quote = quotes.pop().unwrap();
 
-    let mut test_script = std::fs::File::create(dir.path().join("test.sh"))?;
+    let test_file = dir.path().join("test.sh");
+    let mut test_script = std::fs::File::create(test_file)?;
     write!(&mut test_script, "{}", quote)?;
 
-    let status = Command::new("bash")
+    Command::new("bash")
         .current_dir("..") // root of the repo
         .arg("-e")
         .arg("-x")
         .arg(dir.path().join("test.sh"))
+        .arg(storage)
         .status()
-        .await?;
-    assert!(status.success());
-    Ok(())
+        .await
 }
 
 #[allow(clippy::while_let_on_iterator)]
-#[cfg(any(feature = "aws", feature = "rocksdb"))]
+#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 fn get_bash_quotes(reader: impl std::io::BufRead) -> std::io::Result<Vec<String>> {
     let mut result = Vec::new();
     let mut lines = reader.lines();
@@ -61,42 +61,29 @@ fn get_bash_quotes(reader: impl std::io::BufRead) -> std::io::Result<Vec<String>
     Ok(result)
 }
 
+#[cfg(feature = "rocksdb")]
+#[test_log::test(tokio::test)]
+async fn test_rocks_db_examples_in_readme() -> std::io::Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let status = run_test_command("ROCKSDB").await?;
+    assert!(status.success());
+    Ok(())
+}
+
 #[cfg(feature = "aws")]
-mod aws_test {
-    use super::*;
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_examples_in_readme() -> anyhow::Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let status = run_test_command("DYNAMODB").await?;
+    assert!(status.success());
+    Ok(())
+}
 
-    const ROCKS_DB_STORAGE: &str = "--storage rocksdb:server_\"$I\"_\"$J\".db";
-    const DYNAMO_DB_STORAGE: &str = "--storage dynamodb:server-\"$I\":localstack";
-
-    const BUILD: &str = "cargo build";
-    const AWS_BUILD: &str = "cargo build --features aws";
-
-    #[test_log::test(tokio::test)]
-    async fn test_examples_in_readme_with_dynamo_db() -> anyhow::Result<()> {
-        let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
-        let _localstack_guard = LocalStackTestContext::new().await?;
-        let dir = tempdir().unwrap();
-        let file = std::io::BufReader::new(std::fs::File::open("../README.md")?);
-        let mut quotes = get_bash_quotes(file)?;
-        // Check that we have the expected number of examples starting with "```bash".
-        assert_eq!(quotes.len(), 1);
-        let quote = quotes.pop().unwrap();
-        assert_eq!(quote.matches(ROCKS_DB_STORAGE).count(), 1);
-        let quote = quote.replace(ROCKS_DB_STORAGE, DYNAMO_DB_STORAGE);
-        let quote = quote.replace(BUILD, AWS_BUILD);
-
-        let mut test_script = std::fs::File::create(dir.path().join("test.sh"))?;
-        write!(&mut test_script, "{}", quote)?;
-
-        let status = Command::new("bash")
-            .current_dir("..") // root of the repo
-            .arg("-e")
-            .arg("-x")
-            .arg(dir.path().join("test.sh"))
-            .status()
-            .await?;
-        assert!(status.success());
-        Ok(())
-    }
+#[cfg(feature = "scylladb")]
+#[test_log::test(tokio::test)]
+async fn test_scylla_db_examples_in_readme() -> anyhow::Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let status = run_test_command("SCYLLADB").await?;
+    assert!(status.success());
+    Ok(())
 }

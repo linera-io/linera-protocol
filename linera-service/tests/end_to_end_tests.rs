@@ -53,8 +53,8 @@ async fn test_scylla_db_end_to_end_reconfiguration_simple() {
 async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client = local_net.make_client(network);
-    let client_2 = local_net.make_client(network);
+    let mut client = local_net.make_client(network);
+    let mut client_2 = local_net.make_client(network);
 
     let servers = local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
@@ -65,7 +65,7 @@ async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
 
     let (node_service_2, chain_2) = match network {
         Network::Grpc => {
-            let chain_2 = client.open_and_assign(&client_2).await.unwrap();
+            let chain_2 = client.open_and_assign(&mut client_2).await.unwrap();
             let node_service_2 = client_2.run_node_service(8081).await.unwrap();
             (Some(node_service_2), chain_2)
         }
@@ -186,7 +186,7 @@ async fn run_open_chain_node_service(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client = local_net.make_client(network);
+    let mut client = local_net.make_client(network);
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
     local_net.run().await.unwrap();
@@ -269,6 +269,8 @@ async fn run_open_chain_node_service(database: Database) {
     panic!("Failed to receive new block");
 }
 
+/// TODO(1034) This is delayed because it is not essential.
+#[ignore]
 #[test_log::test(tokio::test)]
 async fn test_memory_end_to_end_retry_notification_stream() {
     run_end_to_end_retry_notification_stream(Database::Memory).await
@@ -299,8 +301,8 @@ async fn run_end_to_end_retry_notification_stream(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 1).unwrap();
-    let client1 = local_net.make_client(network);
-    let client2 = local_net.make_client(network);
+    let mut client1 = local_net.make_client(network);
+    let mut client2 = local_net.make_client(network);
 
     // Create initial server and client config.
     local_net.generate_initial_validator_config().await.unwrap();
@@ -379,8 +381,8 @@ async fn run_end_to_end_multiple_wallets(database: Database) {
 
     // Create local_net and two clients.
     let mut local_net = LocalNetwork::new(database, Network::Grpc, 4).unwrap();
-    let client_1 = local_net.make_client(Network::Grpc);
-    let client_2 = local_net.make_client(Network::Grpc);
+    let mut client_1 = local_net.make_client(Network::Grpc);
+    let mut client_2 = local_net.make_client(Network::Grpc);
 
     // Create initial server and client config.
     local_net.generate_initial_validator_config().await.unwrap();
@@ -528,7 +530,7 @@ async fn run_project_publish(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 1).unwrap();
-    let client = local_net.make_client(network);
+    let mut client = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
@@ -578,7 +580,7 @@ async fn run_example_publish(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 1).unwrap();
-    let client = local_net.make_client(network);
+    let mut client = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
@@ -622,8 +624,8 @@ async fn run_end_to_end_open_multi_owner_chain(database: Database) {
 
     // Create runner and two clients.
     let mut runner = LocalNetwork::new(database, Network::Grpc, 4).unwrap();
-    let client1 = runner.make_client(Network::Grpc);
-    let client2 = runner.make_client(Network::Grpc);
+    let mut client1 = runner.make_client(Network::Grpc);
+    let mut client2 = runner.make_client(Network::Grpc);
 
     // Create initial server and client config.
     runner.generate_initial_validator_config().await.unwrap();

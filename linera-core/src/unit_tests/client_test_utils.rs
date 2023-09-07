@@ -35,18 +35,20 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 #[cfg(feature = "rocksdb")]
 use {
     linera_storage::RocksDbStoreClient, linera_views::rocks_db::create_rocks_db_common_config,
-    tokio::sync::Semaphore,
+    linera_views::rocks_db::RocksDbKvStoreConfig, tokio::sync::Semaphore,
 };
 
 #[cfg(feature = "aws")]
 use {
     linera_storage::DynamoDbStoreClient,
+    linera_views::dynamo_db::DynamoDbKvStoreConfig,
     linera_views::dynamo_db::{create_dynamo_db_common_config, LocalStackTestContext},
 };
 
 #[cfg(feature = "scylladb")]
 use {
     linera_storage::ScyllaDbStoreClient, linera_views::scylla_db::create_scylla_db_common_config,
+    linera_views::scylla_db::ScyllaDbKvStoreConfig,
 };
 
 #[cfg(any(feature = "aws", feature = "scylladb"))]
@@ -616,11 +618,15 @@ impl StoreBuilder for MakeRocksDbStoreClient {
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         let dir = tempfile::TempDir::new()?;
-        let path = dir.path().to_path_buf();
+        let path_buf = dir.path().to_path_buf();
         self.temp_dirs.push(dir);
         let common_config = create_rocks_db_common_config();
+        let kv_config = RocksDbKvStoreConfig {
+            path_buf,
+            common_config,
+        };
         let (store_client, _) =
-            RocksDbStoreClient::new_for_testing(path, self.wasm_runtime, common_config).await?;
+            RocksDbStoreClient::new_for_testing(kv_config, self.wasm_runtime).await?;
         Ok(store_client)
     }
 }
@@ -660,14 +666,14 @@ impl StoreBuilder for MakeDynamoDbStoreClient {
         let table = format!("{}_{}", table, self.instance_counter);
         let table_name = table.parse()?;
         let common_config = create_dynamo_db_common_config();
-        self.instance_counter += 1;
-        let (store_client, _) = DynamoDbStoreClient::new_for_testing(
+        let kv_config = DynamoDbKvStoreConfig {
             config,
             table_name,
             common_config,
-            self.wasm_runtime,
-        )
-        .await?;
+        };
+        self.instance_counter += 1;
+        let (store_client, _) =
+            DynamoDbStoreClient::new_for_testing(kv_config, self.wasm_runtime).await?;
         Ok(store_client)
     }
 }
@@ -716,13 +722,13 @@ impl StoreBuilder for MakeScyllaDbStoreClient {
         let table_name = get_table_name().await;
         let table_name = format!("{}_{}", table_name, self.instance_counter);
         let common_config = create_scylla_db_common_config();
-        let (store_client, _) = ScyllaDbStoreClient::new_for_testing(
-            &self.uri,
+        let kv_config = ScyllaDbKvStoreConfig {
+            uri: self.uri.clone(),
             table_name,
             common_config,
-            self.wasm_runtime,
-        )
-        .await?;
+        };
+        let (store_client, _) =
+            ScyllaDbStoreClient::new_for_testing(kv_config, self.wasm_runtime).await?;
         Ok(store_client)
     }
 }

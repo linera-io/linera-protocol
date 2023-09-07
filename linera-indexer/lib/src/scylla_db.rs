@@ -5,7 +5,10 @@ use crate::{
     common::IndexerError,
     runner::{IndexerConfig, Runner},
 };
-use linera_views::{common::CommonStoreConfig, scylla_db::ScyllaDbClient};
+use linera_views::{
+    common::CommonStoreConfig,
+    scylla_db::{ScyllaDbClient, ScyllaDbKvStoreConfig},
+};
 use structopt::StructOpt;
 
 #[derive(StructOpt, Clone, Debug)]
@@ -24,9 +27,6 @@ pub struct ScyllaDbConfig {
     /// The maximal number of entries in the storage cache.
     #[structopt(long, default_value = "1000")]
     cache_size: usize,
-    /// Do not create a table if one is missing
-    #[structopt(long = "do not create a database if missing")]
-    skip_table_creation_when_missing: bool,
 }
 
 pub type ScyllaDbRunner = Runner<ScyllaDbClient, ScyllaDbConfig>;
@@ -34,17 +34,17 @@ pub type ScyllaDbRunner = Runner<ScyllaDbClient, ScyllaDbConfig>;
 impl ScyllaDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
         let config = IndexerConfig::<ScyllaDbConfig>::from_args();
-        let (client, _) = ScyllaDbClient::new(
-            &config.client.uri,
-            config.client.table.clone(),
-            CommonStoreConfig {
-                max_concurrent_queries: config.client.max_concurrent_queries,
-                max_stream_queries: config.client.max_stream_queries,
-                cache_size: config.client.cache_size,
-                create_if_missing: !config.client.skip_table_creation_when_missing,
-            },
-        )
-        .await?;
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: config.client.max_concurrent_queries,
+            max_stream_queries: config.client.max_stream_queries,
+            cache_size: config.client.cache_size,
+        };
+        let kv_config = ScyllaDbKvStoreConfig {
+            uri: config.client.uri.clone(),
+            table_name: config.client.table.clone(),
+            common_config,
+        };
+        let (client, _) = ScyllaDbClient::new(kv_config).await?;
         Self::new(config, client).await
     }
 }

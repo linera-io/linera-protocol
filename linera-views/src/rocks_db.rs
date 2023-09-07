@@ -9,13 +9,14 @@ use crate::{
 };
 use async_trait::async_trait;
 use std::{
+    fs,
     ops::{Bound, Bound::Excluded},
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 use thiserror::Error;
 #[cfg(any(test, feature = "test"))]
-use {crate::lru_caching::TEST_CACHE_SIZE, std::fs, tempfile::TempDir};
+use {crate::lru_caching::TEST_CACHE_SIZE, tempfile::TempDir};
 
 /// The number of streams for the test
 pub const TEST_ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
@@ -32,6 +33,15 @@ pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 pub struct RocksDbClientInternal {
     db: Arc<DB>,
     max_stream_queries: usize,
+}
+
+/// The initial configuration of the system
+#[derive(Debug)]
+pub struct RocksDbKvStoreConfig {
+    /// The AWS configuration
+    pub path_buf: PathBuf,
+    /// The common configuration of the key value store
+    pub common_config: CommonStoreConfig,
 }
 
 #[async_trait]
@@ -174,7 +184,7 @@ pub struct RocksDbClient {
 
 impl RocksDbClient {
     /// Returns whether a table already exists.
-    pub async fn test_existence<P: AsRef<Path>>(path: &P) -> Result<bool, RocksDbContextError> {
+    pub async fn test_existence(path: &Path) -> Result<bool, RocksDbContextError> {
         let options = rocksdb::Options::default();
         let result = DB::open(&options, path);
         match result {
@@ -188,42 +198,83 @@ impl RocksDbClient {
 
     /// Creates a RocksDB database for unit tests from a specified path.
     #[cfg(any(test, feature = "test"))]
-    pub async fn new_for_testing<P: AsRef<Path>>(
-        path: P,
-        common_config: CommonStoreConfig,
+    pub async fn new_for_testing(
+        kv_config: RocksDbKvStoreConfig,
     ) -> Result<(RocksDbClient, TableStatus), RocksDbContextError> {
-        fs::remove_dir_all(&path)?;
-        Self::new(path, common_config).await
+        let path = kv_config.path_buf.as_path();
+        fs::remove_dir_all(path)?;
+        let create_if_missing = true;
+        Self::new_internal(kv_config, create_if_missing).await
+    }
+
+    /// Creates all RocksDB databases
+    pub async fn delete_all(kv_config: RocksDbKvStoreConfig) -> Result<(), RocksDbContextError> {
+        let path = kv_config.path_buf.as_path();
+        fs::remove_dir_all(path)?;
+        Ok(())
+    }
+
+    /// Creates all RocksDB databases
+    pub async fn delete_single(kv_config: RocksDbKvStoreConfig) -> Result<(), RocksDbContextError> {
+        let path = kv_config.path_buf.as_path();
+        fs::remove_dir_all(path)?;
+        Ok(())
     }
 
     /// Creates a RocksDB database from a specified path.
-    pub async fn new<P: AsRef<Path>>(
-        path: P,
-        common_config: CommonStoreConfig,
+    pub async fn new(
+        kv_config: RocksDbKvStoreConfig,
     ) -> Result<(RocksDbClient, TableStatus), RocksDbContextError> {
+        let create_if_missing = false;
+        Self::new_internal(kv_config, create_if_missing).await
+    }
+
+    /// Initializes a RocksDB database from a specified path.
+    pub async fn initialize(kv_config: RocksDbKvStoreConfig) -> Result<Self, RocksDbContextError> {
+        let create_if_missing = true;
+        let (client, table_status) = Self::new_internal(kv_config, create_if_missing).await?;
+        if table_status == TableStatus::Existing {
+            return Err(RocksDbContextError::AlreadyExistingDatabase);
+        }
+        Ok(client)
+    }
+
+    /// Creates a RocksDB database from a specified path.
+    async fn new_internal(
+        kv_config: RocksDbKvStoreConfig,
+        create_if_missing: bool,
+    ) -> Result<(RocksDbClient, TableStatus), RocksDbContextError> {
+        let kv_name = format!(
+            "kv_config={:?} create_if_missing={:?}",
+            kv_config, create_if_missing
+        );
+        let path = kv_config.path_buf.as_path();
+        let cache_size = kv_config.common_config.cache_size;
+        let max_stream_queries = kv_config.common_config.max_stream_queries;
         let mut options = rocksdb::Options::default();
-        let test = Self::test_existence(&path).await?;
+        let test = Self::test_existence(path).await?;
         let table_status = if test {
             TableStatus::Existing
         } else {
             TableStatus::New
         };
-        let db = if common_config.create_if_missing {
+        let db = if create_if_missing {
             options.create_if_missing(true);
             DB::open(&options, path)?
         } else {
             if !test {
-                return Err(RocksDbContextError::MissingDatabase);
+                tracing::info!("RocksDb: Missing database for kv_name={}", kv_name);
+                return Err(RocksDbContextError::MissingDatabase(kv_name));
             }
             DB::open(&options, path)?
         };
         let client = RocksDbClientInternal {
             db: Arc::new(db),
-            max_stream_queries: common_config.max_stream_queries,
+            max_stream_queries,
         };
         let client = ValueSplittingKeyValueStoreClient::new(client);
         let client = Self {
-            client: LruCachingKeyValueClient::new(client, common_config.cache_size),
+            client: LruCachingKeyValueClient::new(client, cache_size),
         };
         Ok((client, table_status))
     }
@@ -236,7 +287,6 @@ pub fn create_rocks_db_common_config() -> CommonStoreConfig {
         max_concurrent_queries: None,
         max_stream_queries: TEST_ROCKS_DB_MAX_STREAM_QUERIES,
         cache_size: TEST_CACHE_SIZE,
-        create_if_missing: true,
     }
 }
 
@@ -244,8 +294,13 @@ pub fn create_rocks_db_common_config() -> CommonStoreConfig {
 #[cfg(any(test, feature = "test"))]
 pub async fn create_rocks_db_test_client() -> RocksDbClient {
     let dir = TempDir::new().unwrap();
+    let path_buf = dir.path().to_path_buf();
     let common_config = create_rocks_db_common_config();
-    let (client, _) = RocksDbClient::new_for_testing(dir, common_config)
+    let kv_config = RocksDbKvStoreConfig {
+        path_buf,
+        common_config,
+    };
+    let (client, _) = RocksDbClient::new_for_testing(kv_config)
         .await
         .expect("client");
     client
@@ -331,7 +386,11 @@ pub enum RocksDbContextError {
 
     /// Missing database
     #[error("Missing database")]
-    MissingDatabase,
+    MissingDatabase(String),
+
+    /// Already existing database
+    #[error("Already existing database")]
+    AlreadyExistingDatabase,
 
     /// Filesystem error
     #[error("Filesystem error")]

@@ -5,7 +5,10 @@ use crate::{
     common::IndexerError,
     runner::{IndexerConfig, Runner},
 };
-use linera_views::{common::CommonStoreConfig, rocks_db::RocksDbClient};
+use linera_views::{
+    common::CommonStoreConfig,
+    rocks_db::{RocksDbClient, RocksDbKvStoreConfig},
+};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -23,9 +26,6 @@ pub struct RocksDbConfig {
     /// The maximal number of entries in the storage cache.
     #[structopt(long, default_value = "1000")]
     cache_size: usize,
-    /// Do not create a table if one is missing
-    #[structopt(long = "do not create a database if missing")]
-    skip_table_creation_when_missing: bool,
 }
 
 pub type RocksDbRunner = Runner<RocksDbClient, RocksDbConfig>;
@@ -33,16 +33,16 @@ pub type RocksDbRunner = Runner<RocksDbClient, RocksDbConfig>;
 impl RocksDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
         let config = IndexerConfig::<RocksDbConfig>::from_args();
-        let (client, _) = RocksDbClient::new(
-            &config.client.storage,
-            CommonStoreConfig {
-                max_concurrent_queries: config.client.max_concurrent_queries,
-                max_stream_queries: config.client.max_stream_queries,
-                cache_size: config.client.cache_size,
-                create_if_missing: !config.client.skip_table_creation_when_missing,
-            },
-        )
-        .await?;
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: config.client.max_concurrent_queries,
+            max_stream_queries: config.client.max_stream_queries,
+            cache_size: config.client.cache_size,
+        };
+        let kv_config = RocksDbKvStoreConfig {
+            path_buf: config.client.storage.as_path().to_path_buf(),
+            common_config,
+        };
+        let client = RocksDbClient::initialize(kv_config).await?;
         Self::new(config, client).await
     }
 }

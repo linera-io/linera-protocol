@@ -23,7 +23,6 @@ use aws_sdk_dynamodb::{
     types::{Blob, SdkError},
     Client,
 };
-use aws_types::SdkConfig;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use static_assertions as sa;
@@ -36,6 +35,7 @@ use {
     crate::lru_caching::TEST_CACHE_SIZE,
     anyhow::{Context, Error},
     aws_sdk_s3::Endpoint,
+    aws_types::SdkConfig,
     std::env,
     tokio::sync::{Mutex, MutexGuard},
 };
@@ -591,27 +591,80 @@ impl DynamoDbClientInternal {
     /// Creates a new [`DynamoDbClientInternal`] instance from scratch using the provided `config` parameters.
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
-        config: impl Into<Config>,
-        table: TableName,
-        common_config: CommonStoreConfig,
+        kv_config: DynamoDbKvStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let client = Client::from_conf(config.into());
-        if Self::test_table_existence(&client, &table).await? {
-            client.delete_table().table_name(&table.0).send().await?;
+        let client = Client::from_conf(kv_config.config);
+        if Self::test_table_existence(&client, &kv_config.table_name).await? {
+            client
+                .delete_table()
+                .table_name(&kv_config.table_name.0)
+                .send()
+                .await?;
         }
         let stop_if_table_exists = true;
-        Self::new_internal(client, table, common_config, stop_if_table_exists).await
+        let create_if_missing = true;
+        Self::new_internal(
+            client,
+            kv_config.table_name,
+            kv_config.common_config,
+            stop_if_table_exists,
+            create_if_missing,
+        )
+        .await
+    }
+
+    async fn delete_all(kv_config: DynamoDbKvStoreConfig) -> Result<(), DynamoDbContextError> {
+        let client = Client::from_conf(kv_config.config);
+        clear_tables(&client).await?;
+        Ok(())
+    }
+
+    async fn delete_single(kv_config: DynamoDbKvStoreConfig) -> Result<(), DynamoDbContextError> {
+        let client = Client::from_conf(kv_config.config);
+        client
+            .delete_table()
+            .table_name(&kv_config.table_name.0)
+            .send()
+            .await?;
+        Ok(())
     }
 
     /// Creates a new [`DynamoDbClientInternal`] instance using the provided `config` parameters.
     pub async fn new(
-        config: impl Into<Config>,
-        table: TableName,
-        common_config: CommonStoreConfig,
+        kv_config: DynamoDbKvStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let client = Client::from_conf(config.into());
+        let client = Client::from_conf(kv_config.config);
         let stop_if_table_exists = false;
-        Self::new_internal(client, table, common_config, stop_if_table_exists).await
+        let create_if_missing = false;
+        Self::new_internal(
+            client,
+            kv_config.table_name,
+            kv_config.common_config,
+            stop_if_table_exists,
+            create_if_missing,
+        )
+        .await
+    }
+
+    /// Initializes a RocksDB database from a specified path.
+    pub async fn initialize(
+        kv_config: DynamoDbKvStoreConfig,
+    ) -> Result<Self, DynamoDbContextError> {
+        let client = Client::from_conf(kv_config.config);
+        let stop_if_table_exists = false;
+        let create_if_missing = true;
+        let (client, table_status) = Self::new_internal(
+            client,
+            kv_config.table_name,
+            kv_config.common_config,
+            stop_if_table_exists,
+            create_if_missing,
+        )
+        .await?;
+        if table_status == TableStatus::Existing {
+            return Err(DynamoDbContextError::AlreadyExistingDatabase);
+        }
+        Ok(client)
     }
 
     /// Creates a new [`DynamoDbClientInternal`] instance using the provided `config` parameters.
@@ -620,7 +673,9 @@ impl DynamoDbClientInternal {
         table: TableName,
         common_config: CommonStoreConfig,
         stop_if_table_exists: bool,
+        create_if_missing: bool,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
+        let kv_name = format!("table={:?} common_config={:?}", table, common_config);
         let mut existing_table = Self::test_table_existence(&client, &table).await?;
         let semaphore = common_config
             .max_concurrent_queries
@@ -633,10 +688,11 @@ impl DynamoDbClientInternal {
             max_stream_queries,
         };
         if !existing_table {
-            if common_config.create_if_missing {
+            if create_if_missing {
                 existing_table = db.create_table(stop_if_table_exists).await?;
             } else {
-                return Err(DynamoDbContextError::MissingDatabase);
+                tracing::info!("DynamoDb: Missing database for kv_name={}", kv_name);
+                return Err(DynamoDbContextError::MissingDatabase(kv_name));
             }
         }
         let table_status = if existing_table {
@@ -898,39 +954,60 @@ impl DynamoDbClient {
     /// Creates a `DynamoDbClient` from scratch with an LRU cache
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
-        config: impl Into<Config>,
-        table: TableName,
-        common_config: CommonStoreConfig,
+        kv_config: DynamoDbKvStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (client, table_name) =
-            DynamoDbClientInternal::new_for_testing(config, table, common_config.clone()).await?;
+        let cache_size = kv_config.common_config.cache_size;
+        let (client, table_status) = DynamoDbClientInternal::new_for_testing(kv_config).await?;
         let client = ValueSplittingKeyValueStoreClient::new(client);
         let client = Self {
-            client: LruCachingKeyValueClient::new(client, common_config.cache_size),
+            client: LruCachingKeyValueClient::new(client, cache_size),
         };
-        Ok((client, table_name))
+        Ok((client, table_status))
+    }
+
+    /// Initializes a `DynamoDbClient`.
+    pub async fn initialize(
+        kv_config: DynamoDbKvStoreConfig,
+    ) -> Result<Self, DynamoDbContextError> {
+        let cache_size = kv_config.common_config.cache_size;
+        let client = DynamoDbClientInternal::initialize(kv_config).await?;
+        let client = ValueSplittingKeyValueStoreClient::new(client);
+        let client = Self {
+            client: LruCachingKeyValueClient::new(client, cache_size),
+        };
+        Ok(client)
+    }
+
+    /// Deletes all the tables from the database
+    pub async fn delete_all(kv_config: DynamoDbKvStoreConfig) -> Result<(), DynamoDbContextError> {
+        DynamoDbClientInternal::delete_all(kv_config).await
+    }
+
+    /// Deletes a single table from the database
+    pub async fn delete_single(
+        kv_config: DynamoDbKvStoreConfig,
+    ) -> Result<(), DynamoDbContextError> {
+        DynamoDbClientInternal::delete_single(kv_config).await
     }
 
     /// Creates a `DynamoDbClient` with an LRU cache
     pub async fn new(
-        config: impl Into<Config>,
-        table: TableName,
-        common_config: CommonStoreConfig,
+        kv_config: DynamoDbKvStoreConfig,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (client, table_name) =
-            DynamoDbClientInternal::new(config, table, common_config.clone()).await?;
+        let cache_size = kv_config.common_config.cache_size;
+        let (client, table_name) = DynamoDbClientInternal::new(kv_config).await?;
         let client = ValueSplittingKeyValueStoreClient::new(client);
         let client = Self {
-            client: LruCachingKeyValueClient::new(client, common_config.cache_size),
+            client: LruCachingKeyValueClient::new(client, cache_size),
         };
         Ok((client, table_name))
     }
 }
 
 /// Gets the AWS configuration from the environment
-pub async fn get_base_config() -> Result<SdkConfig, DynamoDbContextError> {
+pub async fn get_base_config() -> Result<Config, DynamoDbContextError> {
     let base_config = aws_config::load_from_env().await;
-    Ok(base_config)
+    Ok((&base_config).into())
 }
 
 /// Gets the localstack config
@@ -939,6 +1016,26 @@ pub async fn get_localstack_config() -> Result<Config, DynamoDbContextError> {
     Ok(aws_sdk_dynamodb::config::Builder::from(&base_config)
         .endpoint_resolver(localstack::get_endpoint()?)
         .build())
+}
+
+/// Getting a configuration for the system
+pub async fn get_config(use_localstack: bool) -> Result<Config, DynamoDbContextError> {
+    if use_localstack {
+        get_localstack_config().await
+    } else {
+        get_base_config().await
+    }
+}
+
+/// The initial configuration of the system
+#[derive(Debug)]
+pub struct DynamoDbKvStoreConfig {
+    /// The AWS configuration
+    pub config: Config,
+    /// The table_name used
+    pub table_name: TableName,
+    /// The common configuration of the key value store
+    pub common_config: CommonStoreConfig,
 }
 
 /// An implementation of [`Context`][trait1] based on [`DynamoDbClient`].
@@ -953,14 +1050,11 @@ where
     /// Creates a new [`DynamoDbContext`] instance from scratch from the given AWS configuration.
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
-        config: impl Into<Config>,
-        table: TableName,
-        common_config: CommonStoreConfig,
+        kv_config: DynamoDbKvStoreConfig,
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (db, table_status) =
-            DynamoDbClient::new_for_testing(config, table, common_config).await?;
+        let (db, table_status) = DynamoDbClient::new_for_testing(kv_config).await?;
         let storage = DynamoDbContext {
             db,
             base_key,
@@ -971,13 +1065,11 @@ where
 
     /// Creates a new [`DynamoDbContext`] instance from the given AWS configuration.
     pub async fn new(
-        config: impl Into<Config>,
-        table: TableName,
-        common_config: CommonStoreConfig,
+        kv_config: DynamoDbKvStoreConfig,
         base_key: Vec<u8>,
         extra: E,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (db, table_status) = DynamoDbClient::new(config, table, common_config).await?;
+        let (db, table_status) = DynamoDbClient::new(kv_config).await?;
         let storage = DynamoDbContext {
             db,
             base_key,
@@ -1088,7 +1180,11 @@ pub enum DynamoDbContextError {
 
     /// Missing database
     #[error("Missing database")]
-    MissingDatabase,
+    MissingDatabase(String),
+
+    /// Already existing database
+    #[error("Already existing database")]
+    AlreadyExistingDatabase,
 
     /// The length of the value should be at most 400KB.
     #[error("The DynamoDB value should be less than 400KB")]
@@ -1271,27 +1367,32 @@ pub fn create_dynamo_db_common_config() -> CommonStoreConfig {
         max_concurrent_queries: Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
         max_stream_queries: TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
         cache_size: TEST_CACHE_SIZE,
-        create_if_missing: true,
     }
 }
 
 /// Creates a basic client that can be used for tests.
 #[cfg(any(test, feature = "test"))]
 pub async fn create_dynamo_db_test_client() -> DynamoDbClient {
-    let localstack = LocalStackTestContext::new().await.expect("localstack");
     let common_config = create_dynamo_db_common_config();
     let table = get_table_name().await;
     let table_name = table.parse().expect("Invalid table name");
-    let (key_value_operation, _) =
-        DynamoDbClient::new_for_testing(localstack.dynamo_db_config(), table_name, common_config)
-            .await
-            .expect("key_value_operation");
+    let use_localstack = true;
+    let config = get_config(use_localstack).await.expect("config");
+    let kv_config = DynamoDbKvStoreConfig {
+        config,
+        table_name,
+        common_config,
+    };
+    let (key_value_operation, _) = DynamoDbClient::new_for_testing(kv_config)
+        .await
+        .expect("key_value_operation");
     key_value_operation
 }
 
 /// Helper function to list the names of tables registered on DynamoDB.
-#[cfg(any(test, feature = "test"))]
-pub async fn list_tables(client: &aws_sdk_dynamodb::Client) -> Result<Vec<String>, Error> {
+pub async fn list_tables(
+    client: &aws_sdk_dynamodb::Client,
+) -> Result<Vec<String>, DynamoDbContextError> {
     Ok(client
         .list_tables()
         .send()
@@ -1301,8 +1402,7 @@ pub async fn list_tables(client: &aws_sdk_dynamodb::Client) -> Result<Vec<String
 }
 
 /// Helper function to clear all the tables from the database
-#[cfg(any(test, feature = "test"))]
-pub async fn clear_tables(client: &aws_sdk_dynamodb::Client) -> Result<(), Error> {
+pub async fn clear_tables(client: &aws_sdk_dynamodb::Client) -> Result<(), DynamoDbContextError> {
     let tables = list_tables(client).await?;
     for table in tables {
         client.delete_table().table_name(&table).send().await?;
