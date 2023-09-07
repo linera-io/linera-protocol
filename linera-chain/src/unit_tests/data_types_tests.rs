@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use crate::test::{make_first_block, BlockTestExt};
 use linera_base::data_types::Amount;
-use linera_execution::system::{Account, Recipient, SystemOperation, UserData};
+use linera_execution::system::Recipient;
 
 #[test]
 fn test_signed_values() {
@@ -12,21 +13,8 @@ fn test_signed_values() {
     let key2 = KeyPair::generate();
     let name1 = ValidatorName(key1.public());
 
-    let block = Block {
-        epoch: Epoch::ZERO,
-        chain_id: ChainId::root(1),
-        incoming_messages: Vec::new(),
-        operations: vec![Operation::System(SystemOperation::Transfer {
-            owner: None,
-            recipient: Recipient::Account(Account::chain(ChainId::root(2))),
-            amount: Amount::ONE,
-            user_data: UserData::default(),
-        })],
-        height: BlockHeight::ZERO,
-        timestamp: Timestamp::default(),
-        authenticated_signer: None,
-        previous_block_hash: None,
-    };
+    let block =
+        make_first_block(ChainId::root(1)).with_simple_transfer(Recipient::root(2), Amount::ONE);
     let executed_block = ExecutedBlock {
         block,
         messages: Vec::new(),
@@ -52,21 +40,8 @@ fn test_certificates() {
 
     let committee = Committee::make_simple(vec![name1, name2]);
 
-    let block = Block {
-        epoch: Epoch::ZERO,
-        chain_id: ChainId::root(1),
-        incoming_messages: Vec::new(),
-        operations: vec![Operation::System(SystemOperation::Transfer {
-            owner: None,
-            recipient: Recipient::Account(Account::chain(ChainId::root(1))),
-            amount: Amount::ONE,
-            user_data: UserData::default(),
-        })],
-        previous_block_hash: None,
-        height: BlockHeight::ZERO,
-        authenticated_signer: None,
-        timestamp: Timestamp::default(),
-    };
+    let block =
+        make_first_block(ChainId::root(1)).with_simple_transfer(Recipient::root(1), Amount::ONE);
     let executed_block = ExecutedBlock {
         block,
         messages: Vec::new(),
