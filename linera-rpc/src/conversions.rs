@@ -452,10 +452,10 @@ pub mod tests {
     };
     use linera_chain::{
         data_types::{Block, BlockAndRound, ExecutedBlock, HashedValue},
+        test::make_first_block,
         ChainManagerInfo,
     };
     use linera_core::data_types::ChainInfo;
-    use linera_execution::committee::Epoch;
     use serde::{Deserialize, Serialize};
     use std::{borrow::Cow, fmt::Debug};
 
@@ -465,16 +465,7 @@ pub mod tests {
     impl BcsSignable for Foo {}
 
     fn get_block() -> Block {
-        Block {
-            chain_id: ChainId::root(0),
-            epoch: Epoch::default(),
-            incoming_messages: vec![],
-            operations: vec![],
-            height: BlockHeight::ZERO,
-            authenticated_signer: None,
-            timestamp: Timestamp::default(),
-            previous_block_hash: None,
-        }
+        make_first_block(ChainId::root(0))
     }
 
     /// A convenience function for testing. It converts a type into its

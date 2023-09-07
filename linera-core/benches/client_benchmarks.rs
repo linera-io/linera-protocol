@@ -70,7 +70,7 @@ where
         Amount::from_tokens(9)
     );
 
-    let account = Recipient::Account(Account::chain(chain1.chain_id()));
+    let account = Recipient::chain(chain1.chain_id());
     let cert = chain1
         .claim(owner1, chain2.chain_id(), account, amt, UserData(None))
         .await

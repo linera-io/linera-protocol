@@ -184,7 +184,7 @@ where
         .claim(
             owner,
             ChainId::root(2),
-            Recipient::Account(Account::chain(ChainId::root(1))),
+            Recipient::root(1),
             Amount::from_tokens(5),
             UserData(None),
         )
@@ -195,7 +195,7 @@ where
         .claim(
             owner,
             ChainId::root(2),
-            Recipient::Account(Account::chain(ChainId::root(1))),
+            Recipient::root(1),
             Amount::from_tokens(2),
             UserData(None),
         )

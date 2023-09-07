@@ -304,7 +304,7 @@ impl ClientContext {
                 incoming_messages: Vec::new(),
                 operations: vec![Operation::System(SystemOperation::Transfer {
                     owner: None,
-                    recipient: Recipient::Account(Account::chain(next_recipient)),
+                    recipient: Recipient::chain(next_recipient),
                     amount: Amount::ONE,
                     user_data: UserData::default(),
                 })],

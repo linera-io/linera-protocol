@@ -9,29 +9,31 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use super::{init_worker_with_chains, make_block, make_certificate, make_state_hash};
+use crate::worker::worker_tests::make_state;
+
+use super::{init_worker_with_chains, make_certificate, make_state_hash};
 use linera_base::{
     crypto::KeyPair,
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{BytecodeId, ChainDescription, ChainId, Destination, MessageId},
 };
-use linera_chain::data_types::{
-    ChannelFullName, Event, ExecutedBlock, HashedValue, IncomingMessage, Origin, OutgoingMessage,
+use linera_chain::{
+    data_types::{
+        ChannelFullName, Event, ExecutedBlock, HashedValue, IncomingMessage, Origin,
+        OutgoingMessage,
+    },
+    test::{make_child_block, make_first_block, BlockTestExt},
 };
 use linera_execution::{
     committee::Epoch,
     system::{SystemChannel, SystemMessage, SystemOperation},
-    ApplicationId, ApplicationRegistry, Bytecode, BytecodeLocation, ChainOwnership,
-    ChannelSubscription, ExecutionStateView, Message, Operation, OperationContext,
-    SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmApplication,
-    WasmRuntime,
+    ApplicationId, Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription,
+    ExecutionStateView, Message, Operation, OperationContext, SystemExecutionState,
+    UserApplicationDescription, UserApplicationId, WasmApplication, WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, Store};
 use linera_views::views::{CryptoHashView, ViewError};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::sync::Arc;
 use test_case::test_case;
 
 #[cfg(feature = "rocksdb")]
@@ -130,27 +132,15 @@ where
         service: service_bytecode,
     };
     let publish_message = SystemMessage::BytecodePublished { operation_index: 0 };
-    let publish_block = make_block(
-        Epoch::ZERO,
-        publisher_chain.into(),
-        vec![publish_operation],
-        vec![],
-        None,
-        None,
-        Timestamp::from(1),
-    );
+    let publish_block = make_first_block(publisher_chain.into())
+        .with_timestamp(1)
+        .with_operation(publish_operation);
     let publish_block_height = publish_block.height;
     let mut publisher_system_state = SystemExecutionState {
-        epoch: Some(Epoch::ZERO),
-        description: Some(publisher_chain),
-        admin_id: Some(admin_id.into()),
-        subscriptions: BTreeSet::new(),
         committees: [(Epoch::ZERO, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(publisher_key_pair.public()),
-        balance: Amount::ZERO,
-        balances: BTreeMap::new(),
         timestamp: Timestamp::from(1),
-        registry: ApplicationRegistry::default(),
+        ..make_state(Epoch::ZERO, publisher_chain, admin_id)
     };
     let publisher_state_hash = make_state_hash(publisher_system_state.clone()).await;
     let publish_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
@@ -188,15 +178,9 @@ where
             message: Message::System(publish_message),
         },
     };
-    let broadcast_block = make_block(
-        Epoch::ZERO,
-        publisher_chain.into(),
-        Vec::<SystemOperation>::new(),
-        vec![broadcast_message],
-        Some(&publish_certificate),
-        None,
-        Timestamp::from(1),
-    );
+    let broadcast_block = make_child_block(&publish_certificate.value)
+        .with_timestamp(1)
+        .with_incoming_message(broadcast_message);
     let bytecode_id = BytecodeId::new(MessageId {
         chain_id: publisher_chain.into(),
         height: publish_block_height,
@@ -252,27 +236,16 @@ where
         id: creator_chain.into(),
         subscription: publisher_channel.clone(),
     };
-    let subscribe_block = make_block(
-        Epoch::ZERO,
-        creator_chain.into(),
-        vec![subscribe_operation],
-        vec![],
-        None,
-        None,
-        Timestamp::from(2),
-    );
+    let subscribe_block = make_first_block(creator_chain.into())
+        .with_timestamp(2)
+        .with_operation(subscribe_operation);
     let subscribe_block_height = subscribe_block.height;
     let mut creator_system_state = SystemExecutionState {
-        epoch: Some(Epoch::ZERO),
-        description: Some(creator_chain),
-        admin_id: Some(admin_id.into()),
         subscriptions: [publisher_channel].into_iter().collect(),
         committees: [(Epoch::ZERO, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(creator_key_pair.public()),
-        balance: Amount::ZERO,
-        balances: BTreeMap::new(),
         timestamp: Timestamp::from(2),
-        registry: ApplicationRegistry::default(),
+        ..make_state(Epoch::ZERO, creator_chain, admin_id)
     };
     let creator_state = ExecutionStateView::from_system_state(creator_system_state.clone()).await;
     let subscribe_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
@@ -310,15 +283,9 @@ where
             message: subscribe_message.into(),
         },
     };
-    let accept_block = make_block(
-        Epoch::ZERO,
-        publisher_chain.into(),
-        Vec::<SystemOperation>::new(),
-        vec![accept_message],
-        Some(&broadcast_certificate),
-        None,
-        Timestamp::from(3),
-    );
+    let accept_block = make_child_block(&broadcast_certificate.value)
+        .with_timestamp(3)
+        .with_incoming_message(accept_message);
     publisher_system_state.timestamp = Timestamp::from(3);
     let publisher_state_hash = make_state_hash(publisher_system_state).await;
     let accept_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
@@ -374,11 +341,10 @@ where
         application_id: ApplicationId::System,
         name: SystemChannel::PublishedBytecodes.name(),
     };
-    let create_block = make_block(
-        Epoch::ZERO,
-        creator_chain.into(),
-        vec![create_operation],
-        vec![IncomingMessage {
+    let create_block = make_child_block(&subscribe_certificate.value)
+        .with_timestamp(4)
+        .with_operation(create_operation)
+        .with_incoming_message(IncomingMessage {
             origin: Origin::channel(publisher_chain.into(), publish_admin_channel),
             event: Event {
                 certificate_hash: broadcast_certificate.hash(),
@@ -388,11 +354,7 @@ where
                 timestamp: Timestamp::from(1),
                 message: Message::System(broadcast_message),
             },
-        }],
-        Some(&subscribe_certificate),
-        None,
-        Timestamp::from(4),
-    );
+        });
     creator_system_state
         .registry
         .published_bytecodes
@@ -436,18 +398,12 @@ where
     // Execute an application operation
     let increment = 5_u64;
     let user_operation = bcs::to_bytes(&increment)?;
-    let run_block = make_block(
-        Epoch::ZERO,
-        creator_chain.into(),
-        vec![Operation::User {
+    let run_block = make_child_block(&create_certificate.value)
+        .with_timestamp(5)
+        .with_operation(Operation::User {
             application_id,
             bytes: user_operation.clone(),
-        }],
-        vec![],
-        Some(&create_certificate),
-        None,
-        Timestamp::from(5),
-    );
+        });
     let operation_context = OperationContext {
         chain_id: creator_chain.into(),
         authenticated_signer: None,

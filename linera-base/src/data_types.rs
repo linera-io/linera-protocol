@@ -92,6 +92,18 @@ impl Timestamp {
     pub fn saturating_diff_micros(&self, other: Timestamp) -> u64 {
         self.0.saturating_sub(other.0)
     }
+
+    /// Returns a timestamp `micros` microseconds later than `self`, or the highest possible value
+    /// if it would overflow.
+    pub fn saturating_add_micros(&self, micros: u64) -> Timestamp {
+        Timestamp(self.0.saturating_add(micros))
+    }
+
+    /// Returns a timestamp `micros` microseconds earlier than `self`, or the lowest possible value
+    /// if it would underflow.
+    pub fn saturating_sub_micros(&self, micros: u64) -> Timestamp {
+        Timestamp(self.0.saturating_sub(micros))
+    }
 }
 
 impl From<u64> for Timestamp {

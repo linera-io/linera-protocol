@@ -301,6 +301,19 @@ pub enum Recipient {
     Account(Account),
 }
 
+impl Recipient {
+    /// Returns the default recipient for the given chain (no owner).
+    pub fn chain(chain_id: ChainId) -> Recipient {
+        Recipient::Account(Account::chain(chain_id))
+    }
+
+    /// Returns the default recipient for the root chain with the given index.
+    #[cfg(any(test, feature = "test"))]
+    pub fn root(index: u32) -> Recipient {
+        Recipient::chain(ChainId::root(index))
+    }
+}
+
 /// A system account.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
 pub struct Account {

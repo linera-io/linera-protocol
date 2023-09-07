@@ -8,6 +8,8 @@ pub mod data_types;
 mod inbox;
 mod manager;
 mod outbox;
+#[cfg(any(test, feature = "test"))]
+pub mod test;
 
 pub use chain::ChainStateView;
 use data_types::{Event, Origin};
