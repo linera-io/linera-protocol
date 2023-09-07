@@ -3,9 +3,10 @@
 
 //! Implementations of how requests should be handled inside a [`RuntimeActor`].
 
-use super::requests::BaseRequest;
-use crate::{BaseRuntime, ExecutionError};
+use super::requests::{BaseRequest, ContractRequest};
+use crate::{BaseRuntime, ContractRuntime, ExecutionError};
 use async_trait::async_trait;
+use linera_views::views::ViewError;
 
 /// A type that is able to handle incoming `Request`s.
 #[async_trait]
@@ -58,6 +59,68 @@ where
                 key_prefix,
                 response_sender,
             } => response_sender.respond(self.find_key_values_by_prefix(key_prefix).await?),
+        }
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<Runtime> RequestHandler<ContractRequest> for &Runtime
+where
+    Runtime: ContractRuntime + ?Sized,
+{
+    async fn handle_request(&self, request: ContractRequest) -> Result<(), ExecutionError> {
+        // Use unit arguments in calls to `respond` in order to have compile errors if the return
+        // value of the called function changes.
+        #[allow(clippy::unit_arg)]
+        match request {
+            ContractRequest::Base(base_request) => (*self).handle_request(base_request).await?,
+            ContractRequest::RemainingFuel { response_sender } => {
+                response_sender.respond(self.remaining_fuel())
+            }
+            ContractRequest::SetRemainingFuel {
+                remaining_fuel,
+                response_sender,
+            } => response_sender.respond(self.set_remaining_fuel(remaining_fuel)),
+            ContractRequest::TryReadAndLockMyState { response_sender } => {
+                response_sender.respond(match self.try_read_and_lock_my_state().await {
+                    Ok(bytes) => Some(bytes),
+                    Err(ExecutionError::ViewError(ViewError::NotFound(_))) => None,
+                    Err(error) => return Err(error),
+                })
+            }
+            ContractRequest::SaveAndUnlockMyState {
+                state,
+                response_sender,
+            } => response_sender.respond(self.save_and_unlock_my_state(state).is_ok()),
+            ContractRequest::UnlockMyState { response_sender } => {
+                response_sender.respond(self.unlock_my_state())
+            }
+            ContractRequest::WriteBatchAndUnlock {
+                batch,
+                response_sender,
+            } => response_sender.respond(self.write_batch_and_unlock(batch).await?),
+            ContractRequest::TryCallApplication {
+                authenticated,
+                callee_id,
+                argument,
+                forwarded_sessions,
+                response_sender,
+            } => response_sender.respond(
+                self.try_call_application(authenticated, callee_id, &argument, forwarded_sessions)
+                    .await?,
+            ),
+            ContractRequest::TryCallSession {
+                authenticated,
+                session_id,
+                argument,
+                forwarded_sessions,
+                response_sender,
+            } => response_sender.respond(
+                self.try_call_session(authenticated, session_id, &argument, forwarded_sessions)
+                    .await?,
+            ),
         }
 
         Ok(())
