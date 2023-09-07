@@ -1,5 +1,5 @@
 apiVersion: v2
-name: charts-linera
+name: linera-validator
 description: A Helm chart for Linera validators
 
 # A chart can be either an 'application' or a 'library' chart.
