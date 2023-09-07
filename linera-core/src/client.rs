@@ -1055,8 +1055,7 @@ where
     async fn propose_block(&mut self, block: Block) -> Result<Certificate, ChainClientError> {
         let next_round = self.next_round;
         ensure!(
-            matches!(&self.pending_block, None)
-                || matches!(&self.pending_block, Some(r) if *r == block),
+            self.pending_block.is_none() || self.pending_block.as_ref() == Some(&block),
             ChainClientError::BlockProposalError("Client state has a different pending block")
         );
         ensure!(

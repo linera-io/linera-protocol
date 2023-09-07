@@ -108,13 +108,10 @@ impl ChannelName {
     }
 }
 
-// Cannot use #[derive(Clone)] because it requires `A: Copy`.
+// Cannot use #[derive(Clone)] because it requires `A: Clone`.
 impl<A> Clone for BytecodeId<A> {
     fn clone(&self) -> Self {
-        Self {
-            message_id: self.message_id,
-            _phantom: std::marker::PhantomData,
-        }
+        *self
     }
 }
 
@@ -248,13 +245,10 @@ impl<A> BytecodeId<A> {
     }
 }
 
-// Cannot use #[derive(Clone)] because it requires `A: Copy`.
+// Cannot use #[derive(Clone)] because it requires `A: Clone`.
 impl<A> Clone for ApplicationId<A> {
     fn clone(&self) -> Self {
-        Self {
-            bytecode_id: self.bytecode_id,
-            creation: self.creation,
-        }
+        *self
     }
 }
 
@@ -395,13 +389,10 @@ impl<A> ApplicationId<A> {
     }
 }
 
-// Cannot use #[derive(Clone)] because it requires `A: Copy`.
+// Cannot use #[derive(Clone)] because it requires `A: Clone`.
 impl<A> Clone for SessionId<A> {
     fn clone(&self) -> Self {
-        Self {
-            application_id: self.application_id,
-            index: self.index,
-        }
+        *self
     }
 }
 

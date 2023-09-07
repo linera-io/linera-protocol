@@ -2,6 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Needed for arg_enum!
+#![allow(clippy::useless_vec)]
+
 use crate::{codec, codec::Codec, RpcMessage};
 use async_trait::async_trait;
 use futures::{future, Sink, SinkExt, Stream, StreamExt, TryStreamExt};
