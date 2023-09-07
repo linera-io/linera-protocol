@@ -12,7 +12,7 @@ spec:
   ports:
     - name: zef
       protocol: TCP
-      port: 9100
+      port: 19100
       targetPort: linera-port
 ---
 apiVersion: apps/v1
@@ -36,7 +36,7 @@ spec:
           imagePullPolicy: Always
           image: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/zefchain-gcp-test:0.1
           ports:
-            - containerPort: 9100
+            - containerPort: 19100
               name: linera-port
           command: ["./linera-proxy"]
           args: ["server_1.json", "--kube"]
