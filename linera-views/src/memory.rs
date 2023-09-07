@@ -3,7 +3,7 @@
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{get_interval, ContextFromDb, KeyValueStoreClient},
+    common::{get_interval, CommonStoreConfig, ContextFromDb, KeyValueStoreClient},
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
 };
@@ -11,6 +11,13 @@ use async_lock::{Mutex, MutexGuardArc, RwLock};
 use async_trait::async_trait;
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use thiserror::Error;
+
+/// The initial configuration of the system
+#[derive(Debug)]
+pub struct MemoryKvStoreConfig {
+    /// The common configuration of the key value store
+    pub common_config: CommonStoreConfig,
+}
 
 /// The number of streams for the test
 pub const TEST_MEMORY_MAX_STREAM_QUERIES: usize = 10;

@@ -41,6 +41,7 @@ use linera_views::{
     common::{get_table_name, CommonStoreConfig},
     dynamo_db::create_dynamo_db_common_config,
     dynamo_db::DynamoDbContext,
+    dynamo_db::DynamoDbKvStoreConfig,
     dynamo_db::LocalStackTestContext,
     dynamo_db::TableName,
 };
@@ -255,27 +256,17 @@ impl StateStore for DynamoDbTestStore {
         // TODO(#643): Actually acquire a lock.
         tracing::trace!("Acquiring lock on {:?}", id);
         let base_key = bcs::to_bytes(&id)?;
+        let store_config = DynamoDbKvStoreConfig {
+            config: self.localstack.dynamo_db_config(),
+            table_name: self.table_name.clone(),
+            common_config: self.common_config.clone(),
+        };
         let (context, _) = if self.is_created {
-            DynamoDbContext::new(
-                self.localstack.dynamo_db_config(),
-                self.table_name.clone(),
-                self.common_config.clone(),
-                base_key,
-                id,
-            )
-            .await
+            DynamoDbContext::new(store_config, base_key, id).await
         } else {
-            DynamoDbContext::new_for_testing(
-                self.localstack.dynamo_db_config(),
-                self.table_name.clone(),
-                self.common_config.clone(),
-                base_key,
-                id,
-            )
-            .await
+            DynamoDbContext::new_for_testing(store_config, base_key, id).await
         }
         .expect("Failed to create DynamoDB context");
-        self.common_config.create_if_missing = false;
         self.is_created = true;
         StateView::load(context).await
     }

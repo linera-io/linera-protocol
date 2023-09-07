@@ -82,6 +82,10 @@ matching-engine = { workspace = true }
 amm = { workspace = true }
 
 [[bin]]
+name = "linera-db"
+path = "src/database_tool.rs"
+
+[[bin]]
 name = "linera"
 path = "src/linera.rs"
 

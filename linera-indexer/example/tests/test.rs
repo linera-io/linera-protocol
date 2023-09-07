@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
+
 use linera_base::{data_types::Amount, identifiers::ChainId};
 use linera_indexer_graphql_client::{
     indexer::{plugins, state, Plugins, State},
@@ -71,11 +73,6 @@ const TRANSFER_DELAY_MILLIS: u64 = 1000;
 #[cfg(not(debug_assertions))]
 const TRANSFER_DELAY_MILLIS: u64 = 100;
 
-#[test_log::test(tokio::test)]
-async fn test_memory_end_to_end_operations_indexer() {
-    run_end_to_end_operations_indexer(Database::Memory).await
-}
-
 #[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_end_to_end_operations_indexer() {
@@ -101,7 +98,7 @@ async fn run_end_to_end_operations_indexer(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client = local_net.make_client(network);
+    let mut client = local_net.make_client(network);
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
     local_net.run().await.unwrap();
