@@ -6,4 +6,4 @@
 mod handlers;
 mod requests;
 
-pub use self::requests::BaseRequest;
+pub use self::requests::{BaseRequest, ContractRequest};
