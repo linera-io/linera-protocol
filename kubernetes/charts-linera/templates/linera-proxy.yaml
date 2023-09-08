@@ -29,12 +29,12 @@ spec:
       labels:
         app: validator-1
     spec:
-      serviceAccountName: linera-serviceaccount
+      serviceAccountName: linera-adminserviceaccount
       terminationGracePeriodSeconds: 10
       containers:
         - name: linera-proxy
-          imagePullPolicy: Always
-          image: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/zefchain-gcp-test:0.1
+          imagePullPolicy: Never
+          image: {{ .Values.lineraImage }}
           ports:
             - containerPort: 19100
               name: linera-port
