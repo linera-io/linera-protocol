@@ -77,8 +77,8 @@ where
         })
     }
 
-    /// Processes one block:
-    /// registers the block in all the plugins and saves the state of the indexer.
+    /// Processes one block: registers the block in all the plugins and saves the state of
+    /// the indexer.
     pub async fn process_value(
         &self,
         state: &mut StateView<ContextFromDb<(), DB>>,
@@ -97,9 +97,8 @@ where
         state.save().await.map_err(IndexerError::ViewError)
     }
 
-    /// Processes a NewBlock notification:
-    /// processes all blocks from the latest registered to the one in the notification
-    /// in the corresponding chain.
+    /// Processes a `NewBlock` notification: processes all blocks from the latest
+    /// registered to the one in the notification in the corresponding chain.
     pub async fn process(
         &self,
         listener: &Listener,
