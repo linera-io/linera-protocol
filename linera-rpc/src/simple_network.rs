@@ -396,7 +396,10 @@ impl SimpleClient {
                 codec::Error::Io(io_error) => Err(NodeError::ClientIoError {
                     error: format!("{}", io_error),
                 }),
-                _ => Err(NodeError::InvalidDecoding),
+                err => {
+                    error!("Unexpected decoding error: {err}");
+                    Err(NodeError::InvalidDecoding)
+                }
             },
         }
     }
