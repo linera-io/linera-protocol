@@ -26,7 +26,7 @@ graphql-ws-client = { version = "0.5", features = ["client-graphql-client"] }
 graphql_client = { version = "0.13", features = [ "reqwest" ] }
 hyper = "0.14"
 linera-base = { workspace = true }
-linera-chain = { workspace = true, features = ["test"] }
+linera-chain = { workspace = true }
 linera-core = { workspace = true }
 linera-execution = { workspace = true }
 linera-views = { workspace = true }

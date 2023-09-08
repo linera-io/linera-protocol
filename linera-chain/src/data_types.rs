@@ -555,7 +555,6 @@ impl CertificateValue {
 
 impl HashedValue {
     /// Creates a `ConfirmedBlock` with round 0.
-    #[cfg(any(test, feature = "test"))]
     pub fn new_confirmed(executed_block: ExecutedBlock) -> HashedValue {
         CertificateValue::ConfirmedBlock { executed_block }.into()
     }
