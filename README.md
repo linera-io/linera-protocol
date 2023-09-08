@@ -76,7 +76,7 @@ CLIENT=(./linera --storage rocksdb:linera.db --wallet wallet.json --max-pending-
 ${CLIENT[@]} query-validators
 
 # Give some time for server startup
-sleep 1
+sleep 5
 
 # Query balance for first and last user chain, root chains 0 and 9
 CHAIN1="e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
