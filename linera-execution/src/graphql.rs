@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 
 doc_scalar!(
     GenericApplicationId,
-    "A unique identifier for an application"
+    "A unique identifier for a user application or for the system application"
 );
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(ChainOwnership, "Represents the owner(s) of a chain");

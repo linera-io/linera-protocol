@@ -49,7 +49,7 @@ impl GenericApplicationId {
 }
 
 /// Alias for `linera_base::identifiers::ApplicationId`. Use this alias in the core
-/// protocol where the distinction with the more general enum [`ApplicationId`] matters.
+/// protocol where the distinction with the more general enum [`GenericApplicationId`] matters.
 pub type UserApplicationId<A = ()> = linera_base::identifiers::ApplicationId<A>;
 
 /// Description of the necessary information to run a user application.
