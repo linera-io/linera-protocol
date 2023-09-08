@@ -31,16 +31,16 @@ mod applications_tests;
 
 /// A unique identifier for an application.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub enum ApplicationId {
+pub enum GenericApplicationId {
     /// The system application.
     System,
     /// A user application.
     User(UserApplicationId),
 }
 
-impl ApplicationId {
+impl GenericApplicationId {
     pub fn user_application_id(&self) -> Option<&UserApplicationId> {
-        if let ApplicationId::User(app_id) = self {
+        if let GenericApplicationId::User(app_id) = self {
             Some(app_id)
         } else {
             None
@@ -79,9 +79,9 @@ impl From<&UserApplicationDescription> for UserApplicationId {
     }
 }
 
-impl From<UserApplicationId> for ApplicationId {
+impl From<UserApplicationId> for GenericApplicationId {
     fn from(user_application_id: UserApplicationId) -> Self {
-        ApplicationId::User(user_application_id)
+        GenericApplicationId::User(user_application_id)
     }
 }
 

@@ -20,7 +20,7 @@ use linera_base::{
 };
 use linera_execution::{
     system::{Account, SystemMessage},
-    ApplicationId, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, Message,
+    ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, GenericApplicationId, Message,
     MessageContext, OperationContext, Query, QueryContext, RawExecutionResult, RawOutgoingMessage,
     Response, UserApplicationDescription, UserApplicationId,
 };
@@ -520,7 +520,7 @@ where
             match result {
                 ExecutionResult::System(result) => {
                     self.process_raw_execution_result(
-                        ApplicationId::System,
+                        GenericApplicationId::System,
                         Message::System,
                         messages,
                         height,
@@ -530,7 +530,7 @@ where
                 }
                 ExecutionResult::User(application_id, result) => {
                     self.process_raw_execution_result(
-                        ApplicationId::User(application_id),
+                        GenericApplicationId::User(application_id),
                         |bytes| Message::User {
                             application_id,
                             bytes,
@@ -548,7 +548,7 @@ where
 
     async fn process_raw_execution_result<E, F>(
         &mut self,
-        application_id: ApplicationId,
+        application_id: GenericApplicationId,
         lift: F,
         messages: &mut Vec<OutgoingMessage>,
         height: BlockHeight,

@@ -27,8 +27,8 @@ use linera_chain::{
 use linera_execution::{
     committee::Epoch,
     system::{SystemChannel, SystemMessage, SystemOperation},
-    ApplicationId, Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription,
-    ExecutionStateView, Message, Operation, OperationContext, SystemExecutionState,
+    Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, ExecutionStateView,
+    GenericApplicationId, Message, Operation, OperationContext, SystemExecutionState,
     UserApplicationDescription, UserApplicationId, WasmApplication, WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, Store};
@@ -338,7 +338,7 @@ where
         parameters: vec![],
     };
     let publish_admin_channel = ChannelFullName {
-        application_id: ApplicationId::System,
+        application_id: GenericApplicationId::System,
         name: SystemChannel::PublishedBytecodes.name(),
     };
     let create_block = make_child_block(&subscribe_certificate.value)
