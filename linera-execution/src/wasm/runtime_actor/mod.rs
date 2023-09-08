@@ -10,7 +10,7 @@ use self::handlers::RequestHandler;
 pub use self::requests::{BaseRequest, ContractRequest};
 use crate::ExecutionError;
 use futures::{
-    channel::mpsc,
+    channel::{mpsc, oneshot},
     select,
     stream::{FuturesUnordered, StreamExt},
 };
@@ -66,5 +66,41 @@ where
         }
 
         Ok(())
+    }
+}
+
+/// Extension trait to help with sending requests to [`RuntimeActor`]s.
+///
+/// Prepares a channel for the actor to send a response back to the sender of the request.
+pub trait SendRequestExt<Request> {
+    /// Sends a request built by `builder`, returning a [`oneshot::Receiver`] for receiving the
+    /// `Response`.
+    fn send_request<Response>(
+        &self,
+        builder: impl FnOnce(oneshot::Sender<Response>) -> Request,
+    ) -> oneshot::Receiver<Response>
+    where
+        Response: Send;
+}
+
+impl<Request> SendRequestExt<Request> for mpsc::UnboundedSender<Request>
+where
+    Request: Send,
+{
+    fn send_request<Response>(
+        &self,
+        builder: impl FnOnce(oneshot::Sender<Response>) -> Request,
+    ) -> oneshot::Receiver<Response>
+    where
+        Response: Send,
+    {
+        let (response_sender, response_receiver) = oneshot::channel();
+        let request = builder(response_sender);
+
+        self.unbounded_send(request).unwrap_or_else(|error| {
+            panic!("Failed to send request because receiver has stopped listening: {error}")
+        });
+
+        response_receiver
     }
 }
