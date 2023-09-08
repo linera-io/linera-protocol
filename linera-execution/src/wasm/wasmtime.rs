@@ -40,10 +40,14 @@ use super::{
     async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
+    runtime_actor::{BaseRequest, ContractRequest, SendRequestExt},
     WasmApplication, WasmExecutionError,
 };
-use crate::{Bytecode, ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
-use futures::{channel::oneshot, FutureExt};
+use crate::{Bytecode, ExecutionError, ServiceRuntime, SessionId};
+use futures::{
+    channel::{mpsc, oneshot},
+    FutureExt, TryFutureExt,
+};
 use linera_views::{batch::Batch, views::ViewError};
 use once_cell::sync::Lazy;
 use std::{error::Error, task::Poll};
@@ -84,11 +88,17 @@ impl<'runtime> ApplicationRuntimeContext for Contract<'runtime> {
     type Extra = ();
 
     fn finalize(context: &mut WasmRuntimeContext<Self>) {
-        let runtime = context.store.data().system_api.runtime();
-        let initial_fuel = runtime.remaining_fuel();
-        let remaining_fuel = initial_fuel - context.store.fuel_consumed().unwrap_or(0);
+        let runtime = &context.store.data().system_api.runtime;
+        let initial_fuel = runtime
+            .sync_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
+            .unwrap_or(0);
+        let consumed_fuel = context.store.fuel_consumed().unwrap_or(0);
+        let remaining_fuel = initial_fuel.saturating_sub(consumed_fuel);
 
-        runtime.set_remaining_fuel(remaining_fuel);
+        let _ = runtime.sync_request(|response_sender| ContractRequest::SetRemainingFuel {
+            remaining_fuel,
+            response_sender,
+        });
     }
 }
 
@@ -129,7 +139,7 @@ impl WasmApplication {
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare_contract_runtime_with_wasmtime<'runtime>(
         contract_module: &Module,
-        runtime: &'runtime dyn ContractRuntime,
+        runtime: mpsc::UnboundedSender<ContractRequest>,
     ) -> Result<WasmRuntimeContext<'runtime, Contract<'runtime>>, WasmExecutionError> {
         let mut linker = Linker::new(&CONTRACT_ENGINE);
 
@@ -140,7 +150,11 @@ impl WasmApplication {
 
         let waker_forwarder = WakerForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
-        let state = ContractState::new(runtime, waker_forwarder.clone(), queued_future_factory);
+        let state = ContractState::new(
+            runtime.clone(),
+            waker_forwarder.clone(),
+            queued_future_factory,
+        );
         let mut store = Store::new(&CONTRACT_ENGINE, state);
         let (contract, _instance) = contract::Contract::instantiate(
             &mut store,
@@ -217,13 +231,13 @@ impl<'runtime> ContractState<'runtime> {
     /// Uses `runtime` to export the system API, and the `waker` to be able to correctly handle
     /// asynchronous calls from the guest Wasm module.
     pub fn new(
-        runtime: &'runtime dyn ContractRuntime,
+        runtime: mpsc::UnboundedSender<ContractRequest>,
         waker: WakerForwarder,
         queued_future_factory: QueuedHostFutureFactory<'runtime>,
     ) -> Self {
         Self {
             data: ContractData::default(),
-            system_api: ContractSystemApi::new(waker, runtime, queued_future_factory),
+            system_api: ContractSystemApi::new(runtime, waker, queued_future_factory),
             system_tables: ContractSystemApiTables::default(),
             views_tables: ViewSystemApiTables::default(),
         }
@@ -310,11 +324,14 @@ impl<'runtime> common::Contract for Contract<'runtime> {
     type PollSessionCallResult = contract::PollSessionCallResult;
 
     fn configure_fuel(context: &mut WasmRuntimeContext<Self>) {
-        let runtime = context.store.data().system_api.runtime();
+        let runtime = &context.store.data().system_api.runtime;
+        let fuel = runtime
+            .sync_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
+            .unwrap_or(0);
 
         context
             .store
-            .add_fuel(runtime.remaining_fuel())
+            .add_fuel(fuel)
             .expect("Fuel consumption wasn't properly enabled");
     }
 
@@ -453,7 +470,8 @@ struct SystemApi<S> {
 /// Implementation to forward contract system calls from the guest Wasm module to the host
 /// implementation.
 pub struct ContractSystemApi<'runtime> {
-    shared: SystemApi<&'runtime dyn ContractRuntime>,
+    runtime: mpsc::UnboundedSender<ContractRequest>,
+    waker: WakerForwarder,
     queued_future_factory: QueuedHostFutureFactory<'runtime>,
 }
 
@@ -461,24 +479,20 @@ impl<'runtime> ContractSystemApi<'runtime> {
     /// Creates a new [`ContractSystemApi`] instance using the provided asynchronous `waker` and
     /// exporting the API from `runtime`.
     pub fn new(
+        runtime: mpsc::UnboundedSender<ContractRequest>,
         waker: WakerForwarder,
-        runtime: &'runtime dyn ContractRuntime,
         queued_future_factory: QueuedHostFutureFactory<'runtime>,
     ) -> Self {
         ContractSystemApi {
-            shared: SystemApi { waker, runtime },
+            runtime,
+            waker,
             queued_future_factory,
         }
     }
 
-    /// Returns the [`ContractRuntime`] trait object instance to handle a system call.
-    fn runtime(&self) -> &'runtime dyn ContractRuntime {
-        self.shared.runtime
-    }
-
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
     fn waker(&mut self) -> &mut WakerForwarder {
-        &mut self.shared.waker
+        &mut self.waker
     }
 }
 

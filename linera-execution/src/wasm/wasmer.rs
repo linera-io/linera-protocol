@@ -36,11 +36,15 @@ use super::{
     async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
+    runtime_actor::{BaseRequest, ContractRequest, SendRequestExt},
     WasmApplication, WasmExecutionError,
 };
 use crate::{Bytecode, ContractRuntime, ExecutionError, ServiceRuntime, SessionId};
 use bytes::Bytes;
-use futures::{channel::oneshot, FutureExt};
+use futures::{
+    channel::{mpsc, oneshot},
+    FutureExt, TryFutureExt,
+};
 use linera_views::{batch::Batch, views::ViewError};
 use once_cell::sync::Lazy;
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
@@ -76,26 +80,21 @@ pub struct Contract<'runtime> {
 impl<'runtime> ApplicationRuntimeContext for Contract<'runtime> {
     type Store = Store;
     type Error = RuntimeError;
-    type Extra = WasmerContractExtra<'runtime>;
+    type Extra = WasmerContractExtra;
 
     fn finalize(context: &mut WasmRuntimeContext<Self>) {
-        let runtime_guard = context
-            .extra
-            .runtime_guard
-            .runtime
-            .try_lock()
-            .expect("Unexpected concurrent access to ContractRuntime");
-        let runtime = runtime_guard
-            .as_ref()
-            .expect("Runtime guard dropped prematurely");
-
         let remaining_fuel =
             match metering::get_remaining_points(&mut context.store, &context.extra.instance) {
                 MeteringPoints::Exhausted => 0,
                 MeteringPoints::Remaining(fuel) => fuel,
             };
 
-        runtime.set_remaining_fuel(remaining_fuel);
+        let _ = context.extra.runtime.sync_request(|response_sender| {
+            ContractRequest::SetRemainingFuel {
+                remaining_fuel,
+                response_sender,
+            }
+        });
     }
 }
 
@@ -138,18 +137,22 @@ impl WasmApplication {
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare_contract_runtime_with_wasmer<'runtime>(
         (contract_engine, contract_module): &(Engine, Module),
-        runtime: &'runtime dyn ContractRuntime,
+        runtime: mpsc::UnboundedSender<ContractRequest>,
     ) -> Result<WasmRuntimeContext<'static, Contract<'runtime>>, WasmExecutionError> {
         let mut store = Store::new(contract_engine);
         let mut imports = imports! {};
         let waker_forwarder = WakerForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
-        let (system_api, runtime_guard): (SystemApi<&'static dyn ContractRuntime>, _) =
-            SystemApi::new(waker_forwarder.clone(), runtime);
-        let system_api = Arc::new(Mutex::new(system_api));
-        let contract_system_api =
-            ContractSystemApi::new(system_api.clone(), queued_future_factory.clone());
-        let view_system_api = ContractViewSystemApi::new(system_api, queued_future_factory);
+        let contract_system_api = ContractSystemApi::new(
+            runtime.clone(),
+            waker_forwarder.clone(),
+            queued_future_factory.clone(),
+        );
+        let view_system_api = ContractViewSystemApi::new(
+            runtime.clone(),
+            waker_forwarder.clone(),
+            queued_future_factory,
+        );
         let system_api_setup =
             contract_system_api::add_to_imports(&mut store, &mut imports, contract_system_api);
         let views_api_setup =
@@ -170,10 +173,7 @@ impl WasmApplication {
             application,
             future_queue,
             store,
-            extra: WasmerContractExtra {
-                instance,
-                runtime_guard,
-            },
+            extra: WasmerContractExtra { runtime, instance },
         })
     }
 
@@ -247,20 +247,16 @@ impl<'runtime> common::Contract for Contract<'runtime> {
     type PollSessionCallResult = contract::PollSessionCallResult;
 
     fn configure_fuel(context: &mut WasmRuntimeContext<Self>) {
-        let runtime_guard = context
+        let remaining_points = context
             .extra
-            .runtime_guard
             .runtime
-            .try_lock()
-            .expect("Unexpected concurrent access to ContractRuntime");
-        let runtime = runtime_guard
-            .as_ref()
-            .expect("Runtime guard dropped prematurely");
+            .sync_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
+            .unwrap_or(0);
 
         metering::set_remaining_points(
             &mut context.store,
             &context.extra.instance,
-            runtime.remaining_fuel(),
+            remaining_points,
         );
     }
 
@@ -461,50 +457,28 @@ unsafe impl<'runtime> RemoveLifetime for &'runtime dyn ServiceRuntime {
 /// Implementation to forward contract system calls from the guest Wasm module to the host
 /// implementation.
 pub struct ContractSystemApi {
-    shared: Arc<Mutex<SystemApi<&'static dyn ContractRuntime>>>,
+    runtime: mpsc::UnboundedSender<ContractRequest>,
+    waker: WakerForwarder,
     queued_future_factory: QueuedHostFutureFactory<'static>,
 }
 
 impl ContractSystemApi {
     /// Creates a new [`ContractSystemApi`] instance.
     pub fn new(
-        shared: Arc<Mutex<SystemApi<&'static dyn ContractRuntime>>>,
+        runtime: mpsc::UnboundedSender<ContractRequest>,
+        waker: WakerForwarder,
         queued_future_factory: QueuedHostFutureFactory<'static>,
     ) -> Self {
         ContractSystemApi {
-            shared,
+            runtime,
+            waker,
             queued_future_factory,
         }
     }
 
-    /// Safely obtains the [`ContractRuntime`] trait object instance to handle a system call.
-    ///
-    /// # Panics
-    ///
-    /// If there is a concurrent call from the Wasm application (which is impossible as long as it
-    /// is executed in a single thread) or if the trait object is no longer alive (or more
-    /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
-    /// no longer alive).
-    fn runtime(&self) -> &'static dyn ContractRuntime {
-        *self
-            .shared
-            .try_lock()
-            .expect("Unexpected concurrent system API access by application")
-            .runtime
-            .try_lock()
-            .expect("Unexpected concurrent runtime access by application")
-            .as_ref()
-            .expect("Application called runtime after it should have stopped")
-    }
-
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
-    fn waker(&mut self) -> MappedMutexGuard<'_, WakerForwarder> {
-        MutexGuard::map(
-            self.shared
-                .try_lock()
-                .expect("Unexpected concurrent system API access by application"),
-            |system_api| &mut system_api.waker,
-        )
+    fn waker(&mut self) -> &mut WakerForwarder {
+        &mut self.waker
     }
 }
 
@@ -558,50 +532,28 @@ impl_service_system_api!(ServiceSystemApi);
 /// Implementation to forward view system calls from the contract guest Wasm module to the host
 /// implementation.
 pub struct ContractViewSystemApi {
-    shared: Arc<Mutex<SystemApi<&'static dyn ContractRuntime>>>,
+    runtime: mpsc::UnboundedSender<ContractRequest>,
+    waker: WakerForwarder,
     queued_future_factory: QueuedHostFutureFactory<'static>,
 }
 
 impl ContractViewSystemApi {
     /// Creates a new [`ContractViewSystemApi`] instance.
     pub fn new(
-        shared: Arc<Mutex<SystemApi<&'static dyn ContractRuntime>>>,
+        runtime: mpsc::UnboundedSender<ContractRequest>,
+        waker: WakerForwarder,
         queued_future_factory: QueuedHostFutureFactory<'static>,
     ) -> Self {
         ContractViewSystemApi {
-            shared,
+            runtime,
+            waker,
             queued_future_factory,
         }
     }
 
-    /// Safely obtains the [`ContractRuntime`] trait object instance to handle a system call.
-    ///
-    /// # Panics
-    ///
-    /// If there is a concurrent call from the Wasm application (which is impossible as long as it
-    /// is executed in a single thread) or if the trait object is no longer alive (or more
-    /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
-    /// no longer alive).
-    fn runtime(&self) -> &'static dyn ContractRuntime {
-        *self
-            .shared
-            .try_lock()
-            .expect("Unexpected concurrent system API access by application")
-            .runtime
-            .try_lock()
-            .expect("Unexpected concurrent runtime access by application")
-            .as_ref()
-            .expect("Application called runtime after it should have stopped")
-    }
-
     /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
-    fn waker(&mut self) -> MappedMutexGuard<'_, WakerForwarder> {
-        MutexGuard::map(
-            self.shared
-                .try_lock()
-                .expect("Unexpected concurrent system API access by application"),
-            |system_api| &mut system_api.waker,
-        )
+    fn waker(&mut self) -> &mut WakerForwarder {
+        &mut self.waker
     }
 }
 
@@ -652,8 +604,8 @@ impl_view_system_api_for_contract!(ContractViewSystemApi);
 impl_view_system_api_for_service!(ServiceViewSystemApi);
 
 /// Extra parameters necessary when cleaning up after contract execution.
-pub struct WasmerContractExtra<'runtime> {
-    runtime_guard: RuntimeGuard<'runtime, &'static dyn ContractRuntime>,
+pub struct WasmerContractExtra {
+    runtime: mpsc::UnboundedSender<ContractRequest>,
     instance: Instance,
 }
 
