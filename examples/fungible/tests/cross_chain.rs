@@ -13,7 +13,7 @@ use linera_sdk::{base::Amount, test::TestValidator};
 /// Creates the application on a `sender_chain`, initializing it with a single account with some
 /// tokens for that chain's owner. Transfers some of those tokens to a new `receiver_chain`, and
 /// checks that the balances on each microchain are correct.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_cross_chain_transfer() {
     let initial_amount: Amount = Amount::from_tokens(20);
     let transfer_amount: Amount = Amount::from_tokens(15);
