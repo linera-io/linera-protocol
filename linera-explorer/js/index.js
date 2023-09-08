@@ -2,9 +2,11 @@ const rust = import("../pkg/index.js")
 
 import template from '../html/app.html'
 import json from './json.js'
-import op_component from './operation.js'
+import op_component from './op.js'
+import operation_component from './operation.js'
 import block_component from './block.js'
 import blocks_component from './blocks.js'
+import operations_component from './operations.js'
 import applications_component from './applications.js'
 import application_component from './application.js'
 import entrypoint_component from './entrypoint.js'
@@ -24,6 +26,8 @@ function main(r) {
   app.component('v-op', op_component)
   app.component('v-block', block_component)
   app.component('v-blocks', blocks_component)
+  app.component('v-operations', operations_component)
+  app.component('v-operation', operation_component)
   app.component('v-applications', applications_component)
   app.component('v-application', application_component)
   app.component('v-entrypoint', entrypoint_component(r))

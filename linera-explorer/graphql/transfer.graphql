@@ -1,0 +1,3 @@
+mutation Transfer($chainId: ChainId!, $recipient: ChainId!, $amount: Amount!) {
+  transfer(chainId: $chainId, recipient: { Account: { chain_id: $recipient } }, amount: $amount)
+}

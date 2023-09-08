@@ -1,0 +1,11 @@
+query Plugins {
+  plugins
+}
+
+query State {
+  state {
+    chain
+    block
+    height
+  }
+}

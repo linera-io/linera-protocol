@@ -12,6 +12,9 @@
         <li class="nav-item">
           <a class="nav-link" :class="page.applications ? 'active' : ''" @click="route('applications')" role="button">Applications</a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link" :class="page.operations ? 'active' : ''" @click="route('operations')" role="button">Operations</a>
+        </li>
       </ul>
       <ul class="navbar-nav ms-auto">
         <li class="nav-item mx-2">
@@ -20,7 +23,11 @@
           </select>
         </li>
         <li class="nav-item mx-2">
-          <input v-model="config.node" class="form-control" @change="save_config">
+          <div class="input-group">
+            <span class="input-group-text">node</span>
+            <input v-model="config.node" class="form-control" @change="save_config" style="width:190px">
+            <span class="input-group-text">indexer</span>
+            <input v-model="config.indexer" class="form-control" @change="save_config" style="width:190px">
         </li>
         <li class="nav-item mx-2">
           <div class="form-control form-check form-switch">
@@ -78,6 +85,15 @@
   <div v-else-if="page.application">
     <v-application :route="route" :app="page.application"></v-application>
   </div>
+
+  <div v-else-if="page.operations">
+    <v-operations :route="route" :operations="page.operations"></v-operations>
+  </div>
+
+  <div v-else-if="page.operation">
+    <v-operation :route="route" :op="page.operation" :id="page.operation.hash" :index="page.operation.operation.index"></v-operation>
+  </div>
+
 
   <div v-else-if="page.error">
     <div class="m-5 p-5 text-center">

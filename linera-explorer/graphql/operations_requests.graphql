@@ -1,0 +1,27 @@
+query Operations($from: OperationKeyKind!, $limit: Int) {
+  operations(from: $from, limit: $limit) {
+    key
+    previousOperation
+    index
+    block
+    content
+  }
+}
+
+query OperationsCount($chainId: ChainId!) {
+  count(chainId: $chainId)
+}
+
+query LastOperation($chainId: ChainId!) {
+  last(chainId: $chainId)
+}
+
+query GetOperation($key: OperationKeyKind!) {
+  operation(key: $key) {
+    key
+    previousOperation
+    index
+    block
+    content
+  }
+}

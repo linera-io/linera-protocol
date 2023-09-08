@@ -19,7 +19,7 @@
       <tr v-for="b in blocks" :key="'blocks-block-'+b.hash">
         <td>{{ b.value.executedBlock.block.height }}</td>
         <td :title="b.hash">
-          <a @click="route('block', [['block', b.hash]])" class="btn btn-link">{{ sh(b.hash) }}
+          <a @click="route('block', [['block', b.hash]])" class="btn btn-link">{{ sh(b.hash) }}</a>
         </td>
         <td>{{ (new Date(b.value.executedBlock.block.timestamp/1000)).toLocaleString() }}</td>
         <td :title="b.value.executedBlock.block.authenticatedSigner">{{ sh(b.value.executedBlock.block.authenticatedSigner) }}</td>
