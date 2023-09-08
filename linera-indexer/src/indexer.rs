@@ -126,10 +126,10 @@ where
         let mut value = value.clone();
         loop {
             let Some(block) = value.inner().block() else {
-                return Err(IndexerError::InvalidBlock(value.hash()));
+                return Err(IndexerError::InvalidCertificateValue(value.hash()));
             };
             if !value.inner().is_confirmed() {
-                return Err(IndexerError::InvalidBlock(value.hash()));
+                return Err(IndexerError::InvalidCertificateValue(value.hash()));
             };
             values.push(value.clone());
             if let Some(hash) = block.previous_block_hash {
