@@ -961,6 +961,10 @@ fn detect_current_features() -> Vec<&'static str> {
     {
         features.push("aws");
     }
+    #[cfg(scylladb)]
+    {
+        features.push("scylladb");
+    }
     features
 }
 
