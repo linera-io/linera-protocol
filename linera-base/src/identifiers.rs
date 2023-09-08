@@ -317,7 +317,7 @@ impl<A> Debug for ApplicationId<A> {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename = "UserApplicationId")]
+#[serde(rename = "ApplicationId")]
 struct SerializableApplicationId {
     pub bytecode_id: BytecodeId,
     pub creation: MessageId,

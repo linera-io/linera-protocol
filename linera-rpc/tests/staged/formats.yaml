@@ -22,6 +22,12 @@ AdminOperation:
               TYPENAME: Epoch
 Amount:
   NEWTYPESTRUCT: U128
+ApplicationId:
+  STRUCT:
+    - bytecode_id:
+        TYPENAME: BytecodeId
+    - creation:
+        TYPENAME: MessageId
 Block:
   STRUCT:
     - chain_id:
@@ -337,7 +343,7 @@ GenericApplicationId:
     1:
       User:
         NEWTYPE:
-          TYPENAME: UserApplicationId
+          TYPENAME: ApplicationId
 HandleCertificateRequest:
   STRUCT:
     - certificate:
@@ -402,7 +408,7 @@ Message:
       User:
         STRUCT:
           - application_id:
-              TYPENAME: UserApplicationId
+              TYPENAME: ApplicationId
           - bytes: BYTES
 MessageId:
   STRUCT:
@@ -538,7 +544,7 @@ Operation:
       User:
         STRUCT:
           - application_id:
-              TYPENAME: UserApplicationId
+              TYPENAME: ApplicationId
           - bytes: BYTES
 Origin:
   STRUCT:
@@ -728,7 +734,7 @@ SystemMessage:
     11:
       RequestApplication:
         NEWTYPE:
-          TYPENAME: UserApplicationId
+          TYPENAME: ApplicationId
 SystemOperation:
   ENUM:
     0:
@@ -814,14 +820,14 @@ SystemOperation:
           - initialization_argument: BYTES
           - required_application_ids:
               SEQ:
-                TYPENAME: UserApplicationId
+                TYPENAME: ApplicationId
     10:
       RequestApplication:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - application_id:
-              TYPENAME: UserApplicationId
+              TYPENAME: ApplicationId
     11:
       Admin:
         NEWTYPE:
@@ -839,13 +845,7 @@ UserApplicationDescription:
     - parameters: BYTES
     - required_application_ids:
         SEQ:
-          TYPENAME: UserApplicationId
-UserApplicationId:
-  STRUCT:
-    - bytecode_id:
-        TYPENAME: BytecodeId
-    - creation:
-        TYPENAME: MessageId
+          TYPENAME: ApplicationId
 UserData:
   NEWTYPESTRUCT:
     OPTION:
