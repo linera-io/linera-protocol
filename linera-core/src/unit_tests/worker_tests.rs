@@ -30,7 +30,7 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{Account, AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
-    ApplicationId, ChainOwnership, ChannelSubscription, ExecutionStateView, Message, Query,
+    ChainOwnership, ChannelSubscription, ExecutionStateView, GenericApplicationId, Message, Query,
     Response, SystemExecutionState, SystemQuery, SystemResponse,
 };
 use linera_storage::{MemoryStoreClient, Store};
@@ -2195,7 +2195,7 @@ where
         name: SystemChannel::Admin.name(),
     };
     let admin_channel_full_name = ChannelFullName {
-        application_id: ApplicationId::System,
+        application_id: GenericApplicationId::System,
         name: SystemChannel::Admin.name(),
     };
     let admin_channel_origin = Origin::channel(admin_id, admin_channel_full_name.clone());

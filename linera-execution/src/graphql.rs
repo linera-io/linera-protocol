@@ -4,7 +4,7 @@
 use crate::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
     system::{Recipient, UserData},
-    ApplicationId, Bytecode, ChainOwnership, ChannelSubscription, ExecutionStateView,
+    Bytecode, ChainOwnership, ChannelSubscription, ExecutionStateView, GenericApplicationId,
     SystemExecutionStateView, UserApplicationDescription,
 };
 use async_graphql::{Error, Object};
@@ -16,7 +16,10 @@ use linera_base::{
 use linera_views::{common::Context, views::ViewError};
 use std::collections::BTreeMap;
 
-doc_scalar!(ApplicationId, "A unique identifier for an application");
+doc_scalar!(
+    GenericApplicationId,
+    "A unique identifier for a user application or for the system application"
+);
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(ChainOwnership, "Represents the owner(s) of a chain");
 doc_scalar!(

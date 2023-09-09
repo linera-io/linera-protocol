@@ -14,7 +14,7 @@ pub mod system;
 mod wasm;
 
 pub use applications::{
-    ApplicationId, ApplicationRegistryView, BytecodeLocation, UserApplicationDescription,
+    ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
     UserApplicationId,
 };
 pub use execution::ExecutionStateView;
@@ -452,10 +452,10 @@ pub enum ExecutionResult {
 }
 
 impl ExecutionResult {
-    pub fn application_id(&self) -> ApplicationId {
+    pub fn application_id(&self) -> GenericApplicationId {
         match self {
-            ExecutionResult::System(_) => ApplicationId::System,
-            ExecutionResult::User(app_id, _) => ApplicationId::User(*app_id),
+            ExecutionResult::System(_) => GenericApplicationId::System,
+            ExecutionResult::User(app_id, _) => GenericApplicationId::User(*app_id),
         }
     }
 }
@@ -554,10 +554,10 @@ impl Operation {
         })
     }
 
-    pub fn application_id(&self) -> ApplicationId {
+    pub fn application_id(&self) -> GenericApplicationId {
         match self {
-            Self::System(_) => ApplicationId::System,
-            Self::User { application_id, .. } => ApplicationId::User(*application_id),
+            Self::System(_) => GenericApplicationId::System,
+            Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
         }
     }
 }
@@ -585,10 +585,10 @@ impl Message {
         })
     }
 
-    pub fn application_id(&self) -> ApplicationId {
+    pub fn application_id(&self) -> GenericApplicationId {
         match self {
-            Self::System(_) => ApplicationId::System,
-            Self::User { application_id, .. } => ApplicationId::User(*application_id),
+            Self::System(_) => GenericApplicationId::System,
+            Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
         }
     }
 }
@@ -616,10 +616,10 @@ impl Query {
         })
     }
 
-    pub fn application_id(&self) -> ApplicationId {
+    pub fn application_id(&self) -> GenericApplicationId {
         match self {
-            Self::System(_) => ApplicationId::System,
-            Self::User { application_id, .. } => ApplicationId::User(*application_id),
+            Self::System(_) => GenericApplicationId::System,
+            Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
         }
     }
 }
