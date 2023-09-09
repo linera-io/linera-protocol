@@ -961,6 +961,10 @@ fn detect_current_features() -> Vec<&'static str> {
     {
         features.push("aws");
     }
+    #[cfg(scylladb)]
+    {
+        features.push("scylladb");
+    }
     features
 }
 
@@ -1021,13 +1025,15 @@ pub async fn resolve_binary(name: &'static str) -> Result<PathBuf> {
 }
 
 pub async fn cargo_build_binary(name: &'static str, package: Option<&'static str>) -> PathBuf {
-    static COMPILED_BINARIES: OnceCell<Mutex<HashMap<&'static str, PathBuf>>> = OnceCell::new();
+    type Key = (&'static str, Option<&'static str>);
+    static COMPILED_BINARIES: OnceCell<Mutex<HashMap<Key, PathBuf>>> = OnceCell::new();
+
     let mut binaries = COMPILED_BINARIES.get_or_init(Default::default).lock().await;
-    match binaries.get(name) {
+    match binaries.get(&(name, package)) {
         Some(path) => path.clone(),
         None => {
             let path = cargo_force_build_binary(name, package).await;
-            binaries.insert(name, path.clone());
+            binaries.insert((name, package), path.clone());
             path
         }
     }

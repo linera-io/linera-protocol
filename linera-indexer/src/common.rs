@@ -44,8 +44,8 @@ pub enum IndexerError {
     WrongPlugins,
     #[error("Plugin is already registered")]
     PluginAlreadyRegistered,
-    #[error("Invalid block: {0:?}")]
-    InvalidBlock(CryptoHash),
+    #[error("Invalid certificate content: {0:?}")]
+    InvalidCertificateValue(CryptoHash),
 }
 
 pub async fn graphiql(uri: Uri) -> impl IntoResponse {
