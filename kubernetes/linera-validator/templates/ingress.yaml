@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: validator-ingress
+spec:
+  type: LoadBalancer
+  loadBalancerIP: 34.151.215.158
+  selector:
+    app: validator-1
+  ports:
+    - name: zef
+      protocol: TCP
+      port: 19100
+      targetPort: linera-port

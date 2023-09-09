@@ -1,22 +1,4 @@
 apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: linera-adminserviceaccount
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: linera-adminserviceaccount
-subjects:
-  - kind: ServiceAccount
-    name: linera-adminserviceaccount
-    namespace: default
-roleRef:
-  kind: ClusterRole
-  name: cluster-admin
-  apiGroup: rbac.authorization.k8s.io
----
-apiVersion: v1
 kind: Service
 metadata:
   name: server-1-shard-0
@@ -42,12 +24,12 @@ spec:
       labels:
         app: server-1-shard-0
     spec:
-      serviceAccountName: linera-adminserviceaccount
+      serviceAccountName: linera-admin
       terminationGracePeriodSeconds: 10
       containers:
         - name: linera-server
           image: {{ .Values.lineraImage }}
-          imagePullPolicy: Never
+          imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
           command: ["./linera-server"]
           args:
             [
@@ -102,12 +84,12 @@ spec:
       labels:
         app: server-1-shard-1
     spec:
-      serviceAccountName: linera-adminserviceaccount
+      serviceAccountName: linera-admin
       terminationGracePeriodSeconds: 10
       containers:
         - name: linera-server
           image: {{ .Values.lineraImage }}
-          imagePullPolicy: Never
+          imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
           command: ["./linera-server"]
           args:
             [
@@ -162,12 +144,12 @@ spec:
       labels:
         app: server-1-shard-2
     spec:
-      serviceAccountName: linera-adminserviceaccount
+      serviceAccountName: linera-admin
       terminationGracePeriodSeconds: 10
       containers:
         - name: linera-server
           image: {{ .Values.lineraImage }}
-          imagePullPolicy: Never
+          imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
           command: ["./linera-server"]
           args:
             [
@@ -222,12 +204,12 @@ spec:
       labels:
         app: server-1-shard-3
     spec:
-      serviceAccountName: linera-adminserviceaccount
+      serviceAccountName: linera-admin
       terminationGracePeriodSeconds: 10
       containers:
         - name: linera-server
           image: {{ .Values.lineraImage }}
-          imagePullPolicy: Never
+          imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
           command: ["./linera-server"]
           args:
             [
@@ -242,61 +224,6 @@ spec:
               "genesis.json",
               "--kube",
             ]
-          env:
-            - name: MY_POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            - name: MY_POD_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-            - name: MY_POD_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: validator-1
-  labels:
-    app: validator-1
-spec:
-  type: LoadBalancer
-  selector:
-    app: validator-1
-  ports:
-    - name: zef
-      protocol: TCP
-      port: 9100
-      targetPort: linera-port
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: validator-1
-spec:
-  selector:
-    matchLabels:
-      app: validator-1
-  replicas: 1
-  template:
-    metadata:
-      labels:
-        app: validator-1
-    spec:
-      serviceAccountName: linera-adminserviceaccount
-      terminationGracePeriodSeconds: 10
-      containers:
-        - name: linera-proxy
-          imagePullPolicy: Never
-          image: {{ .Values.lineraImage }}
-          ports:
-            - containerPort: 9100
-              name: linera-port
-          command: ["./linera-proxy"]
-          args: ["server_1.json", "--kube"]
           env:
             - name: MY_POD_NAME
               valueFrom:
