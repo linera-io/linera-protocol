@@ -3,8 +3,8 @@ host = "34.151.215.158"
 port = 19100
 internal_host = "validator-1"
 internal_port = 20100
-external_protocol = { Simple = "Tcp" }
-internal_protocol = { Simple = "Tcp" }
+external_protocol = "Grpc"
+internal_protocol = "Grpc"
 
 # If deploying to GCP, host should be the Kubernetes pod name
 [[shards]]
