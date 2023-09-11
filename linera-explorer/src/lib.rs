@@ -20,6 +20,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId},
 };
 use linera_graphql_client::{
+    operations as gql_operations,
     operations::{
         get_operation,
         get_operation::{GetOperationOperation as Operation, OperationKeyKind},
@@ -27,7 +28,7 @@ use linera_graphql_client::{
         operations::{OperationKeyKind as OperationsKeyKind, OperationsOperations as Operations},
         OperationKey,
     },
-    request,
+    request, service as gql_service,
     service::{
         applications, applications::ApplicationsApplications as Application, block,
         block::BlockBlock as Block, blocks, blocks::BlocksBlocks as Blocks, chains, notifications,
@@ -165,18 +166,16 @@ async fn get_blocks(
         chain_id,
         limit: limit.map(|x| x.into()),
     };
-    Ok(
-        request::<linera_graphql_client::service::Blocks, _>(&client, node, variables)
-            .await?
-            .blocks,
-    )
+    Ok(request::<gql_service::Blocks, _>(&client, node, variables)
+        .await?
+        .blocks)
 }
 
 async fn get_applications(node: &str, chain_id: ChainId) -> Result<Vec<Application>> {
     let client = reqwest::Client::new();
     let variables = applications::Variables { chain_id };
     Ok(
-        request::<linera_graphql_client::service::Applications, _>(&client, node, variables)
+        request::<gql_service::Applications, _>(&client, node, variables)
             .await?
             .applications,
     )
@@ -189,13 +188,11 @@ async fn get_operations(indexer: &str, chain_id: ChainId) -> Result<Vec<Operatio
         from: OperationsKeyKind::Last(chain_id),
         limit: None,
     };
-    Ok(request::<linera_graphql_client::operations::Operations, _>(
-        &client,
-        &operations_indexer,
-        variables,
+    Ok(
+        request::<gql_operations::Operations, _>(&client, &operations_indexer, variables)
+            .await?
+            .operations,
     )
-    .await?
-    .operations)
 }
 
 /// Returns the error page.
@@ -226,7 +223,7 @@ async fn blocks(
 async fn block(node: &str, chain_id: ChainId, hash: Option<CryptoHash>) -> Result<(Page, String)> {
     let client = reqwest::Client::new();
     let variables = block::Variables { hash, chain_id };
-    let block = request::<linera_graphql_client::service::Block, _>(&client, node, variables)
+    let block = request::<gql_service::Block, _>(&client, node, variables)
         .await?
         .block
         .ok_or_else(|| anyhow!("no block found"))?;
@@ -284,14 +281,11 @@ async fn operation(
         None => OperationKeyKind::Last(chain_id),
     };
     let variables = get_operation::Variables { key };
-    let operation = request::<linera_graphql_client::operations::GetOperation, _>(
-        &client,
-        &operations_indexer,
-        variables,
-    )
-    .await?
-    .operation
-    .ok_or_else(|| anyhow!("no operation found"))?;
+    let operation =
+        request::<gql_operations::GetOperation, _>(&client, &operations_indexer, variables)
+            .await?
+            .operation
+            .ok_or_else(|| anyhow!("no operation found"))?;
     Ok((
         Page::Operation(operation.clone()),
         format!(
@@ -392,16 +386,6 @@ fn fill_type(element: &Value, types: &Vec<Value>) -> Value {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
-fn application_id(app: &Application) -> &str {
-    app.id.as_str()
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn application_id(_app: &Application) -> &str {
-    panic!("explorer not compiled in wasm32 architecture")
-}
-
 /// Returns the application page.
 async fn application(app: Application) -> Result<(Page, String)> {
     let schema = graphql::introspection(&app.link).await?;
@@ -419,7 +403,7 @@ async fn application(app: Application) -> Result<(Page, String)> {
     let subscriptions = list_entrypoints(&types, &sch["subscriptionType"]["name"])
         .unwrap_or(Value::Array(Vec::new()));
     let subscriptions = fill_type(&subscriptions, &types);
-    let pathname = format!("/application/{}", application_id(&app));
+    let pathname = format!("/application/{}", app.id.as_str());
     Ok((
         Page::Application {
             app: Box::new(app),

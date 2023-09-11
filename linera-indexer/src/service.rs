@@ -85,15 +85,13 @@ impl Service {
             chain_id,
         };
         let response = post_graphql::<Block, _>(&client, &self.http(), variables).await?;
-        match response.data {
-            None => Err(IndexerError::NullData(response.errors)),
-            Some(data) => match data.block {
-                Some(block) => block
-                    .try_into()
-                    .map_err(IndexerError::UnknownCertificateStatus),
-                None => Err(IndexerError::NotFound(hash)),
-            },
-        }
+        response
+            .data
+            .ok_or_else(|| IndexerError::NullData(response.errors))?
+            .block
+            .ok_or_else(|| IndexerError::NotFound(hash))?
+            .try_into()
+            .map_err(IndexerError::UnknownCertificateStatus)
     }
 
     /// Gets chains

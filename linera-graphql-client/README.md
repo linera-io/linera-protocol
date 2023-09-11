@@ -2,7 +2,7 @@
 
 <!-- cargo-rdme start -->
 
-This module defines a GraphQL client for the node service and the indexer.
+A GraphQL client for the node service and the indexer.
 
 <!-- cargo-rdme end -->
 
