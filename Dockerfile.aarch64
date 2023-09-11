@@ -1,5 +1,5 @@
 ##############################################################################
-################## Meant to be run with Google Cloud Build ##################
+################## Meant to be run with Google Cloud Build ###################
 ##############################################################################
 
 # From the root of the repo, use the following command to run:
