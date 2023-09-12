@@ -154,7 +154,7 @@ where
         }
     }
 
-    /// Consume an event from the inbox.
+    /// Consumes an event from the inbox.
     pub(crate) async fn remove_event(&mut self, event: &Event) -> Result<(), InboxError> {
         // Record the latest cursor.
         let cursor = Cursor::from(event);
@@ -206,7 +206,7 @@ where
         Ok(())
     }
 
-    /// Push an event to the inbox. The verifications should not fail in production unless
+    /// Pushes an event to the inbox. The verifications should not fail in production unless
     /// many validators are faulty.
     pub(crate) async fn add_event(&mut self, event: Event) -> Result<(), InboxError> {
         // Record the latest cursor.

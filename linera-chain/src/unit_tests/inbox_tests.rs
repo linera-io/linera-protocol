@@ -187,7 +187,7 @@ async fn test_inbox_add_then_remove_unskippable() {
             .await,
         Err(InboxError::UnexpectedEvent { .. })
     ));
-    // Fail to remove non-matching even (hash).
+    // Fail to remove non-matching event (hash).
     assert!(matches!(
         view.remove_event(&make_unskippable_event(CryptoHash::new(&Dummy2), 0, 1, [1]))
             .await,
@@ -284,12 +284,12 @@ async fn test_inbox_add_then_remove_mixed() {
         .await
         .unwrap();
     view.add_event(make_event(hash, 1, 0, [2])).await.unwrap();
-    // Fail to remove non-matching event.
+    // Fail to remove non-matching event (skippability).
     assert!(matches!(
         view.remove_event(&make_event(hash, 0, 1, [1])).await,
         Err(InboxError::UnexpectedEvent { .. })
     ));
-    // Fail to remove non-matching even (hash).
+    // Fail to remove non-matching event (hash).
     assert!(matches!(
         view.remove_event(&make_unskippable_event(CryptoHash::new(&Dummy2), 0, 1, [1]))
             .await,
