@@ -4,7 +4,6 @@ metadata:
   name: validator-ingress
 spec:
   type: LoadBalancer
-  loadBalancerIP: 34.151.215.158
   selector:
     app: validator-1
   ports:

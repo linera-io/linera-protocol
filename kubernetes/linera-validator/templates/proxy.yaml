@@ -22,8 +22,10 @@ spec:
             - containerPort: 19100
               name: linera-port
           command: ["./linera-proxy"]
-          args: ["server_1.json", "--kube"]
+          args: ["server_1.json"]
           env:
+            - name: RUST_LOG
+              value: {{ .Values.logLevel }}
             - name: MY_POD_NAME
               valueFrom:
                 fieldRef:
