@@ -6,12 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::{fmt, time::SystemTime};
 use thiserror::Error;
 
-#[cfg(any(test, feature = "test"))]
-use test_strategy::Arbitrary;
-
-#[cfg(not(target_arch = "wasm32"))]
-use chrono::NaiveDateTime;
-
 use crate::doc_scalar;
 
 /// A non-negative amount of tokens.
@@ -54,7 +48,7 @@ impl<'de> Deserialize<'de> for Amount {
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
-#[cfg_attr(any(test, feature = "test"), derive(Arbitrary))]
+#[cfg_attr(any(test, feature = "test"), derive(test_strategy::Arbitrary))]
 pub struct BlockHeight(pub u64);
 
 /// A number to identify successive attempts to decide a value in a consensus protocol.
@@ -115,7 +109,7 @@ impl From<u64> for Timestamp {
 #[cfg(not(target_arch = "wasm32"))]
 impl fmt::Display for Timestamp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(date_time) = NaiveDateTime::from_timestamp_opt(
+        if let Some(date_time) = chrono::NaiveDateTime::from_timestamp_opt(
             (self.0 / 1_000_000) as i64,
             ((self.0 % 1_000_000) * 1_000) as u32,
         ) {

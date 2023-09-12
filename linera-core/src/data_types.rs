@@ -21,12 +21,12 @@ use linera_views::{common::Context, views::ViewError};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[cfg(any(test, feature = "test"))]
-use test_strategy::Arbitrary;
-
 /// A range of block heights as used in ChainInfoQuery.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Arbitrary, Eq, PartialEq))]
+#[cfg_attr(
+    any(test, feature = "test"),
+    derive(test_strategy::Arbitrary, Eq, PartialEq)
+)]
 pub struct BlockHeightRange {
     /// Starting point
     pub start: BlockHeight,
@@ -44,7 +44,10 @@ impl BlockHeightRange {
 
 /// Request information about a chain.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Arbitrary, Eq, PartialEq))]
+#[cfg_attr(
+    any(test, feature = "test"),
+    derive(test_strategy::Arbitrary, Eq, PartialEq)
+)]
 pub struct ChainInfoQuery {
     /// The chain id
     pub chain_id: ChainId,
