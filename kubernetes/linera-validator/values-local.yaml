@@ -1,4 +1,4 @@
 # Values for charts linera-validator for local validators.
 
-lineraImage: linera-test:0.1
+lineraImage: linera-test:latest
 lineraImagePullPolicy: Never
