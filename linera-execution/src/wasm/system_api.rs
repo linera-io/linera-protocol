@@ -3,7 +3,7 @@
 
 /// Generates an implementation of `ContractSystemApi` for the provided `contract_system_api` type.
 ///
-/// Generates the common code for contract system API types for all WASM runtimes.
+/// Generates the common code for contract system API types for all Wasm runtimes.
 macro_rules! impl_contract_system_api {
     ($contract_system_api:ident<$runtime:lifetime>) => {
         impl_contract_system_api!(
@@ -173,7 +173,7 @@ macro_rules! impl_contract_system_api {
 
 /// Generates an implementation of `ServiceSystemApi` for the provided `service_system_api` type.
 ///
-/// Generates the common code for service system API types for all WASM runtimes.
+/// Generates the common code for service system API types for all Wasm runtimes.
 macro_rules! impl_service_system_api {
     ($service_system_api:ident<$runtime:lifetime>) => {
         impl_service_system_api!(@generate $service_system_api<$runtime>, $runtime, <$runtime>);
@@ -291,7 +291,7 @@ macro_rules! impl_service_system_api {
 
 /// Generates an implementation of `ViewSystem` for the provided `view_system_api` type.
 ///
-/// Generates the common code for view system API types for all WASM runtimes.
+/// Generates the common code for view system API types for all Wasm runtimes.
 macro_rules! impl_view_system_api {
     ($view_system_api:ident<$runtime:lifetime>) => {
         impl_view_system_api!(

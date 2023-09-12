@@ -166,7 +166,7 @@ impl ActiveChain {
             .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
             .current_dir(repository)
             .output()
-            .expect("Failed to build WASM binaries");
+            .expect("Failed to build Wasm binaries");
 
         if !output.status.success() {
             panic!(

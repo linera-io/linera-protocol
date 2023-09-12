@@ -148,4 +148,4 @@ pub const LOAD_VIEW_COUNTER: &str = "load_view";
 pub const SAVE_VIEW_COUNTER: &str = "save_view";
 
 #[cfg(all(feature = "aws", target_arch = "wasm32"))]
-compile_error!("Cannot build AWS features for the WASM target");
+compile_error!("Cannot build AWS features for the Wasm target");

@@ -13,7 +13,7 @@ pub mod wit_types;
 wit_bindgen_guest_rust::import!("service_system_api.wit");
 
 /// Declares an implementation of the [`Service`][`crate::Service`] trait, exporting it from the
-/// WASM module.
+/// Wasm module.
 ///
 /// Generates the necessary boilerplate for implementing the service WIT interface, exporting the
 /// necessary resource types and functions so that the host can call the service application.

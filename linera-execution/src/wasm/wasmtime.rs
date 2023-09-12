@@ -125,7 +125,7 @@ impl WasmApplication {
         Ok(WasmApplication::Wasmtime { contract, service })
     }
 
-    /// Prepares a runtime instance to call into the WASM contract.
+    /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare_contract_runtime_with_wasmtime<'runtime>(
         contract_module: &Module,
         runtime: &'runtime dyn ContractRuntime,
@@ -163,7 +163,7 @@ impl WasmApplication {
         })
     }
 
-    /// Prepares a runtime instance to call into the WASM service.
+    /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare_service_runtime_with_wasmtime<'runtime>(
         service_module: &Module,
         runtime: &'runtime dyn ServiceRuntime,
@@ -198,7 +198,7 @@ impl WasmApplication {
     }
 }
 
-/// Data stored by the runtime that's necessary for handling calls to and from the WASM module.
+/// Data stored by the runtime that's necessary for handling calls to and from the Wasm module.
 pub struct ContractState<'runtime> {
     data: ContractData,
     system_api: ContractSystemApi<'runtime>,
@@ -206,7 +206,7 @@ pub struct ContractState<'runtime> {
     views_tables: ViewSystemApiTables<ContractSystemApi<'runtime>>,
 }
 
-/// Data stored by the runtime that's necessary for handling queries to and from the WASM module.
+/// Data stored by the runtime that's necessary for handling queries to and from the Wasm module.
 pub struct ServiceState<'runtime> {
     data: ServiceData,
     system_api: ServiceSystemApi<'runtime>,
@@ -218,7 +218,7 @@ impl<'runtime> ContractState<'runtime> {
     /// Creates a new instance of [`ContractState`].
     ///
     /// Uses `runtime` to export the system API, and the `waker` to be able to correctly handle
-    /// asynchronous calls from the guest WASM module.
+    /// asynchronous calls from the guest Wasm module.
     pub fn new(
         runtime: &'runtime dyn ContractRuntime,
         waker: WakerForwarder,
@@ -262,7 +262,7 @@ impl<'runtime> ServiceState<'runtime> {
     /// Creates a new instance of [`ServiceState`].
     ///
     /// Uses `runtime` to export the system API, and the `waker` to be able to correctly handle
-    /// asynchronous calls from the guest WASM module.
+    /// asynchronous calls from the guest Wasm module.
     pub fn new(runtime: &'runtime dyn ServiceRuntime, waker: WakerForwarder) -> Self {
         Self {
             data: ServiceData::default(),
@@ -444,7 +444,7 @@ struct SystemApi<S> {
     runtime: S,
 }
 
-/// Implementation to forward contract system calls from the guest WASM module to the host
+/// Implementation to forward contract system calls from the guest Wasm module to the host
 /// implementation.
 pub struct ContractSystemApi<'runtime> {
     shared: SystemApi<&'runtime dyn ContractRuntime>,
@@ -497,7 +497,7 @@ impl<'runtime> ContractSystemApi<'runtime> {
 impl_contract_system_api!(ContractSystemApi<'runtime>);
 impl_view_system_api!(ContractSystemApi<'runtime>);
 
-/// Implementation to forward service system calls from the guest WASM module to the host
+/// Implementation to forward service system calls from the guest Wasm module to the host
 /// implementation.
 pub struct ServiceSystemApi<'runtime> {
     shared: SystemApi<&'runtime dyn ServiceRuntime>,

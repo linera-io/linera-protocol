@@ -13,7 +13,7 @@ pub mod wit_types;
 wit_bindgen_guest_rust::import!("contract_system_api.wit");
 
 /// Declares an implementation of the [`Contract`][`crate::Contract`] trait, exporting it from the
-/// WASM module.
+/// Wasm module.
 ///
 /// Generates the necessary boilerplate for implementing the contract WIT interface, exporting the
 /// necessary resource types and functions so that the host can call the contract application.

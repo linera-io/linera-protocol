@@ -21,7 +21,7 @@ use serde_json::json;
 use std::sync::Arc;
 use test_case::test_case;
 
-/// Test if the "counter" example application in `linera-sdk` compiled to a WASM module can be
+/// Test if the "counter" example application in `linera-sdk` compiled to a Wasm module can be
 /// called correctly and consume the expected amount of fuel.
 ///
 /// To update the bytecode files, run `linera-execution/update_wasm_fixtures.sh`.

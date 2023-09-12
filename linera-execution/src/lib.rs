@@ -650,7 +650,7 @@ impl Bytecode {
         Bytecode { bytes }
     }
 
-    /// Load bytecode from a WASM module file.
+    /// Load bytecode from a Wasm module file.
     pub async fn load_from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let bytes = tokio::fs::read(path).await?;
         Ok(Bytecode { bytes })

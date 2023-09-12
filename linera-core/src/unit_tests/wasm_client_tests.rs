@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! WASM specific client tests.
+//! Wasm specific client tests.
 //!
-//! These tests only run if a WASM runtime has been configured by enabling either the `wasmer` or
+//! These tests only run if a Wasm runtime has been configured by enabling either the `wasmer` or
 //! the `wasmtime` feature flags.
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]

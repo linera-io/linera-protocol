@@ -34,7 +34,7 @@ use mock_system_api::Resources;
 use std::process::ExitCode;
 use wasmtime::*;
 
-/// Loads a test WASM module and runs all test functions annotated by [`webassembly-test`].
+/// Loads a test Wasm module and runs all test functions annotated by [`webassembly-test`].
 ///
 /// Prints out a summary of executed tests and their results.
 #[tokio::main]
@@ -61,7 +61,7 @@ async fn main() -> Result<ExitCode> {
     Ok(report.print())
 }
 
-/// Loads the input test WASM module specified as a command line argument.
+/// Loads the input test Wasm module specified as a command line argument.
 fn load_test_module(engine: &Engine) -> Result<Module> {
     let module_path = parse_args()?;
     let module = Module::from_file(engine, module_path)?;
@@ -78,7 +78,7 @@ fn parse_args() -> Result<String> {
     }
 }
 
-/// Information of a test in the input WASM module.
+/// Information of a test in the input Wasm module.
 struct Test<'a> {
     name: &'a str,
     function: &'a str,
@@ -86,7 +86,7 @@ struct Test<'a> {
 }
 
 impl<'a> Test<'a> {
-    /// Collects test information from a function exported from the WASM module.
+    /// Collects test information from a function exported from the Wasm module.
     pub fn new(export: ExportType<'a>) -> Option<Self> {
         let function = export.name();
         let test_name = function.strip_prefix("$webassembly-test$")?;
@@ -99,9 +99,9 @@ impl<'a> Test<'a> {
         })
     }
 
-    /// Runs a test function exported from the WASM module and reports its result.
+    /// Runs a test function exported from the Wasm module and reports its result.
     ///
-    /// The test is executed in a clean WASM environment.
+    /// The test is executed in a clean Wasm environment.
     pub async fn run(
         self,
         report: &mut TestReport,
