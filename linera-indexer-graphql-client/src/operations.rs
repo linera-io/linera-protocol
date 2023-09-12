@@ -20,32 +20,32 @@ pub struct OperationKey {
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "graphql/operations_schema.graphql",
-    query_path = "graphql/operations_requests.graphql",
+    schema_path = "gql/operations_schema.graphql",
+    query_path = "gql/operations_requests.graphql",
     response_derives = "Debug, Serialize, Clone"
 )]
 pub struct Operations;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "graphql/operations_schema.graphql",
-    query_path = "graphql/operations_requests.graphql",
+    schema_path = "gql/operations_schema.graphql",
+    query_path = "gql/operations_requests.graphql",
     response_derives = "Debug, Serialize, Clone"
 )]
 pub struct OperationsCount;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "graphql/operations_schema.graphql",
-    query_path = "graphql/operations_requests.graphql",
+    schema_path = "gql/operations_schema.graphql",
+    query_path = "gql/operations_requests.graphql",
     response_derives = "Debug, Serialize, Clone"
 )]
 pub struct LastOperation;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "graphql/operations_schema.graphql",
-    query_path = "graphql/operations_requests.graphql",
+    schema_path = "gql/operations_schema.graphql",
+    query_path = "gql/operations_requests.graphql",
     response_derives = "Debug, Serialize, Clone"
 )]
 pub struct GetOperation;

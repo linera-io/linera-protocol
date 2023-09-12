@@ -58,48 +58,48 @@ pub type ApplicationId = String;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "graphql/service_schema.graphql",
-    query_path = "graphql/service_requests.graphql",
+    schema_path = "gql/service_schema.graphql",
+    query_path = "gql/service_requests.graphql",
     response_derives = "Debug, Serialize, Clone"
 )]
 pub struct Chains;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "graphql/service_schema.graphql",
-    query_path = "graphql/service_requests.graphql",
+    schema_path = "gql/service_schema.graphql",
+    query_path = "gql/service_requests.graphql",
     response_derives = "Debug, Serialize, Clone, PartialEq"
 )]
 pub struct Applications;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "graphql/service_schema.graphql",
-    query_path = "graphql/service_requests.graphql",
+    schema_path = "gql/service_schema.graphql",
+    query_path = "gql/service_requests.graphql",
     response_derives = "Debug, Serialize, Clone, PartialEq"
 )]
 pub struct Blocks;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "graphql/service_schema.graphql",
-    query_path = "graphql/service_requests.graphql",
+    schema_path = "gql/service_schema.graphql",
+    query_path = "gql/service_requests.graphql",
     response_derives = "Debug, Serialize, Clone, PartialEq"
 )]
 pub struct Block;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "graphql/service_schema.graphql",
-    query_path = "graphql/service_requests.graphql",
+    schema_path = "gql/service_schema.graphql",
+    query_path = "gql/service_requests.graphql",
     response_derives = "Debug, Serialize, Clone, PartialEq"
 )]
 pub struct Notifications;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "graphql/service_schema.graphql",
-    query_path = "graphql/service_requests.graphql",
+    schema_path = "gql/service_schema.graphql",
+    query_path = "gql/service_requests.graphql",
     response_derives = "Debug, Serialize, Clone"
 )]
 pub struct Transfer;
@@ -184,7 +184,6 @@ mod from {
                 ("validated", Some(executed_block)) => {
                     Ok(HashedValue::new_validated(executed_block.into()))
                 }
-                // this constructor needs the "test" feature from linera-service
                 ("confirmed", Some(executed_block)) => {
                     Ok(HashedValue::new_confirmed(executed_block.into()))
                 }

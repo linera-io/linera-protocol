@@ -21,7 +21,8 @@ hex = { workspace = true }
 reqwest = { workspace = true }
 js-sys = "0.3"
 linera-base = { workspace = true }
-linera-graphql-client = { workspace = true }
+linera-indexer-graphql-client = { workspace = true }
+linera-service-graphql-client = { workspace = true }
 once_cell = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde-wasm-bindgen = "0.5"

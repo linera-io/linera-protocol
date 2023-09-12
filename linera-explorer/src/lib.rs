@@ -12,6 +12,11 @@ mod js_utils;
 
 use anyhow::{anyhow, Result};
 use futures::prelude::*;
+use gql_service::{
+    applications, applications::ApplicationsApplications as Application, block,
+    block::BlockBlock as Block, blocks, blocks::BlocksBlocks as Blocks, chains, notifications,
+    request, Chains, Reason,
+};
 use graphql_client::Response;
 use js_utils::{getf, log_str, parse, setf, stringify, SER};
 use linera_base::{
@@ -19,7 +24,7 @@ use linera_base::{
     data_types::BlockHeight,
     identifiers::{ChainDescription, ChainId},
 };
-use linera_graphql_client::{
+use linera_indexer_graphql_client::{
     operations as gql_operations,
     operations::{
         get_operation,
@@ -28,13 +33,8 @@ use linera_graphql_client::{
         operations::{OperationKeyKind as OperationsKeyKind, OperationsOperations as Operations},
         OperationKey,
     },
-    request, service as gql_service,
-    service::{
-        applications, applications::ApplicationsApplications as Application, block,
-        block::BlockBlock as Block, blocks, blocks::BlocksBlocks as Blocks, chains, notifications,
-        Chains, Reason,
-    },
 };
+use linera_service_graphql_client as gql_service;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

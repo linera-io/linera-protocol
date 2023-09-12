@@ -1,15 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! A GraphQL client for the node service and the indexer.
-
 use graphql_client::{reqwest::post_graphql, GraphQLQuery};
 use reqwest::Client;
 use thiserror::Error;
-
-pub mod indexer;
-pub mod operations;
-pub mod service;
 
 #[derive(Error, Debug)]
 pub enum Error {

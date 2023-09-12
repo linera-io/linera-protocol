@@ -4,13 +4,14 @@ members = [
         "linera-chain",
         "linera-core",
         "linera-execution",
-        "linera-graphql-client",
         "linera-indexer",
+        "linera-indexer-graphql-client",
         "linera-rpc",
         "linera-sdk",
         "linera-sdk/wasm-tests",
         "linera-sdk-derive",
         "linera-service",
+        "linera-service-graphql-client",
         "linera-storage",
         "linera-views",
         "linera-views-derive",
@@ -121,8 +122,8 @@ linera-base = { version = "0.4.0", path = "./linera-base" }
 linera-chain = { version = "0.4.0", path = "./linera-chain" }
 linera-core = { version = "0.4.0", path = "./linera-core", default-features = false }
 linera-execution = { version = "0.4.0", path = "./linera-execution", default-features = false }
-linera-graphql-client = { version = "0.4.0", path = "./linera-graphql-client" }
 linera-indexer = { version = "0.4.0", path = "./linera-indexer" }
+linera-indexer-graphql-client = { version = "0.4.0", path = "./linera-indexer-graphql-client" }
 linera-rpc = { version = "0.4.0", path = "./linera-rpc" }
 linera-storage = { version = "0.4.0", path = "./linera-storage", default-features = false }
 linera-views = { version = "0.4.0", path = "./linera-views", default-features = false }
@@ -131,6 +132,7 @@ linera-witty = { version = "0.4.0", path = "./linera-witty" }
 linera-witty-macros = { version = "0.4.0", path = "./linera-witty-macros" }
 linera-sdk-derive = { version = "0.4.0", path = "./linera-sdk-derive" }
 linera-service = { version = "0.4.0", path = "./linera-service" }
+linera-service-graphql-client = { version = "0.4.0", path = "./linera-service-graphql-client" }
 
 counter = { path = "./examples/counter" }
 meta-counter = { path = "./examples/meta-counter" }

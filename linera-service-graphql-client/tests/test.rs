@@ -2,14 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{data_types::Amount, identifiers::ChainId};
-use linera_graphql_client::{
-    request,
-    service::{
-        applications, block, blocks, chains, transfer, Applications, Block, Blocks, Chains,
-        Transfer,
-    },
-};
 use linera_service::client::{resolve_binary, LocalNetwork, Network};
+use linera_service_graphql_client::{
+    applications, block, blocks, chains, request, transfer, Applications, Block, Blocks, Chains,
+    Transfer,
+};
 use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, io::Read, rc::Rc, str::FromStr};
 use tempfile::tempdir;
@@ -133,60 +130,12 @@ async fn test_check_service_schema() {
         .await
         .unwrap();
     let service_schema = String::from_utf8(output.stdout).unwrap();
-    let mut file_base = std::fs::File::open("graphql/service_schema.graphql").unwrap();
+    let mut file_base = std::fs::File::open("gql/service_schema.graphql").unwrap();
     let mut graphql_schema = String::new();
     file_base.read_to_string(&mut graphql_schema).unwrap();
     assert_eq!(
         graphql_schema, service_schema,
         "\nGraphQL service schema has changed -> \
-         regenerate schema following steps in linera-graphql-client/README.md\n"
-    )
-}
-
-#[test_log::test(tokio::test)]
-async fn test_check_indexer_schema() {
-    let tmp_dir = Rc::new(tempdir().unwrap());
-    let path = resolve_binary("linera-indexer", Some("linera-indexer"))
-        .await
-        .unwrap();
-    let mut command = Command::new(path);
-    let output = command
-        .current_dir(tmp_dir.path().canonicalize().unwrap())
-        .arg("schema")
-        .output()
-        .await
-        .unwrap();
-    let indexer_schema = String::from_utf8(output.stdout).unwrap();
-    let mut file_base = std::fs::File::open("graphql/indexer_schema.graphql").unwrap();
-    let mut graphql_schema = String::new();
-    file_base.read_to_string(&mut graphql_schema).unwrap();
-    assert_eq!(
-        graphql_schema, indexer_schema,
-        "\nGraphQL indexer schema has changed -> \
-         regenerate schema following steps in linera-graphql-client/README.md\n"
-    )
-}
-
-#[test_log::test(tokio::test)]
-async fn test_check_indexer_operations_schema() {
-    let tmp_dir = Rc::new(tempdir().unwrap());
-    let path = resolve_binary("linera-indexer", Some("linera-indexer"))
-        .await
-        .unwrap();
-    let mut command = Command::new(path);
-    let output = command
-        .current_dir(tmp_dir.path().canonicalize().unwrap())
-        .args(["schema", "operations"])
-        .output()
-        .await
-        .unwrap();
-    let service_schema = String::from_utf8(output.stdout).unwrap();
-    let mut file_base = std::fs::File::open("graphql/operations_schema.graphql").unwrap();
-    let mut graphql_schema = String::new();
-    file_base.read_to_string(&mut graphql_schema).unwrap();
-    assert_eq!(
-        graphql_schema, service_schema,
-        "\nGraphQL indexer operations schema has changed -> \
-         regenerate schema following steps in linera-graphql-client/README.md\n"
+         regenerate schema following steps in linera-service-graphql-client/README.md\n"
     )
 }

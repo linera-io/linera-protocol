@@ -68,7 +68,7 @@ linera-base = { workspace = true, features = ["test"] }
 linera-chain = { workspace = true, features = ["test"] }
 linera-core = { workspace = true, features = ["test"] }
 linera-execution = { workspace = true, features = ["test"] }
-linera-graphql-client = { workspace = true }
+linera-service-graphql-client = { workspace = true }
 linera-rpc = { workspace = true, features = ["test"] }
 linera-storage = { workspace = true, features = ["test"] }
 linera-views = { workspace = true, features = ["test"] }
