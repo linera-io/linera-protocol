@@ -2,15 +2,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod common;
+
+use common::INTEGRATION_TEST_GUARD;
 #[cfg(feature = "aws")]
 use linera_views::dynamo_db::LocalStackTestContext;
-use once_cell::sync::Lazy;
 use std::io::Write;
 use tempfile::tempdir;
-use tokio::{process::Command, sync::Mutex};
-
-/// A static lock to prevent integration tests from running in parallel.
-static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+use tokio::process::Command;
 
 #[test_log::test(tokio::test)]
 async fn test_examples_in_readme() -> std::io::Result<()> {
