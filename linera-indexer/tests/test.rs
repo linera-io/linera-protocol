@@ -18,9 +18,9 @@ use tokio::{
 use tracing::{info, warn};
 
 /// A static lock to prevent integration tests from running in parallel.
-pub static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
-pub async fn run_indexer(tmp_dir: &Rc<TempDir>) -> Child {
+async fn run_indexer(tmp_dir: &Rc<TempDir>) -> Child {
     let port = 8081;
     let path = resolve_binary("linera-indexer", Some("linera-indexer"))
         .await
@@ -65,6 +65,12 @@ async fn transfer(client: &reqwest::Client, from: ChainId, to: ChainId, amount: 
         .unwrap();
 }
 
+#[cfg(debug_assertions)]
+const TRANSFER_DELAY_MILLIS: u64 = 500;
+
+#[cfg(not(debug_assertions))]
+const TRANSFER_DELAY_MILLIS: u64 = 100;
+
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_operations_indexer() {
     // launching network, service and indexer
@@ -95,7 +101,7 @@ async fn test_end_to_end_operations_indexer() {
     let chain1 = ChainId::root(1);
     for _ in 0..10 {
         transfer(&req_client, chain0, chain1, "0.1").await;
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(TRANSFER_DELAY_MILLIS)).await;
     }
     tokio::time::sleep(Duration::from_secs(2)).await;
 
