@@ -578,7 +578,7 @@ impl StoreBuilder for MakeMemoryStoreClient {
 }
 
 impl MakeMemoryStoreClient {
-    /// Creates a [`MakeMemoryStoreClient`] that uses the specified [`WasmRuntime`] to run WASM
+    /// Creates a [`MakeMemoryStoreClient`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
@@ -597,7 +597,7 @@ pub struct MakeRocksDbStoreClient {
 
 #[cfg(feature = "rocksdb")]
 impl MakeRocksDbStoreClient {
-    /// Creates a [`MakeRocksDbStoreClient`] that uses the specified [`WasmRuntime`] to run WASM
+    /// Creates a [`MakeRocksDbStoreClient`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
@@ -634,7 +634,7 @@ pub struct MakeDynamoDbStoreClient {
 
 #[cfg(feature = "aws")]
 impl MakeDynamoDbStoreClient {
-    /// Creates a [`MakeDynamoDbStoreClient`] that uses the specified [`WasmRuntime`] to run WASM
+    /// Creates a [`MakeDynamoDbStoreClient`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
@@ -694,7 +694,7 @@ impl Default for MakeScyllaDbStoreClient {
 
 #[cfg(feature = "scylladb")]
 impl MakeScyllaDbStoreClient {
-    /// Creates a [`MakeScyllaDbStoreClient`] that uses the specified [`WasmRuntime`] to run WASM
+    /// Creates a [`MakeScyllaDbStoreClient`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {

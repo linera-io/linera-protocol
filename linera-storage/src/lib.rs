@@ -191,7 +191,7 @@ pub trait Store: Sized {
         application_description: &UserApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError> {
         let Some(wasm_runtime) = self.wasm_runtime() else {
-            panic!("A WASM runtime is required to load user applications.");
+            panic!("A Wasm runtime is required to load user applications.");
         };
         let UserApplicationDescription {
             bytecode_id,
@@ -232,7 +232,7 @@ pub trait Store: Sized {
         _application_description: &UserApplicationDescription,
     ) -> Result<UserApplicationCode, ExecutionError> {
         panic!(
-            "A WASM runtime is required to load user applications. \
+            "A Wasm runtime is required to load user applications. \
             Please enable the `wasmer` or the `wasmtime` feature flags \
             when compiling `linera-storage`."
         );

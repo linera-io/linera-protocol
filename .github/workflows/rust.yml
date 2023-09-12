@@ -63,11 +63,11 @@ jobs:
     - name: Run some extra execution tests with wasmtime
       run: |
         cargo test --locked -p linera-execution --features wasmtime
-    - name: Build WASM test runner
+    - name: Build Wasm test runner
       # use debug mode to avoid building wasmtime in release mode
       run: |
         cargo build --locked --bin test-runner
-    - name: Run WASM application tests
+    - name: Run Wasm application tests
       run: |
         cd examples
         CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=../target/debug/test-runner cargo test --target wasm32-unknown-unknown
@@ -131,7 +131,7 @@ jobs:
         (set -e; for I in linera-*; do echo $I; cargo rdme --check --no-fail-on-warnings -w $I; done)
         cd examples
         (set -e; for I in fungible social crowd-funding; do echo $I; cargo rdme --check --no-fail-on-warnings -w $I; done)
-    - name: Run WASM application lints
+    - name: Run Wasm application lints
       run: |
         cd examples
         cargo +nightly fmt -- --check

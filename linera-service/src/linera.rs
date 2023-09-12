@@ -831,10 +831,10 @@ enum ClientCommand {
 
     /// Publish bytecode.
     PublishBytecode {
-        /// Path to the WASM file for the application "contract" bytecode.
+        /// Path to the Wasm file for the application "contract" bytecode.
         contract: PathBuf,
 
-        /// Path to the WASM file for the application "service" bytecode.
+        /// Path to the Wasm file for the application "service" bytecode.
         service: PathBuf,
 
         /// An optional chain ID to publish the bytecode. The default chain of the wallet
@@ -874,10 +874,10 @@ enum ClientCommand {
 
     /// Create an application, and publish the required bytecode.
     PublishAndCreate {
-        /// Path to the WASM file for the application "contract" bytecode.
+        /// Path to the Wasm file for the application "contract" bytecode.
         contract: PathBuf,
 
-        /// Path to the WASM file for the application "service" bytecode.
+        /// Path to the Wasm file for the application "service" bytecode.
         service: PathBuf,
 
         /// An optional chain ID to publish the bytecode. The default chain of the wallet

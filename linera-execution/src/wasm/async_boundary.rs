@@ -20,7 +20,7 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-/// A host future that can be called by a WASM guest module.
+/// A host future that can be called by a Wasm guest module.
 pub struct HostFuture<'future, Output> {
     future: Mutex<BoxFuture<'future, Output>>,
 }
@@ -36,17 +36,17 @@ impl<Output> Debug for HostFuture<'_, Output> {
 }
 
 impl<'future, Output> HostFuture<'future, Output> {
-    /// Wraps a given `future` so that it can be called from guest WASM modules.
+    /// Wraps a given `future` so that it can be called from guest Wasm modules.
     pub fn new(future: impl Future<Output = Output> + Send + 'future) -> Self {
         HostFuture {
             future: Mutex::new(Box::pin(future)),
         }
     }
 
-    /// Polls a future from a WASM module.
+    /// Polls a future from a Wasm module.
     ///
     /// Requires the task [`Waker`] to have been saved in the provided `waker`. If it hasn't, or if
-    /// the waker for a task other than the task used to call the WASM module code is provided, the
+    /// the waker for a task other than the task used to call the Wasm module code is provided, the
     /// call may panic or the future may not be scheduled to resume afterwards, leading the module
     /// to hang.
     ///
@@ -75,22 +75,22 @@ impl<'future, Output> HostFuture<'future, Output> {
     }
 }
 
-/// A future implemented in a WASM module.
+/// A future implemented in a Wasm module.
 pub enum GuestFuture<'context, Future, Application>
 where
     Application: ApplicationRuntimeContext,
 {
-    /// The WASM module failed to create an instance of the future.
+    /// The Wasm module failed to create an instance of the future.
     ///
     /// The error will be returned when this [`GuestFuture`] is polled.
     FailedToCreate(Option<Application::Error>),
 
-    /// The WASM future type and the runtime context to poll it.
+    /// The Wasm future type and the runtime context to poll it.
     Active {
         /// A WIT resource type implementing a [`GuestFutureInterface`] so that it can be polled.
         future: Future,
 
-        /// Types necessary to call the guest WASM module in order to poll the future.
+        /// Types necessary to call the guest Wasm module in order to poll the future.
         context: WasmRuntimeContext<'context, Application>,
     },
 }
@@ -101,7 +101,7 @@ where
 {
     /// Creates a [`GuestFuture`] instance with `creation_result` of a future resource type.
     ///
-    /// If the guest resource type could not be created by the WASM module, the error is stored so
+    /// If the guest resource type could not be created by the Wasm module, the error is stored so
     /// that it can be returned when the [`GuestFuture`] is polled.
     pub fn new(
         creation_result: Result<Future, Application::Error>,
@@ -127,7 +127,7 @@ where
     /// Polls the guest future after the [`HostFutureQueue`] in the [`WasmRuntimeContext`] indicates
     /// that it's safe to do so without breaking determinism.
     ///
-    /// Uses the runtime context to call the WASM future's `poll` method, as implemented in the
+    /// Uses the runtime context to call the Wasm future's `poll` method, as implemented in the
     /// [`GuestFutureInterface`]. The `task_context` is stored in the runtime context's
     /// [`WakerForwarder`], so that any host futures the guest calls can use the correct task
     /// context.
@@ -147,7 +147,7 @@ where
     }
 }
 
-/// Interface to poll a future implemented in a WASM module.
+/// Interface to poll a future implemented in a Wasm module.
 pub trait GuestFutureInterface<Application>
 where
     Application: ApplicationRuntimeContext,
@@ -157,7 +157,7 @@ where
 
     /// Polls the guest future to attempt to progress it.
     ///
-    /// May return an [`ExecutionError`] if the guest WASM module panics, for example.
+    /// May return an [`ExecutionError`] if the guest Wasm module panics, for example.
     fn poll(
         &self,
         application: &Application,
@@ -166,12 +166,12 @@ where
 }
 
 /// A type to keep track of a [`Waker`] so that it can be forwarded to any async code called from
-/// the guest WASM module.
+/// the guest Wasm module.
 ///
 /// When a [`Future`] is polled, a [`Waker`] is used so that the task can be scheduled to be
 /// woken up and polled again if it's still awaiting something.
 ///
-/// The problem is that calling a WASM module from an async task can lead to that guest code
+/// The problem is that calling a Wasm module from an async task can lead to that guest code
 /// calling back some host async code. A [`Context`] for the new host code must be created with the
 /// same [`Waker`] to ensure that the wake events are forwarded back correctly to the host code
 /// that called the guest.

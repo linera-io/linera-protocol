@@ -189,12 +189,12 @@ pub trait Service: ApplicationRuntimeContext {
     ) -> Result<Self::PollQuery, Self::Error>;
 }
 
-/// Wrapper around all types necessary to call an asynchronous method of a WASM application.
+/// Wrapper around all types necessary to call an asynchronous method of a Wasm application.
 pub struct WasmRuntimeContext<'context, A>
 where
     A: ApplicationRuntimeContext,
 {
-    /// Where to store the async task context to later be reused in async calls from the guest WASM
+    /// Where to store the async task context to later be reused in async calls from the guest Wasm
     /// module.
     pub(crate) waker_forwarder: WakerForwarder,
 
@@ -207,7 +207,7 @@ where
     /// The application's memory state.
     pub(crate) store: A::Store,
 
-    /// Guard type to clean up any host state after the call to the WASM application finishes.
+    /// Guard type to clean up any host state after the call to the Wasm application finishes.
     #[allow(dead_code)]
     pub(crate) extra: A::Extra,
 }
@@ -216,7 +216,7 @@ impl<'context, A> WasmRuntimeContext<'context, A>
 where
     A: Contract,
 {
-    /// Calls the guest WASM module's implementation of
+    /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::initialize`][`linera_execution::UserApplication::initialize`].
     ///
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
@@ -240,7 +240,7 @@ where
         GuestFuture::new(future, self)
     }
 
-    /// Calls the guest WASM module's implementation of
+    /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::execute_operation`][`linera_execution::UserApplication::execute_operation`].
     ///
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
@@ -264,7 +264,7 @@ where
         GuestFuture::new(future, self)
     }
 
-    /// Calls the guest WASM module's implementation of
+    /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::execute_message`][`linera_execution::UserApplication::execute_message`].
     ///
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
@@ -288,7 +288,7 @@ where
         GuestFuture::new(future, self)
     }
 
-    /// Calls the guest WASM module's implementation of
+    /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::handle_application_call`][`linera_execution::UserApplication::handle_application_call`].
     ///
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
@@ -322,7 +322,7 @@ where
         GuestFuture::new(future, self)
     }
 
-    /// Calls the guest WASM module's implementation of
+    /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::handle_session_call`][`linera_execution::UserApplication::handle_session_call`].
     ///
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
@@ -376,7 +376,7 @@ impl<'context, A> WasmRuntimeContext<'context, A>
 where
     A: Service,
 {
-    /// Calls the guest WASM module's implementation of
+    /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::query_application`][`linera_execution::UserApplication::query_application`].
     ///
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to

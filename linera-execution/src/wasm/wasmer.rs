@@ -134,7 +134,7 @@ impl WasmApplication {
         Ok(WasmApplication::Wasmer { contract, service })
     }
 
-    /// Prepares a runtime instance to call into the WASM contract.
+    /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare_contract_runtime_with_wasmer<'runtime>(
         (contract_engine, contract_module): &(Engine, Module),
         runtime: &'runtime dyn ContractRuntime,
@@ -178,7 +178,7 @@ impl WasmApplication {
         })
     }
 
-    /// Prepares a runtime instance to call into the WASM service.
+    /// Prepares a runtime instance to call into the Wasm service.
     pub fn prepare_service_runtime_with_wasmer<'runtime>(
         service_module: &Module,
         runtime: &'runtime dyn ServiceRuntime,
@@ -391,7 +391,7 @@ impl<Runtime> SystemApi<Runtime> {
     /// respected.
     ///
     /// The [`RuntimeGuard`] instance must be kept alive while the `runtime` reference is still
-    /// expected to be alive and usable by the WASM application.
+    /// expected to be alive and usable by the Wasm application.
     pub fn new<'runtime>(
         waker: WakerForwarder,
         runtime: impl RemoveLifetime<WithoutLifetime = Runtime> + 'runtime,
@@ -441,7 +441,7 @@ unsafe impl<'runtime> RemoveLifetime for &'runtime dyn ServiceRuntime {
     }
 }
 
-/// Implementation to forward contract system calls from the guest WASM module to the host
+/// Implementation to forward contract system calls from the guest Wasm module to the host
 /// implementation.
 pub struct ContractSystemApi {
     shared: Arc<Mutex<SystemApi<&'static dyn ContractRuntime>>>,
@@ -464,7 +464,7 @@ impl ContractSystemApi {
     ///
     /// # Panics
     ///
-    /// If there is a concurrent call from the WASM application (which is impossible as long as it
+    /// If there is a concurrent call from the Wasm application (which is impossible as long as it
     /// is executed in a single thread) or if the trait object is no longer alive (or more
     /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
     /// no longer alive).
@@ -493,7 +493,7 @@ impl ContractSystemApi {
 
 impl_contract_system_api!(ContractSystemApi);
 
-/// Implementation to forward service system calls from the guest WASM module to the host
+/// Implementation to forward service system calls from the guest Wasm module to the host
 /// implementation.
 pub struct ServiceSystemApi {
     shared: Arc<Mutex<SystemApi<&'static dyn ServiceRuntime>>>,
@@ -509,7 +509,7 @@ impl ServiceSystemApi {
     ///
     /// # Panics
     ///
-    /// If there is a concurrent call from the WASM application (which is impossible as long as it
+    /// If there is a concurrent call from the Wasm application (which is impossible as long as it
     /// is executed in a single thread) or if the trait object is no longer alive (or more
     /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
     /// no longer alive).
@@ -538,7 +538,7 @@ impl ServiceSystemApi {
 
 impl_service_system_api!(ServiceSystemApi);
 
-/// Implementation to forward view system calls from the guest WASM module to the host
+/// Implementation to forward view system calls from the guest Wasm module to the host
 /// implementation.
 pub struct ViewSystemApi<Runtime, MaybeQueuedFutureFactory> {
     shared: Arc<Mutex<SystemApi<Runtime>>>,
@@ -563,7 +563,7 @@ impl ViewSystemApi<&'static dyn ContractRuntime, QueuedHostFutureFactory<'static
     ///
     /// # Panics
     ///
-    /// If there is a concurrent call from the WASM application (which is impossible as long as it
+    /// If there is a concurrent call from the Wasm application (which is impossible as long as it
     /// is executed in a single thread) or if the trait object is no longer alive (or more
     /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
     /// no longer alive).
@@ -613,7 +613,7 @@ impl ViewSystemApi<&'static dyn ServiceRuntime, ()> {
     ///
     /// # Panics
     ///
-    /// If there is a concurrent call from the WASM application (which is impossible as long as it
+    /// If there is a concurrent call from the Wasm application (which is impossible as long as it
     /// is executed in a single thread) or if the trait object is no longer alive (or more
     /// accurately, if the [`RuntimeGuard`] returned by [`Self::new`] was dropped to indicate it's
     /// no longer alive).

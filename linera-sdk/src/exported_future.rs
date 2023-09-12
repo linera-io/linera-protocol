@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! A way to export a future from a guest WASM module.
+//! A way to export a future from a guest Wasm module.
 
 use std::{
     cell::RefCell,
@@ -14,7 +14,7 @@ use std::{
     task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
 };
 
-/// A future that's exported from a guest WASM module to the host.
+/// A future that's exported from a guest Wasm module to the host.
 ///
 /// This enables a future created in the guest module to be polled from the host.
 pub struct ExportedFuture<Output> {
@@ -39,7 +39,7 @@ impl<Output> ExportedFuture<Output> {
     /// The exported future can be scheduled to be awakened while this method is executing. In that
     /// case, it should be pooled again immediately.
     ///
-    /// No host task contexts are used inside the guest WASM module, so it is impossible to have the
+    /// No host task contexts are used inside the guest Wasm module, so it is impossible to have the
     /// exported future scheduled to be awakened from the host. Instead, the exported future should
     /// be called from a real task context on the host side, so that it can capture scheduled awakes
     /// on the host side if or when the guest calls host futures. When the awake happens on the

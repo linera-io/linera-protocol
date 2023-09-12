@@ -19,7 +19,7 @@ To make a contribution to the code after discussing it in a GitHub issue,
 3. If you've changed APIs, update the documentation.
 4. Ensure the test suite passes with `cargo test && cargo clippy --all-targets --all-features`.
 5. Run `cargo +nightly fmt` to automatically format your changes (CI will let you know if you missed this).
-6. Repeat step 4 and 5 for WASM examples if needed (see the section on WASM below for the options to `cargo test`).
+6. Repeat step 4 and 5 for Wasm examples if needed (see the section on Wasm below for the options to `cargo test`).
 
 This repository enforces a linear commit history. To remove merge commits, consider using `git filter-branch`
 as explained [here](https://stackoverflow.com/questions/17988099/how-do-i-trivially-linearize-my-git-history).
@@ -102,19 +102,19 @@ outdated. In the most case (but not always sadly), this can be fixed by running
 
 See https://github.com/zefchain/serde-reflection for more context.
 
-## WASM support
+## Wasm support
 
-The support of WASM is controlled by the features `wasmer` and the `wasmtime`, and
+The support of Wasm is controlled by the features `wasmer` and the `wasmtime`, and
 currently defaults to `wasmer` only.
 
-Testing the WASM application examples requires configuring a custom test runner included with
+Testing the Wasm application examples requires configuring a custom test runner included with
 `linera-sdk`. First it has to be built:
 
 ```
 cargo build --release --bin test-runner
 ```
 
-After that, the WASM tests can be executed with:
+After that, the Wasm tests can be executed with:
 
 ```
 cd examples
@@ -134,7 +134,7 @@ can be done manually with
 cd examples
 cargo build --release --target wasm32-unknown-unknown
 ```
-The Rust flags are suggested to reduce the size of the WASM bytecodes.
+The Rust flags are suggested to reduce the size of the Wasm bytecodes.
 
 ## Debugging techniques
 

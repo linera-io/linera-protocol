@@ -1,17 +1,17 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Helper types to enforce determinism on asynchronous code called from a guest WASM module.
+//! Helper types to enforce determinism on asynchronous code called from a guest Wasm module.
 //!
-//! To ensure that asynchronous calls from a guest WASM module are deterministic, the following
+//! To ensure that asynchronous calls from a guest Wasm module are deterministic, the following
 //! rules are enforced:
 //!
 //! - Futures are completed in the exact same order that they were created;
-//! - The guest WASM module is only polled when the next future to be completed has finished;
-//! - Every time the guest WASM module is polled, exactly one future will return [`Poll::Ready`];
+//! - The guest Wasm module is only polled when the next future to be completed has finished;
+//! - Every time the guest Wasm module is polled, exactly one future will return [`Poll::Ready`];
 //! - All other futures will return [`Poll::Pending`].
 //!
-//! To enforce these rules, the futures have to be polled separately from the guest WASM module.
+//! To enforce these rules, the futures have to be polled separately from the guest Wasm module.
 //! The traditional asynchronous behavior is for the host to poll the guest, and for the guest to
 //! poll the host futures again. This is problematic because the number of times the host futures
 //! need to be polled might not be deterministic. So even if the futures are made to finish
@@ -19,7 +19,7 @@
 //!
 //! For the guest to be polled separately from the host futures it calls, two types are used:
 //! [`HostFutureQueue`] and [`QueuedHostFutureFactory`]. The [`QueuedHostFutureFactory`] is what is
-//! used by the guest WASM module handle to enqueue futures for deterministic execution (i.e.,
+//! used by the guest Wasm module handle to enqueue futures for deterministic execution (i.e.,
 //! normally stored in the application's exported API handler). For every future that's enqueued, a
 //! [`HostFuture`] is returned that contains only a [`oneshot::Receiver`] for the future's result.
 //! The future itself is actually sent to the [`HostFutureQueue`] to be polled separately from the
@@ -27,7 +27,7 @@
 //!
 //! The [`HostFutureQueue`] implements [`Stream`], and produces a marker `()` item every time the
 //! next future in the queue is ready for completion. Therefore, the [`super::async_boundary::GuestFuture`] is responsible
-//! for always polling the [`HostFutureQueue`] before polling the guest WASM module.
+//! for always polling the [`HostFutureQueue`] before polling the guest Wasm module.
 
 use super::async_boundary::HostFuture;
 use futures::{
@@ -42,7 +42,7 @@ use std::{
     task::{Context, Poll},
 };
 
-/// A queue of host futures called by a WASM guest module that finish in the same order they were
+/// A queue of host futures called by a Wasm guest module that finish in the same order they were
 /// created.
 ///
 /// Futures are added to the queue through the [`QueuedHostFutureFactory`] associated to the
@@ -63,7 +63,7 @@ impl<'futures> HostFutureQueue<'futures> {
     /// Creates a new [`HostFutureQueue`] and its associated [`QueuedHostFutureFactory`].
     ///
     /// An initial empty future is added to the queue so that the first time the queue is polled it
-    /// returns an item, allowing the guest WASM module to be polled for the first time.
+    /// returns an item, allowing the guest Wasm module to be polled for the first time.
     pub fn new() -> (Self, QueuedHostFutureFactory<'futures>) {
         let (sender, receiver) = mpsc::channel(25);
 
@@ -148,7 +148,7 @@ impl<'futures> Stream for HostFutureQueue<'futures> {
 /// This type is created by [`HostFutureQueue::new`], and is associated to the [`HostFutureQueue`]
 /// returned with it. Both must be used together in the correct manner as described by the module
 /// documentation. The summary is that the [`HostFutureQueue`] should be polled until it returns an
-/// item before the guest WASM module is polled, so that the created [`HostFuture`]s are only polled
+/// item before the guest Wasm module is polled, so that the created [`HostFuture`]s are only polled
 /// deterministically.
 #[derive(Clone)]
 pub struct QueuedHostFutureFactory<'futures> {
@@ -158,7 +158,7 @@ pub struct QueuedHostFutureFactory<'futures> {
 impl<'futures> QueuedHostFutureFactory<'futures> {
     /// Enqueues a `future` in the associated [`HostFutureQueue`].
     ///
-    /// Returns a [`HostFuture`] that can be passed to the guest WASM module, and that will only be
+    /// Returns a [`HostFuture`] that can be passed to the guest Wasm module, and that will only be
     /// ready when the inner `future` is ready and all previous futures added to the queue are
     /// ready.
     ///

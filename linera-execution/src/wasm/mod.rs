@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Support for user applications compiled as WebAssembly (WASM) modules.
+//! Support for user applications compiled as WebAssembly (Wasm) modules.
 //!
 //! Requires a WebAssembly runtime to be selected and enabled using one of the following features:
 //!
@@ -99,18 +99,18 @@ impl WasmApplication {
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 #[derive(Debug, Error)]
 pub enum WasmExecutionError {
-    #[error("Failed to load contract WASM module: {_0}")]
+    #[error("Failed to load contract Wasm module: {_0}")]
     LoadContractModule(#[source] anyhow::Error),
-    #[error("Failed to load service WASM module: {_0}")]
+    #[error("Failed to load service Wasm module: {_0}")]
     LoadServiceModule(#[source] anyhow::Error),
     #[cfg(feature = "wasmtime")]
     #[error("Failed to create and configure Wasmtime runtime")]
     CreateWasmtimeEngine(#[source] anyhow::Error),
     #[cfg(feature = "wasmer")]
-    #[error("Failed to execute WASM module (Wasmer)")]
+    #[error("Failed to execute Wasm module (Wasmer)")]
     ExecuteModuleInWasmer(#[from] ::wasmer::RuntimeError),
     #[cfg(feature = "wasmtime")]
-    #[error("Failed to execute WASM module (Wasmtime)")]
+    #[error("Failed to execute Wasm module (Wasmtime)")]
     ExecuteModuleInWasmtime(#[from] ::wasmtime::Trap),
     #[error("Attempt to use a system API to write to read-only storage")]
     WriteAttemptToReadOnlyStorage,
