@@ -9,3 +9,10 @@ echo "Pods:";
 kubectl get pods;
 echo -e "\nServices:";
 kubectl get svc;
+sleep 2;
+kubectl exec -it shards-0  -- cat wallet.json > /tmp/wallet.json;
+
+echo 'export LINERA_WALLET=/tmp/wallet.json'
+echo 'export LINERA_STORAGE="rocksdb:/tmp/linera.db"'
+
+

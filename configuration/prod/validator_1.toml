@@ -8,25 +8,13 @@ internal_protocol = "Grpc"
 
 # If deploying to GCP, host should be the Kubernetes pod name
 [[shards]]
-host = "server-1-shard-0"
+host = "shards-0.shards.default.svc.cluster.local"
 port = 19100
 metrics_host = "server-1-shard-0"
 metrics_port = 21100
 
 [[shards]]
-host = "server-1-shard-1"
+host = "shards-1.shards.default.svc.cluster.local"
 port = 19100
 metrics_host = "server-1-shard-1"
-metrics_port = 21100
-
-[[shards]]
-host = "server-1-shard-2"
-port = 19100
-metrics_host = "server-1-shard-2"
-metrics_port = 21100
-
-[[shards]]
-host = "server-1-shard-3"
-port = 19100
-metrics_host = "server-1-shard-3"
 metrics_port = 21100
