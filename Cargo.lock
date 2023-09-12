@@ -2974,6 +2974,8 @@ dependencies = [
  "hex",
  "js-sys",
  "linera-base",
+ "linera-indexer-graphql-client",
+ "linera-service-graphql-client",
  "once_cell",
  "reqwest",
  "serde",
@@ -3006,7 +3008,9 @@ dependencies = [
  "linera-chain",
  "linera-core",
  "linera-execution",
+ "linera-indexer-graphql-client",
  "linera-service",
+ "linera-service-graphql-client",
  "linera-views",
  "once_cell",
  "reqwest",
@@ -3018,6 +3022,23 @@ dependencies = [
  "thiserror",
  "tokio",
  "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "linera-indexer-graphql-client"
+version = "0.4.0"
+dependencies = [
+ "graphql_client",
+ "linera-base",
+ "linera-execution",
+ "linera-service",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "test-log",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]
@@ -3140,6 +3161,7 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-rpc",
+ "linera-service-graphql-client",
  "linera-storage",
  "linera-views",
  "matching-engine",
@@ -3162,6 +3184,29 @@ dependencies = [
  "tonic",
  "tonic-health",
  "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "linera-service-graphql-client"
+version = "0.4.0"
+dependencies = [
+ "fungible",
+ "graphql_client",
+ "linera-base",
+ "linera-chain",
+ "linera-core",
+ "linera-execution",
+ "linera-service",
+ "once_cell",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "test-log",
+ "thiserror",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]

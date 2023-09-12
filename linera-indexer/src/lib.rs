@@ -8,7 +8,6 @@
 //! - the runner struct (runner.rs)
 
 pub mod common;
-pub mod graphql;
 pub mod indexer;
 pub mod operations;
 pub mod plugin;

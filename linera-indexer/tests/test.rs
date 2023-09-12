@@ -1,17 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use graphql_client::{reqwest::post_graphql, GraphQLQuery};
-use linera_base::{
-    crypto::CryptoHash,
-    data_types::{BlockHeight, Timestamp},
-    identifiers::{ChainId, Destination, Owner},
+use linera_base::{data_types::Amount, identifiers::ChainId};
+use linera_indexer_graphql_client::{
+    indexer::{plugins, state, Plugins, State},
+    operations::{get_operation, GetOperation, OperationKey},
 };
-use linera_indexer::operations::OperationKey;
 use linera_service::client::{resolve_binary, LocalNetwork, Network};
+use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
 use once_cell::sync::Lazy;
-use serde_json::Value;
-use std::{rc::Rc, time::Duration};
+use std::{rc::Rc, str::FromStr, time::Duration};
 use tempfile::TempDir;
 use tokio::{
     process::{Child, Command},
@@ -19,57 +17,10 @@ use tokio::{
 };
 use tracing::{info, warn};
 
-type Epoch = Value;
-type Message = Value;
-type Operation = Value;
-type Event = Value;
-type Origin = Value;
-type Amount = String;
-
 /// A static lock to prevent integration tests from running in parallel.
-pub static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
-#[derive(GraphQLQuery)]
-#[graphql(
-    schema_path = "../linera-explorer/graphql/schema.graphql",
-    query_path = "../linera-explorer/graphql/block.graphql",
-    response_derives = "Debug, Clone"
-)]
-pub struct Block;
-
-#[derive(GraphQLQuery)]
-#[graphql(
-    schema_path = "../linera-explorer/graphql/schema.graphql",
-    query_path = "../linera-explorer/graphql/transfer.graphql",
-    response_derives = "Debug"
-)]
-pub struct Transfer;
-
-#[derive(GraphQLQuery)]
-#[graphql(
-    schema_path = "../linera-explorer/graphql/indexer_schema.graphql",
-    query_path = "../linera-explorer/graphql/indexer_requests.graphql",
-    response_derives = "Debug"
-)]
-pub struct Plugins;
-
-#[derive(GraphQLQuery)]
-#[graphql(
-    schema_path = "../linera-explorer/graphql/indexer_schema.graphql",
-    query_path = "../linera-explorer/graphql/indexer_requests.graphql",
-    response_derives = "Debug"
-)]
-pub struct State;
-
-#[derive(GraphQLQuery)]
-#[graphql(
-    schema_path = "../linera-explorer/graphql/operations_schema.graphql",
-    query_path = "../linera-explorer/graphql/operations_requests.graphql",
-    response_derives = "Debug"
-)]
-pub struct GetOperation;
-
-pub async fn run_indexer(tmp_dir: &Rc<TempDir>) -> Child {
+async fn run_indexer(tmp_dir: &Rc<TempDir>) -> Child {
     let port = 8081;
     let path = resolve_binary("linera-indexer", Some("linera-indexer"))
         .await
@@ -103,38 +54,32 @@ fn indexer_running(child: &mut Child) {
     }
 }
 
-async fn request<T, V>(client: &reqwest::Client, url: &str, variables: V) -> T::ResponseData
-where
-    T: GraphQLQuery<Variables = V> + Send + Unpin + 'static,
-    V: Send + Unpin,
-{
-    let response = post_graphql::<T, _>(client, url, variables).await.unwrap();
-    response
-        .data
-        .unwrap_or_else(|| panic!("{:?}", response.errors))
-}
-
-async fn transfer(client: &reqwest::Client, from: ChainId, to: ChainId, amount: f32) {
+async fn transfer(client: &reqwest::Client, from: ChainId, to: ChainId, amount: &str) {
     let variables = transfer::Variables {
         chain_id: from,
         recipient: to,
-        amount: amount.to_string(),
+        amount: Amount::from_str(amount).unwrap(),
     };
-    request::<Transfer, _>(client, "http://localhost:8080", variables).await;
+    request::<Transfer, _>(client, "http://localhost:8080", variables)
+        .await
+        .unwrap();
 }
+
+#[cfg(debug_assertions)]
+const TRANSFER_DELAY_MILLIS: u64 = 500;
+
+#[cfg(not(debug_assertions))]
+const TRANSFER_DELAY_MILLIS: u64 = 100;
 
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_operations_indexer() {
     // launching network, service and indexer
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(network, 4).unwrap();
     let client = local_net.make_client(network);
-
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
-
     local_net.run().await.unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
     let mut indexer = run_indexer(&client.tmp_dir).await;
@@ -143,6 +88,7 @@ async fn test_end_to_end_operations_indexer() {
     let req_client = reqwest::Client::new();
     let plugins = request::<Plugins, _>(&req_client, "http://localhost:8081", plugins::Variables)
         .await
+        .unwrap()
         .plugins;
     assert_eq!(
         plugins,
@@ -154,8 +100,8 @@ async fn test_end_to_end_operations_indexer() {
     let chain0 = ChainId::root(0);
     let chain1 = ChainId::root(1);
     for _ in 0..10 {
-        transfer(&req_client, chain0, chain1, 0.1).await;
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        transfer(&req_client, chain0, chain1, "0.1").await;
+        tokio::time::sleep(Duration::from_millis(TRANSFER_DELAY_MILLIS)).await;
     }
     tokio::time::sleep(Duration::from_secs(2)).await;
 
@@ -166,12 +112,14 @@ async fn test_end_to_end_operations_indexer() {
     };
     let last_block = request::<Block, _>(&req_client, "http://localhost:8080", variables)
         .await
+        .unwrap()
         .block
         .unwrap_or_else(|| panic!("no block found"));
     let last_hash = last_block.clone().hash;
 
     let indexer_state = request::<State, _>(&req_client, "http://localhost:8081", state::Variables)
         .await
+        .unwrap()
         .state;
     let indexer_hash =
         indexer_state
@@ -195,6 +143,7 @@ async fn test_end_to_end_operations_indexer() {
     let indexer_operation =
         request::<GetOperation, _>(&req_client, "http://localhost:8081/operations", variables)
             .await
+            .unwrap()
             .operation;
     match indexer_operation {
         Some(get_operation::GetOperationOperation {

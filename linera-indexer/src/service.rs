@@ -3,11 +3,7 @@
 
 //! This module defines the service client for the indexer.
 
-use crate::{
-    common::IndexerError,
-    graphql::{block, chains, notifications, Block, Chains, Notifications},
-    indexer::Indexer,
-};
+use crate::{common::IndexerError, indexer::Indexer};
 use async_tungstenite::{
     tokio::connect_async,
     tungstenite::{client::IntoClientRequest, http::HeaderValue},
@@ -21,6 +17,7 @@ use graphql_ws_client::{graphql::StreamingOperation, GraphQLClientClientBuilder}
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
 use linera_chain::data_types::HashedValue;
 use linera_core::worker::Reason;
+use linera_service_graphql_client::{block, chains, notifications, Block, Chains, Notifications};
 use linera_views::{
     common::KeyValueStoreClient, value_splitting::DatabaseConsistencyError, views::ViewError,
 };
@@ -88,13 +85,13 @@ impl Service {
             chain_id,
         };
         let response = post_graphql::<Block, _>(&client, &self.http(), variables).await?;
-        match response.data {
-            None => Err(IndexerError::NullData(response.errors)),
-            Some(data) => match data.block {
-                Some(block) => block.try_into(),
-                None => Err(IndexerError::NotFound(hash)),
-            },
-        }
+        response
+            .data
+            .ok_or_else(|| IndexerError::NullData(response.errors))?
+            .block
+            .ok_or_else(|| IndexerError::NotFound(hash))?
+            .try_into()
+            .map_err(IndexerError::UnknownCertificateStatus)
     }
 
     /// Gets chains

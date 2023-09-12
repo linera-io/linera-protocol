@@ -1,0 +1,33 @@
+[package]
+name = "linera-service-graphql-client"
+version = "0.4.0"
+edition = "2021"
+description = "A GraphQL client for Linera node service"
+readme = "README.md"
+repository = "https://github.com/linera-io/linera-protocol"
+homepage = "https://linera.dev"
+documentation = "https://docs.rs/linera-service-graphql-client/latest/linera_service_graphql_client/"
+license = "Apache-2.0"
+
+[dependencies]
+graphql_client = { version = "0.13", features = [ "reqwest" ] }
+linera-base = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true, features = [ "derive" ] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+linera-chain = { workspace = true }
+linera-core = { workspace = true }
+linera-execution = { workspace = true }
+
+[dev-dependencies]
+fungible = { workspace = true }
+linera-service = { workspace = true }
+once_cell = { workspace = true }
+test-log = { workspace = true, features = ["trace"] }
+tempfile = {workspace = true }
+tokio = { workspace = true, features = ["full", "test-util"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["fmt"] }
