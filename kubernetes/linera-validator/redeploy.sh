@@ -42,6 +42,7 @@ handle_options() {
 handle_options "$@"
 
 helm uninstall linera-core;
+helm uninstall monitoring;
 sleep 0.5;
 
 if [ "$cloud_mode" = true ]; then
@@ -49,6 +50,10 @@ if [ "$cloud_mode" = true ]; then
 else
     helm install linera-core . --values values-local.yaml || exit 1;
 fi
+
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts;
+helm repo update;
+helm install monitoring prometheus-community/kube-prometheus-stack || exit 1;
 
 sleep 0.5;
 echo "Pods:";
