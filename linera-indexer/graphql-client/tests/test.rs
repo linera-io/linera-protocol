@@ -9,13 +9,9 @@ use tokio::process::Command;
 #[test_log::test(tokio::test)]
 async fn test_check_indexer_schema() {
     let tmp_dir = Rc::new(tempdir().unwrap());
-    let path = resolve_binary(
-        "linera-indexer",
-        Some("linera-indexer-example"),
-        "../../target",
-    )
-    .await
-    .unwrap();
+    let path = resolve_binary("linera-indexer", Some("linera-indexer-example"))
+        .await
+        .unwrap();
     let mut command = Command::new(path);
     let output = command
         .current_dir(tmp_dir.path().canonicalize().unwrap())
@@ -37,13 +33,9 @@ async fn test_check_indexer_schema() {
 #[test_log::test(tokio::test)]
 async fn test_check_indexer_operations_schema() {
     let tmp_dir = Rc::new(tempdir().unwrap());
-    let path = resolve_binary(
-        "linera-indexer",
-        Some("linera-indexer-example"),
-        "../../target",
-    )
-    .await
-    .unwrap();
+    let path = resolve_binary("linera-indexer", Some("linera-indexer-example"))
+        .await
+        .unwrap();
     let mut command = Command::new(path);
     let output = command
         .current_dir(tmp_dir.path().canonicalize().unwrap())

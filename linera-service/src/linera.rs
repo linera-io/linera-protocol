@@ -1692,7 +1692,7 @@ async fn main() -> Result<(), anyhow::Error> {
         ClientCommand::Net(net_command) => match net_command {
             NetCommand::Up => {
                 let network = Network::Grpc;
-                let mut net = LocalNetwork::new(network, 1, None)?;
+                let mut net = LocalNetwork::new(network, 1)?;
                 let client1 = net.make_client(network);
                 let client2 = net.make_client(network);
 

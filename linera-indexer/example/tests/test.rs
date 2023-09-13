@@ -22,13 +22,9 @@ static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 async fn run_indexer(tmp_dir: &Rc<TempDir>) -> Child {
     let port = 8081;
-    let path = resolve_binary(
-        "linera-indexer",
-        Some("linera-indexer-example"),
-        "../../target",
-    )
-    .await
-    .unwrap();
+    let path = resolve_binary("linera-indexer", Some("linera-indexer-example"))
+        .await
+        .unwrap();
     let mut command = Command::new(path);
     command
         .current_dir(tmp_dir.path().canonicalize().unwrap())
@@ -80,7 +76,7 @@ async fn test_end_to_end_operations_indexer() {
     // launching network, service and indexer
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 4, Some("../../target")).unwrap();
+    let mut local_net = LocalNetwork::new(network, 4).unwrap();
     let client = local_net.make_client(network);
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
