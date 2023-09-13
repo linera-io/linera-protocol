@@ -260,6 +260,7 @@ where
         timestamp: Timestamp,
         messages: Vec<OutgoingMessage>,
         certificate_hash: CryptoHash,
+        now: Timestamp,
     ) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         ensure!(
@@ -307,7 +308,7 @@ where
                     height,
                     index,
                 };
-                self.execute_immediate_message(message_id, &message, timestamp)
+                self.execute_immediate_message(message_id, &message, timestamp, now)
                     .await?;
             }
             // Record the inbox event to process it below.
@@ -354,6 +355,7 @@ where
         message_id: MessageId,
         message: &Message,
         timestamp: Timestamp,
+        now: Timestamp,
     ) -> Result<(), ChainError> {
         if let Message::System(SystemMessage::OpenChain {
             ownership,
@@ -375,9 +377,11 @@ where
             let hash = self.execution_state.crypto_hash().await?;
             self.execution_state_hash.set(Some(hash));
             // Last, reset the consensus state based on the current ownership.
-            self.manager
-                .get_mut()
-                .reset(self.execution_state.system.ownership.get(), BlockHeight(0))?;
+            self.manager.get_mut().reset(
+                self.execution_state.system.ownership.get(),
+                BlockHeight(0),
+                now,
+            )?;
         }
         Ok(())
     }
@@ -421,6 +425,7 @@ where
     pub async fn execute_block(
         &mut self,
         block: &Block,
+        now: Timestamp,
     ) -> Result<(Vec<OutgoingMessage>, CryptoHash), ChainError> {
         assert_eq!(block.chain_id, self.chain_id());
         let chain_id = self.chain_id();
@@ -509,6 +514,7 @@ where
         self.manager.get_mut().reset(
             self.execution_state.system.ownership.get(),
             block.height.try_add_one()?,
+            now,
         )?;
         Ok((messages, state_hash))
     }

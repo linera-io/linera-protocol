@@ -41,7 +41,7 @@ use linera_views::{
     views::{CryptoHashView, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, iter, time::Duration};
+use std::{collections::BTreeMap, iter};
 use test_log::test;
 
 #[cfg(feature = "rocksdb")]
@@ -3182,16 +3182,19 @@ async fn test_scylla_db_leader_timeouts() {
     run_test_leader_timeouts(client).await;
 }
 
-async fn run_test_leader_timeouts<S>(client: S)
+async fn run_test_leader_timeouts<C>(client: DbStoreClient<C, TestClock>)
 where
-    S: Store + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    C: KeyValueStoreClient + Clone + Send + Sync + 'static,
+    ViewError: From<<C as KeyValueStoreClient>::Error>,
+    <C as KeyValueStoreClient>::Error:
+        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     let chain_desc = ChainDescription::Root(0);
     let chain_id = ChainId::from(chain_desc);
     let key_pairs = generate_key_pairs(2);
     let pub_key0 = key_pairs[0].public();
     let pub_key1 = key_pairs[1].public();
+    let clock = client.clock.clone();
     let (committee, mut worker) = init_worker_with_chains(
         client,
         vec![(chain_desc, key_pairs[0].public(), Amount::from_tokens(2))],
@@ -3222,7 +3225,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query).await.unwrap();
     assert!(multi_manager(&response.info).timeout_vote.is_none());
 
-    tokio::time::sleep(Duration::from_secs(11)).await;
+    clock.add_micros(11_000_000);
 
     let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
     let (response, _) = worker.handle_chain_info_query(query).await.unwrap();

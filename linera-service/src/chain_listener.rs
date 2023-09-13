@@ -151,7 +151,7 @@ where
         loop {
             let notification = match tokio::time::timeout(
                 round_timeout.map_or(MAX_TIMEOUT, |t| {
-                    Duration::from_micros(t.saturating_diff_micros(Timestamp::now()))
+                    Duration::from_micros(t.saturating_diff_micros(storage.current_time()))
                 }),
                 stream.next(),
             )
