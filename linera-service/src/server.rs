@@ -16,8 +16,6 @@ use linera_rpc::{
     simple_network,
     transport::TransportProtocol,
 };
-#[cfg(feature = "kube")]
-use linera_service::kubernetes::get_ips_from_k8s;
 use linera_service::{
     config::{
         CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig, ValidatorServerConfig,
@@ -38,8 +36,6 @@ struct ServerContext {
     notification_config: NotificationConfig,
     shard: Option<usize>,
     grace_period_micros: u64,
-    #[cfg(feature = "kube")]
-    kube: bool,
 }
 
 impl ServerContext {
@@ -174,17 +170,6 @@ impl ServerContext {
         }
     }
 
-    #[cfg(feature = "kube")]
-    fn get_listen_address(&self) -> String {
-        if self.kube {
-            std::env::var("MY_POD_IP").expect("Could not get env variable MY_POD_IP")
-        } else {
-            // Allow local IP address to be different from the public one.
-            "0.0.0.0".to_string()
-        }
-    }
-
-    #[cfg(not(feature = "kube"))]
     fn get_listen_address(&self) -> String {
         // Allow local IP address to be different from the public one.
         "0.0.0.0".to_string()
@@ -341,13 +326,6 @@ enum ServerCommand {
         /// Do not create a table if one is missing
         #[structopt(long = "do not create a database if missing")]
         skip_table_creation_when_missing: bool,
-
-        /// Use this when running from a Kubernetes cluster (including from within GCP)
-        /// Won't use config files to determine host IPs, but will do it dynamically
-        /// based on cluster info
-        #[cfg(feature = "kube")]
-        #[structopt(long)]
-        kube: bool,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -395,25 +373,12 @@ async fn main() {
             max_concurrent_queries,
             max_stream_queries,
             cache_size,
-            #[cfg(feature = "kube")]
-            kube,
             skip_table_creation_when_missing,
         } => {
             let genesis_config = GenesisConfig::read(&genesis_config_path)
                 .expect("Fail to read initial chain config");
-            #[cfg(not(feature = "kube"))]
             let server_config = ValidatorServerConfig::read(&server_config_path)
                 .expect("Fail to read server config");
-            #[cfg(feature = "kube")]
-            let mut server_config = ValidatorServerConfig::read(&server_config_path)
-                .expect("Fail to read server config");
-
-            #[cfg(feature = "kube")]
-            if kube {
-                get_ips_from_k8s(&mut server_config)
-                    .await
-                    .expect("Failed to get IPs from k8s");
-            }
 
             let job = ServerContext {
                 server_config,
@@ -421,8 +386,6 @@ async fn main() {
                 notification_config,
                 shard,
                 grace_period_micros: grace_period,
-                #[cfg(feature = "kube")]
-                kube,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let create_if_missing = !skip_table_creation_when_missing;

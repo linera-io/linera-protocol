@@ -33,7 +33,7 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler \
     clang
 
-RUN cargo chef cook --release --recipe-path recipe.json --target x86_64-unknown-linux-gnu --features kube
+RUN cargo chef cook --release --recipe-path recipe.json --target x86_64-unknown-linux-gnu
 
 # Stage 3 - Do actual build
 FROM chef as builder
@@ -49,7 +49,7 @@ RUN apt-get update && apt-get install -y \
 COPY --from=cacher /opt/linera/build/target target
 COPY --from=cacher /usr/local/cargo /usr/local/cargo
 
-RUN cargo build --release --target x86_64-unknown-linux-gnu --bin linera --bin linera-proxy --bin linera-server --features kube \
+RUN cargo build --release --target x86_64-unknown-linux-gnu --bin linera --bin linera-proxy --bin linera-server \
     && strip target/x86_64-unknown-linux-gnu/release/linera \
     && strip target/x86_64-unknown-linux-gnu/release/linera-proxy \
     && strip target/x86_64-unknown-linux-gnu/release/linera-server
