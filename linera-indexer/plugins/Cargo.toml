@@ -23,7 +23,8 @@ linera-indexer = { workspace = true }
 linera-views = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
+tower-http = { workspace = true, features = ["cors"] }
 tracing = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["async-trait", "async-graphql-axum", "axum", "bcs", "tokio"]
+ignored = ["async-trait", "async-graphql-axum", "axum", "bcs", "tower-http", "tokio"]

@@ -228,6 +228,7 @@ fn plugin_impl(
                     axum::routing::get(linera_indexer::common::graphiql).post(Self::handler),
                 )
                     .layer(axum::extract::Extension(async_graphql::Schema::new(self.clone(), async_graphql::EmptyMutation, async_graphql::EmptySubscription)))
+                    .layer(tower_http::cors::CorsLayer::permissive())
             }
         }
     }
