@@ -76,7 +76,12 @@ echo 'export LINERA_STORAGE="rocksdb:/tmp/linera.db"'
 export LINERA_WALLET=/tmp/wallet.json
 export LINERA_STORAGE="rocksdb:/tmp/linera.db"
 
-# Get the pod name
+# Get the Grafana pod name
+grafana_pod_name=$(kubectl get pods | grep monitoring-grafana | awk '{ print $1 }')
+echo -e "\nTo access Grafana, you need to port forward yourself, that won't be done here. Run:"
+echo -e "kubectl port-forward $grafana_pod_name 3000\n"
+
+# Get the Validator pod name
 validator_pod_name=$(kubectl get pods | grep validator | awk '{ print $1 }')
 echo -e "\nTo port forward yourself, run:"
 echo -e "kubectl port-forward $validator_pod_name 19100:19100\n"
