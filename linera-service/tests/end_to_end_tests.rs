@@ -276,6 +276,59 @@ async fn test_end_to_end_retry_notification_stream() {
 }
 
 #[test_log::test(tokio::test)]
+async fn test_end_to_end_multiple_wallets() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    // Create local_net and two clients.
+    let mut local_net = LocalNetwork::new(Network::Grpc, 4).unwrap();
+    let client_1 = local_net.make_client(Network::Grpc);
+    let client_2 = local_net.make_client(Network::Grpc);
+
+    // Create initial server and client config.
+    local_net.generate_initial_validator_config().await.unwrap();
+    client_1.create_genesis_config().await.unwrap();
+    client_2.wallet_init(&[]).await.unwrap();
+
+    // Start local network.
+    local_net.run().await.unwrap();
+
+    // Get some chain owned by Client 1.
+    let chain_1 = *client_1.get_wallet().chain_ids().first().unwrap();
+
+    // Generate a key for Client 2.
+    let client_2_key = client_2.keygen().await.unwrap();
+
+    // Open chain on behalf of Client 2.
+    let (message_id, chain_2) = client_1
+        .open_chain(chain_1, Some(client_2_key))
+        .await
+        .unwrap();
+
+    // Assign chain_2 to client_2_key.
+    assert_eq!(
+        chain_2,
+        client_2.assign(client_2_key, message_id).await.unwrap()
+    );
+
+    // Check initial balance of Chain 1.
+    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), "10.");
+
+    // Transfer 5 units from Chain 1 to Chain 2.
+    client_1.transfer("5", chain_1, chain_2).await.unwrap();
+    client_2.synchronize_balance(chain_2).await.unwrap();
+
+    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), "5.");
+    assert_eq!(client_2.query_balance(chain_2).await.unwrap(), "5.");
+
+    // Transfer 2 units from Chain 2 to Chain 1.
+    client_2.transfer("2", chain_2, chain_1).await.unwrap();
+    client_1.synchronize_balance(chain_1).await.unwrap();
+
+    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), "7.");
+    assert_eq!(client_2.query_balance(chain_2).await.unwrap(), "3.");
+}
+
+#[test_log::test(tokio::test)]
 async fn test_project_new() {
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(network, 0).unwrap();
@@ -347,4 +400,64 @@ async fn test_example_publish() {
     let node_service = client.run_node_service(None).await.unwrap();
 
     assert_eq!(node_service.try_get_applications_uri(&chain).await.len(), 1)
+}
+
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_open_multi_owner_chain() {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    // Create runner and two clients.
+    let mut runner = LocalNetwork::new(Network::Grpc, 4).unwrap();
+    let client1 = runner.make_client(Network::Grpc);
+    let client2 = runner.make_client(Network::Grpc);
+
+    // Create initial server and client config.
+    runner.generate_initial_validator_config().await.unwrap();
+    client1.create_genesis_config().await.unwrap();
+    client2.wallet_init(&[]).await.unwrap();
+
+    // Start local network.
+    runner.run().await.unwrap();
+
+    let chain1 = *client1.get_wallet().chain_ids().first().unwrap();
+
+    // Generate keys for both clients.
+    let client1_key = client1.keygen().await.unwrap();
+    let client2_key = client2.keygen().await.unwrap();
+
+    // Open chain on behalf of Client 2.
+    let (message_id, chain2) = client1
+        .open_multi_owner_chain(chain1, vec![client1_key, client2_key])
+        .await
+        .unwrap();
+
+    // Assign chain2 to client1_key.
+    assert_eq!(
+        chain2,
+        client1.assign(client1_key, message_id).await.unwrap()
+    );
+
+    // Assign chain2 to client2_key.
+    assert_eq!(
+        chain2,
+        client2.assign(client2_key, message_id).await.unwrap()
+    );
+
+    // Transfer 6 units from Chain 1 to Chain 2.
+    client1.transfer("6", chain1, chain2).await.unwrap();
+    client2.synchronize_balance(chain2).await.unwrap();
+
+    assert_eq!(client1.query_balance(chain1).await.unwrap(), "4.");
+    assert_eq!(client1.query_balance(chain2).await.unwrap(), "6.");
+    assert_eq!(client2.query_balance(chain2).await.unwrap(), "6.");
+
+    // Transfer 2 + 1 units from Chain 2 to Chain 1 using both clients.
+    client2.transfer("2", chain2, chain1).await.unwrap();
+    client1.transfer("1", chain2, chain1).await.unwrap();
+    client1.synchronize_balance(chain1).await.unwrap();
+    client2.synchronize_balance(chain2).await.unwrap();
+
+    assert_eq!(client1.query_balance(chain1).await.unwrap(), "7.");
+    assert_eq!(client1.query_balance(chain2).await.unwrap(), "3.");
+    assert_eq!(client2.query_balance(chain2).await.unwrap(), "3.");
 }
