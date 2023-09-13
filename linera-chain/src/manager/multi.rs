@@ -109,11 +109,12 @@ impl MultiOwnerManager {
         public_keys: impl IntoIterator<Item = (Owner, (PublicKey, u128))>,
         multi_leader_rounds: RoundNumber,
         seed: u64,
+        now: Timestamp,
     ) -> Result<Self, ChainError> {
         let public_keys: BTreeMap<Owner, (PublicKey, u128)> = public_keys.into_iter().collect();
         let weights = public_keys.values().map(|(_, weight)| *weight).collect();
         let distribution = WeightedAliasIndex::new(weights)?;
-        let round_timeout = Timestamp::now().saturating_add(TIMEOUT);
+        let round_timeout = now.saturating_add(TIMEOUT);
 
         Ok(MultiOwnerManager {
             public_keys,
@@ -222,11 +223,12 @@ impl MultiOwnerManager {
         height: BlockHeight,
         epoch: Epoch,
         key_pair: Option<&KeyPair>,
+        now: Timestamp,
     ) -> bool {
         let Some(key_pair) = key_pair else {
             return false; // We are not a chain owner.
         };
-        if Timestamp::now() < self.round_timeout {
+        if now < self.round_timeout {
             return false; // Round has not timed out yet.
         }
         let current_round = self.current_round();
@@ -282,12 +284,13 @@ impl MultiOwnerManager {
         messages: Vec<OutgoingMessage>,
         state_hash: CryptoHash,
         key_pair: Option<&KeyPair>,
+        now: Timestamp,
     ) {
         if let Some(validated) = &proposal.validated {
-            self.update_timeout(validated.round);
+            self.update_timeout(validated.round, now);
         }
         if let Some(round) = proposal.content.round.0.checked_sub(1) {
-            self.update_timeout(RoundNumber(round));
+            self.update_timeout(RoundNumber(round), now);
         }
         // Record the proposed block, so it can be supplied to clients that request it.
         self.proposed = Some(proposal.clone());
@@ -305,14 +308,19 @@ impl MultiOwnerManager {
     }
 
     /// Signs a vote to confirm the validated block.
-    pub fn create_final_vote(&mut self, certificate: Certificate, key_pair: Option<&KeyPair>) {
+    pub fn create_final_vote(
+        &mut self,
+        certificate: Certificate,
+        key_pair: Option<&KeyPair>,
+        now: Timestamp,
+    ) {
         let Some(value) = certificate.value.clone().into_confirmed() else {
             // Unreachable: This is only called with validated blocks.
             error!("Unexpected certificate; expected ValidatedBlock");
             return;
         };
         let round = certificate.round;
-        self.update_timeout(round);
+        self.update_timeout(round, now);
         self.locked = Some(certificate);
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
@@ -323,17 +331,17 @@ impl MultiOwnerManager {
     }
 
     /// Resets the timer if `round` has just ended.
-    fn update_timeout(&mut self, round: RoundNumber) {
+    fn update_timeout(&mut self, round: RoundNumber, now: Timestamp) {
         if self.current_round() <= round {
             let factor = round.0.saturating_add(2);
             let timeout = TIMEOUT.saturating_mul(factor);
-            self.round_timeout = Timestamp::now().saturating_add(timeout);
+            self.round_timeout = now.saturating_add(timeout);
         }
     }
 
     /// Updates the round number and timer if the timeout certificate is from a higher round than
     /// any known certificate.
-    pub fn handle_timeout_certificate(&mut self, certificate: Certificate) {
+    pub fn handle_timeout_certificate(&mut self, certificate: Certificate, now: Timestamp) {
         if !certificate.value().is_timeout() {
             // Unreachable: This is only called with timeout certificates.
             error!("Unexpected certificate; expected leader timeout");
@@ -345,7 +353,7 @@ impl MultiOwnerManager {
                 return;
             }
         }
-        self.update_timeout(round);
+        self.update_timeout(round, now);
         self.leader_timeout = Some(certificate);
     }
 

@@ -9,7 +9,7 @@ use colored::Colorize;
 use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, RoundNumber, Timestamp},
     identifiers::{BytecodeId, ChainDescription, ChainId, MessageId},
 };
 use linera_chain::data_types::{Certificate, CertificateValue, ExecutedBlock};
@@ -50,7 +50,6 @@ use tracing::{debug, info, warn};
 use linera_service::client::{LocalNetwork, Network};
 #[cfg(feature = "benchmark")]
 use {
-    linera_base::data_types::RoundNumber,
     linera_chain::data_types::{
         Block, BlockAndRound, BlockProposal, HashedValue, SignatureAggregator, Vote,
     },
