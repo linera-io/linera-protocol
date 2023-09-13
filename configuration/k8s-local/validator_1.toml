@@ -1,0 +1,19 @@
+server_config_path = "server_1.json"
+host = "127.0.0.1"
+port = 19100
+internal_host = "validator-1"
+internal_port = 20100
+external_protocol = "Grpc"
+internal_protocol = "Grpc"
+
+[[shards]]
+host = "shards-0.shards.default.svc.cluster.local"
+port = 19100
+metrics_host = "server-1-shard-0"
+metrics_port = 21100
+
+[[shards]]
+host = "shards-1.shards.default.svc.cluster.local"
+port = 19100
+metrics_host = "server-1-shard-1"
+metrics_port = 21100
