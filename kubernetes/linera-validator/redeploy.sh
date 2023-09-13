@@ -45,9 +45,9 @@ helm uninstall linera-core;
 sleep 0.5;
 
 if [ "$cloud_mode" = true ]; then
-    helm install linera-core . --values values-local-with-cloud-build.yaml;
+    helm install linera-core . --values values-local-with-cloud-build.yaml || exit 1;
 else
-    helm install linera-core . --values values-local.yaml;
+    helm install linera-core . --values values-local.yaml || exit 1;
 fi
 
 sleep 0.5;
