@@ -20,6 +20,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
         messages {
           destination
           authenticatedSigner
+          isSkippable
           message
         }
         stateHash

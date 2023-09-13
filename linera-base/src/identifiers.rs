@@ -84,6 +84,12 @@ pub enum Destination {
     Subscribers(ChannelName),
 }
 
+impl Destination {
+    pub fn is_channel(&self) -> bool {
+        matches!(self, Destination::Subscribers(_))
+    }
+}
+
 impl From<ChainId> for Destination {
     fn from(chain_id: ChainId) -> Self {
         Destination::Recipient(chain_id)

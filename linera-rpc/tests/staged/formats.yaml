@@ -323,6 +323,7 @@ Event:
     - authenticated_signer:
         OPTION:
           TYPENAME: Owner
+    - is_skippable: BOOL
     - timestamp:
         TYPENAME: Timestamp
     - message:
@@ -559,6 +560,7 @@ OutgoingMessage:
     - authenticated_signer:
         OPTION:
           TYPENAME: Owner
+    - is_skippable: BOOL
     - message:
         TYPENAME: Message
 Owner:

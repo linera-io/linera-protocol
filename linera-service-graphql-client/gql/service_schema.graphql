@@ -389,8 +389,21 @@ type OutboxStateView {
 A message together with routing information.
 """
 type OutgoingMessage {
+	"""
+	The destination of the message.
+	"""
 	destination: Destination!
+	"""
+	The user authentication carried by the message, if any.
+	"""
 	authenticatedSigner: Owner
+	"""
+	Whether the message can be skipped.
+	"""
+	isSkippable: Boolean!
+	"""
+	The message itself.
+	"""
 	message: Message!
 }
 

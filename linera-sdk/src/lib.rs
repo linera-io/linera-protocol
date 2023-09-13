@@ -369,6 +369,8 @@ pub struct OutgoingMessage<Message> {
     pub destination: Destination,
     /// Whether the message is authenticated.
     pub authenticated: bool,
+    /// Whether the message can skipped by the receiving chain.
+    pub is_skippable: bool,
     /// The message itself.
     pub message: Message,
 }
@@ -400,9 +402,12 @@ impl<Message> Default for ExecutionResult<Message> {
 impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
     /// Adds a message to the execution result.
     pub fn with_message(mut self, destination: impl Into<Destination>, message: Message) -> Self {
+        let destination = destination.into();
+        let is_skippable = destination.is_channel();
         self.messages.push(OutgoingMessage {
-            destination: destination.into(),
+            destination,
             authenticated: false,
+            is_skippable,
             message,
         });
         self
@@ -414,9 +419,12 @@ impl<Message: Serialize + Debug + DeserializeOwned> ExecutionResult<Message> {
         destination: impl Into<Destination>,
         message: Message,
     ) -> Self {
+        let destination = destination.into();
+        let is_skippable = destination.is_channel();
         self.messages.push(OutgoingMessage {
-            destination: destination.into(),
+            destination,
             authenticated: true,
+            is_skippable,
             message,
         });
         self
