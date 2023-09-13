@@ -14,9 +14,6 @@ use std::{
     str::FromStr,
 };
 
-#[cfg(any(test, feature = "test"))]
-use test_strategy::Arbitrary;
-
 /// The owner of a chain. This is currently the hash of the owner's public key used to
 /// verify signatures.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
@@ -35,7 +32,7 @@ pub enum ChainDescription {
 /// The unique identifier (UID) of a chain. This is currently computed as the hash value
 /// of a [`ChainDescription`].
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "test"), derive(Arbitrary, Default))]
+#[cfg_attr(any(test, feature = "test"), derive(test_strategy::Arbitrary, Default))]
 pub struct ChainId(pub CryptoHash);
 
 /// The index of a message in a chain.
