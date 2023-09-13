@@ -1,5 +1,5 @@
 # Values for charts linera-validator for local validators.
 
-lineraImage: linera-test:latest
+lineraImage: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-test-local:latest
 lineraImagePullPolicy: Never
 logLevel: "debug"

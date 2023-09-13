@@ -1,0 +1,5 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: [ 'build', '-t', 'us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-test-local:latest', '-f', 'Dockerfile.local', '.' ]
+images:
+- 'us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-test-local:latest'

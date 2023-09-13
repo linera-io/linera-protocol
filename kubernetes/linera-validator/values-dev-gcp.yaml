@@ -2,3 +2,4 @@
 
 lineraImage: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/zefchain-gcp-test:0.1
 lineraImagePullPolicy: Always
+logLevel: "info"
