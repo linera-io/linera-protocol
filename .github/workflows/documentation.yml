@@ -63,12 +63,12 @@ jobs:
         git clone https://github.com/rust-lang/docs.rs docsrs
         cd docsrs
         git submodule update --init
-    - name: Generate standalone packages
-      run: |
-        for crate in $LINERA_CRATES; do
-            cargo publish -p "linera-${crate}" --dry-run --target-dir "${{ runner.temp }}/crates/linera-${crate}" --no-verify
-        done
     # TODO(#802): Fix this.
+    # - name: Generate standalone packages
+    #   run: |
+    #     for crate in $LINERA_CRATES; do
+    #         cargo publish -p "linera-${crate}" --dry-run --target-dir "${{ runner.temp }}/crates/linera-${crate}" --no-verify
+    #     done
     #
     # - name: Extract packaged crates
     #   run: |
