@@ -8,7 +8,7 @@ use linera_views::{
     views::{RootView, View},
 };
 
-/// A plugin is centered around a RootView
+// A plugin is centered around a RootView
 #[derive(RootView)]
 pub struct Template<C> {
     view1: RegisterView<C, String>,
@@ -16,22 +16,22 @@ pub struct Template<C> {
     // more views
 }
 
-/// The `plugin` macro attribute wraps the `Template` in an `Arc<Mutex<Template>>` and does the necessary transformations.
-/// The `self` attribute always refers to the `Template` struct.
+// The `plugin` macro attribute wraps the `Template` in an `Arc<Mutex<Template>>` and does the necessary transformations.
+// The `self` attribute always refers to the `Template` struct.
 #[plugin]
 impl Template<C> {
-    /// The `register` function is the only required function.
-    /// It is used to register the wanted information from a HashedValue
+    // The `register` function is the only required function.
+    // It is used to register the wanted information from a HashedValue
     async fn register(&self, value: &HashedValue) -> Result<(), IndexerError> {
         // register information
     }
 
-    /// Private functions are directly applied to the `Template` struct.
+    // Private functions are directly applied to the `Template` struct.
     async fn helper1(&self, ...) -> Result<.., IndexerError> {
         // handle some thinfs on the `Template` struct
     }
 
-    /// Public functions are the one accessible through the GraphQL server.
+    // Public functions are the ones accessible through the GraphQL server.
     pub async fn entrypoint1(&self) -> String {
         self.view1.get()
     }
@@ -40,5 +40,5 @@ impl Template<C> {
         Ok(self.view1.get(&key).await?)
     }
 
-    /// Other functions are derived to fill the `linera_indexer::plugin::Plugin` trait.
+    // Other functions are derived to fill the `linera_indexer::plugin::Plugin` trait.
 }

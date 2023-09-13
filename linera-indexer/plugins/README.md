@@ -1,6 +1,6 @@
 <!-- cargo-rdme start -->
 
-This module lists some plugins for the indexer.
+Plugins for Linera indexer.
 
 <!-- cargo-rdme end -->
 
