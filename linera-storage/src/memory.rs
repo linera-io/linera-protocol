@@ -3,9 +3,7 @@
 
 use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
 use linera_execution::WasmRuntime;
-use linera_views::memory::{
-    create_memory_client_stream_queries, MemoryClient, TEST_MEMORY_MAX_STREAM_QUERIES,
-};
+use linera_views::memory::{create_memory_client_stream_queries, MemoryClient};
 use std::sync::Arc;
 
 type MemoryStore = DbStore<MemoryClient>;
@@ -22,16 +20,22 @@ impl MemoryStore {
     }
 }
 
-pub type MemoryStoreClient = DbStoreClient<MemoryClient>;
+pub type MemoryStoreClient<C> = DbStoreClient<MemoryClient, C>;
 
-impl MemoryStoreClient {
-    pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> MemoryStoreClient {
-        MemoryStoreClient::new(wasm_runtime, TEST_MEMORY_MAX_STREAM_QUERIES)
+#[cfg(any(test, feature = "test"))]
+impl MemoryStoreClient<crate::TestClock> {
+    pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> Self {
+        let clock = crate::TestClock::new();
+        let max_stream_queries = linera_views::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
+        MemoryStoreClient::new(wasm_runtime, max_stream_queries, clock)
     }
+}
 
-    pub fn new(wasm_runtime: Option<WasmRuntime>, max_stream_queries: usize) -> Self {
+impl<C> MemoryStoreClient<C> {
+    pub fn new(wasm_runtime: Option<WasmRuntime>, max_stream_queries: usize, clock: C) -> Self {
         Self {
             client: Arc::new(MemoryStore::new(wasm_runtime, max_stream_queries)),
+            clock,
         }
     }
 }

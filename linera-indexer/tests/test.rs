@@ -66,7 +66,7 @@ async fn transfer(client: &reqwest::Client, from: ChainId, to: ChainId, amount: 
 }
 
 #[cfg(debug_assertions)]
-const TRANSFER_DELAY_MILLIS: u64 = 500;
+const TRANSFER_DELAY_MILLIS: u64 = 1000;
 
 #[cfg(not(debug_assertions))]
 const TRANSFER_DELAY_MILLIS: u64 = 100;

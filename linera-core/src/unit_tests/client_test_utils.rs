@@ -21,7 +21,7 @@ use linera_execution::{
     pricing::Pricing,
     WasmRuntime,
 };
-use linera_storage::{MemoryStoreClient, Store};
+use linera_storage::{MemoryStoreClient, Store, TestClock};
 use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -567,12 +567,13 @@ pub struct MakeMemoryStoreClient {
 
 #[async_trait]
 impl StoreBuilder for MakeMemoryStoreClient {
-    type Store = MemoryStoreClient;
+    type Store = MemoryStoreClient<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         Ok(MemoryStoreClient::new(
             self.wasm_runtime,
             TEST_MEMORY_MAX_STREAM_QUERIES,
+            TestClock::new(),
         ))
     }
 }
@@ -611,7 +612,7 @@ impl MakeRocksDbStoreClient {
 #[cfg(feature = "rocksdb")]
 #[async_trait]
 impl StoreBuilder for MakeRocksDbStoreClient {
-    type Store = RocksDbStoreClient;
+    type Store = RocksDbStoreClient<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         let dir = tempfile::TempDir::new()?;
@@ -648,7 +649,7 @@ impl MakeDynamoDbStoreClient {
 #[cfg(feature = "aws")]
 #[async_trait]
 impl StoreBuilder for MakeDynamoDbStoreClient {
-    type Store = DynamoDbStoreClient;
+    type Store = DynamoDbStoreClient<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         if self.localstack.is_none() {
@@ -708,7 +709,7 @@ impl MakeScyllaDbStoreClient {
 #[cfg(feature = "scylladb")]
 #[async_trait]
 impl StoreBuilder for MakeScyllaDbStoreClient {
-    type Store = ScyllaDbStoreClient;
+    type Store = ScyllaDbStoreClient<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         self.instance_counter += 1;

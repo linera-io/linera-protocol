@@ -19,7 +19,7 @@ use linera_execution::{
     committee::{Committee, ValidatorName},
     WasmRuntime,
 };
-use linera_storage::{MemoryStoreClient, Store};
+use linera_storage::{MemoryStoreClient, Store, WallClock};
 use linera_views::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
 use std::sync::{
     atomic::{AtomicU32, Ordering},
@@ -40,7 +40,7 @@ use tokio::sync::{Mutex, MutexGuard};
 pub struct TestValidator {
     key_pair: KeyPair,
     committee: Committee,
-    worker: Arc<Mutex<WorkerState<MemoryStoreClient>>>,
+    worker: Arc<Mutex<WorkerState<MemoryStoreClient<WallClock>>>>,
     root_chain_counter: Arc<AtomicU32>,
     chains: Arc<DashMap<ChainId, ActiveChain>>,
 }
@@ -49,8 +49,11 @@ impl Default for TestValidator {
     fn default() -> Self {
         let key_pair = KeyPair::generate();
         let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
-        let client =
-            MemoryStoreClient::new(Some(WasmRuntime::default()), TEST_MEMORY_MAX_STREAM_QUERIES);
+        let client = MemoryStoreClient::new(
+            Some(WasmRuntime::default()),
+            TEST_MEMORY_MAX_STREAM_QUERIES,
+            WallClock,
+        );
 
         let worker = WorkerState::new(
             "Single validator node".to_string(),
@@ -120,7 +123,7 @@ impl TestValidator {
     }
 
     /// Returns the locked [`WorkerState`] of this validator.
-    pub(crate) async fn worker(&self) -> MutexGuard<WorkerState<MemoryStoreClient>> {
+    pub(crate) async fn worker(&self) -> MutexGuard<WorkerState<MemoryStoreClient<WallClock>>> {
         self.worker.lock().await
     }
 
