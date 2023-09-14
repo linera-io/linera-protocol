@@ -177,14 +177,14 @@ impl ServerContext {
 }
 
 #[async_trait]
-impl<S> Runnable<S> for ServerContext
-where
-    S: Store + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
-{
+impl Runnable for ServerContext {
     type Output = ();
 
-    async fn run(self, storage: S) -> Result<(), anyhow::Error> {
+    async fn run<S>(self, storage: S) -> Result<(), anyhow::Error>
+    where
+        S: Store + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>,
+    {
         let listen_address = self.get_listen_address();
 
         // Run the server
