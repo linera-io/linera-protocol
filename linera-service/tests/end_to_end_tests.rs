@@ -6,23 +6,53 @@ mod common;
 
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::identifiers::ChainId;
-use linera_service::client::{LocalNetwork, Network};
+use linera_service::client::{Database, LocalNetwork, Network};
 use std::time::Duration;
 
+#[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_reconfiguration_grpc() {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    test_reconfiguration(Network::Grpc).await;
+async fn test_rocks_db_end_to_end_reconfiguration_grpc() {
+    run_end_to_end_reconfiguration(Database::RocksDb, Network::Grpc).await;
 }
 
+#[ignore]
+#[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_reconfiguration_simple() {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    test_reconfiguration(Network::Simple).await;
+async fn test_dynamo_db_end_to_end_reconfiguration_grpc() {
+    run_end_to_end_reconfiguration(Database::DynamoDb, Network::Grpc).await;
 }
 
-async fn test_reconfiguration(network: Network) {
-    let mut local_net = LocalNetwork::new(network, 4).unwrap();
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[test_log::test(tokio::test)]
+async fn test_scylla_db_end_to_end_reconfiguration_grpc() {
+    run_end_to_end_reconfiguration(Database::ScyllaDb, Network::Grpc).await;
+}
+
+#[cfg(feature = "rocksdb")]
+#[test_log::test(tokio::test)]
+async fn test_rocks_db_end_to_end_reconfiguration_simple() {
+    run_end_to_end_reconfiguration(Database::RocksDb, Network::Simple).await;
+}
+
+#[ignore]
+#[cfg(feature = "aws")]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_end_to_end_reconfiguration_simple() {
+    run_end_to_end_reconfiguration(Database::DynamoDb, Network::Simple).await;
+}
+
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[test_log::test(tokio::test)]
+async fn test_scylla_db_end_to_end_reconfiguration_simple() {
+    run_end_to_end_reconfiguration(Database::ScyllaDb, Network::Simple).await;
+}
+
+#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
+async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
     let client = local_net.make_client(network);
     let client_2 = local_net.make_client(network);
 
@@ -128,10 +158,34 @@ async fn test_reconfiguration(network: Network) {
 }
 
 #[test_log::test(tokio::test)]
-async fn test_open_chain_node_service() {
+async fn test_memory_open_chain_node_service() {
+    run_open_chain_node_service(Database::Memory).await
+}
+
+#[cfg(feature = "rocksdb")]
+#[test_log::test(tokio::test)]
+async fn test_rocks_db_open_chain_node_service() {
+    run_open_chain_node_service(Database::RocksDb).await
+}
+
+#[ignore]
+#[cfg(feature = "aws")]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_open_chain_node_service() {
+    run_open_chain_node_service(Database::DynamoDb).await
+}
+
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[test_log::test(tokio::test)]
+async fn test_scylla_db_open_chain_node_service() {
+    run_open_chain_node_service(Database::ScyllaDb).await
+}
+
+async fn run_open_chain_node_service(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 4).unwrap();
+    let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
     let client = local_net.make_client(network);
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
@@ -216,11 +270,35 @@ async fn test_open_chain_node_service() {
 }
 
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_retry_notification_stream() {
+async fn test_memory_end_to_end_retry_notification_stream() {
+    run_end_to_end_retry_notification_stream(Database::Memory).await
+}
+
+#[cfg(feature = "rocksdb")]
+#[test_log::test(tokio::test)]
+async fn test_rocks_db_end_to_end_retry_notification_stream() {
+    run_end_to_end_retry_notification_stream(Database::RocksDb).await
+}
+
+#[ignore]
+#[cfg(feature = "aws")]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_end_to_end_retry_notification_stream() {
+    run_end_to_end_retry_notification_stream(Database::DynamoDb).await
+}
+
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[test_log::test(tokio::test)]
+async fn test_scylla_db_end_to_end_retry_notification_stream() {
+    run_end_to_end_retry_notification_stream(Database::ScyllaDb).await
+}
+
+async fn run_end_to_end_retry_notification_stream(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 1).unwrap();
+    let mut local_net = LocalNetwork::new(database, network, 1).unwrap();
     let client1 = local_net.make_client(network);
     let client2 = local_net.make_client(network);
 
@@ -275,12 +353,32 @@ async fn test_end_to_end_retry_notification_stream() {
     node_service2.assert_is_running();
 }
 
+#[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_multiple_wallets() {
+async fn test_rocks_db_end_to_end_multiple_wallets() {
+    run_end_to_end_multiple_wallets(Database::RocksDb).await
+}
+
+#[ignore]
+#[cfg(feature = "aws")]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_end_to_end_multiple_wallets() {
+    run_end_to_end_multiple_wallets(Database::DynamoDb).await
+}
+
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[test_log::test(tokio::test)]
+async fn test_scylla_db_end_to_end_multiple_wallets() {
+    run_end_to_end_multiple_wallets(Database::ScyllaDb).await
+}
+
+#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
+async fn run_end_to_end_multiple_wallets(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create local_net and two clients.
-    let mut local_net = LocalNetwork::new(Network::Grpc, 4).unwrap();
+    let mut local_net = LocalNetwork::new(database, Network::Grpc, 4).unwrap();
     let client_1 = local_net.make_client(Network::Grpc);
     let client_2 = local_net.make_client(Network::Grpc);
 
@@ -329,9 +427,33 @@ async fn test_end_to_end_multiple_wallets() {
 }
 
 #[test_log::test(tokio::test)]
-async fn test_project_new() {
+async fn test_memory_project_new() {
+    run_project_new(Database::Memory).await
+}
+
+#[cfg(feature = "rocksdb")]
+#[test_log::test(tokio::test)]
+async fn test_rocks_db_project_new() {
+    run_project_new(Database::RocksDb).await
+}
+
+#[ignore]
+#[cfg(feature = "aws")]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_project_new() {
+    run_project_new(Database::DynamoDb).await
+}
+
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[test_log::test(tokio::test)]
+async fn test_scylla_db_project_new() {
+    run_project_new(Database::ScyllaDb).await
+}
+
+async fn run_project_new(database: Database) {
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 0).unwrap();
+    let mut local_net = LocalNetwork::new(database, network, 0).unwrap();
     let client = local_net.make_client(network);
 
     let tmp_dir = client.project_new("init-test").await.unwrap();
@@ -343,9 +465,33 @@ async fn test_project_new() {
 }
 
 #[test_log::test(tokio::test)]
-async fn test_project_test() {
+async fn test_memory_project_test() {
+    run_project_test(Database::Memory).await
+}
+
+#[cfg(feature = "rocksdb")]
+#[test_log::test(tokio::test)]
+async fn test_rocks_db_project_test() {
+    run_project_test(Database::RocksDb).await
+}
+
+#[ignore]
+#[cfg(feature = "aws")]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_project_test() {
+    run_project_test(Database::DynamoDb).await
+}
+
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[test_log::test(tokio::test)]
+async fn test_scylla_db_project_test() {
+    run_project_test(Database::ScyllaDb).await
+}
+
+async fn run_project_test(database: Database) {
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 0).unwrap();
+    let mut local_net = LocalNetwork::new(database, network, 0).unwrap();
     let client = local_net.make_client(network);
     client
         .project_test(&LocalNetwork::example_path("counter").unwrap())
@@ -353,11 +499,35 @@ async fn test_project_test() {
 }
 
 #[test_log::test(tokio::test)]
-async fn test_project_publish() {
+async fn test_memory_project_publish() {
+    run_project_publish(Database::Memory).await
+}
+
+#[cfg(feature = "rocksdb")]
+#[test_log::test(tokio::test)]
+async fn test_rocks_db_project_publish() {
+    run_project_publish(Database::RocksDb).await
+}
+
+#[ignore]
+#[cfg(feature = "aws")]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_project_publish() {
+    run_project_publish(Database::DynamoDb).await
+}
+
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[test_log::test(tokio::test)]
+async fn test_scylla_db_project_publish() {
+    run_project_publish(Database::ScyllaDb).await
+}
+
+async fn run_project_publish(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 1).unwrap();
+    let mut local_net = LocalNetwork::new(database, network, 1).unwrap();
     let client = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
@@ -379,11 +549,35 @@ async fn test_project_publish() {
 }
 
 #[test_log::test(tokio::test)]
-async fn test_example_publish() {
+async fn test_memory_example_publish() {
+    run_example_publish(Database::Memory).await
+}
+
+#[cfg(feature = "rocksdb")]
+#[test_log::test(tokio::test)]
+async fn test_rocks_db_example_publish() {
+    run_example_publish(Database::RocksDb).await
+}
+
+#[ignore]
+#[cfg(feature = "aws")]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_example_publish() {
+    run_example_publish(Database::DynamoDb).await
+}
+
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[test_log::test(tokio::test)]
+async fn test_scylla_db_example_publish() {
+    run_example_publish(Database::ScyllaDb).await
+}
+
+async fn run_example_publish(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 1).unwrap();
+    let mut local_net = LocalNetwork::new(database, network, 1).unwrap();
     let client = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
@@ -402,12 +596,32 @@ async fn test_example_publish() {
     assert_eq!(node_service.try_get_applications_uri(&chain).await.len(), 1)
 }
 
+#[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_open_multi_owner_chain() {
+async fn test_rocks_db_end_to_end_open_multi_owner_chain() {
+    run_end_to_end_open_multi_owner_chain(Database::RocksDb).await
+}
+
+#[ignore]
+#[cfg(feature = "aws")]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_end_to_end_open_multi_owner_chain() {
+    run_end_to_end_open_multi_owner_chain(Database::DynamoDb).await
+}
+
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[test_log::test(tokio::test)]
+async fn test_scylla_db_end_to_end_open_multi_owner_chain() {
+    run_end_to_end_open_multi_owner_chain(Database::ScyllaDb).await
+}
+
+#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
+async fn run_end_to_end_open_multi_owner_chain(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
-    let mut runner = LocalNetwork::new(Network::Grpc, 4).unwrap();
+    let mut runner = LocalNetwork::new(database, Network::Grpc, 4).unwrap();
     let client1 = runner.make_client(Network::Grpc);
     let client2 = runner.make_client(Network::Grpc);
 
