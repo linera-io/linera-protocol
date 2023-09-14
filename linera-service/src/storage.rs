@@ -5,10 +5,10 @@ use crate::config::GenesisConfig;
 use anyhow::format_err;
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
-use linera_storage::MemoryStoreClient;
-use linera_views::common::CommonStoreConfig;
+use linera_storage::{MemoryStoreClient, Store};
 #[cfg(feature = "aws")]
 use linera_views::dynamo_db::{get_base_config, get_localstack_config};
+use linera_views::{common::CommonStoreConfig, views::ViewError};
 use std::str::FromStr;
 
 #[cfg(feature = "rocksdb")]
@@ -45,63 +45,25 @@ pub enum StorageConfig {
 }
 
 #[async_trait]
-pub trait Runnable<S> {
+pub trait Runnable {
     type Output;
 
-    async fn run(self, storage: S) -> Result<Self::Output, anyhow::Error>;
-}
-
-#[doc(hidden)]
-#[cfg(feature = "rocksdb")]
-pub type MaybeRocksDbStoreClient = RocksDbStoreClient;
-
-#[doc(hidden)]
-#[cfg(not(feature = "rocksdb"))]
-pub type MaybeRocksDbStoreClient = MemoryStoreClient;
-
-#[doc(hidden)]
-#[cfg(feature = "aws")]
-pub type MaybeDynamoDbStoreClient = DynamoDbStoreClient;
-
-#[doc(hidden)]
-#[cfg(not(feature = "aws"))]
-pub type MaybeDynamoDbStoreClient = MemoryStoreClient;
-
-#[doc(hidden)]
-#[cfg(feature = "scylladb")]
-pub type MaybeScyllaDbStoreClient = ScyllaDbStoreClient;
-
-#[doc(hidden)]
-#[cfg(not(feature = "scylladb"))]
-pub type MaybeScyllaDbStoreClient = MemoryStoreClient;
-
-pub trait RunnableJob<Output>:
-    Runnable<MemoryStoreClient, Output = Output>
-    + Runnable<MaybeRocksDbStoreClient, Output = Output>
-    + Runnable<MaybeDynamoDbStoreClient, Output = Output>
-    + Runnable<MaybeScyllaDbStoreClient, Output = Output>
-{
-}
-
-impl<Output, T> RunnableJob<Output> for T where
-    T: Runnable<MemoryStoreClient, Output = Output>
-        + Runnable<MaybeRocksDbStoreClient, Output = Output>
-        + Runnable<MaybeDynamoDbStoreClient, Output = Output>
-        + Runnable<MaybeScyllaDbStoreClient, Output = Output>
-{
+    async fn run<S>(self, storage: S) -> Result<Self::Output, anyhow::Error>
+    where
+        S: Store + Clone + Send + Sync + 'static,
+        ViewError: From<S::ContextError>;
 }
 
 impl StorageConfig {
-    #[allow(unused_variables)]
-    pub async fn run_with_storage<Job, Output>(
+    pub async fn run_with_storage<Job>(
         &self,
         config: &GenesisConfig,
         wasm_runtime: Option<WasmRuntime>,
         common_config: CommonStoreConfig,
         job: Job,
-    ) -> Result<Output, anyhow::Error>
+    ) -> Result<Job::Output, anyhow::Error>
     where
-        Job: RunnableJob<Output>,
+        Job: Runnable,
     {
         use StorageConfig::*;
         match self {
