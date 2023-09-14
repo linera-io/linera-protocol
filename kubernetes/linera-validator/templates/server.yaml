@@ -18,10 +18,19 @@ metadata:
   name: shards
 spec:
   serviceName: "shards"
-  replicas: 2
+  replicas: 10
   selector:
     matchLabels:
       app: shards
+  volumeClaimTemplates:
+    - metadata:
+        name: rocksdb
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "standard"
+        resources:
+          requests:
+            storage: 100Mi
   template:
     metadata:
       labels:
@@ -38,7 +47,7 @@ spec:
             [
               "run",
               "--storage",
-              "rocksdb:shard_data.db",
+              "rocksdb:/usr/share/rocksdb/shard_data.db",
               "--server",
               "server_1.json",
               "--shard",
@@ -46,6 +55,9 @@ spec:
               "--genesis",
               "genesis.json",
             ]
+          volumeMounts:
+          - name: rocksdb
+            mountPath: /usr/share/rocksdb
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}

@@ -6,6 +6,10 @@ cloud_mode=false
 port_forward=false
 do_build=true
 
+# Guard clause check if required binaries are installed
+which kind > /dev/null || { echo "Error: kind not installed." ; exit 1 ; }
+which helm > /dev/null || { echo "Error: egrep not installed." ; exit 1 ; }
+
 # Function to display script usage
 usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -75,7 +79,11 @@ if [ "$cloud_mode" = true ]; then
 else
     docker_image="linera-test:latest"
     if [ "$do_build" = true ]; then
-        docker build -f ../../Dockerfile.aarch64 ../../ -t $docker_image || exit 1
+        if [ "$(uname -m)" = "x86_64" ]; then
+            docker build -f ../../Dockerfile ../../ -t $docker_image || exit 1
+        else
+            docker build -f ../../Dockerfile.aarch64 ../../ -t $docker_image || exit 1
+        fi
     fi
 
     kind create cluster
