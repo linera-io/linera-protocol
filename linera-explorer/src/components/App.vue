@@ -57,7 +57,7 @@ export default {
           <ul class="navbar-nav ms-auto">
             <li class="nav-item mx-2">
               <select @change="route(undefined, [['chain', ($event.target! as HTMLButtonElement).value]])" class="form-select">
-                <option v-for="c in chains" :value="c" :selected="c==chain" :key="'chain-'+c">{{ sh(c) }}</option>
+                <option v-for="c in chains" :value="c" :selected="c==chain" :key="'chain-'+c">{{ short_hash(c) }}</option>
               </select>
             </li>
             <li class="nav-item mx-2">

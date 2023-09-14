@@ -10,8 +10,8 @@ import 'bootstrap/dist/js/bootstrap.bundle.min.js'
 
 declare module '@vue/runtime-core' {
   interface ComponentCustomProperties {
-    shapp: (id: string) => string,
-    sh: (hash: string) => string,
+    short_app_id: (id: string) => string,
+    short_hash: (hash: string) => string,
     json_load: (id: string, data: any) => void,
     operation_id: (key: Scalars['OperationKey']['output']) => string,
     $root: ComponentPublicInstance<{ route: (name?: string, args?: [string, string][]) => void }>,
@@ -20,8 +20,8 @@ declare module '@vue/runtime-core' {
 
 init().then(() => {
   const app = createApp(App)
-  app.config.globalProperties.sh = short_crypto_hash
-  app.config.globalProperties.shapp = short_app_id
+  app.config.globalProperties.short_hash = short_crypto_hash
+  app.config.globalProperties.short_app_id = short_app_id
   app.config.globalProperties.json_load = json_load
   app.config.globalProperties.operation_id = operation_id
   start(app.mount('#app'))

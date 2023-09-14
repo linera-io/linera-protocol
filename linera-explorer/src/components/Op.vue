@@ -18,7 +18,7 @@ defineProps<{op: any, id: string, index?: number}>()
           <span>{{ op.System.Transfer.amount }}</span>
           <i class="bi bi-arrow-right"></i>
           <a :title="op.System.Transfer.recipient.Account.chain_id" @click="$root.route('blocks', [['chain', op.System.Transfer.recipient.Account.chain_id]])" class="btn btn-link">
-            {{ sh(op.System.Transfer.recipient.Account.chain_id) }}
+            {{ short_hash(op.System.Transfer.recipient.Account.chain_id) }}
           </a>
         </div>
       </div>

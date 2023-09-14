@@ -21,7 +21,7 @@ defineProps<{operations: ChainOperation[]}>()
         <tr v-for="o in operations" :key="'operations-op-'+operation_id(o.key)">
           <td>{{ o.index }}</td>
           <td :title="o.block">
-            <a @click="$root.route('block', [['block', o.block]])" class="btn btn-link">{{ sh(o.block) }} ({{ o.key.index }})</a>
+            <a @click="$root.route('block', [['block', o.block]])" class="btn btn-link">{{ short_hash(o.block) }} ({{ o.key.index }})</a>
           </td>
           <td>{{ o.key.height }}</td>
           <td>

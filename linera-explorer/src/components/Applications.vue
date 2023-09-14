@@ -19,7 +19,7 @@ defineProps<{apps: ApplicationOverview[]}>()
         <tr v-for="a in apps" :key="'application-'+a.id">
           <td :title="a.id">
             <a target="_blank" class="btn btn-link btn-sm" @click="$root.route('application', [['app', JSON.stringify(a)]])">
-              {{ shapp(a.id) }}
+              {{ short_app_id(a.id) }}
             </a>
           </td>
           <td :title="a.link">
