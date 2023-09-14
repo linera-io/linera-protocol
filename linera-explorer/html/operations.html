@@ -5,31 +5,27 @@
   <table class="table">
     <thead>
       <th>Index</th>
-      <th>Hash</th>
       <th>Block</th>
       <th>Height</th>
       <th>Previous</th>
       <th>JSON</th>
     </thead>
     <tbody>
-      <tr v-for="o in operations" :key="'operations-op-'+o.hash">
-        <td>{{ o.operationIndex }}</td>
-        <td :title="o.hash">
-          <a @click="route('operation', [['operation', o.hash]])" class="btn btn-link">{{ sh(o.hash) }}</a>
+      <tr v-for="o in operations" :key="'operations-op-'+operation_id(o.key)">
+        <td>{{ o.index }}</td>
+        <td :title="o.block">
+          <a @click="route('block', [['block', o.block]])" class="btn btn-link">{{ sh(o.block) }} ({{ o.key.index }})</a>
         </td>
-        <td :title="o.operation.block">
-          <a @click="route('block', [['block', o.operation.block]])" class="btn btn-link">{{ sh(o.operation.block) }} ({{ o.operation.index }})</a>
-        </td>
-        <td>{{ o.height }}</td>
-        <td :title="o.previousOperation">
-          <a @click="route('operation', [['operation', o.previousOperation]])" class="btn btn-link" v-if="o.previousOperation">{{ sh(o.previousOperation) }}</a>
+        <td>{{ o.key.height }}</td>
+        <td>
+          <a @click="route('operation', [['height', o.previousOperation.height.toString()], ['index', o.previousOperation.index.toString()]])" class="btn btn-link" v-if="o.previousOperation">{{ operation_id(o.previousOperation) }}</a>
           <span v-else>--</span>
         </td>
         <td>
-          <button class="btn btn-link btn-sm" data-bs-toggle="modal" :data-bs-target="'#'+o.hash+'-modal'" @click="json_load(o.hash+'-json', o)">
+          <button class="btn btn-link btn-sm" data-bs-toggle="modal" :data-bs-target="'#'+operation_id(o.key)+'-modal'" @click="json_load(operation_id(o.key)+'-json', o)">
             <i class="bi bi-braces"></i>
           </button>
-          <div :id="o.hash+'-modal'" class="modal fade">
+          <div :id="operation_id(o.key)+'-modal'" class="modal fade">
             <div class="modal-dialog modal-xl">
               <div class="modal-content">
                 <div class="modal-header">
@@ -37,7 +33,7 @@
                   <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                  <div :id="o.hash+'-json'" style="overflow-x: auto">
+                  <div :id="operation_id(o.key)+'-json'" style="overflow-x: auto">
                   </div>
                 </div>
               </div>

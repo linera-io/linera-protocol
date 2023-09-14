@@ -25,6 +25,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId},
 };
 use linera_indexer_graphql_client::{
+    indexer::{plugins, Plugins},
     operations as gql_operations,
     operations::{
         get_operation,
@@ -68,6 +69,11 @@ enum Page {
     },
     Operations(Vec<Operations>),
     Operation(Operation),
+    Plugin {
+        name: String,
+        link: String,
+        queries: Value,
+    },
     Error(String),
 }
 
@@ -108,6 +114,7 @@ pub struct Data {
     page: Page,
     chains: Vec<ChainId>,
     chain: ChainId,
+    plugins: Vec<String>,
 }
 
 /// Initializes Vue data.
@@ -118,6 +125,7 @@ pub fn data() -> JsValue {
         page: Page::Unloaded,
         chains: Vec::new(),
         chain: ChainId::from(ChainDescription::Root(0)),
+        plugins: Vec::new(),
     };
     data.serialize(&SER).unwrap()
 }
@@ -248,6 +256,19 @@ async fn chains(app: &JsValue, node: &str) -> Result<ChainId> {
         None => ChainId::from(ChainDescription::Root(0)),
         Some(chain_id) => *chain_id,
     }))
+}
+
+/// Queries indexer plugins.
+async fn plugins(app: &JsValue, indexer: &str) -> Result<()> {
+    let client = reqwest::Client::new();
+    let plugins = request::<Plugins, _>(&client, indexer, plugins::Variables)
+        .await?
+        .plugins;
+    let plugins_js = plugins
+        .serialize(&SER)
+        .expect("failed to serialize plugins");
+    setf(app, "plugins", &plugins_js);
+    Ok(())
 }
 
 /// Returns the applications page.
@@ -415,6 +436,29 @@ async fn application(app: Application) -> Result<(Page, String)> {
     ))
 }
 
+/// Returns the plugin page.
+async fn plugin(plugin: &str, indexer: &str) -> Result<(Page, String)> {
+    let link = format!("{}/{}", indexer, plugin);
+    let schema = graphql::introspection(&link).await?;
+    let sch = &schema["data"]["__schema"];
+    let types = sch["types"]
+        .as_array()
+        .expect("introspection types is not an array")
+        .clone();
+    let queries =
+        list_entrypoints(&types, &sch["queryType"]["name"]).unwrap_or(Value::Array(Vec::new()));
+    let queries = fill_type(&queries, &types);
+    let pathname = format!("/plugin?plugin={}", plugin);
+    Ok((
+        Page::Plugin {
+            name: plugin.to_string(),
+            link,
+            queries,
+        },
+        pathname,
+    ))
+}
+
 fn format_bytes(value: &JsValue) -> JsValue {
     let modified_value = value.clone();
     if let Some(object) = js_sys::Object::try_from(value) {
@@ -466,6 +510,7 @@ fn page_name_and_args(page: &Page) -> (&str, Vec<(String, String)>) {
                 ("index".to_string(), op.key.index.to_string()),
             ],
         ),
+        Page::Plugin { name, .. } => ("plugin", vec![("plugin".to_string(), name.to_string())]),
         Page::Error(_) => ("error", Vec::new()),
     }
 }
@@ -545,6 +590,10 @@ async fn page(
             }
         }
         "operations" => operations(indexer, chain_id).await,
+        "plugin" => match find_arg(args, "plugin") {
+            None => Err(anyhow!("unknown plugin")),
+            Some(name) => plugin(&name, indexer).await,
+        },
         "error" => {
             let msg = find_arg(args, "msg").unwrap_or("unknown error".to_string());
             Err(anyhow::Error::msg(msg))
@@ -702,6 +751,8 @@ pub async fn init(app: JsValue, uri: String) {
             .await
         }
         Ok(default_chain) => {
+            let indexer = url(&data.config, Protocol::Http, AddressKind::Indexer);
+            let _ = plugins(&app, &indexer).await;
             let uri = Url::parse(&uri).expect("failed to parse url");
             let pathname = uri.path();
             let mut args: Vec<(String, String)> = uri.query_pairs().into_owned().collect();
@@ -709,6 +760,9 @@ pub async fn init(app: JsValue, uri: String) {
             let path = match pathname {
                 "/blocks" => Some("blocks".to_string()),
                 "/applications" => Some("applications".to_string()),
+                "/operations" => Some("operations".to_string()),
+                "/operation" => Some("operation".to_string()),
+                "/plugin" => Some("plugin".to_string()),
                 pathname => match (
                     pathname.strip_prefix("/block/"),
                     pathname.strip_prefix("/application/"),
