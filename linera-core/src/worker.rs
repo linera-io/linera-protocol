@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::{future, FutureExt};
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, BlockHeight, RoundNumber, Timestamp},
+    data_types::{ArithmeticError, BlockHeight, RoundNumber},
     doc_scalar, ensure,
     identifiers::{ChainId, Owner},
 };
@@ -968,7 +968,8 @@ where
         self.check_no_missing_bytecode(block, blobs).await?;
         // Write the values so that the bytecode is available during execution.
         self.storage.write_values(blobs).await?;
-        let time_till_block = block.timestamp.saturating_diff_micros(Timestamp::now());
+        let now = self.storage.current_time();
+        let time_till_block = block.timestamp.saturating_diff_micros(now);
         ensure!(
             time_till_block <= self.grace_period_micros,
             WorkerError::InvalidTimestamp

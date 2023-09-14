@@ -33,9 +33,11 @@ use linera_execution::{
     ChainOwnership, ChannelSubscription, ExecutionStateView, GenericApplicationId, Message, Query,
     Response, SystemExecutionState, SystemQuery, SystemResponse,
 };
-use linera_storage::{MemoryStoreClient, Store};
+use linera_storage::{DbStoreClient, MemoryStoreClient, Store, TestClock};
 use linera_views::{
+    common::KeyValueStoreClient,
     memory::TEST_MEMORY_MAX_STREAM_QUERIES,
+    value_splitting::DatabaseConsistencyError,
     views::{CryptoHashView, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -412,28 +414,29 @@ async fn test_scylla_db_handle_block_proposal_ticks() {
     run_test_handle_block_proposal_ticks(client).await;
 }
 
-async fn run_test_handle_block_proposal_ticks<S>(client: S)
+async fn run_test_handle_block_proposal_ticks<C>(client: DbStoreClient<C, TestClock>)
 where
-    S: Store + Clone + Send + Sync + 'static,
-    ViewError: From<S::ContextError>,
+    C: KeyValueStoreClient + Clone + Send + Sync + 'static,
+    ViewError: From<<C as KeyValueStoreClient>::Error>,
+    <C as KeyValueStoreClient>::Error:
+        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     let key_pair = KeyPair::generate();
     let balance: Amount = Amount::from_tokens(5);
     let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
     let epoch = Epoch::ZERO;
+    let clock = client.clock.clone();
     let (committee, mut worker) = init_worker_with_chains(client, balances).await;
 
     {
         let block_proposal = make_first_block(ChainId::root(1))
-            .with_timestamp(
-                Timestamp::now().saturating_add_micros(TEST_GRACE_PERIOD_MICROS + 1_000_000),
-            )
+            .with_timestamp(Timestamp::from(TEST_GRACE_PERIOD_MICROS + 1_000_000))
             .into_simple_proposal(&key_pair);
         // Timestamp too far in the future
         assert!(worker.handle_block_proposal(block_proposal).await.is_err());
     }
 
-    let block_0_time = Timestamp::now().saturating_add_micros(TEST_GRACE_PERIOD_MICROS);
+    let block_0_time = Timestamp::from(TEST_GRACE_PERIOD_MICROS);
     let certificate = {
         let block = make_first_block(ChainId::root(1)).with_timestamp(block_0_time);
         let block_proposal = block.clone().into_simple_proposal(&key_pair);
@@ -454,11 +457,9 @@ where
         });
         make_certificate(&committee, &worker, value)
     };
-    worker
-        .fully_handle_certificate(certificate.clone(), vec![])
-        .await
-        .expect("handle certificate with valid tick");
-    assert!(Timestamp::now() >= block_0_time);
+    let future = worker.fully_handle_certificate(certificate.clone(), vec![]);
+    clock.set(block_0_time);
+    future.await.expect("handle certificate with valid tick");
 
     {
         let block_proposal = make_child_block(&certificate.value)
@@ -2925,7 +2926,7 @@ where
 async fn test_cross_chain_helper() {
     // Make a committee and worker (only used for signing certificates)
     let (committee, worker) = init_worker(
-        MemoryStoreClient::new(None, TEST_MEMORY_MAX_STREAM_QUERIES),
+        MemoryStoreClient::new(None, TEST_MEMORY_MAX_STREAM_QUERIES, TestClock::new()),
         true,
     );
     let committees = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);

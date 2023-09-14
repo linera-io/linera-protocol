@@ -884,19 +884,24 @@ where
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
-    assert!(matches!(
-        sender
-            .transfer_to_account_unsafe_unconfirmed(
-                None,
-                Amount::from_tokens(3),
-                Account::chain(ChainId::root(2)),
-                UserData(Some(*b"hello...........hello...........")),
-            )
-            .await,
-        Err(ChainClientError::CommunicationError(
-            CommunicationError::Trusted(crate::node::NodeError::ArithmeticError { .. })
-        ))
-    ));
+    let result = sender
+        .transfer_to_account_unsafe_unconfirmed(
+            None,
+            Amount::from_tokens(3),
+            Account::chain(ChainId::root(2)),
+            UserData(Some(*b"hello...........hello...........")),
+        )
+        .await;
+    assert!(
+        matches!(
+            result,
+            Err(ChainClientError::CommunicationError(
+                CommunicationError::Trusted(crate::node::NodeError::ArithmeticError { .. })
+            ))
+        ),
+        "Unexpected result {:?}",
+        result
+    );
     assert_eq!(sender.next_block_height, BlockHeight::ZERO);
     assert!(sender.pending_block.is_some());
     assert_eq!(

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
+use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient, TestClock, WallClock};
 use dashmap::DashMap;
 use linera_execution::WasmRuntime;
 #[cfg(any(test, feature = "test"))]
@@ -54,10 +54,10 @@ impl DynamoDbStore {
     }
 }
 
-pub type DynamoDbStoreClient = DbStoreClient<DynamoDbClient>;
+pub type DynamoDbStoreClient<C> = DbStoreClient<DynamoDbClient, C>;
 
-impl DynamoDbStoreClient {
-    #[cfg(any(test, feature = "test"))]
+#[cfg(any(test, feature = "test"))]
+impl DynamoDbStoreClient<TestClock> {
     pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> Self {
         let table = get_table_name().await;
         let table_name = table.parse().expect("Invalid table name");
@@ -74,7 +74,6 @@ impl DynamoDbStoreClient {
         client
     }
 
-    #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
         config: impl Into<Config>,
         table: TableName,
@@ -86,10 +85,13 @@ impl DynamoDbStoreClient {
                 .await?;
         let store_client = DynamoDbStoreClient {
             client: Arc::new(store),
+            clock: TestClock::new(),
         };
         Ok((store_client, table_status))
     }
+}
 
+impl DynamoDbStoreClient<WallClock> {
     pub async fn new(
         config: impl Into<Config>,
         table: TableName,
@@ -100,6 +102,7 @@ impl DynamoDbStoreClient {
             DynamoDbStore::new(config.into(), table, common_config, wasm_runtime).await?;
         let store_client = DynamoDbStoreClient {
             client: Arc::new(store),
+            clock: WallClock,
         };
         Ok((store_client, table_status))
     }

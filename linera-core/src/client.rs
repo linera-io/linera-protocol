@@ -1201,7 +1201,7 @@ where
         incoming_messages: Vec<IncomingMessage>,
         operations: Vec<Operation>,
     ) -> Result<Certificate, ChainClientError> {
-        let timestamp = self.next_timestamp(&incoming_messages);
+        let timestamp = self.next_timestamp(&incoming_messages).await;
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
@@ -1220,12 +1220,13 @@ where
     ///
     /// This will usually be the current time according to the local clock, but may be slightly
     /// ahead to make sure it's not earlier than the incoming messages or the previous block.
-    fn next_timestamp(&self, incoming_messages: &[IncomingMessage]) -> Timestamp {
+    async fn next_timestamp(&self, incoming_messages: &[IncomingMessage]) -> Timestamp {
+        let now = self.node_client.storage_client().await.current_time();
         incoming_messages
             .iter()
             .map(|msg| msg.event.timestamp)
             .max()
-            .map_or_else(Timestamp::now, |timestamp| timestamp.max(Timestamp::now()))
+            .map_or(now, |timestamp| timestamp.max(now))
             .max(self.timestamp)
     }
 
@@ -1280,7 +1281,7 @@ where
             ChainClientError::WalletSynchronizationError
         );
         let incoming_messages = self.pending_messages().await?;
-        let timestamp = self.next_timestamp(&incoming_messages);
+        let timestamp = self.next_timestamp(&incoming_messages).await;
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,

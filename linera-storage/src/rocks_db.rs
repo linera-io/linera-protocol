@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
+use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient, WallClock};
 use linera_execution::WasmRuntime;
 use linera_views::{
     common::{CommonStoreConfig, TableStatus},
@@ -51,11 +51,11 @@ impl RocksDbStore {
     }
 }
 
-pub type RocksDbStoreClient = DbStoreClient<RocksDbClient>;
+pub type RocksDbStoreClient<C> = DbStoreClient<RocksDbClient, C>;
 
-impl RocksDbStoreClient {
-    #[cfg(any(test, feature = "test"))]
-    pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> RocksDbStoreClient {
+#[cfg(any(test, feature = "test"))]
+impl RocksDbStoreClient<crate::TestClock> {
+    pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> Self {
         let dir = TempDir::new().unwrap();
         let common_config = create_rocks_db_common_config();
         let (store_client, _) = RocksDbStoreClient::new_for_testing(
@@ -78,10 +78,13 @@ impl RocksDbStoreClient {
             RocksDbStore::new_for_testing(path, wasm_runtime, common_config).await?;
         let store_client = RocksDbStoreClient {
             client: Arc::new(store),
+            clock: crate::TestClock::new(),
         };
         Ok((store_client, table_status))
     }
+}
 
+impl RocksDbStoreClient<WallClock> {
     pub async fn new(
         path: PathBuf,
         wasm_runtime: Option<WasmRuntime>,
@@ -90,6 +93,7 @@ impl RocksDbStoreClient {
         let (store, table_status) = RocksDbStore::new(path, wasm_runtime, common_config).await?;
         let store_client = RocksDbStoreClient {
             client: Arc::new(store),
+            clock: WallClock,
         };
         Ok((store_client, table_status))
     }

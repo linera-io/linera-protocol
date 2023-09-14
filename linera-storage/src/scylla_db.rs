@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
+use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient, WallClock};
 use linera_execution::WasmRuntime;
 use linera_views::{
     common::{CommonStoreConfig, TableStatus},
@@ -56,11 +56,11 @@ impl ScyllaDbStore {
     }
 }
 
-pub type ScyllaDbStoreClient = DbStoreClient<ScyllaDbClient>;
+pub type ScyllaDbStoreClient<C> = DbStoreClient<ScyllaDbClient, C>;
 
-impl ScyllaDbStoreClient {
-    #[cfg(any(test, feature = "test"))]
-    pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> ScyllaDbStoreClient {
+#[cfg(any(test, feature = "test"))]
+impl ScyllaDbStoreClient<crate::TestClock> {
+    pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> Self {
         let uri = "localhost:9042";
         let table_name = get_table_name().await;
         let common_config = create_scylla_db_common_config();
@@ -71,7 +71,6 @@ impl ScyllaDbStoreClient {
         client
     }
 
-    #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
         uri: &str,
         table_name: String,
@@ -82,10 +81,13 @@ impl ScyllaDbStoreClient {
             ScyllaDbStore::new_for_testing(uri, table_name, common_config, wasm_runtime).await?;
         let store_client = ScyllaDbStoreClient {
             client: Arc::new(store),
+            clock: crate::TestClock::new(),
         };
         Ok((store_client, table_status))
     }
+}
 
+impl ScyllaDbStoreClient<WallClock> {
     pub async fn new(
         uri: &str,
         table_name: String,
@@ -96,6 +98,7 @@ impl ScyllaDbStoreClient {
             ScyllaDbStore::new(uri, table_name, common_config, wasm_runtime).await?;
         let store_client = ScyllaDbStoreClient {
             client: Arc::new(store),
+            clock: WallClock,
         };
         Ok((store_client, table_status))
     }

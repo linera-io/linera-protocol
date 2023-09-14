@@ -5,7 +5,7 @@ use crate::config::GenesisConfig;
 use anyhow::format_err;
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
-use linera_storage::{MemoryStoreClient, Store};
+use linera_storage::{MemoryStoreClient, Store, WallClock};
 #[cfg(feature = "aws")]
 use linera_views::dynamo_db::{get_base_config, get_localstack_config};
 use linera_views::{common::CommonStoreConfig, views::ViewError};
@@ -68,8 +68,11 @@ impl StorageConfig {
         use StorageConfig::*;
         match self {
             Memory => {
-                let mut client =
-                    MemoryStoreClient::new(wasm_runtime, common_config.max_stream_queries);
+                let mut client = MemoryStoreClient::new(
+                    wasm_runtime,
+                    common_config.max_stream_queries,
+                    WallClock,
+                );
                 config.initialize_store(&mut client).await?;
                 job.run(client).await
             }
