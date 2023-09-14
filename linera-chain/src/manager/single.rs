@@ -99,6 +99,9 @@ impl SingleOwnerManager {
     }
 
     pub fn verify_owner(&self, proposal: &BlockProposal) -> Option<PublicKey> {
+        if proposal.content.round != RoundNumber::ZERO {
+            return None;
+        }
         (self.owner == proposal.owner).then_some(self.public_key)
     }
 }
