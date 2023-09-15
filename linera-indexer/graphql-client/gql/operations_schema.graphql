@@ -37,6 +37,9 @@ input OperationKeyKind @oneOf {
 	last: ChainId
 }
 
+"""
+Implements ObjectType
+"""
 type OperationsPlugin {
 	"""
 	Gets the operation associated to its hash

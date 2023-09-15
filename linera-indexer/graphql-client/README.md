@@ -10,12 +10,12 @@ A GraphQL client for the indexer.
 
 To generate the indexer GraphQL schema:
 ```bash
-cargo run --bin linera-indexer schema > linera-indexer-graphql-client/gql/indexer_schema.graphql
+cargo run --bin linera-indexer schema > linera-indexer/graphql-client/gql/indexer_schema.graphql
 ```
 
 To generate the indexer operations GraphQL schema:
 ```bash
-cargo run --bin linera-indexer schema operations > linera-indexer-graphql-client/gql/operations_schema.graphql
+cargo run --bin linera-indexer schema operations > linera-indexer/graphql-client/gql/operations_schema.graphql
 ```
 
 ## Contributing
