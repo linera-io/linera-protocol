@@ -1,6 +1,6 @@
 <!-- cargo-rdme start -->
 
-This module proposes an example of indexer with the operations plugin.
+An example of an indexer with the operations plugin.
 
 <!-- cargo-rdme end -->
 

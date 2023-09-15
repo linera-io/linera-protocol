@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module proposes an example of indexer with the operations plugin.
+//! An example of an indexer with the operations plugin.
 
 use linera_indexer::{common::IndexerError, plugin::Plugin, rocks_db::RocksDbRunner};
 use linera_indexer_plugins::operations::OperationsPlugin;
