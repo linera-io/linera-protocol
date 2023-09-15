@@ -10,6 +10,15 @@ documentation = "https://docs.rs/linera-indexer/latest/linera_indexer/"
 license = "Apache-2.0"
 edition = "2021"
 
+[features]
+default = ["rocksdb"]
+benchmark = ["linera-base/test", "linera-indexer/benchmark"]
+rocksdb = ["linera-indexer/rocksdb", "linera-indexer-plugins/rocksdb"]
+aws = ["linera-indexer/aws", "linera-indexer-plugins/aws"]
+scylladb = ["linera-indexer/scylladb", "linera-indexer-plugins/scylladb"]
+wasmer = ["linera-indexer-plugins/wasmer"]
+wasmtime = ["linera-indexer-plugins/wasmtime"]
+
 [dependencies]
 linera-indexer = { workspace = true }
 linera-indexer-plugins = { workspace = true }

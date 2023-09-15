@@ -13,8 +13,6 @@ edition = "2021"
 [features]
 default = ["rocksdb"]
 benchmark = ["linera-base/test"]
-wasmer = ["linera-execution/wasmer"]
-wasmtime = ["linera-execution/wasmtime"]
 rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb"]
 aws = ["linera-views/aws", "linera-core/aws"]
 scylladb = ["linera-views/scylladb", "linera-core/scylladb"]
