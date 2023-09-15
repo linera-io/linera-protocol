@@ -22,10 +22,9 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_table_name, get_upper_bound_option, CommonStoreConfig, ContextFromDb,
-        KeyValueStoreClient, TableStatus,
+        get_upper_bound_option, CommonStoreConfig, ContextFromDb, KeyValueStoreClient, TableStatus,
     },
-    lru_caching::{LruCachingKeyValueClient, TEST_CACHE_SIZE},
+    lru_caching::LruCachingKeyValueClient,
     value_splitting::DatabaseConsistencyError,
 };
 use async_lock::{Semaphore, SemaphoreGuard};
@@ -36,6 +35,9 @@ use scylla::{
 };
 use std::{ops::Deref, sync::Arc};
 use thiserror::Error;
+
+#[cfg(any(test, feature = "test"))]
+use crate::{common::get_table_name, lru_caching::TEST_CACHE_SIZE};
 
 /// The creation of a ScyllaDB client that can be used for accessing it.
 /// The `Vec<u8>`is a primary key.

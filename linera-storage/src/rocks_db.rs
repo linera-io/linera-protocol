@@ -10,7 +10,7 @@ use linera_views::{
 use std::{path::PathBuf, sync::Arc};
 
 #[cfg(any(test, feature = "test"))]
-use {linera_views::rocks_db::create_rocks_db_common_config, tempfile::TempDir};
+use {crate::TestClock, linera_views::rocks_db::create_rocks_db_common_config, tempfile::TempDir};
 
 #[cfg(test)]
 #[path = "unit_tests/rocks_db.rs"]
@@ -54,7 +54,7 @@ impl RocksDbStore {
 pub type RocksDbStoreClient<C> = DbStoreClient<RocksDbClient, C>;
 
 #[cfg(any(test, feature = "test"))]
-impl RocksDbStoreClient<crate::TestClock> {
+impl RocksDbStoreClient<TestClock> {
     pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> Self {
         let dir = TempDir::new().unwrap();
         let common_config = create_rocks_db_common_config();
@@ -78,7 +78,7 @@ impl RocksDbStoreClient<crate::TestClock> {
             RocksDbStore::new_for_testing(path, wasm_runtime, common_config).await?;
         let store_client = RocksDbStoreClient {
             client: Arc::new(store),
-            clock: crate::TestClock::new(),
+            clock: TestClock::new(),
         };
         Ok((store_client, table_status))
     }

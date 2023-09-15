@@ -11,7 +11,8 @@ use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    linera_views::common::get_table_name, linera_views::scylla_db::create_scylla_db_common_config,
+    crate::TestClock, linera_views::common::get_table_name,
+    linera_views::scylla_db::create_scylla_db_common_config,
 };
 
 #[cfg(test)]
@@ -59,7 +60,7 @@ impl ScyllaDbStore {
 pub type ScyllaDbStoreClient<C> = DbStoreClient<ScyllaDbClient, C>;
 
 #[cfg(any(test, feature = "test"))]
-impl ScyllaDbStoreClient<crate::TestClock> {
+impl ScyllaDbStoreClient<TestClock> {
     pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> Self {
         let uri = "localhost:9042";
         let table_name = get_table_name().await;
@@ -81,7 +82,7 @@ impl ScyllaDbStoreClient<crate::TestClock> {
             ScyllaDbStore::new_for_testing(uri, table_name, common_config, wasm_runtime).await?;
         let store_client = ScyllaDbStoreClient {
             client: Arc::new(store),
-            clock: crate::TestClock::new(),
+            clock: TestClock::new(),
         };
         Ok((store_client, table_status))
     }

@@ -23,12 +23,12 @@ use aws_sdk_dynamodb::{
     types::{Blob, SdkError},
     Client,
 };
+use aws_types::SdkConfig;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
+use static_assertions as sa;
 use std::{collections::HashMap, mem, str::FromStr, sync::Arc};
 use thiserror::Error;
-
-use static_assertions as sa;
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -36,7 +36,6 @@ use {
     crate::lru_caching::TEST_CACHE_SIZE,
     anyhow::{Context, Error},
     aws_sdk_s3::Endpoint,
-    aws_types::SdkConfig,
     std::env,
     tokio::sync::{Mutex, MutexGuard},
 };
@@ -952,6 +951,7 @@ where
     E: Clone + Sync + Send,
 {
     /// Creates a new [`DynamoDbContext`] instance from scratch from the given AWS configuration.
+    #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
         config: impl Into<Config>,
         table: TableName,

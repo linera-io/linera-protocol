@@ -1,16 +1,22 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient, TestClock, WallClock};
+use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient, WallClock};
 use dashmap::DashMap;
 use linera_execution::WasmRuntime;
-#[cfg(any(test, feature = "test"))]
-use linera_views::{common::get_table_name, dynamo_db::create_dynamo_db_common_config};
 use linera_views::{
     common::{CommonStoreConfig, TableStatus},
-    dynamo_db::{Config, DynamoDbClient, DynamoDbContextError, LocalStackTestContext, TableName},
+    dynamo_db::{Config, DynamoDbClient, DynamoDbContextError, TableName},
 };
 use std::sync::Arc;
+#[cfg(any(test, feature = "test"))]
+use {
+    crate::TestClock,
+    linera_views::{
+        common::get_table_name,
+        dynamo_db::{create_dynamo_db_common_config, LocalStackTestContext},
+    },
+};
 
 #[cfg(test)]
 #[path = "unit_tests/dynamo_db.rs"]
