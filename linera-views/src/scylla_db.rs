@@ -22,8 +22,7 @@
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        get_upper_bound_option, CommonStoreConfig, ContextFromDb,
-        KeyValueStoreClient, TableStatus,
+        get_upper_bound_option, CommonStoreConfig, ContextFromDb, KeyValueStoreClient, TableStatus,
     },
     lru_caching::LruCachingKeyValueClient,
     value_splitting::DatabaseConsistencyError,

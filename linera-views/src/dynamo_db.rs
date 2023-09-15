@@ -23,12 +23,12 @@ use aws_sdk_dynamodb::{
     types::{Blob, SdkError},
     Client,
 };
+use aws_types::SdkConfig;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
+use static_assertions as sa;
 use std::{collections::HashMap, mem, str::FromStr, sync::Arc};
 use thiserror::Error;
-use aws_types::SdkConfig;
-use static_assertions as sa;
 
 #[cfg(any(test, feature = "test"))]
 use {
