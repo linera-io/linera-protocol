@@ -941,8 +941,6 @@ impl NodeService {
 #[allow(unused_mut)]
 fn detect_current_features() -> Vec<&'static str> {
     let mut features = vec![];
-    // The "default" is required for the linera_indexer code.
-    features.push("default");
     #[cfg(feature = "benchmark")]
     {
         features.push("benchmark");
@@ -983,14 +981,11 @@ async fn cargo_force_build_binary(name: &'static str, package: Option<&'static s
         false
     };
     // Use the same features as the current environment so that we don't rebuild as often.
-    let features = detect_current_features();
-    if !features.is_empty() {
-        let features = features.join(",");
-        build_command
-            .arg("--no-default-features")
-            .arg("--features")
-            .arg(features);
-    }
+    let features = detect_current_features().join(",");
+    build_command
+        .arg("--no-default-features")
+        .arg("--features")
+        .arg(features);
     build_command.args(["--bin", name]);
     info!("Running compiler: {:?}", build_command);
     assert!(build_command

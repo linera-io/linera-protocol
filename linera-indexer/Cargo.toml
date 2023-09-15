@@ -61,4 +61,4 @@ ignored = ["async-trait"]
 [[bin]]
 name = "linera-indexer"
 path = "src/main.rs"
-required-features = ["default"]
+required-features = ["rocksdb"]
