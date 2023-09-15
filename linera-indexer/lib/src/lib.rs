@@ -15,3 +15,5 @@ pub mod service;
 
 #[cfg(feature = "rocksdb")]
 pub mod rocks_db;
+#[cfg(feature = "scylladb")]
+pub mod scylla_db;
