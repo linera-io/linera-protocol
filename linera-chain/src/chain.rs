@@ -8,7 +8,7 @@ use crate::{
     },
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
-    ChainError, ChainManager,
+    ChainError, ChainExecutionContext, ChainManager,
 };
 use async_graphql::SimpleObject;
 use futures::stream::{self, StreamExt, TryStreamExt};
@@ -132,7 +132,8 @@ where
         let response = self
             .execution_state
             .query_application(&context, query)
-            .await?;
+            .await
+            .map_err(|error| ChainError::ExecutionError(error, ChainExecutionContext::Query))?;
         Ok(response)
     }
 
@@ -145,7 +146,9 @@ where
             .registry
             .describe_application(application_id)
             .await
-            .map_err(|err| ChainError::ExecutionError(err.into()))
+            .map_err(|err| {
+                ChainError::ExecutionError(err.into(), ChainExecutionContext::DescribeApplication)
+            })
     }
 
     pub async fn mark_messages_as_received(
@@ -456,7 +459,8 @@ where
         let mut messages = Vec::new();
         let available_fuel = pricing.remaining_fuel(*balance);
         let mut remaining_fuel = available_fuel;
-        for message in &block.incoming_messages {
+        for (index, message) in block.incoming_messages.iter().enumerate() {
+            let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             // Execute the received message.
             let context = MessageContext {
                 chain_id,
@@ -472,7 +476,10 @@ where
             let results = self
                 .execution_state
                 .execute_message(&context, &message.event.message, &mut remaining_fuel)
-                .await?;
+                .await
+                .map_err(|err| {
+                    ChainError::ExecutionError(err, ChainExecutionContext::IncomingMessage(index))
+                })?;
             self.process_execution_results(&mut messages, context.height, results)
                 .await?;
         }
@@ -491,7 +498,10 @@ where
             let results = self
                 .execution_state
                 .execute_operation(&context, operation, &mut remaining_fuel)
-                .await?;
+                .await
+                .map_err(|err| {
+                    ChainError::ExecutionError(err, ChainExecutionContext::Operation(index))
+                })?;
             self.process_execution_results(&mut messages, context.height, results)
                 .await?;
         }

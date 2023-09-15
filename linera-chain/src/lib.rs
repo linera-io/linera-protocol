@@ -31,8 +31,8 @@ pub enum ChainError {
     ArithmeticError(#[from] ArithmeticError),
     #[error("Error in view operation: {0}")]
     ViewError(#[from] ViewError),
-    #[error("Execution error: {0}")]
-    ExecutionError(#[from] ExecutionError),
+    #[error("Execution error: {0} during {1:?}")]
+    ExecutionError(ExecutionError, ChainExecutionContext),
     #[error("Pricing error: {0}")]
     PricingError(#[from] PricingError),
 
@@ -119,4 +119,12 @@ pub enum ChainError {
     InternalError(String),
     #[error("Insufficient balance to pay the fees")]
     InsufficientBalance,
+}
+
+#[derive(Debug)]
+pub enum ChainExecutionContext {
+    Query,
+    DescribeApplication,
+    IncomingMessage(u32),
+    Operation(u32),
 }
