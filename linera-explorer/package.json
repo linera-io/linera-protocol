@@ -14,18 +14,18 @@
     "test": "vitest",
     "serve": "vite --port 3000"
   },
-    "dependencies": {
+  "dependencies": {
     "bootstrap": "^5.3",
     "bootstrap-icons": "^1.10",
     "json-formatter-js": "^2.3",
     "vue": "^3.3"
   },
-    "devDependencies": {
+  "devDependencies": {
     "@graphql-codegen/cli": "^5.0",
     "@graphql-codegen/typescript": "^4.0",
     "@vitejs/plugin-vue": "^4.2",
     "@vue/test-utils": "^2.4",
-    "happy-dom": "^10.11",
+    "jsdom": "^22.1",
     "vite": "^4.4",
     "vitest": "^0.34",
     "vue-tsc": "^1.8",
