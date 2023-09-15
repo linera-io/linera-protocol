@@ -941,29 +941,31 @@ impl NodeService {
 #[allow(unused_mut)]
 fn detect_current_features() -> Vec<&'static str> {
     let mut features = vec![];
-    #[cfg(benchmark)]
+    // The "default" is required for the linera_indexer code.
+    features.push("default");
+    #[cfg(feature = "benchmark")]
     {
         features.push("benchmark");
     }
-    #[cfg(wasmer)]
+    #[cfg(feature = "wasmer")]
     {
         features.push("wasmer");
     }
-    #[cfg(wasmtime)]
+    #[cfg(feature = "wasmtime")]
     {
         features.push("wasmtime");
     }
-    #[cfg(rocksdb)]
+    #[cfg(feature = "rocksdb")]
     {
         features.push("rocksdb");
     }
-    #[cfg(aws)]
-    {
-        features.push("aws");
-    }
-    #[cfg(scylladb)]
+    #[cfg(feature = "scylladb")]
     {
         features.push("scylladb");
+    }
+    #[cfg(feature = "aws")]
+    {
+        features.push("aws");
     }
     features
 }
@@ -983,10 +985,11 @@ async fn cargo_force_build_binary(name: &'static str, package: Option<&'static s
     // Use the same features as the current environment so that we don't rebuild as often.
     let features = detect_current_features();
     if !features.is_empty() {
+        let features = features.join(",");
         build_command
             .arg("--no-default-features")
             .arg("--features")
-            .args(features);
+            .arg(features);
     }
     build_command.args(["--bin", name]);
     info!("Running compiler: {:?}", build_command);
