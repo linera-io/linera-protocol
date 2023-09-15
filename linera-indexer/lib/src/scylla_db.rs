@@ -10,7 +10,7 @@ use structopt::StructOpt;
 
 #[derive(StructOpt, Clone, Debug)]
 pub struct ScyllaDbConfig {
-    /// RocksDB storage path
+    /// ScyllaDB address
     #[structopt(long, default_value = "localhost:9042")]
     pub uri: String,
     #[structopt(long, default_value = "linera")]
