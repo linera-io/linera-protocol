@@ -108,6 +108,7 @@ pub struct Transfer;
 mod from {
     use super::*;
     use linera_chain::data_types::{ExecutedBlock, HashedValue, IncomingMessage, OutgoingMessage};
+    use linera_execution::MessageAttributes;
 
     impl From<block::BlockBlockValueExecutedBlockBlockIncomingMessages> for IncomingMessage {
         fn from(val: block::BlockBlockValueExecutedBlockBlockIncomingMessages) -> Self {
@@ -145,18 +146,31 @@ mod from {
         }
     }
 
+    impl From<block::BlockBlockValueExecutedBlockMessagesAttributes> for MessageAttributes {
+        fn from(val: block::BlockBlockValueExecutedBlockMessagesAttributes) -> Self {
+            let block::BlockBlockValueExecutedBlockMessagesAttributes {
+                is_skippable,
+                is_bouncing,
+            } = val;
+            MessageAttributes {
+                is_skippable,
+                is_bouncing,
+            }
+        }
+    }
+
     impl From<block::BlockBlockValueExecutedBlockMessages> for OutgoingMessage {
         fn from(val: block::BlockBlockValueExecutedBlockMessages) -> Self {
             let block::BlockBlockValueExecutedBlockMessages {
                 destination,
                 authenticated_signer,
-                is_skippable,
+                attributes,
                 message,
             } = val;
             OutgoingMessage {
                 destination,
                 authenticated_signer,
-                is_skippable,
+                attributes: attributes.into(),
                 message,
             }
         }

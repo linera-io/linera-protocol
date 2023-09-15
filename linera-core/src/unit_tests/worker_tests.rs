@@ -31,8 +31,8 @@ use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{Account, AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
     ChainOwnership, ChannelSubscription, ExecutionError, ExecutionStateView, GenericApplicationId,
-    Message, Query, Response, SystemExecutionError, SystemExecutionState, SystemQuery,
-    SystemResponse,
+    Message, MessageAttributes, Query, Response, SystemExecutionError, SystemExecutionState,
+    SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStoreClient, MemoryStoreClient, Store, TestClock};
 use linera_views::{
@@ -239,7 +239,7 @@ fn direct_outgoing_message(recipient: ChainId, message: SystemMessage) -> Outgoi
     OutgoingMessage {
         destination: Destination::Recipient(recipient),
         authenticated_signer: None,
-        is_skippable: false,
+        attributes: MessageAttributes::default(),
         message: Message::System(message),
     }
 }
@@ -248,7 +248,7 @@ fn channel_outgoing_message(name: ChannelName, message: SystemMessage) -> Outgoi
     OutgoingMessage {
         destination: Destination::Subscribers(name),
         authenticated_signer: None,
-        is_skippable: false,
+        attributes: MessageAttributes::default(),
         message: Message::System(message),
     }
 }
@@ -861,7 +861,7 @@ where
                     height: BlockHeight::ZERO,
                     index: 0,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -876,7 +876,7 @@ where
                     height: BlockHeight::ZERO,
                     index: 1,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -891,7 +891,7 @@ where
                     height: BlockHeight::from(1),
                     index: 0,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -917,7 +917,7 @@ where
                     height: BlockHeight::ZERO,
                     index: 1,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -943,7 +943,7 @@ where
                     height: BlockHeight::from(1),
                     index: 0,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -958,7 +958,7 @@ where
                     height: BlockHeight::ZERO,
                     index: 0,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -973,7 +973,7 @@ where
                     height: BlockHeight::ZERO,
                     index: 1,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -999,7 +999,7 @@ where
                     height: BlockHeight::ZERO,
                     index: 0,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -1042,7 +1042,7 @@ where
                     height: BlockHeight::from(0),
                     index: 1,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -1057,7 +1057,7 @@ where
                     height: BlockHeight::from(1),
                     index: 0,
                     authenticated_signer: None,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     timestamp: Timestamp::from(0),
                     message: Message::System(SystemMessage::Credit {
                         account: Account::chain(ChainId::root(2)),
@@ -1464,7 +1464,7 @@ where
                 height: BlockHeight::ZERO,
                 index: 0,
                 authenticated_signer: None,
-                is_skippable: false,
+                attributes: MessageAttributes::default(),
                 timestamp: Timestamp::from(0),
                 message: Message::System(SystemMessage::Credit {
                     account: Account::chain(ChainId::root(1)),
@@ -1514,7 +1514,7 @@ where
             height,
             index: 0,
             authenticated_signer: None,
-            is_skippable: false,
+            attributes: MessageAttributes { is_skippable: false, .. },
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. }),
         } if certificate_hash == CryptoHash::new(&Dummy)
@@ -1704,7 +1704,7 @@ where
             height,
             index: 0,
             authenticated_signer: None,
-            is_skippable: false,
+            attributes: MessageAttributes { is_skippable: false, .. },
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. })
         } if certificate_hash == certificate.hash()
@@ -1808,7 +1808,7 @@ where
             height,
             index: 0,
             authenticated_signer: None,
-            is_skippable: false,
+            attributes: MessageAttributes { is_skippable: false, .. },
             timestamp,
             message: Message::System(SystemMessage::Credit { amount, .. })
         } if certificate_hash == certificate.hash()
@@ -2078,7 +2078,7 @@ where
                 height: BlockHeight::ZERO,
                 index: 0,
                 authenticated_signer: None,
-                is_skippable: false,
+                attributes: MessageAttributes::default(),
                 timestamp: Timestamp::from(0),
                 message: Message::System(SystemMessage::Credit {
                     account: Account::chain(ChainId::root(2)),
@@ -2393,7 +2393,7 @@ where
                         height: BlockHeight::ZERO,
                         index: 1,
                         authenticated_signer: None,
-                        is_skippable: false,
+                        attributes: MessageAttributes::default(),
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::Subscribe {
                             id: user_id,
@@ -2512,7 +2512,7 @@ where
                         height: BlockHeight::from(1),
                         index: 0,
                         authenticated_signer: None,
-                        is_skippable: false,
+                        attributes: MessageAttributes::default(),
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::SetCommittees {
                             epoch: Epoch::from(1),
@@ -2527,7 +2527,7 @@ where
                         height: BlockHeight::from(0),
                         index: 0,
                         authenticated_signer: None,
-                        is_skippable: false,
+                        attributes: MessageAttributes::default(),
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::OpenChain {
                             ownership: ChainOwnership::single(key_pair.public()),
@@ -2544,7 +2544,7 @@ where
                         height: BlockHeight::from(1),
                         index: 1,
                         authenticated_signer: None,
-                        is_skippable: false,
+                        attributes: MessageAttributes::default(),
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::Credit {
                             account: Account::chain(user_id),
@@ -2559,7 +2559,7 @@ where
                         height: BlockHeight::from(2),
                         index: 0,
                         authenticated_signer: None,
-                        is_skippable: false,
+                        attributes: MessageAttributes::default(),
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::Notify { id: user_id }),
                     },
@@ -2939,7 +2939,7 @@ where
                         height: BlockHeight::ZERO,
                         index: 0,
                         authenticated_signer: None,
-                        is_skippable: false,
+                        attributes: MessageAttributes::default(),
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::Credit {
                             account: Account::chain(admin_id),

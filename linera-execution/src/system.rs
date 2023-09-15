@@ -5,8 +5,9 @@
 use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, Bytecode, BytecodeLocation, ChainOwnership, ChannelName,
-    ChannelSubscription, Destination, MessageContext, OperationContext, QueryContext,
-    RawExecutionResult, RawOutgoingMessage, UserApplicationDescription, UserApplicationId,
+    ChannelSubscription, Destination, MessageAttributes, MessageContext, OperationContext,
+    QueryContext, RawExecutionResult, RawOutgoingMessage, UserApplicationDescription,
+    UserApplicationId,
 };
 use async_graphql::Enum;
 use custom_debug_derive::Debug;
@@ -497,7 +498,7 @@ where
                 let e1 = RawOutgoingMessage {
                     destination: Destination::Recipient(child_id),
                     authenticated: false,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     message: SystemMessage::OpenChain {
                         ownership: ownership.clone(),
                         committees: committees.clone(),
@@ -512,7 +513,7 @@ where
                 let e2 = RawOutgoingMessage {
                     destination: Destination::Recipient(*admin_id),
                     authenticated: false,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     message: SystemMessage::Subscribe {
                         id: child_id,
                         subscription,
@@ -540,7 +541,7 @@ where
                         let message = RawOutgoingMessage {
                             destination: Destination::Recipient(subscription.chain_id),
                             authenticated: false,
-                            is_skippable: false,
+                            attributes: MessageAttributes::default(),
                             message: SystemMessage::Unsubscribe {
                                 id: context.chain_id,
                                 subscription,
@@ -583,7 +584,7 @@ where
                     let message = RawOutgoingMessage {
                         destination: Destination::Recipient(account.chain_id),
                         authenticated: false,
-                        is_skippable: false,
+                        attributes: MessageAttributes::default(),
                         message: SystemMessage::Credit {
                             amount: *amount,
                             account: *account,
@@ -610,7 +611,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(*target),
                     authenticated: true,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     message: SystemMessage::Withdraw {
                         amount: *amount,
                         account: Account {
@@ -639,7 +640,7 @@ where
                         let message = RawOutgoingMessage {
                             destination: Destination::Subscribers(SystemChannel::Admin.name()),
                             authenticated: false,
-                            is_skippable: false,
+                            attributes: MessageAttributes::default(),
                             message: SystemMessage::SetCommittees {
                                 epoch: *epoch,
                                 committees: self.committees.get().clone(),
@@ -655,7 +656,7 @@ where
                         let message = RawOutgoingMessage {
                             destination: Destination::Subscribers(SystemChannel::Admin.name()),
                             authenticated: false,
-                            is_skippable: false,
+                            attributes: MessageAttributes::default(),
                             message: SystemMessage::SetCommittees {
                                 epoch: self.epoch.get().expect("chain is active"),
                                 committees: self.committees.get().clone(),
@@ -688,7 +689,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(*chain_id),
                     authenticated: false,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     message: SystemMessage::Subscribe {
                         id: context.chain_id,
                         subscription,
@@ -709,7 +710,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(*chain_id),
                     authenticated: false,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     message: SystemMessage::Unsubscribe {
                         id: context.chain_id,
                         subscription,
@@ -723,7 +724,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(context.chain_id),
                     authenticated: false,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     message: SystemMessage::BytecodePublished {
                         operation_index: context.index,
                     },
@@ -751,7 +752,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(context.chain_id),
                     authenticated: false,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     message: SystemMessage::ApplicationCreated,
                 };
                 result.messages.push(message);
@@ -764,7 +765,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(*chain_id),
                     authenticated: false,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     message: SystemMessage::RequestApplication(*application_id),
                 };
                 result.messages.push(message);
@@ -821,7 +822,7 @@ where
                         let message = RawOutgoingMessage {
                             destination: Destination::Recipient(account.chain_id),
                             authenticated: false,
-                            is_skippable: false,
+                            attributes: MessageAttributes::default(),
                             message: SystemMessage::Credit {
                                 amount: *amount,
                                 account: *account,
@@ -847,7 +848,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(*id),
                     authenticated: false,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     message: SystemMessage::Notify { id: *id },
                 };
                 result.messages.push(message);
@@ -857,7 +858,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(*id),
                     authenticated: false,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     message: SystemMessage::Notify { id: *id },
                 };
                 result.messages.push(message);
@@ -875,7 +876,7 @@ where
                 let message = RawOutgoingMessage {
                     destination: Destination::Subscribers(SystemChannel::PublishedBytecodes.name()),
                     authenticated: false,
-                    is_skippable: false,
+                    attributes: MessageAttributes::default(),
                     message: SystemMessage::BytecodeLocations { locations },
                 };
                 result.messages.push(message);
@@ -916,7 +917,7 @@ where
                         let message = RawOutgoingMessage {
                             destination: Destination::Recipient(context.message_id.chain_id),
                             authenticated: false,
-                            is_skippable: true,
+                            attributes: MessageAttributes::skippable(),
                             message: SystemMessage::RegisterApplications { applications },
                         };
                         result.messages.push(message);

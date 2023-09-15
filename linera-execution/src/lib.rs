@@ -411,10 +411,28 @@ pub struct RawOutgoingMessage<Message> {
     pub destination: Destination,
     /// Whether the message is authenticated.
     pub authenticated: bool,
-    /// Whether the message can be skipped by the receiver.
-    pub is_skippable: bool,
+    /// The attributes of the message.
+    pub attributes: MessageAttributes,
     /// The message itself.
     pub message: Message,
+}
+
+#[derive(Default, Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+/// The attributes of a message.
+pub struct MessageAttributes {
+    /// Whether the message can be skipped.
+    pub is_skippable: bool,
+    /// Whether the message was refused by the receiver and is now bouncing back.
+    pub is_bouncing: bool,
+}
+
+impl MessageAttributes {
+    pub fn skippable() -> Self {
+        Self {
+            is_skippable: true,
+            ..Self::default()
+        }
+    }
 }
 
 /// Externally visible results of an execution. These results are meant in the context of

@@ -10,8 +10,8 @@
 
 use super::{contract, contract_system_api, service_system_api};
 use crate::{
-    ApplicationCallResult, ChannelName, Destination, RawExecutionResult, RawOutgoingMessage,
-    SessionCallResult, SessionId, UserApplicationId,
+    ApplicationCallResult, ChannelName, Destination, MessageAttributes, RawExecutionResult,
+    RawOutgoingMessage, SessionCallResult, SessionId, UserApplicationId,
 };
 use linera_base::{
     crypto::CryptoHash,
@@ -47,7 +47,10 @@ impl From<contract::OutgoingMessage> for RawOutgoingMessage<Vec<u8>> {
         Self {
             destination: message.destination.into(),
             authenticated: message.authenticated,
-            is_skippable: message.is_skippable,
+            attributes: MessageAttributes {
+                is_skippable: message.is_skippable,
+                is_bouncing: false,
+            },
             message: message.message,
         }
     }

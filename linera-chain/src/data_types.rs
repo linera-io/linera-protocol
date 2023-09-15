@@ -12,7 +12,7 @@ use linera_base::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    BytecodeLocation, GenericApplicationId, Message, Operation,
+    BytecodeLocation, GenericApplicationId, Message, MessageAttributes, Operation,
 };
 use serde::{de::Deserializer, Deserialize, Serialize};
 use std::{
@@ -109,8 +109,8 @@ pub struct Event {
     pub index: u32,
     /// The authenticated signer for the operation that created the event, if any.
     pub authenticated_signer: Option<Owner>,
-    /// Whether the message can be skipped.
-    pub is_skippable: bool,
+    /// The attributes of the message.
+    pub attributes: MessageAttributes,
     /// The timestamp of the block that caused the message.
     pub timestamp: Timestamp,
     /// The message of the event (i.e. the actual payload of a message).
@@ -173,8 +173,8 @@ pub struct OutgoingMessage {
     pub destination: Destination,
     /// The user authentication carried by the message, if any.
     pub authenticated_signer: Option<Owner>,
-    /// Whether the message can be skipped.
-    pub is_skippable: bool,
+    /// The attributes of the message.
+    pub attributes: MessageAttributes,
     /// The message itself.
     pub message: Message,
 }

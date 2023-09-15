@@ -292,6 +292,20 @@ An message to be sent and possibly executed in the receiver's block.
 """
 scalar Message
 
+"""
+The attributes of a message.
+"""
+type MessageAttributes {
+	"""
+	Whether the message can be skipped.
+	"""
+	isSkippable: Boolean!
+	"""
+	Whether the message was refused by the receiver and is now bouncing back.
+	"""
+	isBouncing: Boolean!
+}
+
 type MutationRoot {
 	"""
 	Processes the inbox and returns the lists of certificate hashes that were created, if any.
@@ -398,9 +412,9 @@ type OutgoingMessage {
 	"""
 	authenticatedSigner: Owner
 	"""
-	Whether the message can be skipped.
+	The attributes of the message.
 	"""
-	isSkippable: Boolean!
+	attributes: MessageAttributes!
 	"""
 	The message itself.
 	"""

@@ -327,7 +327,8 @@ Event:
     - authenticated_signer:
         OPTION:
           TYPENAME: Owner
-    - is_skippable: BOOL
+    - attributes:
+        TYPENAME: MessageAttributes
     - timestamp:
         TYPENAME: Timestamp
     - message:
@@ -415,6 +416,10 @@ Message:
           - application_id:
               TYPENAME: ApplicationId
           - bytes: BYTES
+MessageAttributes:
+  STRUCT:
+    - is_skippable: BOOL
+    - is_bouncing: BOOL
 MessageId:
   STRUCT:
     - chain_id:
@@ -576,7 +581,8 @@ OutgoingMessage:
     - authenticated_signer:
         OPTION:
           TYPENAME: Owner
-    - is_skippable: BOOL
+    - attributes:
+        TYPENAME: MessageAttributes
     - message:
         TYPENAME: Message
 Owner:

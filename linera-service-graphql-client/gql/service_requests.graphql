@@ -35,7 +35,10 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
         messages {
           destination
           authenticatedSigner
-          isSkippable
+          attributes {
+            isSkippable
+            isBouncing
+          }
           message
         }
         stateHash
@@ -66,7 +69,10 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
         messages {
           destination
           authenticatedSigner
-          isSkippable
+          attributes {
+            isSkippable
+            isBouncing
+          }
           message
         }
         stateHash

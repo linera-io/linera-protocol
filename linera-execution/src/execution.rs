@@ -5,8 +5,9 @@ use crate::{
     runtime::{ApplicationStatus, ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
     ContractRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Message,
-    MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
-    RawOutgoingMessage, Response, SystemMessage, UserApplicationDescription, UserApplicationId,
+    MessageAttributes, MessageContext, Operation, OperationContext, Query, QueryContext,
+    RawExecutionResult, RawOutgoingMessage, Response, SystemMessage, UserApplicationDescription,
+    UserApplicationId,
 };
 use linera_base::{
     ensure,
@@ -233,7 +234,7 @@ where
             system_result.messages.push(RawOutgoingMessage {
                 destination: message.destination.clone(),
                 authenticated: false,
-                is_skippable: true,
+                attributes: MessageAttributes::skippable(),
                 message: SystemMessage::RegisterApplications {
                     applications: applications.clone(),
                 },
