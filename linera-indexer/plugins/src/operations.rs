@@ -65,7 +65,7 @@ pub enum OperationKeyKind {
     Last(ChainId),
 }
 
-/// Implements helper functions on the Rootview
+/// Implements helper functions on the `RootView`
 impl<C> Operations<C>
 where
     C: Context + Send + Sync + 'static + Clone,
@@ -107,7 +107,7 @@ pub struct OperationsPlugin<C>(Arc<Mutex<Operations<C>>>);
 
 static NAME: &str = "operations";
 
-/// Implements Plugin
+/// Implements `Plugin`
 #[async_trait::async_trait]
 impl<DB> Plugin<DB> for OperationsPlugin<ContextFromDb<(), DB>>
 where
@@ -158,7 +158,7 @@ where
     }
 }
 
-/// Implements ObjectType
+/// Implements `ObjectType`
 #[Object]
 impl<C> OperationsPlugin<C>
 where

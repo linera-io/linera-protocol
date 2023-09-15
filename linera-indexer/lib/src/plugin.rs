@@ -21,11 +21,6 @@ where
     DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<DB::Error>,
 {
-    // /// Loads the plugin from a context
-    // async fn from_context(context: ContextFromDb<(), DB>) -> Result<Self, IndexerError>
-    // where
-    //     Self: Sized;
-
     /// Gets the name of the plugin
     fn name(&self) -> String
     where

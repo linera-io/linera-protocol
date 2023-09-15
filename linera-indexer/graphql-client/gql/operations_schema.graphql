@@ -38,7 +38,7 @@ input OperationKeyKind @oneOf {
 }
 
 """
-Implements ObjectType
+Implements `ObjectType`
 """
 type OperationsPlugin {
 	"""
