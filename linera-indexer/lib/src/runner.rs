@@ -108,6 +108,10 @@ where
                 } else {
                     chains
                 };
+                let initialize_chains = chains
+                    .iter()
+                    .map(|chain_id| self.indexer.init(&listener, *chain_id));
+                futures::future::try_join_all(initialize_chains).await?;
                 let connections = {
                     chains
                         .into_iter()

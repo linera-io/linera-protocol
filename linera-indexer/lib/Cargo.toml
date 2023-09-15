@@ -13,8 +13,6 @@ edition = "2021"
 [features]
 default = ["rocksdb"]
 benchmark = ["linera-base/test"]
-wasmer = ["linera-execution/wasmer"]
-wasmtime = ["linera-execution/wasmtime"]
 rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb"]
 aws = ["linera-views/aws", "linera-core/aws"]
 scylladb = ["linera-views/scylladb", "linera-core/scylladb"]
@@ -33,32 +31,11 @@ hyper = "0.14"
 linera-base = { workspace = true }
 linera-chain = { workspace = true }
 linera-core = { workspace = true }
-linera-execution = { workspace = true }
 linera-service-graphql-client = { workspace = true }
 linera-views = { workspace = true }
 reqwest = { workspace = true }
-serde = { workspace = true }
 structopt = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tower-http = { workspace = true, features = ["cors"] }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["fmt"] }
-
-[dev-dependencies]
-anyhow = { workspace = true }
-linera-indexer-graphql-client = { workspace = true }
-linera-service = { workspace = true, features = ["rocksdb"] }
-linera-service-graphql-client = { workspace = true }
-once_cell = { workspace = true }
-test-log = { workspace = true, features = ["trace"] }
-serde_json = { workspace = true }
-tempfile = { workspace = true }
-
-[package.metadata.cargo-machete]
-ignored = ["async-trait"]
-
-[[bin]]
-name = "linera-indexer"
-path = "src/main.rs"
-required-features = ["rocksdb"]

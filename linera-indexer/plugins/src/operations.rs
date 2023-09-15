@@ -1,20 +1,19 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module defines the operations indexer plugin.
-
-use crate::common::IndexerError;
-use async_graphql::{EmptyMutation, EmptySubscription, Object, OneofObject, Schema, SimpleObject};
-use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::{extract::Extension, routing::get, Router};
+use async_graphql::{Object, OneofObject, SimpleObject};
+use axum::Router;
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, doc_scalar, identifiers::ChainId};
 use linera_chain::data_types::HashedValue;
 use linera_execution::Operation;
+use linera_indexer::{
+    common::IndexerError,
+    plugin::{load, route, sdl, Plugin},
+};
 use linera_views::{
     common::{Context, ContextFromDb, KeyValueStoreClient},
     map_view::MapView,
-    value_splitting::DatabaseConsistencyError,
-    views::{RootView, View, ViewError},
+    views::{RootView, ViewError},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -53,34 +52,37 @@ pub struct ChainOperation {
 }
 
 #[derive(RootView)]
-pub struct OperationsPluginInternal<C> {
+pub struct Operations<C> {
     last: MapView<C, ChainId, OperationKey>,
     count: MapView<C, ChainId, u64>,
     /// ChainOperation MapView indexed by their hash
     operations: MapView<C, OperationKey, ChainOperation>,
 }
 
-#[derive(Clone)]
-pub struct OperationsPlugin<C>(Arc<Mutex<OperationsPluginInternal<C>>>, String);
+#[derive(OneofObject)]
+pub enum OperationKeyKind {
+    Key(OperationKey),
+    Last(ChainId),
+}
 
-impl<C> OperationsPlugin<C>
+/// Implements helper functions on the `RootView`
+impl<C> Operations<C>
 where
     C: Context + Send + Sync + 'static + Clone,
     ViewError: From<C::Error>,
 {
     /// Registers an operation and update count and last entries for this chain ID
     async fn register_operation(
-        &self,
+        &mut self,
         key: OperationKey,
         block: CryptoHash,
         content: Operation,
     ) -> Result<(), IndexerError> {
-        let mut plugin = self.0.lock().await;
-        let last_operation = plugin.last.get(&key.chain_id).await?;
+        let last_operation = self.last.get(&key.chain_id).await?;
         match last_operation {
             Some(last_key) if last_key >= key => Ok(()),
             previous_operation => {
-                let index = plugin.count.get(&key.chain_id).await?.unwrap_or(0);
+                let index = self.count.get(&key.chain_id).await?.unwrap_or(0);
                 let operation = ChainOperation {
                     key: key.clone(),
                     previous_operation,
@@ -92,44 +94,40 @@ where
                     "register operation for {:?}:\n{:?}",
                     key.chain_id, operation
                 );
-                plugin.operations.insert(&key, operation.clone())?;
-                plugin.count.insert(&key.chain_id, index + 1)?;
-                plugin
-                    .last
-                    .insert(&key.chain_id, key.clone())
-                    .map_err(IndexerError::ViewError)
+                self.operations.insert(&key, operation.clone())?;
+                self.count.insert(&key.chain_id, index + 1)?;
+                Ok(self.last.insert(&key.chain_id, key.clone())?)
             }
         }
     }
-
-    /// Handler for the GraphQL server
-    async fn handler(
-        schema: Extension<Schema<Self, EmptyMutation, EmptySubscription>>,
-        req: GraphQLRequest,
-    ) -> GraphQLResponse {
-        schema.execute(req.into_inner()).await.into()
-    }
-
-    /// Schema for the GraphQL server
-    fn schema(&self) -> Schema<Self, EmptyMutation, EmptySubscription> {
-        Schema::new(self.clone(), EmptyMutation, EmptySubscription)
-    }
 }
 
+#[derive(Clone)]
+pub struct OperationsPlugin<C>(Arc<Mutex<Operations<C>>>);
+
+static NAME: &str = "operations";
+
+/// Implements `Plugin`
 #[async_trait::async_trait]
-impl<DB> crate::plugin::Plugin<DB> for OperationsPlugin<ContextFromDb<(), DB>>
+impl<DB> Plugin<DB> for OperationsPlugin<ContextFromDb<(), DB>>
 where
     DB: KeyValueStoreClient + Clone + Send + Sync + 'static,
-    DB::Error: From<bcs::Error>
-        + From<DatabaseConsistencyError>
-        + Send
-        + Sync
-        + std::error::Error
-        + 'static,
-
+    DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<DB::Error>,
 {
+    fn name(&self) -> String {
+        NAME.to_string()
+    }
+
+    async fn load(client: DB) -> Result<Self, IndexerError>
+    where
+        Self: Sized,
+    {
+        Ok(Self(load(client, NAME).await?))
+    }
+
     async fn register(&self, value: &HashedValue) -> Result<(), IndexerError> {
+        let mut plugin = self.0.lock().await;
         let Some(executed_block) = value.inner().executed_block() else {
             return Ok(());
         };
@@ -140,7 +138,7 @@ where
                 height: executed_block.block.height,
                 index,
             };
-            match self
+            match plugin
                 .register_operation(key, value.hash(), content.clone())
                 .await
             {
@@ -148,45 +146,20 @@ where
                 Ok(()) => continue,
             }
         }
-        let mut plugin = self.0.lock().await;
-        plugin.save().await.map_err(IndexerError::ViewError)
-    }
-
-    async fn from_context(
-        context: ContextFromDb<(), DB>,
-        name: &str,
-    ) -> Result<Self, IndexerError> {
-        let plugin = OperationsPluginInternal::load(context).await?;
-        Ok(OperationsPlugin(
-            Arc::new(Mutex::new(plugin)),
-            name.to_string(),
-        ))
+        Ok(plugin.save().await?)
     }
 
     fn sdl(&self) -> String {
-        self.schema().sdl()
-    }
-
-    fn name(&self) -> String {
-        self.1.clone()
+        sdl(self.clone())
     }
 
     fn route(&self, app: Router) -> Router {
-        app.route(
-            &format!("/{}", self.1),
-            get(crate::common::graphiql).post(Self::handler),
-        )
-        .layer(Extension(self.schema()))
+        route(&self.name(), self.clone(), app)
     }
 }
 
-#[derive(OneofObject)]
-pub enum OperationKeyKind {
-    Key(OperationKey),
-    Last(ChainId),
-}
-
-#[Object(name = "OperationsRoot")]
+/// Implements `ObjectType`
+#[Object]
 impl<C> OperationsPlugin<C>
 where
     C: Context + Send + Sync + 'static + Clone,
@@ -197,24 +170,15 @@ where
         &self,
         key: OperationKeyKind,
     ) -> Result<Option<ChainOperation>, IndexerError> {
+        let plugin = self.0.lock().await;
         let key = match key {
-            OperationKeyKind::Last(chain_id) => {
-                match self.0.lock().await.last.get(&chain_id).await? {
-                    None => return Ok(None),
-                    Some(key) => key,
-                }
-            }
+            OperationKeyKind::Last(chain_id) => match plugin.last.get(&chain_id).await? {
+                None => return Ok(None),
+                Some(key) => key,
+            },
             OperationKeyKind::Key(key) => key,
         };
-        let operation = self
-            .0
-            .lock()
-            .await
-            .operations
-            .get(&key)
-            .await
-            .map_err(IndexerError::ViewError)?;
-        Ok(operation)
+        Ok(plugin.operations.get(&key).await?)
     }
 
     /// Gets the operations in downward order from an operation hash or from the last block of a chain
@@ -223,20 +187,19 @@ where
         from: OperationKeyKind,
         limit: Option<u32>,
     ) -> Result<Vec<ChainOperation>, IndexerError> {
+        let plugin = self.0.lock().await;
         let mut key = match from {
-            OperationKeyKind::Last(chain_id) => {
-                match self.0.lock().await.last.get(&chain_id).await? {
-                    None => return Ok(Vec::new()),
-                    Some(key) => Some(key),
-                }
-            }
+            OperationKeyKind::Last(chain_id) => match plugin.last.get(&chain_id).await? {
+                None => return Ok(Vec::new()),
+                Some(key) => Some(key),
+            },
             OperationKeyKind::Key(key) => Some(key),
         };
         let mut result = Vec::new();
         let limit = limit.unwrap_or(20);
         for _ in 0..limit {
             let Some(next_key) = key else { break };
-            let operation = self.0.lock().await.operations.get(&next_key).await?;
+            let operation = plugin.operations.get(&next_key).await?;
             match operation {
                 None => break,
                 Some(op) => {
@@ -251,21 +214,16 @@ where
     /// Gets the number of operations registered for a chain
     pub async fn count(&self, chain_id: ChainId) -> Result<u64, IndexerError> {
         let plugin = self.0.lock().await;
-        plugin
+        Ok(plugin
             .count
             .get(&chain_id)
             .await
-            .map_err(IndexerError::ViewError)
-            .map(|opt| opt.unwrap_or(0))
+            .map(|opt| opt.unwrap_or(0))?)
     }
 
     /// Gets the hash of the last operation registered for a chain
     pub async fn last(&self, chain_id: ChainId) -> Result<Option<OperationKey>, IndexerError> {
         let plugin = self.0.lock().await;
-        plugin
-            .last
-            .get(&chain_id)
-            .await
-            .map_err(IndexerError::ViewError)
+        Ok(plugin.last.get(&chain_id).await?)
     }
 }

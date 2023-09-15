@@ -9,7 +9,6 @@
 
 pub mod common;
 pub mod indexer;
-pub mod operations;
 pub mod plugin;
 pub mod runner;
 pub mod service;

@@ -915,12 +915,12 @@ impl NodeService {
         let new_argument = argument.replace('\"', "\\\"");
         let query = format!(
             "mutation {{ createApplication(\
-                chainId: \"{chain_id}\",
+             chainId: \"{chain_id}\",
                 bytecodeId: \"{bytecode_id}\", \
                 parameters: \"{new_parameters}\", \
                 initializationArgument: \"{new_argument}\", \
                 requiredApplicationIds: {json_required_applications_ids}) \
-            }}"
+                }}"
         );
         let data = self.query_node(&query).await;
         serde_json::from_value(data["createApplication"].clone()).unwrap()
@@ -929,9 +929,9 @@ impl NodeService {
     pub async fn request_application(&self, chain_id: &ChainId, application_id: &str) -> String {
         let query = format!(
             "mutation {{ requestApplication(\
-                chainId: \"{chain_id}\", \
-                applicationId: \"{application_id}\") \
-            }}"
+             chainId: \"{chain_id}\", \
+             applicationId: \"{application_id}\") \
+             }}"
         );
         let data = self.query_node(&query).await;
         serde_json::from_value(data["requestApplication"].clone()).unwrap()
@@ -995,17 +995,21 @@ async fn cargo_force_build_binary(name: &'static str, package: Option<&'static s
         .await
         .unwrap()
         .success());
+    let mut cargo_locate_command = Command::new("cargo");
+    cargo_locate_command.args(["locate-project", "--workspace", "--message-format", "plain"]);
+    let output = cargo_locate_command.output().await.unwrap().stdout;
+    let workspace_path = Path::new(std::str::from_utf8(&output).unwrap().trim())
+        .parent()
+        .unwrap();
     if is_release {
-        env::current_dir()
-            .unwrap()
-            .join("../target/release")
+        workspace_path
+            .join("target/release")
             .join(name)
             .canonicalize()
             .unwrap()
     } else {
-        env::current_dir()
-            .unwrap()
-            .join("../target/debug")
+        workspace_path
+            .join("target/debug")
             .join(name)
             .canonicalize()
             .unwrap()
@@ -1025,7 +1029,6 @@ pub async fn resolve_binary(name: &'static str, _package: Option<&'static str>) 
 pub async fn cargo_build_binary(name: &'static str, package: Option<&'static str>) -> PathBuf {
     type Key = (&'static str, Option<&'static str>);
     static COMPILED_BINARIES: OnceCell<Mutex<HashMap<Key, PathBuf>>> = OnceCell::new();
-
     let mut binaries = COMPILED_BINARIES.get_or_init(Default::default).lock().await;
     match binaries.get(&(name, package)) {
         Some(path) => path.clone(),

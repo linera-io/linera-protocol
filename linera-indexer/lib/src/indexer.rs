@@ -135,11 +135,11 @@ where
             if let Some(hash) = block.previous_block_hash {
                 match latest_block {
                     LatestBlock::LatestHash(latest_hash) if latest_hash != hash => {
-                        value = listener.service.get_value(chain_id, hash).await?;
+                        value = listener.service.get_value(chain_id, Some(hash)).await?;
                         continue;
                     }
                     LatestBlock::StartHeight(start) if block.height > start => {
-                        value = listener.service.get_value(chain_id, hash).await?;
+                        value = listener.service.get_value(chain_id, Some(hash)).await?;
                         continue;
                     }
                     _ => break,
@@ -152,6 +152,14 @@ where
             self.process_value(state, &value).await?
         }
         Ok(())
+    }
+
+    pub async fn init(&self, listener: &Listener, chain_id: ChainId) -> Result<(), IndexerError> {
+        match listener.service.get_value(chain_id, None).await {
+            Ok(value) => self.process(listener, &value).await,
+            Err(IndexerError::NotFound(_)) => Ok(()),
+            Err(e) => Err(e),
+        }
     }
 
     /// Produces the GraphQL schema for the indexer or for a certain plugin

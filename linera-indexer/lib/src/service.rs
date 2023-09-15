@@ -77,13 +77,10 @@ impl Service {
     pub async fn get_value(
         &self,
         chain_id: ChainId,
-        hash: CryptoHash,
+        hash: Option<CryptoHash>,
     ) -> Result<HashedValue, IndexerError> {
         let client = reqwest::Client::new();
-        let variables = block::Variables {
-            hash: Some(hash),
-            chain_id,
-        };
+        let variables = block::Variables { hash, chain_id };
         let response = post_graphql::<Block, _>(&client, &self.http(), variables).await?;
         response
             .data
@@ -151,7 +148,7 @@ impl Listener {
                 Ok(response) => {
                     if let Some(data) = response.data {
                         if let Reason::NewBlock { hash, .. } = data.notifications.reason {
-                            if let Ok(value) = self.service.get_value(chain_id, hash).await {
+                            if let Ok(value) = self.service.get_value(chain_id, Some(hash)).await {
                                 indexer.process(self, &value).await?;
                             }
                         }
