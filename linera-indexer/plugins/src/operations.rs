@@ -1,17 +1,26 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{OneofObject, SimpleObject};
+use async_graphql::{Object, OneofObject, SimpleObject};
+use axum::Router;
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, doc_scalar, identifiers::ChainId};
 use linera_chain::data_types::HashedValue;
 use linera_execution::Operation;
-use linera_indexer::common::IndexerError;
+use linera_indexer::{
+    common::IndexerError,
+    plugin::{load, route, sdl, Plugin},
+};
 use linera_views::{
+    common::{Context, ContextFromDb, KeyValueStoreClient},
     map_view::MapView,
-    views::{RootView, View},
+    views::{RootView, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::cmp::{Ordering, PartialOrd};
+use std::{
+    cmp::{Ordering, PartialOrd},
+    sync::Arc,
+};
+use tokio::sync::Mutex;
 use tracing::info;
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -56,8 +65,12 @@ pub enum OperationKeyKind {
     Last(ChainId),
 }
 
-#[linera_indexer::plugin]
-impl Operations<C> {
+/// Implements helper functions on the Rootview
+impl<C> Operations<C>
+where
+    C: Context + Send + Sync + 'static + Clone,
+    ViewError: From<C::Error>,
+{
     /// Registers an operation and update count and last entries for this chain ID
     async fn register_operation(
         &mut self,
@@ -87,8 +100,34 @@ impl Operations<C> {
             }
         }
     }
+}
+
+#[derive(Clone)]
+pub struct OperationsPlugin<C>(Arc<Mutex<Operations<C>>>);
+
+static NAME: &str = "operations";
+
+/// Implements Plugin
+#[async_trait::async_trait]
+impl<DB> Plugin<DB> for OperationsPlugin<ContextFromDb<(), DB>>
+where
+    DB: KeyValueStoreClient + Clone + Send + Sync + 'static,
+    DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
+    ViewError: From<DB::Error>,
+{
+    fn name(&self) -> String {
+        NAME.to_string()
+    }
+
+    async fn load(client: DB) -> Result<Self, IndexerError>
+    where
+        Self: Sized,
+    {
+        Ok(Self(load(client, NAME).await?))
+    }
 
     async fn register(&self, value: &HashedValue) -> Result<(), IndexerError> {
+        let mut plugin = self.0.lock().await;
         let Some(executed_block) = value.inner().executed_block() else {
             return Ok(());
         };
@@ -99,7 +138,7 @@ impl Operations<C> {
                 height: executed_block.block.height,
                 index,
             };
-            match self
+            match plugin
                 .register_operation(key, value.hash(), content.clone())
                 .await
             {
@@ -107,21 +146,39 @@ impl Operations<C> {
                 Ok(()) => continue,
             }
         }
+        Ok(plugin.save().await?)
     }
 
+    fn sdl(&self) -> String {
+        sdl(self.clone())
+    }
+
+    fn route(&self, app: Router) -> Router {
+        route(&self.name(), self.clone(), app)
+    }
+}
+
+/// Implements ObjectType
+#[Object]
+impl<C> OperationsPlugin<C>
+where
+    C: Context + Send + Sync + 'static + Clone,
+    ViewError: From<C::Error>,
+{
     /// Gets the operation associated to its hash
     pub async fn operation(
         &self,
         key: OperationKeyKind,
     ) -> Result<Option<ChainOperation>, IndexerError> {
+        let plugin = self.0.lock().await;
         let key = match key {
-            OperationKeyKind::Last(chain_id) => match self.last.get(&chain_id).await? {
+            OperationKeyKind::Last(chain_id) => match plugin.last.get(&chain_id).await? {
                 None => return Ok(None),
                 Some(key) => key,
             },
             OperationKeyKind::Key(key) => key,
         };
-        Ok(self.operations.get(&key).await?)
+        Ok(plugin.operations.get(&key).await?)
     }
 
     /// Gets the operations in downward order from an operation hash or from the last block of a chain
@@ -130,8 +187,9 @@ impl Operations<C> {
         from: OperationKeyKind,
         limit: Option<u32>,
     ) -> Result<Vec<ChainOperation>, IndexerError> {
+        let plugin = self.0.lock().await;
         let mut key = match from {
-            OperationKeyKind::Last(chain_id) => match self.last.get(&chain_id).await? {
+            OperationKeyKind::Last(chain_id) => match plugin.last.get(&chain_id).await? {
                 None => return Ok(Vec::new()),
                 Some(key) => Some(key),
             },
@@ -141,7 +199,7 @@ impl Operations<C> {
         let limit = limit.unwrap_or(20);
         for _ in 0..limit {
             let Some(next_key) = key else { break };
-            let operation = self.operations.get(&next_key).await?;
+            let operation = plugin.operations.get(&next_key).await?;
             match operation {
                 None => break,
                 Some(op) => {
@@ -155,7 +213,8 @@ impl Operations<C> {
 
     /// Gets the number of operations registered for a chain
     pub async fn count(&self, chain_id: ChainId) -> Result<u64, IndexerError> {
-        Ok(self
+        let plugin = self.0.lock().await;
+        Ok(plugin
             .count
             .get(&chain_id)
             .await
@@ -164,6 +223,7 @@ impl Operations<C> {
 
     /// Gets the hash of the last operation registered for a chain
     pub async fn last(&self, chain_id: ChainId) -> Result<Option<OperationKey>, IndexerError> {
-        Ok(self.last.get(&chain_id).await?)
+        let plugin = self.0.lock().await;
+        Ok(plugin.last.get(&chain_id).await?)
     }
 }

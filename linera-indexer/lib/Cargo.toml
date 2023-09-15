@@ -34,15 +34,10 @@ linera-base = { workspace = true }
 linera-chain = { workspace = true }
 linera-core = { workspace = true }
 linera-service-graphql-client = { workspace = true }
-linera-indexer-macro = { workspace = true }
 linera-views = { workspace = true }
 reqwest = { workspace = true }
-serde = { workspace = true }
 structopt = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tower-http = { workspace = true, features = ["cors"] }
 tracing = { workspace = true }
-
-[package.metadata.cargo-machete]
-ignored = ["serde"]

@@ -7,7 +7,6 @@ members = [
         "linera-indexer/example",
         "linera-indexer/graphql-client",
         "linera-indexer/lib",
-        "linera-indexer/macro",
         "linera-indexer/plugins",
         "linera-rpc",
         "linera-sdk",
@@ -126,7 +125,6 @@ linera-execution = { version = "0.4.0", path = "./linera-execution", default-fea
 linera-indexer = { path = "./linera-indexer/lib" }
 linera-indexer-example = { path = "./linera-indexer/example" }
 linera-indexer-graphql-client = { path = "./linera-indexer/graphql-client" }
-linera-indexer-macro = { path = "./linera-indexer/macro" }
 linera-indexer-plugins = { path = "./linera-indexer/plugins" }
 linera-rpc = { version = "0.4.0", path = "./linera-rpc" }
 linera-storage = { version = "0.4.0", path = "./linera-storage", default-features = false }

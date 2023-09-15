@@ -15,5 +15,3 @@ pub mod service;
 
 #[cfg(feature = "rocksdb")]
 pub mod rocks_db;
-
-pub use linera_indexer_macro::plugin;

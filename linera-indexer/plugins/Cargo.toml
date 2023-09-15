@@ -13,7 +13,6 @@ edition = "2021"
 [dependencies]
 async-trait = { workspace = true }
 async-graphql = { workspace = true }
-async-graphql-axum = { workspace = true }
 axum = { workspace = true, features = ["ws", "headers"] }
 bcs = { workspace = true }
 linera-base = { workspace = true }
@@ -23,8 +22,4 @@ linera-indexer = { workspace = true }
 linera-views = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
-tower-http = { workspace = true, features = ["cors"] }
 tracing = { workspace = true }
-
-[package.metadata.cargo-machete]
-ignored = ["async-trait", "async-graphql-axum", "axum", "bcs", "tower-http", "tokio"]
