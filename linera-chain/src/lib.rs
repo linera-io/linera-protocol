@@ -12,7 +12,7 @@ mod outbox;
 pub mod test;
 
 pub use chain::ChainStateView;
-use data_types::{Event, Origin};
+use data_types::{Event, IncomingMessage, Origin};
 use linera_base::{
     crypto::CryptoError,
     data_types::{ArithmeticError, BlockHeight, RoundNumber, Timestamp},
@@ -78,6 +78,18 @@ pub enum ChainError {
         chain_id: ChainId,
         origin: Box<Origin>,
         event: Event,
+    },
+    #[error(
+        "Block proposed to {chain_id:?} is attempting to bounce a skippable message {message:?}"
+    )]
+    CannotBounceSkippableMessage {
+        chain_id: ChainId,
+        message: IncomingMessage,
+    },
+    #[error("Block proposed to {chain_id:?} is attempting to bounce a message that was bounced once already {message:?}")]
+    CannotBounceMessageTwice {
+        chain_id: ChainId,
+        message: IncomingMessage,
     },
     #[error(
         "Incoming message in block proposed to {chain_id:?} has timestamp {message_timestamp:},

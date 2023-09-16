@@ -3,8 +3,8 @@
 
 use crate::{
     data_types::{
-        Block, ChainAndHeight, ChannelFullName, Event, IncomingMessage, Medium, Origin,
-        OutgoingMessage, Target,
+        Block, ChainAndHeight, ChannelFullName, Event, IncomingMessage, Medium, MessageAction,
+        Origin, OutgoingMessage, Target,
     },
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
@@ -466,7 +466,6 @@ where
         let mut remaining_fuel = available_fuel;
         for (index, message) in block.incoming_messages.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
-            // Execute the received message.
             let context = MessageContext {
                 chain_id,
                 height: block.height,
@@ -478,14 +477,48 @@ where
                 },
                 authenticated_signer: message.event.authenticated_signer,
             };
-            let results = self
-                .execution_state
-                .execute_message(&context, &message.event.message, &mut remaining_fuel)
-                .await
-                .map_err(|err| {
-                    ChainError::ExecutionError(err, ChainExecutionContext::IncomingMessage(index))
-                })?;
-            self.process_execution_results(&mut messages, context.height, results)
+            let results = match message.action {
+                MessageAction::Accept => {
+                    // Execute the received message.
+                    self.execution_state
+                        .execute_message(&context, &message.event.message, &mut remaining_fuel)
+                        .await
+                        .map_err(|err| {
+                            ChainError::ExecutionError(
+                                err,
+                                ChainExecutionContext::IncomingMessage(index),
+                            )
+                        })?
+                }
+
+                MessageAction::Bounce => {
+                    // Bounce the message.
+                    ensure!(
+                        !message.event.attributes.is_skippable,
+                        ChainError::CannotBounceSkippableMessage {
+                            chain_id,
+                            message: message.clone(),
+                        }
+                    );
+                    ensure!(
+                        !message.event.attributes.is_bouncing,
+                        ChainError::CannotBounceMessageTwice {
+                            chain_id,
+                            message: message.clone(),
+                        }
+                    );
+                    self.execution_state
+                        .bounce_message(&context, message.event.message.clone())
+                        .await
+                        .map_err(|err| {
+                            ChainError::ExecutionError(
+                                err,
+                                ChainExecutionContext::IncomingMessage(index),
+                            )
+                        })?
+                }
+            };
+            self.process_execution_results(&mut messages, block.height, results)
                 .await?;
         }
         // Second, execute the operations in the block and remember the recipients to notify.
@@ -507,7 +540,7 @@ where
                 .map_err(|err| {
                     ChainError::ExecutionError(err, ChainExecutionContext::Operation(index))
                 })?;
-            self.process_execution_results(&mut messages, context.height, results)
+            self.process_execution_results(&mut messages, block.height, results)
                 .await?;
         }
         let used_fuel = available_fuel.saturating_sub(remaining_fuel);

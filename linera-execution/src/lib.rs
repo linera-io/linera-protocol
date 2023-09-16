@@ -433,6 +433,13 @@ impl MessageAttributes {
             ..Self::default()
         }
     }
+
+    pub fn bouncing() -> Self {
+        Self {
+            is_skippable: true,
+            is_bouncing: true,
+        }
+    }
 }
 
 /// Externally visible results of an execution. These results are meant in the context of

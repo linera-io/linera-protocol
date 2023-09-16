@@ -11,7 +11,7 @@ use crate::{
 };
 use linera_base::{
     ensure,
-    identifiers::{ChainId, Owner},
+    identifiers::{ChainId, Destination, Owner},
 };
 use linera_views::{
     common::Context,
@@ -318,6 +318,45 @@ where
                     remaining_fuel,
                 )
                 .await
+            }
+        }
+    }
+
+    pub async fn bounce_message(
+        &self,
+        context: &MessageContext,
+        message: Message,
+    ) -> Result<Vec<ExecutionResult>, ExecutionError> {
+        assert_eq!(context.chain_id, self.context().extra().chain_id());
+        match message {
+            Message::System(message) => {
+                let mut result = RawExecutionResult {
+                    authenticated_signer: context.authenticated_signer,
+                    ..Default::default()
+                };
+                result.messages.push(RawOutgoingMessage {
+                    destination: Destination::Recipient(context.message_id.chain_id),
+                    authenticated: true,
+                    attributes: MessageAttributes::bouncing(),
+                    message,
+                });
+                Ok(vec![ExecutionResult::System(result)])
+            }
+            Message::User {
+                application_id,
+                bytes,
+            } => {
+                let mut result = RawExecutionResult {
+                    authenticated_signer: context.authenticated_signer,
+                    ..Default::default()
+                };
+                result.messages.push(RawOutgoingMessage {
+                    destination: Destination::Recipient(context.message_id.chain_id),
+                    authenticated: true,
+                    attributes: MessageAttributes::bouncing(),
+                    message: bytes,
+                });
+                Ok(vec![ExecutionResult::User(application_id, result)])
             }
         }
     }
