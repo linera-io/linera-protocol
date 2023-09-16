@@ -23,7 +23,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{CertificateValue, ExecutedBlock},
-    ChainError,
+    ChainError, ChainExecutionContext,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -1201,7 +1201,7 @@ where
             UserData::default(),
         )
         .await,
-        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. })))
+        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), ChainExecutionContext::Operation(_)))
     ));
     // There is no pending block, since the proposal wasn't valid at the time.
     assert!(client2.retry_pending_block().await.unwrap().is_none());
@@ -1395,7 +1395,7 @@ where
             UserData(Some(*b"I'm giving away all of my money!")),
         )
         .await,
-        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. })))
+        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), ChainExecutionContext::Operation(_)))
     ));
     Ok(())
 }

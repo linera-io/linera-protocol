@@ -23,7 +23,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{CertificateValue, OutgoingMessage},
-    ChainError,
+    ChainError, ChainExecutionContext,
 };
 use linera_execution::{
     pricing::Pricing, Bytecode, ExecutionError, Message, Operation, SystemMessage,
@@ -578,7 +578,7 @@ where
     assert!(matches!(receiver
         .execute_operation(Operation::user(application_id, &transfer)?)
         .await,
-        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::UserError(_)))
+        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::UserError(_), ChainExecutionContext::Operation(_)))
     ));
     receiver.clear_pending_block().await;
 
