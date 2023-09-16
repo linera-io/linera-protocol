@@ -14,7 +14,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
-        HashedValue, IncomingMessage, LiteCertificate, Medium, Origin, Target,
+        HashedValue, IncomingMessage, LiteCertificate, Medium, MessageAction, Origin, Target,
     },
     ChainManagerOutcome, ChainStateView,
 };
@@ -902,7 +902,11 @@ where
 
         assert_eq!(event.message, outgoing_message.message);
 
-        Ok(Some(IncomingMessage { origin, event }))
+        Ok(Some(IncomingMessage {
+            origin,
+            event,
+            action: MessageAction::Accept,
+        }))
     }
 }
 
@@ -1103,6 +1107,7 @@ where
                     messages.push(IncomingMessage {
                         origin: origin.clone(),
                         event: event.clone(),
+                        action: MessageAction::Accept,
                     });
                 }
             }

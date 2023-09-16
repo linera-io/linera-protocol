@@ -369,6 +369,8 @@ IncomingMessage:
         TYPENAME: Origin
     - event:
         TYPENAME: Event
+    - action:
+        TYPENAME: MessageAction
 LiteCertificate:
   STRUCT:
     - value:
@@ -416,6 +418,12 @@ Message:
           - application_id:
               TYPENAME: ApplicationId
           - bytes: BYTES
+MessageAction:
+  ENUM:
+    0:
+      Accept: UNIT
+    1:
+      Bounce: UNIT
 MessageAttributes:
   STRUCT:
     - is_skippable: BOOL

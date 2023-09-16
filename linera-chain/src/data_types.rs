@@ -95,6 +95,17 @@ pub struct IncomingMessage {
     /// The content of the message to be delivered to the inbox identified by
     /// `origin`.
     pub event: Event,
+    /// What to do with the message.
+    pub action: MessageAction,
+}
+
+/// What to do with a message picked from the inbox.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum MessageAction {
+    /// Execute the incoming message.
+    Accept,
+    /// Do not execute the message and send back to the sender instead.
+    Bounce,
 }
 
 /// A message together with non replayable information to ensure uniqueness in a
@@ -859,6 +870,10 @@ impl BcsSignable for ValueHashAndRound {}
 
 impl BcsHashable for CertificateValue {}
 
+doc_scalar!(
+    MessageAction,
+    "Whether a message should be accepted or bounced back"
+);
 doc_scalar!(
     ChannelFullName,
     "A channel name together with its application id"

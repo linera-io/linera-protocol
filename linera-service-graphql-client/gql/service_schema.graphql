@@ -279,6 +279,10 @@ type IncomingMessage {
 	`origin`.
 	"""
 	event: Event!
+	"""
+	What to do with the message.
+	"""
+	action: MessageAction!
 }
 
 
@@ -291,6 +295,11 @@ scalar JSONObject
 An message to be sent and possibly executed in the receiver's block.
 """
 scalar Message
+
+"""
+Whether a message should be accepted or bounced back
+"""
+scalar MessageAction
 
 """
 The attributes of a message.
