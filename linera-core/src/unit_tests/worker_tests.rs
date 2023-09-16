@@ -21,7 +21,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockProposal, Certificate, ChainAndHeight, ChannelFullName, Event, ExecutedBlock,
-        HashedValue, IncomingMessage, LiteVote, Medium, Origin, OutgoingMessage,
+        HashedValue, IncomingMessage, LiteVote, Medium, MessageAction, Origin, OutgoingMessage,
         SignatureAggregator,
     },
     test::{make_child_block, make_first_block, BlockTestExt, VoteTestExt},
@@ -880,6 +880,7 @@ where
                         amount: Amount::ONE,
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .with_incoming_message(IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
@@ -895,6 +896,7 @@ where
                         amount: Amount::from_tokens(2),
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .with_incoming_message(IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
@@ -910,6 +912,7 @@ where
                         amount: Amount::from_tokens(2), // wrong
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .into_fast_proposal(&recipient_key_pair);
         // Inconsistent received messages.
@@ -936,6 +939,7 @@ where
                         amount: Amount::from_tokens(2),
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .into_fast_proposal(&recipient_key_pair);
         // Skipped message.
@@ -962,6 +966,7 @@ where
                         amount: Amount::from_tokens(3),
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .with_incoming_message(IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
@@ -977,6 +982,7 @@ where
                         amount: Amount::ONE,
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .with_incoming_message(IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
@@ -992,6 +998,7 @@ where
                         amount: Amount::from_tokens(2),
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .into_fast_proposal(&recipient_key_pair);
         // Inconsistent order in received messages (heights).
@@ -1018,6 +1025,7 @@ where
                         amount: Amount::ONE,
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .into_fast_proposal(&recipient_key_pair);
         // Taking the first message only is ok.
@@ -1062,6 +1070,7 @@ where
                         amount: Amount::from_tokens(2),
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .with_incoming_message(IncomingMessage {
                 origin: Origin::chain(ChainId::root(1)),
@@ -1077,6 +1086,7 @@ where
                         amount: Amount::from_tokens(3),
                     }),
                 },
+                action: MessageAction::Accept,
             })
             .into_fast_proposal(&recipient_key_pair);
         worker
@@ -1427,6 +1437,7 @@ where
                 balance,
             }),
         },
+        action: MessageAction::Accept,
     };
     let value = HashedValue::new_confirmed(ExecutedBlock {
         block: make_first_block(chain_id).with_incoming_message(open_chain_message),
@@ -1641,6 +1652,7 @@ where
                     amount: Amount::from_tokens(995),
                 }),
             },
+            action: MessageAction::Accept,
         }],
         &committee,
         Amount::ZERO,
@@ -2255,6 +2267,7 @@ where
                     amount: Amount::from_tokens(5),
                 }),
             },
+            action: MessageAction::Accept,
         }],
         &committee,
         Amount::from_tokens(4),
@@ -2578,6 +2591,7 @@ where
                             subscription: admin_channel_subscription.clone(),
                         }),
                     },
+                    action: MessageAction::Accept,
                 }),
             messages: vec![direct_outgoing_message(
                 user_id,
@@ -2701,6 +2715,7 @@ where
                             balance: Amount::ZERO,
                         }),
                     },
+                    action: MessageAction::Accept,
                 })
                 .with_incoming_message(IncomingMessage {
                     origin: admin_channel_origin.clone(),
@@ -2716,6 +2731,7 @@ where
                             committees: committees2.clone(),
                         }),
                     },
+                    action: MessageAction::Accept,
                 })
                 .with_incoming_message(IncomingMessage {
                     origin: Origin::chain(admin_id),
@@ -2731,6 +2747,7 @@ where
                             amount: Amount::from_tokens(2),
                         }),
                     },
+                    action: MessageAction::Accept,
                 })
                 .with_incoming_message(IncomingMessage {
                     origin: Origin::chain(admin_id),
@@ -2743,6 +2760,7 @@ where
                         timestamp: Timestamp::from(0),
                         message: Message::System(SystemMessage::Notify { id: user_id }),
                     },
+                    action: MessageAction::Accept,
                 }),
             messages: Vec::new(),
             message_counts: vec![0, 0, 0, 0],
@@ -3131,6 +3149,7 @@ where
                             amount: Amount::ONE,
                         }),
                     },
+                    action: MessageAction::Accept,
                 }),
             messages: Vec::new(),
             message_counts: vec![0],

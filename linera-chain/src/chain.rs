@@ -4,7 +4,7 @@
 use crate::{
     data_types::{
         Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, Event, IncomingMessage,
-        Medium, Origin, OutgoingMessage, Target,
+        Medium, MessageAction, Origin, OutgoingMessage, Target,
     },
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
@@ -589,6 +589,7 @@ where
                             message: Message::System(SystemMessage::OpenChain { .. }),
                             ..
                         },
+                        action: MessageAction::Accept,
                         ..
                     })
                 ),
@@ -596,6 +597,10 @@ where
             );
         }
         for (index, message) in block.incoming_messages.iter().enumerate() {
+            if let MessageAction::Reject = message.action {
+                // Skip execution of rejected message.
+                continue;
+            }
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let chain_execution_context = ChainExecutionContext::IncomingMessage(index);
             // Execute the received message.

@@ -373,6 +373,10 @@ type IncomingMessage {
 	`origin`.
 	"""
 	event: Event!
+	"""
+	What to do with the message.
+	"""
+	action: MessageAction!
 }
 
 
@@ -417,6 +421,11 @@ input MapInput_Target {
 An message to be sent and possibly executed in the receiver's block.
 """
 scalar Message
+
+"""
+Whether an incoming message is accepted or rejected
+"""
+scalar MessageAction
 
 type MutationRoot {
 	"""

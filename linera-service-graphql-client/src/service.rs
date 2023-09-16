@@ -23,6 +23,7 @@ mod types {
     pub type Epoch = Value;
     pub type Event = Value;
     pub type Message = Value;
+    pub type MessageAction = Value;
     pub type Operation = Value;
     pub type Origin = Value;
     pub type Target = Value;
@@ -55,7 +56,7 @@ mod types {
 #[cfg(not(target_arch = "wasm32"))]
 mod types {
     pub use linera_chain::{
-        data_types::{ChannelFullName, Event, Origin, Target},
+        data_types::{ChannelFullName, Event, MessageAction, Origin, Target},
         ChainManager,
     };
     pub use linera_core::worker::{Notification, Reason};
@@ -130,8 +131,16 @@ mod from {
 
     impl From<block::BlockBlockValueExecutedBlockBlockIncomingMessages> for IncomingMessage {
         fn from(val: block::BlockBlockValueExecutedBlockBlockIncomingMessages) -> Self {
-            let block::BlockBlockValueExecutedBlockBlockIncomingMessages { origin, event } = val;
-            IncomingMessage { origin, event }
+            let block::BlockBlockValueExecutedBlockBlockIncomingMessages {
+                origin,
+                event,
+                action,
+            } = val;
+            IncomingMessage {
+                origin,
+                event,
+                action,
+            }
         }
     }
 

@@ -167,6 +167,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
           incomingMessages {
             origin
             event
+            action
           }
           operations
         }
@@ -199,6 +200,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
           incomingMessages {
             origin
             event
+            action
           }
           operations
         }

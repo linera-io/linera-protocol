@@ -19,7 +19,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        ChannelFullName, Event, ExecutedBlock, HashedValue, IncomingMessage, Origin,
+        ChannelFullName, Event, ExecutedBlock, HashedValue, IncomingMessage, MessageAction, Origin,
         OutgoingMessage,
     },
     test::{make_child_block, make_first_block, BlockTestExt},
@@ -174,6 +174,7 @@ where
             timestamp: Timestamp::from(1),
             message: Message::System(publish_message),
         },
+        action: MessageAction::Accept,
     };
     let broadcast_block = make_child_block(&publish_certificate.value)
         .with_timestamp(1)
@@ -288,6 +289,7 @@ where
             timestamp: Timestamp::from(2),
             message: subscribe_message.into(),
         },
+        action: MessageAction::Accept,
     };
     let accept_block = make_child_block(&broadcast_certificate.value)
         .with_timestamp(3)
@@ -364,6 +366,7 @@ where
                 timestamp: Timestamp::from(1),
                 message: Message::System(broadcast_message),
             },
+            action: MessageAction::Accept,
         });
     creator_system_state
         .registry
