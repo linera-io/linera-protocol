@@ -56,6 +56,7 @@ record operation-context {
 record message-context {
     chain-id: chain-id,
     authenticated-signer: option<owner>,
+    is-bouncing: bool,
     height: block-height,
     message-id: message-id,
 }

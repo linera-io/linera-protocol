@@ -205,6 +205,7 @@ mod tests {
         MessageContext {
             chain_id: ChainId([0; 4].into()),
             authenticated_signer: None,
+            is_bouncing: false,
             height: BlockHeight(0),
             message_id: MessageId {
                 chain_id: ChainId([1; 4].into()),

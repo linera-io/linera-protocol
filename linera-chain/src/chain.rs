@@ -476,6 +476,7 @@ where
                     index: message.event.index,
                 },
                 authenticated_signer: message.event.authenticated_signer,
+                is_bouncing: message.event.attributes.is_bouncing,
             };
             let results = match message.action {
                 MessageAction::Accept => {

@@ -76,6 +76,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
             index: 0,
         },
         authenticated_signer: None,
+        is_bouncing: false,
     };
     let results = view
         .execute_message(&context, &Message::System(message), &mut 10_000_000)

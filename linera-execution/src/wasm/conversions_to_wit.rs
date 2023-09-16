@@ -31,6 +31,7 @@ impl From<MessageContext> for contract::MessageContext {
         contract::MessageContext {
             chain_id: host.chain_id.into(),
             authenticated_signer: host.authenticated_signer.map(|owner| owner.0.into()),
+            is_bouncing: host.is_bouncing,
             height: host.height.0,
             message_id: host.message_id.into(),
         }

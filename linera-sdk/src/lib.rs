@@ -335,6 +335,8 @@ pub struct MessageContext {
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
     pub authenticated_signer: Option<Owner>,
+    /// Whether this message is being sent back to us after being rejected by a sender.
+    pub is_bouncing: bool,
     /// The current block height.
     pub height: BlockHeight,
     /// The id of the message (based on the operation height and index in the remote
