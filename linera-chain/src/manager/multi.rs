@@ -9,15 +9,15 @@
 //! it guarantees that at most one `ConfirmedBlock` certificate will be created for this height.
 //! There are two modes of operation:
 //!
-//! * In cooperative mode, all chain owners can propose blocks at any time. The protocol is
-//!   guaranteed to eventually confirm a block as long as no chain owner continuously actively
-//!   prevents progress.
+//! * In cooperative mode (multi-owner rounds), all chain owners can propose blocks at any time.
+//!   The protocol is guaranteed to eventually confirm a block as long as no chain owner
+//!   continuously actively prevents progress.
 //! * In leader rotation mode, chain owners take turns at proposing blocks. It can make progress
 //!   as long as at least one owner is honest, even if other owners try to prevent it.
 //!
 //! ## Safety, i.e. at most one block will be confirmed
 //!
-//! In both modes is guaranteed as follows:
+//! In both modes this is guaranteed as follows:
 //!
 //! * Validators (honest ones) never cast a vote if they have already cast any vote in a later
 //!   round.
@@ -29,7 +29,7 @@
 //!   same block in the same round.
 //!
 //! This guarantees that once a quroum votes for some `ConfirmedBlock`, there can never be a
-//! `ValidatedBlock` certificate (and thuse also no `ConfirmedBlock` certificate) for a different
+//! `ValidatedBlock` certificate (and thus also no `ConfirmedBlock` certificate) for a different
 //! block in a later round. So if there are two different `ConfirmedBlock` certificates, they may
 //! be from different rounds, but they are guaranteed to contain the same block.
 //!
@@ -76,11 +76,10 @@ use tracing::error;
 
 const TIMEOUT: Duration = Duration::from_secs(10);
 
-/// The specific state of a chain with multiple owners some of which are potentially faulty.
+/// The consensus state of a chain with multiple owners some of which are potentially faulty.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MultiOwnerManager {
-    /// The public keys of the chain's co-owners, with their weights. If all weights are zero, every owner can
-    /// propose in every round. Otherwise every round has only one leader, and rounds can time out.
+    /// The public keys of the chain's co-owners, with their weights.
     pub public_keys: BTreeMap<Owner, (PublicKey, u128)>,
     /// The number of initial rounds in which all owners are allowed to propose blocks,
     /// i.e. the first round with only a single leader.
@@ -136,19 +135,13 @@ impl MultiOwnerManager {
     /// next one to become current.
     pub fn current_round(&self) -> RoundNumber {
         let leader_timeout = self.leader_timeout.as_ref().into_iter();
-        let validated = self
-            .proposed
-            .as_ref()
-            .and_then(|proposal| proposal.validated.as_ref());
+        let proposed = self.proposed.as_ref();
+        let validated = proposed.and_then(|proposal| proposal.validated.as_ref());
         let locked = self.locked.as_ref();
         let certificates = leader_timeout.chain(locked).chain(validated);
         certificates
             .map(|certificate| certificate.round.try_add_one().unwrap_or(RoundNumber::MAX))
-            .chain(
-                self.proposed
-                    .as_ref()
-                    .map(|proposal| proposal.content.round),
-            )
+            .chain(proposed.map(|proposal| proposal.content.round))
             .max()
             .unwrap_or_default()
     }
@@ -158,7 +151,7 @@ impl MultiOwnerManager {
         self.pending.as_ref()
     }
 
-    /// Verifies the safety of the block with respect to voting rules.
+    /// Verifies the safety of a proposed block with respect to voting rules.
     pub fn check_proposed_block(&self, proposal: &BlockProposal) -> Result<Outcome, ChainError> {
         let new_round = proposal.content.round;
         let new_block = &proposal.content.block;
@@ -171,7 +164,7 @@ impl MultiOwnerManager {
         }
         let expected_round = match validated {
             None => self.current_round(),
-            Some(cert) => cert.round.try_add_one()?,
+            Some(cert) => cert.round.try_add_one()?.max(self.current_round()),
         };
         // In leader rotation mode, the round must equal the expected one exactly.
         // Only the first single-leader round can be entered at any time.
@@ -187,7 +180,7 @@ impl MultiOwnerManager {
             );
         }
         if let Some(old_proposal) = &self.proposed {
-            if old_proposal.content.block == *new_block && old_proposal.content.round == new_round {
+            if old_proposal.content == proposal.content {
                 return Ok(Outcome::Skip); // We already voted for this proposal; nothing to do.
             }
             if new_round <= old_proposal.content.round {
@@ -197,9 +190,8 @@ impl MultiOwnerManager {
         }
         // If we have a locked block, it must either match the proposal, or the proposal must
         // include a higher certificate that validates the proposed block.
-        if let Some(locked) = proposal
-            .validated
-            .iter()
+        if let Some(locked) = validated
+            .into_iter()
             .chain(&self.locked)
             .max_by_key(|cert| cert.round)
         {
@@ -237,13 +229,8 @@ impl MultiOwnerManager {
                 return false; // We already signed this timeout.
             }
         }
-        let value = CertificateValue::LeaderTimeout {
-            chain_id,
-            height,
-            epoch,
-        };
-        let vote = Vote::new(HashedValue::from(value), current_round, key_pair);
-        self.timeout_vote = Some(vote);
+        let value = HashedValue::new_leader_timeout(chain_id, height, epoch);
+        self.timeout_vote = Some(Vote::new(value, current_round, key_pair));
         true
     }
 
@@ -289,8 +276,8 @@ impl MultiOwnerManager {
         if let Some(validated) = &proposal.validated {
             self.update_timeout(validated.round, now);
         }
-        if let Some(round) = proposal.content.round.0.checked_sub(1) {
-            self.update_timeout(RoundNumber(round), now);
+        if let Ok(round) = proposal.content.round.try_sub_one() {
+            self.update_timeout(round, now);
         }
         // Record the proposed block, so it can be supplied to clients that request it.
         self.proposed = Some(proposal.clone());
@@ -411,9 +398,9 @@ pub struct MultiOwnerManagerInfo {
     pub timeout_vote: Option<LiteVote>,
     /// The value we voted for, if requested.
     pub requested_pending_value: Option<HashedValue>,
-    /// The current round, i.e. the round number for the next block proposal.
+    /// The current round, i.e. the lowest round where we can still vote to validate a block.
     pub current_round: RoundNumber,
-    /// The lowest round in which a new block can be proposed.
+    /// The lowest round in which a new block can be proposed at the moment.
     pub next_round: Option<RoundNumber>,
     /// The current leader, who is allowed to propose the next block.
     /// `None` if everyone is allowed to propose.

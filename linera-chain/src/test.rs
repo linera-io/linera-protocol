@@ -8,9 +8,17 @@ use linera_base::{
     data_types::{Amount, BlockHeight, RoundNumber, Timestamp},
     identifiers::ChainId,
 };
-use linera_execution::{committee::Epoch, system::Recipient, Operation, SystemOperation};
+use linera_execution::{
+    committee::{Committee, Epoch, ValidatorState},
+    pricing::Pricing,
+    system::Recipient,
+    Operation, SystemOperation,
+};
 
-use crate::data_types::{Block, BlockAndRound, BlockProposal, HashedValue, IncomingMessage};
+use crate::data_types::{
+    Block, BlockAndRound, BlockProposal, Certificate, HashedValue, IncomingMessage,
+    SignatureAggregator, Vote,
+};
 
 /// Creates a new child of the given block, with the same timestamp.
 pub fn make_child_block(parent: &HashedValue) -> Block {
@@ -107,5 +115,27 @@ impl BlockTestExt for Block {
             round: round.into(),
         };
         BlockProposal::new(content, key_pair, vec![], None)
+    }
+}
+
+pub trait VoteTestExt: Sized {
+    /// Returns a certificate for a committee consisting only of this validator.
+    fn into_certificate(self) -> Certificate;
+}
+
+impl VoteTestExt for Vote {
+    fn into_certificate(self) -> Certificate {
+        let state = ValidatorState {
+            network_address: "".to_string(),
+            votes: 100,
+        };
+        let committee = Committee::new(
+            vec![(self.validator, state)].into_iter().collect(),
+            Pricing::only_fuel(),
+        );
+        SignatureAggregator::new(self.value, self.round, &committee)
+            .append(self.validator, self.signature)
+            .unwrap()
+            .unwrap()
     }
 }

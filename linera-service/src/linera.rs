@@ -726,6 +726,8 @@ enum ClientCommand {
         #[structopt(long = "weights")]
         weights: Vec<u128>,
 
+        /// The number of rounds in which every owner can propose blocks, i.e. the first round
+        /// number in which only a single designated leader is allowed to propose blocks.
         #[structopt(long = "multi-leader-rounds")]
         multi_leader_rounds: Option<RoundNumber>,
     },
