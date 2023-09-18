@@ -51,6 +51,14 @@ pub enum Network {
     Simple,
 }
 
+#[derive(Copy, Clone)]
+pub enum Database {
+    Memory,
+    RocksDb,
+    DynamoDb,
+    ScyllaDb,
+}
+
 impl Network {
     fn internal(&self) -> &'static str {
         match self {
@@ -83,11 +91,18 @@ pub struct ClientWrapper {
 }
 
 impl ClientWrapper {
-    fn new(tmp_dir: Rc<TempDir>, network: Network, id: usize) -> Self {
+    fn new(tmp_dir: Rc<TempDir>, database: Database, network: Network, id: usize) -> Self {
+        let storage = match database {
+            Database::Memory => "memory".to_string(),
+            Database::RocksDb => format!("rocksdb:client_{}.db", id),
+            Database::DynamoDb => format!("dynamodb:client_{}.db:localstack", id),
+            Database::ScyllaDb => format!("scylladb:table_client_{}_db", id),
+        };
+        let wallet = format!("wallet_{}.json", id);
         Self {
             tmp_dir,
-            storage: format!("rocksdb:client_{}.db", id),
-            wallet: format!("wallet_{}.json", id),
+            storage,
+            wallet,
             max_pending_messages: 10_000,
             network,
         }
@@ -515,6 +530,7 @@ impl Validator {
 }
 
 pub struct LocalNetwork {
+    database: Database,
     network: Network,
     tmp_dir: Rc<TempDir>,
     next_client_id: usize,
@@ -531,8 +547,13 @@ impl Drop for LocalNetwork {
 }
 
 impl LocalNetwork {
-    pub fn new(network: Network, num_initial_validators: usize) -> Result<Self> {
+    pub fn new(
+        database: Database,
+        network: Network,
+        num_initial_validators: usize,
+    ) -> Result<Self> {
         Ok(Self {
+            database,
             tmp_dir: Rc::new(tempdir()?),
             network,
             next_client_id: 0,
@@ -542,7 +563,12 @@ impl LocalNetwork {
     }
 
     pub fn make_client(&mut self, network: Network) -> ClientWrapper {
-        let client = ClientWrapper::new(self.tmp_dir.clone(), network, self.next_client_id);
+        let client = ClientWrapper::new(
+            self.tmp_dir.clone(),
+            self.database,
+            network,
+            self.next_client_id,
+        );
         self.next_client_id += 1;
         client
     }
@@ -695,8 +721,14 @@ impl LocalNetwork {
         if let Ok(var) = env::var(SERVER_ENV) {
             command.args(var.split_whitespace());
         }
+        let storage = match self.database {
+            Database::Memory => "memory".to_string(),
+            Database::RocksDb => format!("rocksdb:server_{}_{}.db", i, j),
+            Database::DynamoDb => format!("dynamodb:server_{}_{}.db:localstack", i, j),
+            Database::ScyllaDb => format!("scylladb:table_server_{}_{}_db", i, j),
+        };
         let child = command
-            .args(["--storage", &format!("rocksdb:server_{}_{}.db", i, j)])
+            .args(["--storage", &storage])
             .args(["--server", &format!("server_{}.json", i)])
             .args(["--shard", &j.to_string()])
             .args(["--genesis", "genesis.json"])

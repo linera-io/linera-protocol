@@ -1,18 +1,20 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{data_types::Amount, identifiers::ChainId};
-use linera_service::client::{resolve_binary, LocalNetwork, Network};
-use linera_service_graphql_client::{
-    applications, block, blocks, chains, request, transfer, Applications, Block, Blocks, Chains,
-    Transfer,
-};
+use linera_service::client::resolve_binary;
 use once_cell::sync::Lazy;
-use std::{collections::BTreeMap, io::Read, rc::Rc, str::FromStr};
+use std::{io::Read, rc::Rc};
 use tempfile::tempdir;
 use tokio::{process::Command, sync::Mutex};
 
 use fungible::{FungibleTokenAbi, InitialState};
+use linera_base::{data_types::Amount, identifiers::ChainId};
+use linera_service::client::{Database, LocalNetwork, Network};
+use linera_service_graphql_client::{
+    applications, block, blocks, chains, request, transfer, Applications, Block, Blocks, Chains,
+    Transfer,
+};
+use std::{collections::BTreeMap, str::FromStr};
 
 /// A static lock to prevent integration tests from running in parallel.
 pub static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
@@ -29,10 +31,34 @@ async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: ChainI
 }
 
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_queries() {
+async fn test_memory_end_to_end_queries() {
+    run_end_to_end_queries(Database::Memory).await
+}
+
+#[cfg(feature = "rocksdb")]
+#[test_log::test(tokio::test)]
+async fn test_rocks_db_end_to_end_queries() {
+    run_end_to_end_queries(Database::RocksDb).await
+}
+
+#[ignore]
+#[cfg(feature = "aws")]
+#[test_log::test(tokio::test)]
+async fn test_dynamo_db_end_to_end_queries() {
+    run_end_to_end_queries(Database::DynamoDb).await
+}
+
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[test_log::test(tokio::test)]
+async fn test_scylla_db_end_to_end_queries() {
+    run_end_to_end_queries(Database::ScyllaDb).await
+}
+
+async fn run_end_to_end_queries(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(network, 4).unwrap();
+    let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
     let client = local_net.make_client(network);
     local_net.generate_initial_validator_config().await.unwrap();
 

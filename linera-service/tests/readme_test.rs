@@ -2,15 +2,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(any(feature = "aws", feature = "rocksdb"))]
 mod common;
 
-use common::INTEGRATION_TEST_GUARD;
 #[cfg(feature = "aws")]
 use linera_views::dynamo_db::LocalStackTestContext;
-use std::io::Write;
-use tempfile::tempdir;
-use tokio::process::Command;
+#[cfg(any(feature = "aws", feature = "rocksdb"))]
+use {common::INTEGRATION_TEST_GUARD, std::io::Write, tempfile::tempdir, tokio::process::Command};
 
+#[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]
 async fn test_examples_in_readme() -> std::io::Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -37,6 +37,7 @@ async fn test_examples_in_readme() -> std::io::Result<()> {
 }
 
 #[allow(clippy::while_let_on_iterator)]
+#[cfg(any(feature = "aws", feature = "rocksdb"))]
 fn get_bash_quotes(reader: impl std::io::BufRead) -> std::io::Result<Vec<String>> {
     let mut result = Vec::new();
     let mut lines = reader.lines();

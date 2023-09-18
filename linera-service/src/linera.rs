@@ -26,6 +26,7 @@ use linera_execution::{
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
     chain_listener::{self, ChainListenerConfig},
+    client::Database,
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     node_service::NodeService,
     project::{self, Project},
@@ -1692,7 +1693,7 @@ async fn main() -> Result<(), anyhow::Error> {
         ClientCommand::Net(net_command) => match net_command {
             NetCommand::Up => {
                 let network = Network::Grpc;
-                let mut net = LocalNetwork::new(network, 1)?;
+                let mut net = LocalNetwork::new(Database::RocksDb, network, 1)?;
                 let client1 = net.make_client(network);
                 let client2 = net.make_client(network);
 
