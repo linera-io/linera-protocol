@@ -143,13 +143,11 @@ fn make_certificate<S>(
     committee: &Committee,
     worker: &WorkerState<S>,
     value: HashedValue,
+    round: impl Into<RoundNumber>,
 ) -> Certificate {
-    let vote = LiteVote::new(
-        value.lite(),
-        RoundNumber(0),
-        worker.key_pair.as_ref().unwrap(),
-    );
-    let mut builder = SignatureAggregator::new(value, RoundNumber(0), committee);
+    let round = round.into();
+    let vote = LiteVote::new(value.lite(), round, worker.key_pair.as_ref().unwrap());
+    let mut builder = SignatureAggregator::new(value, round, committee);
     builder
         .append(vote.validator, vote.signature)
         .unwrap()
@@ -226,7 +224,7 @@ async fn make_transfer_certificate_for_epoch<S>(
         messages,
         state_hash,
     });
-    make_certificate(committee, worker, value)
+    make_certificate(committee, worker, value, 0)
 }
 
 fn direct_outgoing_message(recipient: ChainId, message: SystemMessage) -> OutgoingMessage {
@@ -301,7 +299,7 @@ where
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::from_tokens(5))
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
     let unknown_key_pair = KeyPair::generate();
     let mut bad_signature_block_proposal = block_proposal.clone();
     bad_signature_block_proposal.signature =
@@ -370,7 +368,7 @@ where
     // test block non-positive amount
     let zero_amount_block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::ZERO)
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
     assert!(worker
         .handle_block_proposal(zero_amount_block_proposal)
         .await
@@ -431,7 +429,7 @@ where
     {
         let block_proposal = make_first_block(ChainId::root(1))
             .with_timestamp(Timestamp::from(TEST_GRACE_PERIOD_MICROS + 1_000_000))
-            .into_simple_proposal(&key_pair);
+            .into_simple_proposal(&key_pair, 0);
         // Timestamp too far in the future
         assert!(worker.handle_block_proposal(block_proposal).await.is_err());
     }
@@ -439,7 +437,7 @@ where
     let block_0_time = Timestamp::from(TEST_GRACE_PERIOD_MICROS);
     let certificate = {
         let block = make_first_block(ChainId::root(1)).with_timestamp(block_0_time);
-        let block_proposal = block.clone().into_simple_proposal(&key_pair);
+        let block_proposal = block.clone().into_simple_proposal(&key_pair, 0);
         assert!(worker.handle_block_proposal(block_proposal).await.is_ok());
 
         let system_state = SystemExecutionState {
@@ -455,7 +453,7 @@ where
             messages: vec![],
             state_hash,
         });
-        make_certificate(&committee, &worker, value)
+        make_certificate(&committee, &worker, value, 0)
     };
     let future = worker.fully_handle_certificate(certificate.clone(), vec![]);
     clock.set(block_0_time);
@@ -464,7 +462,7 @@ where
     {
         let block_proposal = make_child_block(&certificate.value)
             .with_timestamp(block_0_time.saturating_sub_micros(1))
-            .into_simple_proposal(&key_pair);
+            .into_simple_proposal(&key_pair, 0);
         // Timestamp older than previous one
         assert!(worker.handle_block_proposal(block_proposal).await.is_err());
     }
@@ -518,7 +516,7 @@ where
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::from_tokens(5))
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
     let unknown_key = KeyPair::generate();
 
     let unknown_sender_block_proposal =
@@ -584,7 +582,7 @@ where
     .await;
     let block_proposal0 = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::ONE)
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
     let certificate0 = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
@@ -599,7 +597,7 @@ where
     .await;
     let block_proposal1 = make_child_block(&certificate0.value)
         .with_simple_transfer(Recipient::root(2), Amount::from_tokens(2))
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
 
     assert!(worker
         .handle_block_proposal(block_proposal1.clone())
@@ -718,6 +716,7 @@ where
             })
             .await,
         }),
+        0,
     );
 
     let certificate1 = make_certificate(
@@ -737,6 +736,7 @@ where
             })
             .await,
         }),
+        0,
     );
     // Missing earlier blocks
     assert!(worker
@@ -798,7 +798,7 @@ where
     {
         let block_proposal = make_first_block(ChainId::root(2))
             .with_simple_transfer(Recipient::root(3), Amount::from_tokens(6))
-            .into_simple_proposal(&recipient_key_pair);
+            .into_simple_proposal(&recipient_key_pair, 0);
         // Insufficient funding
         assert!(worker.handle_block_proposal(block_proposal).await.is_err());
     }
@@ -850,7 +850,7 @@ where
                     }),
                 },
             })
-            .into_simple_proposal(&recipient_key_pair);
+            .into_simple_proposal(&recipient_key_pair, 0);
         // Inconsistent received messages.
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
@@ -876,7 +876,7 @@ where
                     }),
                 },
             })
-            .into_simple_proposal(&recipient_key_pair);
+            .into_simple_proposal(&recipient_key_pair, 0);
         // Skipped message.
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
@@ -932,7 +932,7 @@ where
                     }),
                 },
             })
-            .into_simple_proposal(&recipient_key_pair);
+            .into_simple_proposal(&recipient_key_pair, 0);
         // Inconsistent order in received messages (heights).
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
@@ -958,7 +958,7 @@ where
                     }),
                 },
             })
-            .into_simple_proposal(&recipient_key_pair);
+            .into_simple_proposal(&recipient_key_pair, 0);
         // Taking the first message only is ok.
         worker
             .handle_block_proposal(block_proposal.clone())
@@ -977,6 +977,7 @@ where
                 })
                 .await,
             }),
+            0,
         );
         worker
             .handle_certificate(certificate.clone(), vec![], None)
@@ -1016,7 +1017,7 @@ where
                     }),
                 },
             })
-            .into_simple_proposal(&recipient_key_pair);
+            .into_simple_proposal(&recipient_key_pair, 0);
         worker
             .handle_block_proposal(block_proposal.clone())
             .await
@@ -1072,7 +1073,7 @@ where
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::from_tokens(1000))
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
     assert!(worker.handle_block_proposal(block_proposal).await.is_err());
     assert!(worker
         .storage
@@ -1130,7 +1131,7 @@ where
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::from_tokens(5))
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
 
     let (chain_info_response, _actions) =
         worker.handle_block_proposal(block_proposal).await.unwrap();
@@ -1201,7 +1202,7 @@ where
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::from_tokens(5))
-        .into_simple_proposal(&sender_key_pair);
+        .into_simple_proposal(&sender_key_pair, 0);
 
     let (response, _actions) = worker
         .handle_block_proposal(block_proposal.clone())
@@ -2251,6 +2252,7 @@ where
             })
             .await,
         }),
+        0,
     );
     worker
         .fully_handle_certificate(certificate0.clone(), vec![])
@@ -2313,6 +2315,7 @@ where
             })
             .await,
         }),
+        0,
     );
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
@@ -2353,6 +2356,7 @@ where
             })
             .await,
         }),
+        0,
     );
     worker
         .fully_handle_certificate(certificate2.clone(), vec![])
@@ -2520,6 +2524,7 @@ where
             })
             .await,
         }),
+        0,
     );
     worker
         .fully_handle_certificate(certificate3, vec![])
@@ -2645,6 +2650,7 @@ where
             })
             .await,
         }),
+        0,
     );
     // Have the admin chain create a new epoch without retiring the old one.
     let committees2 = BTreeMap::from_iter([
@@ -2675,6 +2681,7 @@ where
             })
             .await,
         }),
+        0,
     );
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
@@ -2790,6 +2797,7 @@ where
             })
             .await,
         }),
+        0,
     );
     // Have the admin chain create a new epoch and retire the old one immediately.
     let committees2 = BTreeMap::from_iter([
@@ -2832,6 +2840,7 @@ where
             })
             .await,
         }),
+        0,
     );
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
@@ -2896,6 +2905,7 @@ where
             })
             .await,
         }),
+        0,
     );
     worker
         .fully_handle_certificate(certificate2.clone(), vec![])
