@@ -3279,14 +3279,23 @@ where
     let value = HashedValue::new_confirmed(executed_block);
     assert_eq!(vote.value, value.lite());
 
-    // Proposing a different block now would fail.
+    // Instead of submitting the confirmed block certificate, let rounds 1 to 4 time out, too.
+    let value_timeout =
+        HashedValue::new_leader_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
+    let certificate_timeout = make_certificate(&committee, &worker, value_timeout, 4);
+    let (response, _) = worker
+        .handle_certificate(certificate_timeout, vec![], None)
+        .await
+        .unwrap();
     let leader = multi_manager(&response.info).leader.unwrap();
     assert_eq!(leader, Owner::from(pub_key1));
+
+    // Proposing a different block now would fail.
     let round = multi_manager(&response.info).current_round;
-    assert_eq!(round, RoundNumber::from(2));
+    assert_eq!(round, RoundNumber::from(5));
     let amount = Amount::from_tokens(1);
     let block = make_child_block(&value0).with_simple_transfer(Recipient::root(1), amount);
-    let proposal = block.clone().into_simple_proposal(&key_pairs[1], 2);
+    let proposal = block.clone().into_simple_proposal(&key_pairs[1], 5);
     let result = worker.handle_block_proposal(proposal.clone()).await;
     assert!(matches!(result, Err(WorkerError::ChainError(error))
          if matches!(*error, ChainError::HasLockedBlock(_, _))
