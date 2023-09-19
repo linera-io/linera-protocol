@@ -93,7 +93,7 @@ pub struct ClientWrapper {
 impl ClientWrapper {
     fn new(tmp_dir: Rc<TempDir>, database: Database, network: Network, id: usize) -> Self {
         let storage = match database {
-            Database::RocksDb => format!("rocksdb:client_{}.db", id),
+            Database::RocksDb => format!("rocksdb:{}/client_{}.db", tmp_dir.path().display(), id),
             Database::DynamoDb => format!("dynamodb:client_{}.db:localstack", id),
             Database::ScyllaDb => format!("scylladb:table_client_{}_db", id),
         };
@@ -423,7 +423,15 @@ impl ClientWrapper {
     }
 
     pub fn get_wallet(&self) -> WalletState {
-        WalletState::from_file(self.tmp_dir.path().join(&self.wallet).as_path()).unwrap()
+        WalletState::from_file(self.wallet_path().as_path()).unwrap()
+    }
+
+    pub fn wallet_path(&self) -> PathBuf {
+        self.tmp_dir.path().join(&self.wallet)
+    }
+
+    pub fn storage_path(&self) -> &str {
+        &self.storage
     }
 
     pub fn get_owner(&self) -> Option<Owner> {
