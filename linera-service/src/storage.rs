@@ -380,23 +380,25 @@ pub async fn full_initialize_storage(
     config: FullStorageConfig,
     genesis_config: &GenesisConfig,
 ) -> Result<(), anyhow::Error> {
-    let wasm_runtime = None;
     match config {
         FullStorageConfig::Memory(_) => {
             bail!("The initialization should not be called for memory");
         }
         #[cfg(feature = "rocksdb")]
         FullStorageConfig::RocksDb(store_config) => {
+            let wasm_runtime = None;
             let mut client = RocksDbStoreClient::initialize(store_config, wasm_runtime).await?;
             genesis_config.initialize_store(&mut client).await
         }
         #[cfg(feature = "aws")]
         FullStorageConfig::DynamoDb(store_config) => {
+            let wasm_runtime = None;
             let mut client = DynamoDbStoreClient::initialize(store_config, wasm_runtime).await?;
             genesis_config.initialize_store(&mut client).await
         }
         #[cfg(feature = "scylladb")]
         FullStorageConfig::ScyllaDb(store_config) => {
+            let wasm_runtime = None;
             let mut client = ScyllaDbStoreClient::initialize(store_config, wasm_runtime).await?;
             genesis_config.initialize_store(&mut client).await
         }
