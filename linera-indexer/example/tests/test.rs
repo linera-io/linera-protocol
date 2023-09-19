@@ -71,7 +71,7 @@ const TRANSFER_DELAY_MILLIS: u64 = 1000;
 #[cfg(not(debug_assertions))]
 const TRANSFER_DELAY_MILLIS: u64 = 100;
 
-/// TODO(1034) This is delayed because it is not essential.
+// TODO(#1034): Fix this test.
 #[ignore]
 #[test_log::test(tokio::test)]
 async fn test_memory_end_to_end_operations_indexer() {

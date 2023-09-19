@@ -269,7 +269,7 @@ async fn run_open_chain_node_service(database: Database) {
     panic!("Failed to receive new block");
 }
 
-/// TODO(1034) This is delayed because it is not essential.
+// TODO(#1034): Fix this test.
 #[ignore]
 #[test_log::test(tokio::test)]
 async fn test_memory_end_to_end_retry_notification_stream() {
