@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
+
 use linera_base::{data_types::Amount, identifiers::ChainId};
 use linera_indexer_graphql_client::{
     indexer::{plugins, state, Plugins, State},
@@ -70,13 +72,6 @@ const TRANSFER_DELAY_MILLIS: u64 = 1000;
 
 #[cfg(not(debug_assertions))]
 const TRANSFER_DELAY_MILLIS: u64 = 100;
-
-// TODO(#1034): Fix this test.
-#[ignore]
-#[test_log::test(tokio::test)]
-async fn test_memory_end_to_end_operations_indexer() {
-    run_end_to_end_operations_indexer(Database::Memory).await
-}
 
 #[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]

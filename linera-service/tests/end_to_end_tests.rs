@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
+
 mod common;
 
 use common::INTEGRATION_TEST_GUARD;
@@ -49,7 +51,6 @@ async fn test_scylla_db_end_to_end_reconfiguration_simple() {
     run_end_to_end_reconfiguration(Database::ScyllaDb, Network::Simple).await;
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
@@ -155,11 +156,6 @@ async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
         }
         panic!("Failed to receive new block");
     }
-}
-
-#[test_log::test(tokio::test)]
-async fn test_memory_open_chain_node_service() {
-    run_open_chain_node_service(Database::Memory).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -269,13 +265,6 @@ async fn run_open_chain_node_service(database: Database) {
     panic!("Failed to receive new block");
 }
 
-// TODO(#1034): Fix this test.
-#[ignore]
-#[test_log::test(tokio::test)]
-async fn test_memory_end_to_end_retry_notification_stream() {
-    run_end_to_end_retry_notification_stream(Database::Memory).await
-}
-
 #[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_end_to_end_retry_notification_stream() {
@@ -375,7 +364,6 @@ async fn test_scylla_db_end_to_end_multiple_wallets() {
     run_end_to_end_multiple_wallets(Database::ScyllaDb).await
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 async fn run_end_to_end_multiple_wallets(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -428,11 +416,6 @@ async fn run_end_to_end_multiple_wallets(database: Database) {
     assert_eq!(client_2.query_balance(chain_2).await.unwrap(), "3.");
 }
 
-#[test_log::test(tokio::test)]
-async fn test_memory_project_new() {
-    run_project_new(Database::Memory).await
-}
-
 #[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_project_new() {
@@ -466,11 +449,6 @@ async fn run_project_new(database: Database) {
         .unwrap();
 }
 
-#[test_log::test(tokio::test)]
-async fn test_memory_project_test() {
-    run_project_test(Database::Memory).await
-}
-
 #[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_project_test() {
@@ -498,11 +476,6 @@ async fn run_project_test(database: Database) {
     client
         .project_test(&LocalNetwork::example_path("counter").unwrap())
         .await;
-}
-
-#[test_log::test(tokio::test)]
-async fn test_memory_project_publish() {
-    run_project_publish(Database::Memory).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -548,11 +521,6 @@ async fn run_project_publish(database: Database) {
     let node_service = client.run_node_service(None).await.unwrap();
 
     assert_eq!(node_service.try_get_applications_uri(&chain).await.len(), 1)
-}
-
-#[test_log::test(tokio::test)]
-async fn test_memory_example_publish() {
-    run_example_publish(Database::Memory).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -618,7 +586,6 @@ async fn test_scylla_db_end_to_end_open_multi_owner_chain() {
     run_end_to_end_open_multi_owner_chain(Database::ScyllaDb).await
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 async fn run_end_to_end_open_multi_owner_chain(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 

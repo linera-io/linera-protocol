@@ -2,18 +2,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
+#![cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
+
 mod common;
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
-use {
-    common::INTEGRATION_TEST_GUARD,
-    std::{io::Write, process::ExitStatus},
-    tempfile::tempdir,
-    tokio::process::Command,
-};
+use common::INTEGRATION_TEST_GUARD;
+use std::{io::Write, process::ExitStatus};
+use tempfile::tempdir;
+use tokio::process::Command;
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 async fn run_test_command(storage: &str) -> std::io::Result<ExitStatus> {
     let dir = tempdir().unwrap();
     let file = std::io::BufReader::new(std::fs::File::open("../README.md")?);
@@ -37,7 +34,6 @@ async fn run_test_command(storage: &str) -> std::io::Result<ExitStatus> {
 }
 
 #[allow(clippy::while_let_on_iterator)]
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 fn get_bash_quotes(reader: impl std::io::BufRead) -> std::io::Result<Vec<String>> {
     let mut result = Vec::new();
     let mut lines = reader.lines();

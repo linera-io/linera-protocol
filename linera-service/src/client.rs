@@ -53,7 +53,6 @@ pub enum Network {
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum Database {
-    Memory,
     RocksDb,
     DynamoDb,
     ScyllaDb,
@@ -93,7 +92,6 @@ pub struct ClientWrapper {
 impl ClientWrapper {
     fn new(tmp_dir: Rc<TempDir>, database: Database, network: Network, id: usize) -> Self {
         let storage = match database {
-            Database::Memory => panic!("Wallet clients must used a persistent storage"),
             Database::RocksDb => format!("rocksdb:client_{}.db", id),
             Database::DynamoDb => format!("dynamodb:client_{}.db:localstack", id),
             Database::ScyllaDb => format!("scylladb:table_client_{}_db", id),
@@ -716,13 +714,12 @@ impl LocalNetwork {
 
     async fn run_server(&mut self, i: usize, j: usize) -> Result<Child> {
         let storage = match self.database {
-            Database::Memory => "memory".to_string(),
             Database::RocksDb => format!("rocksdb:server_{}_{}.db", i, j),
             Database::DynamoDb => format!("dynamodb:server_{}_{}.db:localstack", i, j),
             Database::ScyllaDb => format!("scylladb:table_server_{}_{}_db", i, j),
         };
         let key = (i, j);
-        if !self.set_init.contains(&key) && self.database != Database::Memory {
+        if !self.set_init.contains(&key) {
             let mut command = self.command_for_binary("linera-server").await?;
             command.arg("initialize");
             if let Ok(var) = env::var(SERVER_ENV) {

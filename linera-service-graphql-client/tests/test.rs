@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
+
 use linera_service::client::resolve_binary;
 use once_cell::sync::Lazy;
 use std::{io::Read, rc::Rc};
@@ -28,11 +30,6 @@ async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: ChainI
     request::<Transfer, _>(client, url, variables)
         .await
         .unwrap();
-}
-
-#[test_log::test(tokio::test)]
-async fn test_memory_end_to_end_queries() {
-    run_end_to_end_queries(Database::Memory).await
 }
 
 #[cfg(feature = "rocksdb")]
