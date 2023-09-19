@@ -8,7 +8,6 @@ use crate::{
     queue_view::QueueView,
     views::{View, ViewError},
 };
-
 use async_trait::async_trait;
 use std::collections::VecDeque;
 
