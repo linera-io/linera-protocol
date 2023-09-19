@@ -1415,7 +1415,7 @@ where
     pub async fn share_ownership(
         &mut self,
         new_public_key: PublicKey,
-        new_weight: u128,
+        new_weight: u64,
     ) -> Result<Certificate, ChainClientError> {
         let info = self.prepare_chain().await?;
         let messages = self.pending_messages().await?;

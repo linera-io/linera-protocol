@@ -308,7 +308,6 @@ where
                     weights.len()
                 )));
             }
-            let weights = weights.into_iter().map(u128::from);
             public_keys.into_iter().zip(weights).collect()
         } else {
             public_keys.into_iter().zip(iter::repeat(100)).collect()
@@ -347,7 +346,6 @@ where
         new_weights: Vec<u64>,
         multi_leader_rounds: RoundNumber,
     ) -> Result<CryptoHash, Error> {
-        let new_weights = new_weights.into_iter().map(u128::from);
         let operation = SystemOperation::ChangeMultipleOwners {
             new_public_keys: new_public_keys.into_iter().zip(new_weights).collect(),
             multi_leader_rounds,

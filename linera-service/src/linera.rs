@@ -724,7 +724,7 @@ enum ClientCommand {
 
         /// Weights for the new owners
         #[structopt(long = "weights")]
-        weights: Vec<u128>,
+        weights: Vec<u64>,
 
         /// The number of rounds in which every owner can propose blocks, i.e. the first round
         /// number in which only a single designated leader is allowed to propose blocks.
@@ -1166,7 +1166,6 @@ impl Runnable for Job {
                         weights.len()
                     );
                 } else {
-                    let weights = weights.into_iter().map(u128::from);
                     public_keys.into_iter().zip(weights).collect()
                 };
                 let multi_leader_rounds = multi_leader_rounds.unwrap_or(RoundNumber::MAX);

@@ -16,7 +16,7 @@ pub enum ChainOwnership {
     /// The chain is managed by multiple owners.
     Multi {
         /// The owners, with their weights that determine how often they are round leader.
-        public_keys: BTreeMap<Owner, (PublicKey, u128)>,
+        public_keys: BTreeMap<Owner, (PublicKey, u64)>,
         /// The number of initial rounds in which all owners are allowed to propose blocks,
         /// i.e. the first round with only a single leader.
         multi_leader_rounds: RoundNumber,
@@ -32,7 +32,7 @@ impl ChainOwnership {
     }
 
     pub fn multiple(
-        keys_and_weights: impl IntoIterator<Item = (PublicKey, u128)>,
+        keys_and_weights: impl IntoIterator<Item = (PublicKey, u64)>,
         multi_leader_rounds: RoundNumber,
     ) -> Self {
         ChainOwnership::Multi {

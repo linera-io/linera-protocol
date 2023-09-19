@@ -114,7 +114,7 @@ pub enum SystemOperation {
     ChangeOwner { new_public_key: PublicKey },
     /// Changes the authentication key of the chain.
     ChangeMultipleOwners {
-        new_public_keys: Vec<(PublicKey, u128)>,
+        new_public_keys: Vec<(PublicKey, u64)>,
         multi_leader_rounds: RoundNumber,
     },
     /// Subscribes to a system channel.

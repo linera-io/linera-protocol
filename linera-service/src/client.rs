@@ -401,7 +401,7 @@ impl ClientWrapper {
         &mut self,
         from: ChainId,
         to_public_keys: Vec<PublicKey>,
-        weights: Vec<u128>,
+        weights: Vec<u64>,
         multi_leader_rounds: RoundNumber,
     ) -> Result<(MessageId, ChainId)> {
         let mut command = self.run().await?;
@@ -411,7 +411,7 @@ impl ClientWrapper {
             .arg("--to-public-keys")
             .args(to_public_keys.iter().map(PublicKey::to_string))
             .arg("--weights")
-            .args(weights.iter().map(u128::to_string))
+            .args(weights.iter().map(u64::to_string))
             .args(["--multi-leader-rounds", &multi_leader_rounds.to_string()]);
 
         let stdout = Self::run_command(&mut command).await?;

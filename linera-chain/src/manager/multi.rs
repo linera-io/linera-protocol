@@ -80,14 +80,14 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MultiOwnerManager {
     /// The public keys of the chain's co-owners, with their weights.
-    pub public_keys: BTreeMap<Owner, (PublicKey, u128)>,
+    pub public_keys: BTreeMap<Owner, (PublicKey, u64)>,
     /// The number of initial rounds in which all owners are allowed to propose blocks,
     /// i.e. the first round with only a single leader.
     pub multi_leader_rounds: RoundNumber,
     /// The seed for the pseudo-random number generator that determines the round leaders.
     pub seed: u64,
     /// The probability distribution for choosing a round leader.
-    pub distribution: WeightedAliasIndex<u128>,
+    pub distribution: WeightedAliasIndex<u64>,
     /// Latest authenticated block that we have received and checked.
     pub proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
@@ -105,12 +105,12 @@ pub struct MultiOwnerManager {
 
 impl MultiOwnerManager {
     pub fn new(
-        public_keys: impl IntoIterator<Item = (Owner, (PublicKey, u128))>,
+        public_keys: impl IntoIterator<Item = (Owner, (PublicKey, u64))>,
         multi_leader_rounds: RoundNumber,
         seed: u64,
         now: Timestamp,
     ) -> Result<Self, ChainError> {
-        let public_keys: BTreeMap<Owner, (PublicKey, u128)> = public_keys.into_iter().collect();
+        let public_keys: BTreeMap<Owner, (PublicKey, u64)> = public_keys.into_iter().collect();
         let weights = public_keys.values().map(|(_, weight)| *weight).collect();
         let distribution = WeightedAliasIndex::new(weights)?;
         let round_timeout = now.saturating_add(TIMEOUT);
@@ -386,7 +386,7 @@ impl MultiOwnerManager {
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct MultiOwnerManagerInfo {
     /// The public keys of the chain's co-owners.
-    pub public_keys: HashMap<Owner, (PublicKey, u128)>,
+    pub public_keys: HashMap<Owner, (PublicKey, u64)>,
     /// The number of initial rounds in which all owners are allowed to propose blocks,
     /// i.e. the first round with only a single leader.
     pub multi_leader_rounds: RoundNumber,
