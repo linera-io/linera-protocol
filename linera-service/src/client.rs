@@ -88,14 +88,12 @@ pub struct ClientWrapper {
     wallet: String,
     max_pending_messages: usize,
     network: Network,
-    initialized: bool,
-    database: Database,
 }
 
 impl ClientWrapper {
     fn new(tmp_dir: Rc<TempDir>, database: Database, network: Network, id: usize) -> Self {
         let storage = match database {
-            Database::Memory => "memory".to_string(),
+            Database::Memory => panic!("Wallet clients must used a persistent storage"),
             Database::RocksDb => format!("rocksdb:client_{}.db", id),
             Database::DynamoDb => format!("dynamodb:client_{}.db:localstack", id),
             Database::ScyllaDb => format!("scylladb:table_client_{}_db", id),
@@ -107,8 +105,6 @@ impl ClientWrapper {
             wallet,
             max_pending_messages: 10_000,
             network,
-            initialized: false,
-            database,
         }
     }
 
@@ -137,7 +133,7 @@ impl ClientWrapper {
     ) -> Result<String> {
         let json_parameters = serde_json::to_string(&())?;
         let json_argument = serde_json::to_string(argument)?;
-        let mut command = self.run_with_storage().await?;
+        let mut command = self.run().await?;
         command
             .arg("project")
             .arg("publish-and-create")
@@ -175,31 +171,14 @@ impl ClientWrapper {
             .current_dir(&self.tmp_dir.path().canonicalize()?)
             .kill_on_drop(true)
             .args(["--wallet", &self.wallet])
+            .args(["--storage", &self.storage])
+            .args([
+                "--max-pending-messages",
+                &self.max_pending_messages.to_string(),
+            ])
             .args(["--send-timeout-us", "10000000"])
             .args(["--recv-timeout-us", "10000000"])
             .arg("--wait-for-outgoing-messages");
-        Ok(command)
-    }
-
-    async fn run_with_storage(&mut self) -> Result<Command> {
-        let storage = self.storage.to_string();
-        if !self.initialized && self.database != Database::Memory {
-            let mut command = self.run().await?;
-            let output = command
-                .args(["--storage", &storage])
-                .arg("initialize")
-                .spawn()?
-                .wait_with_output()
-                .await?;
-            assert!(output.status.success());
-        }
-        self.initialized = true;
-
-        let mut command = self.run().await?;
-        command.args(["--storage", &storage]).args([
-            "--max-pending-messages",
-            &self.max_pending_messages.to_string(),
-        ]);
         Ok(command)
     }
 
@@ -258,7 +237,7 @@ impl ClientWrapper {
     ) -> Result<String> {
         let json_parameters = serde_json::to_string(parameters)?;
         let json_argument = serde_json::to_string(argument)?;
-        let mut command = self.run_with_storage().await?;
+        let mut command = self.run().await?;
         command
             .arg("publish-and-create")
             .args([contract, service])
@@ -280,7 +259,7 @@ impl ClientWrapper {
         publisher: impl Into<Option<ChainId>>,
     ) -> Result<String> {
         let stdout = Self::run_command(
-            self.run_with_storage()
+            self.run()
                 .await?
                 .arg("publish-bytecode")
                 .args([contract, service])
@@ -298,7 +277,7 @@ impl ClientWrapper {
     ) -> Result<String> {
         let json_argument = serde_json::to_string(argument)?;
         let stdout = Self::run_command(
-            self.run_with_storage()
+            self.run()
                 .await?
                 .arg("create-application")
                 .arg(bytecode_id)
@@ -311,7 +290,7 @@ impl ClientWrapper {
 
     pub async fn run_node_service(&mut self, port: impl Into<Option<u16>>) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
-        let mut command = self.run_with_storage().await?;
+        let mut command = self.run().await?;
         command.arg("service");
         if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {
             command.args(var.split_whitespace());
@@ -337,7 +316,7 @@ impl ClientWrapper {
     }
 
     pub async fn query_validators(&mut self, chain_id: Option<ChainId>) -> Result<()> {
-        let mut command = self.run_with_storage().await?;
+        let mut command = self.run().await?;
         command.arg("query-validators");
         if let Some(chain_id) = chain_id {
             command.arg(&chain_id.to_string());
@@ -348,7 +327,7 @@ impl ClientWrapper {
 
     pub async fn query_balance(&mut self, chain_id: ChainId) -> Result<String> {
         let stdout = Self::run_command(
-            self.run_with_storage()
+            self.run()
                 .await?
                 .arg("query-balance")
                 .arg(&chain_id.to_string()),
@@ -360,7 +339,7 @@ impl ClientWrapper {
 
     pub async fn transfer(&mut self, amount: &str, from: ChainId, to: ChainId) -> Result<()> {
         Self::run_command(
-            self.run_with_storage()
+            self.run()
                 .await?
                 .arg("transfer")
                 .arg(amount)
@@ -391,7 +370,7 @@ impl ClientWrapper {
         from: ChainId,
         to_public_key: Option<PublicKey>,
     ) -> Result<(MessageId, ChainId)> {
-        let mut command = self.run_with_storage().await?;
+        let mut command = self.run().await?;
         command
             .arg("open-chain")
             .args(["--from", &from.to_string()]);
@@ -424,7 +403,7 @@ impl ClientWrapper {
         from: ChainId,
         to_public_keys: Vec<PublicKey>,
     ) -> Result<(MessageId, ChainId)> {
-        let mut command = self.run_with_storage().await?;
+        let mut command = self.run().await?;
         command
             .arg("open-multi-owner-chain")
             .args(["--from", &from.to_string()])
@@ -457,7 +436,7 @@ impl ClientWrapper {
     pub async fn set_validator(&mut self, name: &str, port: usize, votes: usize) -> Result<()> {
         let address = format!("{}:127.0.0.1:{}", self.network.external_short(), port);
         Self::run_command(
-            self.run_with_storage()
+            self.run()
                 .await?
                 .arg("set-validator")
                 .args(["--name", name])
@@ -470,7 +449,7 @@ impl ClientWrapper {
 
     pub async fn remove_validator(&mut self, name: &str) -> Result<()> {
         Self::run_command(
-            self.run_with_storage()
+            self.run()
                 .await?
                 .arg("remove-validator")
                 .args(["--name", name]),
@@ -486,7 +465,7 @@ impl ClientWrapper {
 
     pub async fn assign(&mut self, key: PublicKey, message_id: MessageId) -> Result<ChainId> {
         let stdout = Self::run_command(
-            self.run_with_storage()
+            self.run()
                 .await?
                 .arg("assign")
                 .args(["--key", &key.to_string()])
@@ -501,7 +480,7 @@ impl ClientWrapper {
 
     pub async fn synchronize_balance(&mut self, chain_id: ChainId) -> Result<()> {
         Self::run_command(
-            self.run_with_storage()
+            self.run()
                 .await?
                 .arg("sync-balance")
                 .arg(&chain_id.to_string()),

@@ -92,10 +92,13 @@ trap 'kill $(jobs -p)' EXIT
 # * `committee.json` is the public description of the Linera committee.
 ./linera-server generate --validators ../../configuration/local/validator_{1,2,3,4}.toml --committee committee.json
 
+# Command line prefix for client calls
+CLIENT=(./linera --storage rocksdb:linera.db --wallet wallet.json --max-pending-messages 10000)
+
 # Create configuration files for 10 user chains.
 # * Private chain states are stored in one local wallet `wallet.json`.
 # * `genesis.json` will contain the initial balances of chains as well as the initial committee.
-./linera --wallet wallet.json create-genesis-config 10 --genesis genesis.json --initial-funding 10 --committee committee.json
+${CLIENT[@]} create-genesis-config 10 --genesis genesis.json --initial-funding 10 --committee committee.json
 
 # Start servers and create initial chains in DB
 for I in 1 2 3 4
@@ -127,10 +130,6 @@ do
         done
     fi
 done
-
-# Command line prefix for client calls
-./linera --storage rocksdb:linera.db --wallet wallet.json initialize
-CLIENT=(./linera --storage rocksdb:linera.db --wallet wallet.json --max-pending-messages 10000)
 
 ${CLIENT[@]} query-validators
 

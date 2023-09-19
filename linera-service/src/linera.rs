@@ -643,6 +643,47 @@ impl ClientOptions {
         }
         Ok(client_options)
     }
+
+    async fn run_command_with_storage(self) -> Result<(), Error> {
+        let context = ClientContext::from_options(&self)?;
+        let genesis_config = context.wallet_state.genesis_config().clone();
+        let wasm_runtime = self.wasm_runtime.with_wasm_default();
+        let max_concurrent_queries = self.max_concurrent_queries;
+        let max_stream_queries = self.max_stream_queries;
+        let cache_size = self.cache_size;
+        let storage_config = ClientContext::storage_config(&self)?;
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries,
+            max_stream_queries,
+            cache_size,
+        };
+        let full_storage_config = storage_config.add_common_config(common_config).await?;
+        run_with_storage(
+            full_storage_config,
+            &genesis_config,
+            wasm_runtime,
+            Job(context, self.command),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn initialize_storage(&self) -> Result<(), Error> {
+        let context = ClientContext::from_options(self)?;
+        let genesis_config = context.wallet_state.genesis_config().clone();
+        let max_concurrent_queries = self.max_concurrent_queries;
+        let max_stream_queries = self.max_stream_queries;
+        let cache_size = self.cache_size;
+        let storage_config = ClientContext::storage_config(self)?;
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries,
+            max_stream_queries,
+            cache_size,
+        };
+        let full_storage_config = storage_config.add_common_config(common_config).await?;
+        full_initialize_storage(full_storage_config, &genesis_config).await?;
+        Ok(())
+    }
 }
 
 #[derive(StructOpt)]
@@ -941,9 +982,6 @@ enum ClientCommand {
 
     /// Manage a local Linera Network.
     Net(NetCommand),
-
-    /// Initialize the database
-    Initialize,
 }
 
 #[derive(StructOpt)]
@@ -976,10 +1014,12 @@ enum WalletCommand {
 enum ProjectCommand {
     /// Create a new Linera project.
     New { path: PathBuf },
+
     /// Test a Linera project.
     ///
     /// Equivalent to running `cargo test` with the appropriate test runner.
     Test { path: Option<PathBuf> },
+
     /// Build and publish a Linera project.
     PublishAndCreate {
         /// The path of the root of the Linera project.
@@ -1599,7 +1639,7 @@ impl Runnable for Job {
                 _ => unreachable!("other project commands do not require storage"),
             },
 
-            CreateGenesisConfig { .. } | Initialize | Keygen | Net(_) | Wallet(_) => unreachable!(),
+            CreateGenesisConfig { .. } | Keygen | Net(_) | Wallet(_) => unreachable!(),
         }
         Ok(())
     }
@@ -1664,6 +1704,7 @@ async fn main() -> Result<(), anyhow::Error> {
             let mut context = ClientContext::create(&options, genesis_config.clone(), chains)?;
             genesis_config.write(genesis_config_path)?;
             context.save_wallet();
+            options.initialize_storage().await?;
             Ok(())
         }
 
@@ -1677,7 +1718,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 let project = Project::from_existing_project(path)?;
                 Ok(project.test()?)
             }
-            ProjectCommand::PublishAndCreate { .. } => run_command_with_storage(options).await,
+            ProjectCommand::PublishAndCreate { .. } => options.run_command_with_storage().await,
         },
 
         ClientCommand::Keygen => {
@@ -1763,53 +1804,11 @@ async fn main() -> Result<(), anyhow::Error> {
                     .collect();
                 let mut context = ClientContext::create(&options, genesis_config, chains)?;
                 context.save_wallet();
+                options.initialize_storage().await?;
                 Ok(())
             }
         },
 
-        ClientCommand::Initialize => initialize_storage(options).await,
-
-        _ => run_command_with_storage(options).await,
+        _ => options.run_command_with_storage().await,
     }
-}
-
-async fn run_command_with_storage(options: ClientOptions) -> Result<(), Error> {
-    let context = ClientContext::from_options(&options)?;
-    let genesis_config = context.wallet_state.genesis_config().clone();
-    let wasm_runtime = options.wasm_runtime.with_wasm_default();
-    let max_concurrent_queries = options.max_concurrent_queries;
-    let max_stream_queries = options.max_stream_queries;
-    let cache_size = options.cache_size;
-    let storage_config = ClientContext::storage_config(&options)?;
-    let common_config = CommonStoreConfig {
-        max_concurrent_queries,
-        max_stream_queries,
-        cache_size,
-    };
-    let full_storage_config = storage_config.add_common_config(common_config).await?;
-    run_with_storage(
-        full_storage_config,
-        &genesis_config,
-        wasm_runtime,
-        Job(context, options.command),
-    )
-    .await?;
-    Ok(())
-}
-
-async fn initialize_storage(options: ClientOptions) -> Result<(), Error> {
-    let context = ClientContext::from_options(&options)?;
-    let genesis_config = context.wallet_state.genesis_config().clone();
-    let max_concurrent_queries = options.max_concurrent_queries;
-    let max_stream_queries = options.max_stream_queries;
-    let cache_size = options.cache_size;
-    let storage_config = ClientContext::storage_config(&options)?;
-    let common_config = CommonStoreConfig {
-        max_concurrent_queries,
-        max_stream_queries,
-        cache_size,
-    };
-    let full_storage_config = storage_config.add_common_config(common_config).await?;
-    full_initialize_storage(full_storage_config, &genesis_config).await?;
-    Ok(())
 }
