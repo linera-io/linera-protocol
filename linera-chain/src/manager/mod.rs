@@ -235,6 +235,8 @@ impl ChainManagerInfo {
         }
     }
 
+    /// Returns the round which is currently ongoing, i.e. the lowest round where this validator
+    /// could still vote to confirm a block.
     pub fn current_round(&self) -> RoundNumber {
         match self {
             ChainManagerInfo::Multi(multi) => multi.current_round,
@@ -242,9 +244,10 @@ impl ChainManagerInfo {
         }
     }
 
+    /// Returns the lowest round in which a block could currently be proposed, if any.
     pub fn next_round(&self) -> Option<RoundNumber> {
         match self {
-            ChainManagerInfo::Multi(multi) => multi.next_round,
+            ChainManagerInfo::Multi(multi) => multi.next_round(),
             ChainManagerInfo::Single(_) => Some(RoundNumber::default()),
             ChainManagerInfo::None => None,
         }

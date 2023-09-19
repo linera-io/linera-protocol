@@ -405,8 +405,6 @@ pub struct MultiOwnerManagerInfo {
     pub requested_pending_value: Option<HashedValue>,
     /// The current round, i.e. the lowest round where we can still vote to validate a block.
     pub current_round: RoundNumber,
-    /// The lowest round in which a new block can be proposed at the moment.
-    pub next_round: Option<RoundNumber>,
     /// The current leader, who is allowed to propose the next block.
     /// `None` if everyone is allowed to propose.
     pub leader: Option<Owner>,
@@ -417,16 +415,6 @@ pub struct MultiOwnerManagerInfo {
 impl From<&MultiOwnerManager> for MultiOwnerManagerInfo {
     fn from(manager: &MultiOwnerManager) -> Self {
         let current_round = manager.current_round();
-        let next_round = match &manager.proposed {
-            Some(proposal) if proposal.content.round == current_round => {
-                if current_round >= manager.multi_leader_rounds {
-                    None // There's already a proposal in the current round.
-                } else {
-                    current_round.try_add_one().ok()
-                }
-            }
-            _ => Some(current_round),
-        };
         MultiOwnerManagerInfo {
             public_keys: manager.public_keys.clone().into_iter().collect(),
             multi_leader_rounds: manager.multi_leader_rounds,
@@ -437,7 +425,6 @@ impl From<&MultiOwnerManager> for MultiOwnerManagerInfo {
             timeout_vote: manager.timeout_vote.as_ref().map(Vote::lite),
             requested_pending_value: None,
             current_round,
-            next_round,
             leader: manager.round_leader(current_round).cloned(),
             round_timeout: manager.round_timeout,
         }
@@ -460,5 +447,18 @@ impl MultiOwnerManagerInfo {
                     .and_then(|proposal| proposal.validated.as_ref()),
             )
             .max_by_key(|cert| cert.round)
+    }
+
+    pub fn next_round(&self) -> Option<RoundNumber> {
+        match &self.requested_proposed {
+            Some(proposal) if proposal.content.round == self.current_round => {
+                if self.current_round >= self.multi_leader_rounds {
+                    None // There's already a proposal in the current round.
+                } else {
+                    self.current_round.try_add_one().ok()
+                }
+            }
+            _ => Some(self.current_round),
+        }
     }
 }

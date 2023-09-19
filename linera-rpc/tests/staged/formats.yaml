@@ -243,7 +243,7 @@ ChainOwnership:
                 VALUE:
                   TUPLE:
                     - TYPENAME: PublicKey
-                    - U128
+                    - U64
           - multi_leader_rounds:
               TYPENAME: RoundNumber
 ChannelFullName:
@@ -431,7 +431,7 @@ MultiOwnerManagerInfo:
           VALUE:
             TUPLE:
               - TYPENAME: PublicKey
-              - U128
+              - U64
     - multi_leader_rounds:
         TYPENAME: RoundNumber
     - requested_proposed:
@@ -454,9 +454,6 @@ MultiOwnerManagerInfo:
           TYPENAME: CertificateValue
     - current_round:
         TYPENAME: RoundNumber
-    - next_round:
-        OPTION:
-          TYPENAME: RoundNumber
     - leader:
         OPTION:
           TYPENAME: Owner
@@ -812,7 +809,7 @@ SystemOperation:
               SEQ:
                 TUPLE:
                   - TYPENAME: PublicKey
-                  - U128
+                  - U64
           - multi_leader_rounds:
               TYPENAME: RoundNumber
     6:
