@@ -30,6 +30,7 @@ chrono = { workspace = true }
 colored = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
+lazy_static = { workspace = true }
 linera-base = { workspace = true }
 linera-chain = { workspace = true }
 linera-core = { workspace = true }
@@ -42,6 +43,7 @@ once_cell = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 tracing = { workspace = true }
 parse_duration = { workspace = true }
+prometheus = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 structopt = { workspace = true }

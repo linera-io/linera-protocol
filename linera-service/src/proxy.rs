@@ -19,6 +19,13 @@ use linera_service::{
 use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
 use tracing::{error, info, instrument};
+use prometheus::{register_int_counter, IntCounter};
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref TEST_NDR_COUNTER: IntCounter =
+        register_int_counter!("Test_ndr_counter", "Test counter").unwrap();
+}
 
 /// Options for running the proxy.
 #[derive(Debug, StructOpt)]
@@ -178,6 +185,8 @@ async fn main() -> Result<()> {
         .with_writer(std::io::stderr)
         .with_env_filter(env_filter)
         .init();
+
+    TEST_NDR_COUNTER.inc();
 
     let proxy = Proxy::from_options(ProxyOptions::from_args()).await?;
     proxy.run().await
