@@ -73,3 +73,16 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: shards
+  labels:
+    team: infra
+spec:
+  selector:
+    matchLabels:
+      app: shards
+  endpoints:
+  - port: http
