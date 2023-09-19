@@ -57,11 +57,10 @@ kubectl get pods;
 echo -e "\nServices:";
 kubectl get svc;
 sleep 2;
+docker rm linera-test-local;
 if [ "$cloud_mode" = true ]; then
-    docker rm linera-test-local;
     docker run -d --name linera-test-local us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-test-local:latest && docker cp linera-test-local:/opt/linera/wallet.json /tmp/
 else
-    docker rm linera-test-local;
     docker run -d --name linera-test-local linera-test:latest && docker cp linera-test-local:/opt/linera/wallet.json /tmp/
 fi
 

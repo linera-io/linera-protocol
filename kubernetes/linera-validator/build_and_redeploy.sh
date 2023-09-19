@@ -50,6 +50,11 @@ handle_options() {
 # Main script execution
 handle_options "$@"
 
+# If there's already a kind cluster running, this will fail, and that's fine. We just want to make sure there's a kind
+# cluster running
+kind create cluster
+
+opt_list=""
 # Perform the desired actions based on the provided flags and arguments
 if [ "$cloud_mode" = true ]; then
     if [ "$do_build" = true ]; then
@@ -64,33 +69,25 @@ if [ "$cloud_mode" = true ]; then
         cd "$current_dir"
     fi
 
-    # If there's already a kind cluster running, this will fail, and that's fine. We just want to make sure there's a kind
-    # cluster running
-    kind create cluster
-
     docker_image="us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-test-local:latest"
+    opt_list+=" --cloud"
+    
     docker pull $docker_image || exit 1
-    kind load docker-image $docker_image || exit 1
-    if [ "$port_forward" = true ]; then
-        ./redeploy.sh --cloud --port-forward
-    else
-        ./redeploy.sh --cloud
-    fi
 else
     docker_image="linera-test:latest"
     if [ "$do_build" = true ]; then
         if [ "$(uname -m)" = "x86_64" ]; then
-            docker build -f ../../Dockerfile ../../ -t $docker_image || exit 1
+            docker build -f ../../Dockerfile.local ../../ -t $docker_image || exit 1
         else
-            docker build -f ../../Dockerfile.aarch64 ../../ -t $docker_image || exit 1
+            docker build -f ../../Dockerfile.local-aarch64 ../../ -t $docker_image || exit 1
         fi
     fi
-
-    kind create cluster
-    kind load docker-image $docker_image || exit 1
-    if [ "$port_forward" = true ]; then
-        ./redeploy.sh --port-forward
-    else
-        ./redeploy.sh
-    fi
 fi
+
+kind load docker-image $docker_image || exit 1
+
+if [ "$port_forward" = true ]; then
+    opt_list+=" --port-forward"
+fi
+
+./redeploy.sh $opt_list
