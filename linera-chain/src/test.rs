@@ -67,12 +67,13 @@ pub trait BlockTestExt: Sized {
     /// Returns the block with the specified epoch.
     fn with_epoch(self, epoch: impl Into<Epoch>) -> Self;
 
+    /// Returns a block proposal in round 0 without any blobs or validated block.
+    fn into_simple_proposal(self, key_pair: &KeyPair) -> BlockProposal {
+        self.into_proposal_with_round(key_pair, RoundNumber::ZERO)
+    }
+
     /// Returns a block proposal without any blobs or validated block.
-    fn into_simple_proposal(
-        self,
-        key_pair: &KeyPair,
-        round: impl Into<RoundNumber>,
-    ) -> BlockProposal;
+    fn into_proposal_with_round(self, key_pair: &KeyPair, round: RoundNumber) -> BlockProposal;
 }
 
 impl BlockTestExt for Block {
@@ -105,15 +106,8 @@ impl BlockTestExt for Block {
         self
     }
 
-    fn into_simple_proposal(
-        self,
-        key_pair: &KeyPair,
-        round: impl Into<RoundNumber>,
-    ) -> BlockProposal {
-        let content = BlockAndRound {
-            block: self,
-            round: round.into(),
-        };
+    fn into_proposal_with_round(self, key_pair: &KeyPair, round: RoundNumber) -> BlockProposal {
+        let content = BlockAndRound { block: self, round };
         BlockProposal::new(content, key_pair, vec![], None)
     }
 }

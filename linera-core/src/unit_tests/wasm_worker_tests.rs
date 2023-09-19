@@ -153,7 +153,7 @@ where
         }],
         state_hash: publisher_state_hash,
     });
-    let publish_certificate = make_certificate(&committee, &worker, publish_block_proposal, 0);
+    let publish_certificate = make_certificate(&committee, &worker, publish_block_proposal);
 
     let info = worker
         .fully_handle_certificate(publish_certificate.clone(), vec![])
@@ -212,7 +212,7 @@ where
         }],
         state_hash: publisher_state_hash,
     });
-    let broadcast_certificate = make_certificate(&committee, &worker, broadcast_block_proposal, 0);
+    let broadcast_certificate = make_certificate(&committee, &worker, broadcast_block_proposal);
 
     let info = worker
         .fully_handle_certificate(broadcast_certificate.clone(), vec![])
@@ -261,7 +261,7 @@ where
         }],
         state_hash: creator_state.crypto_hash().await?,
     });
-    let subscribe_certificate = make_certificate(&committee, &worker, subscribe_block_proposal, 0);
+    let subscribe_certificate = make_certificate(&committee, &worker, subscribe_block_proposal);
 
     let info = worker
         .fully_handle_certificate(subscribe_certificate.clone(), vec![])
@@ -305,7 +305,7 @@ where
         }],
         state_hash: publisher_state_hash,
     });
-    let accept_certificate = make_certificate(&committee, &worker, accept_block_proposal, 0);
+    let accept_certificate = make_certificate(&committee, &worker, accept_block_proposal);
 
     let info = worker
         .fully_handle_certificate(accept_certificate.clone(), vec![])
@@ -389,7 +389,7 @@ where
         }],
         state_hash: creator_state.crypto_hash().await?,
     });
-    let create_certificate = make_certificate(&committee, &worker, create_block_proposal, 0);
+    let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
     let info = worker
         .fully_handle_certificate(create_certificate.clone(), vec![])
@@ -435,7 +435,7 @@ where
         messages: vec![],
         state_hash: creator_state.crypto_hash().await?,
     });
-    let run_certificate = make_certificate(&committee, &worker, run_block_proposal, 0);
+    let run_certificate = make_certificate(&committee, &worker, run_block_proposal);
 
     let info = worker
         .fully_handle_certificate(run_certificate.clone(), vec![])
