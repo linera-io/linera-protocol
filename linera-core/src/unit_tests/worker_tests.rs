@@ -2931,7 +2931,7 @@ where
         let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
         assert!(matches!(
             admin_chain.validate_incoming_messages().await,
-            Err(ChainError::MissingCrossChainUpdate{..})
+            Err(ChainError::MissingCrossChainUpdate { .. })
         ));
     }
 
