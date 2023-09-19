@@ -28,7 +28,7 @@
 //! * Validators only vote for a `ConfirmedBlock` if there is a `ValidatedBlock` certificate for the
 //!   same block in the same round.
 //!
-//! This guarantees that once a quroum votes for some `ConfirmedBlock`, there can never be a
+//! This guarantees that once a quorum votes for some `ConfirmedBlock`, there can never be a
 //! `ValidatedBlock` certificate (and thus also no `ConfirmedBlock` certificate) for a different
 //! block in a later round. So if there are two different `ConfirmedBlock` certificates, they may
 //! be from different rounds, but they are guaranteed to contain the same block.
@@ -223,7 +223,7 @@ impl MultiOwnerManager {
         now: Timestamp,
     ) -> bool {
         let Some(key_pair) = key_pair else {
-            return false; // We are not a chain owner.
+            return false; // We are not a validator.
         };
         if now < self.round_timeout {
             return false; // Round has not timed out yet.
