@@ -311,7 +311,7 @@ where
         worker
             .handle_block_proposal(bad_signature_block_proposal)
             .await,
-        Err(WorkerError::InvalidSigner { .. })
+            Err(WorkerError::CryptoError(error)) if matches!(error, CryptoError::InvalidSignature{..})
     ));
     assert!(worker
         .storage
@@ -476,7 +476,7 @@ where
         // Timestamp older than previous one
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
-            Err(WorkerError::InvalidTimestamp)
+            Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InvalidBlockTimestamp{..})
         ));
     }
 }
@@ -538,7 +538,7 @@ where
         worker
             .handle_block_proposal(unknown_sender_block_proposal)
             .await,
-        Err(WorkerError::InvalidSigner { .. })
+        Err(WorkerError::InvalidOwner)
     ));
     assert!(worker
         .storage
@@ -616,7 +616,7 @@ where
 
     assert!(matches!(
         worker.handle_block_proposal(block_proposal1.clone()).await,
-        Err(WorkerError::InvalidBlockChaining)
+        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight{..})
     ));
     assert!(worker
         .storage
@@ -657,7 +657,7 @@ where
         .is_some());
     assert!(matches!(
         worker.handle_block_proposal(block_proposal0.clone()).await,
-        Err(WorkerError::InvalidBlockChaining)
+        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight{..})
     ));
 }
 
@@ -1297,7 +1297,7 @@ where
     assert!(matches!(worker
         .fully_handle_certificate(certificate, vec![])
         .await,
-        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::CertificateSignatureVerificationFailed{..})));
+        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InactiveChain{..})));
 }
 
 #[test(tokio::test)]
@@ -3080,7 +3080,7 @@ async fn test_cross_chain_helper() {
             None,
             vec![certificate0.clone()]
         ),
-        Err(WorkerError::InvalidSigner { .. })
+        Err(WorkerError::InvalidCrossChainRequest)
     ));
 
     let helper = CrossChainUpdateHelper {
