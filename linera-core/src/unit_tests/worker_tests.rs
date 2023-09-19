@@ -25,13 +25,14 @@ use linera_chain::{
         SignatureAggregator,
     },
     test::{make_child_block, make_first_block, BlockTestExt},
-    ChainError, ChainManager,
+    ChainError, ChainExecutionContext, ChainManager,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{Account, AdminOperation, Recipient, SystemChannel, SystemMessage, SystemOperation},
-    ChainOwnership, ChannelSubscription, ExecutionStateView, GenericApplicationId, Message, Query,
-    Response, SystemExecutionState, SystemQuery, SystemResponse,
+    ChainOwnership, ChannelSubscription, ExecutionError, ExecutionStateView, GenericApplicationId,
+    Message, Query, Response, SystemExecutionError, SystemExecutionState, SystemQuery,
+    SystemResponse,
 };
 use linera_storage::{DbStoreClient, MemoryStoreClient, Store, TestClock};
 use linera_views::{
@@ -306,10 +307,12 @@ where
     let mut bad_signature_block_proposal = block_proposal.clone();
     bad_signature_block_proposal.signature =
         Signature::new(&block_proposal.content, &unknown_key_pair);
-    assert!(worker
-        .handle_block_proposal(bad_signature_block_proposal)
-        .await
-        .is_err());
+    assert!(matches!(
+        worker
+            .handle_block_proposal(bad_signature_block_proposal)
+            .await,
+        Err(WorkerError::InvalidSigner { .. })
+    ));
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
@@ -371,10 +374,12 @@ where
     let zero_amount_block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::ZERO)
         .into_simple_proposal(&sender_key_pair);
-    assert!(worker
-        .handle_block_proposal(zero_amount_block_proposal)
-        .await
-        .is_err());
+    assert!(matches!(
+        worker
+            .handle_block_proposal(zero_amount_block_proposal)
+            .await,
+            Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::IncorrectTransferAmount), ChainExecutionContext::Operation(_)))
+    ));
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
@@ -433,7 +438,10 @@ where
             .with_timestamp(Timestamp::from(TEST_GRACE_PERIOD_MICROS + 1_000_000))
             .into_simple_proposal(&key_pair);
         // Timestamp too far in the future
-        assert!(worker.handle_block_proposal(block_proposal).await.is_err());
+        assert!(matches!(
+            worker.handle_block_proposal(block_proposal).await,
+            Err(WorkerError::InvalidTimestamp)
+        ));
     }
 
     let block_0_time = Timestamp::from(TEST_GRACE_PERIOD_MICROS);
@@ -466,7 +474,10 @@ where
             .with_timestamp(block_0_time.saturating_sub_micros(1))
             .into_simple_proposal(&key_pair);
         // Timestamp older than previous one
-        assert!(worker.handle_block_proposal(block_proposal).await.is_err());
+        assert!(matches!(
+            worker.handle_block_proposal(block_proposal).await,
+            Err(WorkerError::InvalidTimestamp)
+        ));
     }
 }
 
@@ -523,10 +534,12 @@ where
 
     let unknown_sender_block_proposal =
         BlockProposal::new(block_proposal.content, &unknown_key, vec![], None);
-    assert!(worker
-        .handle_block_proposal(unknown_sender_block_proposal)
-        .await
-        .is_err());
+    assert!(matches!(
+        worker
+            .handle_block_proposal(unknown_sender_block_proposal)
+            .await,
+        Err(WorkerError::InvalidSigner { .. })
+    ));
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
@@ -601,10 +614,10 @@ where
         .with_simple_transfer(Recipient::root(2), Amount::from_tokens(2))
         .into_simple_proposal(&sender_key_pair);
 
-    assert!(worker
-        .handle_block_proposal(block_proposal1.clone())
-        .await
-        .is_err());
+    assert!(matches!(
+        worker.handle_block_proposal(block_proposal1.clone()).await,
+        Err(WorkerError::InvalidBlockChaining)
+    ));
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
@@ -642,7 +655,10 @@ where
         .get()
         .pending()
         .is_some());
-    assert!(worker.handle_block_proposal(block_proposal0).await.is_err());
+    assert!(matches!(
+        worker.handle_block_proposal(block_proposal0.clone()).await,
+        Err(WorkerError::InvalidBlockChaining)
+    ));
 }
 
 #[test(tokio::test)]
@@ -739,10 +755,12 @@ where
         }),
     );
     // Missing earlier blocks
-    assert!(worker
-        .handle_certificate(certificate1.clone(), vec![], None)
-        .await
-        .is_err());
+    assert!(matches!(
+        worker
+            .handle_certificate(certificate1.clone(), vec![], None)
+            .await,
+        Err(WorkerError::MissingEarlierBlocks { .. })
+    ));
 
     // Run transfers
     let mut notifications = Vec::new();
@@ -800,7 +818,10 @@ where
             .with_simple_transfer(Recipient::root(3), Amount::from_tokens(6))
             .into_simple_proposal(&recipient_key_pair);
         // Insufficient funding
-        assert!(worker.handle_block_proposal(block_proposal).await.is_err());
+        assert!(matches!(
+                worker.handle_block_proposal(block_proposal).await,
+                Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), ChainExecutionContext::Operation(_)))
+        ));
     }
     {
         let block_proposal = make_first_block(ChainId::root(2))
@@ -1073,7 +1094,10 @@ where
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(Recipient::root(2), Amount::from_tokens(1000))
         .into_simple_proposal(&sender_key_pair);
-    assert!(worker.handle_block_proposal(block_proposal).await.is_err());
+    assert!(matches!(
+        worker.handle_block_proposal(block_proposal).await,
+        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), ChainExecutionContext::Operation(_)))
+    ));
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
@@ -1270,10 +1294,10 @@ where
         None,
     )
     .await;
-    assert!(worker
+    assert!(matches!(worker
         .fully_handle_certificate(certificate, vec![])
-        .await
-        .is_err());
+        .await,
+        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::CertificateSignatureVerificationFailed{..})));
 }
 
 #[test(tokio::test)]
@@ -2905,7 +2929,10 @@ where
     {
         // The admin chain has an anticipated message.
         let mut admin_chain = worker.storage.load_active_chain(admin_id).await.unwrap();
-        assert!(admin_chain.validate_incoming_messages().await.is_err());
+        assert!(matches!(
+            admin_chain.validate_incoming_messages().await,
+            Err(ChainError::MissingCrossChainUpdate{..})
+        ));
     }
 
     // Try again to execute the transfer from the user chain to the admin chain.
@@ -3034,25 +3061,27 @@ async fn test_cross_chain_helper() {
         vec![]
     );
     // Order of certificates is checked.
-    assert!(helper
-        .select_certificates(
+    assert!(matches!(
+        helper.select_certificates(
             &Origin::chain(id0),
             id1,
             BlockHeight::ZERO,
             None,
             vec![certificate1.clone(), certificate0.clone()]
-        )
-        .is_err());
+        ),
+        Err(WorkerError::InvalidCrossChainRequest)
+    ));
     // Sender is checked.
-    assert!(helper
-        .select_certificates(
+    assert!(matches!(
+        helper.select_certificates(
             &Origin::chain(id1),
             id0,
             BlockHeight::ZERO,
             None,
             vec![certificate0.clone()]
-        )
-        .is_err());
+        ),
+        Err(WorkerError::InvalidSigner { .. })
+    ));
 
     let helper = CrossChainUpdateHelper {
         nickname: "test",
