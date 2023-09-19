@@ -3,8 +3,8 @@
 
 use crate::{
     data_types::{
-        Block, ChainAndHeight, ChannelFullName, Event, IncomingMessage, Medium, Origin,
-        OutgoingMessage, Target,
+        Block, ChainAndHeight, ChannelFullName, Event, ExecutedBlock, IncomingMessage, Medium,
+        Origin, OutgoingMessage, Target,
     },
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
@@ -421,10 +421,7 @@ where
     /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown
     ///   away.
     /// * Returns the list of messages caused by the block being executed.
-    pub async fn execute_block(
-        &mut self,
-        block: &Block,
-    ) -> Result<(Vec<OutgoingMessage>, CryptoHash), ChainError> {
+    pub async fn execute_block(&mut self, block: Block) -> Result<ExecutedBlock, ChainError> {
         assert_eq!(block.chain_id, self.chain_id());
         let chain_id = self.chain_id();
         ensure!(
@@ -519,7 +516,12 @@ where
         self.manager
             .get_mut()
             .reset(self.execution_state.system.ownership.get());
-        Ok((messages, state_hash))
+        let executed_block = ExecutedBlock {
+            block,
+            messages,
+            state_hash,
+        };
+        Ok(executed_block)
     }
 
     async fn process_execution_results(

@@ -338,13 +338,8 @@ where
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        let (messages, state_hash) = chain.execute_block(&block).await?;
+        let executed_block = chain.execute_block(block).await?;
         let response = ChainInfoResponse::new(&chain, None);
-        let executed_block = ExecutedBlock {
-            block,
-            messages,
-            state_hash,
-        };
         // Do not save the new state.
         Ok((executed_block, response))
     }
@@ -532,13 +527,13 @@ where
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
         // We should always agree on the messages and state hash.
-        let (verified_messages, verified_state_hash) = chain.execute_block(block).await?;
+        let verified_executed_block = chain.execute_block(block.clone()).await?;
         ensure!(
-            *messages == verified_messages,
+            *messages == verified_executed_block.messages,
             WorkerError::IncorrectMessages
         );
         ensure!(
-            *state_hash == verified_state_hash,
+            *state_hash == verified_executed_block.state_hash,
             WorkerError::IncorrectStateHash
         );
         // Advance to next block height.
@@ -977,17 +972,14 @@ where
         if time_till_block > 0 {
             tokio::time::sleep(Duration::from_micros(time_till_block)).await;
         }
-        let (messages, state_hash) = {
-            let (messages, state_hash) = chain.execute_block(block).await?;
-            // Verify that the resulting chain would have no unconfirmed incoming messages.
-            chain.validate_incoming_messages().await?;
-            // Reset all the staged changes as we were only validating things.
-            chain.rollback();
-            (messages, state_hash)
-        };
+        let executed_block = chain.execute_block(proposal.content.block.clone()).await?;
+        // Verify that the resulting chain would have no unconfirmed incoming messages.
+        chain.validate_incoming_messages().await?;
+        // Reset all the staged changes as we were only validating things.
+        chain.rollback();
         // Create the vote and store it in the chain state.
         let manager = chain.manager.get_mut();
-        manager.create_vote(proposal, messages, state_hash, self.key_pair());
+        manager.create_vote(proposal, executed_block, self.key_pair());
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some(vote) = manager.pending() {
             self.cache_recent_value(Cow::Borrowed(&vote.value)).await;

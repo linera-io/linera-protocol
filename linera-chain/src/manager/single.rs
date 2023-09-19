@@ -3,14 +3,11 @@
 
 use super::Outcome;
 use crate::{
-    data_types::{
-        BlockAndRound, BlockProposal, CertificateValue, ExecutedBlock, HashedValue, LiteVote,
-        OutgoingMessage, Vote,
-    },
+    data_types::{BlockProposal, CertificateValue, ExecutedBlock, HashedValue, LiteVote, Vote},
     ChainError,
 };
 use linera_base::{
-    crypto::{CryptoHash, KeyPair, PublicKey},
+    crypto::{KeyPair, PublicKey},
     data_types::RoundNumber,
     ensure,
     identifiers::Owner,
@@ -76,24 +73,17 @@ impl SingleOwnerManager {
     pub fn create_vote(
         &mut self,
         proposal: BlockProposal,
-        messages: Vec<OutgoingMessage>,
-        state_hash: CryptoHash,
+        executed_block: ExecutedBlock,
         key_pair: Option<&KeyPair>,
     ) {
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
-            let BlockAndRound { block, round } = proposal.content;
-            if round != RoundNumber(0) {
+            if proposal.content.round != RoundNumber::ZERO {
                 info!("Single-owner chains always have round number 0.");
                 return;
             }
-            let executed_block = ExecutedBlock {
-                block,
-                messages,
-                state_hash,
-            };
             let value = HashedValue::from(CertificateValue::ConfirmedBlock { executed_block });
-            let vote = Vote::new(value, round, key_pair);
+            let vote = Vote::new(value, RoundNumber::ZERO, key_pair);
             self.pending = Some(vote);
         }
     }

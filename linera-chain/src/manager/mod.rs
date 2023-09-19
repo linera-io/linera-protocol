@@ -8,11 +8,11 @@ pub use multi::{MultiOwnerManager, MultiOwnerManagerInfo};
 pub use single::{SingleOwnerManager, SingleOwnerManagerInfo};
 
 use crate::{
-    data_types::{BlockProposal, Certificate, LiteVote, OutgoingMessage, Vote},
+    data_types::{BlockProposal, Certificate, ExecutedBlock, LiteVote, Vote},
     ChainError,
 };
 use linera_base::{
-    crypto::{CryptoHash, KeyPair, PublicKey},
+    crypto::{KeyPair, PublicKey},
     data_types::{BlockHeight, RoundNumber},
     doc_scalar, ensure,
     identifiers::ChainId,
@@ -136,17 +136,14 @@ impl ChainManager {
     pub fn create_vote(
         &mut self,
         proposal: BlockProposal,
-        messages: Vec<OutgoingMessage>,
-        state_hash: CryptoHash,
+        executed_block: ExecutedBlock,
         key_pair: Option<&KeyPair>,
     ) {
         match self {
             ChainManager::Single(manager) => {
-                manager.create_vote(proposal, messages, state_hash, key_pair)
+                manager.create_vote(proposal, executed_block, key_pair)
             }
-            ChainManager::Multi(manager) => {
-                manager.create_vote(proposal, messages, state_hash, key_pair)
-            }
+            ChainManager::Multi(manager) => manager.create_vote(proposal, executed_block, key_pair),
             ChainManager::None => panic!("unexpected chain manager"),
         }
     }
