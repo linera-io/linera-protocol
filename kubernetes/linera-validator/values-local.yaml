@@ -3,3 +3,17 @@
 lineraImage: linera-test:latest
 lineraImagePullPolicy: Never
 logLevel: "debug"
+prometheus:
+  additionalServiceMonitors:
+    - name: validator-monitor
+      selector:
+        matchLabels:
+          app: validator-1
+      endpoints:
+        - port: linera-port
+    - name: shards-monitor
+      selector:
+        matchLabels:
+          app: shards
+      endpoints:
+        - port: http
