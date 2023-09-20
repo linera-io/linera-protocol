@@ -68,8 +68,6 @@ pub struct CommonStoreConfig {
     pub max_stream_queries: usize,
     /// The cache size being used.
     pub cache_size: usize,
-    /// Creates the database if missing
-    pub create_if_missing: bool,
 }
 
 /// The minimum value for the view tags. Values in 0..MIN_VIEW_TAG are used for other purposes.

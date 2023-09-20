@@ -1,20 +1,20 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
+
 mod common;
 
 use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
-use linera_base::{data_types::Amount, identifiers::ChainId};
+use linera_base::{
+    data_types::{Amount, Timestamp},
+    identifiers::{ApplicationId, ChainId},
+};
 use linera_service::client::{ClientWrapper, Database, LocalNetwork, Network};
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
-use {
-    linera_base::{data_types::Timestamp, identifiers::ApplicationId},
-    std::time::Duration,
-    tracing::{info, warn},
-};
+use std::{collections::BTreeMap, time::Duration};
+use tracing::{info, warn};
 
 struct Application {
     uri: String,
@@ -122,7 +122,6 @@ impl FungibleApp {
         self.0.query(&query).await
     }
 
-    #[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
     async fn claim(&self, source: fungible::Account, target: fungible::Account, amount: Amount) {
         // Claiming tokens from chain1 to chain2.
         let query = format!(
@@ -136,17 +135,14 @@ impl FungibleApp {
     }
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 struct SocialApp(Application);
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 impl From<String> for SocialApp {
     fn from(uri: String) -> Self {
         SocialApp(Application { uri })
     }
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 impl SocialApp {
     async fn subscribe(&self, chain_id: ChainId) -> Value {
         let query = format!("mutation {{ requestSubscribe(field0: \"{chain_id}\") }}");
@@ -164,17 +160,14 @@ impl SocialApp {
     }
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 struct CrowdFundingApp(Application);
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 impl From<String> for CrowdFundingApp {
     fn from(uri: String) -> Self {
         CrowdFundingApp(Application { uri })
     }
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 impl CrowdFundingApp {
     async fn pledge_with_transfer(
         &self,
@@ -194,17 +187,14 @@ impl CrowdFundingApp {
     }
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 struct MatchingEngineApp(Application);
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 impl From<String> for MatchingEngineApp {
     fn from(uri: String) -> Self {
         MatchingEngineApp(Application { uri })
     }
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 impl MatchingEngineApp {
     async fn get_account_info(
         &self,
@@ -224,17 +214,14 @@ impl MatchingEngineApp {
     }
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 struct AmmApp(Application);
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 impl From<String> for AmmApp {
     fn from(uri: String) -> Self {
         AmmApp(Application { uri })
     }
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 impl AmmApp {
     async fn add_liquidity(
         &self,
@@ -294,11 +281,6 @@ impl AmmApp {
     }
 }
 
-#[test_log::test(tokio::test)]
-async fn test_memory_end_to_end_counter() {
-    run_end_to_end_counter(Database::Memory).await
-}
-
 #[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_end_to_end_counter() {
@@ -326,7 +308,7 @@ async fn run_end_to_end_counter(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client = local_net.make_client(network);
+    let mut client = local_net.make_client(network);
 
     let original_counter_value = 35;
     let increment = 5;
@@ -366,11 +348,6 @@ async fn run_end_to_end_counter(database: Database) {
     node_service.assert_is_running();
 }
 
-#[test_log::test(tokio::test)]
-async fn test_memory_end_to_end_counter_publish_create() {
-    run_end_to_end_counter_publish_create(Database::Memory).await
-}
-
 #[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_end_to_end_counter_publish_create() {
@@ -398,7 +375,7 @@ async fn run_end_to_end_counter_publish_create(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client = local_net.make_client(network);
+    let mut client = local_net.make_client(network);
 
     let original_counter_value = 35;
     let increment = 5;
@@ -455,15 +432,14 @@ async fn test_scylla_db_end_to_end_social_user_pub_sub() {
     run_end_to_end_social_user_pub_sub(Database::ScyllaDb).await
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 async fn run_end_to_end_social_user_pub_sub(database: Database) {
     use social::SocialAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client1 = local_net.make_client(network);
-    let client2 = local_net.make_client(network);
+    let mut client1 = local_net.make_client(network);
+    let mut client2 = local_net.make_client(network);
 
     // Create initial server and client config.
     local_net.generate_initial_validator_config().await.unwrap();
@@ -475,7 +451,7 @@ async fn run_end_to_end_social_user_pub_sub(database: Database) {
     let (contract, service) = local_net.build_example("social").await.unwrap();
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
-    let chain2 = client1.open_and_assign(&client2).await.unwrap();
+    let chain2 = client1.open_and_assign(&mut client2).await.unwrap();
     let bytecode_id = client1
         .publish_bytecode(contract, service, None)
         .await
@@ -554,7 +530,6 @@ async fn test_scylla_db_end_to_end_fungible() {
     run_end_to_end_fungible(Database::ScyllaDb).await
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 async fn run_end_to_end_fungible(database: Database) {
     use fungible::{FungibleTokenAbi, InitialState};
 
@@ -562,8 +537,8 @@ async fn run_end_to_end_fungible(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client1 = local_net.make_client(network);
-    let client2 = local_net.make_client(network);
+    let mut client1 = local_net.make_client(network);
+    let mut client2 = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
     client1.create_genesis_config().await.unwrap();
@@ -574,7 +549,7 @@ async fn run_end_to_end_fungible(database: Database) {
     let (contract, service) = local_net.build_example("fungible").await.unwrap();
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
-    let chain2 = client1.open_and_assign(&client2).await.unwrap();
+    let chain2 = client1.open_and_assign(&mut client2).await.unwrap();
 
     // The players
     let account_owner1 = get_fungible_account_owner(&client1);
@@ -668,11 +643,6 @@ async fn run_end_to_end_fungible(database: Database) {
     node_service2.assert_is_running();
 }
 
-#[test_log::test(tokio::test)]
-async fn test_memory_end_to_end_same_wallet_fungible() {
-    run_end_to_end_same_wallet_fungible(Database::Memory).await
-}
-
 #[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_end_to_end_same_wallet_fungible() {
@@ -700,7 +670,7 @@ async fn run_end_to_end_same_wallet_fungible(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client1 = local_net.make_client(network);
+    let mut client1 = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
     client1.create_genesis_config().await.unwrap();
@@ -791,7 +761,6 @@ async fn test_scylla_db_end_to_end_crowd_funding() {
     run_end_to_end_crowd_funding(Database::ScyllaDb).await
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 async fn run_end_to_end_crowd_funding(database: Database) {
     use crowd_funding::{CrowdFundingAbi, InitializationArgument};
     use fungible::{FungibleTokenAbi, InitialState};
@@ -800,8 +769,8 @@ async fn run_end_to_end_crowd_funding(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client1 = local_net.make_client(network);
-    let client2 = local_net.make_client(network);
+    let mut client1 = local_net.make_client(network);
+    let mut client2 = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
     client1.create_genesis_config().await.unwrap();
@@ -812,7 +781,7 @@ async fn run_end_to_end_crowd_funding(database: Database) {
     let (contract_fungible, service_fungible) = local_net.build_example("fungible").await.unwrap();
 
     let chain1 = client1.get_wallet().default_chain().unwrap();
-    let chain2 = client1.open_and_assign(&client2).await.unwrap();
+    let chain2 = client1.open_and_assign(&mut client2).await.unwrap();
 
     // The players
     let account_owner1 = get_fungible_account_owner(&client1); // operator
@@ -935,7 +904,6 @@ async fn test_scylla_db_end_to_end_matching_engine() {
     run_end_to_end_matching_engine(Database::ScyllaDb).await
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 async fn run_end_to_end_matching_engine(database: Database) {
     use fungible::{FungibleTokenAbi, InitialState};
     use matching_engine::{OrderNature, Parameters, Price};
@@ -944,9 +912,9 @@ async fn run_end_to_end_matching_engine(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client_admin = local_net.make_client(network);
-    let client_a = local_net.make_client(network);
-    let client_b = local_net.make_client(network);
+    let mut client_admin = local_net.make_client(network);
+    let mut client_a = local_net.make_client(network);
+    let mut client_b = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
     client_admin.create_genesis_config().await.unwrap();
@@ -960,8 +928,8 @@ async fn run_end_to_end_matching_engine(database: Database) {
         local_net.build_example("matching-engine").await.unwrap();
 
     let chain_admin = client_admin.get_wallet().default_chain().unwrap();
-    let chain_a = client_admin.open_and_assign(&client_a).await.unwrap();
-    let chain_b = client_admin.open_and_assign(&client_b).await.unwrap();
+    let chain_a = client_admin.open_and_assign(&mut client_a).await.unwrap();
+    let chain_b = client_admin.open_and_assign(&mut client_b).await.unwrap();
 
     // The players
     let owner_admin = get_fungible_account_owner(&client_admin);
@@ -1201,7 +1169,6 @@ async fn test_scylla_db_end_to_end_amm() {
     run_end_to_end_amm(Database::ScyllaDb).await
 }
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 async fn run_end_to_end_amm(database: Database) {
     use fungible::InitialState;
     use matching_engine::Parameters;
@@ -1210,9 +1177,9 @@ async fn run_end_to_end_amm(database: Database) {
 
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
-    let client_admin = local_net.make_client(network);
-    let client0 = local_net.make_client(network);
-    let client1 = local_net.make_client(network);
+    let mut client_admin = local_net.make_client(network);
+    let mut client0 = local_net.make_client(network);
+    let mut client1 = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
     client_admin.create_genesis_config().await.unwrap();
@@ -1227,8 +1194,8 @@ async fn run_end_to_end_amm(database: Database) {
     let chain_admin = client_admin.get_wallet().default_chain().unwrap();
 
     // User chains
-    let chain0 = client_admin.open_and_assign(&client0).await.unwrap();
-    let chain1 = client_admin.open_and_assign(&client1).await.unwrap();
+    let chain0 = client_admin.open_and_assign(&mut client0).await.unwrap();
+    let chain1 = client_admin.open_and_assign(&mut client1).await.unwrap();
 
     // Admin user
     let owner_admin = get_fungible_account_owner(&client_admin);

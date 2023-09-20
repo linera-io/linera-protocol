@@ -8,12 +8,14 @@ use crate::{
     queue_view::QueueView,
     views::{View, ViewError},
 };
+
 use async_trait::async_trait;
 use std::collections::VecDeque;
 
 #[cfg(feature = "rocksdb")]
 use {
     crate::rocks_db::create_rocks_db_common_config,
+    crate::rocks_db::RocksDbKvStoreConfig,
     crate::rocks_db::{RocksDbClient, RocksDbContext},
     tempfile::TempDir,
 };
@@ -21,6 +23,7 @@ use {
 #[cfg(feature = "aws")]
 use crate::{
     common::get_table_name,
+    dynamo_db::DynamoDbKvStoreConfig,
     dynamo_db::LocalStackTestContext,
     dynamo_db::{create_dynamo_db_common_config, DynamoDbContext},
 };
@@ -220,7 +223,12 @@ impl TestContextFactory for RocksDbContextFactory {
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let directory = TempDir::new()?;
         let common_config = create_rocks_db_common_config();
-        let (client, _) = RocksDbClient::new(directory.path(), common_config)
+        let path_buf = directory.path().to_path_buf();
+        let store_config = RocksDbKvStoreConfig {
+            path_buf,
+            common_config,
+        };
+        let (client, _) = RocksDbClient::new_for_testing(store_config)
             .await
             .expect("client");
         let context = RocksDbContext::new(client, vec![], ());
@@ -255,8 +263,13 @@ impl TestContextFactory for DynamoDbContextFactory {
         self.table_counter += 1;
         let common_config = create_dynamo_db_common_config();
         let dummy_key_prefix = vec![0];
+        let store_config = DynamoDbKvStoreConfig {
+            config,
+            table_name,
+            common_config,
+        };
         let (context, _) =
-            DynamoDbContext::new(config, table_name, common_config, dummy_key_prefix, ()).await?;
+            DynamoDbContext::new_for_testing(store_config, dummy_key_prefix, ()).await?;
 
         Ok(context)
     }
@@ -274,9 +287,9 @@ impl TestContextFactory for ScyllaDbContextFactory {
     type Context = ScyllaDbContext<()>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let db = create_scylla_db_test_client().await;
-        let table_name = db.get_table_name().await;
-        let context = ScyllaDbContext::new(db, vec![], ());
+        let client = create_scylla_db_test_client().await;
+        let table_name = client.get_table_name().await;
+        let context = ScyllaDbContext::new(client, vec![], ());
 
         self.table_names.push(table_name);
 

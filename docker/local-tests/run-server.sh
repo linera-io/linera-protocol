@@ -8,6 +8,9 @@ SHARD_ID="$(hostname | cut -f4 -d-)"
 ./fetch-config-file.sh genesis.json
 ./fetch-config-file.sh "server_${SERVER_ID}.json"
 
+./linera-server initialize \
+    --storage "rocksdb:shard_data.db" \
+    --genesis genesis.json
 ./linera-server run \
     --storage "rocksdb:shard_data.db" \
     --server "server_${SERVER_ID}.json" \

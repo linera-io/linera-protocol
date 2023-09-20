@@ -57,4 +57,3 @@ tokio-test = { workspace = true }
 
 [dev-dependencies]
 linera-views = { path = ".", features = ["test"] }
-
