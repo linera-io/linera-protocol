@@ -129,25 +129,18 @@ impl MultiOwnerManager {
         })
     }
 
-    /// Returns the lowest round where we can still vote to validate a block. This is the round to
-    /// which the current timeout applies.
+    /// Returns the lowest round where we can still vote to validate or confirm a block. This is
+    /// the round to which the current timeout applies.
     ///
-    /// Both having a leader timeout certificate in any given round causes the next one to become
+    /// Having a leader timeout certificate in any given round causes the next one to become
     /// current. Seeing a validated block certificate or a valid proposal in any round causes that
     /// round to become current, unless a higher one already is.
     pub fn current_round(&self) -> RoundNumber {
-        let leader_timeout = self.leader_timeout.as_ref().into_iter();
-        let proposed = self.proposed.as_ref();
-        let validated = proposed.and_then(|proposal| proposal.validated.as_ref());
-        self.locked
+        self.leader_timeout
             .iter()
-            .chain(validated)
-            .map(|certificate| certificate.round)
-            .chain(
-                leader_timeout
-                    .map(|certificate| certificate.round.try_add_one().unwrap_or(RoundNumber::MAX)),
-            )
-            .chain(proposed.map(|proposal| proposal.content.round))
+            .map(|certificate| certificate.round.try_add_one().unwrap_or(RoundNumber::MAX))
+            .chain(self.locked.iter().map(|certificate| certificate.round))
+            .chain(self.proposed.iter().map(|proposal| proposal.content.round))
             .max()
             .unwrap_or_default()
     }
@@ -279,14 +272,21 @@ impl MultiOwnerManager {
         key_pair: Option<&KeyPair>,
         now: Timestamp,
     ) {
-        if let Some(validated) = &proposal.validated {
-            self.update_timeout(validated.round, now);
-        }
         if let Ok(round) = proposal.content.round.try_sub_one() {
             self.update_timeout(round, now);
         }
         // Record the proposed block, so it can be supplied to clients that request it.
         self.proposed = Some(proposal.clone());
+        // If the validated block certificate is more recent, update our locked block.
+        if let Some(validated) = &proposal.validated {
+            if self
+                .locked
+                .as_ref()
+                .map_or(true, |locked| locked.round < validated.round)
+            {
+                self.locked = Some(validated.clone());
+            }
+        }
         if let Some(key_pair) = key_pair {
             // Vote to validate.
             let BlockAndRound { block, round } = proposal.content;
