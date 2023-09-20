@@ -390,8 +390,17 @@ where
         worker
             .handle_block_proposal(zero_amount_block_proposal)
             .await,
-            Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::IncorrectTransferAmount), ChainExecutionContext::Operation(_)))
-    ));
+            Err(
+                WorkerError::ChainError(error)
+            ) if matches!(
+                *error, 
+                ChainError::ExecutionError(
+                    ExecutionError::SystemError(SystemExecutionError::IncorrectTransferAmount), 
+                    ChainExecutionContext::Operation(_)
+                )
+            )
+        )
+    );
     assert!(worker
         .storage
         .load_active_chain(ChainId::root(1))
@@ -1108,7 +1117,15 @@ where
         .into_simple_proposal(&sender_key_pair);
     assert!(matches!(
         worker.handle_block_proposal(block_proposal).await,
-        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), ChainExecutionContext::Operation(_)))
+        Err(
+            WorkerError::ChainError(error)
+        ) if matches!(
+            *error, 
+            ChainError::ExecutionError(
+                ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), 
+                ChainExecutionContext::Operation(_)    
+            )
+        )
     ));
     assert!(worker
         .storage
