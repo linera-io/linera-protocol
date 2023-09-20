@@ -75,21 +75,23 @@ impl RocksDbStoreClient<TestClock> {
             path_buf,
             common_config,
         };
-        let (store_client, _) = RocksDbStoreClient::new_for_testing(store_config, wasm_runtime)
-            .await
-            .expect("store_client");
+        let (store_client, _) =
+            RocksDbStoreClient::new_for_testing(store_config, wasm_runtime, TestClock::new())
+                .await
+                .expect("store_client");
         store_client
     }
 
     pub async fn new_for_testing(
         store_config: RocksDbKvStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
+        clock: TestClock,
     ) -> Result<(Self, TableStatus), RocksDbContextError> {
         let (store, table_status) =
             RocksDbStore::new_for_testing(store_config, wasm_runtime).await?;
         let store_client = RocksDbStoreClient {
             client: Arc::new(store),
-            clock: TestClock::new(),
+            clock,
         };
         Ok((store_client, table_status))
     }
