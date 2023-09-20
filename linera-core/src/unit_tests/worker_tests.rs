@@ -3249,14 +3249,16 @@ where
     assert_eq!(leader, Owner::from(pub_key0));
 
     // Now owner 0 can propose a block, but owner 1 can't.
-    let block = make_child_block(&value0);
-    let proposal = block
+    let block1 = make_child_block(&value0);
+    let proposal = block1
         .clone()
         .into_proposal_with_round(&key_pairs[1], RoundNumber(1));
-    let (executed_block, _) = worker.stage_block_execution(block.clone()).await.unwrap();
+    let (executed_block, _) = worker.stage_block_execution(block1.clone()).await.unwrap();
     let result = worker.handle_block_proposal(proposal).await;
     assert!(matches!(result, Err(WorkerError::InvalidOwner)));
-    let proposal = block.into_proposal_with_round(&key_pairs[0], RoundNumber(1));
+    let proposal = block1
+        .clone()
+        .into_proposal_with_round(&key_pairs[0], RoundNumber(1));
     let (response, _) = worker.handle_block_proposal(proposal).await.unwrap();
     let value = HashedValue::new_validated(executed_block.clone());
     let manager = &response.info.manager;
@@ -3290,8 +3292,8 @@ where
     let round = multi_manager(manager).current_round;
     assert_eq!(round, RoundNumber::from(5));
     let amount = Amount::from_tokens(1);
-    let block = make_child_block(&value0).with_simple_transfer(Recipient::root(1), amount);
-    let proposal = block
+    let block2 = make_child_block(&value0).with_simple_transfer(Recipient::root(1), amount);
+    let proposal = block2
         .clone()
         .into_proposal_with_round(&key_pairs[1], RoundNumber(5));
     let result = worker.handle_block_proposal(proposal.clone()).await;
@@ -3299,10 +3301,10 @@ where
          if matches!(*error, ChainError::HasLockedBlock(_, _))
     ));
 
-    // But if there was a validated certificate for the new block, it is allowed.
-    let (executed_block, _) = worker.stage_block_execution(block.clone()).await.unwrap();
+    // If there was a validated certificate for the new block, it is allowed.
+    let (executed_block, _) = worker.stage_block_execution(block2.clone()).await.unwrap();
     let value = HashedValue::new_validated(executed_block.clone());
-    let mut proposal = block.into_proposal_with_round(&key_pairs[1], RoundNumber(5));
+    let mut proposal = block2.into_proposal_with_round(&key_pairs[1], RoundNumber(5));
     let lite_value = value.lite();
     proposal.validated = Some(make_certificate_with_round(
         &committee,
@@ -3315,4 +3317,26 @@ where
     let vote = multi_manager(manager).pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value);
     assert_eq!(vote.round, RoundNumber::from(5));
+
+    // Let round 5 time out, too.
+    let value_timeout =
+        HashedValue::new_leader_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
+    let certificate_timeout =
+        make_certificate_with_round(&committee, &worker, value_timeout, RoundNumber(5));
+    let (response, _) = worker
+        .handle_certificate(certificate_timeout, vec![], None)
+        .await
+        .unwrap();
+    let manager = &response.info.manager;
+    let leader = multi_manager(manager).leader.unwrap();
+    assert_eq!(leader, Owner::from(pub_key0));
+
+    // Since the validator now voted for block2, it can't vote for block1 anymore.
+    let round = multi_manager(manager).current_round;
+    assert_eq!(round, RoundNumber::from(6));
+    let proposal = block1.into_proposal_with_round(&key_pairs[0], RoundNumber(6));
+    let result = worker.handle_block_proposal(proposal.clone()).await;
+    assert!(matches!(result, Err(WorkerError::ChainError(error))
+         if matches!(*error, ChainError::HasLockedBlock(_, _))
+    ));
 }
