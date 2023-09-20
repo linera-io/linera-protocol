@@ -24,7 +24,7 @@ use linera_chain::{
         HashedValue, IncomingMessage, LiteVote, Medium, Origin, OutgoingMessage,
         SignatureAggregator,
     },
-    test::{make_child_block, make_first_block, BlockTestExt},
+    test::{make_child_block, make_first_block, multi_manager, BlockTestExt, VoteTestExt},
     ChainError, ChainExecutionContext, ChainManager,
 };
 use linera_execution::{
