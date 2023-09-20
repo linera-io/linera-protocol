@@ -841,7 +841,15 @@ where
         // Insufficient funding
         assert!(matches!(
                 worker.handle_block_proposal(block_proposal).await,
-                Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), ChainExecutionContext::Operation(_)))
+                Err(
+                    WorkerError::ChainError(error)
+                ) if matches!(
+                    *error, 
+                    ChainError::ExecutionError(
+                        ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), 
+                        ChainExecutionContext::Operation(_)
+                    )
+                )
         ));
     }
     {
