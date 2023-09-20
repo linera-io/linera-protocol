@@ -2918,6 +2918,7 @@ dependencies = [
  "linera-indexer-plugins",
  "linera-service",
  "linera-service-graphql-client",
+ "linera-views",
  "once_cell",
  "reqwest",
  "serde",

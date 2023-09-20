@@ -1776,8 +1776,9 @@ async fn main() -> Result<(), anyhow::Error> {
                     panic!("The local test network must have at least one shard per validator.");
                 }
                 let network = Network::Grpc;
-                let mut net = LocalNetwork::new(Database::RocksDb, network, *validators, *shards)?;
-                let mut client1 = net.make_client(network);
+                let mut net =
+                    LocalNetwork::new(Database::RocksDb, network, *validators, *shards).await?;
+                let client1 = net.make_client(network);
 
                 // Create the initial server and client config.
                 net.generate_initial_validator_config().await?;
@@ -1813,7 +1814,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
                 // Create the extra wallets.
                 for wallet in 0..*wallets {
-                    let mut extra_wallet = net.make_client(network);
+                    let extra_wallet = net.make_client(network);
                     extra_wallet.wallet_init(&[]).await?;
                     let unassigned_key = extra_wallet.keygen().await?;
                     let new_chain_msg_id = client1

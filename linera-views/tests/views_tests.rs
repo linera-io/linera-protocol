@@ -9,7 +9,7 @@ use linera_views::{
         WriteOperation::{Delete, DeletePrefix, Put},
     },
     collection_view::CollectionView,
-    common::Context,
+    common::{set_table_prefix, Context},
     key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView},
     log_view::LogView,
     lru_caching::LruCachingMemoryContext,
@@ -92,6 +92,7 @@ impl StateStore for MemoryTestStore {
     }
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
+        set_table_prefix("view_tests").await;
         let state = self
             .states
             .entry(id)

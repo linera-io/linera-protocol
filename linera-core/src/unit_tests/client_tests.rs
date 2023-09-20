@@ -33,7 +33,7 @@ use linera_execution::{
     ChainOwnership, ExecutionError, Operation, SystemExecutionError, SystemQuery, SystemResponse,
 };
 use linera_storage::Store;
-use linera_views::views::ViewError;
+use linera_views::{common::set_table_prefix, views::ViewError};
 use std::sync::Arc;
 use test_log::test;
 
@@ -80,6 +80,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
         .with_pricing(Pricing::fuel_and_certificate());
@@ -155,6 +156,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
         .with_pricing(Pricing::only_fuel());
@@ -245,6 +247,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
         .with_pricing(Pricing::fuel_and_certificate());
@@ -315,6 +318,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
         .with_pricing(Pricing::fuel_and_certificate());
@@ -393,6 +397,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 0).await?;
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
@@ -559,6 +564,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
     builder
@@ -620,6 +626,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
     builder
@@ -719,6 +726,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
     builder
@@ -807,6 +815,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
         .with_pricing(Pricing::all_categories());
@@ -884,6 +893,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 2).await?;
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
@@ -944,6 +954,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
@@ -1074,6 +1085,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
         .with_pricing(Pricing::fuel_and_certificate());
@@ -1155,6 +1167,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
@@ -1270,6 +1283,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let mut admin = builder
         .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
@@ -1385,6 +1399,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
         .with_pricing(Pricing::fuel_and_certificate());
@@ -1433,6 +1448,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("client_tests").await;
     let clock = store_builder.clock().clone();
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let description = ChainDescription::Root(1);

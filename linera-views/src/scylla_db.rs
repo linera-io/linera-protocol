@@ -83,7 +83,7 @@ pub enum ScyllaDbContextError {
 
     /// Already existing database
     #[error("Already existing database")]
-    AlreadyExistingDatabase,
+    AlreadyExistingDatabase(String),
 
     /// The database is not coherent
     #[error(transparent)]
@@ -153,6 +153,17 @@ impl KeyValueStoreClient for ScyllaDbClientInternal {
     async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), Self::Error> {
         Ok(())
     }
+}
+
+/// The type for building a new ScyllaDb Key Value Store Client
+#[derive(Debug)]
+pub struct ScyllaDbKvStoreConfig {
+    /// The url to which the requests have to be sent
+    pub uri: String,
+    /// The name of the table that we create
+    pub table_name: String,
+    /// The common configuration of the key value store
+    pub common_config: CommonStoreConfig,
 }
 
 impl ScyllaDbClientInternal {
@@ -457,6 +468,7 @@ impl ScyllaDbClientInternal {
     }
 
     async fn initialize(store_config: ScyllaDbKvStoreConfig) -> Result<Self, ScyllaDbContextError> {
+        let kv_name = format!("{:?}", store_config);
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
@@ -471,7 +483,7 @@ impl ScyllaDbClientInternal {
         )
         .await?;
         if table_status == TableStatus::Existing {
-            return Err(ScyllaDbContextError::AlreadyExistingDatabase);
+            return Err(ScyllaDbContextError::AlreadyExistingDatabase(kv_name));
         }
         Ok(client)
     }
@@ -561,17 +573,6 @@ impl ScyllaDbClientInternal {
 #[derive(Clone)]
 pub struct ScyllaDbClient {
     client: LruCachingKeyValueClient<ScyllaDbClientInternal>,
-}
-
-/// The type for building a new ScyllaDb Key Value Store Client
-#[derive(Debug)]
-pub struct ScyllaDbKvStoreConfig {
-    /// The url to which the requests have to be sent
-    pub uri: String,
-    /// The name of the table that we create
-    pub table_name: String,
-    /// The common configuration of the key value store
-    pub common_config: CommonStoreConfig,
 }
 
 #[async_trait]

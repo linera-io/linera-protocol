@@ -32,7 +32,10 @@ use linera_execution::{
     UserApplicationDescription, UserApplicationId, WasmApplication, WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, Store};
-use linera_views::views::{CryptoHashView, ViewError};
+use linera_views::{
+    common::set_table_prefix,
+    views::{CryptoHashView, ViewError},
+};
 use std::sync::Arc;
 use test_case::test_case;
 
@@ -98,6 +101,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("wasm_worker_tests").await;
     let admin_id = ChainDescription::Root(0);
     let publisher_key_pair = KeyPair::generate();
     let publisher_chain = ChainDescription::Root(1);

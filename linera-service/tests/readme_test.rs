@@ -8,6 +8,7 @@ mod common;
 #[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 use {
     common::INTEGRATION_TEST_GUARD,
+    linera_views::common::set_table_prefix,
     std::{io::Write, process::ExitStatus},
     tempfile::tempdir,
     tokio::process::Command,
@@ -15,6 +16,7 @@ use {
 
 #[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 async fn run_test_command(storage: &str) -> std::io::Result<ExitStatus> {
+    set_table_prefix("readme_test").await;
     let dir = tempdir().unwrap();
     let file = std::io::BufReader::new(std::fs::File::open("../README.md")?);
     let mut quotes = get_bash_quotes(file)?;

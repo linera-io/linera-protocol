@@ -36,7 +36,7 @@ use linera_execution::{
 };
 use linera_storage::{DbStoreClient, MemoryStoreClient, Store, TestClock};
 use linera_views::{
-    common::KeyValueStoreClient,
+    common::{set_table_prefix, KeyValueStoreClient},
     memory::TEST_MEMORY_MAX_STREAM_QUERIES,
     value_splitting::DatabaseConsistencyError,
     views::{CryptoHashView, ViewError},
@@ -299,6 +299,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
         store,
@@ -369,6 +370,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
         store,
@@ -446,6 +448,7 @@ where
     <C as KeyValueStoreClient>::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
+    set_table_prefix("worker_tests").await;
     let key_pair = KeyPair::generate();
     let balance: Amount = Amount::from_tokens(5);
     let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
@@ -534,6 +537,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
         store,
@@ -604,6 +608,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let recipient = Recipient::root(2);
     let (committee, mut worker) = init_worker_with_chains(
@@ -714,6 +719,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
     let recipient = Recipient::root(2);
@@ -1106,6 +1112,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
         store,
@@ -1178,6 +1185,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
         store,
@@ -1246,6 +1254,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
         store,
@@ -1312,6 +1321,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         store,
@@ -1369,6 +1379,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         store,
@@ -1432,6 +1443,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         store,
@@ -1501,6 +1513,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         store,
@@ -1627,6 +1640,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         store,
@@ -1719,6 +1733,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let key_pair = KeyPair::generate();
     let name = key_pair.public();
     let (committee, mut worker) =
@@ -1816,6 +1831,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         store,
@@ -1917,6 +1933,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker(store, /* is_client */ false);
     let certificate = make_transfer_certificate(
@@ -1980,6 +1997,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker(store, /* is_client */ true);
     let certificate = make_transfer_certificate(
@@ -2055,6 +2073,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
@@ -2237,6 +2256,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         store,
@@ -2305,6 +2325,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
         store,
@@ -2733,6 +2754,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
@@ -2878,6 +2900,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    set_table_prefix("worker_tests").await;
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
@@ -3302,6 +3325,7 @@ where
     <C as KeyValueStoreClient>::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
+    set_table_prefix("worker_tests").await;
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
     let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());

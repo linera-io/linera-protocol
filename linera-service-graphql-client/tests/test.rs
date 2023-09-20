@@ -16,6 +16,7 @@ use linera_service_graphql_client::{
     applications, block, blocks, chains, request, transfer, Applications, Block, Blocks, Chains,
     Transfer,
 };
+use linera_views::common::set_table_prefix;
 use std::{collections::BTreeMap, str::FromStr};
 
 /// A static lock to prevent integration tests from running in parallel.
@@ -38,14 +39,12 @@ async fn test_rocks_db_end_to_end_queries() {
     run_end_to_end_queries(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_end_to_end_queries() {
     run_end_to_end_queries(Database::DynamoDb).await
 }
 
-#[ignore]
 #[cfg(feature = "scylladb")]
 #[test_log::test(tokio::test)]
 async fn test_scylla_db_end_to_end_queries() {
@@ -53,9 +52,10 @@ async fn test_scylla_db_end_to_end_queries() {
 }
 
 async fn run_end_to_end_queries(database: Database) {
+    set_table_prefix("graphql_client_tests").await;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
+    let mut local_net = LocalNetwork::new(database, network, 4).await.unwrap();
     let mut client = local_net.make_client(network);
     local_net.generate_initial_validator_config().await.unwrap();
 

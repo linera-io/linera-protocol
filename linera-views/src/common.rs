@@ -11,7 +11,9 @@
 //! [trait2]: common::Context
 
 use crate::{batch::Batch, views::ViewError};
+use async_lock::RwLock;
 use async_trait::async_trait;
+use once_cell::sync::Lazy;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     fmt::{Debug, Display},
@@ -20,11 +22,10 @@ use std::{
         Bound,
         Bound::{Excluded, Included, Unbounded},
     },
+    sync::Arc,
     time::{Duration, Instant},
 };
-
-#[cfg(any(test, feature = "test"))]
-use {async_lock::RwLock, once_cell::sync::Lazy, std::sync::Arc};
+use tracing::warn;
 
 #[cfg(test)]
 #[path = "unit_tests/common_tests.rs"]
@@ -50,13 +51,24 @@ pub enum TableStatus {
     Existing,
 }
 
+static TEST_PREFIX: Lazy<Arc<RwLock<String>>> =
+    Lazy::new(|| Arc::new(RwLock::new("unset".to_string())));
+
+/// Setting up the table prefix for tests.
+pub async fn set_table_prefix(prefix: &str) {
+    let mut static_prefix = TEST_PREFIX.write().await;
+    *static_prefix = prefix.to_string();
+}
+
 /// Returns a unique table name for testing.
-#[cfg(any(test, feature = "test"))]
 pub async fn get_table_name() -> String {
     static TEST_COUNTER: Lazy<Arc<RwLock<u32>>> = Lazy::new(|| Arc::new(RwLock::new(0)));
     let mut counter = TEST_COUNTER.write().await;
+    let prefix = TEST_PREFIX.read().await;
     *counter += 1;
-    format!("test_table_{}", *counter)
+    let table_name = format!("table_{}_{}", *prefix, *counter);
+    warn!("Generating table_name={}", table_name);
+    table_name
 }
 
 /// The common initialization parameters for the `KeyValueStore`

@@ -237,10 +237,11 @@ impl RocksDbClient {
     pub async fn initialize(
         store_config: RocksDbKvStoreConfig,
     ) -> Result<Self, RocksDbContextError> {
+        let kv_name = format!("{:?}", store_config);
         let create_if_missing = true;
         let (client, table_status) = Self::new_internal(store_config, create_if_missing).await?;
         if table_status == TableStatus::Existing {
-            return Err(RocksDbContextError::AlreadyExistingDatabase);
+            return Err(RocksDbContextError::AlreadyExistingDatabase(kv_name));
         }
         Ok(client)
     }
@@ -396,7 +397,7 @@ pub enum RocksDbContextError {
 
     /// Already existing database
     #[error("Already existing database")]
-    AlreadyExistingDatabase,
+    AlreadyExistingDatabase(String),
 
     /// Filesystem error
     #[error("Filesystem error")]

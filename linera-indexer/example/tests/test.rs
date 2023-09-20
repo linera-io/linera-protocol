@@ -10,6 +10,7 @@ use linera_indexer_graphql_client::{
 };
 use linera_service::cli_wrappers::{resolve_binary, Database, LocalNetwork, Network};
 use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
+use linera_views::common::set_table_prefix;
 use once_cell::sync::Lazy;
 use std::{rc::Rc, str::FromStr, time::Duration};
 use tempfile::TempDir;
@@ -79,14 +80,12 @@ async fn test_rocks_db_end_to_end_operations_indexer() {
     run_end_to_end_operations_indexer(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_end_to_end_operations_indexer() {
     run_end_to_end_operations_indexer(Database::DynamoDb).await
 }
 
-#[ignore]
 #[cfg(feature = "scylladb")]
 #[test_log::test(tokio::test)]
 async fn test_scylla_db_end_to_end_operations_indexer() {
@@ -95,10 +94,13 @@ async fn test_scylla_db_end_to_end_operations_indexer() {
 
 async fn run_end_to_end_operations_indexer(database: Database) {
     // launching network, service and indexer
+    set_table_prefix("indexer").await;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let mut client = local_net.make_client(network);
+    let mut local_net = LocalNetwork::new_for_testing(database, network)
+        .await
+        .unwrap();
+    let client = local_net.make_client(network);
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
     local_net.run().await.unwrap();

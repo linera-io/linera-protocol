@@ -165,11 +165,11 @@ impl FromStr for StorageConfig {
         }
         print!("available storage: memory");
         #[cfg(feature = "rocksdb")]
-        print!(", rocksdb");
+        print!(", RocksDB");
         #[cfg(feature = "aws")]
-        print!(", dynamodb");
+        print!(", DynamoDB");
         #[cfg(feature = "scylladb")]
-        print!(", scyladb");
+        print!(", ScyllaDB");
         println!();
         Err(format_err!("The input has not matched: {}", input))
     }

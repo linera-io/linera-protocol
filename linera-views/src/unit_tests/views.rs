@@ -3,7 +3,7 @@
 
 use crate::{
     batch::Batch,
-    common::Context,
+    common::{set_table_prefix, Context},
     memory::{create_memory_context, MemoryContext},
     queue_view::QueueView,
     views::{View, ViewError},
@@ -65,6 +65,7 @@ where
     C: TestContextFactory,
     ViewError: From<<C::Context as Context>::Error>,
 {
+    set_table_prefix("unit_test_views").await;
     use self::Operation::*;
 
     let test_cases = [

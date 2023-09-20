@@ -24,6 +24,7 @@ linera-indexer = { workspace = true }
 linera-indexer-plugins = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
+linera-views = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

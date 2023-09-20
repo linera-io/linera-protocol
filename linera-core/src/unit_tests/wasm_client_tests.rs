@@ -20,7 +20,7 @@ use linera_execution::{
     WasmRuntime,
 };
 use linera_storage::Store;
-use linera_views::views::ViewError;
+use linera_views::{common::set_table_prefix, views::ViewError};
 use serde_json::json;
 use std::collections::BTreeMap;
 use test_case::test_case;
@@ -71,6 +71,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("wasm_client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
         .with_pricing(Pricing::all_categories());
@@ -194,6 +195,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("wasm_client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
         .with_pricing(Pricing::all_categories());
@@ -335,6 +337,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("wasm_client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
         .with_pricing(Pricing::all_categories());
@@ -438,6 +441,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("wasm_client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
         .with_pricing(Pricing::all_categories());
@@ -632,6 +636,7 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
+    set_table_prefix("wasm_client_tests").await;
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
         .with_pricing(Pricing::all_categories());
