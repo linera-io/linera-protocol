@@ -79,21 +79,23 @@ impl ScyllaDbStoreClient<TestClock> {
             table_name,
             common_config,
         };
-        let (client, _) = ScyllaDbStoreClient::new_for_testing(store_config, wasm_runtime)
-            .await
-            .expect("client");
+        let (client, _) =
+            ScyllaDbStoreClient::new_for_testing(store_config, wasm_runtime, TestClock::new())
+                .await
+                .expect("client");
         client
     }
 
     pub async fn new_for_testing(
         store_config: ScyllaDbKvStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
+        clock: TestClock,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let (store, table_status) =
             ScyllaDbStore::new_for_testing(store_config, wasm_runtime).await?;
         let store_client = ScyllaDbStoreClient {
             client: Arc::new(store),
-            clock: TestClock::new(),
+            clock,
         };
         Ok((store_client, table_status))
     }

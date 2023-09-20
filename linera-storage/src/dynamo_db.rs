@@ -83,21 +83,23 @@ impl DynamoDbStoreClient<TestClock> {
             table_name,
             common_config,
         };
-        let (client, _) = DynamoDbStoreClient::new_for_testing(store_config, wasm_runtime)
-            .await
-            .expect("client and table_name");
+        let (client, _) =
+            DynamoDbStoreClient::new_for_testing(store_config, wasm_runtime, TestClock::new())
+                .await
+                .expect("client and table_name");
         client
     }
 
     pub async fn new_for_testing(
         store_config: DynamoDbKvStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
+        clock: TestClock,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let (store, table_status) =
             DynamoDbStore::new_for_testing(store_config, wasm_runtime).await?;
         let store_client = DynamoDbStoreClient {
             client: Arc::new(store),
-            clock: TestClock::new(),
+            clock,
         };
         Ok((store_client, table_status))
     }

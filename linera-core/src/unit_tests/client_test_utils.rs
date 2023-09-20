@@ -295,7 +295,7 @@ impl<S> FromIterator<LocalValidatorClient<S>> for NodeProvider<S> {
 // NOTE:
 // * To communicate with a quorum of validators, chain clients iterate over a copy of
 // `validator_clients` to spawn I/O tasks.
-// * When using `LocalValidatorClient`, clients communicate with an exact quorum then stops.
+// * When using `LocalValidatorClient`, clients communicate with an exact quorum then stop.
 // * Most tests have 1 faulty validator out 4 so that there is exactly only 1 quorum to
 // communicate with.
 pub struct TestBuilder<B: StoreBuilder> {
@@ -313,6 +313,8 @@ pub trait StoreBuilder {
     type Store: Store + Clone + Send + Sync + 'static;
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error>;
+
+    fn clock(&self) -> &TestClock;
 }
 
 #[derive(Default)]
@@ -565,6 +567,7 @@ pub static ROCKS_DB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
 #[derive(Default)]
 pub struct MakeMemoryStoreClient {
     wasm_runtime: Option<WasmRuntime>,
+    clock: TestClock,
 }
 
 #[async_trait]
@@ -575,8 +578,12 @@ impl StoreBuilder for MakeMemoryStoreClient {
         Ok(MemoryStoreClient::new(
             self.wasm_runtime,
             TEST_MEMORY_MAX_STREAM_QUERIES,
-            TestClock::new(),
+            self.clock.clone(),
         ))
+    }
+
+    fn clock(&self) -> &TestClock {
+        &self.clock
     }
 }
 
@@ -587,6 +594,7 @@ impl MakeMemoryStoreClient {
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
         MakeMemoryStoreClient {
             wasm_runtime: wasm_runtime.into(),
+            ..MakeMemoryStoreClient::default()
         }
     }
 }
@@ -596,6 +604,7 @@ impl MakeMemoryStoreClient {
 pub struct MakeRocksDbStoreClient {
     temp_dirs: Vec<tempfile::TempDir>,
     wasm_runtime: Option<WasmRuntime>,
+    clock: TestClock,
 }
 
 #[cfg(feature = "rocksdb")]
@@ -625,9 +634,17 @@ impl StoreBuilder for MakeRocksDbStoreClient {
             path_buf,
             common_config,
         };
-        let (store_client, _) =
-            RocksDbStoreClient::new_for_testing(store_config, self.wasm_runtime).await?;
+        let (store_client, _) = RocksDbStoreClient::new_for_testing(
+            store_config,
+            self.wasm_runtime,
+            self.clock.clone(),
+        )
+        .await?;
         Ok(store_client)
+    }
+
+    fn clock(&self) -> &TestClock {
+        &self.clock
     }
 }
 
@@ -637,6 +654,7 @@ pub struct MakeDynamoDbStoreClient {
     instance_counter: usize,
     localstack: Option<LocalStackTestContext>,
     wasm_runtime: Option<WasmRuntime>,
+    clock: TestClock,
 }
 
 #[cfg(feature = "aws")]
@@ -672,9 +690,17 @@ impl StoreBuilder for MakeDynamoDbStoreClient {
             common_config,
         };
         self.instance_counter += 1;
-        let (store_client, _) =
-            DynamoDbStoreClient::new_for_testing(store_config, self.wasm_runtime).await?;
+        let (store_client, _) = DynamoDbStoreClient::new_for_testing(
+            store_config,
+            self.wasm_runtime,
+            self.clock.clone(),
+        )
+        .await?;
         Ok(store_client)
+    }
+
+    fn clock(&self) -> &TestClock {
+        &self.clock
     }
 }
 
@@ -683,6 +709,7 @@ pub struct MakeScyllaDbStoreClient {
     instance_counter: usize,
     uri: String,
     wasm_runtime: Option<WasmRuntime>,
+    clock: TestClock,
 }
 
 #[cfg(feature = "scylladb")]
@@ -691,10 +718,12 @@ impl Default for MakeScyllaDbStoreClient {
         let instance_counter = 0;
         let uri = "localhost:9042".to_string();
         let wasm_runtime = None;
+        let clock = TestClock::new();
         MakeScyllaDbStoreClient {
             instance_counter,
             uri,
             wasm_runtime,
+            clock,
         }
     }
 }
@@ -727,8 +756,16 @@ impl StoreBuilder for MakeScyllaDbStoreClient {
             table_name,
             common_config,
         };
-        let (store_client, _) =
-            ScyllaDbStoreClient::new_for_testing(store_config, self.wasm_runtime).await?;
+        let (store_client, _) = ScyllaDbStoreClient::new_for_testing(
+            store_config,
+            self.wasm_runtime,
+            self.clock.clone(),
+        )
+        .await?;
         Ok(store_client)
+    }
+
+    fn clock(&self) -> &TestClock {
+        &self.clock
     }
 }
