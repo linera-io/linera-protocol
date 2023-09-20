@@ -139,8 +139,9 @@ impl MultiOwnerManager {
         let leader_timeout = self.leader_timeout.as_ref().into_iter();
         let proposed = self.proposed.as_ref();
         let validated = proposed.and_then(|proposal| proposal.validated.as_ref());
-        let certificates = self.locked.iter().chain(validated);
-        certificates
+        self.locked
+            .iter()
+            .chain(validated)
             .map(|certificate| certificate.round)
             .chain(
                 leader_timeout
