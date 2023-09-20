@@ -86,14 +86,14 @@ const TEST_GRACE_PERIOD_MICROS: u64 = 500_000;
 
 /// Instantiates the protocol with a single validator. Returns the corresponding committee
 /// and the (non-sharded, in-memory) "worker" that we can interact with.
-fn init_worker<S>(client: S, is_client: bool) -> (Committee, WorkerState<S>)
+fn init_worker<S>(store: S, is_client: bool) -> (Committee, WorkerState<S>)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let key_pair = KeyPair::generate();
     let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
-    let worker = WorkerState::new("Single validator node".to_string(), Some(key_pair), client)
+    let worker = WorkerState::new("Single validator node".to_string(), Some(key_pair), store)
         .with_allow_inactive_chains(is_client)
         .with_allow_messages_from_deprecated_epochs(is_client)
         .with_grace_period_micros(TEST_GRACE_PERIOD_MICROS);
@@ -101,13 +101,13 @@ where
 }
 
 /// Same as `init_worker` but also instantiates some initial chains.
-async fn init_worker_with_chains<S, I>(client: S, balances: I) -> (Committee, WorkerState<S>)
+async fn init_worker_with_chains<S, I>(store: S, balances: I) -> (Committee, WorkerState<S>)
 where
     I: IntoIterator<Item = (ChainDescription, PublicKey, Amount)>,
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    let (committee, worker) = init_worker(client, /* is_client */ false);
+    let (committee, worker) = init_worker(store, /* is_client */ false);
     for (description, pubk, balance) in balances {
         worker
             .storage
@@ -127,7 +127,7 @@ where
 
 /// Same as `init_worker` but also instantiate a single initial chain.
 async fn init_worker_with_chain<S>(
-    client: S,
+    store: S,
     description: ChainDescription,
     owner: PublicKey,
     balance: Amount,
@@ -136,7 +136,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    init_worker_with_chains(client, [(description, owner, balance)]).await
+    init_worker_with_chains(store, [(description, owner, balance)]).await
 }
 
 fn make_certificate<S>(
@@ -267,40 +267,40 @@ fn generate_key_pairs(count: usize) -> Vec<KeyPair> {
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_bad_signature() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_bad_signature(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_bad_signature(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_bad_signature() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_bad_signature(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_bad_signature(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_bad_signature() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_bad_signature(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_bad_signature(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_bad_signature() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_bad_signature(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_bad_signature(store).await;
 }
 
-async fn run_test_handle_block_proposal_bad_signature<S>(client: S)
+async fn run_test_handle_block_proposal_bad_signature<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![
             (
                 ChainDescription::Root(1),
@@ -335,40 +335,40 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_zero_amount() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_zero_amount(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_zero_amount(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_zero_amount() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_zero_amount(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_zero_amount(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_zero_amount() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_zero_amount(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_zero_amount(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_zero_amount() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_zero_amount(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_zero_amount(store).await;
 }
 
-async fn run_test_handle_block_proposal_zero_amount<S>(client: S)
+async fn run_test_handle_block_proposal_zero_amount<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![
             (
                 ChainDescription::Root(1),
@@ -400,33 +400,33 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_ticks() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_ticks(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_ticks(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_ticks() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_ticks(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_ticks(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_ticks() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_ticks(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_ticks(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_ticks() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_ticks(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_ticks(store).await;
 }
 
-async fn run_test_handle_block_proposal_ticks<C>(client: DbStoreClient<C, TestClock>)
+async fn run_test_handle_block_proposal_ticks<C>(store: DbStoreClient<C, TestClock>)
 where
     C: KeyValueStoreClient + Clone + Send + Sync + 'static,
     ViewError: From<<C as KeyValueStoreClient>::Error>,
@@ -437,8 +437,8 @@ where
     let balance: Amount = Amount::from_tokens(5);
     let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
     let epoch = Epoch::ZERO;
-    let clock = client.clock.clone();
-    let (committee, mut worker) = init_worker_with_chains(client, balances).await;
+    let clock = store.clock.clone();
+    let (committee, mut worker) = init_worker_with_chains(store, balances).await;
 
     {
         let block_proposal = make_first_block(ChainId::root(1))
@@ -484,40 +484,40 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_unknown_sender() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_unknown_sender(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_unknown_sender(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_unknown_sender() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_unknown_sender(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_unknown_sender(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_unknown_sender() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_unknown_sender(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_unknown_sender(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_unknown_sender() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_unknown_sender(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_unknown_sender(store).await;
 }
 
-async fn run_test_handle_block_proposal_unknown_sender<S>(client: S)
+async fn run_test_handle_block_proposal_unknown_sender<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![
             (
                 ChainDescription::Root(1),
@@ -552,33 +552,33 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_with_chaining() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_with_chaining(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_with_chaining(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_with_chaining() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_with_chaining(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_with_chaining(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_with_chaining() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_with_chaining(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_with_chaining(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_with_chaining() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_with_chaining(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_with_chaining(store).await;
 }
 
-async fn run_test_handle_block_proposal_with_chaining<S>(client: S)
+async fn run_test_handle_block_proposal_with_chaining<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
@@ -586,7 +586,7 @@ where
     let sender_key_pair = KeyPair::generate();
     let recipient = Recipient::root(2);
     let (committee, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![(
             ChainDescription::Root(1),
             sender_key_pair.public(),
@@ -659,33 +659,33 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_with_incoming_messages() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_with_incoming_messages(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_with_incoming_messages(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_with_incoming_messages() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_with_incoming_messages(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_with_incoming_messages(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_with_incoming_messages() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_with_incoming_messages(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_with_incoming_messages(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_with_incoming_messages() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_with_incoming_messages(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_with_incoming_messages(store).await;
 }
 
-async fn run_test_handle_block_proposal_with_incoming_messages<S>(client: S)
+async fn run_test_handle_block_proposal_with_incoming_messages<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
@@ -694,7 +694,7 @@ where
     let recipient_key_pair = KeyPair::generate();
     let recipient = Recipient::root(2);
     let (committee, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![
             (
                 ChainDescription::Root(1),
@@ -1038,40 +1038,40 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_exceed_balance() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_exceed_balance(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_exceed_balance(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_exceed_balance() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_exceed_balance(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_exceed_balance(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_exceed_balance() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_exceed_balance(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_exceed_balance(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_exceed_balance() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_exceed_balance(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_exceed_balance(store).await;
 }
 
-async fn run_test_handle_block_proposal_exceed_balance<S>(client: S)
+async fn run_test_handle_block_proposal_exceed_balance<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![
             (
                 ChainDescription::Root(1),
@@ -1099,40 +1099,40 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal(store).await;
 }
 
-async fn run_test_handle_block_proposal<S>(client: S)
+async fn run_test_handle_block_proposal<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![(
             ChainDescription::Root(1),
             sender_key_pair.public(),
@@ -1167,40 +1167,40 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_block_proposal_replay() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_replay(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_replay(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_block_proposal_replay() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_replay(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_replay(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_block_proposal_replay() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_replay(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_replay(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_block_proposal_replay() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_block_proposal_replay(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_block_proposal_replay(store).await;
 }
 
-async fn run_test_handle_block_proposal_replay<S>(client: S)
+async fn run_test_handle_block_proposal_replay<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![
             (
                 ChainDescription::Root(1),
@@ -1233,40 +1233,40 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_unknown_sender() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_unknown_sender(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_unknown_sender(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_unknown_sender() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_unknown_sender(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_unknown_sender(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_certificate_unknown_sender() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_unknown_sender(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_unknown_sender(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_certificate_unknown_sender() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_unknown_sender(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_unknown_sender(store).await;
 }
 
-async fn run_test_handle_certificate_unknown_sender<S>(client: S)
+async fn run_test_handle_certificate_unknown_sender<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![(ChainDescription::Root(2), PublicKey::debug(2), Amount::ZERO)],
     )
     .await;
@@ -1290,40 +1290,40 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_bad_block_height() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_bad_block_height(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_bad_block_height(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_bad_block_height() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_bad_block_height(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_bad_block_height(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_certificate_bad_block_height() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_bad_block_height(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_bad_block_height(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_certificate_bad_block_height() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_bad_block_height(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_bad_block_height(store).await;
 }
 
-async fn run_test_handle_certificate_bad_block_height<S>(client: S)
+async fn run_test_handle_certificate_bad_block_height<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![
             (
                 ChainDescription::Root(1),
@@ -1359,40 +1359,40 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_with_anticipated_incoming_message() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_with_anticipated_incoming_message(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_with_anticipated_incoming_message(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_with_anticipated_incoming_message() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_with_anticipated_incoming_message(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_with_anticipated_incoming_message(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_certificate_with_anticipated_incoming_message() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_with_anticipated_incoming_message(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_with_anticipated_incoming_message(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_certificate_with_anticipated_incoming_message() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_with_anticipated_incoming_message(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_with_anticipated_incoming_message(store).await;
 }
 
-async fn run_test_handle_certificate_with_anticipated_incoming_message<S>(client: S)
+async fn run_test_handle_certificate_with_anticipated_incoming_message<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![
             (
                 ChainDescription::Root(1),
@@ -1485,40 +1485,40 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_receiver_balance_overflow() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_receiver_balance_overflow(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_receiver_balance_overflow(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_receiver_balance_overflow() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_receiver_balance_overflow(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_receiver_balance_overflow(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_certificate_receiver_balance_overflow() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_receiver_balance_overflow(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_receiver_balance_overflow(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_certificate_receiver_balance_overflow() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_receiver_balance_overflow(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_receiver_balance_overflow(store).await;
 }
 
-async fn run_test_handle_certificate_receiver_balance_overflow<S>(client: S)
+async fn run_test_handle_certificate_receiver_balance_overflow<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![
             (
                 ChainDescription::Root(1),
@@ -1577,33 +1577,33 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_receiver_equal_sender() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_receiver_equal_sender(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_receiver_equal_sender(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_receiver_equal_sender() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_receiver_equal_sender(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_receiver_equal_sender(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_certificate_receiver_equal_sender() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_receiver_equal_sender(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_receiver_equal_sender(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_certificate_receiver_equal_sender() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_receiver_equal_sender(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_receiver_equal_sender(store).await;
 }
 
-async fn run_test_handle_certificate_receiver_equal_sender<S>(client: S)
+async fn run_test_handle_certificate_receiver_equal_sender<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
@@ -1611,7 +1611,7 @@ where
     let key_pair = KeyPair::generate();
     let name = key_pair.public();
     let (committee, mut worker) =
-        init_worker_with_chain(client, ChainDescription::Root(1), name, Amount::ONE).await;
+        init_worker_with_chain(store, ChainDescription::Root(1), name, Amount::ONE).await;
 
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
@@ -1674,40 +1674,40 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_cross_chain_request() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_cross_chain_request(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_cross_chain_request(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_cross_chain_request() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_cross_chain_request(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_cross_chain_request(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_cross_chain_request() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_cross_chain_request(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_cross_chain_request(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_cross_chain_request() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_cross_chain_request(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_cross_chain_request(store).await;
 }
 
-async fn run_test_handle_cross_chain_request<S>(client: S)
+async fn run_test_handle_cross_chain_request<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![(ChainDescription::Root(2), PublicKey::debug(2), Amount::ONE)],
     )
     .await;
@@ -1775,39 +1775,39 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_cross_chain_request_no_recipient_chain() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_cross_chain_request_no_recipient_chain(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_cross_chain_request_no_recipient_chain() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_cross_chain_request_no_recipient_chain(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_cross_chain_request_no_recipient_chain(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_cross_chain_request_no_recipient_chain() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_cross_chain_request_no_recipient_chain(store).await;
 }
 
-async fn run_test_handle_cross_chain_request_no_recipient_chain<S>(client: S)
+async fn run_test_handle_cross_chain_request_no_recipient_chain<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker(client, /* is_client */ false);
+    let (committee, mut worker) = init_worker(store, /* is_client */ false);
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
@@ -1838,39 +1838,39 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_cross_chain_request_no_recipient_chain_on_client() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_cross_chain_request_no_recipient_chain_on_client(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_cross_chain_request_no_recipient_chain_on_client() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_cross_chain_request_no_recipient_chain_on_client(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_cross_chain_request_no_recipient_chain_on_client() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_cross_chain_request_no_recipient_chain_on_client(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_cross_chain_request_no_recipient_chain_on_client() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_cross_chain_request_no_recipient_chain_on_client(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_cross_chain_request_no_recipient_chain_on_client(store).await;
 }
 
-async fn run_test_handle_cross_chain_request_no_recipient_chain_on_client<S>(client: S)
+async fn run_test_handle_cross_chain_request_no_recipient_chain_on_client<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
-    let (committee, mut worker) = init_worker(client, /* is_client */ true);
+    let (committee, mut worker) = init_worker(store, /* is_client */ true);
     let certificate = make_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
@@ -1913,33 +1913,33 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_to_active_recipient() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_to_active_recipient(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_to_active_recipient(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_to_active_recipient() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_to_active_recipient(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_to_active_recipient(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_certificate_to_active_recipient() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_to_active_recipient(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_to_active_recipient(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_certificate_to_active_recipient() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_to_active_recipient(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_to_active_recipient(store).await;
 }
 
-async fn run_test_handle_certificate_to_active_recipient<S>(client: S)
+async fn run_test_handle_certificate_to_active_recipient<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
@@ -1947,7 +1947,7 @@ where
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![
             (
                 ChainDescription::Root(1),
@@ -2095,40 +2095,40 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_handle_certificate_to_inactive_recipient() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_to_inactive_recipient(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_to_inactive_recipient(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_handle_certificate_to_inactive_recipient() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_to_inactive_recipient(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_to_inactive_recipient(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_handle_certificate_to_inactive_recipient() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_to_inactive_recipient(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_to_inactive_recipient(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_handle_certificate_to_inactive_recipient() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_handle_certificate_to_inactive_recipient(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_to_inactive_recipient(store).await;
 }
 
-async fn run_test_handle_certificate_to_inactive_recipient<S>(client: S)
+async fn run_test_handle_certificate_to_inactive_recipient<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![(
             ChainDescription::Root(1),
             sender_key_pair.public(),
@@ -2163,40 +2163,40 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_chain_creation_with_committee_creation() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_chain_creation_with_committee_creation(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_chain_creation_with_committee_creation(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_chain_creation_with_committee_creation() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_chain_creation_with_committee_creation(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_chain_creation_with_committee_creation(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_chain_creation_with_committee_creation() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_chain_creation_with_committee_creation(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_chain_creation_with_committee_creation(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_chain_creation_with_committee_creation() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_chain_creation_with_committee_creation(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_chain_creation_with_committee_creation(store).await;
 }
 
-async fn run_test_chain_creation_with_committee_creation<S>(client: S)
+async fn run_test_chain_creation_with_committee_creation<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
     let key_pair = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![(
             ChainDescription::Root(0),
             key_pair.public(),
@@ -2591,33 +2591,33 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfers_and_committee_creation() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_transfers_and_committee_creation(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_transfers_and_committee_creation(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_transfers_and_committee_creation() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_transfers_and_committee_creation(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_transfers_and_committee_creation(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_transfers_and_committee_creation() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_transfers_and_committee_creation(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_transfers_and_committee_creation(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_transfers_and_committee_creation() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_transfers_and_committee_creation(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_transfers_and_committee_creation(store).await;
 }
 
-async fn run_test_transfers_and_committee_creation<S>(client: S)
+async fn run_test_transfers_and_committee_creation<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
@@ -2625,7 +2625,7 @@ where
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![
             (ChainDescription::Root(0), key_pair0.public(), Amount::ZERO),
             (
@@ -2736,33 +2736,33 @@ where
 
 #[test(tokio::test)]
 async fn test_memory_transfers_and_committee_removal() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_transfers_and_committee_removal(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_transfers_and_committee_removal(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_transfers_and_committee_removal() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_transfers_and_committee_removal(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_transfers_and_committee_removal(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_transfers_and_committee_removal() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_transfers_and_committee_removal(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_transfers_and_committee_removal(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_transfers_and_committee_removal() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_transfers_and_committee_removal(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_transfers_and_committee_removal(store).await;
 }
 
-async fn run_test_transfers_and_committee_removal<S>(client: S)
+async fn run_test_transfers_and_committee_removal<S>(store: S)
 where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
@@ -2770,7 +2770,7 @@ where
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();
     let (committee, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![
             (ChainDescription::Root(0), key_pair0.public(), Amount::ZERO),
             (
@@ -3153,33 +3153,33 @@ async fn test_cross_chain_helper() {
 
 #[test(tokio::test)]
 async fn test_memory_leader_timeouts() {
-    let client = MemoryStoreClient::make_test_client(None).await;
-    run_test_leader_timeouts(client).await;
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_leader_timeouts(store).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[test(tokio::test)]
 async fn test_rocks_db_leader_timeouts() {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    let client = RocksDbStoreClient::make_test_client(None).await;
-    run_test_leader_timeouts(client).await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_leader_timeouts(store).await;
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_leader_timeouts() {
-    let client = DynamoDbStoreClient::make_test_client(None).await;
-    run_test_leader_timeouts(client).await;
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_leader_timeouts(store).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_leader_timeouts() {
-    let client = ScyllaDbStoreClient::make_test_client(None).await;
-    run_test_leader_timeouts(client).await;
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_leader_timeouts(store).await;
 }
 
-async fn run_test_leader_timeouts<C>(client: DbStoreClient<C, TestClock>)
+async fn run_test_leader_timeouts<C>(store: DbStoreClient<C, TestClock>)
 where
     C: KeyValueStoreClient + Clone + Send + Sync + 'static,
     ViewError: From<<C as KeyValueStoreClient>::Error>,
@@ -3189,9 +3189,9 @@ where
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
     let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
-    let clock = client.clock.clone();
+    let clock = store.clock.clone();
     let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
-    let (committee, mut worker) = init_worker_with_chains(client, balances).await;
+    let (committee, mut worker) = init_worker_with_chains(store, balances).await;
 
     // Add another owner and use the leader-based protocol in all rounds.
     let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeMultipleOwners {

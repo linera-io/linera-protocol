@@ -42,7 +42,7 @@ impl RocksDbRunner {
             path_buf: config.client.storage.as_path().to_path_buf(),
             common_config,
         };
-        let client = RocksDbClient::initialize(store_config).await?;
-        Self::new(config, client).await
+        let store = RocksDbClient::initialize(store_config).await?;
+        Self::new(config, store).await
     }
 }

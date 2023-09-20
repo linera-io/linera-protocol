@@ -49,7 +49,7 @@ impl Default for TestValidator {
     fn default() -> Self {
         let key_pair = KeyPair::generate();
         let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
-        let client = MemoryStoreClient::new(
+        let store = MemoryStoreClient::new(
             Some(WasmRuntime::default()),
             TEST_MEMORY_MAX_STREAM_QUERIES,
             WallClock,
@@ -58,7 +58,7 @@ impl Default for TestValidator {
         let worker = WorkerState::new(
             "Single validator node".to_string(),
             Some(key_pair.copy()),
-            client,
+            store,
         );
 
         TestValidator {

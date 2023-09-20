@@ -44,7 +44,7 @@ impl ScyllaDbRunner {
             table_name: config.client.table.clone(),
             common_config,
         };
-        let (client, _) = ScyllaDbClient::new(store_config).await?;
-        Self::new(config, client).await
+        let (store, _) = ScyllaDbClient::new(store_config).await?;
+        Self::new(config, store).await
     }
 }

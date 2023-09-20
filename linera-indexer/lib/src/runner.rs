@@ -38,7 +38,7 @@ pub struct IndexerConfig<Config: StructOpt> {
 }
 
 pub struct Runner<DB, Config: StructOpt> {
-    pub client: DB,
+    pub store: DB,
     pub config: IndexerConfig<Config>,
     pub indexer: Indexer<DB>,
 }
@@ -57,13 +57,13 @@ where
     ViewError: From<DB::Error>,
 {
     /// Loads a new runner
-    pub async fn new(config: IndexerConfig<Config>, client: DB) -> Result<Self, IndexerError>
+    pub async fn new(config: IndexerConfig<Config>, store: DB) -> Result<Self, IndexerError>
     where
         Self: Sized,
     {
-        let indexer = Indexer::load(client.clone()).await?;
+        let indexer = Indexer::load(store.clone()).await?;
         Ok(Self {
-            client,
+            store,
             config,
             indexer,
         })

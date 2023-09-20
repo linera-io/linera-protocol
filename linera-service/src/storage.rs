@@ -332,7 +332,7 @@ pub trait Runnable {
 
 // The design is that the initialization of the accounts should be separate
 // from the running of the database.
-// However, that does not apply to the memory client which must be initialized
+// However, that does not apply to the memory store which must be initialized
 // in the same context in which it is used.
 #[allow(unused_variables)]
 pub async fn run_with_storage<Job>(
@@ -346,31 +346,30 @@ where
 {
     match config {
         FullStorageConfig::Memory(store_config) => {
-            let mut client = MemoryStoreClient::new(
+            let mut store = MemoryStoreClient::new(
                 wasm_runtime,
                 store_config.common_config.max_stream_queries,
                 WallClock,
             );
-            genesis_config.initialize_store(&mut client).await?;
-            job.run(client).await
+            genesis_config.initialize_store(&mut store).await?;
+            job.run(store).await
         }
         #[cfg(feature = "rocksdb")]
         FullStorageConfig::RocksDb(store_config) => {
-            let (client, table_status) =
-                RocksDbStoreClient::new(store_config, wasm_runtime).await?;
-            job.run(client).await
+            let (store, table_status) = RocksDbStoreClient::new(store_config, wasm_runtime).await?;
+            job.run(store).await
         }
         #[cfg(feature = "aws")]
         FullStorageConfig::DynamoDb(store_config) => {
-            let (client, table_status) =
+            let (store, table_status) =
                 DynamoDbStoreClient::new(store_config, wasm_runtime).await?;
-            job.run(client).await
+            job.run(store).await
         }
         #[cfg(feature = "scylladb")]
         FullStorageConfig::ScyllaDb(store_config) => {
-            let (client, table_status) =
+            let (store, table_status) =
                 ScyllaDbStoreClient::new(store_config, wasm_runtime).await?;
-            job.run(client).await
+            job.run(store).await
         }
     }
 }
@@ -387,20 +386,20 @@ pub async fn full_initialize_storage(
         #[cfg(feature = "rocksdb")]
         FullStorageConfig::RocksDb(store_config) => {
             let wasm_runtime = None;
-            let mut client = RocksDbStoreClient::initialize(store_config, wasm_runtime).await?;
-            genesis_config.initialize_store(&mut client).await
+            let mut store = RocksDbStoreClient::initialize(store_config, wasm_runtime).await?;
+            genesis_config.initialize_store(&mut store).await
         }
         #[cfg(feature = "aws")]
         FullStorageConfig::DynamoDb(store_config) => {
             let wasm_runtime = None;
-            let mut client = DynamoDbStoreClient::initialize(store_config, wasm_runtime).await?;
-            genesis_config.initialize_store(&mut client).await
+            let mut store = DynamoDbStoreClient::initialize(store_config, wasm_runtime).await?;
+            genesis_config.initialize_store(&mut store).await
         }
         #[cfg(feature = "scylladb")]
         FullStorageConfig::ScyllaDb(store_config) => {
             let wasm_runtime = None;
-            let mut client = ScyllaDbStoreClient::initialize(store_config, wasm_runtime).await?;
-            genesis_config.initialize_store(&mut client).await
+            let mut store = ScyllaDbStoreClient::initialize(store_config, wasm_runtime).await?;
+            genesis_config.initialize_store(&mut store).await
         }
     }
 }

@@ -66,8 +66,8 @@ where
     ViewError: From<DB::Error>,
 {
     /// Loads the indexer using a database backend with an `indexer` prefix.
-    pub async fn load(client: DB) -> Result<Self, IndexerError> {
-        let context = ContextFromDb::create(client.clone(), "indexer".as_bytes().to_vec(), ())
+    pub async fn load(store: DB) -> Result<Self, IndexerError> {
+        let context = ContextFromDb::create(store.clone(), "indexer".as_bytes().to_vec(), ())
             .await
             .map_err(|e| IndexerError::ViewError(e.into()))?;
         let state = State(Arc::new(Mutex::new(StateView::load(context).await?)));
