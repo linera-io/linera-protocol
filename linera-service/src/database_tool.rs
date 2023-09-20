@@ -57,9 +57,9 @@ enum DatabaseToolCommand {
         cache_size: usize,
     },
 
-    /// Delete a single table from the database
-    #[structopt(name = "existence")]
-    Existence {
+    /// Check existence of a database
+    #[structopt(name = "check_existence")]
+    CheckExistence {
         /// Storage configuration for the blockchain history.
         #[structopt(long = "storage")]
         storage_config: String,
@@ -139,7 +139,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 .await
                 .expect("successful delete_all operation");
         }
-        DatabaseToolCommand::Existence {
+        DatabaseToolCommand::CheckExistence {
             storage_config,
             max_concurrent_queries,
             max_stream_queries,
@@ -157,9 +157,9 @@ async fn main() -> Result<(), anyhow::Error> {
                 .await
                 .expect("successful delete_all operation");
             if test {
-                println!("The database does exist");
+                tracing::error!("The database does exist");
             } else {
-                println!("The database does not exist");
+                tracing::error!("The database does not exist");
             }
         }
         DatabaseToolCommand::Initialize {
