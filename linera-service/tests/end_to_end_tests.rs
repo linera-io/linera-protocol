@@ -610,7 +610,12 @@ async fn run_end_to_end_open_multi_owner_chain(database: Database) {
 
     // Open chain on behalf of Client 2.
     let (message_id, chain2) = client1
-        .open_multi_owner_chain(chain1, vec![client1_key, client2_key])
+        .open_multi_owner_chain(
+            chain1,
+            vec![client1_key, client2_key],
+            vec![100, 100],
+            linera_base::data_types::RoundNumber::MAX,
+        )
         .await
         .unwrap();
 

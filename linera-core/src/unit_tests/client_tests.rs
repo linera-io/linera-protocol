@@ -397,7 +397,10 @@ where
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
     let new_key_pair = KeyPair::generate();
-    let certificate = sender.share_ownership(new_key_pair.public()).await.unwrap();
+    let certificate = sender
+        .share_ownership(new_key_pair.public(), 100)
+        .await
+        .unwrap();
     assert_eq!(sender.next_block_height, BlockHeight::from(1));
     assert!(sender.pending_block.is_none());
     assert!(sender.key_pair().await.is_ok());

@@ -241,7 +241,11 @@ ChainOwnership:
                 KEY:
                   TYPENAME: Owner
                 VALUE:
-                  TYPENAME: PublicKey
+                  TUPLE:
+                    - TYPENAME: PublicKey
+                    - U64
+          - multi_leader_rounds:
+              TYPENAME: RoundNumber
 ChannelFullName:
   STRUCT:
     - application_id:
@@ -425,11 +429,18 @@ MultiOwnerManagerInfo:
           KEY:
             TYPENAME: Owner
           VALUE:
-            TYPENAME: PublicKey
+            TUPLE:
+              - TYPENAME: PublicKey
+              - U64
+    - multi_leader_rounds:
+        TYPENAME: RoundNumber
     - requested_proposed:
         OPTION:
           TYPENAME: BlockProposal
     - requested_locked:
+        OPTION:
+          TYPENAME: Certificate
+    - leader_timeout:
         OPTION:
           TYPENAME: Certificate
     - pending:
@@ -441,8 +452,13 @@ MultiOwnerManagerInfo:
     - requested_pending_value:
         OPTION:
           TYPENAME: CertificateValue
-    - round:
+    - current_round:
         TYPENAME: RoundNumber
+    - leader:
+        OPTION:
+          TYPENAME: Owner
+    - round_timeout:
+        TYPENAME: Timestamp
 NodeError:
   ENUM:
     0:
@@ -791,7 +807,11 @@ SystemOperation:
         STRUCT:
           - new_public_keys:
               SEQ:
-                TYPENAME: PublicKey
+                TUPLE:
+                  - TYPENAME: PublicKey
+                  - U64
+          - multi_leader_rounds:
+              TYPENAME: RoundNumber
     6:
       Subscribe:
         STRUCT:

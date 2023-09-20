@@ -28,7 +28,7 @@ function timeout(ms: number) : Promise<any> {
 
 export function set_test_config() : Promise<void> {
   return set_test_config_aux().catch(async () => {
-    await timeout(1000)
+    await timeout(2000)
     await set_test_config_aux()
   })
 }

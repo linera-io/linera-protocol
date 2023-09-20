@@ -338,7 +338,8 @@ where
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        let (messages, state_hash) = chain.execute_block(&block).await?;
+        let now = self.storage.current_time();
+        let (messages, state_hash) = chain.execute_block(&block, now).await?;
         let response = ChainInfoResponse::new(&chain, None);
         let executed_block = ExecutedBlock {
             block,
@@ -532,7 +533,8 @@ where
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
         // We should always agree on the messages and state hash.
-        let (verified_messages, verified_state_hash) = chain.execute_block(block).await?;
+        let now = self.storage.current_time();
+        let (verified_messages, verified_state_hash) = chain.execute_block(block, now).await?;
         ensure!(
             *messages == verified_messages,
             WorkerError::IncorrectMessages
@@ -649,7 +651,6 @@ where
         );
         certificate.check(committee)?;
         let mut actions = NetworkActions::default();
-        let next_round = chain.manager.get().next_round();
         if chain
             .tip_state
             .get()
@@ -660,18 +661,20 @@ where
             return Ok((ChainInfoResponse::new(&chain, self.key_pair()), actions));
         }
         self.cache_validated(&certificate.value).await;
-        chain
-            .manager
-            .get_mut()
-            .create_final_vote(certificate.clone(), self.key_pair());
+        let current_round = chain.manager.get().current_round();
+        chain.manager.get_mut().create_final_vote(
+            certificate.clone(),
+            self.key_pair(),
+            self.storage.current_time(),
+        );
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
-        if chain.manager.get().next_round() > next_round {
+        if chain.manager.get().current_round() > current_round {
             actions.notifications.push(Notification {
                 chain_id: block.chain_id,
                 reason: Reason::NewRound {
                     height: block.height,
-                    round: chain.manager.get().next_round(),
+                    round: chain.manager.get().current_round(),
                 },
             })
         }
@@ -710,17 +713,17 @@ where
         if chain.tip_state.get().already_validated_block(height)? {
             return Ok((ChainInfoResponse::new(&chain, self.key_pair()), actions));
         }
-        let next_round = chain.manager.get().next_round();
+        let current_round = chain.manager.get().current_round();
         chain
             .manager
             .get_mut()
-            .handle_timeout_certificate(certificate.clone());
-        if chain.manager.get().next_round() > next_round {
+            .handle_timeout_certificate(certificate.clone(), self.storage.current_time());
+        if chain.manager.get().current_round() > current_round {
             actions.notifications.push(Notification {
                 chain_id,
                 reason: Reason::NewRound {
                     height,
-                    round: chain.manager.get().next_round(),
+                    round: chain.manager.get().current_round(),
                 },
             })
         }
@@ -768,9 +771,10 @@ where
                         },
                     ..
                 } => {
+                    let now = self.storage.current_time();
                     // Update the staged chain state with the received block.
                     chain
-                        .receive_block(origin, block.height, block.timestamp, messages, hash)
+                        .receive_block(origin, block.height, block.timestamp, messages, hash, now)
                         .await?
                 }
                 value => {
@@ -977,8 +981,9 @@ where
         if time_till_block > 0 {
             tokio::time::sleep(Duration::from_micros(time_till_block)).await;
         }
+        let now = self.storage.current_time();
         let (messages, state_hash) = {
-            let (messages, state_hash) = chain.execute_block(block).await?;
+            let (messages, state_hash) = chain.execute_block(block, now).await?;
             // Verify that the resulting chain would have no unconfirmed incoming messages.
             chain.validate_incoming_messages().await?;
             // Reset all the staged changes as we were only validating things.
@@ -987,7 +992,7 @@ where
         };
         // Create the vote and store it in the chain state.
         let manager = chain.manager.get_mut();
-        manager.create_vote(proposal, messages, state_hash, self.key_pair());
+        manager.create_vote(proposal, messages, state_hash, self.key_pair(), now);
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some(vote) = manager.pending() {
             self.cache_recent_value(Cow::Borrowed(&vote.value)).await;
@@ -1070,6 +1075,7 @@ where
                     chain.tip_state.get().next_block_height,
                     *epoch,
                     self.key_pair(),
+                    self.storage.current_time(),
                 ) {
                     chain.save().await?;
                 }

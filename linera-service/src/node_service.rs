@@ -20,7 +20,7 @@ use axum::{
 use futures::lock::{Mutex, MutexGuard, OwnedMutexGuard};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
-    data_types::Amount,
+    data_types::{Amount, RoundNumber},
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
     BcsHexParseError,
 };
@@ -40,7 +40,7 @@ use linera_storage::Store;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{collections::BTreeMap, net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
@@ -297,11 +297,26 @@ where
         &self,
         chain_id: ChainId,
         public_keys: Vec<PublicKey>,
+        weights: Option<Vec<u64>>,
+        multi_leader_rounds: Option<RoundNumber>,
     ) -> Result<ChainId, Error> {
+        let owners: Vec<_> = if let Some(weights) = weights {
+            if weights.len() != public_keys.len() {
+                return Err(Error::new(format!(
+                    "There are {} public keys but {} weights.",
+                    public_keys.len(),
+                    weights.len()
+                )));
+            }
+            public_keys.into_iter().zip(weights).collect()
+        } else {
+            public_keys.into_iter().zip(iter::repeat(100)).collect()
+        };
+        let multi_leader_rounds = multi_leader_rounds.unwrap_or(RoundNumber::MAX);
+        let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
         let Some(mut client) = self.clients.client_lock(&chain_id).await else {
             return Err(Error::new("Unknown chain ID"));
         };
-        let ownership = ChainOwnership::multiple(public_keys);
         let (message_id, _) = client.open_chain(ownership).await?;
         Ok(ChainId::child(message_id))
     }
@@ -328,8 +343,13 @@ where
         &self,
         chain_id: ChainId,
         new_public_keys: Vec<PublicKey>,
+        new_weights: Vec<u64>,
+        multi_leader_rounds: RoundNumber,
     ) -> Result<CryptoHash, Error> {
-        let operation = SystemOperation::ChangeMultipleOwners { new_public_keys };
+        let operation = SystemOperation::ChangeMultipleOwners {
+            new_public_keys: new_public_keys.into_iter().zip(new_weights).collect(),
+            multi_leader_rounds,
+        };
         self.execute_system_operation(operation, chain_id).await
     }
 

@@ -561,13 +561,24 @@ impl CertificateValue {
 }
 
 impl HashedValue {
-    /// Creates a `ConfirmedBlock` with round 0.
+    /// Creates a `ConfirmedBlock` value.
     pub fn new_confirmed(executed_block: ExecutedBlock) -> HashedValue {
         CertificateValue::ConfirmedBlock { executed_block }.into()
     }
 
+    /// Creates a new `ValidatedBlock` value.
     pub fn new_validated(executed_block: ExecutedBlock) -> HashedValue {
         CertificateValue::ValidatedBlock { executed_block }.into()
+    }
+
+    /// Creates a new `LeaderTimeout` value.
+    pub fn new_leader_timeout(chain_id: ChainId, height: BlockHeight, epoch: Epoch) -> HashedValue {
+        CertificateValue::LeaderTimeout {
+            chain_id,
+            height,
+            epoch,
+        }
+        .into()
     }
 
     pub fn hash(&self) -> CryptoHash {

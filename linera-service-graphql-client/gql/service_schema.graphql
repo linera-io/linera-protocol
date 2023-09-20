@@ -317,7 +317,7 @@ type MutationRoot {
 	Creates (or activates) a new chain by installing the given authentication keys.
 	This will automatically subscribe to the future committees created by `admin_id`.
 	"""
-	openMultiOwnerChain(chainId: ChainId!, publicKeys: [PublicKey!]!): ChainId!
+	openMultiOwnerChain(chainId: ChainId!, publicKeys: [PublicKey!]!, weights: [Int!], multiLeaderRounds: RoundNumber): ChainId!
 	"""
 	Closes the chain.
 	"""
@@ -329,7 +329,7 @@ type MutationRoot {
 	"""
 	Changes the authentication key of the chain.
 	"""
-	changeMultipleOwners(chainId: ChainId!, newPublicKeys: [PublicKey!]!): CryptoHash!
+	changeMultipleOwners(chainId: ChainId!, newPublicKeys: [PublicKey!]!, newWeights: [Int!]!, multiLeaderRounds: RoundNumber!): CryptoHash!
 	"""
 	(admin chain only) Registers a new committee. This will notify the subscribers of
 	the admin chain so that they can migrate to the new epoch (by accepting the
@@ -452,6 +452,11 @@ type QueryRoot {
 The recipient of a transfer
 """
 scalar Recipient
+
+"""
+A number to identify successive attempts to decide a value in a consensus protocol.
+"""
+scalar RoundNumber
 
 
 type SubscriptionRoot {

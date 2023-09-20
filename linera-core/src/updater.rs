@@ -11,7 +11,10 @@ use linera_base::{
     data_types::BlockHeight,
     identifiers::{ChainDescription, ChainId, MessageId},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
+use linera_chain::{
+    data_types::{BlockProposal, Certificate, CertificateValue, LiteVote},
+    ChainManager,
+};
 use linera_execution::committee::{Committee, ValidatorName};
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -379,6 +382,19 @@ where
                 let certs = self.store.read_certificates(keys.into_iter()).await?;
                 for cert in certs {
                     self.send_certificate(cert, retryable).await?;
+                }
+            }
+        }
+        let manager = self.store.load_chain(chain_id).await?.manager.get().clone();
+        if let ChainManager::Multi(manager) = manager {
+            if let Some(cert) = manager.locked {
+                if cert.value().is_validated() && cert.value().chain_id() == chain_id {
+                    self.send_certificate(cert, false).await?;
+                }
+            }
+            if let Some(cert) = manager.leader_timeout {
+                if cert.value().is_timeout() && cert.value().chain_id() == chain_id {
+                    self.send_certificate(cert, false).await?;
                 }
             }
         }

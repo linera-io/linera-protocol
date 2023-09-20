@@ -7,6 +7,7 @@ use async_graphql::InputType;
 use linera_base::{
     abi::ContractAbi,
     crypto::PublicKey,
+    data_types::RoundNumber,
     identifiers::{ChainId, MessageId, Owner},
 };
 use linera_execution::Bytecode;
@@ -400,13 +401,18 @@ impl ClientWrapper {
         &mut self,
         from: ChainId,
         to_public_keys: Vec<PublicKey>,
+        weights: Vec<u64>,
+        multi_leader_rounds: RoundNumber,
     ) -> Result<(MessageId, ChainId)> {
         let mut command = self.run().await?;
         command
             .arg("open-multi-owner-chain")
             .args(["--from", &from.to_string()])
             .arg("--to-public-keys")
-            .args(to_public_keys.iter().map(PublicKey::to_string));
+            .args(to_public_keys.iter().map(PublicKey::to_string))
+            .arg("--weights")
+            .args(weights.iter().map(u64::to_string))
+            .args(["--multi-leader-rounds", &multi_leader_rounds.to_string()]);
 
         let stdout = Self::run_command(&mut command).await?;
         let mut split = stdout.split('\n');
