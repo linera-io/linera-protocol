@@ -145,6 +145,9 @@ pub enum ChainClientError {
 
     #[error("Found several possible identities to interact with multi-owner chain {0}")]
     FoundMultipleKeysForMultiOwnerChain(ChainId),
+
+    #[error("Leader timeout certificate does not match the expected one.")]
+    UnexpectedLeaderTimeout,
 }
 
 impl<P, S> ChainClient<P, S> {
@@ -691,6 +694,18 @@ where
                 };
                 (conf_value, round)
             }
+            CommunicateAction::RequestLeaderTimeout {
+                height,
+                round,
+                epoch,
+            } => {
+                let value = HashedValue::from(CertificateValue::LeaderTimeout {
+                    chain_id,
+                    height,
+                    epoch,
+                });
+                (value, round)
+            }
             CommunicateAction::AdvanceToNextBlockHeight(_) => {
                 return match result {
                     Ok(_) => Ok(None),
@@ -1041,6 +1056,49 @@ where
             self.block_hash = info.block_hash;
             self.timestamp = info.timestamp;
         }
+    }
+
+    /// Requests a leader timeout vote from all validators. If a quorum signs it, creates a
+    /// certificate and sends it to all validators, to make them enter the next round.
+    pub async fn request_leader_timeout(&mut self) -> Result<Certificate, ChainClientError> {
+        let chain_id = self.chain_id;
+        let query = ChainInfoQuery::new(chain_id).with_committees();
+        let info = self.node_client.handle_chain_info_query(query).await?.info;
+        let epoch = info.epoch.ok_or(LocalNodeError::InactiveChain(chain_id))?;
+        let committee = info
+            .requested_committees
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
+            .remove(&epoch)
+            .ok_or(LocalNodeError::InactiveChain(chain_id))?;
+        let height = info.next_block_height;
+        let round = info.manager.current_round();
+        let action = CommunicateAction::RequestLeaderTimeout {
+            height,
+            round,
+            epoch,
+        };
+        let certificate = self
+            .communicate_chain_updates(&committee, chain_id, action)
+            .await?
+            .expect("a certificate");
+        let expected_value = CertificateValue::LeaderTimeout {
+            height,
+            chain_id,
+            epoch,
+        };
+        if *certificate.value() != expected_value || certificate.round != round {
+            return Err(ChainClientError::UnexpectedLeaderTimeout);
+        }
+        self.process_certificate(certificate.clone(), vec![])
+            .await?;
+        // The block height didn't increase, but this will communicate the timeout as well.
+        self.communicate_chain_updates(
+            &committee,
+            chain_id,
+            CommunicateAction::AdvanceToNextBlockHeight(height),
+        )
+        .await?;
+        Ok(certificate)
     }
 
     /// Executes (or retries) a regular block proposal. Updates local balance.

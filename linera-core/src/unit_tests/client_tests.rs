@@ -11,7 +11,7 @@ use crate::{
         ChainClient, ChainClientError, CommunicateAction,
     },
     local_node::LocalNodeError,
-    node::NodeError::ClientIoError,
+    node::NodeError::{self, ClientIoError},
     updater::CommunicationError,
     worker::{Notification, Reason, WorkerError},
 };
@@ -23,6 +23,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{CertificateValue, ExecutedBlock},
+    test::multi_manager,
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
@@ -1400,5 +1401,81 @@ where
         .await,
         Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), ChainExecutionContext::Operation(_)))
     ));
+    Ok(())
+}
+
+#[test(tokio::test)]
+async fn test_memory_request_leader_timeout() -> Result<(), anyhow::Error> {
+    run_test_request_leader_timeout(MakeMemoryStoreClient::default()).await
+}
+
+#[cfg(feature = "rocksdb")]
+#[test(tokio::test)]
+async fn test_rocks_db_request_leader_timeout() -> Result<(), anyhow::Error> {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    run_test_request_leader_timeout(MakeRocksDbStoreClient::default()).await
+}
+
+#[cfg(feature = "aws")]
+#[test(tokio::test)]
+async fn test_dynamo_db_request_leader_timeout() -> Result<(), anyhow::Error> {
+    run_test_request_leader_timeout(MakeDynamoDbStoreClient::default()).await
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_request_leader_timeout() -> Result<(), anyhow::Error> {
+    run_test_request_leader_timeout(MakeScyllaDbStoreClient::default()).await
+}
+
+async fn run_test_request_leader_timeout<B>(store_builder: B) -> Result<(), anyhow::Error>
+where
+    B: StoreBuilder,
+    ViewError: From<<B::Store as Store>::ContextError>,
+{
+    let clock = store_builder.clock().clone();
+    let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
+    let description = ChainDescription::Root(1);
+    let chain_id = ChainId::from(description);
+    let mut client = builder
+        .add_initial_chain(description, Amount::from_tokens(3))
+        .await?;
+    let pub_key0 = client.public_key().await.unwrap();
+    let pub_key1 = KeyPair::generate().public();
+
+    let owner_change_op = SystemOperation::ChangeMultipleOwners {
+        new_public_keys: vec![(pub_key0, 100), (pub_key1, 100)],
+        multi_leader_rounds: RoundNumber::ZERO,
+    }
+    .into();
+    client.execute_operation(owner_change_op).await.unwrap();
+    let manager = client.chain_info().await.unwrap().manager;
+
+    // The round has not timed out yet, so validators will not sign a timeout certificate.
+    assert!(matches!(
+        client.request_leader_timeout().await,
+        Err(ChainClientError::CommunicationError(
+            CommunicationError::Trusted(NodeError::MissingVoteInValidatorResponse)
+        ))
+    ));
+
+    clock.set(multi_manager(&manager).round_timeout);
+
+    // After the timeout they will.
+    let certificate = client.request_leader_timeout().await.unwrap();
+    assert_eq!(
+        *certificate.value(),
+        CertificateValue::LeaderTimeout {
+            chain_id,
+            height: BlockHeight::from(1),
+            epoch: Epoch::ZERO
+        }
+    );
+    assert_eq!(certificate.round, RoundNumber::ZERO);
+
+    builder
+        .check_that_validators_are_in_round(chain_id, BlockHeight::from(1), RoundNumber::from(1), 3)
+        .await;
+
     Ok(())
 }

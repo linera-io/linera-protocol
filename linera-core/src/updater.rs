@@ -8,14 +8,14 @@ use crate::{
 };
 use futures::{future, StreamExt};
 use linera_base::{
-    data_types::BlockHeight,
+    data_types::{BlockHeight, RoundNumber},
     identifiers::{ChainDescription, ChainId, MessageId},
 };
 use linera_chain::{
     data_types::{BlockProposal, Certificate, CertificateValue, LiteVote},
     ChainManager,
 };
-use linera_execution::committee::{Committee, ValidatorName};
+use linera_execution::committee::{Committee, Epoch, ValidatorName};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{
@@ -42,6 +42,11 @@ pub enum CommunicateAction {
     SubmitBlockForValidation(BlockProposal),
     FinalizeBlock(Certificate),
     AdvanceToNextBlockHeight(BlockHeight),
+    RequestLeaderTimeout {
+        height: BlockHeight,
+        round: RoundNumber,
+        epoch: Epoch,
+    },
 }
 
 pub struct ValidatorUpdater<A, S> {
@@ -435,7 +440,8 @@ where
                 proposal.content.block.height
             }
             CommunicateAction::FinalizeBlock(certificate) => certificate.value().height(),
-            CommunicateAction::AdvanceToNextBlockHeight(seq) => *seq,
+            CommunicateAction::AdvanceToNextBlockHeight(height) => *height,
+            CommunicateAction::RequestLeaderTimeout { height, .. } => *height,
         };
         // Update the validator with missing information, if needed.
         self.send_chain_information(chain_id, target_block_height)
@@ -460,6 +466,19 @@ where
                 let retryable = target_block_height == BlockHeight::ZERO;
                 let info = self.send_certificate(certificate, retryable).await?;
                 match info.manager.pending() {
+                    Some(vote) if vote.validator == self.name => {
+                        vote.check()?;
+                        return Ok(Some(vote.clone()));
+                    }
+                    Some(_) | None => {
+                        return Err(NodeError::MissingVoteInValidatorResponse);
+                    }
+                }
+            }
+            CommunicateAction::RequestLeaderTimeout { .. } => {
+                let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
+                let info = self.client.handle_chain_info_query(query).await?.info;
+                match info.manager.timeout_vote() {
                     Some(vote) if vote.validator == self.name => {
                         vote.check()?;
                         return Ok(Some(vote.clone()));
