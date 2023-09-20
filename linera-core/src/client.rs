@@ -658,10 +658,10 @@ where
                     .as_ref()
                     .map(|vote| (vote.value.value_hash, vote.round))
             },
-            |name, client| {
+            |name, node| {
                 let mut updater = ValidatorUpdater {
                     name,
-                    client,
+                    node,
                     store: storage_client.clone(),
                     delay: cross_chain_delay,
                     retries: cross_chain_retries,
@@ -813,14 +813,14 @@ where
         tracker: u64,
         committees: BTreeMap<Epoch, Committee>,
         max_epoch: Epoch,
-        mut client: A,
+        mut node: A,
     ) -> Result<(ValidatorName, u64, Vec<Certificate>), NodeError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
         // Retrieve newly received certificates from this validator.
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_nth(tracker);
-        let response = client.handle_chain_info_query(query).await?;
+        let response = node.handle_chain_info_query(query).await?;
         // Responses are authenticated for accountability.
         response.check(name)?;
         let mut certificates = Vec::new();
@@ -829,7 +829,7 @@ where
             let query = ChainInfoQuery::new(entry.chain_id)
                 .with_sent_certificates_in_range(BlockHeightRange::single(entry.height));
 
-            let mut response = client.handle_chain_info_query(query).await?;
+            let mut response = node.handle_chain_info_query(query).await?;
             let Some(certificate) = response.info.requested_sent_certificates.pop() else {
                 break;
             };
@@ -931,11 +931,11 @@ where
             &nodes,
             &local_committee,
             |_| (),
-            |name, client| {
+            |name, node| {
                 let tracker = *trackers.get(&name).unwrap_or(&0);
                 let committees = committees.clone();
                 Box::pin(Self::synchronize_received_certificates_from_validator(
-                    chain_id, name, tracker, committees, max_epoch, client,
+                    chain_id, name, tracker, committees, max_epoch, node,
                 ))
             },
         )
@@ -966,7 +966,7 @@ where
     pub async fn find_received_certificates_from_validator<A>(
         this: Arc<Mutex<Self>>,
         name: ValidatorName,
-        client: A,
+        node: A,
     ) -> Result<(), ChainClientError>
     where
         A: ValidatorNode + Send + Sync + 'static + Clone,
@@ -986,7 +986,7 @@ where
             current_tracker,
             committees,
             max_epoch,
-            client,
+            node,
         )
         .await?;
         // Process received certificates. If the client state has changed during the

@@ -180,7 +180,7 @@ where
     async fn try_process_certificates<A>(
         &mut self,
         name: ValidatorName,
-        client: &mut A,
+        node: &mut A,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
     ) -> Option<ChainInfo>
@@ -203,9 +203,9 @@ where
                 let chain_id = certificate.value().chain_id();
                 let mut blobs = Vec::new();
                 let maybe_blobs = future::join_all(locations.iter().map(|location| {
-                    let mut client = client.clone();
+                    let mut node = node.clone();
                     async move {
-                        Self::try_download_blob_from(name, &mut client, chain_id, *location).await
+                        Self::try_download_blob_from(name, &mut node, chain_id, *location).await
                     }
                 }))
                 .await;
@@ -275,14 +275,14 @@ where
     {
         // Sequentially try each validator in random order.
         validators.shuffle(&mut rand::thread_rng());
-        for (name, client) in validators {
+        for (name, node) in validators {
             let info = self.local_chain_info(chain_id).await?;
             if target_next_block_height <= info.next_block_height {
                 return Ok(info);
             }
             self.try_download_certificates_from(
                 name,
-                client,
+                node,
                 chain_id,
                 info.next_block_height,
                 target_next_block_height,
@@ -384,7 +384,7 @@ where
     async fn try_download_certificates_from<A>(
         &mut self,
         name: ValidatorName,
-        mut client: A,
+        mut node: A,
         chain_id: ChainId,
         start: BlockHeight,
         stop: BlockHeight,
@@ -400,7 +400,7 @@ where
             limit: Some(limit),
         };
         let query = ChainInfoQuery::new(chain_id).with_sent_certificates_in_range(range);
-        if let Ok(response) = client.handle_chain_info_query(query).await {
+        if let Ok(response) = node.handle_chain_info_query(query).await {
             if response.check(name).is_ok() {
                 let ChainInfo {
                     requested_sent_certificates,
@@ -408,7 +408,7 @@ where
                 } = response.info;
                 self.try_process_certificates(
                     name,
-                    &mut client,
+                    &mut node,
                     chain_id,
                     requested_sent_certificates,
                 )
@@ -428,10 +428,11 @@ where
     {
         let futures: Vec<_> = validators
             .into_iter()
-            .map(|(name, client)| {
-                let mut node = self.clone();
+            .map(|(name, node)| {
+                let mut client = self.clone();
                 async move {
-                    node.try_synchronize_chain_state_from(name, client, chain_id)
+                    client
+                        .try_synchronize_chain_state_from(name, node, chain_id)
                         .await
                 }
             })
@@ -444,7 +445,7 @@ where
     pub async fn try_synchronize_chain_state_from<A>(
         &mut self,
         name: ValidatorName,
-        mut client: A,
+        mut node: A,
         chain_id: ChainId,
     ) -> Result<(), LocalNodeError>
     where
@@ -458,7 +459,7 @@ where
         let query = ChainInfoQuery::new(chain_id)
             .with_sent_certificates_in_range(range)
             .with_manager_values();
-        let info = match client.handle_chain_info_query(query).await {
+        let info = match node.handle_chain_info_query(query).await {
             Ok(response) if response.check(name).is_ok() => response.info,
             Ok(_) => {
                 tracing::warn!("Ignoring invalid response from validator");
@@ -471,12 +472,7 @@ where
             }
         };
         if self
-            .try_process_certificates(
-                name,
-                &mut client,
-                chain_id,
-                info.requested_sent_certificates,
-            )
+            .try_process_certificates(name, &mut node, chain_id, info.requested_sent_certificates)
             .await
             .is_none()
         {
@@ -513,9 +509,9 @@ where
     {
         // Sequentially try each validator in random order.
         validators.shuffle(&mut rand::thread_rng());
-        for (name, mut client) in validators {
+        for (name, mut node) in validators {
             if let Some(blob) =
-                Self::try_download_blob_from(name, &mut client, chain_id, location).await
+                Self::try_download_blob_from(name, &mut node, chain_id, location).await
             {
                 return Some(blob);
             }
@@ -525,7 +521,7 @@ where
 
     async fn try_download_blob_from<A>(
         name: ValidatorName,
-        client: &mut A,
+        node: &mut A,
         chain_id: ChainId,
         location: BytecodeLocation,
     ) -> Option<HashedValue>
@@ -533,7 +529,7 @@ where
         A: ValidatorNode + Send + Sync + 'static + Clone,
     {
         let query = ChainInfoQuery::new(chain_id).with_blob(location.certificate_hash);
-        if let Ok(response) = client.handle_chain_info_query(query).await {
+        if let Ok(response) = node.handle_chain_info_query(query).await {
             if response.check(name).is_ok() {
                 return response.info.requested_blob;
             }

@@ -51,8 +51,8 @@ use linera_storage::ScyllaDbStoreClient;
 async fn test_memory_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let client = MemoryStoreClient::make_test_client(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(client, wasm_runtime).await
+    let store = MemoryStoreClient::make_test_client(Some(wasm_runtime)).await;
+    run_test_handle_certificates_to_create_application(store, wasm_runtime).await
 }
 
 #[cfg(feature = "rocksdb")]
@@ -62,8 +62,8 @@ async fn test_memory_handle_certificates_to_create_application(
 async fn test_rocks_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let client = RocksDbStoreClient::make_test_client(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(client, wasm_runtime).await
+    let store = RocksDbStoreClient::make_test_client(Some(wasm_runtime)).await;
+    run_test_handle_certificates_to_create_application(store, wasm_runtime).await
 }
 
 #[ignore]
@@ -74,8 +74,8 @@ async fn test_rocks_db_handle_certificates_to_create_application(
 async fn test_dynamo_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let client = DynamoDbStoreClient::make_test_client(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(client, wasm_runtime).await
+    let store = DynamoDbStoreClient::make_test_client(Some(wasm_runtime)).await;
+    run_test_handle_certificates_to_create_application(store, wasm_runtime).await
 }
 
 #[ignore]
@@ -86,12 +86,12 @@ async fn test_dynamo_db_handle_certificates_to_create_application(
 async fn test_scylla_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let client = ScyllaDbStoreClient::make_test_client(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(client, wasm_runtime).await
+    let store = ScyllaDbStoreClient::make_test_client(Some(wasm_runtime)).await;
+    run_test_handle_certificates_to_create_application(store, wasm_runtime).await
 }
 
 async fn run_test_handle_certificates_to_create_application<S>(
-    client: S,
+    store: S,
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error>
 where
@@ -104,7 +104,7 @@ where
     let creator_key_pair = KeyPair::generate();
     let creator_chain = ChainDescription::Root(2);
     let (committee, mut worker) = init_worker_with_chains(
-        client,
+        store,
         vec![
             (publisher_chain, publisher_key_pair.public(), Amount::ZERO),
             (creator_chain, creator_key_pair.public(), Amount::ZERO),

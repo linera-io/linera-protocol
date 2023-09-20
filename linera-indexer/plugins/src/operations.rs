@@ -119,11 +119,11 @@ where
         NAME.to_string()
     }
 
-    async fn load(client: DB) -> Result<Self, IndexerError>
+    async fn load(store: DB) -> Result<Self, IndexerError>
     where
         Self: Sized,
     {
-        Ok(Self(load(client, NAME).await?))
+        Ok(Self(load(store, NAME).await?))
     }
 
     async fn register(&self, value: &HashedValue) -> Result<(), IndexerError> {

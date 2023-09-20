@@ -51,7 +51,7 @@ pub enum CommunicateAction {
 
 pub struct ValidatorUpdater<A, S> {
     pub name: ValidatorName,
-    pub client: A,
+    pub node: A,
     pub store: S,
     pub delay: Duration,
     pub retries: usize,
@@ -90,11 +90,11 @@ where
 {
     let mut responses: futures::stream::FuturesUnordered<_> = validator_clients
         .iter()
-        .filter_map(|(name, client)| {
-            let client = client.clone();
+        .filter_map(|(name, node)| {
+            let node = node.clone();
             let execute = execute.clone();
             if committee.weight(name) > 0 {
-                Some(async move { (*name, execute(*name, client).await) })
+                Some(async move { (*name, execute(*name, node).await) })
             } else {
                 // This should not happen but better prevent it because certificates
                 // are not allowed to include votes with weight 0.
@@ -175,20 +175,20 @@ where
         loop {
             let mut result = if certificate.is_signed_by(&self.name) {
                 match self
-                    .client
+                    .node
                     .handle_lite_certificate(certificate.lite_certificate())
                     .await
                 {
                     Ok(response) => Ok(response),
                     Err(NodeError::MissingCertificateValue) => {
-                        self.client
+                        self.node
                             .handle_certificate(certificate.clone(), vec![])
                             .await
                     }
                     Err(err) => Err(err),
                 }
             } else {
-                self.client
+                self.node
                     .handle_certificate(certificate.clone(), vec![])
                     .await
             };
@@ -221,7 +221,7 @@ where
                 .into_iter()
                 .collect::<Result<Vec<_>, _>>()?;
                 result = self
-                    .client
+                    .node
                     .handle_certificate(certificate.clone(), blobs)
                     .await;
             }
@@ -253,7 +253,7 @@ where
         let mut count = 0;
         let mut has_send_chain_information_for_senders = false;
         loop {
-            match self.client.handle_block_proposal(proposal.clone()).await {
+            match self.node.handle_block_proposal(proposal.clone()).await {
                 Ok(response) => {
                     response.check(self.name)?;
                     // Succeed
@@ -326,7 +326,7 @@ where
         loop {
             // Figure out which certificates this validator is missing.
             let query = ChainInfoQuery::new(chain_id);
-            match self.client.handle_chain_info_query(query).await {
+            match self.node.handle_chain_info_query(query).await {
                 Ok(response) if response.info.description.is_some() => {
                     response.check(self.name)?;
                     jobs.push((
@@ -477,7 +477,7 @@ where
             }
             CommunicateAction::RequestLeaderTimeout { .. } => {
                 let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
-                let info = self.client.handle_chain_info_query(query).await?.info;
+                let info = self.node.handle_chain_info_query(query).await?.info;
                 match info.manager.timeout_vote() {
                     Some(vote) if vote.validator == self.name => {
                         vote.check()?;

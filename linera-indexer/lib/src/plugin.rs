@@ -26,8 +26,8 @@ where
     where
         Self: Sized;
 
-    /// Loads the plugin from a client
-    async fn load(client: DB) -> Result<Self, IndexerError>
+    /// Loads the plugin from a store
+    async fn load(store: DB) -> Result<Self, IndexerError>
     where
         Self: Sized;
 
@@ -70,7 +70,7 @@ pub fn route<Q: async_graphql::ObjectType + 'static>(
 }
 
 pub async fn load<DB, V: View<ContextFromDb<(), DB>>>(
-    client: DB,
+    store: DB,
     name: &str,
 ) -> Result<Arc<Mutex<V>>, IndexerError>
 where
@@ -78,7 +78,7 @@ where
     DB::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<DB::Error>,
 {
-    let context = ContextFromDb::create(client, name.as_bytes().to_vec(), ())
+    let context = ContextFromDb::create(store, name.as_bytes().to_vec(), ())
         .await
         .map_err(|e| IndexerError::ViewError(e.into()))?;
     let plugin = V::load(context).await?;

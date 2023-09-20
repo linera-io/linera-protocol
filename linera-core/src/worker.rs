@@ -222,8 +222,8 @@ pub struct WorkerState<StorageClient> {
 
 type DeliveryNotifiers = HashMap<ChainId, BTreeMap<BlockHeight, Vec<oneshot::Sender<()>>>>;
 
-impl<Client> WorkerState<Client> {
-    pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: Client) -> Self {
+impl<StorageClient> WorkerState<StorageClient> {
+    pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: StorageClient) -> Self {
         let recent_values = Arc::new(Mutex::new(LruCache::new(
             NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap(),
         )));
@@ -264,14 +264,14 @@ impl<Client> WorkerState<Client> {
 
     /// Returns the storage client so that it can be manipulated or queried.
     #[cfg(not(feature = "test"))]
-    pub(crate) fn storage_client(&self) -> &Client {
+    pub(crate) fn storage_client(&self) -> &StorageClient {
         &self.storage
     }
 
     /// Returns the storage client so that it can be manipulated or queried by tests in other
     /// crates.
     #[cfg(feature = "test")]
-    pub fn storage_client(&self) -> &Client {
+    pub fn storage_client(&self) -> &StorageClient {
         &self.storage
     }
 
@@ -294,10 +294,10 @@ impl<Client> WorkerState<Client> {
     }
 }
 
-impl<Client> WorkerState<Client>
+impl<StorageClient> WorkerState<StorageClient>
 where
-    Client: Store + Clone + Send + Sync + 'static,
-    ViewError: From<Client::ContextError>,
+    StorageClient: Store + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
 {
     // NOTE: This only works for non-sharded workers!
     #[cfg(any(test, feature = "test"))]
@@ -410,7 +410,7 @@ where
 
     async fn create_cross_chain_request(
         &self,
-        confirmed_log: &mut LogView<Client::Context, CryptoHash>,
+        confirmed_log: &mut LogView<StorageClient::Context, CryptoHash>,
         height_map: Vec<(Medium, Vec<BlockHeight>)>,
         sender: ChainId,
         recipient: ChainId,
@@ -435,7 +435,7 @@ where
     /// Loads pending cross-chain requests.
     async fn create_network_actions(
         &self,
-        chain: &mut ChainStateView<Client::Context>,
+        chain: &mut ChainStateView<StorageClient::Context>,
     ) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
         let targets = chain.outboxes.indices().await?;
@@ -845,7 +845,7 @@ where
     pub async fn load_application_registry(
         &self,
         chain_id: ChainId,
-    ) -> Result<ApplicationRegistryView<Client::Context>, WorkerError> {
+    ) -> Result<ApplicationRegistryView<StorageClient::Context>, WorkerError> {
         let chain = self.storage.load_active_chain(chain_id).await?;
         Ok(chain.execution_state.system.registry)
     }
@@ -907,10 +907,10 @@ where
 }
 
 #[async_trait]
-impl<Client> ValidatorWorker for WorkerState<Client>
+impl<StorageClient> ValidatorWorker for WorkerState<StorageClient>
 where
-    Client: Store + Clone + Send + Sync + 'static,
-    ViewError: From<Client::ContextError>,
+    StorageClient: Store + Clone + Send + Sync + 'static,
+    ViewError: From<StorageClient::ContextError>,
 {
     #[instrument(skip_all, fields(
         nick = self.nickname,
