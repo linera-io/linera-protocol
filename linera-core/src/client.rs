@@ -72,8 +72,6 @@ pub struct ChainClient<ValidatorNodeProvider, StorageClient> {
     /// Sequence number that we plan to use for the next block.
     /// We track this value outside local storage mainly for security reasons.
     next_block_height: BlockHeight,
-    /// Round number that we plan to use for the next block.
-    next_round: RoundNumber,
     /// Pending block.
     pending_block: Option<Block>,
     /// Known key pairs from present and past identities.
@@ -147,6 +145,9 @@ pub enum ChainClientError {
 
     #[error("Found several possible identities to interact with multi-owner chain {0}")]
     FoundMultipleKeysForMultiOwnerChain(ChainId),
+
+    #[error("Leader timeout certificate does not match the expected one.")]
+    UnexpectedLeaderTimeout,
 }
 
 impl<P, S> ChainClient<P, S> {
@@ -178,7 +179,6 @@ impl<P, S> ChainClient<P, S> {
             block_hash,
             timestamp,
             next_block_height,
-            next_round: RoundNumber::default(),
             pending_block: None,
             known_key_pairs,
             admin_id,
@@ -508,7 +508,7 @@ where
                 if let Some(info) =
                     Self::local_chain_info(this.clone(), chain_id, &mut local_node).await
                 {
-                    if (info.next_block_height, info.manager.next_round()) >= (height, round) {
+                    if (info.next_block_height, info.manager.current_round()) >= (height, round) {
                         debug!("Accepting redundant notification for new round");
                         return true;
                     }
@@ -526,7 +526,7 @@ where
                     error!("Fail to read local chain info for {chain_id}");
                     return false;
                 };
-                if (info.next_block_height, info.manager.next_round()) < (height, round) {
+                if (info.next_block_height, info.manager.current_round()) < (height, round) {
                     error!("Fail to synchronize new block after notification");
                     return false;
                 }
@@ -693,6 +693,18 @@ where
                     ));
                 };
                 (conf_value, round)
+            }
+            CommunicateAction::RequestLeaderTimeout {
+                height,
+                round,
+                epoch,
+            } => {
+                let value = HashedValue::from(CertificateValue::LeaderTimeout {
+                    chain_id,
+                    height,
+                    epoch,
+                });
+                (value, round)
             }
             CommunicateAction::AdvanceToNextBlockHeight(_) => {
                 return match result {
@@ -1039,21 +1051,59 @@ where
 
     /// Updates the latest block and next block height and round information from the chain info.
     fn update_from_info(&mut self, info: &ChainInfo) {
-        if info.chain_id == self.chain_id
-            && (info.next_block_height, info.manager.next_round())
-                > (self.next_block_height, self.next_round)
-        {
-            self.block_hash = info.block_hash;
+        if info.chain_id == self.chain_id && info.next_block_height > self.next_block_height {
             self.next_block_height = info.next_block_height;
-            self.next_round = info.manager.next_round();
+            self.block_hash = info.block_hash;
             self.timestamp = info.timestamp;
         }
+    }
+
+    /// Requests a leader timeout vote from all validators. If a quorum signs it, creates a
+    /// certificate and sends it to all validators, to make them enter the next round.
+    pub async fn request_leader_timeout(&mut self) -> Result<Certificate, ChainClientError> {
+        let chain_id = self.chain_id;
+        let query = ChainInfoQuery::new(chain_id).with_committees();
+        let info = self.node_client.handle_chain_info_query(query).await?.info;
+        let epoch = info.epoch.ok_or(LocalNodeError::InactiveChain(chain_id))?;
+        let committee = info
+            .requested_committees
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
+            .remove(&epoch)
+            .ok_or(LocalNodeError::InactiveChain(chain_id))?;
+        let height = info.next_block_height;
+        let round = info.manager.current_round();
+        let action = CommunicateAction::RequestLeaderTimeout {
+            height,
+            round,
+            epoch,
+        };
+        let certificate = self
+            .communicate_chain_updates(&committee, chain_id, action)
+            .await?
+            .expect("a certificate");
+        let expected_value = CertificateValue::LeaderTimeout {
+            height,
+            chain_id,
+            epoch,
+        };
+        if *certificate.value() != expected_value || certificate.round != round {
+            return Err(ChainClientError::UnexpectedLeaderTimeout);
+        }
+        self.process_certificate(certificate.clone(), vec![])
+            .await?;
+        // The block height didn't increase, but this will communicate the timeout as well.
+        self.communicate_chain_updates(
+            &committee,
+            chain_id,
+            CommunicateAction::AdvanceToNextBlockHeight(height),
+        )
+        .await?;
+        Ok(certificate)
     }
 
     /// Executes (or retries) a regular block proposal. Updates local balance.
     /// If `with_confirmation` is false, we stop short of executing the finalized block.
     async fn propose_block(&mut self, block: Block) -> Result<Certificate, ChainClientError> {
-        let next_round = self.next_round;
         ensure!(
             self.pending_block.is_none() || self.pending_block.as_ref() == Some(&block),
             ChainClientError::BlockProposalError("Client state has a different pending block")
@@ -1074,7 +1124,14 @@ where
             .read_or_download_blobs(nodes, block.bytecode_locations())
             .await?;
         // Build the initial query.
-        let manager = self.chain_info().await?.manager;
+        let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
+        let response = self.node_client.handle_chain_info_query(query).await?;
+        let manager = response.info.manager;
+        let Some(next_round) = manager.next_round() else {
+            return Err(ChainClientError::BlockProposalError(
+                "Cannot propose a block; there is already a proposal in the current round",
+            ));
+        };
         let key_pair = self.key_pair().await?;
         let validated = manager.highest_validated().cloned();
         // TODO(#66): return the block that should be proposed instead
@@ -1404,30 +1461,37 @@ where
     }
 
     /// Adds another owner to the chain.
+    ///
+    /// If the chain is currently of type `Single`, the existing owner's weight is set to 100, and
+    /// the first two rounds are multi-leader.
     pub async fn share_ownership(
         &mut self,
         new_public_key: PublicKey,
+        new_weight: u64,
     ) -> Result<Certificate, ChainClientError> {
         let info = self.prepare_chain().await?;
         let messages = self.pending_messages().await?;
-        let new_public_keys = match info.manager {
-            ChainManagerInfo::None => {
-                return Err(ChainError::InactiveChain(self.chain_id).into());
-            }
-            ChainManagerInfo::Single(manager) => {
-                vec![manager.public_key, new_public_key]
-            }
-            ChainManagerInfo::Multi(manager) => manager
-                .public_keys
-                .values()
-                .cloned()
-                .chain(iter::once(new_public_key))
-                .collect(),
+        let (new_public_keys, multi_leader_rounds) = match info.manager {
+            ChainManagerInfo::None => return Err(ChainError::InactiveChain(self.chain_id).into()),
+            ChainManagerInfo::Single(manager) => (
+                vec![(manager.public_key, 100), (new_public_key, new_weight)],
+                RoundNumber(2),
+            ),
+            ChainManagerInfo::Multi(manager) => (
+                manager
+                    .public_keys
+                    .values()
+                    .cloned()
+                    .chain(iter::once((new_public_key, new_weight)))
+                    .collect(),
+                manager.multi_leader_rounds,
+            ),
         };
         self.execute_block(
             messages,
             vec![Operation::System(SystemOperation::ChangeMultipleOwners {
                 new_public_keys,
+                multi_leader_rounds,
             })],
         )
         .await

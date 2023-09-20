@@ -19,6 +19,9 @@
 //! [trait1]: common::KeyValueStoreClient
 //! [trait2]: common::Context
 
+#[cfg(any(test, feature = "test"))]
+use crate::{common::get_table_name, lru_caching::TEST_CACHE_SIZE};
+
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
@@ -35,9 +38,6 @@ use scylla::{
 };
 use std::{ops::Deref, sync::Arc};
 use thiserror::Error;
-
-#[cfg(any(test, feature = "test"))]
-use crate::{common::get_table_name, lru_caching::TEST_CACHE_SIZE};
 
 /// The creation of a ScyllaDB client that can be used for accessing it.
 /// The `Vec<u8>`is a primary key.
@@ -74,7 +74,11 @@ pub enum ScyllaDbContextError {
 
     /// Missing database
     #[error("Missing database")]
-    MissingDatabase,
+    MissingDatabase(String),
+
+    /// Already existing database
+    #[error("Already existing database")]
+    AlreadyExistingDatabase,
 
     /// The database is not coherent
     #[error(transparent)]
@@ -338,6 +342,17 @@ impl ScyllaDbClientInternal {
     }
 
     /// Tests if a table is present in the database or not
+    pub async fn test_existence(
+        store_config: ScyllaDbKvStoreConfig,
+    ) -> Result<bool, ScyllaDbContextError> {
+        let session = SessionBuilder::new()
+            .known_node(store_config.uri.as_str())
+            .build()
+            .await?;
+        Self::test_table_existence(&session, &store_config.table_name).await
+    }
+
+    /// Tests if a table is present in the database or not
     pub async fn test_table_existence(
         session: &Session,
         table_name: &String,
@@ -422,43 +437,105 @@ impl ScyllaDbClientInternal {
 
     #[cfg(any(test, feature = "test"))]
     async fn new_for_testing(
-        uri: &str,
-        table_name: String,
-        common_config: CommonStoreConfig,
+        store_config: ScyllaDbKvStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
-        let session = SessionBuilder::new().known_node(uri).build().await?;
-        if Self::test_table_existence(&session, &table_name).await? {
-            let query = format!("DROP TABLE kv.pairs_{};", table_name);
+        let session = SessionBuilder::new()
+            .known_node(store_config.uri.as_str())
+            .build()
+            .await?;
+        if Self::test_table_existence(&session, &store_config.table_name).await? {
+            let query = format!("DROP TABLE kv.pairs_{};", store_config.table_name);
             session.query(query, &[]).await?;
         }
         let stop_if_table_exists = true;
-        Self::new_internal(session, table_name, common_config, stop_if_table_exists).await
+        let create_if_missing = true;
+        Self::new_internal(
+            session,
+            store_config,
+            stop_if_table_exists,
+            create_if_missing,
+        )
+        .await
+    }
+
+    async fn initialize(store_config: ScyllaDbKvStoreConfig) -> Result<Self, ScyllaDbContextError> {
+        let session = SessionBuilder::new()
+            .known_node(store_config.uri.as_str())
+            .build()
+            .await?;
+        let stop_if_table_exists = false;
+        let create_if_missing = true;
+        let (client, table_status) = Self::new_internal(
+            session,
+            store_config,
+            stop_if_table_exists,
+            create_if_missing,
+        )
+        .await?;
+        if table_status == TableStatus::Existing {
+            return Err(ScyllaDbContextError::AlreadyExistingDatabase);
+        }
+        Ok(client)
+    }
+
+    async fn delete_all(store_config: ScyllaDbKvStoreConfig) -> Result<(), ScyllaDbContextError> {
+        let session = SessionBuilder::new()
+            .known_node(store_config.uri.as_str())
+            .build()
+            .await?;
+        let query = "DROP KEYSPACE IF EXISTS kv;".to_string();
+        session.query(query, &[]).await?;
+        Ok(())
+    }
+
+    async fn delete_single(
+        store_config: ScyllaDbKvStoreConfig,
+    ) -> Result<(), ScyllaDbContextError> {
+        let session = SessionBuilder::new()
+            .known_node(store_config.uri.as_str())
+            .build()
+            .await?;
+        let query = format!("DROP TABLE IF EXISTS kv.pairs_{};", store_config.table_name);
+        session.query(query, &[]).await?;
+        Ok(())
     }
 
     async fn new(
-        uri: &str,
-        table_name: String,
-        common_config: CommonStoreConfig,
+        store_config: ScyllaDbKvStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
-        let session = SessionBuilder::new().known_node(uri).build().await?;
+        let session = SessionBuilder::new()
+            .known_node(store_config.uri.as_str())
+            .build()
+            .await?;
         let stop_if_table_exists = false;
-        Self::new_internal(session, table_name, common_config, stop_if_table_exists).await
+        let create_if_missing = false;
+        Self::new_internal(
+            session,
+            store_config,
+            stop_if_table_exists,
+            create_if_missing,
+        )
+        .await
     }
 
     async fn new_internal(
         session: Session,
-        table_name: String,
-        common_config: CommonStoreConfig,
+        store_config: ScyllaDbKvStoreConfig,
         stop_if_table_exists: bool,
+        create_if_missing: bool,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         // Create a session builder and specify the ScyllaDB contact points
-        let mut existing_table = Self::test_table_existence(&session, &table_name).await?;
+        let kv_name = format!("{:?}", store_config);
+        let mut existing_table =
+            Self::test_table_existence(&session, &store_config.table_name).await?;
         if !existing_table {
-            if common_config.create_if_missing {
+            if create_if_missing {
                 existing_table =
-                    Self::create_table(&session, &table_name, stop_if_table_exists).await?;
+                    Self::create_table(&session, &store_config.table_name, stop_if_table_exists)
+                        .await?;
             } else {
-                return Err(ScyllaDbContextError::MissingDatabase);
+                tracing::info!("ScyllaDb: Missing database for kv_name={}", kv_name);
+                return Err(ScyllaDbContextError::MissingDatabase(kv_name));
             }
         }
         let table_status = if existing_table {
@@ -466,12 +543,13 @@ impl ScyllaDbClientInternal {
         } else {
             TableStatus::New
         };
-        let client = (session, table_name);
+        let client = (session, store_config.table_name);
         let client = Arc::new(client);
-        let semaphore = common_config
+        let semaphore = store_config
+            .common_config
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
-        let max_stream_queries = common_config.max_stream_queries;
+        let max_stream_queries = store_config.common_config.max_stream_queries;
         let client = Self {
             client,
             semaphore,
@@ -485,6 +563,17 @@ impl ScyllaDbClientInternal {
 #[derive(Clone)]
 pub struct ScyllaDbClient {
     client: LruCachingKeyValueClient<ScyllaDbClientInternal>,
+}
+
+/// The type for building a new ScyllaDb Key Value Store Client
+#[derive(Debug)]
+pub struct ScyllaDbKvStoreConfig {
+    /// The url to which the requests have to be sent
+    pub uri: String,
+    /// The name of the table that we create
+    pub table_name: String,
+    /// The common configuration of the key value store
+    pub common_config: CommonStoreConfig,
 }
 
 #[async_trait]
@@ -538,26 +627,54 @@ impl ScyllaDbClient {
     /// Creates a [`ScyllaDbClient`] from the input parameters.
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
-        uri: &str,
-        namespace: String,
-        common_config: CommonStoreConfig,
+        store_config: ScyllaDbKvStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
-        let (client, table_status) =
-            ScyllaDbClientInternal::new_for_testing(uri, namespace, common_config.clone()).await?;
-        let client = LruCachingKeyValueClient::new(client, common_config.cache_size);
+        let cache_size = store_config.common_config.cache_size;
+        let (client, table_status) = ScyllaDbClientInternal::new_for_testing(store_config).await?;
+        let client = LruCachingKeyValueClient::new(client, cache_size);
         let client = ScyllaDbClient { client };
         Ok((client, table_status))
     }
 
     /// Creates a [`ScyllaDbClient`] from the input parameters.
+    pub async fn initialize(
+        store_config: ScyllaDbKvStoreConfig,
+    ) -> Result<Self, ScyllaDbContextError> {
+        let cache_size = store_config.common_config.cache_size;
+        let client = ScyllaDbClientInternal::initialize(store_config).await?;
+        let client = LruCachingKeyValueClient::new(client, cache_size);
+        let client = ScyllaDbClient { client };
+        Ok(client)
+    }
+
+    /// Delete all the tables of a database
+    pub async fn test_existence(
+        store_config: ScyllaDbKvStoreConfig,
+    ) -> Result<bool, ScyllaDbContextError> {
+        ScyllaDbClientInternal::test_existence(store_config).await
+    }
+
+    /// Delete all the tables of a database
+    pub async fn delete_all(
+        store_config: ScyllaDbKvStoreConfig,
+    ) -> Result<(), ScyllaDbContextError> {
+        ScyllaDbClientInternal::delete_all(store_config).await
+    }
+
+    /// Deletes a single table from the database
+    pub async fn delete_single(
+        store_config: ScyllaDbKvStoreConfig,
+    ) -> Result<(), ScyllaDbContextError> {
+        ScyllaDbClientInternal::delete_single(store_config).await
+    }
+
+    /// Creates a [`ScyllaDbClient`] from the input parameters.
     pub async fn new(
-        uri: &str,
-        namespace: String,
-        common_config: CommonStoreConfig,
+        store_config: ScyllaDbKvStoreConfig,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
-        let (client, table_status) =
-            ScyllaDbClientInternal::new(uri, namespace, common_config.clone()).await?;
-        let client = LruCachingKeyValueClient::new(client, common_config.cache_size);
+        let cache_size = store_config.common_config.cache_size;
+        let (client, table_status) = ScyllaDbClientInternal::new(store_config).await?;
+        let client = LruCachingKeyValueClient::new(client, cache_size);
         let client = ScyllaDbClient { client };
         Ok((client, table_status))
     }
@@ -570,17 +687,21 @@ pub fn create_scylla_db_common_config() -> CommonStoreConfig {
         max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
         max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
         cache_size: TEST_CACHE_SIZE,
-        create_if_missing: true,
     }
 }
 
 /// Creates a ScyllaDB test client
 #[cfg(any(test, feature = "test"))]
 pub async fn create_scylla_db_test_client() -> ScyllaDbClient {
-    let uri = "localhost:9042";
+    let uri = "localhost:9042".to_string();
     let table_name = get_table_name().await;
     let common_config = create_scylla_db_common_config();
-    let (client, _) = ScyllaDbClient::new_for_testing(uri, table_name, common_config)
+    let store_config = ScyllaDbKvStoreConfig {
+        uri,
+        table_name,
+        common_config,
+    };
+    let (client, _) = ScyllaDbClient::new_for_testing(store_config)
         .await
         .expect("client");
     client

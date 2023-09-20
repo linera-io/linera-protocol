@@ -13,7 +13,7 @@ use crate::{
 };
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
-    data_types::{BlockHeight, RoundNumber},
+    data_types::{BlockHeight, RoundNumber, Timestamp},
     doc_scalar, ensure,
     identifiers::ChainId,
 };
@@ -46,7 +46,12 @@ pub enum Outcome {
 }
 
 impl ChainManager {
-    pub fn reset(&mut self, ownership: &ChainOwnership) {
+    pub fn reset(
+        &mut self,
+        ownership: &ChainOwnership,
+        height: BlockHeight,
+        now: Timestamp,
+    ) -> Result<(), ChainError> {
         match ownership {
             ChainOwnership::None => {
                 *self = ChainManager::None;
@@ -56,15 +61,18 @@ impl ChainManager {
                     ChainManager::Single(Box::new(SingleOwnerManager::new(*owner, *public_key)));
             }
             ChainOwnership::Multi {
-                public_keys: owners,
+                public_keys,
+                multi_leader_rounds,
             } => {
-                let owners = owners
-                    .iter()
-                    .map(|(owner, public_key)| (*owner, *public_key))
-                    .collect();
-                *self = ChainManager::Multi(Box::new(MultiOwnerManager::new(owners)));
+                *self = ChainManager::Multi(Box::new(MultiOwnerManager::new(
+                    public_keys.clone(),
+                    *multi_leader_rounds,
+                    height.0,
+                    now,
+                )?));
             }
         }
+        Ok(())
     }
 
     pub fn is_active(&self) -> bool {
@@ -79,12 +87,9 @@ impl ChainManager {
         }
     }
 
-    pub fn next_round(&self) -> RoundNumber {
+    pub fn current_round(&self) -> RoundNumber {
         match self {
-            ChainManager::Multi(manager) => {
-                let round = manager.round();
-                round.try_add_one().unwrap_or(round)
-            }
+            ChainManager::Multi(manager) => manager.current_round(),
             ChainManager::None | ChainManager::Single(_) => RoundNumber::default(),
         }
     }
@@ -103,10 +108,11 @@ impl ChainManager {
         height: BlockHeight,
         epoch: Epoch,
         key_pair: Option<&KeyPair>,
+        now: Timestamp,
     ) -> bool {
         match self {
             ChainManager::Multi(manager) => {
-                manager.vote_leader_timeout(chain_id, height, epoch, key_pair)
+                manager.vote_leader_timeout(chain_id, height, epoch, key_pair, now)
             }
             ChainManager::Single(_) | ChainManager::None => false,
         }
@@ -139,28 +145,34 @@ impl ChainManager {
         messages: Vec<OutgoingMessage>,
         state_hash: CryptoHash,
         key_pair: Option<&KeyPair>,
+        now: Timestamp,
     ) {
         match self {
             ChainManager::Single(manager) => {
                 manager.create_vote(proposal, messages, state_hash, key_pair)
             }
             ChainManager::Multi(manager) => {
-                manager.create_vote(proposal, messages, state_hash, key_pair)
+                manager.create_vote(proposal, messages, state_hash, key_pair, now)
             }
             ChainManager::None => panic!("unexpected chain manager"),
         }
     }
 
-    pub fn create_final_vote(&mut self, certificate: Certificate, key_pair: Option<&KeyPair>) {
+    pub fn create_final_vote(
+        &mut self,
+        certificate: Certificate,
+        key_pair: Option<&KeyPair>,
+        now: Timestamp,
+    ) {
         match self {
-            ChainManager::Multi(manager) => manager.create_final_vote(certificate, key_pair),
+            ChainManager::Multi(manager) => manager.create_final_vote(certificate, key_pair, now),
             ChainManager::None | ChainManager::Single(_) => panic!("unexpected chain manager"),
         }
     }
 
-    pub fn handle_timeout_certificate(&mut self, certificate: Certificate) {
+    pub fn handle_timeout_certificate(&mut self, certificate: Certificate, now: Timestamp) {
         match self {
-            ChainManager::Multi(manager) => manager.handle_timeout_certificate(certificate),
+            ChainManager::Multi(manager) => manager.handle_timeout_certificate(certificate, now),
             ChainManager::None | ChainManager::Single(_) => panic!("unexpected chain manager"),
         }
     }
@@ -223,10 +235,21 @@ impl ChainManagerInfo {
         }
     }
 
-    pub fn next_round(&self) -> RoundNumber {
+    /// Returns the round which is currently ongoing, i.e. the lowest round where this validator
+    /// could still vote to confirm a block.
+    pub fn current_round(&self) -> RoundNumber {
+        match self {
+            ChainManagerInfo::Multi(multi) => multi.current_round,
+            ChainManagerInfo::None | ChainManagerInfo::Single(_) => RoundNumber::default(),
+        }
+    }
+
+    /// Returns the lowest round in which a block could currently be proposed, if any.
+    pub fn next_round(&self) -> Option<RoundNumber> {
         match self {
             ChainManagerInfo::Multi(multi) => multi.next_round(),
-            ChainManagerInfo::None | ChainManagerInfo::Single(_) => RoundNumber::default(),
+            ChainManagerInfo::Single(_) => Some(RoundNumber::default()),
+            ChainManagerInfo::None => None,
         }
     }
 }

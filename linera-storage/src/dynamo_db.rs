@@ -5,8 +5,8 @@ use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient, WallClock};
 use dashmap::DashMap;
 use linera_execution::WasmRuntime;
 use linera_views::{
-    common::{CommonStoreConfig, TableStatus},
-    dynamo_db::{Config, DynamoDbClient, DynamoDbContextError, TableName},
+    common::TableStatus,
+    dynamo_db::{DynamoDbClient, DynamoDbContextError, DynamoDbKvStoreConfig},
 };
 use std::sync::Arc;
 #[cfg(any(test, feature = "test"))]
@@ -27,13 +27,10 @@ type DynamoDbStore = DbStore<DynamoDbClient>;
 impl DynamoDbStore {
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
-        config: Config,
-        table: TableName,
-        common_config: CommonStoreConfig,
+        store_config: DynamoDbKvStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (client, table_status) =
-            DynamoDbClient::new_for_testing(config, table, common_config).await?;
+        let (client, table_status) = DynamoDbClient::new_for_testing(store_config).await?;
         let store = Self {
             client,
             guards: ChainGuards::default(),
@@ -43,13 +40,25 @@ impl DynamoDbStore {
         Ok((store, table_status))
     }
 
+    pub async fn initialize(
+        store_config: DynamoDbKvStoreConfig,
+        wasm_runtime: Option<WasmRuntime>,
+    ) -> Result<Self, DynamoDbContextError> {
+        let client = DynamoDbClient::initialize(store_config).await?;
+        let store = Self {
+            client,
+            guards: ChainGuards::default(),
+            user_applications: Arc::new(DashMap::new()),
+            wasm_runtime,
+        };
+        Ok(store)
+    }
+
     pub async fn new(
-        config: Config,
-        table: TableName,
-        common_config: CommonStoreConfig,
+        store_config: DynamoDbKvStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (client, table_status) = DynamoDbClient::new(config, table, common_config).await?;
+        let (client, table_status) = DynamoDbClient::new(store_config).await?;
         let store = Self {
             client,
             guards: ChainGuards::default(),
@@ -69,43 +78,51 @@ impl DynamoDbStoreClient<TestClock> {
         let table_name = table.parse().expect("Invalid table name");
         let localstack = LocalStackTestContext::new().await.expect("localstack");
         let common_config = create_dynamo_db_common_config();
-        let (client, _) = DynamoDbStoreClient::new_for_testing(
-            localstack.dynamo_db_config(),
+        let store_config = DynamoDbKvStoreConfig {
+            config: localstack.dynamo_db_config(),
             table_name,
             common_config,
-            wasm_runtime,
-        )
-        .await
-        .expect("client and table_name");
+        };
+        let (client, _) =
+            DynamoDbStoreClient::new_for_testing(store_config, wasm_runtime, TestClock::new())
+                .await
+                .expect("client and table_name");
         client
     }
 
     pub async fn new_for_testing(
-        config: impl Into<Config>,
-        table: TableName,
-        common_config: CommonStoreConfig,
+        store_config: DynamoDbKvStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
+        clock: TestClock,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let (store, table_status) =
-            DynamoDbStore::new_for_testing(config.into(), table, common_config, wasm_runtime)
-                .await?;
+            DynamoDbStore::new_for_testing(store_config, wasm_runtime).await?;
         let store_client = DynamoDbStoreClient {
             client: Arc::new(store),
-            clock: TestClock::new(),
+            clock,
         };
         Ok((store_client, table_status))
     }
 }
 
 impl DynamoDbStoreClient<WallClock> {
+    pub async fn initialize(
+        store_config: DynamoDbKvStoreConfig,
+        wasm_runtime: Option<WasmRuntime>,
+    ) -> Result<Self, DynamoDbContextError> {
+        let store = DynamoDbStore::initialize(store_config, wasm_runtime).await?;
+        let store_client = DynamoDbStoreClient {
+            client: Arc::new(store),
+            clock: WallClock,
+        };
+        Ok(store_client)
+    }
+
     pub async fn new(
-        config: impl Into<Config>,
-        table: TableName,
-        common_config: CommonStoreConfig,
+        store_config: DynamoDbKvStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (store, table_status) =
-            DynamoDbStore::new(config.into(), table, common_config, wasm_runtime).await?;
+        let (store, table_status) = DynamoDbStore::new(store_config, wasm_runtime).await?;
         let store_client = DynamoDbStoreClient {
             client: Arc::new(store),
             clock: WallClock,

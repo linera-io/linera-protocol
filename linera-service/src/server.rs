@@ -20,7 +20,7 @@ use linera_service::{
     config::{
         CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig, ValidatorServerConfig,
     },
-    storage::{Runnable, StorageConfig},
+    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig},
 };
 use linera_storage::Store;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
@@ -322,10 +322,6 @@ enum ServerCommand {
         /// The maximal number of entries in the storage cache.
         #[structopt(long, default_value = "1000")]
         cache_size: usize,
-
-        /// Do not create a table if one is missing
-        #[structopt(long = "do not create a database if missing")]
-        skip_table_creation_when_missing: bool,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -338,6 +334,30 @@ enum ServerCommand {
         /// Path where to write the description of the Linera committee
         #[structopt(long)]
         committee: Option<PathBuf>,
+    },
+
+    /// Initialize the database
+    #[structopt(name = "initialize")]
+    Initialize {
+        /// Storage configuration for the blockchain history and security states.
+        #[structopt(long = "storage")]
+        storage_config: StorageConfig,
+
+        /// Path to the file describing the initial user chains (aka genesis state)
+        #[structopt(long = "genesis")]
+        genesis_config_path: PathBuf,
+
+        /// The maximal number of simultaneous queries to the database
+        #[structopt(long)]
+        max_concurrent_queries: Option<usize>,
+
+        /// The maximal number of stream queries to the database
+        #[structopt(long, default_value = "10")]
+        max_stream_queries: usize,
+
+        /// The maximal number of entries in the storage cache.
+        #[structopt(long, default_value = "1000")]
+        cache_size: usize,
     },
 }
 
@@ -373,7 +393,6 @@ async fn main() {
             max_concurrent_queries,
             max_stream_queries,
             cache_size,
-            skip_table_creation_when_missing,
         } => {
             let genesis_config = GenesisConfig::read(&genesis_config_path)
                 .expect("Fail to read initial chain config");
@@ -388,15 +407,16 @@ async fn main() {
                 grace_period_micros: grace_period,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
-            let create_if_missing = !skip_table_creation_when_missing;
             let common_config = CommonStoreConfig {
                 max_concurrent_queries,
                 max_stream_queries,
                 cache_size,
-                create_if_missing,
             };
-            storage_config
-                .run_with_storage(&genesis_config, wasm_runtime, common_config, job)
+            let full_storage_config = storage_config
+                .add_common_config(common_config)
+                .await
+                .unwrap();
+            run_with_storage(full_storage_config, &genesis_config, wasm_runtime, job)
                 .await
                 .unwrap();
         }
@@ -430,6 +450,29 @@ async fn main() {
                     .expect("Unable to write committee description");
                 info!("Wrote committee config {}", committee.to_str().unwrap());
             }
+        }
+
+        ServerCommand::Initialize {
+            storage_config,
+            genesis_config_path,
+            max_concurrent_queries,
+            max_stream_queries,
+            cache_size,
+        } => {
+            let genesis_config = GenesisConfig::read(&genesis_config_path)
+                .expect("Fail to read initial chain config");
+            let common_config = CommonStoreConfig {
+                max_concurrent_queries,
+                max_stream_queries,
+                cache_size,
+            };
+            let full_storage_config = storage_config
+                .add_common_config(common_config)
+                .await
+                .unwrap();
+            full_initialize_storage(full_storage_config, &genesis_config)
+                .await
+                .unwrap();
         }
     }
 }

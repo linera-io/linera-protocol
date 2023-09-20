@@ -5,12 +5,23 @@
 
 use linera_base::{
     crypto::KeyPair,
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, RoundNumber, Timestamp},
     identifiers::ChainId,
 };
-use linera_execution::{committee::Epoch, system::Recipient, Operation, SystemOperation};
+use linera_execution::{
+    committee::{Committee, Epoch, ValidatorState},
+    pricing::Pricing,
+    system::Recipient,
+    Operation, SystemOperation,
+};
 
-use crate::data_types::{Block, BlockAndRound, BlockProposal, HashedValue, IncomingMessage};
+use crate::{
+    data_types::{
+        Block, BlockAndRound, BlockProposal, Certificate, HashedValue, IncomingMessage,
+        SignatureAggregator, Vote,
+    },
+    ChainManagerInfo, MultiOwnerManagerInfo,
+};
 
 /// Creates a new child of the given block, with the same timestamp.
 pub fn make_child_block(parent: &HashedValue) -> Block {
@@ -59,8 +70,13 @@ pub trait BlockTestExt: Sized {
     /// Returns the block with the specified epoch.
     fn with_epoch(self, epoch: impl Into<Epoch>) -> Self;
 
-    /// Returns a block proposal with round 0, without any blobs or validated block.
-    fn into_simple_proposal(self, key_pair: &KeyPair) -> BlockProposal;
+    /// Returns a block proposal in round 0 without any blobs or validated block.
+    fn into_simple_proposal(self, key_pair: &KeyPair) -> BlockProposal {
+        self.into_proposal_with_round(key_pair, RoundNumber::ZERO)
+    }
+
+    /// Returns a block proposal without any blobs or validated block.
+    fn into_proposal_with_round(self, key_pair: &KeyPair, round: RoundNumber) -> BlockProposal;
 }
 
 impl BlockTestExt for Block {
@@ -93,15 +109,38 @@ impl BlockTestExt for Block {
         self
     }
 
-    fn into_simple_proposal(self, key_pair: &KeyPair) -> BlockProposal {
-        BlockProposal::new(
-            BlockAndRound {
-                block: self,
-                round: Default::default(),
-            },
-            key_pair,
-            vec![],
-            None,
-        )
+    fn into_proposal_with_round(self, key_pair: &KeyPair, round: RoundNumber) -> BlockProposal {
+        let content = BlockAndRound { block: self, round };
+        BlockProposal::new(content, key_pair, vec![], None)
+    }
+}
+
+pub trait VoteTestExt: Sized {
+    /// Returns a certificate for a committee consisting only of this validator.
+    fn into_certificate(self) -> Certificate;
+}
+
+impl VoteTestExt for Vote {
+    fn into_certificate(self) -> Certificate {
+        let state = ValidatorState {
+            network_address: "".to_string(),
+            votes: 100,
+        };
+        let committee = Committee::new(
+            vec![(self.validator, state)].into_iter().collect(),
+            Pricing::only_fuel(),
+        );
+        SignatureAggregator::new(self.value, self.round, &committee)
+            .append(self.validator, self.signature)
+            .unwrap()
+            .unwrap()
+    }
+}
+
+/// Returns the `MultiOwnerManagerInfo`; panics if there is a different kind of chain manager.
+pub fn multi_manager(manager: &ChainManagerInfo) -> &MultiOwnerManagerInfo {
+    match manager {
+        ChainManagerInfo::Multi(multi) => multi,
+        _ => panic!("Expected multi-owner chain manager."),
     }
 }

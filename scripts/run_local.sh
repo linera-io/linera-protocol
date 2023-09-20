@@ -47,6 +47,10 @@ do
 
     for J in $(seq 0 $((SHARDS_PER_VALIDATOR - 1)))
     do
+        ./linera-server initialize --storage rocksdb:server_"$I"_"$J".db --genesis genesis.json
+    done
+    for J in $(seq 0 $((SHARDS_PER_VALIDATOR - 1)))
+    do
         ./linera-server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
     done
 done

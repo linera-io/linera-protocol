@@ -9,7 +9,7 @@ use colored::Colorize;
 use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, BlockHeight, RoundNumber, Timestamp},
     identifiers::{BytecodeId, ChainDescription, ChainId, MessageId},
 };
 use linera_chain::data_types::{Certificate, CertificateValue, ExecutedBlock};
@@ -30,7 +30,7 @@ use linera_service::{
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     node_service::NodeService,
     project::{self, Project},
-    storage::{Runnable, StorageConfig},
+    storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig},
 };
 use linera_storage::Store;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
@@ -38,6 +38,7 @@ use serde_json::Value;
 use std::{
     env, fs,
     io::Read,
+    iter,
     num::NonZeroU16,
     path::PathBuf,
     sync::Arc,
@@ -49,7 +50,6 @@ use tracing::{debug, info, warn};
 use linera_service::client::{LocalNetwork, Network};
 #[cfg(feature = "benchmark")]
 use {
-    linera_base::data_types::RoundNumber,
     linera_chain::data_types::{
         Block, BlockAndRound, BlockProposal, HashedValue, SignatureAggregator, Vote,
     },
@@ -611,10 +611,6 @@ struct ClientOptions {
     #[structopt(long, default_value = "1000")]
     cache_size: usize,
 
-    /// Do not create a table if one is missing
-    #[structopt(long = "do not create a database if missing")]
-    skip_table_creation_when_missing: bool,
-
     /// Subcommand.
     #[structopt(subcommand)]
     command: ClientCommand,
@@ -645,6 +641,47 @@ impl ClientOptions {
             client_options.storage_config = Some(storage_path.parse()?);
         }
         Ok(client_options)
+    }
+
+    async fn run_command_with_storage(self) -> Result<(), Error> {
+        let context = ClientContext::from_options(&self)?;
+        let genesis_config = context.wallet_state.genesis_config().clone();
+        let wasm_runtime = self.wasm_runtime.with_wasm_default();
+        let max_concurrent_queries = self.max_concurrent_queries;
+        let max_stream_queries = self.max_stream_queries;
+        let cache_size = self.cache_size;
+        let storage_config = ClientContext::storage_config(&self)?;
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries,
+            max_stream_queries,
+            cache_size,
+        };
+        let full_storage_config = storage_config.add_common_config(common_config).await?;
+        run_with_storage(
+            full_storage_config,
+            &genesis_config,
+            wasm_runtime,
+            Job(context, self.command),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn initialize_storage(&self) -> Result<(), Error> {
+        let context = ClientContext::from_options(self)?;
+        let genesis_config = context.wallet_state.genesis_config().clone();
+        let max_concurrent_queries = self.max_concurrent_queries;
+        let max_stream_queries = self.max_stream_queries;
+        let cache_size = self.cache_size;
+        let storage_config = ClientContext::storage_config(self)?;
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries,
+            max_stream_queries,
+            cache_size,
+        };
+        let full_storage_config = storage_config.add_common_config(common_config).await?;
+        full_initialize_storage(full_storage_config, &genesis_config).await?;
+        Ok(())
     }
 }
 
@@ -684,6 +721,15 @@ enum ClientCommand {
         /// Public keys of the new owners
         #[structopt(long = "to-public-keys")]
         public_keys: Vec<PublicKey>,
+
+        /// Weights for the new owners
+        #[structopt(long = "weights")]
+        weights: Vec<u64>,
+
+        /// The number of rounds in which every owner can propose blocks, i.e. the first round
+        /// number in which only a single designated leader is allowed to propose blocks.
+        #[structopt(long = "multi-leader-rounds")]
+        multi_leader_rounds: Option<RoundNumber>,
     },
 
     /// Close (i.e. deactivate) an existing chain.
@@ -976,10 +1022,12 @@ enum WalletCommand {
 enum ProjectCommand {
     /// Create a new Linera project.
     New { path: PathBuf },
+
     /// Test a Linera project.
     ///
     /// Equivalent to running `cargo test` with the appropriate test runner.
     Test { path: Option<PathBuf> },
+
     /// Build and publish a Linera project.
     PublishAndCreate {
         /// The path of the root of the Linera project.
@@ -1103,11 +1151,25 @@ impl Runnable for Job {
             OpenMultiOwnerChain {
                 chain_id,
                 public_keys,
+                weights,
+                multi_leader_rounds,
             } => {
                 let mut chain_client = context.make_chain_client(storage, chain_id);
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
-                let ownership = ChainOwnership::multiple(public_keys);
+                let owners: Vec<_> = if weights.is_empty() {
+                    public_keys.into_iter().zip(iter::repeat(100)).collect()
+                } else if weights.len() != public_keys.len() {
+                    bail!(
+                        "There are {} public keys but {} weights.",
+                        public_keys.len(),
+                        weights.len()
+                    );
+                } else {
+                    public_keys.into_iter().zip(weights).collect()
+                };
+                let multi_leader_rounds = multi_leader_rounds.unwrap_or(RoundNumber::MAX);
+                let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
                 let (message_id, certificate) = chain_client.open_chain(ownership).await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
@@ -1664,6 +1726,7 @@ async fn main() -> Result<(), anyhow::Error> {
             let mut context = ClientContext::create(&options, genesis_config.clone(), chains)?;
             genesis_config.write(genesis_config_path)?;
             context.save_wallet();
+            options.initialize_storage().await?;
             Ok(())
         }
 
@@ -1677,7 +1740,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 let project = Project::from_existing_project(path)?;
                 Ok(project.test()?)
             }
-            ProjectCommand::PublishAndCreate { .. } => run_command_with_storage(options).await,
+            ProjectCommand::PublishAndCreate { .. } => options.run_command_with_storage().await,
         },
 
         ClientCommand::Keygen => {
@@ -1763,36 +1826,11 @@ async fn main() -> Result<(), anyhow::Error> {
                     .collect();
                 let mut context = ClientContext::create(&options, genesis_config, chains)?;
                 context.save_wallet();
+                options.initialize_storage().await?;
                 Ok(())
             }
         },
 
-        _ => run_command_with_storage(options).await,
+        _ => options.run_command_with_storage().await,
     }
-}
-
-async fn run_command_with_storage(options: ClientOptions) -> Result<(), Error> {
-    let context = ClientContext::from_options(&options)?;
-    let genesis_config = context.wallet_state.genesis_config().clone();
-    let wasm_runtime = options.wasm_runtime.with_wasm_default();
-    let max_concurrent_queries = options.max_concurrent_queries;
-    let max_stream_queries = options.max_stream_queries;
-    let cache_size = options.cache_size;
-    let create_if_missing = !options.skip_table_creation_when_missing;
-    let storage_config = ClientContext::storage_config(&options)?;
-    let common_config = CommonStoreConfig {
-        max_concurrent_queries,
-        max_stream_queries,
-        cache_size,
-        create_if_missing,
-    };
-    storage_config
-        .run_with_storage(
-            &genesis_config,
-            wasm_runtime,
-            common_config,
-            Job(context, options.command),
-        )
-        .await?;
-    Ok(())
 }
