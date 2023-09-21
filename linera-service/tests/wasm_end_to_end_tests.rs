@@ -11,7 +11,7 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{ApplicationId, ChainId},
 };
-use linera_service::client::{ClientWrapper, Database, LocalNetwork, Network};
+use linera_service::cli_wrappers::{ClientWrapper, Database, LocalNetwork, Network};
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, time::Duration};
 use tracing::{info, warn};

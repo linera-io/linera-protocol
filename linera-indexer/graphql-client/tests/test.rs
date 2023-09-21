@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_service::client::resolve_binary;
+use linera_service::cli_wrappers::resolve_binary;
 use std::{io::Read, rc::Rc};
 use tempfile::tempdir;
 use tokio::process::Command;

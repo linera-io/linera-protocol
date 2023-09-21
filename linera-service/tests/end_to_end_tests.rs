@@ -8,7 +8,7 @@ mod common;
 
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::identifiers::ChainId;
-use linera_service::client::{Database, LocalNetwork, Network};
+use linera_service::cli_wrappers::{Database, LocalNetwork, Network};
 use std::time::Duration;
 
 #[cfg(feature = "rocksdb")]

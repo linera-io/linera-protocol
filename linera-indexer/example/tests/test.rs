@@ -8,7 +8,7 @@ use linera_indexer_graphql_client::{
     indexer::{plugins, state, Plugins, State},
     operations::{get_operation, GetOperation, OperationKey},
 };
-use linera_service::client::{resolve_binary, Database, LocalNetwork, Network};
+use linera_service::cli_wrappers::{resolve_binary, Database, LocalNetwork, Network};
 use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
 use once_cell::sync::Lazy;
 use std::{rc::Rc, str::FromStr, time::Duration};
