@@ -1582,6 +1582,7 @@ dependencies = [
  "sha3",
  "test-strategy",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

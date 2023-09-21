@@ -1458,13 +1458,15 @@ where
         ))
     ));
 
+    tokio::time::pause();
     tokio::time::sleep(Duration::from_micros(
         multi_manager(&manager)
             .round_timeout
             .saturating_diff_micros(Timestamp::now())
-            + 100_000,
+            + 1_000_000,
     ))
     .await;
+    tokio::time::resume();
 
     // After the timeout they will.
     let certificate = client.request_leader_timeout().await.unwrap();

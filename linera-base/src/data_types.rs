@@ -3,10 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt,
-    time::{Duration, SystemTime},
-};
+use std::{fmt, time::Duration};
 use thiserror::Error;
 
 use crate::doc_scalar;
@@ -66,17 +63,30 @@ pub struct RoundNumber(pub u32);
 )]
 pub struct Timestamp(u64);
 
+#[cfg(any(test, feature = "test"))]
+static FIRST_INSTANT: std::sync::OnceLock<tokio::time::Instant> = std::sync::OnceLock::new();
+
 impl Timestamp {
     /// Returns the current time according to the system clock.
+    #[cfg(not(any(test, feature = "test")))]
     pub fn now() -> Timestamp {
         Timestamp(
-            SystemTime::UNIX_EPOCH
+            std::time::SystemTime::UNIX_EPOCH
                 .elapsed()
                 .expect("system time should be after Unix epoch")
                 .as_micros()
                 .try_into()
                 .unwrap_or(u64::MAX),
         )
+    }
+
+    /// Returns the time, as milliseconds since the first call to `now()`. This can be modified
+    /// using `tokio::time`'s test-util functions.
+    #[cfg(any(test, feature = "test"))]
+    pub fn now() -> Timestamp {
+        let now = tokio::time::Instant::now();
+        let first = *FIRST_INSTANT.get_or_init(|| now);
+        Timestamp(u64::try_from(now.duration_since(first).as_micros()).unwrap())
     }
 
     /// Returns the number of microseconds since the Unix epoch.

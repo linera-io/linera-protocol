@@ -11,7 +11,7 @@ license = "Apache-2.0"
 edition = "2021"
 
 [features]
-test = ["test-strategy", "proptest"]
+test = ["test-strategy", "proptest", "tokio"]
 
 [dependencies]
 async-graphql = { workspace = true }
@@ -26,6 +26,7 @@ serde-name = { workspace = true }
 sha3 = { workspace = true }
 test-strategy = { workspace = true, optional = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["test-util"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono = { workspace = true }
@@ -34,6 +35,7 @@ rand07 = { workspace = true }
 [dev-dependencies]
 custom_debug_derive = { workspace = true }
 linera-base = { path = ".", features = ["test"] }
+tokio = { workspace = true, features = ["test-util"] }
 
 [package.metadata.cargo-machete]
 ignored = ["serde_bytes"]

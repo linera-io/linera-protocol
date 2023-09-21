@@ -4,18 +4,16 @@
 use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient};
 use dashmap::DashMap;
 use linera_execution::WasmRuntime;
+#[cfg(any(test, feature = "test"))]
+use linera_views::{
+    common::get_table_name,
+    dynamo_db::{create_dynamo_db_common_config, LocalStackTestContext},
+};
 use linera_views::{
     common::TableStatus,
     dynamo_db::{DynamoDbClient, DynamoDbContextError, DynamoDbKvStoreConfig},
 };
 use std::sync::Arc;
-#[cfg(any(test, feature = "test"))]
-use {
-    linera_views::{
-        common::get_table_name,
-        dynamo_db::{create_dynamo_db_common_config, LocalStackTestContext},
-    },
-};
 
 #[cfg(test)]
 #[path = "unit_tests/dynamo_db.rs"]

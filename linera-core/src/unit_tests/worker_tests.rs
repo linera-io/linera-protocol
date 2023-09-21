@@ -453,17 +453,21 @@ where
     let (committee, mut worker) = init_worker_with_chains(store, balances).await;
 
     {
+        let future_time =
+            Timestamp::now().saturating_add_micros(TEST_GRACE_PERIOD_MICROS + 1_000_000);
         let block_proposal = make_first_block(ChainId::root(1))
-            .with_timestamp(Timestamp::from(TEST_GRACE_PERIOD_MICROS + 1_000_000))
+            .with_timestamp(future_time)
             .into_simple_proposal(&key_pair);
         // Timestamp too far in the future
-        assert!(matches!(
-            worker.handle_block_proposal(block_proposal).await,
-            Err(WorkerError::InvalidTimestamp)
-        ));
+        let result = worker.handle_block_proposal(block_proposal).await;
+        assert!(
+            matches!(result, Err(WorkerError::InvalidTimestamp)),
+            "Unexpected result: {:?}",
+            result
+        );
     }
 
-    let block_0_time = Timestamp::from(TEST_GRACE_PERIOD_MICROS);
+    let block_0_time = Timestamp::now().saturating_add_micros(TEST_GRACE_PERIOD_MICROS);
     let certificate = {
         let block = make_first_block(ChainId::root(1)).with_timestamp(block_0_time);
         let block_proposal = block.clone().into_simple_proposal(&key_pair);
@@ -3281,13 +3285,15 @@ where
     assert!(multi_manager(manager).timeout_vote.is_none());
 
     // Set the clock to the end of the round.
+    tokio::time::pause();
     tokio::time::sleep(Duration::from_micros(
         multi_manager(manager)
             .round_timeout
             .saturating_diff_micros(Timestamp::now())
-            + 100_000,
+            + 1_000_000,
     ))
     .await;
+    tokio::time::resume();
 
     // Now the validator will sign a leader timeout vote.
     let query = ChainInfoQuery::new(chain_id).with_leader_timeout();

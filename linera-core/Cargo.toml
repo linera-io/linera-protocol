@@ -17,6 +17,7 @@ wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 test = [
     "anyhow", "linera-base/test", "linera-chain/test", "linera-execution/test", "linera-storage/test",
     "linera-views/test", "proptest", "tempfile", "test-log", "test-strategy", "tokio/parking_lot",
+    "tokio/test-util",
 ]
 rocksdb = ["linera-views/rocksdb", "linera-storage/rocksdb"]
 aws = ["linera-views/aws", "linera-storage/aws"]

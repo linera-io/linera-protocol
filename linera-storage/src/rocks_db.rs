@@ -65,8 +65,8 @@ impl RocksDbStore {
 
 pub type RocksDbStoreClient = DbStoreClient<RocksDbClient>;
 
+#[cfg(any(test, feature = "test"))]
 impl RocksDbStoreClient {
-    #[cfg(any(test, feature = "test"))]
     pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> RocksDbStoreClient {
         let dir = TempDir::new().unwrap();
         let path_buf = dir.path().to_path_buf();
