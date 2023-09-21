@@ -1337,6 +1337,69 @@ where
 }
 
 #[test(tokio::test)]
+async fn test_memory_handle_certificate_wrong_owner() {
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_wrong_owner(store).await;
+}
+
+#[cfg(feature = "rocksdb")]
+#[test(tokio::test)]
+async fn test_rocks_db_handle_certificate_wrong_owner() {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_wrong_owner(store).await;
+}
+
+#[cfg(feature = "aws")]
+#[test(tokio::test)]
+async fn test_dynamo_db_handle_certificate_wrong_owner() {
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_wrong_owner(store).await;
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_certificate_wrong_owner() {
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_wrong_owner(store).await;
+}
+
+async fn run_test_handle_certificate_wrong_owner<S>(store: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
+    let sender_key_pair = KeyPair::generate();
+    let (committee, mut worker) = init_worker_with_chains(
+        store,
+        vec![(
+            ChainDescription::Root(2),
+            PublicKey::debug(2),
+            Amount::from_tokens(5),
+        )],
+    )
+    .await;
+    let certificate = make_transfer_certificate(
+        ChainDescription::Root(2),
+        &sender_key_pair,
+        Recipient::root(2),
+        Amount::from_tokens(5),
+        Vec::new(),
+        &committee,
+        Amount::ZERO,
+        &worker,
+        None,
+    )
+    .await;
+    // This fails because `make_transfer_certificate` uses `sender_key_pair.public()` to
+    // compute the hash of the execution state.
+    assert!(matches!(
+        worker.fully_handle_certificate(certificate, vec![]).await,
+        Err(WorkerError::IncorrectStateHash)
+    ));
+}
+
+#[test(tokio::test)]
 async fn test_memory_handle_certificate_bad_block_height() {
     let store = MemoryStoreClient::make_test_client(None).await;
     run_test_handle_certificate_bad_block_height(store).await;
