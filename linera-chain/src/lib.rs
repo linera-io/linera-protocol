@@ -86,7 +86,10 @@ pub enum ChainError {
         chain_id: ChainId,
         message: IncomingMessage,
     },
-    #[error("Block proposed to {chain_id:?} is attempting to bounce a message that was bounced once already {message:?}")]
+    #[error(
+        "Block proposed to {chain_id:?} is attempting to bounce a message \
+             that was bounced once already {message:?}"
+    )]
     CannotBounceMessageTwice {
         chain_id: ChainId,
         message: IncomingMessage,
