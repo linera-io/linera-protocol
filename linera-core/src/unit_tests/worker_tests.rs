@@ -323,7 +323,7 @@ where
         worker
             .handle_block_proposal(bad_signature_block_proposal)
             .await,
-            Err(WorkerError::CryptoError(error)) if matches!(error, CryptoError::InvalidSignature{..})
+            Err(WorkerError::CryptoError(error)) if matches!(error, CryptoError::InvalidSignature {..})
     ));
     assert!(worker
         .storage
@@ -496,7 +496,7 @@ where
         // Timestamp older than previous one
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
-            Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InvalidBlockTimestamp{..})
+            Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InvalidBlockTimestamp {..})
         ));
     }
 }
@@ -636,7 +636,7 @@ where
 
     assert!(matches!(
         worker.handle_block_proposal(block_proposal1.clone()).await,
-        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight{..})
+        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight {..})
     ));
     assert!(worker
         .storage
@@ -677,7 +677,7 @@ where
         .is_some());
     assert!(matches!(
         worker.handle_block_proposal(block_proposal0.clone()).await,
-        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight{..})
+        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight {..})
     ));
 }
 
@@ -1333,7 +1333,70 @@ where
     assert!(matches!(worker
         .fully_handle_certificate(certificate, vec![])
         .await,
-        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InactiveChain{..})));
+        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InactiveChain {..})));
+}
+
+#[test(tokio::test)]
+async fn test_memory_handle_certificate_wrong_owner() {
+    let store = MemoryStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_wrong_owner(store).await;
+}
+
+#[cfg(feature = "rocksdb")]
+#[test(tokio::test)]
+async fn test_rocks_db_handle_certificate_wrong_owner() {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let store = RocksDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_wrong_owner(store).await;
+}
+
+#[cfg(feature = "aws")]
+#[test(tokio::test)]
+async fn test_dynamo_db_handle_certificate_wrong_owner() {
+    let store = DynamoDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_wrong_owner(store).await;
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_handle_certificate_wrong_owner() {
+    let store = ScyllaDbStoreClient::make_test_client(None).await;
+    run_test_handle_certificate_wrong_owner(store).await;
+}
+
+async fn run_test_handle_certificate_wrong_owner<S>(store: S)
+where
+    S: Store + Clone + Send + Sync + 'static,
+    ViewError: From<S::ContextError>,
+{
+    let sender_key_pair = KeyPair::generate();
+    let (committee, mut worker) = init_worker_with_chains(
+        store,
+        vec![(
+            ChainDescription::Root(2),
+            PublicKey::debug(2),
+            Amount::from_tokens(5),
+        )],
+    )
+    .await;
+    let certificate = make_transfer_certificate(
+        ChainDescription::Root(2),
+        &sender_key_pair,
+        Recipient::root(2),
+        Amount::from_tokens(5),
+        Vec::new(),
+        &committee,
+        Amount::ZERO,
+        &worker,
+        None,
+    )
+    .await;
+    // This fails because `make_transfer_certificate` uses `sender_key_pair.public()` to
+    // compute the hash of the execution state.
+    assert!(matches!(
+        worker.fully_handle_certificate(certificate, vec![]).await,
+        Err(WorkerError::IncorrectStateHash)
+    ));
 }
 
 #[test(tokio::test)]

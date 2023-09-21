@@ -26,7 +26,7 @@ use linera_execution::{
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
     chain_listener::{self, ChainListenerConfig},
-    client::Database,
+    client::{Database, LocalNetwork, Network},
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     node_service::NodeService,
     project::{self, Project},
@@ -47,7 +47,6 @@ use std::{
 use structopt::StructOpt;
 use tracing::{debug, info, warn};
 
-use linera_service::client::{LocalNetwork, Network};
 #[cfg(feature = "benchmark")]
 use {
     linera_chain::data_types::{
