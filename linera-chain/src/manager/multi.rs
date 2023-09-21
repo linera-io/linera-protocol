@@ -255,11 +255,12 @@ impl MultiOwnerManager {
                 }
             }
         }
-        let current_round = self.current_round();
-        ensure!(
-            new_round >= current_round,
-            ChainError::InsufficientRound(current_round)
-        );
+        if let Some(locked) = &self.locked {
+            ensure!(
+                new_round > locked.round,
+                ChainError::InsufficientRound(locked.round)
+            );
+        }
         Ok(Outcome::Accept)
     }
 
@@ -307,12 +308,17 @@ impl MultiOwnerManager {
         key_pair: Option<&KeyPair>,
         now: Timestamp,
     ) {
+        let round = certificate.round;
+        // Validators only change their locked block if the new one is included in a proposal in the
+        // current round, or it is itself in the current round.
+        if key_pair.is_some() && round < self.current_round() {
+            return;
+        }
         let Some(value) = certificate.value.clone().into_confirmed() else {
             // Unreachable: This is only called with validated blocks.
             error!("Unexpected certificate; expected ValidatedBlock");
             return;
         };
-        let round = certificate.round;
         self.update_timeout(round, now);
         self.locked = Some(certificate);
         if let Some(key_pair) = key_pair {
