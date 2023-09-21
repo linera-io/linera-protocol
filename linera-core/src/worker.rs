@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::{future, FutureExt};
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, BlockHeight, RoundNumber},
+    data_types::{ArithmeticError, BlockHeight, RoundNumber, Timestamp},
     doc_scalar, ensure,
     identifiers::{ChainId, Owner},
 };
@@ -338,7 +338,7 @@ where
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
-        let now = self.storage.current_time();
+        let now = Timestamp::now();
         let (messages, state_hash) = chain.execute_block(&block, now).await?;
         let response = ChainInfoResponse::new(&chain, None);
         let executed_block = ExecutedBlock {
@@ -533,7 +533,7 @@ where
         // Execute the block and update inboxes.
         chain.remove_events_from_inboxes(block).await?;
         // We should always agree on the messages and state hash.
-        let now = self.storage.current_time();
+        let now = Timestamp::now();
         let (verified_messages, verified_state_hash) = chain.execute_block(block, now).await?;
         ensure!(
             *messages == verified_messages,
@@ -665,7 +665,7 @@ where
         chain.manager.get_mut().create_final_vote(
             certificate.clone(),
             self.key_pair(),
-            self.storage.current_time(),
+            Timestamp::now(),
         );
         let info = ChainInfoResponse::new(&chain, self.key_pair());
         chain.save().await?;
@@ -717,7 +717,7 @@ where
         chain
             .manager
             .get_mut()
-            .handle_timeout_certificate(certificate.clone(), self.storage.current_time());
+            .handle_timeout_certificate(certificate.clone(), Timestamp::now());
         if chain.manager.get().current_round() > current_round {
             actions.notifications.push(Notification {
                 chain_id,
@@ -771,7 +771,7 @@ where
                         },
                     ..
                 } => {
-                    let now = self.storage.current_time();
+                    let now = Timestamp::now();
                     // Update the staged chain state with the received block.
                     chain
                         .receive_block(origin, block.height, block.timestamp, messages, hash, now)
@@ -972,7 +972,7 @@ where
         self.check_no_missing_bytecode(block, blobs).await?;
         // Write the values so that the bytecode is available during execution.
         self.storage.write_values(blobs).await?;
-        let now = self.storage.current_time();
+        let now = Timestamp::now();
         let time_till_block = block.timestamp.saturating_diff_micros(now);
         ensure!(
             time_till_block <= self.grace_period_micros,
@@ -981,7 +981,7 @@ where
         if time_till_block > 0 {
             tokio::time::sleep(Duration::from_micros(time_till_block)).await;
         }
-        let now = self.storage.current_time();
+        let now = Timestamp::now();
         let (messages, state_hash) = {
             let (messages, state_hash) = chain.execute_block(block, now).await?;
             // Verify that the resulting chain would have no unconfirmed incoming messages.
@@ -1075,7 +1075,7 @@ where
                     chain.tip_state.get().next_block_height,
                     *epoch,
                     self.key_pair(),
-                    self.storage.current_time(),
+                    Timestamp::now(),
                 ) {
                     chain.save().await?;
                 }

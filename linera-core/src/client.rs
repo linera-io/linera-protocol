@@ -1278,7 +1278,7 @@ where
     /// This will usually be the current time according to the local clock, but may be slightly
     /// ahead to make sure it's not earlier than the incoming messages or the previous block.
     async fn next_timestamp(&self, incoming_messages: &[IncomingMessage]) -> Timestamp {
-        let now = self.node_client.storage_client().await.current_time();
+        let now = Timestamp::now();
         incoming_messages
             .iter()
             .map(|msg| msg.event.timestamp)

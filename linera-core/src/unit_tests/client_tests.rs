@@ -34,7 +34,7 @@ use linera_execution::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use test_log::test;
 
 #[cfg(feature = "rocksdb")]
@@ -1433,7 +1433,6 @@ where
     B: StoreBuilder,
     ViewError: From<<B::Store as Store>::ContextError>,
 {
-    let clock = store_builder.clock().clone();
     let mut builder = TestBuilder::new(store_builder, 4, 1).await?;
     let description = ChainDescription::Root(1);
     let chain_id = ChainId::from(description);
@@ -1459,7 +1458,13 @@ where
         ))
     ));
 
-    clock.set(multi_manager(&manager).round_timeout);
+    tokio::time::sleep(Duration::from_micros(
+        multi_manager(&manager)
+            .round_timeout
+            .saturating_diff_micros(Timestamp::now())
+            + 100_000,
+    ))
+    .await;
 
     // After the timeout they will.
     let certificate = client.request_leader_timeout().await.unwrap();

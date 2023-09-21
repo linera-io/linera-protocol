@@ -20,22 +20,18 @@ impl MemoryStore {
     }
 }
 
-pub type MemoryStoreClient<C> = DbStoreClient<MemoryClient, C>;
+pub type MemoryStoreClient = DbStoreClient<MemoryClient>;
 
-#[cfg(any(test, feature = "test"))]
-impl MemoryStoreClient<crate::TestClock> {
+impl MemoryStoreClient {
+    #[cfg(any(test, feature = "test"))]
     pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> Self {
-        let clock = crate::TestClock::new();
         let max_stream_queries = linera_views::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
-        MemoryStoreClient::new(wasm_runtime, max_stream_queries, clock)
+        MemoryStoreClient::new(wasm_runtime, max_stream_queries)
     }
-}
 
-impl<C> MemoryStoreClient<C> {
-    pub fn new(wasm_runtime: Option<WasmRuntime>, max_stream_queries: usize, clock: C) -> Self {
+    pub fn new(wasm_runtime: Option<WasmRuntime>, max_stream_queries: usize) -> Self {
         Self {
             client: Arc::new(MemoryStore::new(wasm_runtime, max_stream_queries)),
-            clock,
         }
     }
 }

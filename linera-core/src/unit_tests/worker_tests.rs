@@ -34,7 +34,7 @@ use linera_execution::{
     Message, Query, Response, SystemExecutionError, SystemExecutionState, SystemQuery,
     SystemResponse,
 };
-use linera_storage::{DbStoreClient, MemoryStoreClient, Store, TestClock};
+use linera_storage::{DbStoreClient, MemoryStoreClient, Store};
 use linera_views::{
     common::KeyValueStoreClient,
     memory::TEST_MEMORY_MAX_STREAM_QUERIES,
@@ -42,7 +42,7 @@ use linera_views::{
     views::{CryptoHashView, ViewError},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, iter};
+use std::{collections::BTreeMap, iter, time::Duration};
 use test_log::test;
 
 #[cfg(feature = "rocksdb")]
@@ -439,7 +439,7 @@ async fn test_scylla_db_handle_block_proposal_ticks() {
     run_test_handle_block_proposal_ticks(store).await;
 }
 
-async fn run_test_handle_block_proposal_ticks<C>(store: DbStoreClient<C, TestClock>)
+async fn run_test_handle_block_proposal_ticks<C>(store: DbStoreClient<C>)
 where
     C: KeyValueStoreClient + Clone + Send + Sync + 'static,
     ViewError: From<<C as KeyValueStoreClient>::Error>,
@@ -450,7 +450,6 @@ where
     let balance: Amount = Amount::from_tokens(5);
     let balances = vec![(ChainDescription::Root(1), key_pair.public(), balance)];
     let epoch = Epoch::ZERO;
-    let clock = store.clock.clone();
     let (committee, mut worker) = init_worker_with_chains(store, balances).await;
 
     {
@@ -485,9 +484,11 @@ where
         });
         make_certificate(&committee, &worker, value)
     };
-    let future = worker.fully_handle_certificate(certificate.clone(), vec![]);
-    clock.set(block_0_time);
-    future.await.expect("handle certificate with valid tick");
+    worker
+        .fully_handle_certificate(certificate.clone(), vec![])
+        .await
+        .expect("handle certificate with valid tick");
+    assert!(Timestamp::now() >= block_0_time);
 
     {
         let block_proposal = make_child_block(&certificate.value)
@@ -2989,7 +2990,7 @@ where
 async fn test_cross_chain_helper() {
     // Make a committee and worker (only used for signing certificates)
     let (committee, worker) = init_worker(
-        MemoryStoreClient::new(None, TEST_MEMORY_MAX_STREAM_QUERIES, TestClock::new()),
+        MemoryStoreClient::new(None, TEST_MEMORY_MAX_STREAM_QUERIES),
         true,
     );
     let committees = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
@@ -3232,7 +3233,7 @@ async fn test_scylla_db_leader_timeouts() {
     run_test_leader_timeouts(store).await;
 }
 
-async fn run_test_leader_timeouts<C>(store: DbStoreClient<C, TestClock>)
+async fn run_test_leader_timeouts<C>(store: DbStoreClient<C>)
 where
     C: KeyValueStoreClient + Clone + Send + Sync + 'static,
     ViewError: From<<C as KeyValueStoreClient>::Error>,
@@ -3242,7 +3243,6 @@ where
     let chain_id = ChainId::root(0);
     let key_pairs = generate_key_pairs(2);
     let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
-    let clock = store.clock.clone();
     let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
     let (committee, mut worker) = init_worker_with_chains(store, balances).await;
 
@@ -3281,7 +3281,13 @@ where
     assert!(multi_manager(manager).timeout_vote.is_none());
 
     // Set the clock to the end of the round.
-    clock.set(multi_manager(manager).round_timeout);
+    tokio::time::sleep(Duration::from_micros(
+        multi_manager(manager)
+            .round_timeout
+            .saturating_diff_micros(Timestamp::now())
+            + 100_000,
+    ))
+    .await;
 
     // Now the validator will sign a leader timeout vote.
     let query = ChainInfoQuery::new(chain_id).with_leader_timeout();

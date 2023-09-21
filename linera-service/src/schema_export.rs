@@ -12,7 +12,7 @@ use linera_core::{
 };
 use linera_execution::committee::Committee;
 use linera_service::{chain_listener::ChainListenerConfig, node_service::NodeService};
-use linera_storage::{MemoryStoreClient, WallClock};
+use linera_storage::MemoryStoreClient;
 
 #[derive(Clone)]
 struct DummyValidatorNode;
@@ -68,7 +68,7 @@ impl ValidatorNodeProvider for DummyValidatorNodeProvider {
 }
 
 fn main() -> std::io::Result<()> {
-    let store = MemoryStoreClient::new(None, TEST_MEMORY_MAX_STREAM_QUERIES, WallClock);
+    let store = MemoryStoreClient::new(None, TEST_MEMORY_MAX_STREAM_QUERIES);
     let config = ChainListenerConfig {
         delay_before_ms: 0,
         delay_after_ms: 0,

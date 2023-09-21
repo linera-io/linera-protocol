@@ -74,9 +74,6 @@ pub trait Store: Sized {
     /// Alias to provide simpler trait bounds `ViewError: From<Self::ContextError>`
     type ContextError: std::error::Error + Debug + Sync + Send;
 
-    /// Returns the current wall clock time.
-    fn current_time(&self) -> Timestamp;
-
     /// Loads the view of a chain state.
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>;
 
@@ -178,7 +175,7 @@ pub trait Store: Sized {
         chain.manager.get_mut().reset(
             &ChainOwnership::single(public_key),
             BlockHeight(0),
-            self.current_time(),
+            Timestamp::now(),
         )?;
         chain.save().await?;
         Ok(())
@@ -253,9 +250,8 @@ pub struct DbStore<Client> {
 
 #[derive(Clone)]
 /// A DbStoreClient wrapping with Arc
-pub struct DbStoreClient<Client, Clock> {
+pub struct DbStoreClient<Client> {
     client: Arc<DbStore<Client>>,
-    pub clock: Clock,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -265,69 +261,16 @@ enum BaseKey {
     Value(CryptoHash),
 }
 
-/// A clock that can be used to get the current `Timestamp`.
-pub trait Clock {
-    fn current_time(&self) -> Timestamp;
-}
-
-/// A `Clock` implementation using the system clock.
-#[derive(Clone)]
-pub struct WallClock;
-
-impl Clock for WallClock {
-    fn current_time(&self) -> Timestamp {
-        Timestamp::now()
-    }
-}
-
-/// A clock implementation that uses a stored number of microseconds and that can be updated
-/// explicitly. All clones share the same time, and setting it in one clone updates all the others.
-#[cfg(any(test, feature = "test"))]
-#[derive(Clone, Default)]
-pub struct TestClock(Arc<std::sync::atomic::AtomicU64>);
-
-#[cfg(any(test, feature = "test"))]
-impl Clock for TestClock {
-    fn current_time(&self) -> Timestamp {
-        Timestamp::from(self.0.load(std::sync::atomic::Ordering::SeqCst))
-    }
-}
-
-#[cfg(any(test, feature = "test"))]
-impl TestClock {
-    /// Creates a new clock with its time set to 0, i.e. the Unix epoch.
-    pub fn new() -> Self {
-        TestClock(Arc::new(0.into()))
-    }
-
-    /// Sets the current time.
-    pub fn set(&self, timestamp: Timestamp) {
-        self.0
-            .store(timestamp.micros(), std::sync::atomic::Ordering::SeqCst);
-    }
-
-    /// Advances the current time by the specified number of microseconds.
-    pub fn add_micros(&self, micros: u64) {
-        self.0
-            .fetch_add(micros, std::sync::atomic::Ordering::SeqCst);
-    }
-}
-
 #[async_trait]
-impl<Client, C> Store for DbStoreClient<Client, C>
+impl<Client> Store for DbStoreClient<Client>
 where
     Client: KeyValueStoreClient + Clone + Send + Sync + 'static,
-    C: Clock + Clone + Send + Sync + 'static,
     ViewError: From<<Client as KeyValueStoreClient>::Error>,
     <Client as KeyValueStoreClient>::Error:
         From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
 {
     type Context = ContextFromDb<ChainRuntimeContext<Self>, Client>;
     type ContextError = <Client as KeyValueStoreClient>::Error;
-
-    fn current_time(&self) -> Timestamp {
-        self.clock.current_time()
-    }
 
     async fn load_chain(
         &self,
@@ -436,10 +379,9 @@ where
     }
 }
 
-impl<Client, C> DbStoreClient<Client, C>
+impl<Client> DbStoreClient<Client>
 where
     Client: KeyValueStoreClient + Clone + Send + Sync + 'static,
-    C: Clock,
     ViewError: From<<Client as KeyValueStoreClient>::Error>,
     <Client as KeyValueStoreClient>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
 {
