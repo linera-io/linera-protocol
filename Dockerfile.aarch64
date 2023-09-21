@@ -10,6 +10,8 @@
 # takes considerably longer. The default timeout is 1h, which you'll likely hit if you run with
 # the default machine type.
 
+# test
+
 # Stage 1 - Generate recipe file for dependencies
 FROM lukemathwalker/cargo-chef:latest-rust-slim AS chef
 
