@@ -7,7 +7,7 @@ spec:
   selector:
     app: validator-1
   ports:
-    - name: zef
+    - name: linera
       protocol: TCP
       port: 19100
       targetPort: linera-port
