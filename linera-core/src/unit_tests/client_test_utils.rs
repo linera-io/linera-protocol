@@ -52,7 +52,7 @@ use {
 };
 
 #[cfg(any(feature = "aws", feature = "scylladb"))]
-use linera_views::common::get_table_name;
+use linera_views::test_utils::get_table_name;
 
 use super::ChainClientBuilder;
 

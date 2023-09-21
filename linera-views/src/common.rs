@@ -23,9 +23,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[cfg(any(test, feature = "test"))]
-use {rand::Rng, tracing::warn};
-
 #[cfg(test)]
 #[path = "unit_tests/common_tests.rs"]
 mod common_tests;
@@ -48,31 +45,6 @@ pub enum TableStatus {
     New,
     /// Table already existed when the [`KeyValueStoreClient`] instance was created.
     Existing,
-}
-
-#[cfg(any(test, feature = "test"))]
-fn generate_random_alphanumeric_string(length: usize) -> String {
-    // Define the characters that are allowed in the alphanumeric string
-    let charset: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
-
-    let mut rng = rand::thread_rng();
-    let alphanumeric_string: String = (0..length)
-        .map(|_| {
-            let random_index = rng.gen_range(0..charset.len());
-            charset[random_index] as char
-        })
-        .collect();
-
-    alphanumeric_string
-}
-
-/// Returns a unique table name for testing.
-#[cfg(any(test, feature = "test"))]
-pub fn get_table_name() -> String {
-    let entry = generate_random_alphanumeric_string(20);
-    let table_name = format!("table_{}", entry);
-    warn!("Generating table_name={}", table_name);
-    table_name
 }
 
 /// The common initialization parameters for the `KeyValueStore`

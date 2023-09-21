@@ -13,8 +13,8 @@ use std::sync::Arc;
 use {
     crate::TestClock,
     linera_views::{
-        common::get_table_name,
         dynamo_db::{create_dynamo_db_common_config, LocalStackTestContext},
+        test_utils::get_table_name,
     },
 };
 

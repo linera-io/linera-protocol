@@ -8,6 +8,39 @@ use crate::batch::{
 
 use rand::{Rng, RngCore};
 use std::collections::HashSet;
+use tracing::warn;
+
+fn generate_random_alphanumeric_string(length: usize) -> String {
+    // Define the characters that are allowed in the alphanumeric string
+    let charset: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
+
+    let mut rng = rand::thread_rng();
+    let alphanumeric_string: String = (0..length)
+        .map(|_| {
+            let random_index = rng.gen_range(0..charset.len());
+            charset[random_index] as char
+        })
+        .collect();
+
+    alphanumeric_string
+}
+
+/// Returns a unique table name for testing.
+pub fn get_table_name() -> String {
+    let entry = generate_random_alphanumeric_string(20);
+    let table_name = format!("table_{}", entry);
+    warn!("Generating table_name={}", table_name);
+    table_name
+}
+
+/// Returns a random key_prefix used for tests
+pub fn get_random_key_prefix() -> Vec<u8> {
+    let mut key_prefix = vec![0];
+    let mut rng = rand::thread_rng();
+    let value: usize = rng.gen();
+    bcs::serialize_into(&mut key_prefix, &value).unwrap();
+    key_prefix
+}
 
 /// Shuffles the values entries randomly
 pub fn random_shuffle<R: RngCore, T: Clone>(rng: &mut R, values: &mut Vec<T>) {

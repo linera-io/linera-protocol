@@ -38,12 +38,9 @@ use linera_views::rocks_db::{create_rocks_db_test_client, RocksDbClient, RocksDb
 
 #[cfg(feature = "aws")]
 use linera_views::{
-    common::{get_table_name, CommonStoreConfig},
-    dynamo_db::create_dynamo_db_common_config,
-    dynamo_db::DynamoDbContext,
-    dynamo_db::DynamoDbKvStoreConfig,
-    dynamo_db::LocalStackTestContext,
-    dynamo_db::TableName,
+    common::CommonStoreConfig, dynamo_db::create_dynamo_db_common_config,
+    dynamo_db::DynamoDbContext, dynamo_db::DynamoDbKvStoreConfig, dynamo_db::LocalStackTestContext,
+    dynamo_db::TableName, test_utils::get_table_name,
 };
 
 #[cfg(feature = "scylladb")]

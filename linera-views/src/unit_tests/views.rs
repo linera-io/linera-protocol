@@ -21,10 +21,10 @@ use {
 
 #[cfg(feature = "aws")]
 use crate::{
-    common::get_table_name,
     dynamo_db::DynamoDbKvStoreConfig,
     dynamo_db::LocalStackTestContext,
     dynamo_db::{create_dynamo_db_common_config, DynamoDbContext},
+    test_utils::get_table_name,
 };
 
 #[cfg(feature = "scylladb")]

@@ -20,7 +20,7 @@
 //! [trait2]: common::Context
 
 #[cfg(any(test, feature = "test"))]
-use crate::{common::get_table_name, lru_caching::TEST_CACHE_SIZE};
+use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::get_table_name};
 
 use crate::{
     batch::{Batch, WriteOperation},

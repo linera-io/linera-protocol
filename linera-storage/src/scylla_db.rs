@@ -11,8 +11,8 @@ use std::sync::Arc;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::TestClock, linera_views::common::get_table_name,
-    linera_views::scylla_db::create_scylla_db_common_config,
+    crate::TestClock, linera_views::scylla_db::create_scylla_db_common_config,
+    linera_views::test_utils::get_table_name,
 };
 
 #[cfg(test)]
