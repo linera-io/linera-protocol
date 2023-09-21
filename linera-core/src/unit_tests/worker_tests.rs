@@ -323,7 +323,7 @@ where
         worker
             .handle_block_proposal(bad_signature_block_proposal)
             .await,
-            Err(WorkerError::CryptoError(error)) if matches!(error, CryptoError::InvalidSignature{..})
+            Err(WorkerError::CryptoError(error)) if matches!(error, CryptoError::InvalidSignature {..})
     ));
     assert!(worker
         .storage
@@ -496,7 +496,7 @@ where
         // Timestamp older than previous one
         assert!(matches!(
             worker.handle_block_proposal(block_proposal).await,
-            Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InvalidBlockTimestamp{..})
+            Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InvalidBlockTimestamp {..})
         ));
     }
 }
@@ -636,7 +636,7 @@ where
 
     assert!(matches!(
         worker.handle_block_proposal(block_proposal1.clone()).await,
-        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight{..})
+        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight {..})
     ));
     assert!(worker
         .storage
@@ -677,7 +677,7 @@ where
         .is_some());
     assert!(matches!(
         worker.handle_block_proposal(block_proposal0.clone()).await,
-        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight{..})
+        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight {..})
     ));
 }
 
@@ -1333,7 +1333,7 @@ where
     assert!(matches!(worker
         .fully_handle_certificate(certificate, vec![])
         .await,
-        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InactiveChain{..})));
+        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InactiveChain {..})));
 }
 
 #[test(tokio::test)]
