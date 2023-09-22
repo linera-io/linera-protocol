@@ -3,7 +3,7 @@
 
 #![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 
-use linera_service::client::resolve_binary;
+use linera_service::cli_wrappers::resolve_binary;
 use once_cell::sync::Lazy;
 use std::{io::Read, rc::Rc};
 use tempfile::tempdir;
@@ -11,7 +11,7 @@ use tokio::{process::Command, sync::Mutex};
 
 use fungible::{FungibleTokenAbi, InitialState};
 use linera_base::{data_types::Amount, identifiers::ChainId};
-use linera_service::client::{Database, LocalNetwork, Network};
+use linera_service::cli_wrappers::{Database, LocalNetwork, Network};
 use linera_service_graphql_client::{
     applications, block, blocks, chains, request, transfer, Applications, Block, Blocks, Chains,
     Transfer,
