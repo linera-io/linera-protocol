@@ -719,13 +719,13 @@ where
     {
         let port = self.port.get();
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
-        let applications_handler = axum::routing::get(graphiql).post(Self::application_handler);
+        let application_handler = axum::routing::get(graphiql).post(Self::application_handler);
 
         let app = Router::new()
             .route("/", index_handler)
             .route(
                 "/chains/:chain_id/applications/:application_id",
-                applications_handler,
+                application_handler,
             )
             .route("/ready", axum::routing::get(|| async { "ready!" }))
             .route_service("/ws", GraphQLSubscription::new(self.schema()))
