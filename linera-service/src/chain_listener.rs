@@ -80,7 +80,7 @@ where
     where
         C: ClientContext<P> + Send + 'static,
     {
-        let chain_ids = context.wallet_state().own_chain_ids();
+        let chain_ids = context.wallet_state().chain_ids();
         let context = Arc::new(Mutex::new(context));
         for chain_id in chain_ids {
             Self::run_with_chain_id(

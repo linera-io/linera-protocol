@@ -1968,7 +1968,6 @@ async fn main() -> Result<(), anyhow::Error> {
                 testing_prng_seed,
             } => {
                 let genesis_config = GenesisConfig::read(genesis_config_path)?;
-                let mut rng = Box::<dyn CryptoRng>::from(*testing_prng_seed);
                 let chains = with_other_chains
                     .iter()
                     .filter_map(|chain_id| {
@@ -1976,16 +1975,11 @@ async fn main() -> Result<(), anyhow::Error> {
                             .chains
                             .iter()
                             .find(|(desc, _, _, _)| ChainId::from(*desc) == *chain_id)?;
-                        Some(UserChain::make_initial(&mut rng, *description, *timestamp))
+                        Some(UserChain::make_other(*description, *timestamp))
                     })
                     .collect();
-                let new_prng_seed = if testing_prng_seed.is_some() {
-                    Some(rng.gen())
-                } else {
-                    None
-                };
                 let mut context =
-                    ClientContext::create(&options, genesis_config, new_prng_seed, chains)?;
+                    ClientContext::create(&options, genesis_config, *testing_prng_seed, chains)?;
                 context.save_wallet();
                 options.initialize_storage().await?;
                 Ok(())
