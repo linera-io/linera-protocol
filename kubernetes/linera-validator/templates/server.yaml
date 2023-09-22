@@ -80,3 +80,16 @@ spec:
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: shards
+  labels:
+    team: infra
+spec:
+  selector:
+    matchLabels:
+      app: shards
+  endpoints:
+  - port: http

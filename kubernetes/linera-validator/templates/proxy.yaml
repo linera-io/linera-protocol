@@ -38,3 +38,16 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: validator-1
+  labels:
+    team: infra
+spec:
+  selector:
+    matchLabels:
+      app: validator-1
+  endpoints:
+  - port: linera-port
