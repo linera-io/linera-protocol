@@ -951,27 +951,26 @@ impl NodeService {
         );
     }
 
-    pub async fn create_application(
+    pub async fn create_application<A: ContractAbi>(
         &self,
         chain_id: &ChainId,
         bytecode_id: String,
-        parameters: String,
-        argument: String,
+        parameters: &A::Parameters,
+        argument: &A::InitializationArgument,
         required_application_ids: Vec<String>,
     ) -> String {
-        // TODO(#828): Avoid using the string replacement below
-        let json_required_applications_ids =
-            serde_json::to_string(&required_application_ids).unwrap();
-        let new_parameters = parameters.replace('\"', "\\\"");
-        let new_argument = argument.replace('\"', "\\\"");
+        let json_required_applications_ids = required_application_ids.to_value();
+        // Convert to `serde_json::Value` then `async_graphql::Value` via the trait `InputType`.
+        let new_parameters = serde_json::to_value(parameters).unwrap().to_value();
+        let new_argument = serde_json::to_value(argument).unwrap().to_value();
         let query = format!(
             "mutation {{ createApplication(\
-             chainId: \"{chain_id}\",
-                bytecodeId: \"{bytecode_id}\", \
-                parameters: \"{new_parameters}\", \
-                initializationArgument: \"{new_argument}\", \
-                requiredApplicationIds: {json_required_applications_ids}) \
-                }}"
+                 chainId: \"{chain_id}\",
+                 bytecodeId: \"{bytecode_id}\", \
+                 parameters: {new_parameters}, \
+                 initializationArgument: {new_argument}, \
+                 requiredApplicationIds: {json_required_applications_ids}) \
+             }}"
         );
         let data = self.query_node(&query).await;
         serde_json::from_value(data["createApplication"].clone()).unwrap()
@@ -980,8 +979,8 @@ impl NodeService {
     pub async fn request_application(&self, chain_id: &ChainId, application_id: &str) -> String {
         let query = format!(
             "mutation {{ requestApplication(\
-             chainId: \"{chain_id}\", \
-             applicationId: \"{application_id}\") \
+                 chainId: \"{chain_id}\", \
+                 applicationId: \"{application_id}\") \
              }}"
         );
         let data = self.query_node(&query).await;

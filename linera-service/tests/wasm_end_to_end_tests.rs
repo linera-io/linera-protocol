@@ -906,7 +906,7 @@ async fn test_scylla_db_end_to_end_matching_engine() {
 
 async fn run_end_to_end_matching_engine(database: Database) {
     use fungible::{FungibleTokenAbi, InitialState};
-    use matching_engine::{OrderNature, Parameters, Price};
+    use matching_engine::{MatchingEngineAbi, OrderNature, Parameters, Price};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -1041,14 +1041,12 @@ async fn run_end_to_end_matching_engine(database: Database) {
     let bytecode_id = node_service_admin
         .publish_bytecode(&chain_admin, contract_matching, service_matching)
         .await;
-    let parameter_str = serde_json::to_string(&parameter).unwrap();
-    let argument_str = serde_json::to_string(&()).unwrap();
     let application_id_matching = node_service_admin
-        .create_application(
+        .create_application::<MatchingEngineAbi>(
             &chain_admin,
             bytecode_id,
-            parameter_str,
-            argument_str,
+            &parameter,
+            &(),
             vec![
                 application_id_fungible0.clone(),
                 application_id_fungible1.clone(),
@@ -1170,8 +1168,8 @@ async fn test_scylla_db_end_to_end_amm() {
 }
 
 async fn run_end_to_end_amm(database: Database) {
-    use fungible::InitialState;
-    use matching_engine::Parameters;
+    use amm::{AmmAbi, Parameters};
+    use fungible::{FungibleTokenAbi, InitialState};
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
@@ -1233,20 +1231,20 @@ async fn run_end_to_end_amm(database: Database) {
         .await;
 
     let application_id_fungible0 = node_service_admin
-        .create_application(
+        .create_application::<FungibleTokenAbi>(
             &chain_admin,
             fungible_bytecode_id.clone(),
-            serde_json::to_string(&()).unwrap(),
-            serde_json::to_string(&state_fungible0).unwrap(),
+            &(),
+            &state_fungible0,
             vec![],
         )
         .await;
     let application_id_fungible1 = node_service_admin
-        .create_application(
+        .create_application::<FungibleTokenAbi>(
             &chain_admin,
             fungible_bytecode_id,
-            serde_json::to_string(&()).unwrap(),
-            serde_json::to_string(&state_fungible1).unwrap(),
+            &(),
+            &state_fungible1,
             vec![],
         )
         .await;
@@ -1293,14 +1291,12 @@ async fn run_end_to_end_amm(database: Database) {
     let bytecode_id = node_service_admin
         .publish_bytecode(&chain_admin, contract_amm, service_amm)
         .await;
-    let parameter_str = serde_json::to_string(&parameters).unwrap();
-    let argument_str = serde_json::to_string(&()).unwrap();
     let application_id_amm = node_service_admin
-        .create_application(
+        .create_application::<AmmAbi>(
             &chain_admin,
             bytecode_id,
-            parameter_str,
-            argument_str,
+            &parameters,
+            &(),
             vec![
                 application_id_fungible0.clone(),
                 application_id_fungible1.clone(),
