@@ -74,3 +74,22 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+      initContainers:
+        - name: linera-server-initializer
+          image: {{ .Values.lineraImage }}
+          imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
+          command: ["./linera-server"]
+          args:
+            [
+              "initialize",
+              "--storage",
+              "rocksdb:/usr/share/rocksdb/shard_data.db",
+              "--genesis",
+              "genesis.json",
+            ]
+          volumeMounts:
+          - name: rocksdb
+            mountPath: /usr/share/rocksdb
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.logLevel }}
