@@ -71,6 +71,10 @@ COPY --from=builder $BUILD_PATH/target/x86_64-unknown-linux-gnu/release/linera-p
 # Copying configuration files
 COPY --from=builder $BUILD_PATH/configuration/prod/validator_1.toml ./
 
+# Copy entrypoint
+COPY docker/server-entrypoint.sh .
+RUN chmod +x server-entrypoint.sh
+
 # Create configuration files for the validator according to the validator's config file.
 # * Private server states are stored in `server*.json`.
 # * `committee.json` is the public description of the Linera committee.

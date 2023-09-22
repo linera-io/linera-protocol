@@ -42,19 +42,7 @@ spec:
         - name: linera-server
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
-          command: ["./linera-server"]
-          args:
-            [
-              "run",
-              "--storage",
-              "rocksdb:/usr/share/rocksdb/shard_data.db",
-              "--server",
-              "server_1.json",
-              "--shard",
-              "0",
-              "--genesis",
-              "genesis.json",
-            ]
+          command: ["./server-entrypoint.sh"]
           volumeMounts:
           - name: rocksdb
             mountPath: /usr/share/rocksdb
