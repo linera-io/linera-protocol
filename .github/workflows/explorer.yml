@@ -44,4 +44,4 @@ jobs:
     - name: Test
       run: |
         cd linera-explorer
-        npx vite --port 3000 & npm run test
+        npm run test -- --run
