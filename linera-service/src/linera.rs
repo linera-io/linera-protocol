@@ -1060,7 +1060,7 @@ enum WalletCommand {
         #[structopt(long = "genesis")]
         genesis_config_path: PathBuf,
 
-        // Other chains to follow.
+        /// Other chains to follow.
         #[structopt(long)]
         with_other_chains: Vec<ChainId>,
 
