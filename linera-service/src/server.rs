@@ -322,6 +322,10 @@ enum ServerCommand {
         /// The maximal number of entries in the storage cache.
         #[structopt(long, default_value = "1000")]
         cache_size: usize,
+
+        /// Wether to initialize the server before running
+        #[structopt(long)]
+        initialize: bool,
     },
 
     /// Act as a trusted third-party and generate all server configurations
@@ -369,6 +373,29 @@ fn parse_duration(s: &str) -> Result<u64, parse_duration::parse::Error> {
         .unwrap_or(u64::MAX))
 }
 
+async fn initialize_command(
+    storage_config: &StorageConfig,
+    genesis_config_path: &PathBuf,
+    max_concurrent_queries: Option<usize>,
+    max_stream_queries: usize,
+    cache_size: usize,
+) {
+    let genesis_config =
+        GenesisConfig::read(&genesis_config_path).expect("Fail to read initial chain config");
+    let common_config = CommonStoreConfig {
+        max_concurrent_queries,
+        max_stream_queries,
+        cache_size,
+    };
+    let full_storage_config = storage_config
+        .add_common_config(common_config)
+        .await
+        .unwrap();
+    full_initialize_storage(full_storage_config, &genesis_config)
+        .await
+        .unwrap();
+}
+
 #[tokio::main]
 async fn main() {
     let env_filter = tracing_subscriber::EnvFilter::builder()
@@ -393,7 +420,18 @@ async fn main() {
             max_concurrent_queries,
             max_stream_queries,
             cache_size,
+            initialize,
         } => {
+            if initialize {
+                initialize_command(
+                    &storage_config,
+                    &genesis_config_path,
+                    max_concurrent_queries,
+                    max_stream_queries,
+                    cache_size,
+                )
+                .await;
+            }
             let genesis_config = GenesisConfig::read(&genesis_config_path)
                 .expect("Fail to read initial chain config");
             let server_config = ValidatorServerConfig::read(&server_config_path)
@@ -459,20 +497,14 @@ async fn main() {
             max_stream_queries,
             cache_size,
         } => {
-            let genesis_config = GenesisConfig::read(&genesis_config_path)
-                .expect("Fail to read initial chain config");
-            let common_config = CommonStoreConfig {
+            initialize_command(
+                &storage_config,
+                &genesis_config_path,
                 max_concurrent_queries,
                 max_stream_queries,
                 cache_size,
-            };
-            let full_storage_config = storage_config
-                .add_common_config(common_config)
-                .await
-                .unwrap();
-            full_initialize_storage(full_storage_config, &genesis_config)
-                .await
-                .unwrap();
+            )
+            .await;
         }
     }
 }

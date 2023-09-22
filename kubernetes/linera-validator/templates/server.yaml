@@ -54,6 +54,7 @@ spec:
               "0",
               "--genesis",
               "genesis.json",
+              "--initialize",
             ]
           volumeMounts:
           - name: rocksdb
