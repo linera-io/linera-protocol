@@ -732,7 +732,6 @@ enum ClientCommand {
     },
 
     /// Close (i.e. deactivate) an existing chain.
-    // TODO: Consider `spend-and-transfer` instead for real-life use cases.
     CloseChain {
         /// Chain id (must be one of our chains)
         #[structopt(long = "from")]
