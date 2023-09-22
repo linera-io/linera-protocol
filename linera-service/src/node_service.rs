@@ -314,9 +314,7 @@ where
         };
         let multi_leader_rounds = multi_leader_rounds.unwrap_or(RoundNumber::MAX);
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
-        let Some(mut client) = self.clients.client_lock(&chain_id).await else {
-            return Err(Error::new("Unknown chain ID"));
-        };
+        let mut client = self.clients.try_client_lock(&chain_id).await?;
         let (message_id, _) = client.open_chain(ownership).await?;
         Ok(ChainId::child(message_id))
     }
