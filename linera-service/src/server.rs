@@ -29,6 +29,31 @@ use std::{net::SocketAddr, path::PathBuf};
 use structopt::StructOpt;
 use tokio::fs;
 use tracing::{error, info};
+#[cfg(feature = "prometheus-metrics")]
+use {
+    axum::{
+        body::Body,
+        http::{header::CONTENT_TYPE, Response},
+        routing::get,
+        Router, Server,
+    },
+    lazy_static::lazy_static,
+    prometheus::{gather, Encoder, IntCounter, Registry, TextEncoder},
+};
+
+#[cfg(feature = "prometheus-metrics")]
+lazy_static! {
+    pub static ref REGISTRY: Registry = Registry::new();
+    pub static ref TEST_NDR_COUNTER: IntCounter =
+        IntCounter::new("Test_ndr_counter", "Test counter").expect("Counter can be created");
+}
+
+#[cfg(feature = "prometheus-metrics")]
+fn register_custom_metrics() {
+    REGISTRY
+        .register(Box::new(TEST_NDR_COUNTER.clone()))
+        .expect("collector can be registered");
+}
 
 struct ServerContext {
     server_config: ValidatorServerConfig,
@@ -81,9 +106,12 @@ impl ServerContext {
             let internal_network = internal_network.clone();
             let cross_chain_config = self.cross_chain_config.clone();
             handles.push(async move {
+                #[cfg(not(feature = "prometheus-metrics"))]
                 if let Some(port) = shard.metrics_port {
-                    Self::start_metrics(&shard.metrics_host, port);
+                    Self::start_metrics(&shard.metrics_host, &port);
                 }
+                #[cfg(feature = "prometheus-metrics")]
+                Self::start_metrics(&shard.host, &shard.port);
                 let server = simple_network::Server::new(
                     internal_network,
                     listen_address.to_string(),
@@ -104,6 +132,9 @@ impl ServerContext {
                 }
             });
         }
+        #[cfg(feature = "prometheus-metrics")]
+        TEST_NDR_COUNTER.inc();
+
         join_all(handles).await;
 
         Ok(())
@@ -123,9 +154,12 @@ impl ServerContext {
             let cross_chain_config = self.cross_chain_config.clone();
             let notification_config = self.notification_config.clone();
             handles.push(async move {
+                #[cfg(not(feature = "prometheus-metrics"))]
                 if let Some(port) = shard.metrics_port {
-                    Self::start_metrics(&shard.metrics_host, port);
+                    Self::start_metrics(&shard.metrics_host, &port);
                 }
+                #[cfg(feature = "prometheus-metrics")]
+                Self::start_metrics(&shard.host, &shard.port);
                 let spawned_server = match GrpcServer::spawn(
                     listen_address.to_string(),
                     shard.port,
@@ -148,26 +182,111 @@ impl ServerContext {
                 }
             });
         }
+
+        #[cfg(feature = "prometheus-metrics")]
+        TEST_NDR_COUNTER.inc();
         join_all(handles).await;
 
         Ok(())
     }
 
-    fn start_metrics(host: &str, port: u16) {
+    fn start_metrics(host: &str, port: &u16) {
         match format!("{}:{}", host, port).parse::<SocketAddr>() {
             Err(err) => error!("Invalid metrics address: {err}"),
-            Ok(address) => {
-                if let Err(error) = metrics_exporter_tcp::TcpBuilder::new()
-                    .listen_address(address)
-                    .install()
-                {
-                    error!(
-                        ?error, %address,
-                        "Could not install TCP metrics exporter."
-                    );
+            Ok(address) => Self::start_metrics_impl(address),
+        }
+    }
+
+    #[cfg(not(feature = "prometheus-metrics"))]
+    fn start_metrics_impl(address: SocketAddr) {
+        if let Err(error) = metrics_exporter_tcp::TcpBuilder::new()
+            .listen_address(address)
+            .install()
+        {
+            error!(
+                ?error, %address,
+                "Could not install TCP metrics exporter."
+            );
+        }
+    }
+
+    #[cfg(feature = "prometheus-metrics")]
+    fn start_metrics_impl(address: SocketAddr) {
+        let prometheus_app =
+            Router::new().route("/metrics", get(|| async { Self::serve_metrics() }));
+        let server = Server::bind(&address).serve(prometheus_app.into_make_service());
+
+        tokio::spawn(server);
+    }
+
+    #[cfg(feature = "prometheus-metrics")]
+    fn serve_metrics() -> Response<Body> {
+        let encoder = TextEncoder::new();
+        let mut buffer = Vec::new();
+        let mut custom_failed = false;
+        let mut error_str = String::new();
+
+        if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
+            custom_failed = true;
+            error!("Encode custom metrics error: {:?}", e);
+
+            error_str.push_str(&e.to_string());
+        }
+
+        let mut res = match String::from_utf8(buffer.clone()) {
+            Ok(v) => v,
+            Err(e) => {
+                custom_failed = true;
+                error!("Custom metrics could not be from_utf8'd: {:?}", e);
+                if error_str.is_empty() {
+                    error_str.push_str(&e.to_string());
                 }
+                String::default()
+            }
+        };
+
+        buffer.clear();
+
+        let mut buffer = Vec::new();
+        if let Err(e) = encoder.encode(&gather(), &mut buffer) {
+            error!("Encode prometheus metrics error: {:?}", e);
+
+            if custom_failed {
+                // Both types of metrics failed, so returning failure response
+                error_str.push_str(&e.to_string());
+                return Response::builder()
+                    .status(500)
+                    .body(Body::from(error_str))
+                    .expect("Error building response");
             }
         }
+
+        let res_prometheus = match String::from_utf8(buffer.clone()) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Prometheus metrics could not be from_utf8'd: {:?}", e);
+
+                if custom_failed {
+                    // Both types of metrics failed, so returning failure response
+                    error_str.push_str(&e.to_string());
+                    return Response::builder()
+                        .status(500)
+                        .body(Body::from(error_str))
+                        .expect("Error building response");
+                }
+
+                String::default()
+            }
+        };
+
+        buffer.clear();
+        res.push_str(&res_prometheus);
+
+        Response::builder()
+            .status(200)
+            .header(CONTENT_TYPE, encoder.format_type())
+            .body(Body::from(res))
+            .unwrap()
     }
 
     fn get_listen_address(&self) -> String {
@@ -386,6 +505,10 @@ async fn main() {
         .with_writer(std::io::stderr)
         .with_env_filter(env_filter)
         .init();
+
+    #[cfg(feature = "prometheus-metrics")]
+    register_custom_metrics();
+
     let options = ServerOptions::from_args();
 
     match options.command {
