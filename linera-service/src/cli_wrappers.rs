@@ -475,6 +475,10 @@ impl ClientWrapper {
         Ok(PublicKey::from_str(stdout.trim())?)
     }
 
+    pub fn default_chain(&self) -> Option<ChainId> {
+        self.get_wallet().default_chain()
+    }
+
     pub async fn assign(&mut self, key: PublicKey, message_id: MessageId) -> Result<ChainId> {
         let stdout = Self::run_command(
             self.run()
