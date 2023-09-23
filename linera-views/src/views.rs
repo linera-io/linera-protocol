@@ -62,9 +62,8 @@ pub enum ViewError {
     Io(#[from] std::io::Error),
 
     /// An error happened while trying to lock.
-    #[cfg(not(target_arch = "wasm32"))]
-    #[error("Failed to lock collection entry: {0}")]
-    TryLockError(#[from] tokio::sync::TryLockError),
+    #[error("Failed to lock collection entry: {0:?}")]
+    TryLockError(Vec<u8>),
 
     /// Tokio errors can happen while joining.
     #[cfg(not(target_arch = "wasm32"))]
