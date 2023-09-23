@@ -24,6 +24,7 @@ scylladb = ["linera-views/scylladb", "linera-core/scylladb", "linera-storage/scy
 anyhow = { workspace = true }
 async-graphql = { workspace = true }
 async-graphql-axum = { workspace = true }
+async-lock = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true, features = ["ws", "headers"] }
 bcs = { workspace = true }

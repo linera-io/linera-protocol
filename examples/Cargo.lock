@@ -1655,6 +1655,7 @@ version = "0.5.0"
 dependencies = [
  "anyhow",
  "async-graphql",
+ "async-lock",
  "async-trait",
  "bcs",
  "dashmap",

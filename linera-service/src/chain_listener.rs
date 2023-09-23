@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{config::WalletState, node_service::ChainClients};
+use async_lock::Mutex;
 use async_trait::async_trait;
-use futures::{lock::Mutex, StreamExt};
+use futures::StreamExt;
 use linera_base::{
     crypto::KeyPair,
     data_types::Timestamp,

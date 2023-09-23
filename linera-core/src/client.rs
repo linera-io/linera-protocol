@@ -12,9 +12,9 @@ use crate::{
         DeliveryNotifiers, Notification, Reason, WorkerError, WorkerState, DEFAULT_VALUE_CACHE_SIZE,
     },
 };
+use async_lock::Mutex;
 use futures::{
     future,
-    lock::Mutex,
     stream::{self, FuturesUnordered, StreamExt},
 };
 use linera_base::{

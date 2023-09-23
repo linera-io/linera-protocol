@@ -10,6 +10,7 @@ use async_graphql::{
     Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
+use async_lock::{Mutex, MutexGuard, MutexGuardArc};
 use axum::{
     extract::Path,
     http::{StatusCode, Uri},
@@ -17,7 +18,6 @@ use axum::{
     response::IntoResponse,
     Extension, Router, Server,
 };
-use futures::lock::{Mutex, MutexGuard, OwnedMutexGuard};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
     data_types::{Amount, RoundNumber},
@@ -74,14 +74,14 @@ impl<P, S> ChainClients<P, S> {
     pub(crate) async fn client_lock(
         &self,
         chain_id: &ChainId,
-    ) -> Option<OwnedMutexGuard<ChainClient<P, S>>> {
-        Some(self.client(chain_id).await?.lock_owned().await)
+    ) -> Option<MutexGuardArc<ChainClient<P, S>>> {
+        Some(self.client(chain_id).await?.lock_arc().await)
     }
 
     pub(crate) async fn try_client_lock(
         &self,
         chain_id: &ChainId,
-    ) -> Result<OwnedMutexGuard<ChainClient<P, S>>, Error> {
+    ) -> Result<MutexGuardArc<ChainClient<P, S>>, Error> {
         self.client_lock(chain_id)
             .await
             .ok_or_else(|| Error::new("Unknown chain ID"))

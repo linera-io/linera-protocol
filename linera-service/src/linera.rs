@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{bail, Context, Error};
+use async_lock::Mutex;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
-use futures::{lock::Mutex, StreamExt};
+use futures::StreamExt;
 use linera_base::{
     crypto::{CryptoRng, KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, RoundNumber, Timestamp},

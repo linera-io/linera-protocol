@@ -15,7 +15,8 @@ use crate::{
     updater::CommunicationError,
     worker::{Notification, Reason, WorkerError},
 };
-use futures::{lock::Mutex, StreamExt};
+use async_lock::Mutex;
+use futures::StreamExt;
 use linera_base::{
     crypto::*,
     data_types::*,
