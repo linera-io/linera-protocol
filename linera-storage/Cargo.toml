@@ -26,6 +26,7 @@ rocksdb = ["linera-views/rocksdb"]
 scylladb = ["linera-views/scylladb"]
 
 [dependencies]
+async-lock = { workspace = true }
 async-trait = { workspace = true }
 bcs = { workspace = true }
 dashmap = { workspace = true }

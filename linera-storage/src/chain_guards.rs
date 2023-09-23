@@ -10,13 +10,13 @@
 //! for a given chain, and new instances for the same chain can only be created when the previous
 //! instance is dropped.
 
+use async_lock::{Mutex, MutexGuardArc};
 use dashmap::DashMap;
 use linera_base::identifiers::ChainId;
 use std::{
     fmt::{self, Debug, Formatter},
     sync::{Arc, Weak},
 };
-use tokio::sync::{Mutex, OwnedMutexGuard};
 
 #[cfg(test)]
 #[path = "unit_tests/chain_guards.rs"]
@@ -53,7 +53,7 @@ impl ChainGuards {
         ChainGuard {
             chain_id,
             guards: self.guards.clone(),
-            guard: Some(guard.lock_owned().await),
+            guard: Some(guard.lock_arc().await),
         }
     }
 
@@ -110,7 +110,7 @@ impl ChainGuards {
 pub struct ChainGuard {
     chain_id: ChainId,
     guards: Arc<ChainGuardMap>,
-    guard: Option<OwnedMutexGuard<()>>,
+    guard: Option<MutexGuardArc<()>>,
 }
 
 impl Drop for ChainGuard {
@@ -132,7 +132,7 @@ impl Drop for ChainGuard {
     ///    map.
     fn drop(&mut self) {
         self.guards.remove_if(&self.chain_id, |_, _| {
-            let mutex = Arc::downgrade(OwnedMutexGuard::mutex(
+            let mutex = Arc::downgrade(MutexGuardArc::source(
                 &self
                     .guard
                     .take()

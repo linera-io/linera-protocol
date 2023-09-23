@@ -1753,6 +1753,7 @@ dependencies = [
 name = "linera-storage"
 version = "0.5.0"
 dependencies = [
+ "async-lock",
  "async-trait",
  "bcs",
  "dashmap",
