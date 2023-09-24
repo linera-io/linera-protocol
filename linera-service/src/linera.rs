@@ -994,7 +994,11 @@ enum ClientCommand {
 #[derive(StructOpt)]
 enum NetCommand {
     /// Start a Local Linera Network
-    Up,
+    Up {
+        /// The number of extra wallets and user chains to initialise. Default is 0.
+        #[structopt(default_value, long)]
+        wallets: usize,
+    },
 }
 
 #[derive(StructOpt)]
@@ -1753,40 +1757,58 @@ async fn main() -> Result<(), anyhow::Error> {
         }
 
         ClientCommand::Net(net_command) => match net_command {
-            NetCommand::Up => {
+            NetCommand::Up { wallets } => {
                 let network = Network::Grpc;
                 let mut net = LocalNetwork::new(Database::RocksDb, network, 1)?;
-                let client1 = net.make_client(network);
-                let client2 = net.make_client(network);
+                let mut client1 = net.make_client(network);
 
                 net.generate_initial_validator_config().await?;
                 client1.create_genesis_config().await?;
-                client2.wallet_init(&[]).await?;
+                let default_chain = client1
+                    .default_chain()
+                    .expect("initialized client should always have default chain");
 
                 // Create initial server and client config.
                 net.run().await?;
-                let net_path = net.net_path();
+
+                for wallet in 0..*wallets {
+                    let mut extra_wallet = net.make_client(network);
+                    extra_wallet.wallet_init(&[]).await?;
+                    let unassigned_key = extra_wallet.keygen().await?;
+                    let new_chain_msg_id = client1
+                        .open_chain(default_chain, Some(unassigned_key))
+                        .await?
+                        .0;
+                    extra_wallet
+                        .assign(unassigned_key, new_chain_msg_id)
+                        .await?;
+                    eprintln!("\nExtra wallet {}:", wallet + 1);
+                    eprintln!(
+                        "export LINERA_WALLET=\"{}\"",
+                        extra_wallet.wallet_path().display()
+                    );
+                    eprintln!(
+                        "export LINERA_STORAGE=\"{}\"\n",
+                        extra_wallet.storage_path()
+                    );
+                }
 
                 eprintln!(
                     "\nLinera net directory available at: {}",
-                    net_path.display()
+                    net.net_path().display()
                 );
                 eprintln!("To configure your Linera client for this network, run:\n");
                 eprintln!(
                     "{}",
                     format!(
                         "export LINERA_WALLET=\"{}\"",
-                        net_path.join("wallet_0.json").display()
+                        client1.wallet_path().display()
                     )
                     .bold()
                 );
                 eprintln!(
                     "{}",
-                    format!(
-                        "export LINERA_STORAGE=\"rocksdb:{}\"",
-                        net_path.join("linera.db").display()
-                    )
-                    .bold()
+                    format!("export LINERA_STORAGE=\"{}\"", client1.storage_path()).bold()
                 );
 
                 std::io::stdin().bytes().next();
