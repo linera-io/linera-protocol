@@ -255,11 +255,12 @@ impl MultiOwnerManager {
                 }
             }
         }
-        let current_round = self.current_round();
-        ensure!(
-            new_round >= current_round,
-            ChainError::InsufficientRound(current_round)
-        );
+        if let Some(locked) = &self.locked {
+            ensure!(
+                new_round > locked.round,
+                ChainError::InsufficientRound(locked.round)
+            );
+        }
         Ok(Outcome::Accept)
     }
 
@@ -307,12 +308,17 @@ impl MultiOwnerManager {
         key_pair: Option<&KeyPair>,
         now: Timestamp,
     ) {
+        let round = certificate.round;
+        // Validators only change their locked block if the new one is included in a proposal in the
+        // current round, or it is itself in the current round.
+        if key_pair.is_some() && round < self.current_round() {
+            return;
+        }
         let Some(value) = certificate.value.clone().into_confirmed() else {
             // Unreachable: This is only called with validated blocks.
             error!("Unexpected certificate; expected ValidatedBlock");
             return;
         };
-        let round = certificate.round;
         self.update_timeout(round, now);
         self.locked = Some(certificate);
         if let Some(key_pair) = key_pair {
@@ -451,15 +457,23 @@ impl MultiOwnerManagerInfo {
     }
 
     pub fn next_round(&self) -> Option<RoundNumber> {
-        match &self.requested_proposed {
-            Some(proposal) if proposal.content.round == self.current_round => {
-                if self.current_round >= self.multi_leader_rounds {
-                    None // There's already a proposal in the current round.
-                } else {
-                    self.current_round.try_add_one().ok()
-                }
-            }
-            _ => Some(self.current_round),
+        let proposal_round = self
+            .requested_proposed
+            .as_ref()
+            .map(|proposal| proposal.content.round);
+        let locked_round = self
+            .requested_locked
+            .as_ref()
+            .map(|certificate| certificate.round);
+        if proposal_round != Some(self.current_round) && locked_round != Some(self.current_round) {
+            // There's no proposal or locked block yet in the current round.
+            Some(self.current_round)
+        } else if self.current_round < self.multi_leader_rounds {
+            // We're still in multi-leader mode, so we can propose in the next round at any time.
+            self.current_round.try_add_one().ok()
+        } else {
+            // We're in single-leader mode, so the next proposal can only be made after the timeout.
+            None
         }
     }
 }

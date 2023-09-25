@@ -275,6 +275,12 @@ impl<StorageClient> WorkerState<StorageClient> {
         &self.storage
     }
 
+    #[cfg(test)]
+    pub(crate) fn with_key_pair(mut self, key_pair: Option<Arc<KeyPair>>) -> Self {
+        self.key_pair = key_pair;
+        self
+    }
+
     pub(crate) async fn full_certificate(
         &mut self,
         certificate: LiteCertificate<'_>,

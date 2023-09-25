@@ -3323,8 +3323,8 @@ where
         .unwrap();
 
     // The leader sequence is pseudorandom but deterministic. The first leader is owner 1.
-    let leader = multi_manager(&response.info.manager).leader.unwrap();
-    assert_eq!(leader, Owner::from(pub_key1));
+    let manager = multi_manager(&response.info.manager);
+    assert_eq!(manager.leader, Some(Owner::from(pub_key1)));
 
     // So owner 0 cannot propose a block in this round. And the next round hasn't started yet.
     let proposal = make_child_block(&value0).into_simple_proposal(&key_pairs[0]);
@@ -3340,75 +3340,94 @@ where
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
     let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
     let (response, _) = worker.handle_chain_info_query(query).await.unwrap();
-    let manager = &response.info.manager;
-    assert!(multi_manager(manager).timeout_vote.is_none());
+    let manager = multi_manager(&response.info.manager);
+    assert!(manager.timeout_vote.is_none());
 
     // Set the clock to the end of the round.
-    clock.set(multi_manager(manager).round_timeout);
+    clock.set(manager.round_timeout);
 
     // Now the validator will sign a leader timeout vote.
     let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
     let (response, _) = worker.handle_chain_info_query(query).await.unwrap();
-    let manager = &response.info.manager;
-    let vote = multi_manager(manager).timeout_vote.clone().unwrap();
+    let manager = multi_manager(&response.info.manager);
+    let vote = manager.timeout_vote.clone().unwrap();
     let value_timeout =
         HashedValue::new_leader_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
 
     // Once we provide the validator with a timeout certificate, the next round starts, where owner
     // 0 happens to be the leader.
-    let certificate_timeout = vote.with_value(value_timeout).unwrap().into_certificate();
+    let certificate_timeout = vote
+        .with_value(value_timeout.clone())
+        .unwrap()
+        .into_certificate();
     let (response, _) = worker
         .handle_certificate(certificate_timeout, vec![], None)
         .await
         .unwrap();
-    let leader = multi_manager(&response.info.manager).leader.unwrap();
-    assert_eq!(leader, Owner::from(pub_key0));
+    let manager = multi_manager(&response.info.manager);
+    assert_eq!(manager.leader, Some(Owner::from(pub_key0)));
 
     // Now owner 0 can propose a block, but owner 1 can't.
     let block1 = make_child_block(&value0);
-    let proposal = block1
+    let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await.unwrap();
+    let proposal1_wrong_owner = block1
         .clone()
         .into_proposal_with_round(&key_pairs[1], RoundNumber(1));
-    let (executed_block, _) = worker.stage_block_execution(block1.clone()).await.unwrap();
-    let result = worker.handle_block_proposal(proposal).await;
+    let result = worker.handle_block_proposal(proposal1_wrong_owner).await;
     assert!(matches!(result, Err(WorkerError::InvalidOwner)));
-    let proposal = block1
+    let proposal1 = block1
         .clone()
         .into_proposal_with_round(&key_pairs[0], RoundNumber(1));
-    let (response, _) = worker.handle_block_proposal(proposal).await.unwrap();
-    let value = HashedValue::new_validated(executed_block.clone());
-    let manager = &response.info.manager;
-    let vote = multi_manager(manager).pending.clone().unwrap();
+    let (response, _) = worker.handle_block_proposal(proposal1).await.unwrap();
+    let value1 = HashedValue::new_validated(executed_block1.clone());
+    let manager = multi_manager(&response.info.manager);
 
     // If we send the validated block certificate to the worker, it votes to confirm.
-    let certificate = vote.with_value(value).unwrap().into_certificate();
+    let vote = manager.pending.clone().unwrap();
+    let certificate1 = vote.with_value(value1.clone()).unwrap().into_certificate();
     let (response, _) = worker
-        .handle_certificate(certificate, vec![], None)
+        .handle_certificate(certificate1.clone(), vec![], None)
         .await
         .unwrap();
-    let manager = &response.info.manager;
-    let vote = multi_manager(manager).pending.as_ref().unwrap();
-    let value = HashedValue::new_confirmed(executed_block);
+    let manager = multi_manager(&response.info.manager);
+    let vote = manager.pending.as_ref().unwrap();
+    let value = HashedValue::new_confirmed(executed_block1.clone());
     assert_eq!(vote.value, value.lite());
 
     // Instead of submitting the confirmed block certificate, let rounds 1 to 4 time out, too.
-    let value_timeout =
-        HashedValue::new_leader_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
     let certificate_timeout =
-        make_certificate_with_round(&committee, &worker, value_timeout, RoundNumber(4));
+        make_certificate_with_round(&committee, &worker, value_timeout.clone(), RoundNumber(4));
     let (response, _) = worker
         .handle_certificate(certificate_timeout, vec![], None)
         .await
         .unwrap();
-    let manager = &response.info.manager;
-    let leader = multi_manager(manager).leader.unwrap();
-    assert_eq!(leader, Owner::from(pub_key1));
+    let manager = multi_manager(&response.info.manager);
+    assert_eq!(manager.leader, Some(Owner::from(pub_key1)));
+    assert_eq!(manager.current_round, RoundNumber::from(5));
 
-    // Proposing a different block now would fail.
-    let round = multi_manager(manager).current_round;
-    assert_eq!(round, RoundNumber::from(5));
+    // Create block2, also at height 1, but different from block 1.
     let amount = Amount::from_tokens(1);
     let block2 = make_child_block(&value0).with_simple_transfer(Recipient::root(1), amount);
+    let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await.unwrap();
+
+    // Since round 3 is already over, a validated block from round 3 won't update the validator's
+    // locked block; certificate1 (with block1) remains locked.
+    let value2 = HashedValue::new_validated(executed_block2.clone());
+    let certificate =
+        make_certificate_with_round(&committee, &worker, value2.clone(), RoundNumber(3));
+    worker
+        .handle_certificate(certificate, vec![], None)
+        .await
+        .unwrap();
+    let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
+    let (response, _) = worker
+        .handle_chain_info_query(query_values.clone())
+        .await
+        .unwrap();
+    let manager = multi_manager(&response.info.manager);
+    assert_eq!(manager.requested_locked, Some(certificate1));
+
+    // Proposing block2 now would fail.
     let proposal = block2
         .clone()
         .into_proposal_with_round(&key_pairs[1], RoundNumber(5));
@@ -3417,42 +3436,60 @@ where
          if matches!(*error, ChainError::HasLockedBlock(_, _))
     ));
 
-    // If there was a validated certificate for the new block, it is allowed.
-    let (executed_block, _) = worker.stage_block_execution(block2.clone()).await.unwrap();
-    let value = HashedValue::new_validated(executed_block.clone());
+    // But with the validated block certificate for block2, it is allowed.
     let mut proposal = block2.into_proposal_with_round(&key_pairs[1], RoundNumber(5));
-    let lite_value = value.lite();
-    proposal.validated = Some(make_certificate_with_round(
-        &committee,
-        &worker,
-        value,
-        RoundNumber(4),
-    ));
-    let (response, _) = worker.handle_block_proposal(proposal).await.unwrap();
-    let manager = &response.info.manager;
-    let vote = multi_manager(manager).pending.as_ref().unwrap();
-    assert_eq!(vote.value, lite_value);
+    let lite_value2 = value2.lite();
+    let certificate2 =
+        make_certificate_with_round(&committee, &worker, value2.clone(), RoundNumber(4));
+    proposal.validated = Some(certificate2.clone());
+    let (_, _) = worker.handle_block_proposal(proposal).await.unwrap();
+    let (response, _) = worker
+        .handle_chain_info_query(query_values.clone())
+        .await
+        .unwrap();
+    let manager = multi_manager(&response.info.manager);
+    assert_eq!(manager.requested_locked, Some(certificate2));
+    let vote = manager.pending.as_ref().unwrap();
+    assert_eq!(vote.value, lite_value2);
     assert_eq!(vote.round, RoundNumber::from(5));
 
     // Let round 5 time out, too.
-    let value_timeout =
-        HashedValue::new_leader_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
     let certificate_timeout =
-        make_certificate_with_round(&committee, &worker, value_timeout, RoundNumber(5));
+        make_certificate_with_round(&committee, &worker, value_timeout.clone(), RoundNumber(5));
     let (response, _) = worker
         .handle_certificate(certificate_timeout, vec![], None)
         .await
         .unwrap();
-    let manager = &response.info.manager;
-    let leader = multi_manager(manager).leader.unwrap();
-    assert_eq!(leader, Owner::from(pub_key0));
+    let manager = multi_manager(&response.info.manager);
+    assert_eq!(manager.leader, Some(Owner::from(pub_key0)));
+    assert_eq!(manager.current_round, RoundNumber::from(6));
 
     // Since the validator now voted for block2, it can't vote for block1 anymore.
-    let round = multi_manager(manager).current_round;
-    assert_eq!(round, RoundNumber::from(6));
     let proposal = block1.into_proposal_with_round(&key_pairs[0], RoundNumber(6));
     let result = worker.handle_block_proposal(proposal.clone()).await;
     assert!(matches!(result, Err(WorkerError::ChainError(error))
          if matches!(*error, ChainError::HasLockedBlock(_, _))
     ));
+
+    // Let rounds 6 and 7 time out.
+    let certificate_timeout =
+        make_certificate_with_round(&committee, &worker, value_timeout, RoundNumber(7));
+    let (response, _) = worker
+        .handle_certificate(certificate_timeout, vec![], None)
+        .await
+        .unwrap();
+    let manager = multi_manager(&response.info.manager);
+    assert_eq!(manager.current_round, RoundNumber::from(8));
+
+    // If the worker does not belong to a validator, it does update its locked block even if it's
+    // from a past round.
+    let certificate = make_certificate_with_round(&committee, &worker, value1, RoundNumber(7));
+    let mut worker = worker.with_key_pair(None); // Forget validator keys.
+    worker
+        .handle_certificate(certificate.clone(), vec![], None)
+        .await
+        .unwrap();
+    let (response, _) = worker.handle_chain_info_query(query_values).await.unwrap();
+    let manager = multi_manager(&response.info.manager);
+    assert_eq!(manager.requested_locked, Some(certificate));
 }
