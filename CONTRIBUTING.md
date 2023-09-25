@@ -187,3 +187,14 @@ New files should be copyrighted by "Zefchain Labs, Inc" (the legal entity behind
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 ```
+
+## Reviewer Checklist
+
+- The title and the summary of the PR are short and descriptive.
+- The proposed solution achieves the goals stated in the PR.
+- The test plan is reproducible and provides sufficient coverage.
+- The release plan is adequate.
+- The commits correspond to distinct logical changes.
+- The code follows the [coding guidelines](https://github.com/linera-io/linera-protocol/blob/main/CONTRIBUTING.md).
+- The proposed changes look correct.
+- The CI is passing.
