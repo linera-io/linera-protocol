@@ -69,7 +69,11 @@ COPY --from=builder $BUILD_PATH/target/aarch64-unknown-linux-gnu/release/linera-
 COPY --from=builder $BUILD_PATH/target/aarch64-unknown-linux-gnu/release/linera-proxy ./
 
 # Copying configuration files
-COPY --from=builder $BUILD_PATH/configuration/k8s-local/validator_1.toml ./
+COPY --from=builder $BUILD_PATH/configuration/prod/validator_1.toml ./
+
+# Copy entrypoint
+COPY docker/server-entrypoint.sh .
+RUN chmod +x server-entrypoint.sh
 
 # Create configuration files for the validator according to the validator's config file.
 # * Private server states are stored in `server*.json`.
