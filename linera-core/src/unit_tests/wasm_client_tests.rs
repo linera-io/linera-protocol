@@ -8,26 +8,16 @@
 
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use crate::{
-    client::{
-        client_tests::{MakeMemoryStoreClient, StoreBuilder, TestBuilder},
-        ChainClientError,
-    },
-    local_node::LocalNodeError,
-    worker::WorkerError,
-};
+use crate::client::client_tests::{MakeMemoryStoreClient, StoreBuilder, TestBuilder};
 use async_graphql::Request;
 use linera_base::{
     data_types::Amount,
     identifiers::{ChainDescription, ChainId, Destination, Owner},
 };
-use linera_chain::{
-    data_types::{CertificateValue, OutgoingMessage},
-    ChainError, ChainExecutionContext,
-};
+use linera_chain::data_types::{CertificateValue, OutgoingMessage};
 use linera_execution::{
-    pricing::Pricing, Bytecode, ExecutionError, Message, Operation, SystemMessage,
-    UserApplicationDescription, WasmRuntime,
+    pricing::Pricing, Bytecode, Message, Operation, SystemMessage, UserApplicationDescription,
+    WasmRuntime,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -575,11 +565,11 @@ where
             owner: sender_owner,
         },
     };
-    assert!(matches!(receiver
+    // TODO(#989): Make user errors fail blocks again.
+    receiver
         .execute_operation(Operation::user(application_id, &transfer)?)
-        .await,
-        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::UserError(_), ChainExecutionContext::Operation(_)))
-    ));
+        .await
+        .unwrap();
     receiver.clear_pending_block().await;
 
     // Try another transfer in the other direction with the correct amount.

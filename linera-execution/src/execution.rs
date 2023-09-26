@@ -210,10 +210,13 @@ where
                     .await
             }
         };
-        if let Err(ExecutionError::UserError(message)) = &call_result {
-            tracing::error!("User application reported an error: {message}");
-        }
-        let mut result = call_result?;
+        // TODO(#989): Make user errors fail blocks again.
+        let mut result = if let Err(ExecutionError::UserError(message)) = &call_result {
+            tracing::error!("Ignoring error reported by user application: {message}");
+            RawExecutionResult::default()
+        } else {
+            call_result?
+        };
         // Set the authenticated signer to be used in outgoing messages.
         result.authenticated_signer = signer;
         *remaining_fuel = runtime.remaining_fuel();
