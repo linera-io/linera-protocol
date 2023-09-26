@@ -32,6 +32,7 @@ use crate::{
 };
 use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
+use futures::future::join_all;
 use scylla::{
     transport::errors::{DbError, QueryError},
     IntoTypedRows, Session, SessionBuilder,
@@ -119,15 +120,13 @@ impl KeyValueStoreClient for ScyllaDbClientInternal {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        // There is probably a better way in ScyllaDB for downloading several keys than this one.
         let client = self.client.deref();
         let _guard = self.acquire().await;
-        let mut values = Vec::new();
-        for key in keys {
-            let value = Self::read_key_internal(client, key.to_vec()).await?;
-            values.push(value);
-        }
-        Ok(values)
+        let handles = keys
+            .into_iter()
+            .map(|key| Self::read_key_internal(client, key));
+        let result = join_all(handles).await;
+        Ok(result.into_iter().collect::<Result<_, _>>()?)
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
