@@ -1,6 +1,10 @@
 name: Kubernetes
 
 on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull-requests
@@ -21,7 +25,7 @@ permissions:
 
 jobs:
 
-  integration-test-with-kind:
+  local-kind-deployment-integration-test:
     runs-on: ubuntu-latest-4-cores
     steps:
       - uses: actions/checkout@v3
@@ -35,9 +39,9 @@ jobs:
         uses: arduino/setup-protoc@v1
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build binaries
+      - name: Build client binary
         run: |
-          cargo build --release --locked --no-default-features --bin linera --bin linera-proxy --bin linera-server
+          cargo build --release --locked --bin linera
       - name: Install Kind
         run: |
           curl -sL -o /tmp/kind https://kind.sigs.k8s.io/dl/v0.14.0/kind-linux-amd64
@@ -48,33 +52,35 @@ jobs:
           curl -sL -o /tmp/kubectl https://storage.googleapis.com/kubernetes-release/release/v1.24.1/bin/linux/amd64/kubectl
           chmod +x /tmp/kubectl
           mv /tmp/kubectl /usr/local/bin/
-      - name: Create cluster
+      - name: Build Docker and deploy locally with Kind
         run: |
-          kind create cluster
-      - name: Build and Load Docker images
+          cd kubernetes/linera-validator
+          ./build_and_redeploy.sh
+      - name: Port Forward
         run: |
-          cd docker/local-tests
-          cp ../../target/release/{linera,linera-proxy,linera-server} .
-          for image in linera linera-proxy linera-server setup; do
-              docker build -t "linera-test-$image" --target "$image" .
-              kind load docker-image "linera-test-$image"
-          done
-      - name: Deploy cluster
+          kubectl get pods | grep validator | awk '{ print $1 }' | xargs -I % kubectl port-forward % 19100:19100 &
+      - name: Send sync-balance request
+        # TODO(#1003): Stop using sleep as a workaround for shards initialization delay
         run: |
-          cd docker/local-tests
-          ./integration-test.sh 4 5
-          kubectl apply -f linera-k8s.yml
-      - name: Wait for client test
-        run: |
-          kubectl wait --for condition=Complete --timeout 180s job/client
+          cd target/release
+          sleep 15 && ./linera --wallet /tmp/wallet.json --storage rocksdb:/tmp/linera.db sync-balance
       - name: Print client test logs
+        # Always here means that this will run even if previous steps fail, same for the ones below
         if: always()
         run: |
           kubectl logs --tail 500 -l app=linera
-      - name: Clean cluster
+      - name: Print validator test logs
         if: always()
         run: |
-          kubectl delete -f docker/local-tests/linera-k8s.yml
+          kubectl logs --tail 500 -l app=validator
+      - name: Print shards test logs
+        if: always()
+        run: |
+          kubectl logs --tail 500 -l app=shards
+      - name: Stop port forwarding
+        if: always()
+        run: |
+          ps aux | grep port-forward | grep validator | awk '{ print $2 }' | xargs kill -9
       - name: Delete cluster
         if: always()
         run: |
