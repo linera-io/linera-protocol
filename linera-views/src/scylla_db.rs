@@ -120,14 +120,9 @@ impl KeyValueStoreClient for ScyllaDbClientInternal {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        // There is probably a better way in ScyllaDB for downloading several keys than this one.
         let client = self.client.deref();
         let _guard = self.acquire().await;
-        let mut handles = Vec::new();
-        for key in keys {
-            let handle = Self::read_key_internal(client, key);
-            handles.push(handle);
-        }
+        let handles = keys.into_iter().map(|key| Self::read_key_internal(client, key));
         let result = join_all(handles).await;
         Ok(result.into_iter().collect::<Result<_, _>>()?)
     }
