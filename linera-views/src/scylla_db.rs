@@ -72,6 +72,10 @@ pub enum ScyllaDbContextError {
     #[error(transparent)]
     ScyllaDbNewSessionError(#[from] scylla::transport::errors::NewSessionError),
 
+    /// Table name contains forbidden characters
+    #[error("Table name contains forbidden characters")]
+    TableNameHasForbiddenCharacters,
+
     /// Missing database
     #[error("Missing database")]
     MissingDatabase(String),
@@ -168,11 +172,8 @@ impl ScyllaDbClientInternal {
         let session = &client.0;
         let table_name = &client.1;
         // Read the value of a key
-        let values = (table_name.to_string(), key);
-        let query = format!(
-            "SELECT v FROM kv.pairs_{} WHERE table_name = ? AND k = ?",
-            table_name
-        );
+        let values = (key,);
+        let query = format!("SELECT v FROM kv.{} WHERE k = ?", table_name);
         let rows = session.query(query, values).await?;
         if let Some(rows) = rows.rows {
             if let Some(row) = rows.into_typed::<(Vec<u8>,)>().next() {
@@ -191,10 +192,10 @@ impl ScyllaDbClientInternal {
         let session = &client.0;
         let table_name = &client.1;
         let query = format!(
-            "INSERT INTO kv.pairs_{} (table_name, k, v) VALUES (?, ?, ?)",
+            "INSERT INTO kv.{} (dummy, k, v) VALUES (0, ?, ?)",
             table_name
         );
-        let values = (table_name.to_string(), key, value);
+        let values = (key, value);
         session.query(query, values).await?;
         Ok(())
     }
@@ -205,11 +206,8 @@ impl ScyllaDbClientInternal {
     ) -> Result<(), ScyllaDbContextError> {
         let session = &client.0;
         let table_name = &client.1;
-        let values = (table_name.to_string(), key);
-        let query = format!(
-            "DELETE FROM kv.pairs_{} WHERE table_name = ? AND k = ?",
-            table_name
-        );
+        let values = (key,);
+        let query = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k = ?", table_name);
         session.query(query, values).await?;
         Ok(())
     }
@@ -222,17 +220,14 @@ impl ScyllaDbClientInternal {
         let table_name = &client.1;
         match get_upper_bound_option(&key_prefix) {
             None => {
-                let values = (table_name.to_string(), key_prefix);
-                let query = format!(
-                    "DELETE FROM kv.pairs_{} WHERE table_name = ? AND k >= ?",
-                    table_name
-                );
+                let values = (key_prefix,);
+                let query = format!("DELETE FROM kv.{} WHERE k >= ?", table_name);
                 session.query(query, values).await?;
             }
             Some(upper_bound) => {
-                let values = (table_name.to_string(), key_prefix, upper_bound);
+                let values = (key_prefix, upper_bound);
                 let query = format!(
-                    "DELETE FROM kv.pairs_{} WHERE table_name = ? AND k >= ? AND k < ?",
+                    "DELETE FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ?",
                     table_name
                 );
                 session.query(query, values).await?;
@@ -271,19 +266,13 @@ impl ScyllaDbClientInternal {
         let len = key_prefix.len();
         let rows = match get_upper_bound_option(&key_prefix) {
             None => {
-                let values = (table_name.to_string(), key_prefix);
-                let query = format!(
-                    "SELECT k FROM kv.pairs_{} WHERE table_name = ? AND k >= ?",
-                    table_name
-                );
+                let values = (key_prefix,);
+                let query = format!("SELECT k FROM kv.{} WHERE k >= ?", table_name);
                 session.query(query, values).await?
             }
             Some(upper_bound) => {
-                let values = (table_name.to_string(), key_prefix, upper_bound);
-                let query = format!(
-                    "SELECT k FROM kv.pairs_{} WHERE table_name = ? AND k >= ? AND k < ?",
-                    table_name
-                );
+                let values = (key_prefix, upper_bound);
+                let query = format!("SELECT k FROM kv.{} WHERE k >= ? AND k < ?", table_name);
                 session.query(query, values).await?
             }
         };
@@ -308,19 +297,13 @@ impl ScyllaDbClientInternal {
         let len = key_prefix.len();
         let rows = match get_upper_bound_option(&key_prefix) {
             None => {
-                let values = (table_name.to_string(), key_prefix);
-                let query = format!(
-                    "SELECT k FROM kv.pairs_{} WHERE table_name = ? AND k >= ?",
-                    table_name
-                );
+                let values = (key_prefix,);
+                let query = format!("SELECT k FROM kv.{} WHERE k >= ?", table_name);
                 session.query(query, values).await?
             }
             Some(upper_bound) => {
-                let values = (table_name.to_string(), key_prefix, upper_bound);
-                let query = format!(
-                    "SELECT k,v FROM kv.pairs_{} WHERE table_name = ? AND k >= ? AND k < ?",
-                    table_name
-                );
+                let values = (key_prefix, upper_bound);
+                let query = format!("SELECT k,v FROM kv.{} WHERE k >= ? AND k < ?", table_name);
                 session.query(query, values).await?
             }
         };
@@ -358,15 +341,15 @@ impl ScyllaDbClientInternal {
         table_name: &String,
     ) -> Result<bool, ScyllaDbContextError> {
         // We check the way the test can fail. It can fail in different ways.
-        let query = format!("SELECT table_name FROM kv.pairs_{}", table_name);
+        let query = format!("SELECT dummy FROM kv.{}", table_name);
 
         // Execute the query
         let result = session.query(query, &[]).await;
 
         // The missing table translates into a very specific error that we matched
-        let mesg_miss1 = format!("unconfigured table pairs_{}", table_name);
+        let mesg_miss1 = format!("unconfigured table {}", table_name);
         let mesg_miss1 = mesg_miss1.as_str();
-        let mesg_miss2 = "Undefined name table_name in selection clause";
+        let mesg_miss2 = "Undefined name dummy in selection clause";
         let mesg_miss3 = "Keyspace kv does not exist";
         let Err(error) = result else {
             // If ok, then the table exists
@@ -391,6 +374,14 @@ impl ScyllaDbClientInternal {
         }
     }
 
+    fn is_allowed_name(table_name: &str) -> bool {
+        !table_name.is_empty()
+            && table_name.len() <= 48
+            && table_name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    }
+
     /// Creates a table, the keyspace might or might not be existing.
     ///
     /// For the table itself, we return true if the table already exists
@@ -406,12 +397,20 @@ impl ScyllaDbClientInternal {
         table_name: &String,
         stop_if_table_exists: bool,
     ) -> Result<bool, ScyllaDbContextError> {
+        if !Self::is_allowed_name(table_name) {
+            return Err(ScyllaDbContextError::TableNameHasForbiddenCharacters);
+        }
         // Create a keyspace if it doesn't exist
         let query = "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }";
         session.query(query, &[]).await?;
 
         // Create a table if it doesn't exist
-        let query = format!("CREATE TABLE kv.pairs_{} (table_name text, k blob, v blob, primary key (table_name, k))", table_name);
+        // The schema appears too complicated for non-trivial reasons.
+        // See TODO(#1069).
+        let query = format!(
+            "CREATE TABLE kv.{} (dummy int, k blob, v blob, primary key (dummy, k))",
+            table_name
+        );
         let result = session.query(query, &[]).await;
 
         let Err(error) = result else {
@@ -444,7 +443,7 @@ impl ScyllaDbClientInternal {
             .build()
             .await?;
         if Self::test_table_existence(&session, &store_config.table_name).await? {
-            let query = format!("DROP TABLE kv.pairs_{};", store_config.table_name);
+            let query = format!("DROP TABLE kv.{};", store_config.table_name);
             session.query(query, &[]).await?;
         }
         let stop_if_table_exists = true;
@@ -495,7 +494,7 @@ impl ScyllaDbClientInternal {
             .known_node(store_config.uri.as_str())
             .build()
             .await?;
-        let query = format!("DROP TABLE IF EXISTS kv.pairs_{};", store_config.table_name);
+        let query = format!("DROP TABLE IF EXISTS kv.{};", store_config.table_name);
         session.query(query, &[]).await?;
         Ok(())
     }
