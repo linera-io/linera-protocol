@@ -20,7 +20,7 @@ Please only include the relevant items (if any) and create issues to track futur
 - Need to bump the major/minor version number in the next release of the crates.
 - Need to update the developer manual.
 - This PR is adding or removing Cargo features.
-- Release is blocked and/or tracked by other issues (see links above)
+- Release is blocked and/or tracked by other issues (see links below)
 
 ## Links
 
