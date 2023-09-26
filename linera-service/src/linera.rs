@@ -998,6 +998,14 @@ enum NetCommand {
         /// The number of extra wallets and user chains to initialise. Default is 0.
         #[structopt(default_value, long)]
         wallets: usize,
+
+        /// The number of validators in the local test network. Default is 1.
+        #[structopt(long, default_value = "1")]
+        validators: usize,
+
+        /// The number of shards per validator in the local test network. Default is 1.
+        #[structopt(long, default_value = "1")]
+        shards: usize,
     },
 }
 
@@ -1757,20 +1765,54 @@ async fn main() -> Result<(), anyhow::Error> {
         }
 
         ClientCommand::Net(net_command) => match net_command {
-            NetCommand::Up { wallets } => {
+            NetCommand::Up {
+                wallets,
+                validators,
+                shards,
+            } => {
+                if *validators < 1 {
+                    panic!("The local test network must have at least one validator.");
+                }
+                if *shards < 1 {
+                    panic!("The local test network must have at least one shard per validator.");
+                }
                 let network = Network::Grpc;
-                let mut net = LocalNetwork::new(Database::RocksDb, network, 1)?;
+                let mut net = LocalNetwork::new(Database::RocksDb, network, *validators, *shards)?;
                 let mut client1 = net.make_client(network);
 
+                // Create the initial server and client config.
                 net.generate_initial_validator_config().await?;
                 client1.create_genesis_config().await?;
                 let default_chain = client1
                     .default_chain()
                     .expect("initialized client should always have default chain");
 
-                // Create initial server and client config.
+                // Start the validators.
                 net.run().await?;
 
+                // Make time to (hopefully) display the message after the tracing logs.
+                tokio::time::sleep(Duration::from_secs(1)).await;
+
+                // Create the wallet for the initial "root" chains.
+                eprintln!(
+                    "\nA local Linera network was started using the following temporary directory:\n{}\n",
+                    net.net_path().display()
+                );
+                eprintln!("To use the initial wallet of this network, set the following environment variables:\n");
+                eprintln!(
+                    "{}",
+                    format!(
+                        "export LINERA_WALLET=\"{}\"",
+                        client1.wallet_path().display()
+                    )
+                    .bold()
+                );
+                eprintln!(
+                    "{}",
+                    format!("export LINERA_STORAGE=\"{}\"\n", client1.storage_path()).bold()
+                );
+
+                // Create the extra wallets.
                 for wallet in 0..*wallets {
                     let mut extra_wallet = net.make_client(network);
                     extra_wallet.wallet_init(&[]).await?;
@@ -1782,7 +1824,7 @@ async fn main() -> Result<(), anyhow::Error> {
                     extra_wallet
                         .assign(unassigned_key, new_chain_msg_id)
                         .await?;
-                    eprintln!("\nExtra wallet {}:", wallet + 1);
+                    eprintln!("\nExtra user wallet {}:", wallet + 1);
                     eprintln!(
                         "export LINERA_WALLET=\"{}\"",
                         extra_wallet.wallet_path().display()
@@ -1793,26 +1835,10 @@ async fn main() -> Result<(), anyhow::Error> {
                     );
                 }
 
-                eprintln!(
-                    "\nLinera net directory available at: {}",
-                    net.net_path().display()
-                );
-                eprintln!("To configure your Linera client for this network, run:\n");
-                eprintln!(
-                    "{}",
-                    format!(
-                        "export LINERA_WALLET=\"{}\"",
-                        client1.wallet_path().display()
-                    )
-                    .bold()
-                );
-                eprintln!(
-                    "{}",
-                    format!("export LINERA_STORAGE=\"{}\"", client1.storage_path()).bold()
-                );
-
+                eprintln!("\nPress ENTER to terminate the local Linera network and clean the temporary directory.");
                 std::io::stdin().bytes().next();
 
+                eprintln!("Done.");
                 Ok(())
             }
         },

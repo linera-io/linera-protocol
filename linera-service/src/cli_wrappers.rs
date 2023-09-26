@@ -542,12 +542,12 @@ impl Validator {
 pub struct LocalNetwork {
     database: Database,
     network: Network,
-    tmp_dir: Rc<TempDir>,
     next_client_id: usize,
     num_initial_validators: usize,
     num_shards: usize,
     local_net: BTreeMap<usize, Validator>,
     set_init: HashSet<(usize, usize)>,
+    tmp_dir: Rc<TempDir>,
 }
 
 impl Drop for LocalNetwork {
@@ -563,18 +563,29 @@ impl LocalNetwork {
         database: Database,
         network: Network,
         num_initial_validators: usize,
+        num_shards: usize,
     ) -> Result<Self> {
-        let num_shards = 4;
         Ok(Self {
             database,
-            tmp_dir: Rc::new(tempdir()?),
             network,
             next_client_id: 0,
             num_initial_validators,
             num_shards,
             local_net: BTreeMap::new(),
             set_init: HashSet::new(),
+            tmp_dir: Rc::new(tempdir()?),
         })
+    }
+
+    #[cfg(any(test, feature = "test"))]
+    pub fn new_for_testing(database: Database, network: Network) -> Result<Self> {
+        let num_validators = 4;
+        let num_shards = match database {
+            Database::RocksDb => 1,
+            Database::DynamoDb => 4,
+            Database::ScyllaDb => 4,
+        };
+        Self::new(database, network, num_validators, num_shards)
     }
 
     pub fn make_client(&mut self, network: Network) -> ClientWrapper {
