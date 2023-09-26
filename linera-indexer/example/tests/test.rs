@@ -97,7 +97,7 @@ async fn run_end_to_end_operations_indexer(database: Database) {
     // launching network, service and indexer
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
+    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
     let mut client = local_net.make_client(network);
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();

@@ -307,7 +307,7 @@ async fn run_end_to_end_counter(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
+    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
     let mut client = local_net.make_client(network);
 
     let original_counter_value = 35;
@@ -374,7 +374,7 @@ async fn run_end_to_end_counter_publish_create(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
+    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
     let mut client = local_net.make_client(network);
 
     let original_counter_value = 35;
@@ -437,7 +437,7 @@ async fn run_end_to_end_social_user_pub_sub(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
+    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
     let mut client1 = local_net.make_client(network);
     let mut client2 = local_net.make_client(network);
 
@@ -536,7 +536,7 @@ async fn run_end_to_end_fungible(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
+    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
     let mut client1 = local_net.make_client(network);
     let mut client2 = local_net.make_client(network);
 
@@ -669,7 +669,7 @@ async fn run_end_to_end_same_wallet_fungible(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
+    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
     let mut client1 = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
@@ -768,7 +768,7 @@ async fn run_end_to_end_crowd_funding(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
+    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
     let mut client1 = local_net.make_client(network);
     let mut client2 = local_net.make_client(network);
 
@@ -911,7 +911,7 @@ async fn run_end_to_end_matching_engine(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
+    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
     let mut client_admin = local_net.make_client(network);
     let mut client_a = local_net.make_client(network);
     let mut client_b = local_net.make_client(network);
@@ -1174,7 +1174,7 @@ async fn run_end_to_end_amm(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(database, network, 4).unwrap();
+    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
     let mut client_admin = local_net.make_client(network);
     let mut client0 = local_net.make_client(network);
     let mut client1 = local_net.make_client(network);

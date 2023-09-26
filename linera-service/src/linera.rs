@@ -1002,6 +1002,10 @@ enum NetCommand {
         /// The number of validators in the local test network. Default is 1.
         #[structopt(long, default_value = "1")]
         validators: usize,
+
+        /// The number of shards per validator in the local test network. Default is 1.
+        #[structopt(long, default_value = "1")]
+        shards: usize,
     },
 }
 
@@ -1764,12 +1768,16 @@ async fn main() -> Result<(), anyhow::Error> {
             NetCommand::Up {
                 wallets,
                 validators,
+                shards,
             } => {
-                if validators < 1 {
+                if *validators < 1 {
                     panic!("The local test network must have at least one validator.");
                 }
+                if *shards < 1 {
+                    panic!("The local test network must have at least one shard per validator.");
+                }
                 let network = Network::Grpc;
-                let mut net = LocalNetwork::new(Database::RocksDb, network, *validators)?;
+                let mut net = LocalNetwork::new(Database::RocksDb, network, *validators, *shards)?;
                 let mut client1 = net.make_client(network);
 
                 // Create the initial server and client config.

@@ -31,7 +31,7 @@ async-graphql = { workspace = true }
 linera-base = { workspace = true }
 linera-indexer-graphql-client = { workspace = true }
 linera-service-graphql-client = { workspace = true }
-linera-service = { workspace = true, features = ["rocksdb"] }
+linera-service = { workspace = true, features = ["rocksdb", "test"] }
 once_cell = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

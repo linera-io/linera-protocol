@@ -3080,6 +3080,7 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-rpc",
+ "linera-service",
  "linera-storage",
  "linera-views",
  "matching-engine",
