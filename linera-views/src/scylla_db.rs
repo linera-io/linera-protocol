@@ -347,7 +347,7 @@ impl ScyllaDbClientInternal {
         let result = session.query(query, &[]).await;
 
         // The missing table translates into a very specific error that we matched
-        let mesg_miss1 = format!("unconfigured table p_{}", table_name);
+        let mesg_miss1 = format!("unconfigured table {}", table_name);
         let mesg_miss1 = mesg_miss1.as_str();
         let mesg_miss2 = "Undefined name dummy in selection clause";
         let mesg_miss3 = "Keyspace kv does not exist";
@@ -397,7 +397,7 @@ impl ScyllaDbClientInternal {
         table_name: &String,
         stop_if_table_exists: bool,
     ) -> Result<bool, ScyllaDbContextError> {
-        if Self::is_allowed_name(table_name) {
+        if !Self::is_allowed_name(table_name) {
             return Err(ScyllaDbContextError::TableNameHasForbiddenCharacters);
         }
         // Create a keyspace if it doesn't exist
