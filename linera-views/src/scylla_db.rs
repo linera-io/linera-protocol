@@ -122,7 +122,9 @@ impl KeyValueStoreClient for ScyllaDbClientInternal {
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         let client = self.client.deref();
         let _guard = self.acquire().await;
-        let handles = keys.into_iter().map(|key| Self::read_key_internal(client, key));
+        let handles = keys
+            .into_iter()
+            .map(|key| Self::read_key_internal(client, key));
         let result = join_all(handles).await;
         Ok(result.into_iter().collect::<Result<_, _>>()?)
     }
