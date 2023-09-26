@@ -53,10 +53,26 @@ jobs:
           curl -sL -o /tmp/kubectl https://storage.googleapis.com/kubernetes-release/release/v1.24.1/bin/linux/amd64/kubectl
           chmod +x /tmp/kubectl
           mv /tmp/kubectl /usr/local/bin/
+      # Setup gcloud CLI
+      - uses: GoogleCloudPlatform/github-actions/setup-gcloud@v0
+        with:
+          service_account_email: ${{ secrets.GCP_EMAIL }}
+          service_account_key: ${{ secrets.GCP_CREDENTIALS }}
+          export_default_credentials: true
+      
+      # Configure Docker with Credentials
+      - name: Configure Docker
+        run: |
+          gcloud auth configure-docker
+        
+      - name: Set GCloud project
+        run: |
+          gcloud config set project ${{ secrets.GCP_PROJECT }}
+      # Build the Docker image
       - name: Build Docker and deploy locally with Kind
         run: |
           cd kubernetes/linera-validator
-          ./build_and_redeploy.sh
+          ./build_and_redeploy.sh --cloud
       - name: Port Forward
         run: |
           kubectl get pods | grep validator | awk '{ print $1 }' | xargs -I % kubectl port-forward % 19100:19100 &
