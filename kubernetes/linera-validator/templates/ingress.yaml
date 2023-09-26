@@ -3,7 +3,10 @@ kind: Service
 metadata:
   name: validator-ingress
 spec:
-  type: LoadBalancer
+  # NodePort here is temporary. LoadBalancer will keep trying to set an external IP,
+  # leaving it in a permanent pending state. Since we port forward anyways, we don't
+  # need that for now, so just using NodePort
+  type: NodePort
   selector:
     app: validator-1
   ports:

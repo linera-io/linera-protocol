@@ -100,22 +100,19 @@ if [ "$port_forward" = true ]; then
     opt_list+=" --port-forward"
 fi
 
-helm uninstall linera-core;
-
-sleep 0.5;
+helm uninstall linera-core --wait;
 
 if [ "$cloud_mode" = true ]; then
-    helm install linera-core . --values values-local-with-cloud-build.yaml || exit 1;
+    helm install linera-core . --values values-local-with-cloud-build.yaml --wait || exit 1;
 else
-    helm install linera-core . --values values-local.yaml || exit 1;
+    helm install linera-core . --values values-local.yaml --wait || exit 1;
 fi
 
-sleep 0.5;
 echo "Pods:";
 kubectl get pods;
 echo -e "\nServices:";
 kubectl get svc;
-sleep 2;
+
 docker rm linera-test-local;
 if [ "$cloud_mode" = true ]; then
     docker run -d --name linera-test-local $docker_image \
