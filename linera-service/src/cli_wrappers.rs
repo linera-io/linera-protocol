@@ -542,12 +542,12 @@ impl Validator {
 pub struct LocalNetwork {
     database: Database,
     network: Network,
-    tmp_dir: Rc<TempDir>,
     next_client_id: usize,
     num_initial_validators: usize,
     num_shards: usize,
     local_net: BTreeMap<usize, Validator>,
     set_init: HashSet<(usize, usize)>,
+    tmp_dir: Rc<TempDir>,
 }
 
 impl Drop for LocalNetwork {
@@ -567,13 +567,13 @@ impl LocalNetwork {
         let num_shards = 4;
         Ok(Self {
             database,
-            tmp_dir: Rc::new(tempdir()?),
             network,
             next_client_id: 0,
             num_initial_validators,
             num_shards,
             local_net: BTreeMap::new(),
             set_init: HashSet::new(),
+            tmp_dir: Rc::new(tempdir()?),
         })
     }
 
