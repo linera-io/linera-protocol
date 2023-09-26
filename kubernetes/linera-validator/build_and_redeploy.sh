@@ -100,4 +100,50 @@ if [ "$port_forward" = true ]; then
     opt_list+=" --port-forward"
 fi
 
-./redeploy.sh $opt_list
+helm uninstall linera-core;
+
+sleep 0.5;
+
+if [ "$cloud_mode" = true ]; then
+    helm install linera-core . --values values-local-with-cloud-build.yaml || exit 1;
+else
+    helm install linera-core . --values values-local.yaml || exit 1;
+fi
+
+sleep 0.5;
+echo "Pods:";
+kubectl get pods;
+echo -e "\nServices:";
+kubectl get svc;
+sleep 2;
+docker rm linera-test-local;
+if [ "$cloud_mode" = true ]; then
+    docker run -d --name linera-test-local $docker_image \
+    && docker cp linera-test-local:/opt/linera/wallet.json /tmp/ \
+    && docker cp linera-test-local:/opt/linera/linera.db /tmp/
+else
+    docker run -d --name linera-test-local $docker_image \
+    && docker cp linera-test-local:/opt/linera/wallet.json /tmp/ \
+    && docker cp linera-test-local:/opt/linera/linera.db /tmp/
+fi
+
+echo -e "\nMake sure the terminal you'll run the linera client from has these exports:"
+echo 'export LINERA_WALLET=/tmp/wallet.json'
+echo 'export LINERA_STORAGE="rocksdb:/tmp/linera.db"'
+
+export LINERA_WALLET=/tmp/wallet.json
+export LINERA_STORAGE="rocksdb:/tmp/linera.db"
+
+# Get the Grafana pod name
+grafana_pod_name=$(kubectl get pods | grep grafana | awk '{ print $1 }')
+echo -e "\nTo access Grafana, you need to port forward yourself, that won't be done here. Run:"
+echo -e "kubectl port-forward $grafana_pod_name 3000\n"
+
+# Get the Validator pod name
+validator_pod_name=$(kubectl get pods | grep validator | awk '{ print $1 }')
+echo -e "\nTo port forward yourself, run:"
+echo -e "kubectl port-forward $validator_pod_name 19100:19100\n"
+
+if [ "$port_forward" = true ]; then
+    kubectl port-forward $validator_pod_name 19100:19100
+fi
