@@ -73,9 +73,13 @@ const KEY_VALUE_ATTRIBUTE: &str = "item_key, item_value";
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ServiceQuotas.html
 const MAX_VALUE_BYTES: usize = 409600;
 
+/// Fundamental constant in DynamoDB: The maximum size of a key is 1024 bytes
+/// See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html
+const MAX_KEY_BYTES: usize = 1024;
+
 /// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 4M.
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html
-const _MAX_TRANSACT_WRITE_ITEM_BYTES: usize = 4194304;
+const MAX_TRANSACT_WRITE_ITEM_BYTES: usize = 4194304;
 
 /// The DynamoDb database is potentially handling an infinite number of connections.
 /// However, for testing or some other purpose we really need to decrease the number of
@@ -88,13 +92,6 @@ pub const TEST_DYNAMO_DB_MAX_STREAM_QUERIES: usize = 10;
 /// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 100.
 /// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html>
 pub const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
-
-/// Fundamental constants in DynamoDB: The maximum size of a BatchWriteItem is 16M.
-/// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html>
-const MAX_BATCH_WRITE_ITEM_BYTES: usize = 16777216;
-
-/// This limit guarantees that the values seen by DynamoDb are under 400 kB = 409600 bytes.
-const MAX_VALUE_SIZE: usize = 409000;
 
 /// Builds the key attributes for a table item.
 ///
@@ -193,6 +190,63 @@ fn extract_key_value_owned(
     Ok((key, value))
 }
 
+fn build_delete_transact(
+    key: Vec<u8>,
+    db: &DynamoDbClientInternal,
+) -> Result<TransactWriteItem, DynamoDbContextError> {
+    if key.is_empty() {
+        return Err(DynamoDbContextError::ZeroLengthKey);
+    }
+    if key.len() > MAX_KEY_BYTES {
+        return Err(DynamoDbContextError::TooLongKey);
+    }
+    let request = Delete::builder()
+        .table_name(&db.table.0)
+        .set_key(Some(build_key(key)))
+        .build();
+    Ok(TransactWriteItem::builder().delete(request).build())
+}
+
+fn build_put_transact(
+    key: Vec<u8>,
+    value: Vec<u8>,
+    db: &DynamoDbClientInternal,
+) -> Result<TransactWriteItem, DynamoDbContextError> {
+    if key.is_empty() {
+        return Err(DynamoDbContextError::ZeroLengthKey);
+    }
+    if key.len() > MAX_KEY_BYTES {
+        return Err(DynamoDbContextError::TooLongKey);
+    }
+    if value.len() > MAX_VALUE_BYTES {
+        return Err(DynamoDbContextError::ValueLengthTooLarge);
+    }
+    let request = Put::builder()
+        .table_name(&db.table.0)
+        .set_item(Some(build_key_value(key, value)))
+        .build();
+    Ok(TransactWriteItem::builder().put(request).build())
+}
+
+async fn submit_transactions(
+    transacts: Vec<TransactWriteItem>,
+    db: &DynamoDbClientInternal,
+) -> Result<(), DynamoDbContextError> {
+    if transacts.len() > MAX_TRANSACT_WRITE_ITEM_SIZE {
+        return Err(DynamoDbContextError::TransactUpperLimitSize);
+    }
+    if !transacts.is_empty() {
+        let _guard = db.acquire().await;
+        db.client
+            .transact_write_items()
+            .set_transact_items(Some(transacts))
+            .send()
+            .await?;
+    }
+    // Drop the output of type TransactWriteItemsOutput
+    Ok(())
+}
+
 #[derive(Default)]
 struct TransactionBuilder {
     transacts: Vec<TransactWriteItem>,
@@ -204,14 +258,7 @@ impl TransactionBuilder {
         key: Vec<u8>,
         db: &DynamoDbClientInternal,
     ) -> Result<(), DynamoDbContextError> {
-        if key.is_empty() {
-            return Err(DynamoDbContextError::ZeroLengthKey);
-        }
-        let request = Delete::builder()
-            .table_name(&db.table.0)
-            .set_key(Some(build_key(key)))
-            .build();
-        let transact = TransactWriteItem::builder().delete(request).build();
+        let transact = build_delete_transact(key, db)?;
         self.transacts.push(transact);
         Ok(())
     }
@@ -222,35 +269,13 @@ impl TransactionBuilder {
         value: Vec<u8>,
         db: &DynamoDbClientInternal,
     ) -> Result<(), DynamoDbContextError> {
-        if key.is_empty() {
-            return Err(DynamoDbContextError::ZeroLengthKey);
-        }
-        if value.len() > MAX_VALUE_BYTES {
-            return Err(DynamoDbContextError::ValueLengthTooLarge);
-        }
-        let request = Put::builder()
-            .table_name(&db.table.0)
-            .set_item(Some(build_key_value(key, value)))
-            .build();
-        let transact = TransactWriteItem::builder().put(request).build();
+        let transact = build_put_transact(key, value, db)?;
         self.transacts.push(transact);
         Ok(())
     }
 
     async fn submit(self, db: &DynamoDbClientInternal) -> Result<(), DynamoDbContextError> {
-        if self.transacts.len() > MAX_TRANSACT_WRITE_ITEM_SIZE {
-            return Err(DynamoDbContextError::TransactUpperLimitSize);
-        }
-        if !self.transacts.is_empty() {
-            let _guard = db.acquire().await;
-            db.client
-                .transact_write_items()
-                .set_transact_items(Some(self.transacts))
-                .send()
-                .await?;
-        }
-        // Drop the output of type TransactWriteItemsOutput
-        Ok(())
+        submit_transactions(self.transacts, db).await
     }
 }
 
@@ -322,7 +347,14 @@ impl DynamoDbBatch {
     }
 
     fn is_fastpath_feasible(&self) -> bool {
-        self.len() <= MAX_TRANSACT_WRITE_ITEM_SIZE
+        let mut total_size = 0;
+        for (key, value) in &self.0.insertions {
+            total_size += key.len() + value.len();
+        }
+        for deletion in &self.0.deletions {
+            total_size += deletion.len();
+        }
+        self.len() <= MAX_TRANSACT_WRITE_ITEM_SIZE && total_size <= MAX_TRANSACT_WRITE_ITEM_BYTES
     }
 
     fn add_journal_header_operations(
@@ -347,48 +379,63 @@ impl DynamoDbBatch {
         db: &DynamoDbClientInternal,
         base_key: &[u8],
     ) -> Result<JournalHeader, DynamoDbContextError> {
-        let delete_count = self.0.deletions.len();
-        let insert_count = self.0.insertions.len();
-        let total_count = delete_count + insert_count;
-        let mut curr_size = 0;
-        let mut curr_len = 0;
+        let mut delete_iter = self.0.deletions.into_iter().peekable();
+        let mut insert_iter = self.0.insertions.into_iter().peekable();
+        let mut value_size = 2;
+        let mut transact_size = 0;
         let mut deletions = Vec::new();
         let mut insertions = Vec::new();
         let mut block_count = 0;
-        for i in 0..total_count {
-            curr_len += 1;
-            if i < delete_count {
-                let delete = &self.0.deletions[i];
-                curr_size += delete.len();
-                deletions.push(delete.to_vec());
+        let mut transacts = Vec::new();
+        loop {
+            if let Some(delete) = delete_iter.next() {
+                value_size += delete.len() + 1;
+                deletions.push(delete);
+            } else if let Some((key, value)) = insert_iter.next() {
+                value_size += key.len() + value.len() + 2;
+                insertions.push((key, value));
             } else {
-                let key_value = &self.0.insertions[i - delete_count];
-                curr_size += key_value.0.len() + key_value.1.len();
-                insertions.push(key_value.clone());
+                break;
             }
-            let do_flush = if i == total_count - 1 || curr_len == MAX_TRANSACT_WRITE_ITEM_SIZE - 2 {
-                true
+            let (value_flush, transact_flush) = if (delete_iter.len() + insert_iter.len() == 0)
+                || deletions.len() + insertions.len() == MAX_TRANSACT_WRITE_ITEM_SIZE - 2
+            {
+                (true, true)
             } else {
-                let size_next = if i + 1 < delete_count {
-                    self.0.deletions[i + 1].len()
+                let next_size = if let Some(delete) = delete_iter.peek() {
+                    delete.len() + 1
                 } else {
-                    let key_value = &self.0.insertions[i + 1 - delete_count];
-                    key_value.0.len() + key_value.1.len()
+                    // Unwrapping: We checked above that at least one iterator is not empty.
+                    let (key, value) = insert_iter.peek().unwrap();
+                    key.len() + value.len() + 2
                 };
-                curr_size + size_next > MAX_BATCH_WRITE_ITEM_BYTES
+                let next_value_size = value_size + next_size;
+                let next_transact_size = transact_size + next_value_size;
+                let value_flush = if next_transact_size > MAX_TRANSACT_WRITE_ITEM_BYTES {
+                    true
+                } else {
+                    next_value_size > MAX_VALUE_BYTES
+                };
+                let transact_flush = next_transact_size > MAX_TRANSACT_WRITE_ITEM_BYTES;
+                (value_flush, transact_flush)
             };
-            if do_flush {
+            if value_flush {
                 let simple_unordered_batch = SimpleUnorderedBatch {
                     deletions: mem::take(&mut deletions),
                     insertions: mem::take(&mut insertions),
                 };
                 let entry = DynamoDbBatch(simple_unordered_batch);
-                let key = get_journaling_key(base_key, KeyTag::Entry as u8, block_count)?;
                 let value = bcs::to_bytes(&entry)?;
-                db.write_single_key_value(key, value).await?;
+                assert_eq!(value.len(), value_size);
+                let key = get_journaling_key(base_key, KeyTag::Entry as u8, block_count)?;
+                transacts.push(build_put_transact(key, value, db)?);
                 block_count += 1;
-                curr_size = 0;
-                curr_len = 0;
+                transact_size += value_size;
+                value_size = 2;
+            }
+            if transact_flush {
+                submit_transactions(mem::take(&mut transacts), db).await?;
+                transact_size = 0;
             }
         }
         let header = JournalHeader { block_count };
@@ -545,6 +592,17 @@ impl DeletePrefixExpander for DynamoDbClientInternal {
         }
         Ok(vector_list)
     }
+}
+
+/// The initial configuration of the system
+#[derive(Debug)]
+pub struct DynamoDbKvStoreConfig {
+    /// The AWS configuration
+    pub config: Config,
+    /// The table_name used
+    pub table_name: TableName,
+    /// The common configuration of the key value store
+    pub common_config: CommonStoreConfig,
 }
 
 impl DynamoDbClientInternal {
@@ -828,7 +886,7 @@ impl DynamoDbClientInternal {
 
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClientInternal {
-    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_BYTES;
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
@@ -879,6 +937,9 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
         if key_prefix.is_empty() {
             return Err(DynamoDbContextError::ZeroLengthKeyPrefix);
         }
+        if key_prefix.len() > MAX_KEY_BYTES {
+            return Err(DynamoDbContextError::TooLongKeyPrefix);
+        }
         let response = Box::new(
             self.get_query_output(KEY_VALUE_ATTRIBUTE, key_prefix)
                 .await?,
@@ -917,7 +978,7 @@ pub struct DynamoDbClient {
 
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClient {
-    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_BYTES;
     type Error = DynamoDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -1044,17 +1105,6 @@ pub async fn get_config(use_localstack: bool) -> Result<Config, DynamoDbContextE
     } else {
         get_base_config().await
     }
-}
-
-/// The initial configuration of the system
-#[derive(Debug)]
-pub struct DynamoDbKvStoreConfig {
-    /// The AWS configuration
-    pub config: Config,
-    /// The table_name used
-    pub table_name: TableName,
-    /// The common configuration of the key value store
-    pub common_config: CommonStoreConfig,
 }
 
 /// An implementation of [`Context`][trait1] based on [`DynamoDbClient`].
@@ -1184,6 +1234,14 @@ pub enum DynamoDbContextError {
     /// Keys have to be of non-zero length.
     #[error("The key must be of strictly positive length")]
     ZeroLengthKey,
+
+    /// The key must have at most 1024 bytes
+    #[error("The key must have at most 1024 bytes")]
+    TooLongKey,
+
+    /// The key prefix must have at most 1024 bytes
+    #[error("The key prefix must have at most 1024 bytes")]
+    TooLongKeyPrefix,
 
     /// Key prefixes have to be of non-zero length.
     #[error("The key_prefix must be of strictly positive length")]
