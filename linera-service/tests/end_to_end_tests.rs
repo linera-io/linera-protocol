@@ -438,7 +438,7 @@ async fn test_scylla_db_project_new() {
 
 async fn run_project_new(database: Database) {
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(database, network, 0, 0).unwrap();
+    let mut local_net = LocalNetwork::new(database, network, None, 0, 0).unwrap();
     let client = local_net.make_client(network);
 
     let tmp_dir = client.project_new("init-test").await.unwrap();
@@ -471,7 +471,7 @@ async fn test_scylla_db_project_test() {
 
 async fn run_project_test(database: Database) {
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(database, network, 0, 0).unwrap();
+    let mut local_net = LocalNetwork::new(database, network, None, 0, 0).unwrap();
     let client = local_net.make_client(network);
     client
         .project_test(&LocalNetwork::example_path("counter").unwrap())
@@ -502,7 +502,7 @@ async fn run_project_publish(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(database, network, 1, 1).unwrap();
+    let mut local_net = LocalNetwork::new(database, network, Some(37), 1, 1).unwrap();
     let mut client = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
@@ -547,7 +547,7 @@ async fn run_example_publish(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new(database, network, 1, 1).unwrap();
+    let mut local_net = LocalNetwork::new(database, network, Some(37), 1, 1).unwrap();
     let mut client = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();

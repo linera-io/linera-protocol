@@ -1021,6 +1021,11 @@ enum NetCommand {
         /// The number of shards per validator in the local test network. Default is 1.
         #[structopt(long, default_value = "1")]
         shards: usize,
+
+        /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
+        /// TESTING ONLY.
+        #[structopt(long)]
+        testing_prng_seed: Option<u64>,
     },
 }
 
@@ -1797,6 +1802,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 wallets,
                 validators,
                 shards,
+                testing_prng_seed,
             } => {
                 if *validators < 1 {
                     panic!("The local test network must have at least one validator.");
@@ -1805,7 +1811,13 @@ async fn main() -> Result<(), anyhow::Error> {
                     panic!("The local test network must have at least one shard per validator.");
                 }
                 let network = Network::Grpc;
-                let mut net = LocalNetwork::new(Database::RocksDb, network, *validators, *shards)?;
+                let mut net = LocalNetwork::new(
+                    Database::RocksDb,
+                    network,
+                    *testing_prng_seed,
+                    *validators,
+                    *shards,
+                )?;
                 let mut client1 = net.make_client(network);
 
                 // Create the initial server and client config.
