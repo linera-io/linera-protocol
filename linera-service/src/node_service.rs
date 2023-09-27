@@ -314,9 +314,7 @@ where
         };
         let multi_leader_rounds = multi_leader_rounds.unwrap_or(RoundNumber::MAX);
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
-        let Some(mut client) = self.clients.client_lock(&chain_id).await else {
-            return Err(Error::new("Unknown chain ID"));
-        };
+        let mut client = self.clients.try_client_lock(&chain_id).await?;
         let (message_id, _) = client.open_chain(ownership).await?;
         Ok(ChainId::child(message_id))
     }
@@ -721,13 +719,13 @@ where
     {
         let port = self.port.get();
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
-        let applications_handler = axum::routing::get(graphiql).post(Self::application_handler);
+        let application_handler = axum::routing::get(graphiql).post(Self::application_handler);
 
         let app = Router::new()
             .route("/", index_handler)
             .route(
                 "/chains/:chain_id/applications/:application_id",
-                applications_handler,
+                application_handler,
             )
             .route("/ready", axum::routing::get(|| async { "ready!" }))
             .route_service("/ws", GraphQLSubscription::new(self.schema()))

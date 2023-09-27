@@ -139,7 +139,13 @@ where
             // notification.
             let mut guard = client.lock().await;
             guard.synchronize_from_validators().await?;
-            guard.process_inbox().await?;
+            if let Err(e) = guard.process_inbox().await {
+                warn!(
+                    "Failed to process inbox after starting stream \
+                     with error: {:?}",
+                    e
+                );
+            }
         }
         while let Some(notification) = stream.next().await {
             if !tracker.is_new(&notification) {

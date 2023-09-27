@@ -231,6 +231,7 @@ pub trait Store: Sized {
     }
 
     #[cfg(not(any(feature = "wasmer", feature = "wasmtime")))]
+    #[allow(clippy::diverging_sub_expression)]
     async fn load_application(
         &self,
         _application_description: &UserApplicationDescription,
