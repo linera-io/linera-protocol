@@ -459,6 +459,7 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
+    #[graphql(cache_control(no_cache))]
     async fn chain(&self, chain_id: ChainId) -> Result<ChainStateExtendedView<S::Context>, Error> {
         let client = self.clients.try_client_lock(&chain_id).await?;
         let view = client.chain_state_view(Some(chain_id)).await?;
