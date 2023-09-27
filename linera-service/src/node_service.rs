@@ -463,7 +463,7 @@ where
     #[graphql(cache_control(no_cache))]
     async fn chain(&self, chain_id: ChainId) -> Result<ChainStateExtendedView<S::Context>, Error> {
         let view = self.storage.load_chain(chain_id).await?;
-        Ok(ChainStateExtendedView::new(view))
+        Ok(ChainStateExtendedView::new(Arc::new(view)))
     }
 
     async fn applications(&self, chain_id: ChainId) -> Result<Vec<ApplicationOverview>, Error> {
@@ -546,7 +546,7 @@ impl ChainStateViewExtension {
 }
 
 #[derive(MergedObject)]
-struct ChainStateExtendedView<C>(ChainStateViewExtension, ChainStateView<C>)
+struct ChainStateExtendedView<C>(ChainStateViewExtension, Arc<ChainStateView<C>>)
 where
     C: linera_views::common::Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
@@ -558,7 +558,7 @@ where
     ViewError: From<C::Error>,
     C::Extra: linera_execution::ExecutionRuntimeContext,
 {
-    fn new(view: ChainStateView<C>) -> Self {
+    fn new(view: Arc<ChainStateView<C>>) -> Self {
         Self(ChainStateViewExtension(view.chain_id()), view)
     }
 }
