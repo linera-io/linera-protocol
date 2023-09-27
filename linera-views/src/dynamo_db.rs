@@ -69,9 +69,10 @@ const VALUE_ATTRIBUTE: &str = "item_value";
 /// The attribute for obtaining the primary key (used as a sort key) with the stored value.
 const KEY_VALUE_ATTRIBUTE: &str = "item_key, item_value";
 
+/// TODO(#1084): We remove 600 from 400 * 1024. We need to determine what exactly needs to be done.
 /// Fundamental constants in DynamoDB: The maximum size of a value is 400KB
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ServiceQuotas.html
-const MAX_VALUE_BYTES: usize = 409600;
+const MAX_VALUE_BYTES: usize = 409000;
 
 /// Fundamental constant in DynamoDB: The maximum size of a key is 1024 bytes
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html
