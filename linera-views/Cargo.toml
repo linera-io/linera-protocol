@@ -40,7 +40,6 @@ linked-hash-map = { workspace = true }
 tempfile = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-once_cell = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
 anyhow = { workspace = true, optional = true }
 tracing = { workspace = true }

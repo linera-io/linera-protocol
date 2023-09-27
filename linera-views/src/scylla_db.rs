@@ -75,7 +75,7 @@ pub enum ScyllaDbContextError {
 
     /// Table name contains forbidden characters
     #[error("Table name contains forbidden characters")]
-    TableNameHasForbiddenCharacters,
+    InvalidTableName,
 
     /// Missing database
     #[error("Missing database")]
@@ -172,7 +172,10 @@ impl ScyllaDbClientInternal {
         let table_name = &client.1;
         // Read the value of a key
         let values = (key,);
-        let query = format!("SELECT v FROM kv.{} WHERE k = ?", table_name);
+        let query = format!(
+            "SELECT v FROM kv.{} WHERE k = ? ALLOW FILTERING",
+            table_name
+        );
         let rows = session.query(query, values).await?;
         if let Some(rows) = rows.rows {
             if let Some(row) = rows.into_typed::<(Vec<u8>,)>().next() {
@@ -266,12 +269,18 @@ impl ScyllaDbClientInternal {
         let rows = match get_upper_bound_option(&key_prefix) {
             None => {
                 let values = (key_prefix,);
-                let query = format!("SELECT k FROM kv.{} WHERE k >= ?", table_name);
+                let query = format!(
+                    "SELECT k FROM kv.{} WHERE k >= ? ALLOW FILTERING",
+                    table_name
+                );
                 session.query(query, values).await?
             }
             Some(upper_bound) => {
                 let values = (key_prefix, upper_bound);
-                let query = format!("SELECT k FROM kv.{} WHERE k >= ? AND k < ?", table_name);
+                let query = format!(
+                    "SELECT k FROM kv.{} WHERE k >= ? AND k < ? ALLOW FILTERING",
+                    table_name
+                );
                 session.query(query, values).await?
             }
         };
@@ -297,12 +306,18 @@ impl ScyllaDbClientInternal {
         let rows = match get_upper_bound_option(&key_prefix) {
             None => {
                 let values = (key_prefix,);
-                let query = format!("SELECT k FROM kv.{} WHERE k >= ?", table_name);
+                let query = format!(
+                    "SELECT k FROM kv.{} WHERE k >= ? ALLOW FILTERING",
+                    table_name
+                );
                 session.query(query, values).await?
             }
             Some(upper_bound) => {
                 let values = (key_prefix, upper_bound);
-                let query = format!("SELECT k,v FROM kv.{} WHERE k >= ? AND k < ?", table_name);
+                let query = format!(
+                    "SELECT k,v FROM kv.{} WHERE k >= ? AND k < ? ALLOW FILTERING",
+                    table_name
+                );
                 session.query(query, values).await?
             }
         };
@@ -340,7 +355,7 @@ impl ScyllaDbClientInternal {
         table_name: &String,
     ) -> Result<bool, ScyllaDbContextError> {
         // We check the way the test can fail. It can fail in different ways.
-        let query = format!("SELECT dummy FROM kv.{}", table_name);
+        let query = format!("SELECT dummy FROM kv.{} ALLOW FILTERING", table_name);
 
         // Execute the query
         let result = session.query(query, &[]).await;
@@ -397,7 +412,7 @@ impl ScyllaDbClientInternal {
         stop_if_table_exists: bool,
     ) -> Result<bool, ScyllaDbContextError> {
         if !Self::is_allowed_name(table_name) {
-            return Err(ScyllaDbContextError::TableNameHasForbiddenCharacters);
+            return Err(ScyllaDbContextError::InvalidTableName);
         }
         // Create a keyspace if it doesn't exist
         let query = "CREATE KEYSPACE IF NOT EXISTS kv WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }";
@@ -692,7 +707,7 @@ pub fn create_scylla_db_common_config() -> CommonStoreConfig {
 #[cfg(any(test, feature = "test"))]
 pub async fn create_scylla_db_test_client() -> ScyllaDbClient {
     let uri = "localhost:9042".to_string();
-    let table_name = get_table_name().await;
+    let table_name = get_table_name();
     let common_config = create_scylla_db_common_config();
     let store_config = ScyllaDbKvStoreConfig {
         uri,

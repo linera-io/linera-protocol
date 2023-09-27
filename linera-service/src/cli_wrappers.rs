@@ -34,6 +34,9 @@ use tonic_health::proto::{
 };
 use tracing::{info, warn};
 
+#[cfg(any(test, feature = "test"))]
+use linera_views::common::get_table_name;
+
 /// The name of the environment variable that allows specifying additional arguments to be passed
 /// to `cargo` when starting client, server and proxy processes.
 pub const CARGO_ENV: &str = "LOCAL_NET_CARGO_PARAMS";
@@ -94,16 +97,11 @@ pub struct ClientWrapper {
 impl ClientWrapper {
     fn new(
         tmp_dir: Rc<TempDir>,
-        database: Database,
         network: Network,
         testing_prng_seed: Option<u64>,
         id: usize,
     ) -> Self {
-        let storage = match database {
-            Database::RocksDb => format!("rocksdb:{}/client_{}.db", tmp_dir.path().display(), id),
-            Database::DynamoDb => format!("dynamodb:client_{}.db:localstack", id),
-            Database::ScyllaDb => format!("scylladb:table_client_{}_db", id),
-        };
+        let storage = format!("rocksdb:{}/client_{}.db", tmp_dir.path().display(), id);
         let wallet = format!("wallet_{}.json", id);
         Self {
             testing_prng_seed,
@@ -132,7 +130,7 @@ impl ClientWrapper {
     }
 
     pub async fn project_publish<T: Serialize>(
-        &mut self,
+        &self,
         path: PathBuf,
         required_application_ids: Vec<String>,
         publisher: impl Into<Option<ChainId>>,
@@ -236,7 +234,7 @@ impl ClientWrapper {
     }
 
     pub async fn publish_and_create<A: ContractAbi>(
-        &mut self,
+        &self,
         contract: PathBuf,
         service: PathBuf,
         parameters: &A::Parameters,
@@ -262,7 +260,7 @@ impl ClientWrapper {
     }
 
     pub async fn publish_bytecode(
-        &mut self,
+        &self,
         contract: PathBuf,
         service: PathBuf,
         publisher: impl Into<Option<ChainId>>,
@@ -279,7 +277,7 @@ impl ClientWrapper {
     }
 
     pub async fn create_application<A: ContractAbi>(
-        &mut self,
+        &self,
         bytecode_id: String,
         argument: &A::InitializationArgument,
         creator: impl Into<Option<ChainId>>,
@@ -297,7 +295,7 @@ impl ClientWrapper {
         Ok(stdout.trim().to_string())
     }
 
-    pub async fn run_node_service(&mut self, port: impl Into<Option<u16>>) -> Result<NodeService> {
+    pub async fn run_node_service(&self, port: impl Into<Option<u16>>) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
         let mut command = self.run().await?;
         command.arg("service");
@@ -324,7 +322,7 @@ impl ClientWrapper {
         panic!("Failed to start node service");
     }
 
-    pub async fn query_validators(&mut self, chain_id: Option<ChainId>) -> Result<()> {
+    pub async fn query_validators(&self, chain_id: Option<ChainId>) -> Result<()> {
         let mut command = self.run().await?;
         command.arg("query-validators");
         if let Some(chain_id) = chain_id {
@@ -334,7 +332,7 @@ impl ClientWrapper {
         Ok(())
     }
 
-    pub async fn query_balance(&mut self, chain_id: ChainId) -> Result<String> {
+    pub async fn query_balance(&self, chain_id: ChainId) -> Result<String> {
         let stdout = Self::run_command(
             self.run()
                 .await?
@@ -346,7 +344,7 @@ impl ClientWrapper {
         Ok(amount)
     }
 
-    pub async fn transfer(&mut self, amount: &str, from: ChainId, to: ChainId) -> Result<()> {
+    pub async fn transfer(&self, amount: &str, from: ChainId, to: ChainId) -> Result<()> {
         Self::run_command(
             self.run()
                 .await?
@@ -375,7 +373,7 @@ impl ClientWrapper {
     }
 
     pub async fn open_chain(
-        &mut self,
+        &self,
         from: ChainId,
         to_public_key: Option<PublicKey>,
     ) -> Result<(MessageId, ChainId)> {
@@ -396,7 +394,7 @@ impl ClientWrapper {
         Ok((message_id, chain_id))
     }
 
-    pub async fn open_and_assign(&mut self, client: &mut ClientWrapper) -> Result<ChainId> {
+    pub async fn open_and_assign(&self, client: &ClientWrapper) -> Result<ChainId> {
         let our_chain = self
             .get_wallet()
             .default_chain()
@@ -408,7 +406,7 @@ impl ClientWrapper {
     }
 
     pub async fn open_multi_owner_chain(
-        &mut self,
+        &self,
         from: ChainId,
         to_public_keys: Vec<PublicKey>,
         weights: Vec<u64>,
@@ -455,7 +453,7 @@ impl ClientWrapper {
         self.get_wallet().get(chain).is_some()
     }
 
-    pub async fn set_validator(&mut self, name: &str, port: usize, votes: usize) -> Result<()> {
+    pub async fn set_validator(&self, name: &str, port: usize, votes: usize) -> Result<()> {
         let address = format!("{}:127.0.0.1:{}", self.network.external_short(), port);
         Self::run_command(
             self.run()
@@ -469,7 +467,7 @@ impl ClientWrapper {
         Ok(())
     }
 
-    pub async fn remove_validator(&mut self, name: &str) -> Result<()> {
+    pub async fn remove_validator(&self, name: &str) -> Result<()> {
         Self::run_command(
             self.run()
                 .await?
@@ -489,7 +487,7 @@ impl ClientWrapper {
         self.get_wallet().default_chain()
     }
 
-    pub async fn assign(&mut self, key: PublicKey, message_id: MessageId) -> Result<ChainId> {
+    pub async fn assign(&self, key: PublicKey, message_id: MessageId) -> Result<ChainId> {
         let stdout = Self::run_command(
             self.run()
                 .await?
@@ -504,7 +502,7 @@ impl ClientWrapper {
         Ok(chain_id)
     }
 
-    pub async fn synchronize_balance(&mut self, chain_id: ChainId) -> Result<()> {
+    pub async fn synchronize_balance(&self, chain_id: ChainId) -> Result<()> {
         Self::run_command(
             self.run()
                 .await?
@@ -557,6 +555,7 @@ pub struct LocalNetwork {
     num_initial_validators: usize,
     num_shards: usize,
     local_net: BTreeMap<usize, Validator>,
+    table_name: String,
     set_init: HashSet<(usize, usize)>,
     tmp_dir: Rc<TempDir>,
 }
@@ -574,6 +573,7 @@ impl LocalNetwork {
         database: Database,
         network: Network,
         testing_prng_seed: Option<u64>,
+        table_name: String,
         num_initial_validators: usize,
         num_shards: usize,
     ) -> Result<Self> {
@@ -585,6 +585,7 @@ impl LocalNetwork {
             num_initial_validators,
             num_shards,
             local_net: BTreeMap::new(),
+            table_name,
             set_init: HashSet::new(),
             tmp_dir: Rc::new(tempdir()?),
         })
@@ -593,19 +594,26 @@ impl LocalNetwork {
     #[cfg(any(test, feature = "test"))]
     pub fn new_for_testing(database: Database, network: Network) -> Result<Self> {
         let seed = 37;
+        let table_name = get_table_name();
         let num_validators = 4;
         let num_shards = match database {
             Database::RocksDb => 1,
             Database::DynamoDb => 4,
             Database::ScyllaDb => 4,
         };
-        Self::new(database, network, Some(seed), num_validators, num_shards)
+        Self::new(
+            database,
+            network,
+            Some(seed),
+            table_name,
+            num_validators,
+            num_shards,
+        )
     }
 
     pub fn make_client(&mut self, network: Network) -> ClientWrapper {
         let client = ClientWrapper::new(
             self.tmp_dir.clone(),
-            self.database,
             network,
             self.testing_prng_seed,
             self.next_client_id,
@@ -765,25 +773,46 @@ impl LocalNetwork {
     }
 
     async fn run_server(&mut self, i: usize, j: usize) -> Result<Child> {
-        let storage = match self.database {
-            Database::RocksDb => format!("rocksdb:server_{}_{}.db", i, j),
-            Database::DynamoDb => format!("dynamodb:server_{}_{}.db:localstack", i, j),
-            Database::ScyllaDb => format!("scylladb:table_server_{}_{}_db", i, j),
+        let (storage, key) = match self.database {
+            Database::RocksDb => (format!("rocksdb:server_{}_{}.db", i, j), (i, j)),
+            Database::DynamoDb => (
+                format!("dynamodb:{}_server_{}.db:localstack", self.table_name, i),
+                (i, 0),
+            ),
+            Database::ScyllaDb => (
+                format!("scylladb:{}_server_{}_db", self.table_name, i),
+                (i, 0),
+            ),
         };
-        let key = (i, j);
         if !self.set_init.contains(&key) {
-            let mut command = self.command_for_binary("linera-server").await?;
-            command.arg("initialize");
-            if let Ok(var) = env::var(SERVER_ENV) {
-                command.args(var.split_whitespace());
+            let max_try = 4;
+            let mut i_try = 0;
+            loop {
+                let mut command = self.command_for_binary("linera-server").await?;
+                command.arg("initialize");
+                if let Ok(var) = env::var(SERVER_ENV) {
+                    command.args(var.split_whitespace());
+                }
+                let output = command
+                    .args(["--storage", &storage])
+                    .args(["--genesis", "genesis.json"])
+                    .spawn()?
+                    .wait_with_output()
+                    .await?;
+                if output.status.success() {
+                    break;
+                }
+                warn!(
+                    "Failed to initialize storage={} using linera-server, i_try={}, output={:?}",
+                    storage, i_try, output
+                );
+                i_try += 1;
+                if i_try == max_try {
+                    panic!("Failed to initialize after {} attempts", max_try);
+                }
+                let one_second = std::time::Duration::from_millis(1000);
+                std::thread::sleep(one_second);
             }
-            let output = command
-                .args(["--storage", &storage])
-                .args(["--genesis", "genesis.json"])
-                .spawn()?
-                .wait_with_output()
-                .await?;
-            assert!(output.status.success());
             self.set_init.insert(key);
         }
 
@@ -918,7 +947,7 @@ impl NodeService {
     }
 
     pub async fn make_application(&self, chain_id: &ChainId, application_id: &str) -> String {
-        for i in 0..10 {
+        for i in 0..30 {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let values = self.try_get_applications_uri(chain_id).await;
             if let Some(link) = values.get(application_id) {
@@ -963,7 +992,8 @@ impl NodeService {
     }
 
     pub async fn query_node(&self, query: &str) -> Value {
-        for i in 0..10 {
+        let n_try = 30;
+        for i in 0..n_try {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let url = format!("http://localhost:{}/", self.port);
             let client = reqwest::Client::new();
@@ -992,8 +1022,9 @@ impl NodeService {
             }
         }
         panic!(
-            "Query \"{}\" failed after 10 retries.",
-            query.get(..200).unwrap_or(query)
+            "Query \"{}\" failed after {} retries.",
+            query.get(..200).unwrap_or(query),
+            n_try
         );
     }
 

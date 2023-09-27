@@ -1026,6 +1026,10 @@ enum NetCommand {
         /// TESTING ONLY.
         #[structopt(long)]
         testing_prng_seed: Option<u64>,
+
+        /// The name for the database table to store the chain data in.
+        #[structopt(long, default_value = "table_default")]
+        table_name: String,
     },
 }
 
@@ -1803,6 +1807,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 validators,
                 shards,
                 testing_prng_seed,
+                table_name,
             } => {
                 if *validators < 1 {
                     panic!("The local test network must have at least one validator.");
@@ -1815,10 +1820,11 @@ async fn main() -> Result<(), anyhow::Error> {
                     Database::RocksDb,
                     network,
                     *testing_prng_seed,
+                    table_name.to_string(),
                     *validators,
                     *shards,
                 )?;
-                let mut client1 = net.make_client(network);
+                let client1 = net.make_client(network);
 
                 // Create the initial server and client config.
                 net.generate_initial_validator_config().await?;
@@ -1854,7 +1860,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
                 // Create the extra wallets.
                 for wallet in 0..*wallets {
-                    let mut extra_wallet = net.make_client(network);
+                    let extra_wallet = net.make_client(network);
                     extra_wallet.wallet_init(&[]).await?;
                     let unassigned_key = extra_wallet.keygen().await?;
                     let new_chain_msg_id = client1

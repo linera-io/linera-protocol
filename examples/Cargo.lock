@@ -1735,7 +1735,6 @@ dependencies = [
  "linera-views-derive",
  "linked-hash-map",
  "metrics",
- "once_cell",
  "rand 0.8.5",
  "serde",
  "sha3",

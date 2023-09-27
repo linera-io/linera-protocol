@@ -8,6 +8,7 @@ use linera_execution::WasmRuntime;
 use linera_storage::{MemoryStoreClient, Store, WallClock};
 use linera_views::{common::CommonStoreConfig, memory::MemoryKvStoreConfig, views::ViewError};
 use std::str::FromStr;
+use tracing::error;
 
 #[cfg(feature = "rocksdb")]
 use {
@@ -163,14 +164,13 @@ impl FromStr for StorageConfig {
             let table_name = table_name.unwrap_or("table_storage".to_string());
             return Ok(Self::ScyllaDb { uri, table_name });
         }
-        print!("available storage: memory");
+        error!("available storage: memory");
         #[cfg(feature = "rocksdb")]
-        print!(", rocksdb");
+        error!("Also available is RocksDB");
         #[cfg(feature = "aws")]
-        print!(", dynamodb");
+        error!("Also available is DynamoDB");
         #[cfg(feature = "scylladb")]
-        print!(", scyladb");
-        println!();
+        error!("Also available is ScyllaDB");
         Err(format_err!("The input has not matched: {}", input))
     }
 }

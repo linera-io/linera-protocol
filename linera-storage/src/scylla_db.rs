@@ -72,7 +72,7 @@ pub type ScyllaDbStoreClient<C> = DbStoreClient<ScyllaDbClient, C>;
 impl ScyllaDbStoreClient<TestClock> {
     pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> Self {
         let uri = "localhost:9042".to_string();
-        let table_name = get_table_name().await;
+        let table_name = get_table_name();
         let common_config = create_scylla_db_common_config();
         let store_config = ScyllaDbKvStoreConfig {
             uri,
