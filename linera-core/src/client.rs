@@ -26,7 +26,7 @@ use linera_chain::{
         Block, BlockAndRound, BlockProposal, Certificate, CertificateValue, HashedValue,
         IncomingMessage, LiteCertificate, LiteVote,
     },
-    ChainError, ChainManagerInfo, ChainStateView,
+    ChainError, ChainManagerInfo,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
@@ -224,21 +224,6 @@ where
     S: Store + Clone + Send + Sync + 'static,
     ViewError: From<S::ContextError>,
 {
-    /// Obtains a `ChainStateView` for a given `ChainId`.
-    pub async fn chain_state_view(
-        &self,
-        chain_id: Option<ChainId>,
-    ) -> Result<Arc<ChainStateView<S::Context>>, LocalNodeError> {
-        let chain_id = chain_id.unwrap_or(self.chain_id);
-        let chain_state_view = self
-            .node_client
-            .storage_client()
-            .await
-            .load_chain(chain_id)
-            .await?;
-        Ok(Arc::new(chain_state_view))
-    }
-
     /// Obtains the basic `ChainInfo` data for the local chain.
     async fn chain_info(&mut self) -> Result<ChainInfo, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id);
@@ -1723,25 +1708,5 @@ where
             user_data,
         }))
         .await
-    }
-
-    pub async fn read_value(&self, hash: CryptoHash) -> Result<HashedValue, ViewError> {
-        self.node_client
-            .storage_client()
-            .await
-            .read_value(hash)
-            .await
-    }
-
-    pub async fn read_values_downward(
-        &self,
-        from: CryptoHash,
-        limit: u32,
-    ) -> Result<Vec<HashedValue>, ViewError> {
-        self.node_client
-            .storage_client()
-            .await
-            .read_values_downward(from, limit)
-            .await
     }
 }

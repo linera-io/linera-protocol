@@ -95,6 +95,7 @@ impl<P, S> ChainClients<P, S> {
 /// Our root GraphQL query type.
 pub struct QueryRoot<P, S> {
     clients: ChainClients<P, S>,
+    storage: S,
     port: NonZeroU16,
     default_chain: Option<ChainId>,
 }
@@ -461,15 +462,14 @@ where
 {
     #[graphql(cache_control(no_cache))]
     async fn chain(&self, chain_id: ChainId) -> Result<ChainStateExtendedView<S::Context>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
-        let view = client.chain_state_view(Some(chain_id)).await?;
+        let view = self.storage.load_chain(chain_id).await?;
         Ok(ChainStateExtendedView::new(view))
     }
 
     async fn applications(&self, chain_id: ChainId) -> Result<Vec<ApplicationOverview>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
-        let applications = client
-            .chain_state_view(Some(chain_id))
+        let applications = self
+            .storage
+            .load_chain(chain_id)
             .await?
             .execution_state
             .list_applications()
@@ -495,16 +495,15 @@ where
         hash: Option<CryptoHash>,
         chain_id: ChainId,
     ) -> Result<Option<HashedValue>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
         let hash = match hash {
             Some(hash) => Some(hash),
             None => {
-                let view = client.chain_state_view(Some(chain_id)).await?;
+                let view = self.storage.load_chain(chain_id).await?;
                 view.tip_state.get().block_hash
             }
         };
         if let Some(hash) = hash {
-            let block = client.read_value(hash).await?;
+            let block = self.storage.read_value(hash).await?;
             Ok(Some(block))
         } else {
             Ok(None)
@@ -517,17 +516,16 @@ where
         chain_id: ChainId,
         limit: Option<u32>,
     ) -> Result<Vec<HashedValue>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
         let limit = limit.unwrap_or(10);
         let from = match from {
             Some(from) => Some(from),
             None => {
-                let view = client.chain_state_view(Some(chain_id)).await?;
+                let view = self.storage.load_chain(chain_id).await?;
                 view.tip_state.get().block_hash
             }
         };
         if let Some(from) = from {
-            let values = client.read_values_downward(from, limit).await?;
+            let values = self.storage.read_values_downward(from, limit).await?;
             Ok(values)
         } else {
             Ok(vec![])
@@ -548,7 +546,7 @@ impl ChainStateViewExtension {
 }
 
 #[derive(MergedObject)]
-struct ChainStateExtendedView<C>(ChainStateViewExtension, Arc<ChainStateView<C>>)
+struct ChainStateExtendedView<C>(ChainStateViewExtension, ChainStateView<C>)
 where
     C: linera_views::common::Context + Clone + Send + Sync + 'static,
     ViewError: From<C::Error>,
@@ -560,7 +558,7 @@ where
     ViewError: From<C::Error>,
     C::Extra: linera_execution::ExecutionRuntimeContext,
 {
-    fn new(view: Arc<ChainStateView<C>>) -> Self {
+    fn new(view: ChainStateView<C>) -> Self {
         Self(ChainStateViewExtension(view.chain_id()), view)
     }
 }
@@ -700,6 +698,7 @@ where
         Schema::build(
             QueryRoot {
                 clients: self.clients.clone(),
+                storage: self.storage.clone(),
                 port: self.port,
                 default_chain: self.default_chain,
             },
