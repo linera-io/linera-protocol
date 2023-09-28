@@ -199,7 +199,7 @@ fn build_delete_transact(
         return Err(DynamoDbContextError::ZeroLengthKey);
     }
     if key.len() > MAX_KEY_BYTES {
-        return Err(DynamoDbContextError::TooLongKey);
+        return Err(DynamoDbContextError::KeyTooLong);
     }
     let request = Delete::builder()
         .table_name(&db.table.0)
@@ -217,7 +217,7 @@ fn build_put_transact(
         return Err(DynamoDbContextError::ZeroLengthKey);
     }
     if key.len() > MAX_KEY_BYTES {
-        return Err(DynamoDbContextError::TooLongKey);
+        return Err(DynamoDbContextError::KeyTooLong);
     }
     if value.len() > MAX_VALUE_BYTES {
         return Err(DynamoDbContextError::ValueLengthTooLarge);
@@ -939,7 +939,7 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
             return Err(DynamoDbContextError::ZeroLengthKeyPrefix);
         }
         if key_prefix.len() > MAX_KEY_BYTES {
-            return Err(DynamoDbContextError::TooLongKeyPrefix);
+            return Err(DynamoDbContextError::KeyPrefixTooLong);
         }
         let response = Box::new(
             self.get_query_output(KEY_VALUE_ATTRIBUTE, key_prefix)
@@ -1238,11 +1238,11 @@ pub enum DynamoDbContextError {
 
     /// The key must have at most 1024 bytes
     #[error("The key must have at most 1024 bytes")]
-    TooLongKey,
+    KeyTooLong,
 
     /// The key prefix must have at most 1024 bytes
     #[error("The key prefix must have at most 1024 bytes")]
-    TooLongKeyPrefix,
+    KeyPrefixTooLong,
 
     /// Key prefixes have to be of non-zero length.
     #[error("The key_prefix must be of strictly positive length")]
