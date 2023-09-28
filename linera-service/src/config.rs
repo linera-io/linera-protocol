@@ -9,7 +9,7 @@ use comfy_table::{
 };
 use file_lock::{FileLock, FileOptions};
 use linera_base::{
-    crypto::{CryptoHash, KeyPair, PublicKey},
+    crypto::{CryptoHash, CryptoRng, KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{ChainDescription, ChainId, Owner},
 };
@@ -21,6 +21,7 @@ use linera_execution::{
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Store;
 use linera_views::views::ViewError;
+use rand07::Rng;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -105,8 +106,13 @@ pub struct UserChain {
 }
 
 impl UserChain {
-    pub fn make_initial(description: ChainDescription, timestamp: Timestamp) -> Self {
-        let key_pair = KeyPair::generate();
+    /// Create a user chain that we own.
+    pub fn make_initial<R: CryptoRng>(
+        rng: &mut R,
+        description: ChainDescription,
+        timestamp: Timestamp,
+    ) -> Self {
+        let key_pair = KeyPair::generate_from(rng);
         Self {
             chain_id: description.into(),
             key_pair: Some(key_pair),
@@ -131,6 +137,7 @@ struct InnerWallet {
     unassigned_key_pairs: HashMap<PublicKey, KeyPair>,
     default: Option<ChainId>,
     genesis_config: GenesisConfig,
+    testing_prng_seed: Option<u64>,
 }
 
 impl WalletState {
@@ -255,6 +262,16 @@ impl WalletState {
         &self.inner.genesis_config
     }
 
+    pub fn make_prng(&self) -> Box<dyn CryptoRng> {
+        self.inner.testing_prng_seed.into()
+    }
+
+    pub fn refresh_prng_seed<R: CryptoRng>(&mut self, rng: &mut R) {
+        if self.inner.testing_prng_seed.is_some() {
+            self.inner.testing_prng_seed = Some(rng.gen());
+        }
+    }
+
     pub fn from_file(path: &Path) -> Result<Self, anyhow::Error> {
         let file = FileOptions::new().read(true).write(true);
         let block = false;
@@ -276,7 +293,11 @@ Please make sure a node service isn't running locally, only one client can use a
         })
     }
 
-    pub fn create(path: &Path, genesis_config: GenesisConfig) -> Result<Self, anyhow::Error> {
+    pub fn create(
+        path: &Path,
+        genesis_config: GenesisConfig,
+        testing_prng_seed: Option<u64>,
+    ) -> Result<Self, anyhow::Error> {
         let file = FileOptions::new().create(true).write(true).read(true);
         let block = false;
         let file_lock = match FileLock::lock(path, block, file) {
@@ -296,6 +317,7 @@ Please make sure a node service isn't running locally, only one client can use a
                 unassigned_key_pairs: HashMap::new(),
                 default: None,
                 genesis_config,
+                testing_prng_seed,
             };
             Ok(Self {
                 inner,

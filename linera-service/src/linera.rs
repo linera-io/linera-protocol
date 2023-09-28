@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use colored::Colorize;
 use futures::{lock::Mutex, StreamExt};
 use linera_base::{
-    crypto::{KeyPair, PublicKey},
+    crypto::{CryptoRng, KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, RoundNumber, Timestamp},
     identifiers::{BytecodeId, ChainDescription, ChainId, MessageId},
 };
@@ -34,6 +34,7 @@ use linera_service::{
 };
 use linera_storage::Store;
 use linera_views::{common::CommonStoreConfig, views::ViewError};
+use rand07::Rng;
 use serde_json::Value;
 use std::{
     env, fs,
@@ -76,6 +77,7 @@ struct ClientContext {
     notification_retry_delay: Duration,
     notification_retries: u32,
     wait_for_outgoing_messages: bool,
+    prng: Box<dyn CryptoRng>,
 }
 
 #[async_trait]
@@ -115,6 +117,7 @@ impl ClientContext {
     fn create(
         options: &ClientOptions,
         genesis_config: GenesisConfig,
+        testing_prng_seed: Option<u64>,
         chains: Vec<UserChain>,
     ) -> Result<Self, anyhow::Error> {
         let wallet_state_path = match &options.wallet_state_path {
@@ -127,8 +130,9 @@ impl ClientContext {
                 wallet_state_path.display()
             )
         }
-        let mut wallet_state = WalletState::create(&wallet_state_path, genesis_config)
-            .with_context(|| format!("Unable to create wallet at {:?}", &wallet_state_path))?;
+        let mut wallet_state =
+            WalletState::create(&wallet_state_path, genesis_config, testing_prng_seed)
+                .with_context(|| format!("Unable to create wallet at {:?}", &wallet_state_path))?;
         chains
             .into_iter()
             .for_each(|chain| wallet_state.insert(chain));
@@ -159,6 +163,7 @@ impl ClientContext {
         let notification_retry_delay = Duration::from_micros(options.notification_retry_delay_us);
         let notification_retries = options.notification_retries;
         let wait_for_outgoing_messages = options.wait_for_outgoing_messages;
+        let prng = wallet_state.make_prng();
 
         ClientContext {
             wallet_state,
@@ -170,6 +175,7 @@ impl ClientContext {
             notification_retry_delay,
             notification_retries,
             wait_for_outgoing_messages,
+            prng,
         }
     }
 
@@ -411,6 +417,7 @@ impl ClientContext {
     }
 
     fn save_wallet(&mut self) {
+        self.wallet_state.refresh_prng_seed(&mut self.prng);
         self.wallet_state
             .write()
             .expect("Unable to write user chains");
@@ -544,6 +551,10 @@ impl ClientContext {
         chain_client.synchronize_from_validators().await?;
         chain_client.process_inbox().await?;
         Ok(bytecode_id)
+    }
+
+    fn generate_key_pair(&mut self) -> KeyPair {
+        KeyPair::generate_from(&mut self.prng)
     }
 }
 
@@ -852,6 +863,11 @@ enum ClientCommand {
         /// Set the price per byte to store and send outgoing cross-chain messages.
         #[structopt(long, default_value = "0")]
         messages_price: Amount,
+
+        /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
+        /// TESTING ONLY.
+        #[structopt(long)]
+        testing_prng_seed: Option<u64>,
     },
 
     /// Watch the network for notifications.
@@ -1005,6 +1021,11 @@ enum NetCommand {
         /// The number of shards per validator in the local test network. Default is 1.
         #[structopt(long, default_value = "1")]
         shards: usize,
+
+        /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
+        /// TESTING ONLY.
+        #[structopt(long)]
+        testing_prng_seed: Option<u64>,
     },
 }
 
@@ -1025,6 +1046,11 @@ enum WalletCommand {
         // Other chains to follow.
         #[structopt(long)]
         with_other_chains: Vec<ChainId>,
+
+        /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
+        /// TESTING ONLY.
+        #[structopt(long)]
+        testing_prng_seed: Option<u64>,
     },
 }
 
@@ -1131,7 +1157,7 @@ impl Runnable for Job {
                 let (new_public_key, key_pair) = match public_key {
                     Some(key) => (key, None),
                     None => {
-                        let key_pair = KeyPair::generate();
+                        let key_pair = context.generate_key_pair();
                         (key_pair.public(), Some(key_pair))
                     }
                 };
@@ -1700,6 +1726,7 @@ async fn main() -> Result<(), anyhow::Error> {
             fuel_price,
             storage_price,
             messages_price,
+            testing_prng_seed,
         } => {
             let committee_config = CommitteeConfig::read(committee_config_path)
                 .expect("Unable to read committee config file");
@@ -1718,11 +1745,12 @@ async fn main() -> Result<(), anyhow::Error> {
                     )
                 })
                 .unwrap_or_else(Timestamp::now);
+            let mut rng = Box::<dyn CryptoRng>::from(*testing_prng_seed);
             let mut chains = vec![];
             for i in 0..*num {
                 let description = ChainDescription::Root(i);
                 // Create keys.
-                let chain = UserChain::make_initial(description, timestamp);
+                let chain = UserChain::make_initial(&mut rng, description, timestamp);
                 // Public "genesis" state.
                 genesis_config.chains.push((
                     description,
@@ -1733,7 +1761,13 @@ async fn main() -> Result<(), anyhow::Error> {
                 // Private keys.
                 chains.push(chain);
             }
-            let mut context = ClientContext::create(&options, genesis_config.clone(), chains)?;
+            let new_prng_seed = if testing_prng_seed.is_some() {
+                Some(rng.gen())
+            } else {
+                None
+            };
+            let mut context =
+                ClientContext::create(&options, genesis_config.clone(), new_prng_seed, chains)?;
             genesis_config.write(genesis_config_path)?;
             context.save_wallet();
             options.initialize_storage().await?;
@@ -1755,7 +1789,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
         ClientCommand::Keygen => {
             let mut context = ClientContext::from_options(&options)?;
-            let key_pair = KeyPair::generate();
+            let key_pair = context.generate_key_pair();
             let public = key_pair.public();
             context.wallet_state.add_unassigned_key_pair(key_pair);
             context.save_wallet();
@@ -1768,6 +1802,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 wallets,
                 validators,
                 shards,
+                testing_prng_seed,
             } => {
                 if *validators < 1 {
                     panic!("The local test network must have at least one validator.");
@@ -1776,7 +1811,13 @@ async fn main() -> Result<(), anyhow::Error> {
                     panic!("The local test network must have at least one shard per validator.");
                 }
                 let network = Network::Grpc;
-                let mut net = LocalNetwork::new(Database::RocksDb, network, *validators, *shards)?;
+                let mut net = LocalNetwork::new(
+                    Database::RocksDb,
+                    network,
+                    *testing_prng_seed,
+                    *validators,
+                    *shards,
+                )?;
                 let mut client1 = net.make_client(network);
 
                 // Create the initial server and client config.
@@ -1858,8 +1899,10 @@ async fn main() -> Result<(), anyhow::Error> {
             WalletCommand::Init {
                 genesis_config_path,
                 with_other_chains,
+                testing_prng_seed,
             } => {
                 let genesis_config = GenesisConfig::read(genesis_config_path)?;
+                let mut rng = Box::<dyn CryptoRng>::from(*testing_prng_seed);
                 let chains = with_other_chains
                     .iter()
                     .filter_map(|chain_id| {
@@ -1867,10 +1910,16 @@ async fn main() -> Result<(), anyhow::Error> {
                             .chains
                             .iter()
                             .find(|(desc, _, _, _)| ChainId::from(*desc) == *chain_id)?;
-                        Some(UserChain::make_initial(*description, *timestamp))
+                        Some(UserChain::make_initial(&mut rng, *description, *timestamp))
                     })
                     .collect();
-                let mut context = ClientContext::create(&options, genesis_config, chains)?;
+                let new_prng_seed = if testing_prng_seed.is_some() {
+                    Some(rng.gen())
+                } else {
+                    None
+                };
+                let mut context =
+                    ClientContext::create(&options, genesis_config, new_prng_seed, chains)?;
                 context.save_wallet();
                 options.initialize_storage().await?;
                 Ok(())

@@ -68,12 +68,37 @@ impl PublicKey {
     }
 }
 
+/// Wrapper around [`rand07::CryptoRng`] and [`rand07::RngCore`].
+#[cfg(not(target_arch = "wasm32"))]
+pub trait CryptoRng: rand07::CryptoRng + rand07::RngCore + Send + Sync {}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl<T: rand07::CryptoRng + rand07::RngCore + Send + Sync> CryptoRng for T {}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl From<Option<u64>> for Box<dyn CryptoRng> {
+    fn from(seed: Option<u64>) -> Self {
+        use rand07::SeedableRng;
+
+        match seed {
+            Some(seed) => Box::new(rand07::rngs::StdRng::seed_from_u64(seed)),
+            None => Box::new(rand07::rngs::OsRng),
+        }
+    }
+}
+
 impl KeyPair {
     /// Generates a new key-pair.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn generate() -> Self {
-        let mut csprng = rand07::rngs::OsRng;
-        let keypair = dalek::Keypair::generate(&mut csprng);
+        let mut rng = rand07::rngs::OsRng;
+        Self::generate_from(&mut rng)
+    }
+
+    /// Generates a new key-pair from the given RNG. Use with care.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn generate_from<R: CryptoRng>(rng: &mut R) -> Self {
+        let keypair = dalek::Keypair::generate(rng);
         KeyPair(keypair)
     }
 
