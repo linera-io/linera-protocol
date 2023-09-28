@@ -1454,7 +1454,7 @@ pub fn create_dynamo_db_common_config() -> CommonStoreConfig {
 #[cfg(any(test, feature = "test"))]
 pub async fn create_dynamo_db_test_client() -> DynamoDbClient {
     let common_config = create_dynamo_db_common_config();
-    let table = get_table_name().await;
+    let table = get_table_name();
     let table_name = table.parse().expect("Invalid table name");
     let use_localstack = true;
     let config = get_config(use_localstack).await.expect("config");

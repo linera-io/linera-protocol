@@ -12,7 +12,7 @@ edition = "2021"
 
 [features]
 default = ["wasmer", "rocksdb"]
-test = []
+test = ["linera-views/test"]
 benchmark = ["linera-base/test"]
 wasmer = ["linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]

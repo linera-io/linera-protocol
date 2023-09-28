@@ -256,7 +256,7 @@ impl TestContextFactory for DynamoDbContextFactory {
         }
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
 
-        let table = get_table_name().await;
+        let table = get_table_name();
         let table = format!("{}_{}", table, self.table_counter);
         let table_name = table.parse()?;
         self.table_counter += 1;

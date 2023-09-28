@@ -86,7 +86,6 @@ async fn test_dynamo_db_end_to_end_operations_indexer() {
     run_end_to_end_operations_indexer(Database::DynamoDb).await
 }
 
-#[ignore]
 #[cfg(feature = "scylladb")]
 #[test_log::test(tokio::test)]
 async fn test_scylla_db_end_to_end_operations_indexer() {
@@ -98,7 +97,7 @@ async fn run_end_to_end_operations_indexer(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let mut client = local_net.make_client(network);
+    let client = local_net.make_client(network);
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
     local_net.run().await.unwrap();

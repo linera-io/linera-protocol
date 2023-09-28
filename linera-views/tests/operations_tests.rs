@@ -29,7 +29,7 @@ use linera_views::scylla_db::create_scylla_db_test_client;
 /// * `find_keys_by_prefix` / `find_key_values_by_prefix`
 /// * The ordering of keys returned by `find_keys_by_prefix` and `find_key_values_by_prefix`
 #[cfg(test)]
-async fn test_readings_vec<OP: KeyValueStoreClient + Sync>(
+async fn run_readings_vec<OP: KeyValueStoreClient + Sync>(
     key_value_operation: OP,
     key_value_vec: Vec<(Vec<u8>, Vec<u8>)>,
 ) {
@@ -148,7 +148,7 @@ fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
 async fn test_readings_test_memory() {
     for scenario in get_random_test_scenarios() {
         let key_value_operation = create_test_memory_client();
-        test_readings_vec(key_value_operation, scenario).await;
+        run_readings_vec(key_value_operation, scenario).await;
     }
 }
 
@@ -156,7 +156,7 @@ async fn test_readings_test_memory() {
 async fn test_readings_memory() {
     for scenario in get_random_test_scenarios() {
         let key_value_operation = create_memory_client();
-        test_readings_vec(key_value_operation, scenario).await;
+        run_readings_vec(key_value_operation, scenario).await;
     }
 }
 
@@ -165,7 +165,7 @@ async fn test_readings_memory() {
 async fn test_readings_rocks_db() {
     for scenario in get_random_test_scenarios() {
         let key_value_operation = create_rocks_db_test_client().await;
-        test_readings_vec(key_value_operation, scenario).await;
+        run_readings_vec(key_value_operation, scenario).await;
     }
 }
 
@@ -174,7 +174,7 @@ async fn test_readings_rocks_db() {
 async fn test_readings_dynamodb() {
     for scenario in get_random_test_scenarios() {
         let key_value_operation = create_dynamo_db_test_client().await;
-        test_readings_vec(key_value_operation, scenario).await;
+        run_readings_vec(key_value_operation, scenario).await;
     }
 }
 
@@ -183,7 +183,7 @@ async fn test_readings_dynamodb() {
 async fn test_readings_scylla_db() {
     for scenario in get_random_test_scenarios() {
         let key_value_operation = create_scylla_db_test_client().await;
-        test_readings_vec(key_value_operation, scenario).await;
+        run_readings_vec(key_value_operation, scenario).await;
     }
 }
 
@@ -192,7 +192,7 @@ async fn test_readings_key_value_store_view_memory() {
     for scenario in get_random_test_scenarios() {
         let context = create_memory_context();
         let key_value_operation = ViewContainer::new(context).await.unwrap();
-        test_readings_vec(key_value_operation, scenario).await;
+        run_readings_vec(key_value_operation, scenario).await;
     }
 }
 
@@ -205,11 +205,11 @@ async fn test_readings_memory_specific() {
         (vec![0, 2], Vec::new()),
         (vec![0, 2, 0], Vec::new()),
     ];
-    test_readings_vec(key_value_operation, key_value_vec).await;
+    run_readings_vec(key_value_operation, key_value_vec).await;
 }
 
 #[cfg(test)]
-async fn test_writings_random<OP: KeyValueStoreClient + Sync>(key_value_operation: OP) {
+async fn run_writings_random<OP: KeyValueStoreClient + Sync>(key_value_operation: OP) {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     let mut kv_state = BTreeMap::new();
     let n_oper = 100;
@@ -270,41 +270,41 @@ async fn test_writings_random<OP: KeyValueStoreClient + Sync>(key_value_operatio
 #[tokio::test]
 async fn test_writings_test_memory() {
     let key_value_operation = create_test_memory_client();
-    test_writings_random(key_value_operation).await;
+    run_writings_random(key_value_operation).await;
 }
 
 #[tokio::test]
 async fn test_writings_memory() {
     let key_value_operation = create_memory_client();
-    test_writings_random(key_value_operation).await;
+    run_writings_random(key_value_operation).await;
 }
 
 #[tokio::test]
 async fn test_writings_key_value_store_view_memory() {
     let context = create_memory_context();
     let key_value_operation = ViewContainer::new(context).await.unwrap();
-    test_writings_random(key_value_operation).await;
+    run_writings_random(key_value_operation).await;
 }
 
 #[cfg(feature = "rocksdb")]
 #[tokio::test]
 async fn test_writings_rocks_db() {
     let key_value_operation = create_rocks_db_test_client().await;
-    test_writings_random(key_value_operation).await;
+    run_writings_random(key_value_operation).await;
 }
 
 #[cfg(feature = "aws")]
 #[tokio::test]
 async fn test_writings_dynamodb() {
     let key_value_operation = create_dynamo_db_test_client().await;
-    test_writings_random(key_value_operation).await;
+    run_writings_random(key_value_operation).await;
 }
 
 #[cfg(feature = "scylladb")]
 #[tokio::test]
 async fn test_writings_scylla_db() {
     let key_value_operation = create_scylla_db_test_client().await;
-    test_writings_random(key_value_operation).await;
+    run_writings_random(key_value_operation).await;
 }
 
 #[tokio::test]

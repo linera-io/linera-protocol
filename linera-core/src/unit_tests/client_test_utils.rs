@@ -704,7 +704,7 @@ impl StoreBuilder for MakeDynamoDbStoreClient {
             self.localstack = Some(LocalStackTestContext::new().await?);
         }
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
-        let table = get_table_name().await;
+        let table = get_table_name();
         let table = format!("{}_{}", table, self.instance_counter);
         let table_name = table.parse()?;
         let common_config = create_dynamo_db_common_config();
@@ -772,7 +772,7 @@ impl StoreBuilder for MakeScyllaDbStoreClient {
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         self.instance_counter += 1;
-        let table_name = get_table_name().await;
+        let table_name = get_table_name();
         let table_name = format!("{}_{}", table_name, self.instance_counter);
         let common_config = create_scylla_db_common_config();
         let store_config = ScyllaDbKvStoreConfig {

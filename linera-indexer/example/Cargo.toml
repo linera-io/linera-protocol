@@ -18,6 +18,7 @@ aws = ["linera-indexer/aws", "linera-indexer-plugins/aws"]
 scylladb = ["linera-indexer/scylladb", "linera-indexer-plugins/scylladb"]
 wasmer = ["linera-indexer-plugins/wasmer"]
 wasmtime = ["linera-indexer-plugins/wasmtime"]
+test = ["linera-service/test"]
 
 [dependencies]
 linera-indexer = { workspace = true }

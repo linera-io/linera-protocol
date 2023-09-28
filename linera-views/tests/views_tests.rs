@@ -237,7 +237,7 @@ impl StateStore for DynamoDbTestStore {
 
     async fn new() -> Self {
         let localstack = LocalStackTestContext::new().await.expect("localstack");
-        let table = get_table_name().await;
+        let table = get_table_name();
         let table_name = table.parse().expect("Invalid table name");
         let is_created = false;
         let common_config = create_dynamo_db_common_config();
