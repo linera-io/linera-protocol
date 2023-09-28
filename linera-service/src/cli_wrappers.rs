@@ -83,15 +83,22 @@ impl Network {
 }
 
 pub struct ClientWrapper {
-    pub tmp_dir: Rc<TempDir>,
+    testing_prng_seed: Option<u64>,
     storage: String,
     wallet: String,
     max_pending_messages: usize,
     network: Network,
+    pub tmp_dir: Rc<TempDir>,
 }
 
 impl ClientWrapper {
-    fn new(tmp_dir: Rc<TempDir>, database: Database, network: Network, id: usize) -> Self {
+    fn new(
+        tmp_dir: Rc<TempDir>,
+        database: Database,
+        network: Network,
+        testing_prng_seed: Option<u64>,
+        id: usize,
+    ) -> Self {
         let storage = match database {
             Database::RocksDb => format!("rocksdb:{}/client_{}.db", tmp_dir.path().display(), id),
             Database::DynamoDb => format!("dynamodb:client_{}.db:localstack", id),
@@ -99,11 +106,12 @@ impl ClientWrapper {
         };
         let wallet = format!("wallet_{}.json", id);
         Self {
-            tmp_dir,
+            testing_prng_seed,
             storage,
             wallet,
             max_pending_messages: 10_000,
             network,
+            tmp_dir,
         }
     }
 
@@ -149,7 +157,7 @@ impl ClientWrapper {
     }
 
     pub async fn project_test(&self, path: &Path) {
-        let mut command = self.run().await.expect("TODO");
+        let mut command = self.run().await.unwrap();
         assert!(command
             .current_dir(path)
             .kill_on_drop(true)
@@ -182,17 +190,16 @@ impl ClientWrapper {
     }
 
     pub async fn create_genesis_config(&self) -> Result<()> {
-        assert!(self
-            .run()
-            .await?
+        let mut command = self.run().await?;
+        command
             .args(["create-genesis-config", "10"])
             .args(["--initial-funding", "10"])
             .args(["--committee", "committee.json"])
-            .args(["--genesis", "genesis.json"])
-            .spawn()?
-            .wait()
-            .await?
-            .success());
+            .args(["--genesis", "genesis.json"]);
+        if let Some(seed) = self.testing_prng_seed {
+            command.arg("--testing-prng-seed").arg(seed.to_string());
+        }
+        assert!(command.spawn()?.wait().await?.success());
         Ok(())
     }
 
@@ -201,6 +208,9 @@ impl ClientWrapper {
         command
             .args(["wallet", "init"])
             .args(["--genesis", "genesis.json"]);
+        if let Some(seed) = self.testing_prng_seed {
+            command.arg("--testing-prng-seed").arg(seed.to_string());
+        }
         if !chain_ids.is_empty() {
             let ids = chain_ids.iter().map(ChainId::to_string);
             command.arg("--with-other-chains").args(ids);
@@ -542,6 +552,7 @@ impl Validator {
 pub struct LocalNetwork {
     database: Database,
     network: Network,
+    testing_prng_seed: Option<u64>,
     next_client_id: usize,
     num_initial_validators: usize,
     num_shards: usize,
@@ -562,12 +573,14 @@ impl LocalNetwork {
     pub fn new(
         database: Database,
         network: Network,
+        testing_prng_seed: Option<u64>,
         num_initial_validators: usize,
         num_shards: usize,
     ) -> Result<Self> {
         Ok(Self {
             database,
             network,
+            testing_prng_seed,
             next_client_id: 0,
             num_initial_validators,
             num_shards,
@@ -579,13 +592,14 @@ impl LocalNetwork {
 
     #[cfg(any(test, feature = "test"))]
     pub fn new_for_testing(database: Database, network: Network) -> Result<Self> {
+        let seed = 37;
         let num_validators = 4;
         let num_shards = match database {
             Database::RocksDb => 1,
             Database::DynamoDb => 4,
             Database::ScyllaDb => 4,
         };
-        Self::new(database, network, num_validators, num_shards)
+        Self::new(database, network, Some(seed), num_validators, num_shards)
     }
 
     pub fn make_client(&mut self, network: Network) -> ClientWrapper {
@@ -593,8 +607,12 @@ impl LocalNetwork {
             self.tmp_dir.clone(),
             self.database,
             network,
+            self.testing_prng_seed,
             self.next_client_id,
         );
+        if let Some(seed) = self.testing_prng_seed {
+            self.testing_prng_seed = Some(seed + 1);
+        }
         self.next_client_id += 1;
         client
     }
@@ -668,9 +686,14 @@ impl LocalNetwork {
             .expect("could not parse string into os string"))
     }
 
-    pub async fn generate_initial_validator_config(&self) -> Result<Vec<String>> {
+    pub async fn generate_initial_validator_config(&mut self) -> Result<Vec<String>> {
         let mut command = self.command_for_binary("linera-server").await?;
-        command.arg("generate").arg("--validators");
+        command.arg("generate");
+        if let Some(seed) = self.testing_prng_seed {
+            command.arg("--testing-prng-seed").arg(seed.to_string());
+            self.testing_prng_seed = Some(seed + 1);
+        }
+        command.arg("--validators");
         for i in 1..=self.num_initial_validators {
             command.arg(&self.configuration_string(i)?);
         }

@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use futures::future::join_all;
-use linera_base::crypto::KeyPair;
+use linera_base::crypto::{CryptoRng, KeyPair};
 use linera_core::worker::WorkerState;
 use linera_execution::{committee::ValidatorName, WasmRuntime, WithWasmDefault};
 use linera_rpc::{
@@ -251,7 +251,10 @@ struct ValidatorOptions {
     shards: Vec<ShardConfig>,
 }
 
-fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
+fn make_server_config<R: CryptoRng>(
+    rng: &mut R,
+    options: ValidatorOptions,
+) -> ValidatorServerConfig {
     let network = ValidatorPublicNetworkConfig {
         protocol: options.external_protocol,
         host: options.host,
@@ -263,7 +266,7 @@ fn make_server_config(options: ValidatorOptions) -> ValidatorServerConfig {
         host: options.internal_host,
         port: options.internal_port,
     };
-    let key = KeyPair::generate();
+    let key = KeyPair::generate_from(rng);
     let name = ValidatorName(key.public());
     let validator = ValidatorConfig { network, name };
     ValidatorServerConfig {
@@ -334,6 +337,11 @@ enum ServerCommand {
         /// Path where to write the description of the Linera committee
         #[structopt(long)]
         committee: Option<PathBuf>,
+
+        /// Force this command to generate keys using a PRNG and a given seed. USE FOR
+        /// TESTING ONLY.
+        #[structopt(long)]
+        testing_prng_seed: Option<u64>,
     },
 
     /// Initialize the database
@@ -424,8 +432,10 @@ async fn main() {
         ServerCommand::Generate {
             validators,
             committee,
+            testing_prng_seed,
         } => {
             let mut config_validators = Vec::new();
+            let mut rng = Box::<dyn CryptoRng>::from(testing_prng_seed);
             for options_path in validators {
                 let options_string = fs::read_to_string(options_path)
                     .await
@@ -433,7 +443,7 @@ async fn main() {
                 let options: ValidatorOptions =
                     toml::from_str(&options_string).expect("Invalid options file format");
                 let path = options.server_config_path.clone();
-                let server = make_server_config(options);
+                let server = make_server_config(&mut rng, options);
                 server
                     .write(&path)
                     .expect("Unable to write server config file");
