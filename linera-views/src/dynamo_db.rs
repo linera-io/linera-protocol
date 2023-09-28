@@ -291,6 +291,9 @@ impl DynamoDbBatch {
     }
 
     fn is_fastpath_feasible(&self) -> bool {
+        if self.len() > MAX_TRANSACT_WRITE_ITEM_SIZE {
+            return false;
+        }
         let mut total_size = 0;
         for (key, value) in &self.0.insertions {
             total_size += key.len() + value.len();
@@ -298,7 +301,7 @@ impl DynamoDbBatch {
         for deletion in &self.0.deletions {
             total_size += deletion.len();
         }
-        self.len() <= MAX_TRANSACT_WRITE_ITEM_SIZE && total_size <= MAX_TRANSACT_WRITE_ITEM_BYTES
+        total_size <= MAX_TRANSACT_WRITE_ITEM_BYTES
     }
 
     fn add_journal_header_operations(
