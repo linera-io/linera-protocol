@@ -194,7 +194,7 @@ impl From<linera_chain::ChainError> for WorkerError {
     }
 }
 
-const DEFAULT_VALUE_CACHE_SIZE: usize = 1000;
+pub(crate) const DEFAULT_VALUE_CACHE_SIZE: usize = 1000;
 
 /// State of a worker in a validator or a local node.
 #[derive(Clone)]
@@ -220,7 +220,8 @@ pub struct WorkerState<StorageClient> {
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
 }
 
-type DeliveryNotifiers = HashMap<ChainId, BTreeMap<BlockHeight, Vec<oneshot::Sender<()>>>>;
+pub(crate) type DeliveryNotifiers =
+    HashMap<ChainId, BTreeMap<BlockHeight, Vec<oneshot::Sender<()>>>>;
 
 impl<StorageClient> WorkerState<StorageClient> {
     pub fn new(nickname: String, key_pair: Option<KeyPair>, storage: StorageClient) -> Self {
@@ -236,6 +237,24 @@ impl<StorageClient> WorkerState<StorageClient> {
             grace_period_micros: 0,
             recent_values,
             delivery_notifiers: Arc::default(),
+        }
+    }
+
+    pub fn new_for_client(
+        nickname: String,
+        storage: StorageClient,
+        recent_values: Arc<Mutex<LruCache<CryptoHash, HashedValue>>>,
+        delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
+    ) -> Self {
+        WorkerState {
+            nickname,
+            key_pair: None,
+            storage,
+            allow_inactive_chains: false,
+            allow_messages_from_deprecated_epochs: false,
+            grace_period_micros: 0,
+            recent_values,
+            delivery_notifiers,
         }
     }
 
@@ -260,11 +279,6 @@ impl<StorageClient> WorkerState<StorageClient> {
 
     pub fn nickname(&self) -> &str {
         &self.nickname
-    }
-
-    pub fn clone_cache(&mut self, other: &Self) {
-        self.recent_values = other.recent_values.clone();
-        self.delivery_notifiers = other.delivery_notifiers.clone();
     }
 
     /// Returns the storage client so that it can be manipulated or queried.

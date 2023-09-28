@@ -14,8 +14,13 @@ use linera_base::{
 };
 use linera_chain::data_types::{Certificate, CertificateValue, ExecutedBlock};
 use linera_core::{
-    client::ChainClient, data_types::ChainInfoQuery, local_node::LocalNodeClient,
-    node::ValidatorNodeProvider, tracker::NotificationTracker, worker::WorkerState,
+    client::{ChainClient, ChainClientBuilder},
+    data_types::ChainInfoQuery,
+    local_node::LocalNodeClient,
+    node::ValidatorNodeProvider,
+    notifier::Notifier,
+    tracker::NotificationTracker,
+    worker::WorkerState,
 };
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
@@ -68,11 +73,9 @@ use {
 
 struct ClientContext {
     wallet_state: WalletState,
-    max_pending_messages: usize,
+    chain_client_builder: ChainClientBuilder<NodeProvider>,
     send_timeout: Duration,
     recv_timeout: Duration,
-    cross_chain_delay: Duration,
-    cross_chain_retries: usize,
     notification_retry_delay: Duration,
     notification_retries: u32,
     wait_for_outgoing_messages: bool,
@@ -157,19 +160,29 @@ impl ClientContext {
         let recv_timeout = Duration::from_micros(options.recv_timeout_us);
         let cross_chain_delay = Duration::from_micros(options.cross_chain_delay_ms);
         let notification_retry_delay = Duration::from_micros(options.notification_retry_delay_us);
-        let notification_retries = options.notification_retries;
-        let wait_for_outgoing_messages = options.wait_for_outgoing_messages;
 
-        ClientContext {
-            wallet_state,
-            max_pending_messages: options.max_pending_messages,
+        let node_options = NodeOptions {
             send_timeout,
             recv_timeout,
-            cross_chain_delay,
-            cross_chain_retries: options.cross_chain_retries,
             notification_retry_delay,
-            notification_retries,
-            wait_for_outgoing_messages,
+            notification_retries: options.notification_retries,
+            wait_for_outgoing_messages: options.wait_for_outgoing_messages,
+        };
+        let node_provider = NodeProvider::new(node_options);
+        let chain_client_builder = ChainClientBuilder::new(
+            node_provider,
+            options.max_pending_messages,
+            cross_chain_delay,
+            options.cross_chain_retries,
+        );
+        ClientContext {
+            chain_client_builder,
+            wallet_state,
+            send_timeout,
+            recv_timeout,
+            notification_retry_delay,
+            notification_retries: options.notification_retries,
+            wait_for_outgoing_messages: options.wait_for_outgoing_messages,
         }
     }
 
@@ -240,23 +253,20 @@ impl ClientContext {
             .wallet_state
             .get(chain_id)
             .unwrap_or_else(|| panic!("Unknown chain: {}", chain_id));
-        ChainClient::new(
+        let known_key_pairs = chain
+            .key_pair
+            .as_ref()
+            .map(|kp| kp.copy())
+            .into_iter()
+            .collect();
+        self.chain_client_builder.build(
             chain_id,
-            chain
-                .key_pair
-                .as_ref()
-                .map(|kp| kp.copy())
-                .into_iter()
-                .collect(),
-            self.make_node_provider(),
+            known_key_pairs,
             storage,
             self.wallet_state.genesis_admin_chain(),
-            self.max_pending_messages,
             chain.block_hash,
             chain.timestamp,
             chain.next_block_height,
-            self.cross_chain_delay,
-            self.cross_chain_retries,
         )
     }
 
@@ -457,7 +467,7 @@ impl ClientContext {
         let worker = WorkerState::new("Temporary client node".to_string(), None, storage)
             .with_allow_inactive_chains(true)
             .with_allow_messages_from_deprecated_epochs(true);
-        let mut node = LocalNodeClient::new(worker);
+        let mut node = LocalNodeClient::new(worker, Notifier::default());
         // Second replay the certificates locally.
         for certificate in certificates {
             // No required certificates from other chains: This is only used with benchmark.
@@ -1582,7 +1592,7 @@ impl Runnable for Job {
                 let state = WorkerState::new("Local node".to_string(), None, storage)
                     .with_allow_inactive_chains(true)
                     .with_allow_messages_from_deprecated_epochs(true);
-                let mut node_client = LocalNodeClient::new(state);
+                let mut node_client = LocalNodeClient::new(state, Notifier::default());
 
                 // Take the latest committee we know of.
                 let admin_chain_id = context.wallet_state.genesis_admin_chain();
