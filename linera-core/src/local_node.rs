@@ -151,6 +151,16 @@ impl<S> LocalNodeClient<S> {
             node: Arc::new(Mutex::new(node)),
         }
     }
+
+    pub async fn with_notifier_and_cache(self, other: &Self) -> Self {
+        {
+            let other_node = other.node.lock().await;
+            let mut node = self.node.lock().await;
+            node.notifier = other_node.notifier.clone();
+            node.state.clone_cache(&other_node.state);
+        }
+        self
+    }
 }
 
 impl<S> LocalNodeClient<S>

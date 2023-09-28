@@ -123,14 +123,19 @@ where
     {
         let client = {
             let mut map_guard = clients.map_lock().await;
-            let context_guard = context.lock().await;
-            map_guard
-                .entry(chain_id)
-                .or_insert_with(|| {
-                    let client = context_guard.make_chain_client(storage.clone(), chain_id);
-                    Arc::new(Mutex::new(client))
-                })
-                .clone()
+            if let Some(client) = map_guard.get(&chain_id) {
+                client.clone()
+            } else {
+                let context_guard = context.lock().await;
+                let mut client = context_guard.make_chain_client(storage.clone(), chain_id);
+                if let Some(other_client) = map_guard.values().next() {
+                    let other_client = other_client.lock().await;
+                    client = client.with_notifier_and_cache(&other_client).await;
+                }
+                let client = Arc::new(Mutex::new(client));
+                map_guard.insert(chain_id, client.clone());
+                client
+            }
         };
         let mut stream = ChainClient::listen(client.clone()).await?;
         let mut tracker = NotificationTracker::default();

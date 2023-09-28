@@ -190,6 +190,14 @@ impl<P, S> ChainClient<P, S> {
         }
     }
 
+    pub async fn with_notifier_and_cache(mut self, other: &Self) -> Self {
+        self.node_client = self
+            .node_client
+            .with_notifier_and_cache(&other.node_client)
+            .await;
+        self
+    }
+
     pub fn chain_id(&self) -> ChainId {
         self.chain_id
     }
@@ -235,6 +243,11 @@ where
             .load_chain(self.chain_id)
             .await?;
         Ok(Arc::new(chain_state_view))
+    }
+
+    /// Subscribes to notifications from this client's chain.
+    pub async fn subscribe(&mut self) -> Result<NotificationStream, LocalNodeError> {
+        self.node_client.subscribe(vec![self.chain_id]).await
     }
 
     /// Obtains the basic `ChainInfo` data for the local chain.

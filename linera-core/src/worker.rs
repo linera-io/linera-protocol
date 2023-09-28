@@ -262,6 +262,11 @@ impl<StorageClient> WorkerState<StorageClient> {
         &self.nickname
     }
 
+    pub fn clone_cache(&mut self, other: &Self) {
+        self.recent_values = other.recent_values.clone();
+        self.delivery_notifiers = other.delivery_notifiers.clone();
+    }
+
     /// Returns the storage client so that it can be manipulated or queried.
     #[cfg(not(feature = "test"))]
     pub(crate) fn storage_client(&self) -> &StorageClient {

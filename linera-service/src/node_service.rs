@@ -198,10 +198,8 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<impl Stream<Item = Notification>, Error> {
-        let Some(client) = self.clients.client(&chain_id).await else {
-            return Err(Error::new("Unknown chain ID"));
-        };
-        Ok(ChainClient::listen(client).await?)
+        let mut client = self.clients.try_client_lock(&chain_id).await?;
+        Ok(client.subscribe().await?)
     }
 }
 
