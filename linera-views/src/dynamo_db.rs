@@ -191,63 +191,6 @@ fn extract_key_value_owned(
     Ok((key, value))
 }
 
-fn build_delete_transact(
-    key: Vec<u8>,
-    db: &DynamoDbClientInternal,
-) -> Result<TransactWriteItem, DynamoDbContextError> {
-    if key.is_empty() {
-        return Err(DynamoDbContextError::ZeroLengthKey);
-    }
-    if key.len() > MAX_KEY_BYTES {
-        return Err(DynamoDbContextError::KeyTooLong);
-    }
-    let request = Delete::builder()
-        .table_name(&db.table.0)
-        .set_key(Some(build_key(key)))
-        .build();
-    Ok(TransactWriteItem::builder().delete(request).build())
-}
-
-fn build_put_transact(
-    key: Vec<u8>,
-    value: Vec<u8>,
-    db: &DynamoDbClientInternal,
-) -> Result<TransactWriteItem, DynamoDbContextError> {
-    if key.is_empty() {
-        return Err(DynamoDbContextError::ZeroLengthKey);
-    }
-    if key.len() > MAX_KEY_BYTES {
-        return Err(DynamoDbContextError::KeyTooLong);
-    }
-    if value.len() > MAX_VALUE_BYTES {
-        return Err(DynamoDbContextError::ValueLengthTooLarge);
-    }
-    let request = Put::builder()
-        .table_name(&db.table.0)
-        .set_item(Some(build_key_value(key, value)))
-        .build();
-    Ok(TransactWriteItem::builder().put(request).build())
-}
-
-async fn submit_transactions(
-    transacts: Vec<TransactWriteItem>,
-    db: &DynamoDbClientInternal,
-) -> Result<(), DynamoDbContextError> {
-    if transacts.len() > MAX_TRANSACT_WRITE_ITEM_SIZE {
-        return Err(DynamoDbContextError::TransactUpperLimitSize);
-    }
-    if !transacts.is_empty() {
-        let _guard = db.acquire().await;
-        db.client
-            .transact_write_items()
-            .set_transact_items(Some(transacts))
-            .send()
-            .await?;
-    }
-    // Drop the output of type TransactWriteItemsOutput
-    Ok(())
-}
-
 #[derive(Default)]
 struct TransactionBuilder {
     transacts: Vec<TransactWriteItem>,
@@ -259,7 +202,7 @@ impl TransactionBuilder {
         key: Vec<u8>,
         db: &DynamoDbClientInternal,
     ) -> Result<(), DynamoDbContextError> {
-        let transact = build_delete_transact(key, db)?;
+        let transact = db.build_delete_transact(key)?;
         self.transacts.push(transact);
         Ok(())
     }
@@ -270,13 +213,13 @@ impl TransactionBuilder {
         value: Vec<u8>,
         db: &DynamoDbClientInternal,
     ) -> Result<(), DynamoDbContextError> {
-        let transact = build_put_transact(key, value, db)?;
+        let transact = db.build_put_transact(key, value)?;
         self.transacts.push(transact);
         Ok(())
     }
 
     async fn submit(self, db: &DynamoDbClientInternal) -> Result<(), DynamoDbContextError> {
-        submit_transactions(self.transacts, db).await
+        db.submit_transactions(self.transacts).await
     }
 }
 
@@ -429,13 +372,13 @@ impl DynamoDbBatch {
                 let value = bcs::to_bytes(&entry)?;
                 assert_eq!(value.len(), value_size);
                 let key = get_journaling_key(base_key, KeyTag::Entry as u8, block_count)?;
-                transacts.push(build_put_transact(key, value, db)?);
+                transacts.push(db.build_put_transact(key, value)?);
                 block_count += 1;
                 transact_size += value_size;
                 value_size = 2;
             }
             if transact_flush {
-                submit_transactions(mem::take(&mut transacts), db).await?;
+                db.submit_transactions(mem::take(&mut transacts)).await?;
                 transact_size = 0;
             }
         }
@@ -607,6 +550,62 @@ pub struct DynamoDbKvStoreConfig {
 }
 
 impl DynamoDbClientInternal {
+    fn build_delete_transact(
+        &self,
+        key: Vec<u8>,
+    ) -> Result<TransactWriteItem, DynamoDbContextError> {
+        if key.is_empty() {
+            return Err(DynamoDbContextError::ZeroLengthKey);
+        }
+        if key.len() > MAX_KEY_BYTES {
+            return Err(DynamoDbContextError::KeyTooLong);
+        }
+        let request = Delete::builder()
+            .table_name(&self.table.0)
+            .set_key(Some(build_key(key)))
+            .build();
+        Ok(TransactWriteItem::builder().delete(request).build())
+    }
+
+    fn build_put_transact(
+        &self,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<TransactWriteItem, DynamoDbContextError> {
+        if key.is_empty() {
+            return Err(DynamoDbContextError::ZeroLengthKey);
+        }
+        if key.len() > MAX_KEY_BYTES {
+            return Err(DynamoDbContextError::KeyTooLong);
+        }
+        if value.len() > MAX_VALUE_BYTES {
+            return Err(DynamoDbContextError::ValueLengthTooLarge);
+        }
+        let request = Put::builder()
+            .table_name(&self.table.0)
+            .set_item(Some(build_key_value(key, value)))
+            .build();
+        Ok(TransactWriteItem::builder().put(request).build())
+    }
+
+    async fn submit_transactions(
+        &self,
+        transacts: Vec<TransactWriteItem>,
+    ) -> Result<(), DynamoDbContextError> {
+        if transacts.len() > MAX_TRANSACT_WRITE_ITEM_SIZE {
+            return Err(DynamoDbContextError::TransactUpperLimitSize);
+        }
+        if !transacts.is_empty() {
+            let _guard = self.acquire().await;
+            self.client
+                .transact_write_items()
+                .set_transact_items(Some(transacts))
+                .send()
+                .await?;
+        }
+        Ok(())
+    }
+
     /// Obtains the semaphore lock on the database if needed.
     async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
         match &self.semaphore {
