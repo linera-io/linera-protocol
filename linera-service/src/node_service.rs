@@ -198,10 +198,8 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<impl Stream<Item = Notification>, Error> {
-        let Some(client) = self.clients.client(&chain_id).await else {
-            return Err(Error::new("Unknown chain ID"));
-        };
-        Ok(ChainClient::listen(client).await?)
+        let mut client = self.clients.try_client_lock(&chain_id).await?;
+        Ok(client.subscribe().await?)
     }
 }
 
@@ -461,14 +459,14 @@ where
 {
     async fn chain(&self, chain_id: ChainId) -> Result<ChainStateExtendedView<S::Context>, Error> {
         let client = self.clients.try_client_lock(&chain_id).await?;
-        let view = client.chain_state_view(Some(chain_id)).await?;
+        let view = client.chain_state_view().await?;
         Ok(ChainStateExtendedView::new(view))
     }
 
     async fn applications(&self, chain_id: ChainId) -> Result<Vec<ApplicationOverview>, Error> {
         let client = self.clients.try_client_lock(&chain_id).await?;
         let applications = client
-            .chain_state_view(Some(chain_id))
+            .chain_state_view()
             .await?
             .execution_state
             .list_applications()
@@ -498,7 +496,7 @@ where
         let hash = match hash {
             Some(hash) => Some(hash),
             None => {
-                let view = client.chain_state_view(Some(chain_id)).await?;
+                let view = client.chain_state_view().await?;
                 view.tip_state.get().block_hash
             }
         };
@@ -521,7 +519,7 @@ where
         let from = match from {
             Some(from) => Some(from),
             None => {
-                let view = client.chain_state_view(Some(chain_id)).await?;
+                let view = client.chain_state_view().await?;
                 view.tip_state.get().block_hash
             }
         };

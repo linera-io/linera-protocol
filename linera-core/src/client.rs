@@ -6,8 +6,11 @@ use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery},
     local_node::{LocalNodeClient, LocalNodeError},
     node::{NodeError, NotificationStream, ValidatorNode, ValidatorNodeProvider},
+    notifier::Notifier,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
-    worker::{Notification, Reason, WorkerError, WorkerState},
+    worker::{
+        DeliveryNotifiers, Notification, Reason, WorkerError, WorkerState, DEFAULT_VALUE_CACHE_SIZE,
+    },
 };
 use futures::{
     future,
@@ -36,9 +39,11 @@ use linera_execution::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
+use lru::LruCache;
 use std::{
     collections::{hash_map, BTreeMap, HashMap},
     iter,
+    num::NonZeroUsize,
     pin::Pin,
     sync::Arc,
     time::Duration,
@@ -54,6 +59,90 @@ pub mod client_test_utils;
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
 mod client_tests;
+
+/// A builder that creates `ChainClients` which share the cache and notifiers.
+pub struct ChainClientBuilder<ValidatorNodeProvider> {
+    /// How to talk to the validators.
+    validator_node_provider: ValidatorNodeProvider,
+    /// Maximum number of pending messages processed at a time in a block.
+    max_pending_messages: usize,
+    /// How much time to wait between attempts when we wait for a cross-chain update.
+    cross_chain_delay: Duration,
+    /// How many times we are willing to retry a block that depends on cross-chain updates.
+    cross_chain_retries: usize,
+    /// Cached values by hash.
+    recent_values: Arc<tokio::sync::Mutex<LruCache<CryptoHash, HashedValue>>>,
+    /// One-shot channels to notify callers when messages of a particular chain have been
+    /// delivered.
+    delivery_notifiers: Arc<tokio::sync::Mutex<DeliveryNotifiers>>,
+    /// References to clients waiting for chain notifications.
+    notifier: Notifier<Notification>,
+}
+
+impl<ValidatorNodeProvider: Clone> ChainClientBuilder<ValidatorNodeProvider> {
+    /// Creates a new `ChainClientBuilder` with a new cache and notifiers.
+    pub fn new(
+        validator_node_provider: ValidatorNodeProvider,
+        max_pending_messages: usize,
+        cross_chain_delay: Duration,
+        cross_chain_retries: usize,
+    ) -> Self {
+        let recent_values = Arc::new(tokio::sync::Mutex::new(LruCache::new(
+            NonZeroUsize::try_from(DEFAULT_VALUE_CACHE_SIZE).unwrap(),
+        )));
+        Self {
+            validator_node_provider,
+            max_pending_messages,
+            cross_chain_delay,
+            cross_chain_retries,
+            recent_values,
+            delivery_notifiers: Arc::new(tokio::sync::Mutex::new(DeliveryNotifiers::default())),
+            notifier: Notifier::default(),
+        }
+    }
+
+    /// Creates a new `ChainClient`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build<StorageClient>(
+        &self,
+        chain_id: ChainId,
+        known_key_pairs: Vec<KeyPair>,
+        storage: StorageClient,
+        admin_id: ChainId,
+        block_hash: Option<CryptoHash>,
+        timestamp: Timestamp,
+        next_block_height: BlockHeight,
+    ) -> ChainClient<ValidatorNodeProvider, StorageClient> {
+        let known_key_pairs = known_key_pairs
+            .into_iter()
+            .map(|kp| (Owner::from(kp.public()), kp))
+            .collect();
+        let state = WorkerState::new_for_client(
+            format!("Client node {:?}", chain_id),
+            storage,
+            self.recent_values.clone(),
+            self.delivery_notifiers.clone(),
+        )
+        .with_allow_inactive_chains(true)
+        .with_allow_messages_from_deprecated_epochs(true);
+        let node_client = LocalNodeClient::new(state, self.notifier.clone());
+        ChainClient {
+            chain_id,
+            known_key_pairs,
+            validator_node_provider: self.validator_node_provider.clone(),
+            admin_id,
+            max_pending_messages: self.max_pending_messages,
+            received_certificate_trackers: HashMap::new(),
+            block_hash,
+            timestamp,
+            next_block_height,
+            pending_block: None,
+            cross_chain_delay: self.cross_chain_delay,
+            cross_chain_retries: self.cross_chain_retries,
+            node_client,
+        }
+    }
+}
 
 /// Client to operate a chain by interacting with validators and the given local storage
 /// implementation.
@@ -172,7 +261,7 @@ impl<P, S> ChainClient<P, S> {
         let state = WorkerState::new(format!("Client node {:?}", chain_id), None, storage_client)
             .with_allow_inactive_chains(true)
             .with_allow_messages_from_deprecated_epochs(true);
-        let node_client = LocalNodeClient::new(state);
+        let node_client = LocalNodeClient::new(state, Notifier::default());
         Self {
             chain_id,
             validator_node_provider,
@@ -227,16 +316,19 @@ where
     /// Obtains a `ChainStateView` for a given `ChainId`.
     pub async fn chain_state_view(
         &self,
-        chain_id: Option<ChainId>,
     ) -> Result<Arc<ChainStateView<S::Context>>, LocalNodeError> {
-        let chain_id = chain_id.unwrap_or(self.chain_id);
         let chain_state_view = self
             .node_client
             .storage_client()
             .await
-            .load_chain(chain_id)
+            .load_chain(self.chain_id)
             .await?;
         Ok(Arc::new(chain_state_view))
+    }
+
+    /// Subscribes to notifications from this client's chain.
+    pub async fn subscribe(&mut self) -> Result<NotificationStream, LocalNodeError> {
+        self.node_client.subscribe(vec![self.chain_id]).await
     }
 
     /// Obtains the basic `ChainInfo` data for the local chain.
