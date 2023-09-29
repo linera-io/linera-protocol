@@ -3,7 +3,7 @@ kind: Prometheus
 metadata:
   name: prometheus
 spec:
-  serviceAccountName: linera-admin
+  serviceAccountName: prometheus
   serviceMonitorSelector:
     matchLabels:
       team: infra
@@ -11,3 +11,18 @@ spec:
     requests:
       memory: 400Mi
   enableAdminAPI: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+spec:
+  type: NodePort
+  ports:
+  - name: web
+    nodePort: 30900
+    port: 9090
+    protocol: TCP
+    targetPort: web
+  selector:
+    prometheus: prometheus
