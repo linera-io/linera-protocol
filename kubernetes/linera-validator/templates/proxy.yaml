@@ -40,7 +40,7 @@ spec:
                   fieldPath: status.podIP
 ---
 apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+kind: PodMonitor
 metadata:
   name: validator-1
   labels:
@@ -49,5 +49,7 @@ spec:
   selector:
     matchLabels:
       app: validator-1
-  endpoints:
+  podMetricsEndpoints:
   - port: linera-port
+    path: /metrics
+    scheme: http

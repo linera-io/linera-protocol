@@ -82,7 +82,7 @@ spec:
               value: {{ .Values.logLevel }}
 ---
 apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+kind: PodMonitor
 metadata:
   name: shards
   labels:
@@ -91,5 +91,7 @@ spec:
   selector:
     matchLabels:
       app: shards
-  endpoints:
+  podMetricsEndpoints:
   - port: http
+    path: /metrics
+    scheme: http
