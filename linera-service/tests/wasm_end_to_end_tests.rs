@@ -287,7 +287,6 @@ async fn test_rocks_db_wasm_end_to_end_counter() {
     run_wasm_end_to_end_counter(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_wasm_end_to_end_counter() {
@@ -352,7 +351,6 @@ async fn test_rocks_db_wasm_end_to_end_counter_publish_create() {
     run_wasm_end_to_end_counter_publish_create(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_wasm_end_to_end_counter_publish_create() {
@@ -415,7 +413,6 @@ async fn test_rocks_db_wasm_end_to_end_social_user_pub_sub() {
     run_wasm_end_to_end_social_user_pub_sub(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_wasm_end_to_end_social_user_pub_sub() {
@@ -512,7 +509,6 @@ async fn test_rocks_db_wasm_end_to_end_fungible() {
     run_wasm_end_to_end_fungible(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_wasm_end_to_end_fungible() {
@@ -644,7 +640,6 @@ async fn test_rocks_db_wasm_end_to_end_same_wallet_fungible() {
     run_wasm_end_to_end_same_wallet_fungible(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_wasm_end_to_end_same_wallet_fungible() {
@@ -741,7 +736,6 @@ async fn test_rocks_db_wasm_end_to_end_crowd_funding() {
     run_wasm_end_to_end_crowd_funding(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_wasm_end_to_end_crowd_funding() {
@@ -883,7 +877,6 @@ async fn test_rocks_db_wasm_end_to_end_matching_engine() {
     run_wasm_end_to_end_matching_engine(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_wasm_end_to_end_matching_engine() {
@@ -1145,7 +1138,6 @@ async fn test_rocks_db_wasm_end_to_end_amm() {
     run_wasm_end_to_end_amm(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_wasm_end_to_end_amm() {

@@ -66,7 +66,6 @@ async fn test_rocks_db_handle_certificates_to_create_application(
     run_test_handle_certificates_to_create_application(store, wasm_runtime).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -78,11 +77,10 @@ async fn test_dynamo_db_handle_certificates_to_create_application(
     run_test_handle_certificates_to_create_application(store, wasm_runtime).await
 }
 
-#[ignore]
 #[cfg(feature = "scylladb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_scylla_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {

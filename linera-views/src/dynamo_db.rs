@@ -23,6 +23,7 @@ use aws_sdk_dynamodb::{
     types::{Blob, SdkError},
     Client,
 };
+use bcs::serialized_size;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use static_assertions as sa;
@@ -69,10 +70,21 @@ const VALUE_ATTRIBUTE: &str = "item_value";
 /// The attribute for obtaining the primary key (used as a sort key) with the stored value.
 const KEY_VALUE_ATTRIBUTE: &str = "item_key, item_value";
 
-/// TODO(#1084): We remove 600 from 400 * 1024. We need to determine what exactly needs to be done.
+/// TODO(#1084): The scheme below with the MAX_VALUE_BYTES has to be checked
+/// This is the maximum size of a raw value in DynamoDb.
+const RAW_MAX_VALUE_BYTES: usize = 409600;
+
 /// Fundamental constants in DynamoDB: The maximum size of a value is 400KB
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ServiceQuotas.html
-const MAX_VALUE_BYTES: usize = 409000;
+/// However, the value being written can also be the serialization of a SimpleUnorderedBatch
+/// Therefore the actual MAX_VALUE_BYTES might be lower.
+/// At the maximum the key_size is 1024 bytes (see below) and we pack just one entry.
+/// So if the key has 1024 bytes this gets us the inequality
+/// 1 + 1 + serialized_size(1024)? + serialized_size(x)? <= 400*1024
+/// and so this simplifies to 1 + 1 + (2 + 1024) + (3 + x) <= 400 * 1024
+/// (we write 3 because get_uleb128_size(400*1024) = 3)
+/// and so to a maximal value of 408569;
+const VISIBLE_MAX_VALUE_BYTES: usize = 408569;
 
 /// Fundamental constant in DynamoDB: The maximum size of a key is 1024 bytes
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html
@@ -189,6 +201,20 @@ fn extract_key_value_owned(
     let key = extract_key(prefix_len, attributes)?.to_vec();
     let value = extract_value_owned(attributes)?;
     Ok((key, value))
+}
+
+/// This computes the offset of the BCS serialization of a vector.
+/// The formula that should be satisfied is
+/// serialized_size(vec![v_1, ...., v_n]) = get_uleb128_size(n)
+///  + serialized_size(v_1)? + .... serialized_size(v_n)?
+pub fn get_uleb128_size(len: usize) -> usize {
+    let mut power = 128;
+    let mut expo = 1;
+    while len >= power {
+        power *= 128;
+        expo += 1;
+    }
+    expo
 }
 
 #[derive(Default)]
@@ -328,7 +354,7 @@ impl DynamoDbBatch {
     ) -> Result<JournalHeader, DynamoDbContextError> {
         let mut delete_iter = self.0.deletions.into_iter().peekable();
         let mut insert_iter = self.0.insertions.into_iter().peekable();
-        let mut value_size = 2;
+        let mut value_size = 0;
         let mut transact_size = 0;
         let mut deletions = Vec::new();
         let mut insertions = Vec::new();
@@ -336,10 +362,10 @@ impl DynamoDbBatch {
         let mut transacts = Vec::new();
         loop {
             if let Some(delete) = delete_iter.next() {
-                value_size += delete.len() + 1;
+                value_size += serialized_size(&delete)?;
                 deletions.push(delete);
             } else if let Some((key, value)) = insert_iter.next() {
-                value_size += key.len() + value.len() + 2;
+                value_size += serialized_size(&key)? + serialized_size(&value)?;
                 insertions.push((key, value));
             } else {
                 break;
@@ -350,23 +376,28 @@ impl DynamoDbBatch {
                 (true, true)
             } else {
                 let next_size = if let Some(delete) = delete_iter.peek() {
-                    delete.len() + 1
+                    serialized_size(&delete)?
                 } else {
                     // Unwrapping: We checked above that at least one iterator is not empty.
                     let (key, value) = insert_iter.peek().unwrap();
-                    key.len() + value.len() + 2
+                    serialized_size(&key)? + serialized_size(&value)?
                 };
-                let next_value_size = value_size + next_size;
+                let next_value_size = value_size
+                    + next_size
+                    + get_uleb128_size(deletions.len() + 1)
+                    + get_uleb128_size(insertions.len() + 1);
                 let next_transact_size = transact_size + next_value_size;
                 let value_flush = if next_transact_size > MAX_TRANSACT_WRITE_ITEM_BYTES {
                     true
                 } else {
-                    next_value_size > MAX_VALUE_BYTES
+                    next_value_size > RAW_MAX_VALUE_BYTES
                 };
                 let transact_flush = next_transact_size > MAX_TRANSACT_WRITE_ITEM_BYTES;
                 (value_flush, transact_flush)
             };
             if value_flush {
+                value_size +=
+                    get_uleb128_size(deletions.len()) + get_uleb128_size(insertions.len());
                 let simple_unordered_batch = SimpleUnorderedBatch {
                     deletions: mem::take(&mut deletions),
                     insertions: mem::take(&mut insertions),
@@ -378,7 +409,7 @@ impl DynamoDbBatch {
                 transacts.push(db.build_put_transact(key, value)?);
                 block_count += 1;
                 transact_size += value_size;
-                value_size = 2;
+                value_size = 0;
             }
             if transact_flush {
                 db.submit_transactions(mem::take(&mut transacts)).await?;
@@ -421,102 +452,6 @@ impl DynamoDbBatch {
         let unordered_batch = batch.simplify();
         let simple_unordered_batch = unordered_batch.expand_delete_prefixes(db).await?;
         Ok(DynamoDbBatch(simple_unordered_batch))
-    }
-}
-
-// Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
-#[doc(hidden)]
-pub struct DynamoDbKeyIterator<'a> {
-    prefix_len: usize,
-    iter: std::iter::Flatten<
-        std::option::Iter<'a, Vec<HashMap<std::string::String, AttributeValue>>>,
-    >,
-}
-
-impl<'a> Iterator for DynamoDbKeyIterator<'a> {
-    type Item = Result<&'a [u8], DynamoDbContextError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|x| extract_key(self.prefix_len, x))
-    }
-}
-
-/// A set of keys returned by a search query on DynamoDB.
-pub struct DynamoDbKeys {
-    prefix_len: usize,
-    response: Box<QueryOutput>,
-}
-
-impl KeyIterable<DynamoDbContextError> for DynamoDbKeys {
-    type Iterator<'a> = DynamoDbKeyIterator<'a> where Self: 'a;
-
-    fn iterator(&self) -> Self::Iterator<'_> {
-        DynamoDbKeyIterator {
-            prefix_len: self.prefix_len,
-            iter: self.response.items.iter().flatten(),
-        }
-    }
-}
-
-// Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
-#[doc(hidden)]
-pub struct DynamoDbKeyValueIterator<'a> {
-    prefix_len: usize,
-    iter: std::iter::Flatten<
-        std::option::Iter<'a, Vec<HashMap<std::string::String, AttributeValue>>>,
-    >,
-}
-
-impl<'a> Iterator for DynamoDbKeyValueIterator<'a> {
-    type Item = Result<(&'a [u8], &'a [u8]), DynamoDbContextError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter
-            .next()
-            .map(|x| extract_key_value(self.prefix_len, x))
-    }
-}
-
-#[doc(hidden)]
-pub struct DynamoDbKeyValueIteratorOwned {
-    prefix_len: usize,
-    iter: std::iter::Flatten<
-        std::option::IntoIter<Vec<HashMap<std::string::String, AttributeValue>>>,
-    >,
-}
-
-impl Iterator for DynamoDbKeyValueIteratorOwned {
-    type Item = Result<(Vec<u8>, Vec<u8>), DynamoDbContextError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter
-            .next()
-            .map(|mut x| extract_key_value_owned(self.prefix_len, &mut x))
-    }
-}
-
-/// A set of `(key, value)` returned by a search query on DynamoDb.
-pub struct DynamoDbKeyValues {
-    prefix_len: usize,
-    response: Box<QueryOutput>,
-}
-
-impl KeyValueIterable<DynamoDbContextError> for DynamoDbKeyValues {
-    type Iterator<'a> = DynamoDbKeyValueIterator<'a> where Self: 'a;
-    type IteratorOwned = DynamoDbKeyValueIteratorOwned;
-
-    fn iterator(&self) -> Self::Iterator<'_> {
-        DynamoDbKeyValueIterator {
-            prefix_len: self.prefix_len,
-            iter: self.response.items.iter().flatten(),
-        }
-    }
-
-    fn into_iterator_owned(self) -> Self::IteratorOwned {
-        DynamoDbKeyValueIteratorOwned {
-            prefix_len: self.prefix_len,
-            iter: self.response.items.into_iter().flatten(),
-        }
     }
 }
 
@@ -581,7 +516,7 @@ impl DynamoDbClientInternal {
         if key.len() > MAX_KEY_BYTES {
             return Err(DynamoDbContextError::KeyTooLong);
         }
-        if value.len() > MAX_VALUE_BYTES {
+        if value.len() > RAW_MAX_VALUE_BYTES {
             return Err(DynamoDbContextError::ValueLengthTooLarge);
         }
         let request = Put::builder()
@@ -778,6 +713,7 @@ impl DynamoDbClientInternal {
         &self,
         attribute_str: &str,
         key_prefix: &[u8],
+        start_key_map: Option<HashMap<String, AttributeValue>>,
     ) -> Result<QueryOutput, DynamoDbContextError> {
         let _guard = self.acquire().await;
         let response = self
@@ -793,6 +729,7 @@ impl DynamoDbClientInternal {
                 AttributeValue::B(Blob::new(DUMMY_PARTITION_KEY)),
             )
             .expression_attribute_values(":prefix", AttributeValue::B(Blob::new(key_prefix)))
+            .set_exclusive_start_key(start_key_map)
             .send()
             .await?;
         Ok(response)
@@ -887,9 +824,208 @@ impl DynamoDbClientInternal {
     }
 }
 
+struct QueryResults {
+    prefix_len: usize,
+    responses: Vec<QueryOutput>,
+}
+
+// Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
+#[doc(hidden)]
+#[allow(clippy::type_complexity)]
+pub struct DynamoDbKeyBlockIterator<'a> {
+    prefix_len: usize,
+    pos: usize,
+    iters: Vec<
+        std::iter::Flatten<
+            std::option::Iter<'a, Vec<HashMap<std::string::String, AttributeValue>>>,
+        >,
+    >,
+}
+
+impl<'a> Iterator for DynamoDbKeyBlockIterator<'a> {
+    type Item = Result<&'a [u8], DynamoDbContextError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let result = self.iters[self.pos].next();
+        match result {
+            None => {
+                if self.pos == self.iters.len() - 1 {
+                    return None;
+                }
+                self.pos += 1;
+                self.iters[self.pos]
+                    .next()
+                    .map(|x| extract_key(self.prefix_len, x))
+            }
+            Some(result) => Some(extract_key(self.prefix_len, result)),
+        }
+    }
+}
+
+/// A set of keys returned by a search query on DynamoDB.
+pub struct DynamoDbKeys {
+    result_queries: QueryResults,
+}
+
+impl KeyIterable<DynamoDbContextError> for DynamoDbKeys {
+    type Iterator<'a> = DynamoDbKeyBlockIterator<'a> where Self: 'a;
+
+    fn iterator(&self) -> Self::Iterator<'_> {
+        let pos = 0;
+        let mut iters = Vec::new();
+        for response in &self.result_queries.responses {
+            let iter = response.items.iter().flatten();
+            iters.push(iter);
+        }
+        DynamoDbKeyBlockIterator {
+            prefix_len: self.result_queries.prefix_len,
+            pos,
+            iters,
+        }
+    }
+}
+
+/// A set of `(key, value)` returned by a search query on DynamoDb.
+pub struct DynamoDbKeyValues {
+    result_queries: QueryResults,
+}
+
+#[doc(hidden)]
+#[allow(clippy::type_complexity)]
+pub struct DynamoDbKeyValueIterator<'a> {
+    prefix_len: usize,
+    pos: usize,
+    iters: Vec<
+        std::iter::Flatten<
+            std::option::Iter<'a, Vec<HashMap<std::string::String, AttributeValue>>>,
+        >,
+    >,
+}
+
+impl<'a> Iterator for DynamoDbKeyValueIterator<'a> {
+    type Item = Result<(&'a [u8], &'a [u8]), DynamoDbContextError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let result = self.iters[self.pos].next();
+        match result {
+            None => {
+                if self.pos == self.iters.len() - 1 {
+                    return None;
+                }
+                self.pos += 1;
+                self.iters[self.pos]
+                    .next()
+                    .map(|x| extract_key_value(self.prefix_len, x))
+            }
+            Some(result) => Some(extract_key_value(self.prefix_len, result)),
+        }
+    }
+}
+
+#[doc(hidden)]
+#[allow(clippy::type_complexity)]
+pub struct DynamoDbKeyValueIteratorOwned {
+    prefix_len: usize,
+    pos: usize,
+    iters: Vec<
+        std::iter::Flatten<
+            std::option::IntoIter<Vec<HashMap<std::string::String, AttributeValue>>>,
+        >,
+    >,
+}
+
+impl Iterator for DynamoDbKeyValueIteratorOwned {
+    type Item = Result<(Vec<u8>, Vec<u8>), DynamoDbContextError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let result = self.iters[self.pos].next();
+        match result {
+            None => {
+                if self.pos == self.iters.len() - 1 {
+                    return None;
+                }
+                self.pos += 1;
+                self.iters[self.pos]
+                    .next()
+                    .map(|mut x| extract_key_value_owned(self.prefix_len, &mut x))
+            }
+            Some(mut result) => Some(extract_key_value_owned(self.prefix_len, &mut result)),
+        }
+    }
+}
+
+impl KeyValueIterable<DynamoDbContextError> for DynamoDbKeyValues {
+    type Iterator<'a> = DynamoDbKeyValueIterator<'a> where Self: 'a;
+    type IteratorOwned = DynamoDbKeyValueIteratorOwned;
+
+    fn iterator(&self) -> Self::Iterator<'_> {
+        let pos = 0;
+        let mut iters = Vec::new();
+        for response in &self.result_queries.responses {
+            let iter = response.items.iter().flatten();
+            iters.push(iter);
+        }
+        DynamoDbKeyValueIterator {
+            prefix_len: self.result_queries.prefix_len,
+            pos,
+            iters,
+        }
+    }
+
+    fn into_iterator_owned(self) -> Self::IteratorOwned {
+        let pos = 0;
+        let mut iters = Vec::new();
+        for response in self.result_queries.responses.into_iter() {
+            let iter = response.items.into_iter().flatten();
+            iters.push(iter);
+        }
+        DynamoDbKeyValueIteratorOwned {
+            prefix_len: self.result_queries.prefix_len,
+            pos,
+            iters,
+        }
+    }
+}
+
+impl DynamoDbClientInternal {
+    async fn get_list_responses(
+        &self,
+        attribute: &str,
+        key_prefix: &[u8],
+    ) -> Result<QueryResults, DynamoDbContextError> {
+        if key_prefix.is_empty() {
+            return Err(DynamoDbContextError::ZeroLengthKeyPrefix);
+        }
+        if key_prefix.len() > MAX_KEY_BYTES {
+            return Err(DynamoDbContextError::KeyPrefixTooLong);
+        }
+        let mut responses = Vec::new();
+        let mut start_key = None;
+        loop {
+            let response = self
+                .get_query_output(attribute, key_prefix, start_key)
+                .await?;
+            let last_evaluated = response.last_evaluated_key.clone();
+            responses.push(response);
+            match last_evaluated {
+                None => {
+                    break;
+                }
+                Some(value) => {
+                    start_key = Some(value);
+                }
+            }
+        }
+        Ok(QueryResults {
+            prefix_len: key_prefix.len(),
+            responses,
+        })
+    }
+}
+
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClientInternal {
-    const MAX_VALUE_SIZE: usize = MAX_VALUE_BYTES;
+    const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_BYTES;
     type Error = DynamoDbContextError;
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
@@ -917,40 +1053,22 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
         Ok(result.into_iter().collect::<Result<_, _>>()?)
     }
 
-    // TODO(#201): Large responses may be truncated.
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<DynamoDbKeys, DynamoDbContextError> {
-        if key_prefix.is_empty() {
-            return Err(DynamoDbContextError::ZeroLengthKeyPrefix);
-        }
-        let response = Box::new(self.get_query_output(KEY_ATTRIBUTE, key_prefix).await?);
-        Ok(DynamoDbKeys {
-            prefix_len: key_prefix.len(),
-            response,
-        })
+        let result_queries = self.get_list_responses(KEY_ATTRIBUTE, key_prefix).await?;
+        Ok(DynamoDbKeys { result_queries })
     }
 
-    // TODO(#201): Large responses may be truncated.
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<DynamoDbKeyValues, DynamoDbContextError> {
-        if key_prefix.is_empty() {
-            return Err(DynamoDbContextError::ZeroLengthKeyPrefix);
-        }
-        if key_prefix.len() > MAX_KEY_BYTES {
-            return Err(DynamoDbContextError::KeyPrefixTooLong);
-        }
-        let response = Box::new(
-            self.get_query_output(KEY_VALUE_ATTRIBUTE, key_prefix)
-                .await?,
-        );
-        Ok(DynamoDbKeyValues {
-            prefix_len: key_prefix.len(),
-            response,
-        })
+        let result_queries = self
+            .get_list_responses(KEY_VALUE_ATTRIBUTE, key_prefix)
+            .await?;
+        Ok(DynamoDbKeyValues { result_queries })
     }
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), DynamoDbContextError> {
@@ -981,7 +1099,7 @@ pub struct DynamoDbClient {
 
 #[async_trait]
 impl KeyValueStoreClient for DynamoDbClient {
-    const MAX_VALUE_SIZE: usize = MAX_VALUE_BYTES;
+    const MAX_VALUE_SIZE: usize = DynamoDbClientInternal::MAX_VALUE_SIZE;
     type Error = DynamoDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
@@ -1463,10 +1581,10 @@ pub async fn create_dynamo_db_test_client() -> DynamoDbClient {
         table_name,
         common_config,
     };
-    let (key_value_operation, _) = DynamoDbClient::new_for_testing(store_config)
+    let (key_value_store, _) = DynamoDbClient::new_for_testing(store_config)
         .await
-        .expect("key_value_operation");
-    key_value_operation
+        .expect("key_value_store");
+    key_value_store
 }
 
 /// Helper function to list the names of tables registered on DynamoDB.
@@ -1488,4 +1606,34 @@ pub async fn clear_tables(client: &aws_sdk_dynamodb::Client) -> Result<(), Dynam
         client.delete_table().table_name(&table).send().await?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        batch::SimpleUnorderedBatch,
+        dynamo_db::{
+            get_uleb128_size, MAX_KEY_BYTES, RAW_MAX_VALUE_BYTES, VISIBLE_MAX_VALUE_BYTES,
+        },
+    };
+    use bcs::serialized_size;
+
+    #[test]
+    fn test_serialization_len() {
+        for n in [0, 10, 127, 128, 129, 16383, 16384, 20000] {
+            let mut vec = Vec::new();
+            vec.resize(n, 0_u8);
+            let est_size = get_uleb128_size(n) + n;
+            let serial_size = serialized_size(&vec).unwrap();
+            assert_eq!(est_size, serial_size);
+        }
+    }
+
+    #[test]
+    fn test_raw_visible_sizes() {
+        let mut vis_computed = RAW_MAX_VALUE_BYTES - MAX_KEY_BYTES;
+        vis_computed -= serialized_size(&SimpleUnorderedBatch::default()).unwrap();
+        vis_computed -= get_uleb128_size(RAW_MAX_VALUE_BYTES) + get_uleb128_size(MAX_KEY_BYTES);
+        assert_eq!(vis_computed, VISIBLE_MAX_VALUE_BYTES);
+    }
 }

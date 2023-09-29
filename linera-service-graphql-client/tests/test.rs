@@ -38,7 +38,6 @@ async fn test_rocks_db_end_to_end_queries() {
     run_end_to_end_queries(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_end_to_end_queries() {

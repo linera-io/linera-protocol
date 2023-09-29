@@ -79,7 +79,6 @@ async fn test_rocks_db_end_to_end_operations_indexer() {
     run_end_to_end_operations_indexer(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_end_to_end_operations_indexer() {
