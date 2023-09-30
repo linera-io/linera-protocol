@@ -11,21 +11,3 @@ host = "127.0.0.1"
 port = 9401
 metrics_host = "127.0.0.1"
 metrics_port = 11401
-
-[[shards]]
-host = "127.0.0.1"
-port = 9402
-metrics_host = "127.0.0.1"
-metrics_port = 11402
-
-[[shards]]
-host = "127.0.0.1"
-port = 9403
-metrics_host = "127.0.0.1"
-metrics_port = 11403
-
-[[shards]]
-host = "127.0.0.1"
-port = 9404
-metrics_host = "127.0.0.1"
-metrics_port = 11404

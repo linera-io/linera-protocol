@@ -2,7 +2,6 @@
 
 # Get the number of proxies and servers from command line arguments or use default values.
 NUM_VALIDATORS=${1:-1}
-SHARDS_PER_VALIDATOR=${2:-4}
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 CONF_DIR="${SCRIPT_DIR}/../configuration/local"
@@ -22,7 +21,7 @@ trap 'kill $(jobs -p)' EXIT
 
 set -x
 
-# Create configuration files for NUM_VALIDATORS validators with SHARDS_PER_VALIDATOR shards each.
+# Create configuration files for NUM_VALIDATORS validators with 1 shard each.
 # * Private server states are stored in `server*.json`.
 # * `committee.json` is the public description of the Linera committee.
 VALIDATOR_FILES=()
@@ -45,14 +44,8 @@ for I in $(seq 1 $NUM_VALIDATORS)
 do
     ./linera-proxy server_"$I".json &
 
-    for J in $(seq 0 $((SHARDS_PER_VALIDATOR - 1)))
-    do
-        ./linera-server initialize --storage rocksdb:server_"$I"_"$J".db --genesis genesis.json
-    done
-    for J in $(seq 0 $((SHARDS_PER_VALIDATOR - 1)))
-    do
-        ./linera-server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
-    done
+    ./linera-server initialize --storage rocksdb:server_"$I".db --genesis genesis.json
+    ./linera-server run --storage rocksdb:server_"$I".db --server server_"$I".json --genesis genesis.json &
 done
 
 sleep 3;

@@ -11,7 +11,7 @@ the Linera protocol functions refer to the [whitepaper](https://linera.io/whitep
 
 ## Repository Structure
 
-The Linera protocol repository is broken down into the following crates and subdirectories: (from low-level to high-level in the dependency graph)
+The Linera protocol repository is broken down into the following main crates and subdirectories: (from low-level to high-level in the dependency graph)
 
 1. [`linera-base`](https://linera-io.github.io/linera-protocol/linera_base/index.html) Base definitions, including cryptography.
 
@@ -33,67 +33,58 @@ The Linera protocol repository is broken down into the following crates and subd
 
 10. [`examples`](./examples) Examples of Linera applications written in Rust.
 
-## Quickstart with the Linera service CLI
+Additionally,
+- `linera-service-graphql-client` is a Rust GraphQL client for the system components of the `linera-service`
+- `linera-explorer` contains an experimental block explorer.
+- `linera-indexer` is an experimental block indexer.
+- `linera-witty` is an experimental alternative to `wit-bindgen` for rust hosts.
 
-The following script can be run with `cargo test`.
+## Quickstart
+
+See our [developer manual](https://linera.dev) for a full introduction to the Linera SDK.
+
+The following script creates a local test network and runs a simple transfers between two user chains.
+
+It can be run with `cargo test readme`.
 
 ```bash
-storage="ROCKSDB"
-
 if [ $# -eq 1 ]
 then
-    if [ "$1" == 'DYNAMODB' ]
-    then
-        storage="DYNAMODB"
-    fi
-    if [ "$1" == 'SCYLLADB' ]
-    then
-        storage="SCYLLADB"
-    fi
+    STORAGE="$1"
+else
+    STORAGE="ROCKSDB"
 fi
 
-# For debug builds:
-if [ "$storage" = "ROCKSDB" ]
+# Build the repository and clean up existing databases if needed.
+if [ "$STORAGE" = "ROCKSDB" ]
 then
-    cargo build && cd target/debug
-elif [ "$storage" = "DYNAMODB" ]
+    cargo build -p linera-service
+elif [ "$STORAGE" = "DYNAMODB" ]
 then
-    cargo build --features aws && cd target/debug
-elif [ "$storage" = "SCYLLADB" ]
+    cargo build -p linera-service --features aws
+    target/debug/linera-db delete_all --storage dynamodb:table:localstack
+elif [ "$STORAGE" = "SCYLLADB" ]
 then
-    cargo build --features scylladb && cd target/debug
+    cargo build -p linera-service --features scylladb
+    target/debug/linera-db delete_all --storage scylladb:
 fi
 
-# For release builds:
-# cargo build --release && cd target/release
+# Change working directory
+cd target/debug
 
-# Clean up data files
+# Clean up files
 rm -rf *.json *.txt *.db
-rm -rf linera.db
-if [ "$storage" = "ROCKSDB" ]
-then
-    rm -rf server_?_?.db
-elif [ "$storage" = "DYNAMODB" ]
-then
-    ./linera-db delete_all --storage dynamodb:table:localstack
-elif [ "$storage" = "SCYLLADB" ]
-then
-    ./linera-db delete_all --storage scylladb:
-fi
-
-
-
 
 # Make sure to clean up child processes on exit.
 trap 'kill $(jobs -p)' EXIT
 
-# Create configuration files for 4 validators with 4 shards each.
+# Create configuration files for 4 validators with 1 shard each.
 # * Private server states are stored in `server*.json`.
 # * `committee.json` is the public description of the Linera committee.
 ./linera-server generate --validators ../../configuration/local/validator_{1,2,3,4}.toml --committee committee.json
 
 # Command line prefix for client calls
-CLIENT=(./linera --storage rocksdb:linera.db --wallet wallet.json --max-pending-messages 10000)
+CLIENT=(./linera --storage rocksdb:linera.db --wallet wallet.json)
 
 # Create configuration files for 10 user chains.
 # * Private chain states are stored in one local wallet `wallet.json`.
@@ -103,32 +94,25 @@ ${CLIENT[@]} create-genesis-config 10 --genesis genesis.json --initial-funding 1
 # Start servers and create initial chains in DB
 for I in 1 2 3 4
 do
+    # Start validator proxy
     ./linera-proxy server_"$I".json &
-    if [ "$storage" = "ROCKSDB" ]
+
+    if [ "$STORAGE" = "ROCKSDB" ]
     then
-        for J in $(seq 0 3)
-        do
-            ./linera-server initialize --storage rocksdb:server_"$I"_"$J".db --genesis genesis.json
-        done
-        for J in $(seq 0 3)
-        do
-            ./linera-server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
-        done
-    elif [ "$storage" = "DYNAMODB" ]
+        STORE=rocksdb:server_"$I".db
+    elif [ "$STORAGE" = "DYNAMODB" ]
     then
-        ./linera-server initialize --storage dynamodb:server-"$I":localstack --genesis genesis.json
-        for J in $(seq 0 3)
-        do
-            ./linera-server run --storage dynamodb:server-"$I":localstack --server server_"$I".json --shard "$J" --genesis genesis.json &
-        done
-    elif [ "$storage" = "SCYLLADB" ]
+        STORE=dynamodb:server-"$I":localstack
+    elif [ "$STORAGE" = "SCYLLADB" ]
     then
-        ./linera-server initialize --storage scylladb:table_server_"$I" --genesis genesis.json
-        for J in $(seq 0 3)
-        do
-            ./linera-server run --storage scylladb:table_server_"$I" --server server_"$I".json --shard "$J" --genesis genesis.json &
-        done
+        STORE=scylladb:table_server_"$I"
     fi
+
+    # Initialize validator storage.
+    ./linera-server initialize --storage "$STORE" --genesis genesis.json
+
+    # Start the server of the unique shard.
+    ./linera-server run --storage "$STORE" --server server_"$I".json --genesis genesis.json &
 done
 
 ${CLIENT[@]} query-validators
