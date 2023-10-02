@@ -54,6 +54,8 @@ use {
 #[cfg(any(feature = "aws", feature = "scylladb"))]
 use linera_views::common::get_table_name;
 
+use super::ChainClientBuilder;
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum FaultType {
     Honest,
@@ -260,6 +262,7 @@ where
     }
 }
 
+#[derive(Clone)]
 pub struct NodeProvider<S>(BTreeMap<ValidatorName, Arc<Mutex<LocalValidator<S>>>>);
 
 impl<S> ValidatorNodeProvider for NodeProvider<S>
@@ -506,18 +509,16 @@ where
             .await;
         self.chain_client_stores.push(store.clone());
         let provider = self.validator_clients.iter().cloned().collect();
-        Ok(ChainClient::new(
+        let cross_chain_delay = std::time::Duration::from_millis(500);
+        let builder = ChainClientBuilder::new(provider, 10, cross_chain_delay, 10);
+        Ok(builder.build(
             chain_id,
             vec![key_pair],
-            provider,
             store,
             self.admin_id,
-            10,
             block_hash,
             Timestamp::from(0),
             block_height,
-            std::time::Duration::from_millis(500),
-            10,
         ))
     }
 
