@@ -240,45 +240,6 @@ pub enum ChainClientError {
 }
 
 impl<P, S> ChainClient<P, S> {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        chain_id: ChainId,
-        known_key_pairs: Vec<KeyPair>,
-        validator_node_provider: P,
-        storage_client: S,
-        admin_id: ChainId,
-        max_pending_messages: usize,
-        block_hash: Option<CryptoHash>,
-        timestamp: Timestamp,
-        next_block_height: BlockHeight,
-        cross_chain_delay: Duration,
-        cross_chain_retries: usize,
-    ) -> Self {
-        let known_key_pairs = known_key_pairs
-            .into_iter()
-            .map(|kp| (Owner::from(kp.public()), kp))
-            .collect();
-        let state = WorkerState::new(format!("Client node {:?}", chain_id), None, storage_client)
-            .with_allow_inactive_chains(true)
-            .with_allow_messages_from_deprecated_epochs(true);
-        let node_client = LocalNodeClient::new(state, Notifier::default());
-        Self {
-            chain_id,
-            validator_node_provider,
-            block_hash,
-            timestamp,
-            next_block_height,
-            pending_block: None,
-            known_key_pairs,
-            admin_id,
-            max_pending_messages,
-            received_certificate_trackers: HashMap::new(),
-            cross_chain_delay,
-            cross_chain_retries,
-            node_client,
-        }
-    }
-
     pub fn chain_id(&self) -> ChainId {
         self.chain_id
     }
