@@ -90,7 +90,6 @@ pub mod memory;
 pub mod lru_caching;
 
 /// The `ReentrantCollectionView` implements a map structure whose keys are ordered and the values are views with concurrent access.
-#[cfg(not(target_arch = "wasm32"))]
 pub mod reentrant_collection_view;
 
 /// The implementation of a key-value store view.
@@ -126,9 +125,11 @@ pub mod localstack;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod test_utils;
 
-/// Macros used for the library.
+/// Re-exports used by the derive macros of this library.
 #[doc(hidden)]
-pub use {async_trait::async_trait, futures, generic_array, linera_base::crypto, serde, sha3};
+pub use {
+    async_lock, async_trait::async_trait, futures, generic_array, linera_base::crypto, serde, sha3,
+};
 
 /// Does nothing. Use the metrics feature to enable.
 #[cfg(not(feature = "metrics"))]
@@ -149,3 +150,9 @@ pub const SAVE_VIEW_COUNTER: &str = "save_view";
 
 #[cfg(all(feature = "aws", target_arch = "wasm32"))]
 compile_error!("Cannot build AWS features for the Wasm target");
+
+#[cfg(all(feature = "rocksdb", target_arch = "wasm32"))]
+compile_error!("Cannot build RocksDB features for the Wasm target");
+
+#[cfg(all(feature = "scylladb", target_arch = "wasm32"))]
+compile_error!("Cannot build ScyllaDB features for the Wasm target");

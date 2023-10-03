@@ -416,9 +416,10 @@ fn generate_graphql_code_for_field(
             let generic_method_name = snakify(generic_ident);
 
             let (guard, lifetime) = match view_name.as_str() {
-                "ReentrantCollectionView" | "ReentrantCustomCollectionView" => {
-                    (quote!(tokio::sync::OwnedRwLockReadGuard), quote!())
-                }
+                "ReentrantCollectionView" | "ReentrantCustomCollectionView" => (
+                    quote!(linera_views::async_lock::RwLockReadGuardArc),
+                    quote!(),
+                ),
                 "CollectionView" | "CustomCollectionView" => (
                     quote!(linera_views::collection_view::ReadGuardedView),
                     quote!('a,),

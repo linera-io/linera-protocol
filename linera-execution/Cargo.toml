@@ -12,7 +12,7 @@ edition = "2021"
 
 [features]
 default = ["wasmer"]
-test = ["tokio/macros", "async-lock"]
+test = ["tokio/macros"]
 wasmer = [
     "bytes", "dep:wasmer", "wasm-encoder", "wasmer-middlewares", "wasmparser",
     "wit-bindgen-host-wasmer-rust",
@@ -21,7 +21,7 @@ wasmtime = ["dep:wasmtime", "wasm-encoder", "wasmparser", "wit-bindgen-host-wasm
 
 [dependencies]
 anyhow = { workspace = true }
-async-lock = { workspace = true, optional = true }
+async-lock = { workspace = true }
 async-trait = { workspace = true }
 async-graphql = { workspace = true }
 bcs = { workspace = true }

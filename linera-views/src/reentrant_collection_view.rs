@@ -6,6 +6,7 @@ use crate::{
     common::{Context, CustomSerialize, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
     views::{HashableView, Hasher, View, ViewError},
 };
+use async_lock::{Mutex, RwLock, RwLockReadGuardArc, RwLockWriteGuardArc};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -17,7 +18,6 @@ use std::{
     mem,
     sync::Arc,
 };
-use tokio::sync::{Mutex, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
 
 /// A view that supports accessing a collection of views of the same kind, indexed by `Vec<u8>`,
 /// possibly several subviews at a time.
@@ -171,14 +171,17 @@ where
     pub async fn try_load_entry_mut(
         &mut self,
         short_key: Vec<u8>,
-    ) -> Result<OwnedRwLockWriteGuard<W>, ViewError> {
+    ) -> Result<RwLockWriteGuardArc<W>, ViewError> {
         *self.hash.get_mut() = None;
         let updates = self.updates.get_mut();
         match updates.entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
                 match entry {
-                    Update::Set(view) => Ok(view.clone().try_write_owned()?),
+                    Update::Set(view) => Ok(view
+                        .clone()
+                        .try_write_arc()
+                        .ok_or_else(|| ViewError::TryLockError(short_key))?),
                     Update::Removed => {
                         let key = self
                             .context
@@ -189,7 +192,9 @@ where
                         view.clear();
                         let wrapped_view = Arc::new(RwLock::new(view));
                         *entry = Update::Set(wrapped_view.clone());
-                        Ok(wrapped_view.try_write_owned()?)
+                        Ok(wrapped_view
+                            .try_write_arc()
+                            .ok_or_else(|| ViewError::TryLockError(short_key))?)
                     }
                 }
             }
@@ -204,7 +209,9 @@ where
                 }
                 let wrapped_view = Arc::new(RwLock::new(view));
                 entry.insert(Update::Set(wrapped_view.clone()));
-                Ok(wrapped_view.try_write_owned()?)
+                Ok(wrapped_view
+                    .try_write_arc()
+                    .ok_or_else(|| ViewError::TryLockError(short_key))?)
             }
         }
     }
@@ -227,13 +234,16 @@ where
     pub async fn try_load_entry(
         &self,
         short_key: Vec<u8>,
-    ) -> Result<OwnedRwLockReadGuard<W>, ViewError> {
+    ) -> Result<RwLockReadGuardArc<W>, ViewError> {
         let mut updates = self.updates.lock().await;
         match updates.entry(short_key.clone()) {
             btree_map::Entry::Occupied(entry) => {
                 let entry = entry.into_mut();
                 match entry {
-                    Update::Set(view) => Ok(view.clone().try_read_owned()?),
+                    Update::Set(view) => Ok(view
+                        .clone()
+                        .try_read_arc()
+                        .ok_or_else(|| ViewError::TryLockError(short_key))?),
                     Update::Removed => {
                         let key = self
                             .context
@@ -244,7 +254,9 @@ where
                         view.clear();
                         let wrapped_view = Arc::new(RwLock::new(view));
                         *entry = Update::Set(wrapped_view.clone());
-                        Ok(wrapped_view.try_read_owned()?)
+                        Ok(wrapped_view
+                            .try_read_arc()
+                            .ok_or_else(|| ViewError::TryLockError(short_key))?)
                     }
                 }
             }
@@ -259,7 +271,9 @@ where
                 }
                 let wrapped_view = Arc::new(RwLock::new(view));
                 entry.insert(Update::Set(wrapped_view.clone()));
-                Ok(wrapped_view.try_read_owned()?)
+                Ok(wrapped_view
+                    .try_read_arc()
+                    .ok_or_else(|| ViewError::TryLockError(short_key))?)
             }
         }
     }
@@ -354,10 +368,11 @@ where
     ///   assert_eq!(*value2, String::default());
     /// # })
     /// ```
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn try_load_entries_mut(
         &mut self,
         short_keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<OwnedRwLockWriteGuard<W>>, ViewError> {
+    ) -> Result<Vec<RwLockWriteGuardArc<W>>, ViewError> {
         let mut selected_short_keys = Vec::new();
         *self.hash.get_mut() = None;
         let updates = self.updates.get_mut();
@@ -397,10 +412,12 @@ where
         let mut result = Vec::new();
         for short_key in short_keys {
             result.push(
-                if let btree_map::Entry::Occupied(entry) = updates.entry(short_key) {
+                if let btree_map::Entry::Occupied(entry) = updates.entry(short_key.clone()) {
                     let entry = entry.into_mut();
                     if let Update::Set(view) = entry {
-                        view.clone().try_write_owned()?
+                        view.clone()
+                            .try_write_arc()
+                            .ok_or_else(|| ViewError::TryLockError(short_key))?
                     } else {
                         unreachable!()
                     }
@@ -430,10 +447,11 @@ where
     ///   assert_eq!(*value2, String::default());
     /// # })
     /// ```
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn try_load_entries(
         &self,
         short_keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<OwnedRwLockReadGuard<W>>, ViewError> {
+    ) -> Result<Vec<RwLockReadGuardArc<W>>, ViewError> {
         let mut selected_short_keys = Vec::new();
         let mut updates = self.updates.lock().await;
         for short_key in short_keys.clone() {
@@ -472,10 +490,12 @@ where
         let mut result = Vec::new();
         for short_key in short_keys {
             result.push(
-                if let btree_map::Entry::Occupied(entry) = updates.entry(short_key) {
+                if let btree_map::Entry::Occupied(entry) = updates.entry(short_key.clone()) {
                     let entry = entry.into_mut();
                     if let Update::Set(view) = entry {
-                        view.clone().try_read_owned()?
+                        view.clone()
+                            .try_read_arc()
+                            .ok_or_else(|| ViewError::TryLockError(short_key))?
                     } else {
                         unreachable!()
                     }
@@ -649,7 +669,7 @@ where
     }
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let mut hash = self.hash.try_lock()?;
+        let mut hash = self.hash.lock().await;
         match *hash {
             Some(hash) => Ok(hash),
             None => {
@@ -740,7 +760,7 @@ where
     pub async fn try_load_entry_mut<Q>(
         &mut self,
         index: &Q,
-    ) -> Result<OwnedRwLockWriteGuard<W>, ViewError>
+    ) -> Result<RwLockWriteGuardArc<W>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
@@ -764,7 +784,7 @@ where
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<OwnedRwLockReadGuard<W>, ViewError>
+    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<RwLockReadGuardArc<W>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + ?Sized,
@@ -835,7 +855,7 @@ where
     }
 }
 
-impl<'a, C, I, W> ReentrantCollectionView<C, I, W>
+impl<C, I, W> ReentrantCollectionView<C, I, W>
 where
     C: Context + Send + Clone + 'static,
     ViewError: From<C::Error>,
@@ -860,10 +880,11 @@ where
     ///   assert_eq!(*value2, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entries_mut<Q>(
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn try_load_entries_mut<'a, Q>(
         &'a mut self,
         indices: impl IntoIterator<Item = &'a Q>,
-    ) -> Result<Vec<OwnedRwLockWriteGuard<W>>, ViewError>
+    ) -> Result<Vec<RwLockWriteGuardArc<W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + 'a,
@@ -893,10 +914,11 @@ where
     ///   assert_eq!(*value2, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entries<Q>(
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn try_load_entries<'a, Q>(
         &'a self,
         indices: impl IntoIterator<Item = &'a Q>,
-    ) -> Result<Vec<OwnedRwLockReadGuard<W>>, ViewError>
+    ) -> Result<Vec<RwLockReadGuardArc<W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: Serialize + 'a,
@@ -1099,7 +1121,7 @@ where
     pub async fn try_load_entry_mut<Q>(
         &mut self,
         index: &Q,
-    ) -> Result<OwnedRwLockWriteGuard<W>, ViewError>
+    ) -> Result<RwLockWriteGuardArc<W>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
@@ -1123,7 +1145,7 @@ where
     ///   assert_eq!(*value, String::default());
     /// # })
     /// ```
-    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<OwnedRwLockReadGuard<W>, ViewError>
+    pub async fn try_load_entry<Q>(&self, index: &Q) -> Result<RwLockReadGuardArc<W>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize + ?Sized,
@@ -1221,10 +1243,11 @@ where
     ///   assert_eq!(*value2, String::default());
     /// # })
     /// ```
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn try_load_entries_mut<Q>(
         &mut self,
         indices: impl IntoIterator<Item = Q>,
-    ) -> Result<Vec<OwnedRwLockWriteGuard<W>>, ViewError>
+    ) -> Result<Vec<RwLockWriteGuardArc<W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize,
@@ -1254,10 +1277,11 @@ where
     ///   assert_eq!(*value2, String::default());
     /// # })
     /// ```
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn try_load_entries<Q>(
         &self,
         indices: impl IntoIterator<Item = Q>,
-    ) -> Result<Vec<OwnedRwLockReadGuard<W>>, ViewError>
+    ) -> Result<Vec<RwLockReadGuardArc<W>>, ViewError>
     where
         I: Borrow<Q>,
         Q: CustomSerialize,

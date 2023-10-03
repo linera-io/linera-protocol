@@ -6,6 +6,7 @@ use crate::{
     ExecutionResult, ExecutionRuntimeContext, ServiceRuntime, SessionId, UserApplicationCode,
     UserApplicationDescription, UserApplicationId,
 };
+use async_lock::{Mutex, MutexGuard, MutexGuardArc, RwLockWriteGuardArc};
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
 use linera_base::{
@@ -28,7 +29,6 @@ use std::{
         Arc,
     },
 };
-use tokio::sync::{Mutex, MutexGuard, OwnedMutexGuard, OwnedRwLockWriteGuard};
 
 /// Runtime data tracked during the execution of a transaction.
 #[derive(Debug, Clone)]
@@ -65,10 +65,10 @@ pub(crate) struct ApplicationStatus {
 }
 
 type ActiveViewUserStates<C> =
-    BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<KeyValueStoreView<C>>>;
+    BTreeMap<UserApplicationId, RwLockWriteGuardArc<KeyValueStoreView<C>>>;
 type ActiveSimpleUserStates<C> =
-    BTreeMap<UserApplicationId, OwnedRwLockWriteGuard<RegisterView<C, Vec<u8>>>>;
-type ActiveSessions = BTreeMap<SessionId, OwnedMutexGuard<SessionState>>;
+    BTreeMap<UserApplicationId, RwLockWriteGuardArc<RegisterView<C, Vec<u8>>>>;
+type ActiveSessions = BTreeMap<SessionId, MutexGuardArc<SessionState>>;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SessionManager {
@@ -186,8 +186,8 @@ where
                 .get(id)
                 .ok_or(ExecutionError::InvalidSession)?
                 .clone()
-                .try_lock_owned()
-                .map_err(|_| ExecutionError::SessionIsInUse)?;
+                .try_lock_arc()
+                .ok_or(ExecutionError::SessionIsInUse)?;
             // Verify ownership.
             ensure!(state.owner == from_id, ExecutionError::InvalidSessionOwner);
             // Transfer the session.
@@ -234,8 +234,8 @@ where
             .get(&session_id)
             .ok_or(ExecutionError::InvalidSession)?
             .clone()
-            .try_lock_owned()
-            .map_err(|_| ExecutionError::SessionIsInUse)?;
+            .try_lock_arc()
+            .ok_or(ExecutionError::SessionIsInUse)?;
         let state = guard.data.clone();
         // Verify ownership.
         ensure!(
