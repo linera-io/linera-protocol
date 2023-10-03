@@ -21,7 +21,7 @@ use futures::{
 use linera_base::{
     abi::{Abi, ContractAbi},
     crypto::{CryptoHash, KeyPair, PublicKey},
-    data_types::{Amount, ArithmeticError, BlockHeight, RoundNumber, Timestamp},
+    data_types::{Amount, ArithmeticError, BlockHeight, OwnerConfig, RoundNumber, Timestamp},
     ensure,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
@@ -426,7 +426,7 @@ where
             }
             ChainManagerInfo::Multi(manager) => {
                 let mut identities = manager
-                    .public_keys
+                    .owners
                     .keys()
                     .filter(|owner| self.known_key_pairs.contains_key(owner));
                 let Some(identity) = identities.next() else {
@@ -1532,26 +1532,30 @@ where
     ) -> Result<Certificate, ChainClientError> {
         let info = self.prepare_chain().await?;
         let messages = self.pending_messages().await?;
-        let (new_public_keys, multi_leader_rounds) = match info.manager {
+        let (new_owners, multi_leader_rounds) = match info.manager {
             ChainManagerInfo::None => return Err(ChainError::InactiveChain(self.chain_id).into()),
             ChainManagerInfo::Single(manager) => (
-                vec![(manager.public_key, 100), (new_public_key, new_weight)],
+                vec![
+                    OwnerConfig::new_regular(manager.public_key, 100),
+                    OwnerConfig::new_regular(new_public_key, new_weight),
+                ],
                 RoundNumber(2),
             ),
-            ChainManagerInfo::Multi(manager) => (
-                manager
-                    .public_keys
+            ChainManagerInfo::Multi(manager) => {
+                let config = OwnerConfig::new_regular(new_public_key, new_weight);
+                let new_owners = manager
+                    .owners
                     .values()
                     .cloned()
-                    .chain(iter::once((new_public_key, new_weight)))
-                    .collect(),
-                manager.multi_leader_rounds,
-            ),
+                    .chain(iter::once(config))
+                    .collect();
+                (new_owners, manager.multi_leader_rounds)
+            }
         };
         self.execute_block(
             messages,
             vec![Operation::System(SystemOperation::ChangeMultipleOwners {
-                new_public_keys,
+                new_owners,
                 multi_leader_rounds,
             })],
         )

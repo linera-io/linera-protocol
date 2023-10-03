@@ -12,7 +12,7 @@ use async_graphql::Enum;
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, ArithmeticError, RoundNumber, Timestamp},
+    data_types::{Amount, ArithmeticError, OwnerConfig, RoundNumber, Timestamp},
     ensure, hex_debug,
     identifiers::{BytecodeId, ChainDescription, ChainId, MessageId, Owner},
 };
@@ -123,7 +123,7 @@ pub enum SystemOperation {
     ChangeOwner { new_public_key: PublicKey },
     /// Changes the authentication key of the chain.
     ChangeMultipleOwners {
-        new_public_keys: Vec<(PublicKey, u64)>,
+        new_owners: Vec<OwnerConfig>,
         multi_leader_rounds: RoundNumber,
     },
     /// Subscribes to a system channel.
@@ -533,11 +533,11 @@ where
                 self.ownership.set(ChainOwnership::single(*new_public_key));
             }
             ChangeMultipleOwners {
-                new_public_keys,
+                new_owners,
                 multi_leader_rounds,
             } => {
                 self.ownership.set(ChainOwnership::multiple(
-                    new_public_keys.iter().map(|(key, weight)| (*key, *weight)),
+                    new_owners.iter().cloned(),
                     *multi_leader_rounds,
                 ));
             }

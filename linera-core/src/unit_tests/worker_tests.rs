@@ -3328,7 +3328,10 @@ where
 
     // Add another owner and use the leader-based protocol in all rounds.
     let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeMultipleOwners {
-        new_public_keys: vec![(pub_key0, 100), (pub_key1, 100)],
+        new_owners: vec![
+            OwnerConfig::new_regular(pub_key0, 100),
+            OwnerConfig::new_regular(pub_key1, 100),
+        ],
         multi_leader_rounds: RoundNumber::from(0),
     });
     let (executed_block0, _) = worker.stage_block_execution(block0).await.unwrap();

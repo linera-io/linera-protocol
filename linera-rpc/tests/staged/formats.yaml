@@ -236,14 +236,12 @@ ChainOwnership:
     2:
       Multi:
         STRUCT:
-          - public_keys:
+          - owners:
               MAP:
                 KEY:
                   TYPENAME: Owner
                 VALUE:
-                  TUPLE:
-                    - TYPENAME: PublicKey
-                    - U64
+                  TYPENAME: OwnerConfig
           - multi_leader_rounds:
               TYPENAME: RoundNumber
 ChannelFullName:
@@ -426,14 +424,12 @@ MessageId:
     - index: U32
 MultiOwnerManagerInfo:
   STRUCT:
-    - public_keys:
+    - owners:
         MAP:
           KEY:
             TYPENAME: Owner
           VALUE:
-            TUPLE:
-              - TYPENAME: PublicKey
-              - U64
+            TYPENAME: OwnerConfig
     - multi_leader_rounds:
         TYPENAME: RoundNumber
     - requested_proposed:
@@ -584,6 +580,19 @@ OutgoingMessage:
 Owner:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
+OwnerConfig:
+  STRUCT:
+    - public_key:
+        TYPENAME: PublicKey
+    - kind:
+        TYPENAME: OwnerKind
+    - weight: U64
+OwnerKind:
+  ENUM:
+    0:
+      Super: UNIT
+    1:
+      Regular: UNIT
 PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -813,11 +822,9 @@ SystemOperation:
     5:
       ChangeMultipleOwners:
         STRUCT:
-          - new_public_keys:
+          - new_owners:
               SEQ:
-                TUPLE:
-                  - TYPENAME: PublicKey
-                  - U64
+                TYPENAME: OwnerConfig
           - multi_leader_rounds:
               TYPENAME: RoundNumber
     6:

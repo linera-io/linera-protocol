@@ -60,7 +60,7 @@ use crate::{
 };
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{BlockHeight, RoundNumber, Timestamp},
+    data_types::{BlockHeight, OwnerConfig, OwnerKind, RoundNumber, Timestamp},
     ensure,
     identifiers::{ChainId, Owner},
 };
@@ -79,8 +79,8 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 /// The consensus state of a chain with multiple owners some of which are potentially faulty.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MultiOwnerManager {
-    /// The public keys of the chain's co-owners, with their weights.
-    pub public_keys: BTreeMap<Owner, (PublicKey, u64)>,
+    /// The public keys, weights and types of the chain's owners.
+    pub owners: BTreeMap<Owner, OwnerConfig>,
     /// The number of initial rounds in which all owners are allowed to propose blocks,
     /// i.e. the first round with only a single leader.
     pub multi_leader_rounds: RoundNumber,
@@ -105,18 +105,18 @@ pub struct MultiOwnerManager {
 
 impl MultiOwnerManager {
     pub fn new(
-        public_keys: impl IntoIterator<Item = (Owner, (PublicKey, u64))>,
+        owners: impl IntoIterator<Item = (Owner, OwnerConfig)>,
         multi_leader_rounds: RoundNumber,
         seed: u64,
         now: Timestamp,
     ) -> Result<Self, ChainError> {
-        let public_keys: BTreeMap<Owner, (PublicKey, u64)> = public_keys.into_iter().collect();
-        let weights = public_keys.values().map(|(_, weight)| *weight).collect();
+        let owners: BTreeMap<Owner, OwnerConfig> = owners.into_iter().collect();
+        let weights = owners.values().map(|conf| conf.weight).collect();
         let distribution = WeightedAliasIndex::new(weights)?;
         let round_timeout = now.saturating_add(TIMEOUT);
 
         Ok(MultiOwnerManager {
-            public_keys,
+            owners,
             multi_leader_rounds,
             seed,
             distribution,
@@ -291,8 +291,16 @@ impl MultiOwnerManager {
             // Vote to validate.
             let BlockAndRound { block, round } = proposal.content;
             let executed_block = outcome.with(block);
-            let vote = Vote::new(HashedValue::new_validated(executed_block), round, key_pair);
-            self.pending = Some(vote);
+            let Some(config) = self.owners.get(&proposal.owner) else {
+                error!("Called create_vote with a proposal by a non-owner.");
+                return;
+            };
+            let value = if config.kind == OwnerKind::Super {
+                HashedValue::new_confirmed(executed_block)
+            } else {
+                HashedValue::new_validated(executed_block)
+            };
+            self.pending = Some(Vote::new(value, round, key_pair));
         }
     }
 
@@ -354,13 +362,14 @@ impl MultiOwnerManager {
     /// Returns the public key of the block proposal's signer, if they are a valid owner and allowed
     /// to propose a block in the proposal's round.
     pub fn verify_owner(&self, proposal: &BlockProposal) -> Option<PublicKey> {
-        if proposal.content.round < self.multi_leader_rounds {
-            let (key, _) = self.public_keys.get(&proposal.owner)?;
-            return Some(*key); // Not in leader rotation mode; any owner is allowed to propose.
+        let config = self.owners.get(&proposal.owner)?;
+        if proposal.content.round < self.multi_leader_rounds || config.kind == OwnerKind::Super {
+            // Not in leader rotation mode; any owner is allowed to propose.
+            return Some(config.public_key);
         };
         let index = self.round_leader_index(proposal.content.round)?;
-        let (leader, (key, _)) = self.public_keys.iter().nth(index)?;
-        (*leader == proposal.owner).then_some(*key)
+        let leader = self.owners.keys().nth(index)?;
+        (*leader == proposal.owner).then_some(config.public_key)
     }
 
     /// Returns the leader who is allowed to propose a block in the given round, or `None` if every
@@ -370,7 +379,7 @@ impl MultiOwnerManager {
             return None;
         };
         let index = self.round_leader_index(round)?;
-        self.public_keys.keys().nth(index)
+        self.owners.keys().nth(index)
     }
 
     /// Returns the index of the leader who is allowed to propose a block in the given round, or
@@ -387,8 +396,8 @@ impl MultiOwnerManager {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct MultiOwnerManagerInfo {
-    /// The public keys of the chain's co-owners.
-    pub public_keys: HashMap<Owner, (PublicKey, u64)>,
+    /// The configuration of the chain's owners.
+    pub owners: HashMap<Owner, OwnerConfig>,
     /// The number of initial rounds in which all owners are allowed to propose blocks,
     /// i.e. the first round with only a single leader.
     pub multi_leader_rounds: RoundNumber,
@@ -418,7 +427,7 @@ impl From<&MultiOwnerManager> for MultiOwnerManagerInfo {
     fn from(manager: &MultiOwnerManager) -> Self {
         let current_round = manager.current_round();
         MultiOwnerManagerInfo {
-            public_keys: manager.public_keys.clone().into_iter().collect(),
+            owners: manager.owners.clone().into_iter().collect(),
             multi_leader_rounds: manager.multi_leader_rounds,
             requested_proposed: None,
             requested_locked: None,

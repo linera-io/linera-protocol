@@ -18,7 +18,7 @@ use axum::{
 use futures::lock::{Mutex, MutexGuard, OwnedMutexGuard};
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
-    data_types::{Amount, RoundNumber},
+    data_types::{Amount, OwnerConfig, RoundNumber},
     identifiers::{ApplicationId, BytecodeId, ChainId, Owner},
     BcsHexParseError,
 };
@@ -38,7 +38,7 @@ use linera_storage::Store;
 use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{collections::BTreeMap, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{collections::BTreeMap, net::SocketAddr, num::NonZeroU16, sync::Arc};
 use thiserror::Error as ThisError;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info};
@@ -304,9 +304,16 @@ where
                     weights.len()
                 )));
             }
-            public_keys.into_iter().zip(weights).collect()
+            public_keys
+                .into_iter()
+                .zip(weights)
+                .map(|(public_key, weight)| OwnerConfig::new_regular(public_key, weight))
+                .collect()
         } else {
-            public_keys.into_iter().zip(iter::repeat(100)).collect()
+            public_keys
+                .into_iter()
+                .map(|public_key| OwnerConfig::new_regular(public_key, 100))
+                .collect()
         };
         let multi_leader_rounds = multi_leader_rounds.unwrap_or(RoundNumber::MAX);
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
@@ -340,8 +347,13 @@ where
         new_weights: Vec<u64>,
         multi_leader_rounds: RoundNumber,
     ) -> Result<CryptoHash, Error> {
+        let new_owners = new_public_keys
+            .into_iter()
+            .zip(new_weights)
+            .map(|(public_key, weight)| OwnerConfig::new_regular(public_key, weight))
+            .collect();
         let operation = SystemOperation::ChangeMultipleOwners {
-            new_public_keys: new_public_keys.into_iter().zip(new_weights).collect(),
+            new_owners,
             multi_leader_rounds,
         };
         self.execute_system_operation(operation, chain_id).await

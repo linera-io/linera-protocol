@@ -1,7 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{crypto::PublicKey, data_types::RoundNumber, identifiers::Owner};
+use linera_base::{
+    crypto::PublicKey,
+    data_types::{OwnerConfig, RoundNumber},
+    identifiers::Owner,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -16,7 +20,7 @@ pub enum ChainOwnership {
     /// The chain is managed by multiple owners.
     Multi {
         /// The owners, with their weights that determine how often they are round leader.
-        public_keys: BTreeMap<Owner, (PublicKey, u64)>,
+        owners: BTreeMap<Owner, OwnerConfig>,
         /// The number of initial rounds in which all owners are allowed to propose blocks,
         /// i.e. the first round with only a single leader.
         multi_leader_rounds: RoundNumber,
@@ -32,13 +36,13 @@ impl ChainOwnership {
     }
 
     pub fn multiple(
-        keys_and_weights: impl IntoIterator<Item = (PublicKey, u64)>,
+        keys_and_weights: impl IntoIterator<Item = OwnerConfig>,
         multi_leader_rounds: RoundNumber,
     ) -> Self {
         ChainOwnership::Multi {
-            public_keys: keys_and_weights
+            owners: keys_and_weights
                 .into_iter()
-                .map(|(key, weight)| (Owner::from(key), (key, weight)))
+                .map(|config| (Owner::from(config.public_key), config))
                 .collect(),
             multi_leader_rounds,
         }
@@ -60,8 +64,8 @@ impl ChainOwnership {
                     None
                 }
             }
-            ChainOwnership::Multi { public_keys, .. } => {
-                public_keys.get(owner).map(|(key, _)| *key)
+            ChainOwnership::Multi { owners, .. } => {
+                owners.get(owner).map(|config| config.public_key)
             }
             ChainOwnership::None => None,
         }

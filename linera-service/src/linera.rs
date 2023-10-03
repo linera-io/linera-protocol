@@ -9,7 +9,7 @@ use colored::Colorize;
 use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::{CryptoRng, KeyPair, PublicKey},
-    data_types::{Amount, BlockHeight, RoundNumber, Timestamp},
+    data_types::{Amount, BlockHeight, OwnerConfig, RoundNumber, Timestamp},
     identifiers::{BytecodeId, ChainDescription, ChainId, MessageId},
 };
 use linera_chain::data_types::{Certificate, CertificateValue, ExecutedBlock};
@@ -46,7 +46,7 @@ use linera_views::{common::CommonStoreConfig, views::ViewError};
 use rand07::Rng;
 use serde_json::Value;
 use std::{
-    env, fs, iter,
+    env, fs,
     num::NonZeroU16,
     path::PathBuf,
     sync::Arc,
@@ -1269,7 +1269,10 @@ impl Runnable for Job {
                 info!("Starting operation to open a new chain");
                 let time_start = Instant::now();
                 let owners: Vec<_> = if weights.is_empty() {
-                    public_keys.into_iter().zip(iter::repeat(100)).collect()
+                    public_keys
+                        .into_iter()
+                        .map(|public_key| OwnerConfig::new_regular(public_key, 100))
+                        .collect()
                 } else if weights.len() != public_keys.len() {
                     bail!(
                         "There are {} public keys but {} weights.",
@@ -1277,7 +1280,11 @@ impl Runnable for Job {
                         weights.len()
                     );
                 } else {
-                    public_keys.into_iter().zip(weights).collect()
+                    public_keys
+                        .into_iter()
+                        .zip(weights)
+                        .map(|(public_key, weight)| OwnerConfig::new_regular(public_key, weight))
+                        .collect()
                 };
                 let multi_leader_rounds = multi_leader_rounds.unwrap_or(RoundNumber::MAX);
                 let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
