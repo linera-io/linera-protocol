@@ -21,7 +21,9 @@ use futures::{
 use linera_base::{
     abi::{Abi, ContractAbi},
     crypto::{CryptoHash, KeyPair, PublicKey},
-    data_types::{Amount, ArithmeticError, BlockHeight, OwnerConfig, RoundNumber, Timestamp},
+    data_types::{
+        Amount, ArithmeticError, BlockHeight, OwnerConfig, OwnerKind, RoundNumber, Timestamp,
+    },
     ensure,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
@@ -1189,6 +1191,13 @@ where
         let response = self.node_client.handle_chain_info_query(query).await?;
         let manager = response.info.manager;
         let Some(next_round) = manager.next_round() else {
+            if let ChainManagerInfo::Multi(multi) = manager {
+                tracing::error!(
+                    "round {}, multi: {}",
+                    multi.current_round,
+                    multi.multi_leader_rounds
+                );
+            }
             return Err(ChainClientError::BlockProposalError(
                 "Cannot propose a block; there is already a proposal in the current round",
             ));
@@ -1221,28 +1230,41 @@ where
         self.pending_block = Some(block);
         // Send the query to validators.
         let final_certificate = match manager {
-            ChainManagerInfo::Multi(_) => {
-                // Need two round-trips.
-                let certificate = self
-                    .communicate_chain_updates(
+            ChainManagerInfo::Multi(manager) => {
+                if manager.owners.get(&proposal.owner).map(|conf| conf.kind)
+                    == Some(OwnerKind::Super)
+                {
+                    // Only one round-trip is needed
+                    self.communicate_chain_updates(
                         &committee,
                         self.chain_id,
-                        CommunicateAction::SubmitBlockForValidation(proposal.clone()),
+                        CommunicateAction::SubmitBlockForConfirmation(proposal.clone()),
                     )
                     .await?
-                    .expect("a certificate");
-                assert!(matches!(
-                    certificate.value(),
-                    CertificateValue::ValidatedBlock { executed_block, .. }
-                        if executed_block.block == proposal.content.block
-                ));
-                self.communicate_chain_updates(
-                    &committee,
-                    self.chain_id,
-                    CommunicateAction::FinalizeBlock(certificate),
-                )
-                .await?
-                .expect("a certificate")
+                    .expect("a certificate")
+                } else {
+                    // Need two round-trips.
+                    let certificate = self
+                        .communicate_chain_updates(
+                            &committee,
+                            self.chain_id,
+                            CommunicateAction::SubmitBlockForValidation(proposal.clone()),
+                        )
+                        .await?
+                        .expect("a certificate");
+                    assert!(matches!(
+                        certificate.value(),
+                        CertificateValue::ValidatedBlock { executed_block, .. }
+                            if executed_block.block == proposal.content.block
+                    ));
+                    self.communicate_chain_updates(
+                        &committee,
+                        self.chain_id,
+                        CommunicateAction::FinalizeBlock(certificate),
+                    )
+                    .await?
+                    .expect("a certificate")
+                }
             }
             ChainManagerInfo::Single(_) => {
                 // Only one round-trip is needed

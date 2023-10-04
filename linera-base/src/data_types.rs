@@ -413,7 +413,7 @@ doc_scalar!(
 );
 
 /// The type of an owner, determining when and how they can propose blocks for this chain.
-#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub enum OwnerKind {
     /// An owner that can propose fast blocks, and even if they are not the round leader.
     Super,

@@ -331,7 +331,7 @@ where
     assert!(sender.pending_block.is_none());
     assert!(matches!(
         sender.key_pair().await,
-        Err(ChainClientError::CannotFindKeyForSingleOwnerChain(_))
+        Err(ChainClientError::CannotFindKeyForMultiOwnerChain(_))
     ));
     assert_eq!(
         builder
@@ -359,7 +359,7 @@ where
                 UserData::default()
             )
             .await,
-        Err(ChainClientError::CannotFindKeyForSingleOwnerChain(_))
+        Err(ChainClientError::CannotFindKeyForMultiOwnerChain(_))
     ));
     Ok(())
 }
@@ -458,19 +458,24 @@ where
 
     // We need at least three validators for making a transfer.
     builder.set_fault_type(..2, FaultType::Offline).await;
-    assert!(matches!(
-        client
-            .transfer_to_account(
-                None,
-                Amount::ONE,
-                Account::chain(ChainId::root(3)),
-                UserData::default(),
-            )
-            .await,
-        Err(ChainClientError::CommunicationError(
-            CommunicationError::Trusted(ClientIoError { .. })
-        ))
-    ));
+    let result = client
+        .transfer_to_account(
+            None,
+            Amount::ONE,
+            Account::chain(ChainId::root(3)),
+            UserData::default(),
+        )
+        .await;
+    assert!(
+        matches!(
+            result,
+            Err(ChainClientError::CommunicationError(
+                CommunicationError::Trusted(ClientIoError { .. }),
+            ))
+        ),
+        "Unexpected result: {:?}",
+        result
+    );
     builder.set_fault_type(..2, FaultType::Honest).await;
     builder.set_fault_type(2.., FaultType::Offline).await;
     assert!(matches!(

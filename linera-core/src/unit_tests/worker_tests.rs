@@ -2191,7 +2191,9 @@ where
         );
         assert!(matches!(
             recipient_chain.manager.get(),
-            ChainManager::Single(single) if single.owner == recipient_key_pair.public().into()
+            ChainManager::Multi(multi)
+                if multi.owners.contains_key(&recipient_key_pair.public().into())
+                    && multi.owners.len() == 1
         ));
         assert_eq!(recipient_chain.confirmed_log.count(), 1);
         assert_eq!(
