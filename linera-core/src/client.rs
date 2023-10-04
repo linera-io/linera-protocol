@@ -1572,8 +1572,9 @@ where
             .await?;
         // The second last message created the new chain.
         let message_id = certificate
-            .value
-            .nth_last_message_id(2)
+            .value()
+            .executed_block()
+            .and_then(|executed_block| executed_block.open_chain_message_ids().next())
             .ok_or_else(|| ChainClientError::InternalError("Failed to open a new chain"))?;
         Ok((message_id, certificate))
     }
@@ -1597,11 +1598,11 @@ where
             }))
             .await?;
         // The last message published the bytecode.
-        let message_id = certificate
-            .value
-            .nth_last_message_id(1)
+        let id = certificate
+            .value()
+            .executed_block()
+            .and_then(|executed_block| executed_block.published_bytecode_ids().next())
             .ok_or_else(|| ChainClientError::InternalError("Failed to publish bytecode"))?;
-        let id = BytecodeId::new(message_id);
         Ok((id, certificate))
     }
 
@@ -1643,14 +1644,11 @@ where
             }))
             .await?;
         // The last message created the application.
-        let creation = certificate
-            .value
-            .nth_last_message_id(1)
+        let id = certificate
+            .value()
+            .executed_block()
+            .and_then(|executed_block| executed_block.created_application_ids().next())
             .ok_or_else(|| ChainClientError::InternalError("Failed to create application"))?;
-        let id = UserApplicationId {
-            bytecode_id,
-            creation,
-        };
         Ok((id, certificate))
     }
 

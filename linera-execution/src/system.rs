@@ -204,7 +204,7 @@ pub enum SystemMessage {
     /// Notifies that a new application bytecode was published.
     BytecodePublished { operation_index: u32 },
     /// Notifies that a new application was created.
-    ApplicationCreated,
+    ApplicationCreated { bytecode_id: BytecodeId },
     /// Shares the locations of published bytecodes.
     BytecodeLocations {
         locations: Vec<(BytecodeId, BytecodeLocation)>,
@@ -752,7 +752,9 @@ where
                     destination: Destination::Recipient(context.chain_id),
                     authenticated: false,
                     is_skippable: false,
-                    message: SystemMessage::ApplicationCreated,
+                    message: SystemMessage::ApplicationCreated {
+                        bytecode_id: *bytecode_id,
+                    },
                 };
                 result.messages.push(message);
                 new_application = Some((id, initialization_argument.clone()));

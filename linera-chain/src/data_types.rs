@@ -8,11 +8,11 @@ use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
     data_types::{BlockHeight, RoundNumber, Timestamp},
     doc_scalar, ensure,
-    identifiers::{ChainId, ChannelName, Destination, MessageId, Owner},
+    identifiers::{ApplicationId, BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner},
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    BytecodeLocation, GenericApplicationId, Message, Operation,
+    BytecodeLocation, GenericApplicationId, Message, Operation, SystemMessage,
 };
 use serde::{de::Deserializer, Deserialize, Serialize};
 use std::{
@@ -516,19 +516,6 @@ impl CertificateValue {
             && executed_block.messages.len() > index
     }
 
-    /// Skip `n-1` messages from the end of the block and return the message ID, if any.
-    pub fn nth_last_message_id(&self, n: u32) -> Option<MessageId> {
-        if n == 0 {
-            return None;
-        }
-        let message_count = self.executed_block()?.messages.len();
-        Some(MessageId {
-            chain_id: self.chain_id(),
-            height: self.height(),
-            index: u32::try_from(message_count).ok()?.checked_sub(n)?,
-        })
-    }
-
     pub fn is_confirmed(&self) -> bool {
         matches!(self, CertificateValue::ConfirmedBlock { .. })
     }
@@ -557,6 +544,66 @@ impl CertificateValue {
     pub fn block(&self) -> Option<&Block> {
         self.executed_block()
             .map(|executed_block| &executed_block.block)
+    }
+}
+
+impl ExecutedBlock {
+    /// Returns the IDs of all applications that were created in this block.
+    pub fn created_application_ids(&self) -> impl Iterator<Item = ApplicationId> + '_ {
+        self.enumerate_messages()
+            .filter_map(|(index, outgoing_message)| {
+                if let Message::System(SystemMessage::ApplicationCreated { bytecode_id }) =
+                    outgoing_message.message
+                {
+                    Some(ApplicationId {
+                        bytecode_id,
+                        creation: self.message_id(index),
+                    })
+                } else {
+                    None
+                }
+            })
+    }
+
+    /// Returns the IDs of all bytecodes that were published in this block.
+    pub fn published_bytecode_ids(&self) -> impl Iterator<Item = BytecodeId> + '_ {
+        self.enumerate_messages()
+            .filter_map(|(index, outgoing_message)| {
+                matches!(
+                    outgoing_message.message,
+                    Message::System(SystemMessage::BytecodePublished { .. })
+                )
+                .then(|| BytecodeId::new(self.message_id(index)))
+            })
+    }
+
+    /// Returns the IDs of all messages that created a new chain in this block.
+    ///
+    /// Given the creation message ID `id`, the chain description is `ChainDescription::Child(id)`,
+    /// and the chain ID is `ChainId::from(ChainDescription::Child(id))`.
+    pub fn open_chain_message_ids(&self) -> impl Iterator<Item = MessageId> + '_ {
+        self.enumerate_messages()
+            .filter_map(|(index, outgoing_message)| {
+                matches!(
+                    outgoing_message.message,
+                    Message::System(SystemMessage::OpenChain { .. })
+                )
+                .then(|| self.message_id(index))
+            })
+    }
+
+    /// Returns all pairs of a message index and its outgoing message.
+    fn enumerate_messages(&self) -> impl Iterator<Item = (u32, &OutgoingMessage)> + '_ {
+        (0..=u32::MAX).zip(&self.messages)
+    }
+
+    /// Returns the message ID belonging to the `index`th outgoing message in this block.
+    fn message_id(&self, index: u32) -> MessageId {
+        MessageId {
+            chain_id: self.block.chain_id,
+            height: self.block.height,
+            index,
+        }
     }
 }
 
@@ -611,11 +658,6 @@ impl HashedValue {
 
     pub fn into_inner(self) -> CertificateValue {
         self.value
-    }
-
-    /// Skip `n-1` messages from the end of the block and return the message ID, if any.
-    pub fn nth_last_message_id(&self, n: u32) -> Option<MessageId> {
-        self.value.nth_last_message_id(n)
     }
 }
 
