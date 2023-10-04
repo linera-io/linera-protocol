@@ -9,7 +9,7 @@ clean=false
 
 # Guard clause check if required binaries are installed
 which kind > /dev/null || { echo "Error: kind not installed." ; exit 1 ; }
-which helm > /dev/null || { echo "Error: egrep not installed." ; exit 1 ; }
+which helm > /dev/null || { echo "Error: helm not installed." ; exit 1 ; }
 
 # Function to display script usage
 usage() {
