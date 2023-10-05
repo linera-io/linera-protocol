@@ -33,11 +33,13 @@ impl Contract for MetaCounter {
 
     async fn initialize(
         &mut self,
-        _context: &OperationContext,
+        context: &OperationContext,
         _argument: (),
     ) -> Result<ExecutionResult<Self::Message>, Self::Error> {
         Self::counter_id()?;
-        Ok(ExecutionResult::default())
+        // Send a no-op message to ourselves. This is only for testing contracts that send messages
+        // on initialization. Since the value is 0 it does not change the counter value.
+        Ok(ExecutionResult::default().with_message(context.chain_id, 0))
     }
 
     async fn execute_operation(

@@ -729,7 +729,10 @@ SystemMessage:
         STRUCT:
           - operation_index: U32
     7:
-      ApplicationCreated: UNIT
+      ApplicationCreated:
+        STRUCT:
+          - bytecode_id:
+              TYPENAME: BytecodeId
     8:
       BytecodeLocations:
         STRUCT:
