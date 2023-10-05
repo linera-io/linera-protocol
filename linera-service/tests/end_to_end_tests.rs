@@ -18,7 +18,6 @@ async fn test_rocks_db_end_to_end_reconfiguration_grpc() {
     run_end_to_end_reconfiguration(Database::RocksDb, Network::Grpc).await;
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_end_to_end_reconfiguration_grpc() {
@@ -37,7 +36,6 @@ async fn test_rocks_db_end_to_end_reconfiguration_simple() {
     run_end_to_end_reconfiguration(Database::RocksDb, Network::Simple).await;
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_end_to_end_reconfiguration_simple() {
@@ -163,7 +161,6 @@ async fn test_rocks_db_open_chain_node_service() {
     run_open_chain_node_service(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_open_chain_node_service() {
@@ -269,7 +266,6 @@ async fn test_rocks_db_end_to_end_retry_notification_stream() {
     run_end_to_end_retry_notification_stream(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_end_to_end_retry_notification_stream() {
@@ -347,7 +343,6 @@ async fn test_rocks_db_end_to_end_multiple_wallets() {
     run_end_to_end_multiple_wallets(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_end_to_end_multiple_wallets() {
@@ -418,7 +413,6 @@ async fn test_rocks_db_project_new() {
     run_project_new(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_project_new() {
@@ -451,7 +445,6 @@ async fn test_rocks_db_project_test() {
     run_project_test(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_project_test() {
@@ -480,7 +473,6 @@ async fn test_rocks_db_project_publish() {
     run_project_publish(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_project_publish() {
@@ -525,7 +517,6 @@ async fn test_rocks_db_example_publish() {
     run_example_publish(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_example_publish() {
@@ -568,7 +559,6 @@ async fn test_rocks_db_end_to_end_open_multi_owner_chain() {
     run_end_to_end_open_multi_owner_chain(Database::RocksDb).await
 }
 
-#[ignore]
 #[cfg(feature = "aws")]
 #[test_log::test(tokio::test)]
 async fn test_dynamo_db_end_to_end_open_multi_owner_chain() {

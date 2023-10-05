@@ -947,7 +947,8 @@ impl NodeService {
     }
 
     pub async fn make_application(&self, chain_id: &ChainId, application_id: &str) -> String {
-        for i in 0..30 {
+        let n_try = 30;
+        for i in 0..n_try {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let values = self.try_get_applications_uri(chain_id).await;
             if let Some(link) = values.get(application_id) {
@@ -955,7 +956,7 @@ impl NodeService {
             }
             warn!("Waiting for application {application_id:?} to be visible on chain {chain_id:?}");
         }
-        panic!("Could not find application URI: {application_id}");
+        panic!("Could not find application URI: {application_id} after {n_try} tries");
     }
 
     pub async fn try_get_applications_uri(&self, chain_id: &ChainId) -> HashMap<String, String> {
