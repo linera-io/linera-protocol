@@ -12,6 +12,8 @@ use linera_rpc::{
     transport::{MessageHandler, TransportProtocol},
     RpcMessage,
 };
+#[cfg(feature = "prometheus-metrics")]
+use linera_service::prometheus_server;
 use linera_service::{
     config::{Import, ValidatorServerConfig},
     grpc_proxy::GrpcProxy,
@@ -19,6 +21,19 @@ use linera_service::{
 use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
 use tracing::{error, info, instrument};
+#[cfg(feature = "prometheus-metrics")]
+use {
+    lazy_static::lazy_static,
+    prometheus::{register_int_counter, IntCounter},
+    std::net::SocketAddr,
+};
+
+#[cfg(feature = "prometheus-metrics")]
+lazy_static! {
+    pub static ref TEST_NDR_SIMPLE_PROXY_COUNTER: IntCounter =
+        register_int_counter!("test_ndr_simple_proxy_counter", "Test simple proxy counter")
+            .expect("Counter can be created");
+}
 
 /// Options for running the proxy.
 #[derive(Debug, StructOpt)]
@@ -139,6 +154,13 @@ impl SimpleProxy {
     async fn run(self) -> Result<()> {
         info!("Starting simple server");
         let address = self.get_listen_address(self.public_config.port);
+
+        #[cfg(feature = "prometheus-metrics")]
+        Self::start_metrics(&self.get_listen_address(self.public_config.metrics_port));
+
+        #[cfg(feature = "prometheus-metrics")]
+        TEST_NDR_SIMPLE_PROXY_COUNTER.inc();
+
         self.public_config
             .protocol
             .spawn_server(&address, self)
@@ -146,6 +168,14 @@ impl SimpleProxy {
             .join()
             .await?;
         Ok(())
+    }
+
+    #[cfg(feature = "prometheus-metrics")]
+    pub fn start_metrics(address: &String) {
+        match address.parse::<SocketAddr>() {
+            Err(err) => error!("Invalid metrics address for {address}: {err}"),
+            Ok(address) => prometheus_server::start_metrics(address),
+        }
     }
 
     fn get_listen_address(&self, port: u16) -> String {

@@ -5,12 +5,12 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: validator
+      app: validator-1
   replicas: 1
   template:
     metadata:
       labels:
-        app: validator
+        app: validator-1
     spec:
       serviceAccountName: linera-admin
       terminationGracePeriodSeconds: 10
@@ -19,8 +19,8 @@ spec:
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
           image: {{ .Values.lineraImage }}
           ports:
-            - containerPort: 19100
-              name: linera-port
+            - name: linera-port
+              containerPort: 19100
           command: ["./linera-proxy"]
           args: ["server_1.json"]
           env:
@@ -38,3 +38,22 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    release: linera-core
+  name: validator-1
+spec:
+  endpoints:
+  - port: metrics-port
+    path: /metrics
+    scheme: http
+  jobLabel: validator-1
+  namespaceSelector:
+    matchNames:
+    - default
+  selector:
+    matchLabels:
+      app: validator-1

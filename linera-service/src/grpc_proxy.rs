@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "prometheus-metrics")]
+use crate::prometheus_server;
 use anyhow::Result;
 use async_trait::async_trait;
 use linera_base::identifiers::ChainId;
@@ -27,6 +29,18 @@ use tonic::{
     Request, Response, Status,
 };
 use tracing::{debug, info, instrument};
+#[cfg(feature = "prometheus-metrics")]
+use {
+    lazy_static::lazy_static,
+    prometheus::{register_int_counter, IntCounter},
+};
+
+#[cfg(feature = "prometheus-metrics")]
+lazy_static! {
+    pub static ref TEST_NDR_GRPC_PROXY_COUNTER: IntCounter =
+        register_int_counter!("test_ndr_grpc_proxy_counter", "Test gRPC proxy counter")
+            .expect("Counter can be created");
+}
 
 #[derive(Clone)]
 pub struct GrpcProxy(Arc<GrpcProxyInner>);
@@ -67,6 +81,10 @@ impl GrpcProxy {
         SocketAddr::from(([0, 0, 0, 0], self.0.public_config.port))
     }
 
+    fn metrics_address(&self) -> SocketAddr {
+        SocketAddr::from(([0, 0, 0, 0], self.0.public_config.metrics_port))
+    }
+
     fn internal_address(&self) -> SocketAddr {
         SocketAddr::from(([0, 0, 0, 0], self.0.internal_config.port))
     }
@@ -92,9 +110,13 @@ impl GrpcProxy {
 
     /// Runs the proxy. If either the public server or private server dies for whatever
     /// reason we'll kill the proxy.
-    #[instrument(skip_all, fields(public_address = %self.public_address(), internal_address = %self.internal_address()), err)]
+    #[instrument(skip_all, fields(public_address = %self.public_address(), internal_address = %self.internal_address(), metrics_address = %self.metrics_address()), err)]
     pub async fn run(self) -> Result<()> {
         info!("Starting gRPC server");
+
+        #[cfg(feature = "prometheus-metrics")]
+        prometheus_server::start_metrics(self.metrics_address());
+
         let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
         health_reporter
             .set_serving::<ValidatorNodeServer<GrpcProxy>>()
@@ -106,6 +128,10 @@ impl GrpcProxy {
             .add_service(health_service)
             .add_service(self.as_validator_node())
             .serve(self.public_address());
+
+        #[cfg(feature = "prometheus-metrics")]
+        TEST_NDR_GRPC_PROXY_COUNTER.inc();
+
         select! {
             internal_res = internal_server => internal_res?,
             public_res = public_server => public_res?,

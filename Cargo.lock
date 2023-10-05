@@ -3068,6 +3068,7 @@ dependencies = [
  "fungible",
  "futures",
  "hex",
+ "lazy_static",
  "linera-base",
  "linera-chain",
  "linera-core",

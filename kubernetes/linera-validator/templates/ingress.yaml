@@ -2,6 +2,8 @@ apiVersion: v1
 kind: Service
 metadata:
   name: validator-ingress
+  labels:
+    app: validator-1
 spec:
   # NodePort here is temporary. LoadBalancer will keep trying to set an external IP,
   # leaving it in a permanent pending state. Since we port forward anyways, we don't
@@ -14,3 +16,7 @@ spec:
       protocol: TCP
       port: 19100
       targetPort: linera-port
+    - name: metrics
+      protocol: TCP
+      port: 21100
+      targetPort: metrics-port

@@ -31,6 +31,7 @@ chrono = { workspace = true }
 colored = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
+lazy_static = { workspace = true, optional = true }
 linera-base = { workspace = true }
 linera-chain = { workspace = true }
 linera-core = { workspace = true }

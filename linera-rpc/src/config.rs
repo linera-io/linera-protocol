@@ -123,6 +123,10 @@ pub struct ValidatorPublicNetworkPreConfig<P> {
     pub host: String,
     /// The port the validator listens on.
     pub port: u16,
+    /// The host name of the proxy's metrics endpoint.
+    pub metrics_host: String,
+    /// The port of the proxy's metrics endpoint.
+    pub metrics_port: u16,
 }
 
 impl<P> ValidatorPublicNetworkPreConfig<P> {
@@ -131,6 +135,8 @@ impl<P> ValidatorPublicNetworkPreConfig<P> {
             protocol,
             host: self.host.clone(),
             port: self.port,
+            metrics_host: self.metrics_host.clone(),
+            metrics_port: self.metrics_port,
         }
     }
 
@@ -144,7 +150,11 @@ where
     P: std::fmt::Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}:{}", self.protocol, self.host, self.port)
+        write!(
+            f,
+            "{}:{}:{}:{}:{}",
+            self.protocol, self.host, self.port, self.metrics_host, self.metrics_port
+        )
     }
 }
 
@@ -167,16 +177,20 @@ where
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.split(':').collect();
         anyhow::ensure!(
-            parts.len() == 3,
-            "Expecting format `(tcp|udp|grpc):host:port`"
+            parts.len() == 5,
+            "Expecting format `(tcp|udp|grpc):host:port:metrics_host:metrics_port`"
         );
         let protocol = parts[0].parse().map_err(|s| anyhow::anyhow!("{}", s))?;
         let host = parts[1].to_owned();
         let port = parts[2].parse()?;
+        let metrics_host = parts[3].to_owned();
+        let metrics_port = parts[4].parse()?;
         Ok(ValidatorPublicNetworkPreConfig {
             protocol,
             host,
             port,
+            metrics_host,
+            metrics_port,
         })
     }
 }
