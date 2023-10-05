@@ -16,6 +16,8 @@ use linera_rpc::{
     simple_network,
     transport::TransportProtocol,
 };
+#[cfg(feature = "prometheus-metrics")]
+use linera_service::prometheus_server;
 use linera_service::{
     config::{
         CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig, ValidatorServerConfig,
@@ -82,7 +84,7 @@ impl ServerContext {
             let cross_chain_config = self.cross_chain_config.clone();
             handles.push(async move {
                 if let Some(port) = shard.metrics_port {
-                    Self::start_metrics(&shard.metrics_host, port);
+                    Self::start_metrics(listen_address, &port);
                 }
                 let server = simple_network::Server::new(
                     internal_network,
@@ -104,6 +106,7 @@ impl ServerContext {
                 }
             });
         }
+
         join_all(handles).await;
 
         Ok(())
@@ -124,7 +127,7 @@ impl ServerContext {
             let notification_config = self.notification_config.clone();
             handles.push(async move {
                 if let Some(port) = shard.metrics_port {
-                    Self::start_metrics(&shard.metrics_host, port);
+                    Self::start_metrics(listen_address, &port);
                 }
                 let spawned_server = match GrpcServer::spawn(
                     listen_address.to_string(),
@@ -148,25 +151,32 @@ impl ServerContext {
                 }
             });
         }
+
         join_all(handles).await;
 
         Ok(())
     }
 
-    fn start_metrics(host: &str, port: u16) {
+    fn start_metrics(host: &str, port: &u16) {
         match format!("{}:{}", host, port).parse::<SocketAddr>() {
-            Err(err) => error!("Invalid metrics address: {err}"),
-            Ok(address) => {
-                if let Err(error) = metrics_exporter_tcp::TcpBuilder::new()
-                    .listen_address(address)
-                    .install()
-                {
-                    error!(
-                        ?error, %address,
-                        "Could not install TCP metrics exporter."
-                    );
-                }
-            }
+            Err(err) => error!("Invalid metrics address for {host}:{port}: {err}"),
+            #[cfg(not(feature = "prometheus-metrics"))]
+            Ok(address) => Self::start_metrics_impl(address),
+            #[cfg(feature = "prometheus-metrics")]
+            Ok(address) => prometheus_server::start_metrics(address),
+        }
+    }
+
+    #[cfg(not(feature = "prometheus-metrics"))]
+    fn start_metrics_impl(address: SocketAddr) {
+        if let Err(error) = metrics_exporter_tcp::TcpBuilder::new()
+            .listen_address(address)
+            .install()
+        {
+            error!(
+                ?error, %address,
+                "Could not install TCP metrics exporter."
+            );
         }
     }
 
