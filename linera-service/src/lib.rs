@@ -10,5 +10,7 @@ pub mod config;
 pub mod grpc_proxy;
 pub mod node_service;
 pub mod project;
+#[cfg(feature = "prometheus-metrics")]
+pub mod prometheus_server;
 pub mod storage;
 pub mod util;
