@@ -19,6 +19,7 @@ pub struct Project {
 }
 
 const RUNNER_BIN_NAME: &str = "test-runner";
+const RUNNER_BIN_CRATE: &str = "linera-sdk";
 
 impl Project {
     pub fn new(root: PathBuf) -> Result<Self> {
@@ -74,15 +75,15 @@ impl Project {
         Ok(Self { root })
     }
 
-    pub fn test(&self) -> Result<()> {
-        if !Self::runner_is_installed()? {
+    pub async fn test(&self) -> Result<()> {
+        if Self::runner_path().await.is_err() {
             debug!("Linera test runner not found");
             Self::install_test_runner()?;
         }
         let unit_tests = Command::new("cargo")
             .env(
                 "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER",
-                Self::runner_path()?.display().to_string().as_str(),
+                Self::runner_path().await?.display().to_string().as_str(),
             )
             .arg("test")
             .args(["--target", "wasm32-unknown-unknown"])
@@ -102,10 +103,6 @@ impl Project {
             bail!("integration tests failed")
         }
         Ok(())
-    }
-
-    pub fn runner_is_installed() -> Result<bool> {
-        Ok(Self::runner_path()?.exists())
     }
 
     /// Finds the workspace for a given crate. If the workspace
@@ -143,8 +140,8 @@ impl Project {
         Ok(())
     }
 
-    fn runner_path() -> Result<PathBuf> {
-        util::resolve_cargo_binary(RUNNER_BIN_NAME)
+    async fn runner_path() -> Result<PathBuf> {
+        util::resolve_binary(RUNNER_BIN_NAME, RUNNER_BIN_CRATE).await
     }
 
     fn create_source_directory(project_root: &Path) -> Result<PathBuf> {

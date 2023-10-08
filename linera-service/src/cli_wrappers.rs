@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{config::WalletState, util::resolve_binary};
+use crate::{config::WalletState, util};
 use anyhow::{Context, Result};
 use async_graphql::InputType;
 use linera_base::{
@@ -162,7 +162,7 @@ impl ClientWrapper {
     }
 
     async fn run(&self) -> Result<Command> {
-        let path = resolve_binary("linera", None).await?;
+        let path = util::resolve_binary("linera", env!("CARGO_PKG_NAME")).await?;
         let mut command = Command::new(path);
         command
             .current_dir(&self.tmp_dir.path().canonicalize()?)
@@ -618,7 +618,7 @@ impl LocalNetwork {
     }
 
     async fn command_for_binary(&self, name: &'static str) -> Result<Command> {
-        let path = resolve_binary(name, None).await?;
+        let path = util::resolve_binary(name, env!("CARGO_PKG_NAME")).await?;
         let mut command = Command::new(path);
         command
             .current_dir(&self.tmp_dir.path().canonicalize()?)

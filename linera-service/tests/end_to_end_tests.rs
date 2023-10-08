@@ -8,9 +8,27 @@ mod common;
 
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::identifiers::ChainId;
-use linera_service::cli_wrappers::{Database, LocalNetwork, Network};
+use linera_service::{
+    cli_wrappers::{Database, LocalNetwork, Network},
+    util,
+};
 use linera_views::common::get_table_name;
 use std::time::Duration;
+
+#[tokio::test]
+async fn test_resolve_binary() {
+    util::resolve_binary("linera", env!("CARGO_PKG_NAME"))
+        .await
+        .unwrap();
+    util::resolve_binary("linera-proxy", env!("CARGO_PKG_NAME"))
+        .await
+        .unwrap();
+    assert!(
+        util::resolve_binary("linera-spaceship", env!("CARGO_PKG_NAME"))
+            .await
+            .is_err()
+    );
+}
 
 #[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]

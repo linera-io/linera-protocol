@@ -27,7 +27,7 @@ static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 async fn run_indexer(tmp_dir: &Rc<TempDir>) -> Child {
     let port = 8081;
-    let path = resolve_binary("linera-indexer", Some("linera-indexer-example"))
+    let path = resolve_binary("linera-indexer", "linera-indexer-example")
         .await
         .unwrap();
     let mut command = Command::new(path);
