@@ -9,6 +9,12 @@ homepage = "https://linera.dev"
 documentation = "https://docs.rs/linera-service-graphql-client/latest/linera_service_graphql_client/"
 license = "Apache-2.0"
 
+[features]
+default = ["rocksdb"]
+rocksdb = ["linera-service/rocksdb"]
+aws = ["linera-service/aws"]
+scylladb = ["linera-service/scylladb"]
+
 [dependencies]
 graphql_client = { version = "0.13", features = [ "reqwest" ] }
 linera-base = { workspace = true }
@@ -24,7 +30,7 @@ linera-execution = { workspace = true }
 
 [dev-dependencies]
 fungible = { workspace = true }
-linera-service = { workspace = true }
+linera-service = { workspace = true, features = ["test"] }
 once_cell = { workspace = true }
 test-log = { workspace = true, features = ["trace"] }
 tempfile = {workspace = true }

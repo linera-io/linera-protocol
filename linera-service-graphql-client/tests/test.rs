@@ -3,20 +3,17 @@
 
 #![cfg(any(feature = "rocksdb", feature = "aws", feature = "scylladb"))]
 
-use linera_service::cli_wrappers::resolve_binary;
-use once_cell::sync::Lazy;
-use std::{io::Read, rc::Rc};
-use tempfile::tempdir;
-use tokio::{process::Command, sync::Mutex};
-
 use fungible::{FungibleTokenAbi, InitialState};
 use linera_base::{data_types::Amount, identifiers::ChainId};
-use linera_service::cli_wrappers::{Database, LocalNetwork, Network};
+use linera_service::cli_wrappers::{resolve_binary, Database, LocalNetwork, Network};
 use linera_service_graphql_client::{
     applications, block, blocks, chains, request, transfer, Applications, Block, Blocks, Chains,
     Transfer,
 };
-use std::{collections::BTreeMap, str::FromStr};
+use once_cell::sync::Lazy;
+use std::{collections::BTreeMap, io::Read, rc::Rc, str::FromStr};
+use tempfile::tempdir;
+use tokio::{process::Command, sync::Mutex};
 
 /// A static lock to prevent integration tests from running in parallel.
 pub static INTEGRATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
@@ -54,7 +51,7 @@ async fn run_end_to_end_queries(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
     let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
-    let mut client = local_net.make_client(network);
+    let client = local_net.make_client(network);
     local_net.generate_initial_validator_config().await.unwrap();
 
     client.create_genesis_config().await.unwrap();
