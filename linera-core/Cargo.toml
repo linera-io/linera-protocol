@@ -35,6 +35,7 @@ linera-execution = { workspace = true }
 linera-storage = { workspace = true }
 linera-views = { workspace = true }
 lru = { workspace = true }
+prometheus = { workspace = true }
 proptest = { workspace = true, optional = true }
 rand = { workspace = true }
 serde = { workspace = true }
@@ -54,8 +55,6 @@ fungible = { workspace = true }
 linera-core = { path = ".", default-features = false, features = ["test"] }
 linera-views = { workspace = true }
 meta-counter = { workspace = true }
-metrics = { workspace = true }
-metrics-util = { workspace = true }
 reentrant-counter = { workspace = true }
 serde_json = { workspace = true }
 social = { workspace = true }

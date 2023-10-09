@@ -45,18 +45,47 @@ use linera_views::{
     value_splitting::DatabaseConsistencyError,
     views::{CryptoHashView, RootView, View, ViewError},
 };
-use metrics::increment_counter;
+use once_cell::sync::Lazy;
+use prometheus::{register_int_counter_vec, IntCounterVec};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc};
 
 /// The metric counting how often a value is read from storage.
-pub const READ_VALUE_COUNTER: &str = "read_value";
+pub static READ_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "read_value",
+        "The metric counting how often a value is read from storage",
+        &["chain_id"]
+    )
+    .expect("Counter can be created")
+});
 /// The metric counting how often a value is written to storage.
-pub const WRITE_VALUE_COUNTER: &str = "write_value";
+pub static WRITE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "write_value",
+        "The metric counting how often a value is written to storage",
+        &["chain_id"]
+    )
+    .expect("Counter can be created")
+});
 /// The metric counting how often a certificate is read from storage.
-pub const READ_CERTIFICATE_COUNTER: &str = "read_certificate";
+pub static READ_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "read_certificate",
+        "The metric counting how often a certificate is read from storage",
+        &["chain_id"]
+    )
+    .expect("Counter can be created")
+});
 /// The metric counting how often a certificate is written to storage.
-pub const WRITE_CERTIFICATE_COUNTER: &str = "write_certificate";
+pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "write_certificate",
+        "The metric counting how often a certificate is written to storage",
+        &["chain_id"]
+    )
+    .expect("Counter can be created")
+});
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
 use linera_execution::{Operation, SystemOperation, WasmApplication};
@@ -355,7 +384,7 @@ where
             Some(value) => value.chain_id().to_string(),
             None => "not found".to_string(),
         };
-        increment_counter!(READ_VALUE_COUNTER, &[("chain_id", id)]);
+        READ_VALUE_COUNTER.with_label_values(&[&id]).inc();
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
         Ok(value.with_hash_unchecked(hash))
     }
@@ -407,7 +436,7 @@ where
                 Some(value) => value.chain_id().to_string(),
                 None => "not found".to_string(),
             };
-            increment_counter!(READ_CERTIFICATE_COUNTER, &[("chain_id", id)]);
+            READ_CERTIFICATE_COUNTER.with_label_values(&[&id]).inc();
         };
         let value: CertificateValue =
             value_result?.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
@@ -446,7 +475,7 @@ where
 {
     fn add_value_to_batch(&self, value: &HashedValue, batch: &mut Batch) -> Result<(), ViewError> {
         let id = value.inner().chain_id().to_string();
-        increment_counter!(WRITE_VALUE_COUNTER, &[("chain_id", id)]);
+        WRITE_VALUE_COUNTER.with_label_values(&[&id]).inc();
         let value_key = bcs::to_bytes(&BaseKey::Value(value.hash()))?;
         batch.put_key_value(value_key.to_vec(), value)?;
         Ok(())
@@ -458,7 +487,7 @@ where
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
         let id = certificate.value().chain_id().to_string();
-        increment_counter!(WRITE_CERTIFICATE_COUNTER, &[("chain_id", id)]);
+        WRITE_CERTIFICATE_COUNTER.with_label_values(&[&id]).inc();
         let hash = certificate.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::Value(hash))?;

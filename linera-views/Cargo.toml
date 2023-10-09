@@ -19,7 +19,7 @@ test = ["anyhow", "tokio/macros", "tokio/parking_lot"]
 aws = ["aws-config", "aws-sdk-dynamodb", "aws-sdk-s3", "aws-smithy-http", "aws-types"]
 scylladb = ["scylla"]
 db_timings = []
-metrics = ["dep:hex", "dep:metrics"]
+metrics = ["dep:hex"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -32,7 +32,8 @@ hex = { workspace = true, optional = true }
 linera-base = { workspace = true }
 linera-views-derive = { workspace = true }
 linked-hash-map = { workspace = true }
-metrics = { workspace = true, optional = true }
+once_cell = { workspace = true }
+prometheus = { workspace = true }
 serde = { workspace = true }
 sha3 = { workspace = true }
 static_assertions = { workspace = true }

@@ -2,79 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use criterion::measurement::{Measurement, ValueFormatter};
-use metrics::{
-    atomics::AtomicU64, Counter, Gauge, Histogram, Key, KeyName, Recorder, SharedString, Unit,
-};
-use metrics_util::registry::{AtomicStorage, Registry};
-use std::{
-    collections::HashSet,
-    sync::{atomic::Ordering, Arc},
-};
-
-/// A metrics recorder that can be used for measurements with Criterion.
-#[derive(Clone)]
-pub struct BenchRecorder(Arc<Registry<Key, AtomicStorage>>);
-
-impl Default for BenchRecorder {
-    fn default() -> Self {
-        BenchRecorder(Arc::new(Registry::atomic()))
-    }
-}
-
-impl BenchRecorder {
-    /// Installs this as the global recorder.
-    pub fn install(self) -> Result<(), metrics::SetRecorderError> {
-        metrics::set_boxed_recorder(Box::new(self))
-    }
-
-    /// Visits every counter stored in this registry.
-    pub fn visit_counters<F>(&self, collect: F)
-    where
-        F: FnMut(&Key, &Arc<AtomicU64>),
-    {
-        self.0.visit_counters(collect)
-    }
-}
-
-impl Recorder for BenchRecorder {
-    fn describe_counter(&self, _key: KeyName, _unit: Option<Unit>, _description: SharedString) {}
-
-    fn describe_gauge(&self, _key: KeyName, _unit: Option<Unit>, _description: SharedString) {}
-
-    fn describe_histogram(&self, _key: KeyName, _unit: Option<Unit>, _description: SharedString) {}
-
-    fn register_counter(&self, key: &Key) -> Counter {
-        self.0
-            .get_or_create_counter(key, |c| Counter::from_arc(c.clone()))
-    }
-
-    fn register_gauge(&self, key: &Key) -> Gauge {
-        self.0
-            .get_or_create_gauge(key, |g| Gauge::from_arc(g.clone()))
-    }
-
-    fn register_histogram(&self, key: &Key) -> Histogram {
-        self.0
-            .get_or_create_histogram(key, |h| Histogram::from_arc(h.clone()))
-    }
-}
+use prometheus::proto::MetricType;
+use std::collections::HashSet;
 
 /// A `BenchRecorder` together with a set of counter names. This can be used in benachmarks that
 /// measure the sum of the selected counters instead of wall clock time.
 pub struct BenchRecorderMeasurement {
-    recorder: BenchRecorder,
     counter_names: HashSet<&'static str>,
 }
 
 impl BenchRecorderMeasurement {
-    pub fn new(
-        recorder: BenchRecorder,
-        counter_names: impl IntoIterator<Item = &'static str>,
-    ) -> Self {
-        let counters = counter_names.into_iter().collect();
+    pub fn new(counters: impl IntoIterator<Item = &'static str>) -> Self {
         Self {
-            recorder,
-            counter_names: counters,
+            counter_names: counters.into_iter().collect(),
         }
     }
 }
@@ -86,11 +26,16 @@ impl Measurement for BenchRecorderMeasurement {
 
     fn start(&self) -> Self::Intermediate {
         let mut total = 0;
-        self.recorder.visit_counters(|key, counter| {
-            if self.counter_names.contains(key.name()) {
-                total += counter.load(Ordering::SeqCst);
+        let metric_families = prometheus::gather();
+        for metric_family in metric_families {
+            if self.counter_names.contains(metric_family.get_name()) {
+                let metric_type = metric_family.get_field_type();
+                assert_eq!(metric_type, MetricType::COUNTER);
+                for metric in metric_family.get_metric() {
+                    total += metric.get_counter().get_value() as Self::Intermediate;
+                }
             }
-        });
+        }
         total
     }
 
