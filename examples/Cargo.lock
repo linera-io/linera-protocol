@@ -1619,6 +1619,7 @@ dependencies = [
  "linera-storage",
  "linera-views",
  "lru",
+ "prometheus",
  "proptest",
  "rand 0.8.5",
  "serde",
@@ -1708,11 +1709,12 @@ dependencies = [
  "bcs",
  "dashmap",
  "futures",
+ "lazy_static",
  "linera-base",
  "linera-chain",
  "linera-execution",
  "linera-views",
- "metrics",
+ "prometheus",
  "serde",
  "tempfile",
  "tokio",
@@ -1731,10 +1733,11 @@ dependencies = [
  "generic-array",
  "hex",
  "http",
+ "lazy_static",
  "linera-base",
  "linera-views-derive",
  "linked-hash-map",
- "metrics",
+ "prometheus",
  "rand 0.8.5",
  "serde",
  "sha3",
@@ -1752,6 +1755,7 @@ version = "0.4.1"
 dependencies = [
  "convert_case 0.6.0",
  "heck 0.4.1",
+ "hex",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
@@ -2044,28 +2048,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "metrics"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa8ebbd1a9e57bbab77b9facae7f5136aea44c356943bf9a198f647da64285d6"
-dependencies = [
- "ahash 0.8.3",
- "metrics-macros",
- "portable-atomic",
-]
-
-[[package]]
-name = "metrics-macros"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddece26afd34c31585c74a4db0630c376df271c285d682d1e55012197830b6df"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.15",
-]
-
-[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2276,12 +2258,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26072860ba924cbfa98ea39c8c19b4dd6a4a25423dbdf219c1eca91aa0cf6964"
 
 [[package]]
-name = "portable-atomic"
-version = "1.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "767eb9f07d4a5ebcb39bbf2d452058a93c011373abf6832e24194a1c3f004794"
-
-[[package]]
 name = "ppv-lite86"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2331,6 +2307,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "prometheus"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "449811d15fbdf5ceb5c1144416066429cf82316e2ec8ce0c1f6f8a02e7bbcf8c"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "memchr",
+ "parking_lot",
+ "protobuf",
+ "thiserror",
+]
+
+[[package]]
 name = "proptest"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2350,6 +2341,12 @@ dependencies = [
  "tempfile",
  "unarray",
 ]
+
+[[package]]
+name = "protobuf"
+version = "2.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
 name = "psm"

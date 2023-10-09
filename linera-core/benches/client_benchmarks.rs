@@ -8,12 +8,9 @@ use linera_core::client::{
     client_test_utils::{MakeMemoryStoreClient, NodeProvider, StoreBuilder, TestBuilder},
 };
 use linera_execution::system::{Account, Recipient, UserData};
-use linera_storage::{
-    Store, READ_CERTIFICATE_COUNTER, READ_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
-    WRITE_VALUE_COUNTER,
-};
-use linera_views::{views::ViewError, LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};
-use recorder::{BenchRecorder, BenchRecorderMeasurement};
+use linera_storage::Store;
+use linera_views::views::ViewError;
+use recorder::BenchRecorderMeasurement;
 use std::time::Duration;
 use tokio::runtime;
 
@@ -98,20 +95,14 @@ fn criterion_benchmark<M: Measurement + 'static>(c: &mut Criterion<M>) {
     });
 }
 
-fn create_recorder() -> BenchRecorder {
-    let recorder = BenchRecorder::default();
-    recorder.clone().install().unwrap();
-    recorder
-}
-
 criterion_group!(
     name = benches;
     config = Criterion::default()
         .measurement_time(Duration::from_secs(40))
-        .with_measurement(BenchRecorderMeasurement::new(create_recorder(), vec![
-            READ_VALUE_COUNTER, WRITE_VALUE_COUNTER,
-            READ_CERTIFICATE_COUNTER, WRITE_CERTIFICATE_COUNTER,
-            LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER
+        .with_measurement(BenchRecorderMeasurement::new(vec![
+            "read_value", "write_value",
+            "read_certificate", "write_certificate",
+            "load_view", "save_view"
         ]));
     targets = criterion_benchmark
 );

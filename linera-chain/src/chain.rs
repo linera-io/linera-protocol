@@ -15,7 +15,7 @@ use futures::stream::{self, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
-    ensure,
+    ensure, hex,
     identifiers::{ChainId, Destination, MessageId},
 };
 use linera_execution::{

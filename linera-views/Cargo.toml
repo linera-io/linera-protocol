@@ -19,7 +19,6 @@ test = ["anyhow", "tokio/macros", "tokio/parking_lot"]
 aws = ["aws-config", "aws-sdk-dynamodb", "aws-sdk-s3", "aws-smithy-http", "aws-types"]
 scylladb = ["scylla"]
 db_timings = []
-metrics = ["dep:hex", "dep:metrics"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -29,15 +28,15 @@ async-trait = { workspace = true }
 bcs = { workspace = true }
 futures = { workspace = true }
 generic-array = { workspace = true }
-hex = { workspace = true, optional = true }
 linera-base = { workspace = true }
 linera-views-derive = { workspace = true }
-metrics = { workspace = true, optional = true }
 serde = { workspace = true }
 sha3 = { workspace = true }
 thiserror = { workspace = true }
 linked-hash-map = { workspace = true }
 tempfile = { workspace = true }
+lazy_static = { workspace = true }
+prometheus = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync"] }

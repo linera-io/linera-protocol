@@ -127,11 +127,11 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
 
     let increment_counter = if root {
         quote! {
-            linera_views::increment_counter(
-                linera_views::LOAD_VIEW_COUNTER,
-                stringify!(#struct_name),
-                &context.base_key(),
-            );
+            linera_views::LOAD_VIEW_COUNTER.with_label_values(
+                &[
+                    stringify!(#struct_name).into(),
+                    &hex::encode(&context.base_key())
+                ]).inc();
         }
     } else {
         quote! {}
@@ -201,11 +201,11 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
         {
             async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
                 use linera_views::{common::Context, batch::Batch, views::View};
-                linera_views::increment_counter(
-                    linera_views::SAVE_VIEW_COUNTER,
-                    stringify!(#struct_name),
-                    &self.context().base_key(),
-                );
+                linera_views::SAVE_VIEW_COUNTER.with_label_values(
+                    &[
+                        stringify!(#struct_name),
+                        &hex::encode(&self.context().base_key())
+                    ]).inc();
                 let mut batch = Batch::new();
                 #(#flushes)*
                 self.context().write_batch(batch).await?;
@@ -738,11 +738,11 @@ pub mod tests {
                         context: #context
                     ) -> Result<Self, linera_views::views::ViewError> {
                         use linera_views::{futures::join, common::Context};
-                        linera_views::increment_counter(
-                            linera_views::LOAD_VIEW_COUNTER,
-                            stringify!(TestView),
-                            &context.base_key(),
-                        );
+                        linera_views::LOAD_VIEW_COUNTER.with_label_values(
+                            &[
+                                stringify!(TestView).into(),
+                                hex::encode(&context.base_key())
+                            ]).inc();
                         let index = 0;
                         let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
                         let register_fut =
@@ -858,11 +858,11 @@ pub mod tests {
                 {
                     async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
                         use linera_views::{common::Context, batch::Batch, views::View};
-                        linera_views::increment_counter(
-                            linera_views::SAVE_VIEW_COUNTER,
-                            stringify!(TestView),
-                            &self.context().base_key(),
-                        );
+                        linera_views::SAVE_VIEW_COUNTER.with_label_values(
+                            &[
+                                stringify!(TestView).into(),
+                                hex::encode(&self.context().base_key())
+                            ]).inc();
                         let mut batch = Batch::new();
                         self.register.flush(&mut batch)?;
                         self.collection.flush(&mut batch)?;

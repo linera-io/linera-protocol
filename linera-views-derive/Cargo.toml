@@ -17,3 +17,4 @@ heck = { workspace = true }
 quote = { workspace = true }
 proc-macro2 = { workspace = true }
 convert_case = { workspace = true }
+hex = { workspace = true }

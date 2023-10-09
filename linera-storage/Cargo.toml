@@ -12,7 +12,13 @@ edition = "2021"
 
 [features]
 default = ["wasmer", "rocksdb"]
-test = ["tokio/rt", "tokio/test-util", "tokio/time", "linera-execution/test", "linera-views/test"]
+test = [
+    "tokio/rt",
+    "tokio/test-util",
+    "tokio/time",
+    "linera-execution/test",
+    "linera-views/test",
+]
 wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
 aws = ["linera-views/aws"]
@@ -25,13 +31,14 @@ async-trait = { workspace = true }
 bcs = { workspace = true }
 dashmap = { workspace = true }
 futures = { workspace = true }
+lazy_static = { workspace = true }
 linera-base = { workspace = true }
 linera-chain = { workspace = true }
 linera-execution = { workspace = true }
-linera-views = { workspace = true, features = ["metrics"] }
-metrics = { workspace = true }
-tracing = { workspace = true }
+linera-views = { workspace = true }
+prometheus = { workspace = true }
 serde = { workspace = true }
+tracing = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 
 [dev-dependencies]

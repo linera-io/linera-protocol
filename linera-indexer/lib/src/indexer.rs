@@ -11,7 +11,7 @@ use crate::{
 use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{extract::Extension, routing::get, Router};
-use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
+use linera_base::{crypto::CryptoHash, data_types::BlockHeight, hex, identifiers::ChainId};
 use linera_chain::data_types::HashedValue;
 use linera_views::{
     common::{Context, ContextFromDb, KeyValueStoreClient},
