@@ -3025,6 +3025,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
+ "structopt",
  "tokio",
  "tokio-test",
  "wasmtime",
