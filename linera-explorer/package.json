@@ -1,7 +1,7 @@
 {
   "author": "linera <linera@contact.com>",
   "name": "linera-explorer",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "scripts": {
     "clean": "rm -rf pkg dist package-lock.json gql",
     "wipe": "npm run clean && rm -rf node_modules",

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_service::cli_wrappers::resolve_binary;
+use linera_service::util::resolve_binary;
 use std::{io::Read, rc::Rc};
 use tempfile::tempdir;
 use tokio::process::Command;
@@ -9,7 +9,7 @@ use tokio::process::Command;
 #[test_log::test(tokio::test)]
 async fn test_check_indexer_schema() {
     let tmp_dir = Rc::new(tempdir().unwrap());
-    let path = resolve_binary("linera-indexer", Some("linera-indexer-example"))
+    let path = resolve_binary("linera-indexer", "linera-indexer-example")
         .await
         .unwrap();
     let mut command = Command::new(path);
@@ -33,7 +33,7 @@ async fn test_check_indexer_schema() {
 #[test_log::test(tokio::test)]
 async fn test_check_indexer_operations_schema() {
     let tmp_dir = Rc::new(tempdir().unwrap());
-    let path = resolve_binary("linera-indexer", Some("linera-indexer-example"))
+    let path = resolve_binary("linera-indexer", "linera-indexer-example")
         .await
         .unwrap();
     let mut command = Command::new(path);

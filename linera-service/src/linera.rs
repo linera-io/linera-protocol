@@ -585,7 +585,7 @@ fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
 
 #[derive(StructOpt)]
 #[structopt(
-    name = "Linera Client",
+    name = "Linera client tool",
     about = "A Byzantine-fault tolerant sidechain with low-latency finality and high throughput"
 )]
 struct ClientOptions {
@@ -1796,7 +1796,7 @@ async fn main() -> Result<(), anyhow::Error> {
             ProjectCommand::Test { path } => {
                 let path = path.clone().unwrap_or_else(|| env::current_dir().unwrap());
                 let project = Project::from_existing_project(path)?;
-                Ok(project.test()?)
+                Ok(project.test().await?)
             }
             ProjectCommand::PublishAndCreate { .. } => options.run_command_with_storage().await,
         },

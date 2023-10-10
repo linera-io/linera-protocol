@@ -12,13 +12,14 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use tracing::{debug, info};
+use tracing::debug;
 
 pub struct Project {
     root: PathBuf,
 }
 
 const RUNNER_BIN_NAME: &str = "test-runner";
+const RUNNER_BIN_CRATE: &str = "linera-sdk";
 
 impl Project {
     pub fn new(root: PathBuf) -> Result<Self> {
@@ -74,15 +75,12 @@ impl Project {
         Ok(Self { root })
     }
 
-    pub fn test(&self) -> Result<()> {
-        if !Self::runner_is_installed()? {
-            debug!("Linera test runner not found");
-            Self::install_test_runner()?;
-        }
+    pub async fn test(&self) -> Result<()> {
+        let runner_path = util::resolve_binary(RUNNER_BIN_NAME, RUNNER_BIN_CRATE).await?;
         let unit_tests = Command::new("cargo")
             .env(
                 "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER",
-                Self::runner_path()?.display().to_string().as_str(),
+                runner_path.display().to_string().as_str(),
             )
             .arg("test")
             .args(["--target", "wasm32-unknown-unknown"])
@@ -102,10 +100,6 @@ impl Project {
             bail!("integration tests failed")
         }
         Ok(())
-    }
-
-    pub fn runner_is_installed() -> Result<bool> {
-        Ok(Self::runner_path()?.exists())
     }
 
     /// Finds the workspace for a given crate. If the workspace
@@ -128,23 +122,6 @@ impl Project {
             }
         }
         Ok(self.root.as_path())
-    }
-
-    fn install_test_runner() -> Result<()> {
-        info!("installing test runner...");
-        let cargo_install = Command::new("cargo")
-            .args(["install", "linera-sdk"])
-            .args(["--bin", RUNNER_BIN_NAME])
-            .spawn()?
-            .wait()?;
-        if !cargo_install.success() {
-            bail!("failed to install {}", &RUNNER_BIN_NAME)
-        }
-        Ok(())
-    }
-
-    fn runner_path() -> Result<PathBuf> {
-        util::resolve_cargo_binary(RUNNER_BIN_NAME)
     }
 
     fn create_source_directory(project_root: &Path) -> Result<PathBuf> {
