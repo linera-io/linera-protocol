@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient, WallClock};
+use crate::{chain_guards::ChainGuards, DbStoreClient, DbStoreInner, WallClock};
 use linera_execution::WasmRuntime;
 use linera_views::{
     common::TableStatus,
@@ -19,9 +19,9 @@ use {
 #[path = "unit_tests/scylla_db.rs"]
 mod tests;
 
-type ScyllaDbStore = DbStore<ScyllaDbClient>;
+type ScyllaDbStoreInner = DbStoreInner<ScyllaDbClient>;
 
-impl ScyllaDbStore {
+impl ScyllaDbStoreInner {
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
         store_config: ScyllaDbKvStoreConfig,
@@ -92,7 +92,7 @@ impl ScyllaDbStoreClient<TestClock> {
         clock: TestClock,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let (store, table_status) =
-            ScyllaDbStore::new_for_testing(store_config, wasm_runtime).await?;
+            ScyllaDbStoreInner::new_for_testing(store_config, wasm_runtime).await?;
         let store_client = ScyllaDbStoreClient {
             client: Arc::new(store),
             clock,
@@ -106,7 +106,7 @@ impl ScyllaDbStoreClient<WallClock> {
         store_config: ScyllaDbKvStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, ScyllaDbContextError> {
-        let store = ScyllaDbStore::initialize(store_config, wasm_runtime).await?;
+        let store = ScyllaDbStoreInner::initialize(store_config, wasm_runtime).await?;
         let store_client = ScyllaDbStoreClient {
             client: Arc::new(store),
             clock: WallClock,
@@ -118,7 +118,7 @@ impl ScyllaDbStoreClient<WallClock> {
         store_config: ScyllaDbKvStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
-        let (store, table_status) = ScyllaDbStore::new(store_config, wasm_runtime).await?;
+        let (store, table_status) = ScyllaDbStoreInner::new(store_config, wasm_runtime).await?;
         let store_client = ScyllaDbStoreClient {
             client: Arc::new(store),
             clock: WallClock,

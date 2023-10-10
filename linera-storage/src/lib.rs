@@ -245,7 +245,7 @@ pub trait Store: Sized {
 }
 
 /// A store implemented from a [`KeyValueStoreClient`]
-pub struct DbStore<Client> {
+pub struct DbStoreInner<Client> {
     client: Client,
     guards: ChainGuards,
     user_applications: Arc<DashMap<UserApplicationId, UserApplicationCode>>,
@@ -255,7 +255,7 @@ pub struct DbStore<Client> {
 #[derive(Clone)]
 /// A DbStoreClient wrapping with Arc
 pub struct DbStoreClient<Client, Clock> {
-    client: Arc<DbStore<Client>>,
+    client: Arc<DbStoreInner<Client>>,
     pub clock: Clock,
 }
 

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_guards::ChainGuards, DbStore, DbStoreClient, WallClock};
+use crate::{chain_guards::ChainGuards, DbStoreClient, DbStoreInner, WallClock};
 use dashmap::DashMap;
 use linera_execution::WasmRuntime;
 use linera_views::{
@@ -22,9 +22,9 @@ use {
 #[path = "unit_tests/dynamo_db.rs"]
 mod tests;
 
-type DynamoDbStore = DbStore<DynamoDbClient>;
+type DynamoDbStoreInner = DbStoreInner<DynamoDbClient>;
 
-impl DynamoDbStore {
+impl DynamoDbStoreInner {
     #[cfg(any(test, feature = "test"))]
     pub async fn new_for_testing(
         store_config: DynamoDbKvStoreConfig,
@@ -96,7 +96,7 @@ impl DynamoDbStoreClient<TestClock> {
         clock: TestClock,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
         let (store, table_status) =
-            DynamoDbStore::new_for_testing(store_config, wasm_runtime).await?;
+            DynamoDbStoreInner::new_for_testing(store_config, wasm_runtime).await?;
         let store_client = DynamoDbStoreClient {
             client: Arc::new(store),
             clock,
@@ -110,7 +110,7 @@ impl DynamoDbStoreClient<WallClock> {
         store_config: DynamoDbKvStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, DynamoDbContextError> {
-        let store = DynamoDbStore::initialize(store_config, wasm_runtime).await?;
+        let store = DynamoDbStoreInner::initialize(store_config, wasm_runtime).await?;
         let store_client = DynamoDbStoreClient {
             client: Arc::new(store),
             clock: WallClock,
@@ -122,7 +122,7 @@ impl DynamoDbStoreClient<WallClock> {
         store_config: DynamoDbKvStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), DynamoDbContextError> {
-        let (store, table_status) = DynamoDbStore::new(store_config, wasm_runtime).await?;
+        let (store, table_status) = DynamoDbStoreInner::new(store_config, wasm_runtime).await?;
         let store_client = DynamoDbStoreClient {
             client: Arc::new(store),
             clock: WallClock,
