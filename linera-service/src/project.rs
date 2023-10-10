@@ -12,7 +12,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use tracing::{debug, info};
+use tracing::debug;
 
 pub struct Project {
     root: PathBuf,
@@ -76,14 +76,11 @@ impl Project {
     }
 
     pub async fn test(&self) -> Result<()> {
-        if Self::runner_path().await.is_err() {
-            debug!("Linera test runner not found");
-            Self::install_test_runner()?;
-        }
+        let runner_path = util::resolve_binary(RUNNER_BIN_NAME, RUNNER_BIN_CRATE).await?;
         let unit_tests = Command::new("cargo")
             .env(
                 "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER",
-                Self::runner_path().await?.display().to_string().as_str(),
+                runner_path.display().to_string().as_str(),
             )
             .arg("test")
             .args(["--target", "wasm32-unknown-unknown"])
@@ -125,23 +122,6 @@ impl Project {
             }
         }
         Ok(self.root.as_path())
-    }
-
-    fn install_test_runner() -> Result<()> {
-        info!("installing test runner...");
-        let cargo_install = Command::new("cargo")
-            .args(["install", "linera-sdk"])
-            .args(["--bin", RUNNER_BIN_NAME])
-            .spawn()?
-            .wait()?;
-        if !cargo_install.success() {
-            bail!("failed to install {}", &RUNNER_BIN_NAME)
-        }
-        Ok(())
-    }
-
-    async fn runner_path() -> Result<PathBuf> {
-        util::resolve_binary(RUNNER_BIN_NAME, RUNNER_BIN_CRATE).await
     }
 
     fn create_source_directory(project_root: &Path) -> Result<PathBuf> {
