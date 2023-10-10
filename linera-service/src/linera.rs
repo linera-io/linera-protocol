@@ -585,7 +585,7 @@ fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
 
 #[derive(StructOpt)]
 #[structopt(
-    name = "Linera Client",
+    name = "Linera client tool",
     about = "A Byzantine-fault tolerant sidechain with low-latency finality and high throughput"
 )]
 struct ClientOptions {
