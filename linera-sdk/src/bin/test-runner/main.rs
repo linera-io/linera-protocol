@@ -29,23 +29,38 @@ compile_error!("The test runner is meant to be compiled for the host target");
 
 mod mock_system_api;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use mock_system_api::Resources;
-use std::process::ExitCode;
+use std::{
+    path::{Path, PathBuf},
+    process::ExitCode,
+};
+use structopt::StructOpt;
 use wasmtime::*;
+
+#[derive(StructOpt)]
+#[structopt(
+    name = "Linera Wasm test runner",
+    about = "A binary for running unit tests for Linera applications implemented in WebAssembly."
+)]
+struct Options {
+    module_path: PathBuf,
+}
 
 /// Loads a test Wasm module and runs all test functions annotated by [`webassembly-test`].
 ///
 /// Prints out a summary of executed tests and their results.
 #[tokio::main]
 async fn main() -> Result<ExitCode> {
+    let options = Options::from_args_safe()?;
+
     let mut report = TestReport::default();
     let mut engine_config = Config::default();
     engine_config.wasm_backtrace_details(WasmBacktraceDetails::Enable);
     engine_config.async_support(true);
     let engine = Engine::new(&engine_config)?;
     let mut linker = Linker::new(&engine);
-    let test_module = load_test_module(&engine)?;
+    let test_module = load_test_module(&options.module_path, &engine)?;
     let tests: Vec<_> = test_module.exports().filter_map(Test::new).collect();
 
     mock_system_api::add_to_linker(&mut linker)?;
@@ -62,20 +77,9 @@ async fn main() -> Result<ExitCode> {
 }
 
 /// Loads the input test Wasm module specified as a command line argument.
-fn load_test_module(engine: &Engine) -> Result<Module> {
-    let module_path = parse_args()?;
+fn load_test_module(module_path: &Path, engine: &Engine) -> Result<Module> {
     let module = Module::from_file(engine, module_path)?;
     Ok(module)
-}
-
-/// Parses command line arguments to extract the path of the input test module.
-fn parse_args() -> Result<String> {
-    match std::env::args().nth(1) {
-        Some(file_path) => Ok(file_path),
-        None => {
-            bail!("usage: test-runner tests.wasm");
-        }
-    }
 }
 
 /// Information of a test in the input Wasm module.
