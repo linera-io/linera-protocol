@@ -223,27 +223,23 @@ ChainManagerInfo:
         NEWTYPE:
           TYPENAME: MultiOwnerManagerInfo
 ChainOwnership:
-  ENUM:
-    0:
-      None: UNIT
-    1:
-      Single:
-        STRUCT:
-          - owner:
-              TYPENAME: Owner
-          - public_key:
-              TYPENAME: PublicKey
-    2:
-      Multi:
-        STRUCT:
-          - owners:
-              MAP:
-                KEY:
-                  TYPENAME: Owner
-                VALUE:
-                  TYPENAME: OwnerConfig
-          - multi_leader_rounds:
-              TYPENAME: RoundNumber
+  STRUCT:
+    - super_owners:
+        MAP:
+          KEY:
+            TYPENAME: Owner
+          VALUE:
+            TYPENAME: PublicKey
+    - owners:
+        MAP:
+          KEY:
+            TYPENAME: Owner
+          VALUE:
+            TUPLE:
+              - TYPENAME: PublicKey
+              - U64
+    - multi_leader_rounds:
+        TYPENAME: RoundNumber
 ChannelFullName:
   STRUCT:
     - application_id:
@@ -424,14 +420,8 @@ MessageId:
     - index: U32
 MultiOwnerManagerInfo:
   STRUCT:
-    - owners:
-        MAP:
-          KEY:
-            TYPENAME: Owner
-          VALUE:
-            TYPENAME: OwnerConfig
-    - multi_leader_rounds:
-        TYPENAME: RoundNumber
+    - ownership:
+        TYPENAME: ChainOwnership
     - requested_proposed:
         OPTION:
           TYPENAME: BlockProposal
@@ -580,19 +570,6 @@ OutgoingMessage:
 Owner:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
-OwnerConfig:
-  STRUCT:
-    - public_key:
-        TYPENAME: PublicKey
-    - kind:
-        TYPENAME: OwnerKind
-    - weight: U64
-OwnerKind:
-  ENUM:
-    0:
-      Super: UNIT
-    1:
-      Regular: UNIT
 PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -824,7 +801,9 @@ SystemOperation:
         STRUCT:
           - new_owners:
               SEQ:
-                TYPENAME: OwnerConfig
+                TUPLE:
+                  - TYPENAME: PublicKey
+                  - U64
           - multi_leader_rounds:
               TYPENAME: RoundNumber
     6:

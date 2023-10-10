@@ -9,7 +9,7 @@ use std::{
 };
 use thiserror::Error;
 
-use crate::{crypto::PublicKey, doc_scalar};
+use crate::doc_scalar;
 
 /// A non-negative amount of tokens.
 ///
@@ -411,42 +411,6 @@ doc_scalar!(
     RoundNumber,
     "A number to identify successive attempts to decide a value in a consensus protocol."
 );
-
-/// The type of an owner, determining when and how they can propose blocks for this chain.
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
-pub enum OwnerKind {
-    /// An owner that can propose fast blocks, and even if they are not the round leader.
-    Super,
-    /// A regular owner that can only propose slow blocks, and only if they are round leader or the
-    /// current round is still a multi-leader round.
-    Regular,
-}
-
-/// The configuration that determines when and how an owner can propose blocks for this chain.
-#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
-pub struct OwnerConfig {
-    pub public_key: PublicKey,
-    pub kind: OwnerKind,
-    pub weight: u64,
-}
-
-impl OwnerConfig {
-    pub fn new_regular(public_key: PublicKey, weight: u64) -> Self {
-        Self {
-            public_key,
-            kind: OwnerKind::Regular,
-            weight,
-        }
-    }
-
-    pub fn new_super(public_key: PublicKey, weight: u64) -> Self {
-        Self {
-            public_key,
-            kind: OwnerKind::Super,
-            weight,
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {

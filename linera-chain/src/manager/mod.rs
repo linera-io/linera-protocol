@@ -4,8 +4,6 @@
 mod multi;
 mod single;
 
-use std::iter;
-
 pub use multi::{MultiOwnerManager, MultiOwnerManagerInfo};
 pub use single::{SingleOwnerManager, SingleOwnerManagerInfo};
 
@@ -15,7 +13,7 @@ use crate::{
 };
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{BlockHeight, OwnerConfig, RoundNumber, Timestamp},
+    data_types::{BlockHeight, RoundNumber, Timestamp},
     doc_scalar, ensure,
     identifiers::ChainId,
 };
@@ -54,34 +52,11 @@ impl ChainManager {
         height: BlockHeight,
         now: Timestamp,
     ) -> Result<(), ChainError> {
-        match ownership {
-            ChainOwnership::None => {
-                *self = ChainManager::None;
-            }
-            ChainOwnership::Single { owner, public_key } => {
-                let owners = iter::once((*owner, OwnerConfig::new_super(*public_key, 100)));
-                *self = ChainManager::Multi(Box::new(MultiOwnerManager::new(
-                    owners,
-                    RoundNumber(2),
-                    height.0,
-                    now,
-                )?));
-            }
-            ChainOwnership::Multi {
-                owners,
-                multi_leader_rounds,
-            } => {
-                let owners = owners
-                    .iter()
-                    .map(|(owner, config)| (*owner, config.clone()));
-                *self = ChainManager::Multi(Box::new(MultiOwnerManager::new(
-                    owners,
-                    *multi_leader_rounds,
-                    height.0,
-                    now,
-                )?));
-            }
-        }
+        *self = ChainManager::Multi(Box::new(MultiOwnerManager::new(
+            ownership.clone(),
+            height.0,
+            now,
+        )?));
         Ok(())
     }
 

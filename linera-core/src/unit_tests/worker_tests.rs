@@ -2192,8 +2192,8 @@ where
         assert!(matches!(
             recipient_chain.manager.get(),
             ChainManager::Multi(multi)
-                if multi.owners.contains_key(&recipient_key_pair.public().into())
-                    && multi.owners.len() == 1
+                if multi.ownership.super_owners.contains_key(&recipient_key_pair.public().into())
+                    && multi.ownership.super_owners.len() == 1 && multi.ownership.owners.is_empty()
         ));
         assert_eq!(recipient_chain.confirmed_log.count(), 1);
         assert_eq!(
@@ -3330,10 +3330,7 @@ where
 
     // Add another owner and use the leader-based protocol in all rounds.
     let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeMultipleOwners {
-        new_owners: vec![
-            OwnerConfig::new_regular(pub_key0, 100),
-            OwnerConfig::new_regular(pub_key1, 100),
-        ],
+        new_owners: vec![(pub_key0, 100), (pub_key1, 100)],
         multi_leader_rounds: RoundNumber::from(0),
     });
     let (executed_block0, _) = worker.stage_block_execution(block0).await.unwrap();
@@ -3346,17 +3343,18 @@ where
 
     // The leader sequence is pseudorandom but deterministic. The first leader is owner 1.
     let manager = multi_manager(&response.info.manager);
-    assert_eq!(manager.leader, Some(Owner::from(pub_key1)));
+    assert_eq!(manager.leader, Some(Owner::from(pub_key0)));
 
-    // So owner 0 cannot propose a block in this round. And the next round hasn't started yet.
-    let proposal = make_child_block(&value0).into_simple_proposal(&key_pairs[0]);
+    // So owner 1 cannot propose a block in this round. And the next round hasn't started yet.
+    let proposal =
+        make_child_block(&value0).into_proposal_with_round(&key_pairs[1], RoundNumber(1));
     let result = worker.handle_block_proposal(proposal).await;
     assert!(matches!(result, Err(WorkerError::InvalidOwner)));
     let proposal =
-        make_child_block(&value0).into_proposal_with_round(&key_pairs[0], RoundNumber(1));
+        make_child_block(&value0).into_proposal_with_round(&key_pairs[1], RoundNumber(2));
     let result = worker.handle_block_proposal(proposal).await;
     assert!(matches!(result, Err(WorkerError::ChainError(ref error))
-        if matches!(**error, ChainError::WrongRound(RoundNumber::ZERO))
+        if matches!(**error, ChainError::WrongRound(RoundNumber(1)))
     ));
 
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
@@ -3387,19 +3385,19 @@ where
         .await
         .unwrap();
     let manager = multi_manager(&response.info.manager);
-    assert_eq!(manager.leader, Some(Owner::from(pub_key0)));
+    assert_eq!(manager.leader, Some(Owner::from(pub_key1)));
 
-    // Now owner 0 can propose a block, but owner 1 can't.
+    // Now owner 1 can propose a block, but owner 0 can't.
     let block1 = make_child_block(&value0);
     let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await.unwrap();
     let proposal1_wrong_owner = block1
         .clone()
-        .into_proposal_with_round(&key_pairs[1], RoundNumber(1));
+        .into_proposal_with_round(&key_pairs[0], RoundNumber(2));
     let result = worker.handle_block_proposal(proposal1_wrong_owner).await;
     assert!(matches!(result, Err(WorkerError::InvalidOwner)));
     let proposal1 = block1
         .clone()
-        .into_proposal_with_round(&key_pairs[0], RoundNumber(1));
+        .into_proposal_with_round(&key_pairs[1], RoundNumber(2));
     let (response, _) = worker.handle_block_proposal(proposal1).await.unwrap();
     let value1 = HashedValue::new_validated(executed_block1.clone());
     let manager = multi_manager(&response.info.manager);
@@ -3416,7 +3414,7 @@ where
     let value = HashedValue::new_confirmed(executed_block1.clone());
     assert_eq!(vote.value, value.lite());
 
-    // Instead of submitting the confirmed block certificate, let rounds 1 to 4 time out, too.
+    // Instead of submitting the confirmed block certificate, let rounds 2 to 4 time out, too.
     let certificate_timeout =
         make_certificate_with_round(&committee, &worker, value_timeout.clone(), RoundNumber(4));
     let (response, _) = worker

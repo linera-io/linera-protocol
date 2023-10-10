@@ -60,18 +60,15 @@ use crate::{
 };
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{BlockHeight, OwnerConfig, OwnerKind, RoundNumber, Timestamp},
+    data_types::{BlockHeight, RoundNumber, Timestamp},
     ensure,
     identifiers::{ChainId, Owner},
 };
-use linera_execution::committee::Epoch;
+use linera_execution::{committee::Epoch, ChainOwnership};
 use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use rand_distr::{Distribution, WeightedAliasIndex};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, HashMap},
-    time::Duration,
-};
+use std::time::Duration;
 use tracing::error;
 
 const TIMEOUT: Duration = Duration::from_secs(10);
@@ -80,14 +77,11 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MultiOwnerManager {
     /// The public keys, weights and types of the chain's owners.
-    pub owners: BTreeMap<Owner, OwnerConfig>,
-    /// The number of initial rounds in which all owners are allowed to propose blocks,
-    /// i.e. the first round with only a single leader.
-    pub multi_leader_rounds: RoundNumber,
+    pub ownership: ChainOwnership,
     /// The seed for the pseudo-random number generator that determines the round leaders.
     pub seed: u64,
     /// The probability distribution for choosing a round leader.
-    pub distribution: WeightedAliasIndex<u64>,
+    pub distribution: Option<WeightedAliasIndex<u64>>,
     /// Latest authenticated block that we have received and checked.
     pub proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
@@ -104,20 +98,21 @@ pub struct MultiOwnerManager {
 }
 
 impl MultiOwnerManager {
-    pub fn new(
-        owners: impl IntoIterator<Item = (Owner, OwnerConfig)>,
-        multi_leader_rounds: RoundNumber,
-        seed: u64,
-        now: Timestamp,
-    ) -> Result<Self, ChainError> {
-        let owners: BTreeMap<Owner, OwnerConfig> = owners.into_iter().collect();
-        let weights = owners.values().map(|conf| conf.weight).collect();
-        let distribution = WeightedAliasIndex::new(weights)?;
+    pub fn new(ownership: ChainOwnership, seed: u64, now: Timestamp) -> Result<Self, ChainError> {
+        let distribution = if !ownership.owners.is_empty() {
+            let weights = ownership
+                .owners
+                .values()
+                .map(|(_, weight)| *weight)
+                .collect();
+            Some(WeightedAliasIndex::new(weights)?)
+        } else {
+            None
+        };
         let round_timeout = now.saturating_add(TIMEOUT);
 
         Ok(MultiOwnerManager {
-            owners,
-            multi_leader_rounds,
+            ownership,
             seed,
             distribution,
             proposed: None,
@@ -143,6 +138,7 @@ impl MultiOwnerManager {
             .chain(self.proposed.iter().map(|proposal| proposal.content.round))
             .max()
             .unwrap_or_default()
+            .max(self.ownership.first_round())
     }
 
     /// Returns the most recent vote we cast.
@@ -154,6 +150,7 @@ impl MultiOwnerManager {
     pub fn check_proposed_block(&self, proposal: &BlockProposal) -> Result<Outcome, ChainError> {
         let new_round = proposal.content.round;
         let new_block = &proposal.content.block;
+        let owner = &proposal.owner;
         let validated = proposal.validated.as_ref();
         if let Some(validated) = validated {
             ensure!(
@@ -167,15 +164,15 @@ impl MultiOwnerManager {
         };
         // In leader rotation mode, the round must equal the expected one exactly.
         // Only the first single-leader round can be entered at any time.
-        if new_round > self.multi_leader_rounds {
-            ensure!(
-                expected_round == new_round,
-                ChainError::WrongRound(expected_round)
-            );
-        } else {
+        if self.is_super(owner) || new_round <= self.ownership.first_single_leader_round() {
             ensure!(
                 expected_round <= new_round,
                 ChainError::InsufficientRound(expected_round)
+            );
+        } else {
+            ensure!(
+                expected_round == new_round,
+                ChainError::WrongRound(expected_round)
             );
         }
         if let Some(old_proposal) = &self.proposed {
@@ -219,8 +216,8 @@ impl MultiOwnerManager {
         let Some(key_pair) = key_pair else {
             return false; // We are not a validator.
         };
-        if now < self.round_timeout {
-            return false; // Round has not timed out yet.
+        if now < self.round_timeout || self.ownership.owners.is_empty() {
+            return false; // Round has not timed out yet, or there are no regular owners.
         }
         let current_round = self.current_round();
         if let Some(vote) = &self.timeout_vote {
@@ -288,14 +285,10 @@ impl MultiOwnerManager {
             }
         }
         if let Some(key_pair) = key_pair {
-            // Vote to validate.
             let BlockAndRound { block, round } = proposal.content;
             let executed_block = outcome.with(block);
-            let Some(config) = self.owners.get(&proposal.owner) else {
-                error!("Called create_vote with a proposal by a non-owner.");
-                return;
-            };
-            let value = if config.kind == OwnerKind::Super {
+            // If this is a fast block, vote to confirm. Otherwise vote to validate.
+            let value = if round == RoundNumber::ZERO {
                 HashedValue::new_confirmed(executed_block)
             } else {
                 HashedValue::new_validated(executed_block)
@@ -362,32 +355,45 @@ impl MultiOwnerManager {
     /// Returns the public key of the block proposal's signer, if they are a valid owner and allowed
     /// to propose a block in the proposal's round.
     pub fn verify_owner(&self, proposal: &BlockProposal) -> Option<PublicKey> {
-        let config = self.owners.get(&proposal.owner)?;
-        if proposal.content.round < self.multi_leader_rounds || config.kind == OwnerKind::Super {
+        if let Some(public_key) = self.ownership.super_owners.get(&proposal.owner) {
+            return Some(*public_key);
+        }
+        if proposal.content.round == RoundNumber::ZERO {
+            return None; // Only super owners can propose in round 0.
+        }
+        if proposal.content.round <= self.ownership.multi_leader_rounds {
             // Not in leader rotation mode; any owner is allowed to propose.
-            return Some(config.public_key);
+            return self
+                .ownership
+                .owners
+                .get(&proposal.owner)
+                .map(|(public_key, _)| *public_key);
         };
         let index = self.round_leader_index(proposal.content.round)?;
-        let leader = self.owners.keys().nth(index)?;
-        (*leader == proposal.owner).then_some(config.public_key)
+        let (leader, (public_key, _)) = self.ownership.owners.iter().nth(index)?;
+        (*leader == proposal.owner).then_some(*public_key)
     }
 
     /// Returns the leader who is allowed to propose a block in the given round, or `None` if every
-    /// owner is allowed to propose.
+    /// owner is allowed to propose. Exception: In round 0, only super owners can propose.
     fn round_leader(&self, round: RoundNumber) -> Option<&Owner> {
-        if round < self.multi_leader_rounds {
+        if round <= self.ownership.multi_leader_rounds {
             return None;
         };
         let index = self.round_leader_index(round)?;
-        self.owners.keys().nth(index)
+        self.ownership.owners.keys().nth(index)
     }
 
-    /// Returns the index of the leader who is allowed to propose a block in the given round, or
-    /// `None` if every owner is allowed to propose.
+    /// Returns the index of the leader who is allowed to propose a block in the given round.
     fn round_leader_index(&self, round: RoundNumber) -> Option<usize> {
         let seed = u64::from(round.0).rotate_left(32).wrapping_add(self.seed);
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        Some(self.distribution.sample(&mut rng))
+        Some(self.distribution.as_ref()?.sample(&mut rng))
+    }
+
+    /// Returns whether the owner is a super owner.
+    fn is_super(&self, owner: &Owner) -> bool {
+        self.ownership.super_owners.contains_key(owner)
     }
 }
 
@@ -397,10 +403,7 @@ impl MultiOwnerManager {
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
 pub struct MultiOwnerManagerInfo {
     /// The configuration of the chain's owners.
-    pub owners: HashMap<Owner, OwnerConfig>,
-    /// The number of initial rounds in which all owners are allowed to propose blocks,
-    /// i.e. the first round with only a single leader.
-    pub multi_leader_rounds: RoundNumber,
+    pub ownership: ChainOwnership,
     /// Latest authenticated block that we have received, if requested.
     pub requested_proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
@@ -427,8 +430,7 @@ impl From<&MultiOwnerManager> for MultiOwnerManagerInfo {
     fn from(manager: &MultiOwnerManager) -> Self {
         let current_round = manager.current_round();
         MultiOwnerManagerInfo {
-            owners: manager.owners.clone().into_iter().collect(),
-            multi_leader_rounds: manager.multi_leader_rounds,
+            ownership: manager.ownership.clone(),
             requested_proposed: None,
             requested_locked: None,
             leader_timeout: manager.leader_timeout.clone(),
@@ -472,7 +474,7 @@ impl MultiOwnerManagerInfo {
         if proposal_round != Some(self.current_round) && locked_round != Some(self.current_round) {
             // There's no proposal or locked block yet in the current round.
             Some(self.current_round)
-        } else if self.current_round < self.multi_leader_rounds {
+        } else if self.current_round <= self.ownership.multi_leader_rounds {
             // We're still in multi-leader mode, so we can propose in the next round at any time.
             self.current_round.try_add_one().ok()
         } else {

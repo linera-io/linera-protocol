@@ -16,7 +16,7 @@ use linera_core::{
     tracker::NotificationTracker,
     worker::{Notification, Reason},
 };
-use linera_execution::{ChainOwnership, Message, SystemMessage};
+use linera_execution::{Message, SystemMessage};
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use std::{sync::Arc, time::Duration};
@@ -171,17 +171,20 @@ where
                 for outgoing_message in &executed_block.messages {
                     if let OutgoingMessage {
                         destination: Destination::Recipient(new_id),
-                        message:
-                            Message::System(SystemMessage::OpenChain {
-                                ownership: ChainOwnership::Single { public_key, .. },
-                                ..
-                            }),
+                        message: Message::System(SystemMessage::OpenChain { ownership, .. }),
                         ..
                     } = outgoing_message
                     {
                         {
                             let mut context_guard = context.lock().await;
-                            let key_pair = context_guard.wallet_state().key_pair_for_pk(public_key);
+                            let key_pair = ownership
+                                .owners
+                                .values()
+                                .map(|(public_key, _)| public_key)
+                                .chain(ownership.super_owners.values())
+                                .find_map(|public_key| {
+                                    context_guard.wallet_state().key_pair_for_pk(public_key)
+                                });
                             context_guard.update_wallet_for_new_chain(*new_id, key_pair, timestamp);
                         }
                         Self::run_with_chain_id(

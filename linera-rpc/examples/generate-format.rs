@@ -5,10 +5,7 @@
 // Needed for arg_enum!
 #![allow(clippy::useless_vec)]
 
-use linera_base::{
-    data_types::{OwnerConfig, OwnerKind},
-    identifiers::{ChainDescription, Destination},
-};
+use linera_base::identifiers::{ChainDescription, Destination};
 use linera_chain::{
     data_types::{CertificateValue, HashedValue, Medium},
     ChainManagerInfo,
@@ -44,8 +41,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<Medium>(&samples)?;
     tracer.trace_type::<Destination>(&samples)?;
     tracer.trace_type::<ChainDescription>(&samples)?;
-    tracer.trace_type::<OwnerKind>(&samples)?;
-    tracer.trace_type::<OwnerConfig>(&samples)?;
     tracer.trace_type::<ChainOwnership>(&samples)?;
     tracer.trace_type::<GenericApplicationId>(&samples)?;
     tracer.trace_type::<ChainManagerInfo>(&samples)?;

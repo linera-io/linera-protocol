@@ -21,9 +21,7 @@ use futures::{
 use linera_base::{
     abi::{Abi, ContractAbi},
     crypto::{CryptoHash, KeyPair, PublicKey},
-    data_types::{
-        Amount, ArithmeticError, BlockHeight, OwnerConfig, OwnerKind, RoundNumber, Timestamp,
-    },
+    data_types::{Amount, ArithmeticError, BlockHeight, RoundNumber, Timestamp},
     ensure,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
@@ -427,9 +425,14 @@ where
                 Ok(manager.owner)
             }
             ChainManagerInfo::Multi(manager) => {
+                if !manager.ownership.is_active() {
+                    return Err(LocalNodeError::InactiveChain(self.chain_id).into());
+                }
                 let mut identities = manager
+                    .ownership
                     .owners
                     .keys()
+                    .chain(manager.ownership.super_owners.keys())
                     .filter(|owner| self.known_key_pairs.contains_key(owner));
                 let Some(identity) = identities.next() else {
                     return Err(ChainClientError::CannotFindKeyForMultiOwnerChain(
@@ -1191,13 +1194,6 @@ where
         let response = self.node_client.handle_chain_info_query(query).await?;
         let manager = response.info.manager;
         let Some(next_round) = manager.next_round() else {
-            if let ChainManagerInfo::Multi(multi) = manager {
-                tracing::error!(
-                    "round {}, multi: {}",
-                    multi.current_round,
-                    multi.multi_leader_rounds
-                );
-            }
             return Err(ChainClientError::BlockProposalError(
                 "Cannot propose a block; there is already a proposal in the current round",
             ));
@@ -1231,9 +1227,7 @@ where
         // Send the query to validators.
         let final_certificate = match manager {
             ChainManagerInfo::Multi(manager) => {
-                if manager.owners.get(&proposal.owner).map(|conf| conf.kind)
-                    == Some(OwnerKind::Super)
-                {
+                if manager.ownership.super_owners.contains_key(&proposal.owner) {
                     // Only one round-trip is needed
                     self.communicate_chain_updates(
                         &committee,
@@ -1557,21 +1551,25 @@ where
         let (new_owners, multi_leader_rounds) = match info.manager {
             ChainManagerInfo::None => return Err(ChainError::InactiveChain(self.chain_id).into()),
             ChainManagerInfo::Single(manager) => (
-                vec![
-                    OwnerConfig::new_regular(manager.public_key, 100),
-                    OwnerConfig::new_regular(new_public_key, new_weight),
-                ],
+                vec![(manager.public_key, 100), (new_public_key, new_weight)],
                 RoundNumber(2),
             ),
             ChainManagerInfo::Multi(manager) => {
-                let config = OwnerConfig::new_regular(new_public_key, new_weight);
                 let new_owners = manager
+                    .ownership
                     .owners
                     .values()
                     .cloned()
-                    .chain(iter::once(config))
+                    .chain(
+                        manager
+                            .ownership
+                            .super_owners
+                            .values()
+                            .map(|public_key| (*public_key, 100)),
+                    )
+                    .chain(iter::once((new_public_key, new_weight)))
                     .collect();
-                (new_owners, manager.multi_leader_rounds)
+                (new_owners, manager.ownership.multi_leader_rounds)
             }
         };
         self.execute_block(
