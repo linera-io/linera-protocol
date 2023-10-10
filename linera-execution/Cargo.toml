@@ -21,9 +21,9 @@ wasmtime = ["dep:wasmtime", "wasm-encoder", "wasmparser", "wit-bindgen-host-wasm
 
 [dependencies]
 anyhow = { workspace = true }
+async-graphql = { workspace = true }
 async-lock = { workspace = true }
 async-trait = { workspace = true }
-async-graphql = { workspace = true }
 bcs = { workspace = true }
 bytes = { workspace = true, optional = true }
 custom_debug_derive = { workspace = true }
@@ -57,8 +57,8 @@ linera-base = { workspace = true, features = ["test"] }
 linera-execution = { path = ".", features = ["test"] }
 test-case = { workspace = true }
 test-log = { workspace = true, features = ["trace"] }
-tracing-subscriber = { workspace = true, features = ["fmt"] }
 tokio = { workspace = true, features = ["full", "test-util"] }
+tracing-subscriber = { workspace = true, features = ["fmt"] }
 
 [package.metadata.cargo-machete]
 ignored = ["serde_bytes"]

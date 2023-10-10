@@ -18,17 +18,17 @@ console_error_panic_hook = "0.1"
 futures = { workspace = true }
 graphql_client = { version = "0.13", features = [ "reqwest" ] }
 hex = { workspace = true }
-reqwest = { workspace = true }
 js-sys = "0.3"
 linera-base = { workspace = true }
 linera-indexer-graphql-client = { workspace = true }
 linera-service-graphql-client = { workspace = true }
 once_cell = { workspace = true }
+reqwest = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde-wasm-bindgen = "0.5"
 serde_json = { workspace = true }
-uuid = { version = "1.4", features = [ "v3" ] }
 url = "2.4"
+uuid = { version = "1.4", features = [ "v3" ] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [ "console", "Window", "History", "Storage", "Location" ] }

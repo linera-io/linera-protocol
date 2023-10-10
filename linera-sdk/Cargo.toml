@@ -23,16 +23,16 @@ wasmtime = ["linera-core/wasmtime", "linera-execution/wasmtime", "linera-storage
 test = []
 
 [dependencies]
-async-trait = { workspace = true }
 async-graphql = { workspace = true }
+async-trait = { workspace = true }
 bcs = { workspace = true }
 futures = { workspace = true }
-log = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 linera-base = { workspace = true }
 linera-sdk-derive = { workspace = true }
 linera-views = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 wit-bindgen-guest-rust = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

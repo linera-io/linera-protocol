@@ -20,7 +20,6 @@ rocksdb = ["linera-views/rocksdb"]
 scylladb = ["linera-views/scylladb"]
 
 [dependencies]
-tempfile = { workspace = true }
 async-trait = { workspace = true }
 bcs = { workspace = true }
 dashmap = { workspace = true }
@@ -30,9 +29,10 @@ linera-chain = { workspace = true }
 linera-execution = { workspace = true }
 linera-views = { workspace = true, features = ["metrics"] }
 metrics = { workspace = true }
-tracing = { workspace = true }
 serde = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

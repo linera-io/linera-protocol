@@ -21,8 +21,8 @@ generic-array = { workspace = true }
 hex = { workspace = true }
 proptest = { workspace = true, optional = true }
 serde = { workspace = true }
-serde_bytes = { workspace = true }
 serde-name = { workspace = true }
+serde_bytes = { workspace = true }
 sha3 = { workspace = true }
 test-strategy = { workspace = true, optional = true }
 thiserror = { workspace = true }
