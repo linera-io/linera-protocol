@@ -47,7 +47,7 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build
       run: |
-        cargo build --locked --features aws,scylladb
+        cargo build --locked --features aws,scylladb --all-targets
     - name: Setup local ScyllaDB instance
       run: |
         docker run --rm --name scylladb -d -p 9042:9042 scylladb/scylla
