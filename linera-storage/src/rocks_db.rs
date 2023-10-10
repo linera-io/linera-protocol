@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_guards::ChainGuards, DbStoreClient, DbStoreInner, WallClock};
+use crate::{chain_guards::ChainGuards, DbStore, DbStoreInner, WallClock};
 use linera_execution::WasmRuntime;
 use linera_views::{
     common::TableStatus,
@@ -63,10 +63,10 @@ impl RocksDbStoreInner {
     }
 }
 
-pub type RocksDbStoreClient<C> = DbStoreClient<RocksDbClient, C>;
+pub type RocksDbStore<C> = DbStore<RocksDbClient, C>;
 
 #[cfg(any(test, feature = "test"))]
-impl RocksDbStoreClient<TestClock> {
+impl RocksDbStore<TestClock> {
     pub async fn make_test_store(wasm_runtime: Option<WasmRuntime>) -> Self {
         let dir = TempDir::new().unwrap();
         let path_buf = dir.path().to_path_buf();
@@ -76,7 +76,7 @@ impl RocksDbStoreClient<TestClock> {
             common_config,
         };
         let (store_client, _) =
-            RocksDbStoreClient::new_for_testing(store_config, wasm_runtime, TestClock::new())
+            RocksDbStore::new_for_testing(store_config, wasm_runtime, TestClock::new())
                 .await
                 .expect("store_client");
         store_client
@@ -89,7 +89,7 @@ impl RocksDbStoreClient<TestClock> {
     ) -> Result<(Self, TableStatus), RocksDbContextError> {
         let (store, table_status) =
             RocksDbStoreInner::new_for_testing(store_config, wasm_runtime).await?;
-        let store_client = RocksDbStoreClient {
+        let store_client = RocksDbStore {
             client: Arc::new(store),
             clock,
         };
@@ -97,13 +97,13 @@ impl RocksDbStoreClient<TestClock> {
     }
 }
 
-impl RocksDbStoreClient<WallClock> {
+impl RocksDbStore<WallClock> {
     pub async fn initialize(
         store_config: RocksDbKvStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, RocksDbContextError> {
         let store = RocksDbStoreInner::initialize(store_config, wasm_runtime).await?;
-        let store_client = RocksDbStoreClient {
+        let store_client = RocksDbStore {
             client: Arc::new(store),
             clock: WallClock,
         };
@@ -115,7 +115,7 @@ impl RocksDbStoreClient<WallClock> {
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), RocksDbContextError> {
         let (store, table_status) = RocksDbStoreInner::new(store_config, wasm_runtime).await?;
-        let store_client = RocksDbStoreClient {
+        let store_client = RocksDbStore {
             client: Arc::new(store),
             clock: WallClock,
         };

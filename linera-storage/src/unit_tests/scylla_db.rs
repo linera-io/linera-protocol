@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::ScyllaDbStoreClient;
+use super::ScyllaDbStore;
 use crate::Store;
 use linera_base::identifiers::ChainId;
 use std::mem;
@@ -9,7 +9,7 @@ use std::mem;
 /// Tests if released guards don't use memory.
 #[tokio::test]
 async fn guards_dont_leak() -> Result<(), anyhow::Error> {
-    let store = ScyllaDbStoreClient::make_test_store(None).await;
+    let store = ScyllaDbStore::make_test_store(None).await;
     let chain_id = ChainId::root(1);
     // There should be no active guards when initialized
     assert_eq!(store.client.guards.active_guards(), 0);

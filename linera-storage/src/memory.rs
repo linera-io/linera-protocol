@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_guards::ChainGuards, DbStoreClient, DbStoreInner};
+use crate::{chain_guards::ChainGuards, DbStore, DbStoreInner};
 use linera_execution::WasmRuntime;
 use linera_views::memory::{create_memory_client_stream_queries, MemoryClient};
 use std::sync::Arc;
@@ -20,7 +20,7 @@ impl MemoryStore {
     }
 }
 
-pub type MemoryStoreClient<C> = DbStoreClient<MemoryClient, C>;
+pub type MemoryStoreClient<C> = DbStore<MemoryClient, C>;
 
 #[cfg(any(test, feature = "test"))]
 impl MemoryStoreClient<crate::TestClock> {

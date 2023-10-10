@@ -12,20 +12,20 @@ use tracing::error;
 
 #[cfg(feature = "rocksdb")]
 use {
-    linera_storage::RocksDbStoreClient,
+    linera_storage::RocksDbStore,
     linera_views::rocks_db::{RocksDbClient, RocksDbKvStoreConfig},
     std::path::PathBuf,
 };
 
 #[cfg(feature = "aws")]
 use {
-    linera_storage::DynamoDbStoreClient,
+    linera_storage::DynamoDbStore,
     linera_views::dynamo_db::{get_config, DynamoDbClient, DynamoDbKvStoreConfig, TableName},
 };
 
 #[cfg(feature = "scylladb")]
 use {
-    linera_storage::ScyllaDbStoreClient,
+    linera_storage::ScyllaDbStore,
     linera_views::scylla_db::{ScyllaDbClient, ScyllaDbKvStoreConfig},
 };
 
@@ -356,19 +356,17 @@ where
         }
         #[cfg(feature = "rocksdb")]
         FullStorageConfig::RocksDb(store_config) => {
-            let (store, table_status) = RocksDbStoreClient::new(store_config, wasm_runtime).await?;
+            let (store, table_status) = RocksDbStore::new(store_config, wasm_runtime).await?;
             job.run(store).await
         }
         #[cfg(feature = "aws")]
         FullStorageConfig::DynamoDb(store_config) => {
-            let (store, table_status) =
-                DynamoDbStoreClient::new(store_config, wasm_runtime).await?;
+            let (store, table_status) = DynamoDbStore::new(store_config, wasm_runtime).await?;
             job.run(store).await
         }
         #[cfg(feature = "scylladb")]
         FullStorageConfig::ScyllaDb(store_config) => {
-            let (store, table_status) =
-                ScyllaDbStoreClient::new(store_config, wasm_runtime).await?;
+            let (store, table_status) = ScyllaDbStore::new(store_config, wasm_runtime).await?;
             job.run(store).await
         }
     }
@@ -386,19 +384,19 @@ pub async fn full_initialize_storage(
         #[cfg(feature = "rocksdb")]
         FullStorageConfig::RocksDb(store_config) => {
             let wasm_runtime = None;
-            let mut store = RocksDbStoreClient::initialize(store_config, wasm_runtime).await?;
+            let mut store = RocksDbStore::initialize(store_config, wasm_runtime).await?;
             genesis_config.initialize_store(&mut store).await
         }
         #[cfg(feature = "aws")]
         FullStorageConfig::DynamoDb(store_config) => {
             let wasm_runtime = None;
-            let mut store = DynamoDbStoreClient::initialize(store_config, wasm_runtime).await?;
+            let mut store = DynamoDbStore::initialize(store_config, wasm_runtime).await?;
             genesis_config.initialize_store(&mut store).await
         }
         #[cfg(feature = "scylladb")]
         FullStorageConfig::ScyllaDb(store_config) => {
             let wasm_runtime = None;
-            let mut store = ScyllaDbStoreClient::initialize(store_config, wasm_runtime).await?;
+            let mut store = ScyllaDbStore::initialize(store_config, wasm_runtime).await?;
             genesis_config.initialize_store(&mut store).await
         }
     }

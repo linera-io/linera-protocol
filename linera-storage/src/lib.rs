@@ -13,12 +13,12 @@ mod rocks_db;
 mod scylla_db;
 
 #[cfg(feature = "aws")]
-pub use crate::dynamo_db::DynamoDbStoreClient;
+pub use crate::dynamo_db::DynamoDbStore;
 pub use crate::memory::MemoryStoreClient;
 #[cfg(feature = "rocksdb")]
-pub use crate::rocks_db::RocksDbStoreClient;
+pub use crate::rocks_db::RocksDbStore;
 #[cfg(feature = "scylladb")]
-pub use crate::scylla_db::ScyllaDbStoreClient;
+pub use crate::scylla_db::ScyllaDbStore;
 
 use crate::chain_guards::ChainGuards;
 use async_trait::async_trait;
@@ -253,8 +253,8 @@ pub struct DbStoreInner<Client> {
 }
 
 #[derive(Clone)]
-/// A DbStoreClient wrapping with Arc
-pub struct DbStoreClient<Client, Clock> {
+/// A DbStore wrapping with Arc
+pub struct DbStore<Client, Clock> {
     client: Arc<DbStoreInner<Client>>,
     pub clock: Clock,
 }
@@ -315,7 +315,7 @@ impl TestClock {
 }
 
 #[async_trait]
-impl<Client, C> Store for DbStoreClient<Client, C>
+impl<Client, C> Store for DbStore<Client, C>
 where
     Client: KeyValueStoreClient + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
@@ -437,7 +437,7 @@ where
     }
 }
 
-impl<Client, C> DbStoreClient<Client, C>
+impl<Client, C> DbStore<Client, C>
 where
     Client: KeyValueStoreClient + Clone + Send + Sync + 'static,
     C: Clock,

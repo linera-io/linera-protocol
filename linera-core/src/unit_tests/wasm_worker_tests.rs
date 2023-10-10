@@ -37,13 +37,13 @@ use std::sync::Arc;
 use test_case::test_case;
 
 #[cfg(feature = "rocksdb")]
-use linera_storage::RocksDbStoreClient;
+use linera_storage::RocksDbStore;
 
 #[cfg(feature = "aws")]
-use linera_storage::DynamoDbStoreClient;
+use linera_storage::DynamoDbStore;
 
 #[cfg(feature = "scylladb")]
-use linera_storage::ScyllaDbStoreClient;
+use linera_storage::ScyllaDbStore;
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -62,7 +62,7 @@ async fn test_memory_handle_certificates_to_create_application(
 async fn test_rocks_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let store = RocksDbStoreClient::make_test_store(Some(wasm_runtime)).await;
+    let store = RocksDbStore::make_test_store(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(store, wasm_runtime).await
 }
 
@@ -73,7 +73,7 @@ async fn test_rocks_db_handle_certificates_to_create_application(
 async fn test_dynamo_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let store = DynamoDbStoreClient::make_test_store(Some(wasm_runtime)).await;
+    let store = DynamoDbStore::make_test_store(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(store, wasm_runtime).await
 }
 
@@ -84,7 +84,7 @@ async fn test_dynamo_db_handle_certificates_to_create_application(
 async fn test_scylla_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
-    let store = ScyllaDbStoreClient::make_test_store(Some(wasm_runtime)).await;
+    let store = ScyllaDbStore::make_test_store(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(store, wasm_runtime).await
 }
 

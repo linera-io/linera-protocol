@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chain_guards::ChainGuards, DbStoreClient, DbStoreInner, WallClock};
+use crate::{chain_guards::ChainGuards, DbStore, DbStoreInner, WallClock};
 use linera_execution::WasmRuntime;
 use linera_views::{
     common::TableStatus,
@@ -66,10 +66,10 @@ impl ScyllaDbStoreInner {
     }
 }
 
-pub type ScyllaDbStoreClient<C> = DbStoreClient<ScyllaDbClient, C>;
+pub type ScyllaDbStore<C> = DbStore<ScyllaDbClient, C>;
 
 #[cfg(any(test, feature = "test"))]
-impl ScyllaDbStoreClient<TestClock> {
+impl ScyllaDbStore<TestClock> {
     pub async fn make_test_store(wasm_runtime: Option<WasmRuntime>) -> Self {
         let uri = "localhost:9042".to_string();
         let table_name = get_table_name();
@@ -80,7 +80,7 @@ impl ScyllaDbStoreClient<TestClock> {
             common_config,
         };
         let (client, _) =
-            ScyllaDbStoreClient::new_for_testing(store_config, wasm_runtime, TestClock::new())
+            ScyllaDbStore::new_for_testing(store_config, wasm_runtime, TestClock::new())
                 .await
                 .expect("client");
         client
@@ -93,7 +93,7 @@ impl ScyllaDbStoreClient<TestClock> {
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let (store, table_status) =
             ScyllaDbStoreInner::new_for_testing(store_config, wasm_runtime).await?;
-        let store_client = ScyllaDbStoreClient {
+        let store_client = ScyllaDbStore {
             client: Arc::new(store),
             clock,
         };
@@ -101,13 +101,13 @@ impl ScyllaDbStoreClient<TestClock> {
     }
 }
 
-impl ScyllaDbStoreClient<WallClock> {
+impl ScyllaDbStore<WallClock> {
     pub async fn initialize(
         store_config: ScyllaDbKvStoreConfig,
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, ScyllaDbContextError> {
         let store = ScyllaDbStoreInner::initialize(store_config, wasm_runtime).await?;
-        let store_client = ScyllaDbStoreClient {
+        let store_client = ScyllaDbStore {
             client: Arc::new(store),
             clock: WallClock,
         };
@@ -119,7 +119,7 @@ impl ScyllaDbStoreClient<WallClock> {
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let (store, table_status) = ScyllaDbStoreInner::new(store_config, wasm_runtime).await?;
-        let store_client = ScyllaDbStoreClient {
+        let store_client = ScyllaDbStore {
             client: Arc::new(store),
             clock: WallClock,
         };
