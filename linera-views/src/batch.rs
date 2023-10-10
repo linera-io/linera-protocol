@@ -27,6 +27,7 @@ use std::fmt::Debug;
 use crate::common::get_interval;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
+    mem,
     ops::Bound,
 };
 
@@ -108,6 +109,48 @@ impl UnorderedBatch {
             insertions,
         })
     }
+
+    /// From an `UnorderedBatch`, creates a [`UnorderedBatch`] that does contain
+    /// key_prefix_deletions that collide with a `key_prefix_deletions`.
+    /// This requires accessing the database to read them and translate them
+    /// as collection of deletes.
+    pub async fn expand_colliding_delete_prefixes<DB: DeletePrefixExpander>(
+        mut self,
+        db: &DB,
+    ) -> Result<UnorderedBatch, DB::Error> {
+        let mut insert_key = BTreeSet::new();
+        for (key, _) in &self.simple_unordered_batch.insertions {
+            insert_key.insert(key.clone());
+        }
+        let insertions = mem::take(&mut self.simple_unordered_batch.insertions);
+        let mut deletions = mem::take(&mut self.simple_unordered_batch.deletions);
+        let mut key_prefix_deletions = Vec::new();
+        for key_prefix in self.key_prefix_deletions {
+            if !insert_key
+                .range(get_interval(key_prefix.clone()))
+                .collect::<Vec<_>>()
+                .is_empty()
+            {
+                for short_key in db.expand_delete_prefix(&key_prefix).await?.iter() {
+                    let mut key = key_prefix.clone();
+                    key.extend(short_key);
+                    if !insert_key.contains(&key) {
+                        deletions.push(key);
+                    }
+                }
+            } else {
+                key_prefix_deletions.push(key_prefix);
+            }
+        }
+        let simple_unordered_batch = SimpleUnorderedBatch {
+            deletions,
+            insertions,
+        };
+        Ok(UnorderedBatch {
+            key_prefix_deletions,
+            simple_unordered_batch,
+        })
+    }
 }
 
 /// Checks if `key` is matched by any prefix in `key_prefix_set`.
@@ -162,8 +205,8 @@ impl Batch {
     pub fn simplify(self) -> UnorderedBatch {
         let mut delete_and_insert_map = BTreeMap::new();
         let mut delete_prefix_set = BTreeSet::new();
-        for op in self.operations {
-            match op {
+        for operation in self.operations {
+            match operation {
                 WriteOperation::Delete { key } => {
                     // We delete a key. However if said key was already matched by a delete_prefix then
                     // nothing needs to be done.
