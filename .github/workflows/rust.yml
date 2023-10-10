@@ -57,25 +57,19 @@ jobs:
       run: |
         cd examples
         cargo build --locked --release --target wasm32-unknown-unknown
-    - name: Compile the workspace with the default features (test)
+    - name: Compile the workspace with the default features
       run: |
-        cargo test --locked --no-run
-    - name: Compile the workspace with the default features (build)
-      run: |
-        cargo build --locked
+        cargo build --all-targets --locked --features test
     - name: Run all tests using the default features
       run: |
         cargo test --locked
     - name: Run some extra execution tests with wasmtime
       run: |
         cargo test --locked -p linera-execution --features wasmtime
-    - name: Build Wasm test runner
-      # use debug mode to avoid building wasmtime in release mode
-      run: |
-        cargo build --locked --bin linera-wasm-test-runner
     - name: Run Wasm application tests
       run: |
         cd examples
+        # use debug mode to avoid building wasmtime in release mode
         CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=../target/debug/linera-wasm-test-runner cargo test --target wasm32-unknown-unknown
         cargo test --locked --target x86_64-unknown-linux-gnu
     - name: Run Witty integration tests
