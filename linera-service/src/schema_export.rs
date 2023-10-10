@@ -1,11 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_trait::async_trait;
 use linera_base::identifiers::ChainId;
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
-use linera_views::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
-
-use async_trait::async_trait;
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{NodeError, NotificationStream, ValidatorNode, ValidatorNodeProvider},
@@ -13,6 +11,8 @@ use linera_core::{
 use linera_execution::committee::Committee;
 use linera_service::{chain_listener::ChainListenerConfig, node_service::NodeService};
 use linera_storage::{MemoryStoreClient, WallClock};
+use linera_views::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
+use structopt::StructOpt;
 
 #[derive(Clone)]
 struct DummyValidatorNode;
@@ -67,7 +67,16 @@ impl ValidatorNodeProvider for DummyValidatorNodeProvider {
     }
 }
 
+#[derive(StructOpt)]
+#[structopt(
+    name = "Linera GraphQL schema exporter",
+    about = "Export the GraphQL schema for the core data in a Linera chain"
+)]
+struct Options {}
+
 fn main() -> std::io::Result<()> {
+    let _options = Options::from_args();
+
     let store = MemoryStoreClient::new(None, TEST_MEMORY_MAX_STREAM_QUERIES, WallClock);
     let config = ChainListenerConfig {
         delay_before_ms: 0,
