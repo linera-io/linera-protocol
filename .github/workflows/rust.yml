@@ -53,19 +53,19 @@ jobs:
       uses: arduino/setup-protoc@v1
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build the main workspace with the default features
+      run: |
+        RUSTFLAGS="-C opt-level=3 -C debuginfo=1" cargo build --all-targets --locked --features test
     - name: Build example applications
       run: |
         cd examples
         cargo build --locked --release --target wasm32-unknown-unknown
-    - name: Compile the workspace with the default features
-      run: |
-        cargo build --all-targets --locked --features test
     - name: Run all tests using the default features
       run: |
-        cargo test --locked
+        RUSTFLAGS="-C opt-level=3 -C debuginfo=1" cargo test --locked
     - name: Run some extra execution tests with wasmtime
       run: |
-        cargo test --locked -p linera-execution --features wasmtime
+        RUSTFLAGS="-C opt-level=3 -C debuginfo=1" cargo test --locked -p linera-execution --features wasmtime
     - name: Run Wasm application tests
       run: |
         cd examples
