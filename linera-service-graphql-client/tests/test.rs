@@ -5,7 +5,10 @@
 
 use fungible::{FungibleTokenAbi, InitialState};
 use linera_base::{data_types::Amount, identifiers::ChainId};
-use linera_service::cli_wrappers::{resolve_binary, Database, LocalNetwork, Network};
+use linera_service::{
+    cli_wrappers::{Database, LocalNetwork, Network},
+    util::resolve_binary,
+};
 use linera_service_graphql_client::{
     applications, block, blocks, chains, request, transfer, Applications, Block, Blocks, Chains,
     Transfer,
