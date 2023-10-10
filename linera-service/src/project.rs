@@ -6,7 +6,6 @@ use anyhow::{ensure, Context, Result};
 use cargo_toml::Manifest;
 use current_platform::CURRENT_PLATFORM;
 use std::{
-    ffi::OsStr,
     fs::File,
     io::Write,
     path::{Path, PathBuf},
@@ -22,33 +21,32 @@ const RUNNER_BIN_NAME: &str = "linera-wasm-test-runner";
 const RUNNER_BIN_CRATE: &str = "linera-sdk";
 
 impl Project {
-    pub fn create_new(root: PathBuf) -> Result<Self> {
+    pub fn create_new(name: &str, linera_root: Option<&Path>) -> Result<Self> {
+        ensure!(
+            !name.contains(std::path::is_separator),
+            "Project name {name} should not contain path-separators",
+        );
+        let root = PathBuf::from(name);
         ensure!(
             !root.exists(),
-            "destination {} already exists",
+            "Directory {} already exists",
             root.display(),
         );
         ensure!(
             root.extension().is_none(),
-            "project name must be a directory"
+            "Project name {name} should not have a file extension",
         );
-        debug!("creating directory at {}", root.display());
+        debug!("Creating directory at {}", root.display());
         std::fs::create_dir_all(&root)?;
 
-        debug!("creating the source directory");
+        debug!("Creating the source directory");
         let source_directory = Self::create_source_directory(&root)?;
 
-        debug!("initializing git repository");
+        debug!("Initializing git repository");
         Self::initialize_git_repository(&root)?;
 
-        let project_name = root
-            .file_name()
-            .and_then(OsStr::to_str)
-            .map(|s| s.to_string())
-            .context("path specified cannot terminate in . or ..")?;
-
         debug!("writing Cargo.toml");
-        Self::create_cargo_toml(&root, &project_name)?;
+        Self::create_cargo_toml(&root, name, linera_root)?;
 
         debug!("writing rust-toolchain");
         Self::create_rust_toolchain(&root)?;
@@ -60,10 +58,10 @@ impl Project {
         Self::create_lib_file(&source_directory)?;
 
         debug!("writing contract.rs");
-        Self::create_contract_file(&source_directory, &project_name)?;
+        Self::create_contract_file(&source_directory, name)?;
 
         debug!("writing service.rs");
-        Self::create_service_file(&source_directory, &project_name)?;
+        Self::create_service_file(&source_directory, name)?;
 
         debug!("creating cargo config");
         Self::create_cargo_config(&root)?;
@@ -150,10 +148,14 @@ impl Project {
         Self::write_string_to_file(&project_root.join(".gitignore"), "/target")
     }
 
-    fn create_cargo_toml(project_root: &Path, project_name: &str) -> Result<()> {
+    fn create_cargo_toml(
+        project_root: &Path,
+        project_name: &str,
+        linera_root: Option<&Path>,
+    ) -> Result<()> {
         let toml_path = project_root.join("Cargo.toml");
         let (linera_sdk_dep, linera_sdk_dev_dep, linera_views_dep) =
-            Self::linera_sdk_dependencies();
+            Self::linera_sdk_dependencies(linera_root);
         let toml_contents = format!(
             include_str!("../template/Cargo.toml.template"),
             project_name = project_name,
@@ -218,25 +220,20 @@ impl Project {
         Ok(())
     }
 
-    /// Resolves ['linera-sdk'] and [`linera-views`] dependencies in `debug` mode.
-    ///
-    /// Uses the directory of `linera-service` at compile time to figure out
-    /// where `linera-sdk` and `linera-views' is.
-    #[cfg(debug_assertions)]
-    fn linera_sdk_dependencies() -> (String, String, String) {
-        let linera_service_path: PathBuf = env!("CARGO_MANIFEST_DIR")
-            .parse()
-            .expect("the CARGO_MANIFEST_DIR should always be a valid path");
-        let linera_sdk_path = linera_service_path
-            .join("..")
-            .join("linera-sdk")
-            .canonicalize()
-            .expect("the linera-sdk crate should always exist");
-        let linera_views_path = linera_service_path
-            .join("..")
-            .join("linera-views")
-            .canonicalize()
-            .expect("the linera-sdk crate should always exist");
+    /// Resolves ['linera-sdk'] and [`linera-views`] dependencies.
+    fn linera_sdk_dependencies(linera_root: Option<&Path>) -> (String, String, String) {
+        match linera_root {
+            Some(path) => Self::linera_sdk_testing_dependencies(path),
+            None => Self::linera_sdk_production_dependencies(),
+        }
+    }
+
+    /// Resolves ['linera-sdk'] and [`linera-views`] dependencies in testing mode.
+    fn linera_sdk_testing_dependencies(linera_root: &Path) -> (String, String, String) {
+        // We're putting the Cargo.toml file one level above the current directory.
+        let linera_root = PathBuf::from("..").join(linera_root);
+        let linera_sdk_path = linera_root.join("linera-sdk");
+        let linera_views_path = linera_root.join("linera-views");
         let linera_sdk_dep = format!(
             "linera-sdk = {{ path = \"{}\" }}",
             linera_sdk_path.display()
@@ -252,9 +249,8 @@ impl Project {
         (linera_sdk_dep, linera_sdk_dev_dep, linera_views_dep)
     }
 
-    /// Adds ['linera-sdk'] dependencies in `release` mode.
-    #[cfg(not(debug_assertions))]
-    fn linera_sdk_dependencies() -> (String, String, String) {
+    /// Adds ['linera-sdk'] dependencies in production mode.
+    fn linera_sdk_production_dependencies() -> (String, String, String) {
         let version = env!("CARGO_PKG_VERSION");
         let linera_sdk_dep = format!("linera-sdk = \"{}\"", version);
         let linera_sdk_dev_dep = format!(

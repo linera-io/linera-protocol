@@ -1,6 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Helper module to call the binaries of `linera-service` with appropriate command-line
+//! arguments.
+
 use crate::{config::WalletState, util};
 use anyhow::{Context, Result};
 use async_graphql::InputType;
@@ -105,19 +108,18 @@ impl ClientWrapper {
         }
     }
 
-    pub async fn project_new(&self, project_name: &str) -> Result<TempDir> {
+    pub async fn project_new(&self, project_name: &str, linera_root: &Path) -> Result<TempDir> {
         let tmp = TempDir::new()?;
         let mut command = self.run().await?;
-        assert!(command
+        command
             .current_dir(tmp.path())
             .kill_on_drop(true)
             .arg("project")
             .arg("new")
             .arg(project_name)
-            .spawn()?
-            .wait()
-            .await?
-            .success());
+            .arg("--linera-root")
+            .arg(linera_root);
+        assert!(command.spawn()?.wait().await?.success());
         Ok(tmp)
     }
 

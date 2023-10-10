@@ -1061,7 +1061,14 @@ enum WalletCommand {
 #[derive(StructOpt)]
 enum ProjectCommand {
     /// Create a new Linera project.
-    New { path: PathBuf },
+    New {
+        /// The project name. A directory of the same name will be created in the current directory.
+        name: String,
+
+        /// Use the given clone of the Linera repository instead of remote crates.
+        #[structopt(long)]
+        linera_root: Option<PathBuf>,
+    },
 
     /// Test a Linera project.
     ///
@@ -1779,8 +1786,8 @@ async fn main() -> Result<(), anyhow::Error> {
         }
 
         ClientCommand::Project(project_command) => match project_command {
-            ProjectCommand::New { path } => {
-                Project::create_new(path.clone())?;
+            ProjectCommand::New { name, linera_root } => {
+                Project::create_new(name, linera_root.as_ref().map(AsRef::as_ref))?;
                 Ok(())
             }
             ProjectCommand::Test { path } => {
