@@ -1,4 +1,4 @@
-name: DynamoDB tests
+name: Production databases
 
 on:
   push:
@@ -47,10 +47,19 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build
       run: |
-        cargo build --locked --features aws
+        cargo build --locked --features aws,scylladb
+    - name: Setup local ScyllaDB instance
+      run: |
+        docker run --rm --name scylladb -d -p 9042:9042 scylladb/scylla
+    - name: Run ScyllaDB tests
+      run: |
+        cargo test --locked --features aws,scylladb -- scylla
+    - name: Stop local ScyllaDB instance
+      run: |
+        docker stop scylladb
     - name: Setup local DynamoDB instance
       run: |
-        docker run --rm -d --name local-dynamodb -p 8000:8000/tcp amazon/dynamodb-local
+        docker run --rm -d --name dynamodb_local -p 8000:8000/tcp amazon/dynamodb-local
     - name: Run DynamoDB tests
       env:
         AWS_REGION: us-east-1
@@ -58,4 +67,7 @@ jobs:
         AWS_SECRET_ACCESS_KEY: test
         LOCALSTACK_ENDPOINT: http://localhost:8000
       run: |
-        cargo test --locked --features aws -- dynamo
+        cargo test --locked --features aws,scylladb -- dynamo
+    - name: Stop local DynamoDB instance
+      run: |
+        docker stop dynamodb_local
