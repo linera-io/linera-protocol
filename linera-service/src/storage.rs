@@ -25,9 +25,11 @@ use {
 
 #[cfg(feature = "scylladb")]
 use {
-    anyhow::Context as _,
+    anyhow::Context,
     linera_storage::ScyllaDbStore,
     linera_views::scylla_db::{ScyllaDbClient, ScyllaDbKvStoreConfig},
+    std::num::NonZeroU16,
+    tracing::debug,
 };
 
 /// The Full storage input to the constructor of the database client.
@@ -123,19 +125,28 @@ impl FromStr for StorageConfig {
         if let Some(s) = input.strip_prefix(SCYLLA_DB) {
             let mut uri: Option<String> = None;
             let mut table_name: Option<String> = None;
+            let parse_error: &'static str = "Correct format is (https|http)://db_hostname:port.";
             if !s.is_empty() {
                 let mut parts = s.split(':');
                 while let Some(part) = parts.next() {
                     match part {
-                        "https" => {
-                            let err_msg = "Correct format is https:://db_hostname:port";
-                            let empty = parts.next().context(err_msg)?;
-                            anyhow::ensure!(empty.is_empty(), err_msg);
-                            let address = parts.next().context(err_msg)?;
-                            let port_str = parts.next().context(err_msg)?;
-                            let _num_port = port_str.parse::<u16>().context(err_msg)?;
-                            anyhow::ensure!(uri.is_none(), "The uri has already been assigned");
-                            uri = Some(format!("https::{}:{}", address, port_str));
+                        "tcp" => {
+                            let address = parts.next().with_context(|| {
+                                format!("Failed to find address for {}. {}", s, parse_error)
+                            })?;
+                            let port_str = parts.next().with_context(|| {
+                                format!("Failed to find port for {}. {}", s, parse_error)
+                            })?;
+                            let port = NonZeroU16::from_str(port_str).with_context(|| {
+                                format!(
+                                    "Failed to find parse port {} for {}. {}",
+                                    port_str, s, parse_error
+                                )
+                            })?;
+                            if uri.is_some() {
+                                bail!("The uri has already been assigned");
+                            }
+                            uri = Some(format!("{}:{}", &address, port));
                         }
                         _ if part.starts_with("table") => {
                             anyhow::ensure!(
@@ -152,7 +163,9 @@ impl FromStr for StorageConfig {
             }
             let uri = uri.unwrap_or("localhost:9042".to_string());
             let table_name = table_name.unwrap_or("table_storage".to_string());
-            return Ok(Self::ScyllaDb { uri, table_name });
+            let db = Self::ScyllaDb { uri, table_name };
+            debug!("ScyllaDB connection info: {:?}", db);
+            return Ok(db);
         }
         error!("available storage: memory");
         #[cfg(feature = "rocksdb")]
@@ -500,16 +513,23 @@ fn test_scylla_db_storage_config_from_str() {
         }
     );
     assert_eq!(
-        StorageConfig::from_str("scylladb:https:://db_hostname:230").unwrap(),
+        StorageConfig::from_str("scylladb:tcp:db_hostname:230:table_other_storage").unwrap(),
         StorageConfig::ScyllaDb {
-            uri: "https:://db_hostname:230".to_string(),
+            uri: "db_hostname:230".to_string(),
+            table_name: "table_other_storage".to_string(),
+        }
+    );
+    assert_eq!(
+        StorageConfig::from_str("scylladb:tcp:db_hostname:230").unwrap(),
+        StorageConfig::ScyllaDb {
+            uri: "db_hostname:230".to_string(),
             table_name: "table_storage".to_string(),
         }
     );
     assert!(StorageConfig::from_str("scylladb:-10").is_err());
     assert!(StorageConfig::from_str("scylladb:70000").is_err());
     assert!(StorageConfig::from_str("scylladb:230:234").is_err());
-    assert!(StorageConfig::from_str("scylladb:https:://address1").is_err());
-    assert!(StorageConfig::from_str("scylladb:https:://address1:https::/address2").is_err());
+    assert!(StorageConfig::from_str("scylladb:tcp:address1").is_err());
+    assert!(StorageConfig::from_str("scylladb:tcp:address1:tcp:/address2").is_err());
     assert!(StorageConfig::from_str("scylladb:wrong").is_err());
 }
