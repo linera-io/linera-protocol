@@ -119,11 +119,13 @@ pub enum SystemOperation {
     },
     /// Closes the chain.
     CloseChain,
-    /// Changes the authentication key of the chain.
-    ChangeOwner { new_public_key: PublicKey },
-    /// Changes the authentication key of the chain.
-    ChangeMultipleOwners {
-        new_owners: Vec<(PublicKey, u64)>,
+    /// Changes the ownership of the chain.
+    ChangeOwnership {
+        /// Super owners can propose fast blocks in round 0, and regular blocks in any round.
+        super_owners: Vec<PublicKey>,
+        /// The regular owners, with their weights that determine how often they are round leader.
+        owners: Vec<(PublicKey, u64)>,
+        /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
         multi_leader_rounds: RoundNumber,
     },
     /// Subscribes to a system channel.
@@ -529,17 +531,24 @@ where
                 };
                 result.messages.extend([e1, e2]);
             }
-            ChangeOwner { new_public_key } => {
-                self.ownership.set(ChainOwnership::single(*new_public_key));
-            }
-            ChangeMultipleOwners {
-                new_owners,
+            ChangeOwnership {
+                super_owners,
+                owners,
                 multi_leader_rounds,
             } => {
-                self.ownership.set(ChainOwnership::multiple(
-                    new_owners.iter().map(|(key, weight)| (*key, *weight)),
-                    *multi_leader_rounds,
-                ));
+                self.ownership.set(ChainOwnership {
+                    super_owners: super_owners
+                        .iter()
+                        .map(|public_key| (Owner::from(public_key), *public_key))
+                        .collect(),
+                    owners: owners
+                        .iter()
+                        .map(|(public_key, weight)| {
+                            (Owner::from(public_key), (*public_key, *weight))
+                        })
+                        .collect(),
+                    multi_leader_rounds: *multi_leader_rounds,
+                });
             }
             CloseChain => {
                 self.ownership.set(ChainOwnership::default());

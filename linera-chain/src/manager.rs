@@ -1,14 +1,20 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! # Manager for Multi-Owner Chains
+//! # Chain manager
 //!
-//! This module contains the consensus mechanism for multi-owner chains. Whenever a block is
+//! This module contains the consensus mechanism for all microchains. Whenever a block is
 //! confirmed, a new chain manager is created for the next block height. It manages the consensus
 //! state until a new block is confirmed. As long as less than a third of the validators are faulty,
 //! it guarantees that at most one `ConfirmedBlock` certificate will be created for this height.
-//! There are two modes of operation:
 //!
+//! The protocol proceeds in rounds, until it reaches a round where a block gets confirmed.
+//!
+//! There are three kinds of rounds:
+//!
+//! * In round 0, only super owners can propose blocks, and validators vote to confirm a block
+//!   immediately. Super owners must be careful to make only one block proposal, or else they can
+//!   permanently block the microchain. If there are no super owners, round 0 is skipped.
 //! * In cooperative mode (multi-owner rounds), all chain owners can propose blocks at any time.
 //!   The protocol is guaranteed to eventually confirm a block as long as no chain owner
 //!   continuously actively prevents progress.
@@ -17,7 +23,7 @@
 //!
 //! ## Safety, i.e. at most one block will be confirmed
 //!
-//! In both modes this is guaranteed as follows:
+//! In all modes this is guaranteed as follows:
 //!
 //! * Validators (honest ones) never cast a vote if they have already cast any vote in a later
 //!   round.
@@ -36,12 +42,19 @@
 //!
 //! ## Liveness, i.e. some block will eventually be confirmed
 //!
+//! In round 0, liveness depends on the super owners coordinating, and proposing at most one block.
+//!
+//! If they propose none, and there are other owners, round 0 will eventually time out.
+//!
 //! In cooperative mode, if there is contention, the owners need to agree on a single owner as the
 //! next proposer. That owner should then download all highest-round certificates and block
 //! proposals known to the honest validators. They can then make a proposal in a round higher than
 //! all previous proposals. If there is any `ValidatedBlock` certificate they must include the
 //! highest one in their proposal, and propose that block. Otherwise they can propose a new block.
 //! Now all honest validators are allowed to vote for that proposal, and eventually confirm it.
+//!
+//! If the owners fail to cooperate, any honest owner can initiate the last multi-leader round by
+//! making a proposal there, then wait for it to time out, which starts the leader-based mode:
 //!
 //! In leader-based mode, an honest owner should subscribe to notifications from all validators,
 //! and follow the chain. Whenever another leader's round takes too long, they should request
@@ -50,7 +63,6 @@
 //! round. Then they download the highest `ValidatedBlock` certificate known to any honest validator
 //! and include that in their block proposal, just like in the cooperative case.
 
-use super::Outcome;
 use crate::{
     data_types::{
         BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
@@ -61,7 +73,7 @@ use crate::{
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{BlockHeight, RoundNumber, Timestamp},
-    ensure,
+    doc_scalar, ensure,
     identifiers::{ChainId, Owner},
 };
 use linera_execution::{committee::Epoch, ChainOwnership};
@@ -73,9 +85,16 @@ use tracing::error;
 
 const TIMEOUT: Duration = Duration::from_secs(10);
 
-/// The consensus state of a chain with multiple owners some of which are potentially faulty.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MultiOwnerManager {
+/// The result of verifying a (valid) query.
+#[derive(Eq, PartialEq)]
+pub enum Outcome {
+    Accept,
+    Skip,
+}
+
+/// The state of the certification process for a chain's next block.
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+pub struct ChainManager {
     /// The public keys, weights and types of the chain's owners.
     pub ownership: ChainOwnership,
     /// The seed for the pseudo-random number generator that determines the round leaders.
@@ -97,8 +116,27 @@ pub struct MultiOwnerManager {
     pub round_timeout: Timestamp,
 }
 
-impl MultiOwnerManager {
-    pub fn new(ownership: ChainOwnership, seed: u64, now: Timestamp) -> Result<Self, ChainError> {
+doc_scalar!(
+    ChainManager,
+    "The state of the certification process for a chain's next block"
+);
+
+impl ChainManager {
+    pub fn reset(
+        &mut self,
+        ownership: &ChainOwnership,
+        height: BlockHeight,
+        now: Timestamp,
+    ) -> Result<(), ChainError> {
+        *self = ChainManager::new(ownership.clone(), height.0, now)?;
+        Ok(())
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.ownership.is_active()
+    }
+
+    fn new(ownership: ChainOwnership, seed: u64, now: Timestamp) -> Result<Self, ChainError> {
         let distribution = if !ownership.owners.is_empty() {
             let weights = ownership
                 .owners
@@ -111,7 +149,7 @@ impl MultiOwnerManager {
         };
         let round_timeout = now.saturating_add(TIMEOUT);
 
-        Ok(MultiOwnerManager {
+        Ok(ChainManager {
             ownership,
             seed,
             distribution,
@@ -152,6 +190,12 @@ impl MultiOwnerManager {
         let new_block = &proposal.content.block;
         let owner = &proposal.owner;
         let validated = proposal.validated.as_ref();
+
+        // When a block is certified, incrementing its height must succeed.
+        ensure!(
+            new_block.height < BlockHeight::MAX,
+            ChainError::InvalidBlockHeight
+        );
         if let Some(validated) = validated {
             ensure!(
                 validated.value().is_validated(),
@@ -397,11 +441,10 @@ impl MultiOwnerManager {
     }
 }
 
-/// Chain manager information that is included in `ChainInfo` sent to clients, about chains
-/// with multiple owners.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// Chain manager information that is included in `ChainInfo` sent to clients.
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test"), derive(Eq, PartialEq))]
-pub struct MultiOwnerManagerInfo {
+pub struct ChainManagerInfo {
     /// The configuration of the chain's owners.
     pub ownership: ChainOwnership,
     /// Latest authenticated block that we have received, if requested.
@@ -426,10 +469,10 @@ pub struct MultiOwnerManagerInfo {
     pub round_timeout: Timestamp,
 }
 
-impl From<&MultiOwnerManager> for MultiOwnerManagerInfo {
-    fn from(manager: &MultiOwnerManager) -> Self {
+impl From<&ChainManager> for ChainManagerInfo {
+    fn from(manager: &ChainManager) -> Self {
         let current_round = manager.current_round();
-        MultiOwnerManagerInfo {
+        ChainManagerInfo {
             ownership: manager.ownership.clone(),
             requested_proposed: None,
             requested_locked: None,
@@ -444,8 +487,8 @@ impl From<&MultiOwnerManager> for MultiOwnerManagerInfo {
     }
 }
 
-impl MultiOwnerManagerInfo {
-    pub fn add_values(&mut self, manager: &MultiOwnerManager) {
+impl ChainManagerInfo {
+    pub fn add_values(&mut self, manager: &ChainManager) {
         self.requested_proposed = manager.proposed.clone();
         self.requested_locked = manager.locked.clone();
         self.requested_pending_value = manager.pending.as_ref().map(|vote| vote.value.clone());

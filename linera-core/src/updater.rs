@@ -11,10 +11,7 @@ use linera_base::{
     data_types::{BlockHeight, RoundNumber},
     identifiers::{ChainDescription, ChainId, MessageId},
 };
-use linera_chain::{
-    data_types::{BlockProposal, Certificate, CertificateValue, LiteVote},
-    ChainManager,
-};
+use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
 use linera_execution::committee::{Committee, Epoch, ValidatorName};
 use linera_storage::Store;
 use linera_views::views::ViewError;
@@ -38,8 +35,7 @@ const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub enum CommunicateAction {
-    SubmitBlockForConfirmation(BlockProposal),
-    SubmitBlockForValidation(BlockProposal),
+    SubmitBlock(BlockProposal),
     FinalizeBlock(Certificate),
     AdvanceToNextBlockHeight(BlockHeight),
     RequestLeaderTimeout {
@@ -391,16 +387,14 @@ where
             }
         }
         let manager = self.store.load_chain(chain_id).await?.manager.get().clone();
-        if let ChainManager::Multi(manager) = manager {
-            if let Some(cert) = manager.locked {
-                if cert.value().is_validated() && cert.value().chain_id() == chain_id {
-                    self.send_certificate(cert, false).await?;
-                }
+        if let Some(cert) = manager.locked {
+            if cert.value().is_validated() && cert.value().chain_id() == chain_id {
+                self.send_certificate(cert, false).await?;
             }
-            if let Some(cert) = manager.leader_timeout {
-                if cert.value().is_timeout() && cert.value().chain_id() == chain_id {
-                    self.send_certificate(cert, false).await?;
-                }
+        }
+        if let Some(cert) = manager.leader_timeout {
+            if cert.value().is_timeout() && cert.value().chain_id() == chain_id {
+                self.send_certificate(cert, false).await?;
             }
         }
         Ok(())
@@ -435,10 +429,7 @@ where
         action: CommunicateAction,
     ) -> Result<Option<LiteVote>, NodeError> {
         let target_block_height = match &action {
-            CommunicateAction::SubmitBlockForValidation(proposal)
-            | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
-                proposal.content.block.height
-            }
+            CommunicateAction::SubmitBlock(proposal) => proposal.content.block.height,
             CommunicateAction::FinalizeBlock(certificate) => certificate.value().height(),
             CommunicateAction::AdvanceToNextBlockHeight(height) => *height,
             CommunicateAction::RequestLeaderTimeout { height, .. } => *height,
@@ -448,10 +439,9 @@ where
             .await?;
         // Send the block proposal (if any) and return a vote.
         match action {
-            CommunicateAction::SubmitBlockForValidation(proposal)
-            | CommunicateAction::SubmitBlockForConfirmation(proposal) => {
+            CommunicateAction::SubmitBlock(proposal) => {
                 let info = self.send_block_proposal(proposal.clone()).await?;
-                match info.manager.pending() {
+                match info.manager.pending {
                     Some(vote) if vote.validator == self.name => {
                         vote.check()?;
                         return Ok(Some(vote.clone()));
@@ -465,7 +455,7 @@ where
                 // The only cause for a retry here is the first certificate of a newly opened chain.
                 let retryable = target_block_height == BlockHeight::ZERO;
                 let info = self.send_certificate(certificate, retryable).await?;
-                match info.manager.pending() {
+                match info.manager.pending {
                     Some(vote) if vote.validator == self.name => {
                         vote.check()?;
                         return Ok(Some(vote.clone()));
@@ -478,7 +468,7 @@ where
             CommunicateAction::RequestLeaderTimeout { .. } => {
                 let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
                 let info = self.node.handle_chain_info_query(query).await?.info;
-                match info.manager.timeout_vote() {
+                match info.manager.timeout_vote {
                     Some(vote) if vote.validator == self.name => {
                         vote.check()?;
                         return Ok(Some(vote.clone()));

@@ -211,17 +211,34 @@ ChainInfoResponse:
         OPTION:
           TYPENAME: Signature
 ChainManagerInfo:
-  ENUM:
-    0:
-      None: UNIT
-    1:
-      Single:
-        NEWTYPE:
-          TYPENAME: SingleOwnerManagerInfo
-    2:
-      Multi:
-        NEWTYPE:
-          TYPENAME: MultiOwnerManagerInfo
+  STRUCT:
+    - ownership:
+        TYPENAME: ChainOwnership
+    - requested_proposed:
+        OPTION:
+          TYPENAME: BlockProposal
+    - requested_locked:
+        OPTION:
+          TYPENAME: Certificate
+    - leader_timeout:
+        OPTION:
+          TYPENAME: Certificate
+    - pending:
+        OPTION:
+          TYPENAME: LiteVote
+    - timeout_vote:
+        OPTION:
+          TYPENAME: LiteVote
+    - requested_pending_value:
+        OPTION:
+          TYPENAME: CertificateValue
+    - current_round:
+        TYPENAME: RoundNumber
+    - leader:
+        OPTION:
+          TYPENAME: Owner
+    - round_timeout:
+        TYPENAME: Timestamp
 ChainOwnership:
   STRUCT:
     - super_owners:
@@ -418,35 +435,6 @@ MessageId:
     - height:
         TYPENAME: BlockHeight
     - index: U32
-MultiOwnerManagerInfo:
-  STRUCT:
-    - ownership:
-        TYPENAME: ChainOwnership
-    - requested_proposed:
-        OPTION:
-          TYPENAME: BlockProposal
-    - requested_locked:
-        OPTION:
-          TYPENAME: Certificate
-    - leader_timeout:
-        OPTION:
-          TYPENAME: Certificate
-    - pending:
-        OPTION:
-          TYPENAME: LiteVote
-    - timeout_vote:
-        OPTION:
-          TYPENAME: LiteVote
-    - requested_pending_value:
-        OPTION:
-          TYPENAME: CertificateValue
-    - current_round:
-        TYPENAME: RoundNumber
-    - leader:
-        OPTION:
-          TYPENAME: Owner
-    - round_timeout:
-        TYPENAME: Timestamp
 NodeError:
   ENUM:
     0:
@@ -640,18 +628,6 @@ Signature:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 64
-SingleOwnerManagerInfo:
-  STRUCT:
-    - owner:
-        TYPENAME: Owner
-    - public_key:
-        TYPENAME: PublicKey
-    - pending:
-        OPTION:
-          TYPENAME: LiteVote
-    - requested_pending_value:
-        OPTION:
-          TYPENAME: CertificateValue
 SystemChannel:
   ENUM:
     0:
@@ -792,42 +768,40 @@ SystemOperation:
     3:
       CloseChain: UNIT
     4:
-      ChangeOwner:
+      ChangeOwnership:
         STRUCT:
-          - new_public_key:
-              TYPENAME: PublicKey
-    5:
-      ChangeMultipleOwners:
-        STRUCT:
-          - new_owners:
+          - super_owners:
+              SEQ:
+                TYPENAME: PublicKey
+          - owners:
               SEQ:
                 TUPLE:
                   - TYPENAME: PublicKey
                   - U64
           - multi_leader_rounds:
               TYPENAME: RoundNumber
-    6:
+    5:
       Subscribe:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - channel:
               TYPENAME: SystemChannel
-    7:
+    6:
       Unsubscribe:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - channel:
               TYPENAME: SystemChannel
-    8:
+    7:
       PublishBytecode:
         STRUCT:
           - contract:
               TYPENAME: Bytecode
           - service:
               TYPENAME: Bytecode
-    9:
+    8:
       CreateApplication:
         STRUCT:
           - bytecode_id:
@@ -837,14 +811,14 @@ SystemOperation:
           - required_application_ids:
               SEQ:
                 TYPENAME: ApplicationId
-    10:
+    9:
       RequestApplication:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
           - application_id:
               TYPENAME: ApplicationId
-    11:
+    10:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation

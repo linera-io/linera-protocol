@@ -328,7 +328,11 @@ where
         chain_id: ChainId,
         new_public_key: PublicKey,
     ) -> Result<CryptoHash, Error> {
-        let operation = SystemOperation::ChangeOwner { new_public_key };
+        let operation = SystemOperation::ChangeOwnership {
+            super_owners: vec![new_public_key],
+            owners: Vec::new(),
+            multi_leader_rounds: RoundNumber(2),
+        };
         self.execute_system_operation(operation, chain_id).await
     }
 
@@ -340,8 +344,9 @@ where
         new_weights: Vec<u64>,
         multi_leader_rounds: RoundNumber,
     ) -> Result<CryptoHash, Error> {
-        let operation = SystemOperation::ChangeMultipleOwners {
-            new_owners: new_public_keys.into_iter().zip(new_weights).collect(),
+        let operation = SystemOperation::ChangeOwnership {
+            super_owners: Vec::new(),
+            owners: new_public_keys.into_iter().zip(new_weights).collect(),
             multi_leader_rounds,
         };
         self.execute_system_operation(operation, chain_id).await

@@ -166,7 +166,7 @@ where
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Timestamp::from(1), info.timestamp);
     assert_eq!(Some(publish_certificate.hash()), info.block_hash);
-    assert!(info.manager.pending().is_none());
+    assert!(info.manager.pending.is_none());
 
     // Produce one more block to broadcast the bytecode ID.
     let broadcast_message = IncomingMessage {
@@ -226,7 +226,7 @@ where
     assert_eq!(BlockHeight::from(2), info.next_block_height);
     assert_eq!(Timestamp::from(1), info.timestamp);
     assert_eq!(Some(broadcast_certificate.hash()), info.block_hash);
-    assert!(info.manager.pending().is_none());
+    assert!(info.manager.pending.is_none());
 
     // Subscribe to get the bytecode ID.
     let subscribe_operation = SystemOperation::Subscribe {
@@ -276,7 +276,7 @@ where
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Timestamp::from(2), info.timestamp);
     assert_eq!(Some(subscribe_certificate.hash()), info.block_hash);
-    assert!(info.manager.pending().is_none());
+    assert!(info.manager.pending.is_none());
 
     // Accept subscription
     let accept_message = IncomingMessage {
@@ -321,7 +321,7 @@ where
     assert_eq!(BlockHeight::from(3), info.next_block_height);
     assert_eq!(Timestamp::from(3), info.timestamp);
     assert_eq!(Some(accept_certificate.hash()), info.block_hash);
-    assert!(info.manager.pending().is_none());
+    assert!(info.manager.pending.is_none());
 
     // Create an application.
     let initial_value = 10_u64;
@@ -406,7 +406,7 @@ where
     assert_eq!(BlockHeight::from(2), info.next_block_height);
     assert_eq!(Timestamp::from(4), info.timestamp);
     assert_eq!(Some(create_certificate.hash()), info.block_hash);
-    assert!(info.manager.pending().is_none());
+    assert!(info.manager.pending.is_none());
 
     // Execute an application operation
     let increment = 5_u64;
@@ -456,6 +456,6 @@ where
     assert_eq!(BlockHeight::from(3), info.next_block_height);
     assert_eq!(Some(run_certificate.hash()), info.block_hash);
     assert_eq!(Timestamp::from(5), info.timestamp);
-    assert!(info.manager.pending().is_none());
+    assert!(info.manager.pending.is_none());
     Ok(())
 }

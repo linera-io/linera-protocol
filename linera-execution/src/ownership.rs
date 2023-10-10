@@ -62,4 +62,8 @@ impl ChainOwnership {
     pub fn first_single_leader_round(&self) -> RoundNumber {
         self.multi_leader_rounds.saturating_add(RoundNumber(1))
     }
+
+    pub fn all_owners(&self) -> impl Iterator<Item = &Owner> {
+        self.super_owners.keys().chain(self.owners.keys())
+    }
 }

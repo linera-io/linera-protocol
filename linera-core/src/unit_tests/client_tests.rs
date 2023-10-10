@@ -23,7 +23,6 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{CertificateValue, ExecutedBlock},
-    test::multi_manager,
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
@@ -1448,8 +1447,9 @@ where
     let pub_key0 = client.public_key().await.unwrap();
     let pub_key1 = KeyPair::generate().public();
 
-    let owner_change_op = SystemOperation::ChangeMultipleOwners {
-        new_owners: vec![(pub_key0, 100), (pub_key1, 100)],
+    let owner_change_op = SystemOperation::ChangeOwnership {
+        super_owners: Vec::new(),
+        owners: vec![(pub_key0, 100), (pub_key1, 100)],
         multi_leader_rounds: RoundNumber::ZERO,
     }
     .into();
@@ -1464,7 +1464,7 @@ where
         ))
     ));
 
-    clock.set(multi_manager(&manager).round_timeout);
+    clock.set(manager.round_timeout);
 
     // After the timeout they will.
     let certificate = client.request_leader_timeout().await.unwrap();

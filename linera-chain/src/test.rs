@@ -15,12 +15,9 @@ use linera_execution::{
     Operation, SystemOperation,
 };
 
-use crate::{
-    data_types::{
-        Block, BlockAndRound, BlockProposal, Certificate, HashedValue, IncomingMessage,
-        SignatureAggregator, Vote,
-    },
-    ChainManagerInfo, MultiOwnerManagerInfo,
+use crate::data_types::{
+    Block, BlockAndRound, BlockProposal, Certificate, HashedValue, IncomingMessage,
+    SignatureAggregator, Vote,
 };
 
 /// Creates a new child of the given block, with the same timestamp.
@@ -134,13 +131,5 @@ impl VoteTestExt for Vote {
             .append(self.validator, self.signature)
             .unwrap()
             .unwrap()
-    }
-}
-
-/// Returns the `MultiOwnerManagerInfo`; panics if there is a different kind of chain manager.
-pub fn multi_manager(manager: &ChainManagerInfo) -> &MultiOwnerManagerInfo {
-    match manager {
-        ChainManagerInfo::Multi(multi) => multi,
-        _ => panic!("Expected multi-owner chain manager."),
     }
 }

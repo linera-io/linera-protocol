@@ -24,8 +24,8 @@ use linera_chain::{
         HashedValue, IncomingMessage, LiteVote, Medium, Origin, OutgoingMessage,
         SignatureAggregator,
     },
-    test::{make_child_block, make_first_block, multi_manager, BlockTestExt, VoteTestExt},
-    ChainError, ChainExecutionContext, ChainManager,
+    test::{make_child_block, make_first_block, BlockTestExt, VoteTestExt},
+    ChainError, ChainExecutionContext,
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
@@ -1216,7 +1216,7 @@ where
         .unwrap()
         .lite();
     assert_eq!(
-        *chain_info_response.info.manager.pending().unwrap(),
+        chain_info_response.info.manager.pending.unwrap(),
         pending_value
     );
 }
@@ -2124,7 +2124,7 @@ where
     assert_eq!(Amount::ZERO, info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash()), info.block_hash);
-    assert!(info.manager.pending().is_none());
+    assert!(info.manager.pending.is_none());
     assert_eq!(
         worker
             .query_application(ChainId::root(1), &Query::System(SystemQuery))
@@ -2189,12 +2189,14 @@ where
             *recipient_chain.execution_state.system.balance.get(),
             Amount::from_tokens(4)
         );
-        assert!(matches!(
-            recipient_chain.manager.get(),
-            ChainManager::Multi(multi)
-                if multi.ownership.super_owners.contains_key(&recipient_key_pair.public().into())
-                    && multi.ownership.super_owners.len() == 1 && multi.ownership.owners.is_empty()
-        ));
+        let ownership = &recipient_chain.manager.get().ownership;
+        assert!(
+            ownership
+                .super_owners
+                .contains_key(&recipient_key_pair.public().into())
+                && ownership.super_owners.len() == 1
+                && ownership.owners.is_empty()
+        );
         assert_eq!(recipient_chain.confirmed_log.count(), 1);
         assert_eq!(
             recipient_chain.tip_state.get().block_hash,
@@ -2279,7 +2281,7 @@ where
     assert_eq!(Amount::ZERO, info.system_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash()), info.block_hash);
-    assert!(info.manager.pending().is_none());
+    assert!(info.manager.pending.is_none());
 }
 
 #[test(tokio::test)]
@@ -3329,8 +3331,9 @@ where
     let (committee, mut worker) = init_worker_with_chains(store, balances).await;
 
     // Add another owner and use the leader-based protocol in all rounds.
-    let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeMultipleOwners {
-        new_owners: vec![(pub_key0, 100), (pub_key1, 100)],
+    let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
+        super_owners: Vec::new(),
+        owners: vec![(pub_key0, 100), (pub_key1, 100)],
         multi_leader_rounds: RoundNumber::from(0),
     });
     let (executed_block0, _) = worker.stage_block_execution(block0).await.unwrap();
@@ -3342,8 +3345,7 @@ where
         .unwrap();
 
     // The leader sequence is pseudorandom but deterministic. The first leader is owner 1.
-    let manager = multi_manager(&response.info.manager);
-    assert_eq!(manager.leader, Some(Owner::from(pub_key0)));
+    assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key0)));
 
     // So owner 1 cannot propose a block in this round. And the next round hasn't started yet.
     let proposal =
@@ -3360,17 +3362,15 @@ where
     // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
     let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
     let (response, _) = worker.handle_chain_info_query(query).await.unwrap();
-    let manager = multi_manager(&response.info.manager);
-    assert!(manager.timeout_vote.is_none());
+    assert!(response.info.manager.timeout_vote.is_none());
 
     // Set the clock to the end of the round.
-    clock.set(manager.round_timeout);
+    clock.set(response.info.manager.round_timeout);
 
     // Now the validator will sign a leader timeout vote.
     let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
     let (response, _) = worker.handle_chain_info_query(query).await.unwrap();
-    let manager = multi_manager(&response.info.manager);
-    let vote = manager.timeout_vote.clone().unwrap();
+    let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout =
         HashedValue::new_leader_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
 
@@ -3384,8 +3384,7 @@ where
         .handle_certificate(certificate_timeout, vec![], None)
         .await
         .unwrap();
-    let manager = multi_manager(&response.info.manager);
-    assert_eq!(manager.leader, Some(Owner::from(pub_key1)));
+    assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key1)));
 
     // Now owner 1 can propose a block, but owner 0 can't.
     let block1 = make_child_block(&value0);
@@ -3400,17 +3399,15 @@ where
         .into_proposal_with_round(&key_pairs[1], RoundNumber(2));
     let (response, _) = worker.handle_block_proposal(proposal1).await.unwrap();
     let value1 = HashedValue::new_validated(executed_block1.clone());
-    let manager = multi_manager(&response.info.manager);
 
     // If we send the validated block certificate to the worker, it votes to confirm.
-    let vote = manager.pending.clone().unwrap();
+    let vote = response.info.manager.pending.clone().unwrap();
     let certificate1 = vote.with_value(value1.clone()).unwrap().into_certificate();
     let (response, _) = worker
         .handle_certificate(certificate1.clone(), vec![], None)
         .await
         .unwrap();
-    let manager = multi_manager(&response.info.manager);
-    let vote = manager.pending.as_ref().unwrap();
+    let vote = response.info.manager.pending.as_ref().unwrap();
     let value = HashedValue::new_confirmed(executed_block1.clone());
     assert_eq!(vote.value, value.lite());
 
@@ -3421,9 +3418,8 @@ where
         .handle_certificate(certificate_timeout, vec![], None)
         .await
         .unwrap();
-    let manager = multi_manager(&response.info.manager);
-    assert_eq!(manager.leader, Some(Owner::from(pub_key1)));
-    assert_eq!(manager.current_round, RoundNumber::from(5));
+    assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key1)));
+    assert_eq!(response.info.manager.current_round, RoundNumber::from(5));
 
     // Create block2, also at height 1, but different from block 1.
     let amount = Amount::from_tokens(1);
@@ -3444,8 +3440,7 @@ where
         .handle_chain_info_query(query_values.clone())
         .await
         .unwrap();
-    let manager = multi_manager(&response.info.manager);
-    assert_eq!(manager.requested_locked, Some(certificate1));
+    assert_eq!(response.info.manager.requested_locked, Some(certificate1));
 
     // Proposing block2 now would fail.
     let proposal = block2
@@ -3467,9 +3462,8 @@ where
         .handle_chain_info_query(query_values.clone())
         .await
         .unwrap();
-    let manager = multi_manager(&response.info.manager);
-    assert_eq!(manager.requested_locked, Some(certificate2));
-    let vote = manager.pending.as_ref().unwrap();
+    assert_eq!(response.info.manager.requested_locked, Some(certificate2));
+    let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
     assert_eq!(vote.round, RoundNumber::from(5));
 
@@ -3480,9 +3474,8 @@ where
         .handle_certificate(certificate_timeout, vec![], None)
         .await
         .unwrap();
-    let manager = multi_manager(&response.info.manager);
-    assert_eq!(manager.leader, Some(Owner::from(pub_key0)));
-    assert_eq!(manager.current_round, RoundNumber::from(6));
+    assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key0)));
+    assert_eq!(response.info.manager.current_round, RoundNumber::from(6));
 
     // Since the validator now voted for block2, it can't vote for block1 anymore.
     let proposal = block1.into_proposal_with_round(&key_pairs[0], RoundNumber(6));
@@ -3498,8 +3491,7 @@ where
         .handle_certificate(certificate_timeout, vec![], None)
         .await
         .unwrap();
-    let manager = multi_manager(&response.info.manager);
-    assert_eq!(manager.current_round, RoundNumber::from(8));
+    assert_eq!(response.info.manager.current_round, RoundNumber::from(8));
 
     // If the worker does not belong to a validator, it does update its locked block even if it's
     // from a past round.
@@ -3510,6 +3502,5 @@ where
         .await
         .unwrap();
     let (response, _) = worker.handle_chain_info_query(query_values).await.unwrap();
-    let manager = multi_manager(&response.info.manager);
-    assert_eq!(manager.requested_locked, Some(certificate));
+    assert_eq!(response.info.manager.requested_locked, Some(certificate));
 }

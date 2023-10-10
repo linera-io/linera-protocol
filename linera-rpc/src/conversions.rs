@@ -453,7 +453,6 @@ pub mod tests {
     use linera_chain::{
         data_types::{Block, BlockAndRound, ExecutedBlock, HashedValue},
         test::make_first_block,
-        ChainManagerInfo,
     };
     use linera_core::data_types::ChainInfo;
     use serde::{Deserialize, Serialize};
@@ -527,7 +526,7 @@ pub mod tests {
             chain_id: ChainId::root(0),
             epoch: None,
             description: None,
-            manager: ChainManagerInfo::default(),
+            manager: Box::default(),
             system_balance: Amount::ZERO,
             block_hash: None,
             timestamp: Timestamp::default(),

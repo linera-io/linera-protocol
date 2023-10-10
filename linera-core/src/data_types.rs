@@ -135,7 +135,7 @@ pub struct ChainInfo {
     /// The chain description.
     pub description: Option<ChainDescription>,
     /// The state of the chain authentication.
-    pub manager: ChainManagerInfo,
+    pub manager: Box<ChainManagerInfo>,
     /// The current balance.
     pub system_balance: Amount,
     /// The last block hash, if any.
@@ -225,7 +225,7 @@ where
             chain_id: view.chain_id(),
             epoch: *system_state.epoch.get(),
             description: *system_state.description.get(),
-            manager: ChainManagerInfo::from(view.manager.get()),
+            manager: Box::new(ChainManagerInfo::from(view.manager.get())),
             system_balance: *system_state.balance.get(),
             block_hash: tip_state.block_hash,
             next_block_height: tip_state.next_block_height,

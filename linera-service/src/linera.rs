@@ -1527,7 +1527,7 @@ impl Runnable for Job {
                     .into_iter()
                     .filter_map(|message| {
                         deserialize_response(message).and_then(|response| {
-                            response.info.manager.pending().and_then(|vote| {
+                            response.info.manager.pending.and_then(|vote| {
                                 let value = values.get(&vote.value.value_hash)?.clone();
                                 vote.clone().with_value(value)
                             })
