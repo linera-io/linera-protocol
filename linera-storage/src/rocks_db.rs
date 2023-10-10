@@ -67,7 +67,7 @@ pub type RocksDbStoreClient<C> = DbStoreClient<RocksDbClient, C>;
 
 #[cfg(any(test, feature = "test"))]
 impl RocksDbStoreClient<TestClock> {
-    pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> Self {
+    pub async fn make_test_store(wasm_runtime: Option<WasmRuntime>) -> Self {
         let dir = TempDir::new().unwrap();
         let path_buf = dir.path().to_path_buf();
         let common_config = create_rocks_db_common_config();

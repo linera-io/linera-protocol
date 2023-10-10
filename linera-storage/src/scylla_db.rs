@@ -70,7 +70,7 @@ pub type ScyllaDbStoreClient<C> = DbStoreClient<ScyllaDbClient, C>;
 
 #[cfg(any(test, feature = "test"))]
 impl ScyllaDbStoreClient<TestClock> {
-    pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> Self {
+    pub async fn make_test_store(wasm_runtime: Option<WasmRuntime>) -> Self {
         let uri = "localhost:9042".to_string();
         let table_name = get_table_name();
         let common_config = create_scylla_db_common_config();

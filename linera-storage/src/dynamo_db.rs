@@ -73,7 +73,7 @@ pub type DynamoDbStoreClient<C> = DbStoreClient<DynamoDbClient, C>;
 
 #[cfg(any(test, feature = "test"))]
 impl DynamoDbStoreClient<TestClock> {
-    pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> Self {
+    pub async fn make_test_store(wasm_runtime: Option<WasmRuntime>) -> Self {
         let table = get_table_name();
         let table_name = table.parse().expect("Invalid table name");
         let localstack = LocalStackTestContext::new().await.expect("localstack");

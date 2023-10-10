@@ -24,7 +24,7 @@ pub type MemoryStoreClient<C> = DbStoreClient<MemoryClient, C>;
 
 #[cfg(any(test, feature = "test"))]
 impl MemoryStoreClient<crate::TestClock> {
-    pub async fn make_test_client(wasm_runtime: Option<WasmRuntime>) -> Self {
+    pub async fn make_test_store(wasm_runtime: Option<WasmRuntime>) -> Self {
         let clock = crate::TestClock::new();
         let max_stream_queries = linera_views::memory::TEST_MEMORY_MAX_STREAM_QUERIES;
         MemoryStoreClient::new(wasm_runtime, max_stream_queries, clock)
