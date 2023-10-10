@@ -111,7 +111,7 @@ Testing the Wasm application examples requires configuring a custom test runner 
 `linera-sdk`. First it has to be built:
 
 ```
-cargo build --release --bin test-runner
+cargo build --release --bin linera-wasm-test-runner
 ```
 
 After that, the Wasm tests can be executed with:
@@ -121,10 +121,10 @@ cd examples
 cargo test --target wasm32-unknown-unknown
 ```
 
-Note that this works because we declared the test-runner in `.cargo/config.toml` with
+Note that this works because we declared the linera-wasm-test-runner in `.cargo/config.toml` with
 ```
 [target.wasm32-unknown-unknown]
-runner = "/path/to/repository/target/release/test-runner"
+runner = "/path/to/repository/target/release/linera-wasm-test-runner"
 ```
 (See the [documentation of Cargo](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure) for more context.)
 

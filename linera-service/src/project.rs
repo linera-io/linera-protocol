@@ -18,7 +18,7 @@ pub struct Project {
     root: PathBuf,
 }
 
-const RUNNER_BIN_NAME: &str = "test-runner";
+const RUNNER_BIN_NAME: &str = "linera-wasm-test-runner";
 const RUNNER_BIN_CRATE: &str = "linera-sdk";
 
 impl Project {

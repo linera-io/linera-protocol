@@ -12,14 +12,14 @@
 //!
 //! # Using With Cargo
 //!
-//! It's possible to make Cargo use this test-runner for the `wasm32-unknown-unknown` target
+//! It's possible to make Cargo use this test runner for the `wasm32-unknown-unknown` target
 //! automatically by adding the following line to one of [Cargo's configuration
 //! files](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure) or setting
 //! the `CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER` environment variable.
 //!
 //! ```ignore
 //! [target.wasm32-unknown-unknown]
-//! runner = "/path/to/test-runner"
+//! runner = "/path/to/linera-wasm-test-runner"
 //! ```
 //!
 //! [webassembly_test]: https://docs.rs/webassembly-test/latest/webassembly_test/
