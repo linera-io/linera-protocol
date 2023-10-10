@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::util;
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 use cargo_toml::Manifest;
 use current_platform::CURRENT_PLATFORM;
 use std::{
@@ -22,13 +22,13 @@ const RUNNER_BIN_NAME: &str = "linera-wasm-test-runner";
 const RUNNER_BIN_CRATE: &str = "linera-sdk";
 
 impl Project {
-    pub fn new(root: PathBuf) -> Result<Self> {
-        anyhow::ensure!(
+    pub fn create_new(root: PathBuf) -> Result<Self> {
+        ensure!(
             !root.exists(),
             "destination {} already exists",
             root.display(),
         );
-        anyhow::ensure!(
+        ensure!(
             root.extension().is_none(),
             "project name must be a directory"
         );
@@ -72,7 +72,7 @@ impl Project {
     }
 
     pub fn from_existing_project(root: PathBuf) -> Result<Self> {
-        anyhow::ensure!(
+        ensure!(
             root.exists(),
             "could not find project at {}",
             root.display()
@@ -92,14 +92,14 @@ impl Project {
             .current_dir(&self.root)
             .spawn()?
             .wait()?;
-        anyhow::ensure!(unit_tests.success(), "unit tests failed");
+        ensure!(unit_tests.success(), "unit tests failed");
         let integration_tests = Command::new("cargo")
             .arg("test")
             .args(["--target", CURRENT_PLATFORM])
             .current_dir(&self.root)
             .spawn()?
             .wait()?;
-        anyhow::ensure!(integration_tests.success(), "integration tests failed");
+        ensure!(integration_tests.success(), "integration tests failed");
         Ok(())
     }
 
@@ -141,7 +141,7 @@ impl Project {
             ])
             .output()?;
 
-        anyhow::ensure!(
+        ensure!(
             output.status.success(),
             "failed to initialize git repository at {}",
             &project_root.display()
@@ -276,7 +276,7 @@ impl Project {
             .current_dir(&self.root)
             .spawn()?
             .wait()?;
-        anyhow::ensure!(cargo_build.success(), "build failed");
+        ensure!(cargo_build.success(), "build failed");
         let build_path = self
             .workspace_root()?
             .join("target/wasm32-unknown-unknown/release");

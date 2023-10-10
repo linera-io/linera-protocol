@@ -1788,7 +1788,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
         ClientCommand::Project(project_command) => match project_command {
             ProjectCommand::New { path } => {
-                Project::new(path.clone())?;
+                Project::create_new(path.clone())?;
                 Ok(())
             }
             ProjectCommand::Test { path } => {
