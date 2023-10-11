@@ -8,6 +8,8 @@ spec:
   ports:
     - port: 19100
       name: http
+    - port: 21100
+      name: metrics
   clusterIP: None
   selector:
     app: shards
@@ -80,3 +82,22 @@ spec:
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    release: linera-core
+  name: shards
+spec:
+  endpoints:
+  - port: metrics
+    path: /metrics
+    scheme: http
+  jobLabel: shards
+  namespaceSelector:
+    matchNames:
+    - default
+  selector:
+    matchLabels:
+      app: shards
