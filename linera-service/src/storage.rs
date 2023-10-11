@@ -25,6 +25,7 @@ use {
 
 #[cfg(feature = "scylladb")]
 use {
+    anyhow::Context as _,
     linera_storage::ScyllaDbStore,
     linera_views::scylla_db::{ScyllaDbClient, ScyllaDbKvStoreConfig},
 };
@@ -128,30 +129,19 @@ impl FromStr for StorageConfig {
                     match part {
                         "https" => {
                             let err_msg = "Correct format is https:://db_hostname:port";
-                            let Some(empty) = parts.next() else {
-                                bail!(err_msg);
-                            };
-                            if !empty.is_empty() {
-                                bail!(err_msg);
-                            }
-                            let Some(address) = parts.next() else {
-                                bail!(err_msg);
-                            };
-                            let Some(port_str) = parts.next() else {
-                                bail!(err_msg);
-                            };
-                            let Ok(_num_port) = port_str.parse::<u16>() else {
-                                bail!(err_msg);
-                            };
-                            if uri.is_some() {
-                                bail!("The uri has already been assigned");
-                            }
+                            let empty = parts.next().context(err_msg)?;
+                            anyhow::ensure!(empty.is_empty(), err_msg);
+                            let address = parts.next().context(err_msg)?;
+                            let port_str = parts.next().context(err_msg)?;
+                            let _num_port = port_str.parse::<u16>().context(err_msg)?;
+                            anyhow::ensure!(uri.is_none(), "The uri has already been assigned");
                             uri = Some(format!("https::{}:{}", address, port_str));
                         }
                         _ if part.starts_with("table") => {
-                            if table_name.is_some() {
-                                bail!("The table_name has already been assigned");
-                            }
+                            anyhow::ensure!(
+                                table_name.is_none(),
+                                "The table_name has already been assigned"
+                            );
                             table_name = Some(part.to_string());
                         }
                         _ => {

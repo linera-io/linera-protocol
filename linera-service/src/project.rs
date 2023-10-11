@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::util;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result};
 use cargo_toml::Manifest;
 use current_platform::CURRENT_PLATFORM;
 use std::{
@@ -23,12 +23,15 @@ const RUNNER_BIN_CRATE: &str = "linera-sdk";
 
 impl Project {
     pub fn new(root: PathBuf) -> Result<Self> {
-        if root.exists() {
-            bail!("destination {} already exists", root.display());
-        }
-        if root.extension().is_some() {
-            bail!("project name must be a directory");
-        }
+        anyhow::ensure!(
+            !root.exists(),
+            "destination {} already exists",
+            root.display(),
+        );
+        anyhow::ensure!(
+            root.extension().is_none(),
+            "project name must be a directory"
+        );
         debug!("creating directory at {}", root.display());
         std::fs::create_dir_all(&root)?;
 
@@ -42,7 +45,7 @@ impl Project {
             .file_name()
             .and_then(OsStr::to_str)
             .map(|s| s.to_string())
-            .ok_or_else(|| anyhow!("path specified cannot terminate in . or .."))?;
+            .context("path specified cannot terminate in . or ..")?;
 
         debug!("writing Cargo.toml");
         Self::create_cargo_toml(&root, &project_name)?;
@@ -69,9 +72,11 @@ impl Project {
     }
 
     pub fn from_existing_project(root: PathBuf) -> Result<Self> {
-        if !root.exists() {
-            bail!("could not find project at {}", root.display());
-        }
+        anyhow::ensure!(
+            root.exists(),
+            "could not find project at {}",
+            root.display()
+        );
         Ok(Self { root })
     }
 
@@ -87,18 +92,14 @@ impl Project {
             .current_dir(&self.root)
             .spawn()?
             .wait()?;
-        if !unit_tests.success() {
-            bail!("unit tests failed")
-        }
+        anyhow::ensure!(unit_tests.success(), "unit tests failed");
         let integration_tests = Command::new("cargo")
             .arg("test")
             .args(["--target", CURRENT_PLATFORM])
             .current_dir(&self.root)
             .spawn()?
             .wait()?;
-        if !integration_tests.success() {
-            bail!("integration tests failed")
-        }
+        anyhow::ensure!(integration_tests.success(), "integration tests failed");
         Ok(())
     }
 
@@ -140,12 +141,11 @@ impl Project {
             ])
             .output()?;
 
-        if !output.status.success() {
-            bail!(
-                "failed to initialize git repository at {}",
-                &project_root.display()
-            );
-        }
+        anyhow::ensure!(
+            output.status.success(),
+            "failed to initialize git repository at {}",
+            &project_root.display()
+        );
 
         Self::write_string_to_file(&project_root.join(".gitignore"), "/target")
     }
@@ -276,9 +276,7 @@ impl Project {
             .current_dir(&self.root)
             .spawn()?
             .wait()?;
-        if !cargo_build.success() {
-            bail!("build failed")
-        }
+        anyhow::ensure!(cargo_build.success(), "build failed");
         let build_path = self
             .workspace_root()?
             .join("target/wasm32-unknown-unknown/release");

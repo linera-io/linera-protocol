@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, bail};
+use anyhow::{bail, Context as _};
 use comfy_table::{
     modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color, ContentArrangement,
     Table,
@@ -214,9 +214,7 @@ impl WalletState {
             .inner
             .unassigned_key_pairs
             .remove(&key)
-            .ok_or_else(|| {
-                anyhow!("could not assign chain to key as unassigned key was not found")
-            })?;
+            .context("could not assign chain to key as unassigned key was not found")?;
         let user_chain = UserChain {
             chain_id,
             key_pair: Some(key_pair),
@@ -229,9 +227,12 @@ impl WalletState {
     }
 
     pub fn set_default_chain(&mut self, chain_id: ChainId) -> Result<(), anyhow::Error> {
-        if !self.inner.chains.contains_key(&chain_id) {
-            bail!("Chain {} cannot be assigned as the default chain since it does not exist in the wallet.", &chain_id);
-        }
+        anyhow::ensure!(
+            self.inner.chains.contains_key(&chain_id),
+            "Chain {} cannot be assigned as the default chain since it does not exist in the \
+             wallet.",
+            &chain_id
+        );
         self.inner.default = Some(chain_id);
         Ok(())
     }
@@ -275,16 +276,10 @@ impl WalletState {
     pub fn from_file(path: &Path) -> Result<Self, anyhow::Error> {
         let file = FileOptions::new().read(true).write(true);
         let block = false;
-        let file_lock = match FileLock::lock(path, block, file) {
-            Ok(lock) => lock,
-            Err(err) => bail!(
-                r#"
-Error getting write lock to wallet: {}.
-Please make sure a node service isn't running locally, only one client can use a wallet at a time.
-            "#,
-                err
-            ),
-        };
+        let file_lock = FileLock::lock(path, block, file).context(
+            "Error getting write lock to wallet. Please make sure a node service isn't \
+             running locally, only one client can use a wallet at a time.",
+        )?;
         let inner = serde_json::from_reader(BufReader::new(&file_lock.file))?;
         Ok(Self {
             inner,
@@ -300,16 +295,10 @@ Please make sure a node service isn't running locally, only one client can use a
     ) -> Result<Self, anyhow::Error> {
         let file = FileOptions::new().create(true).write(true).read(true);
         let block = false;
-        let file_lock = match FileLock::lock(path, block, file) {
-            Ok(lock) => lock,
-            Err(err) => bail!(
-                r#"
-Error getting write lock to wallet: {}.
-Please make sure a node service isn't running locally, only one client can use a wallet at a time.
-            "#,
-                err
-            ),
-        };
+        let file_lock = FileLock::lock(path, block, file).context(
+            "Error getting write lock to wallet. Please make sure a node service isn't \
+             running locally, only one client can use a wallet at a time.",
+        )?;
         let mut reader = BufReader::new(&file_lock.file);
         if reader.fill_buf()?.is_empty() {
             let inner = InnerWallet {
