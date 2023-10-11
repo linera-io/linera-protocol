@@ -7,7 +7,7 @@ mod handlers;
 mod requests;
 
 use self::handlers::RequestHandler;
-pub use self::requests::{BaseRequest, ContractRequest};
+pub use self::requests::{BaseRequest, ContractRequest, ServiceRequest};
 use crate::ExecutionError;
 use futures::{
     channel::mpsc,

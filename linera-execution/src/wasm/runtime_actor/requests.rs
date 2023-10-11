@@ -240,3 +240,37 @@ impl Debug for ContractRequest {
         }
     }
 }
+
+/// Requests from application services.
+pub enum ServiceRequest {
+    /// Requests that are valid for both contracts and services.
+    Base(BaseRequest),
+
+    /// Requests to query another application.
+    TryQueryApplication {
+        queried_id: UserApplicationId,
+        argument: Vec<u8>,
+        response_sender: oneshot::Sender<Vec<u8>>,
+    },
+}
+
+impl Debug for ServiceRequest {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        match self {
+            ServiceRequest::Base(base_request) => formatter
+                .debug_tuple("ServiceRequest::Base")
+                .field(base_request)
+                .finish(),
+
+            ServiceRequest::TryQueryApplication {
+                queried_id,
+                argument,
+                ..
+            } => formatter
+                .debug_struct("ServiceRequest::TryQueryApplication")
+                .field("queried_id", queried_id)
+                .field("argument", argument)
+                .finish_non_exhaustive(),
+        }
+    }
+}
