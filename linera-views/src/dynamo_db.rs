@@ -623,6 +623,11 @@ impl DynamoDbClientInternal {
         Ok(())
     }
 
+    async fn list_tables(store_config: DynamoDbKvStoreConfig) -> Result<Vec<String>, DynamoDbContextError> {
+        let client = Client::from_conf(store_config.config);
+        get_list_tables(&client).await
+    }
+
     async fn delete_single(
         store_config: DynamoDbKvStoreConfig,
     ) -> Result<(), DynamoDbContextError> {
@@ -1177,6 +1182,13 @@ impl DynamoDbClient {
         DynamoDbClientInternal::test_existence(store_config).await
     }
 
+    /// List all the tables of the database
+    pub async fn list_tables(
+        store_config: DynamoDbKvStoreConfig,
+    ) -> Result<Vec<String>, DynamoDbContextError> {
+        DynamoDbClientInternal::list_tables(store_config).await
+    }
+
     /// Deletes all the tables from the database
     pub async fn delete_all(
         store_config: DynamoDbKvStoreConfig,
@@ -1588,7 +1600,7 @@ pub async fn create_dynamo_db_test_client() -> DynamoDbClient {
 }
 
 /// Helper function to list the names of tables registered on DynamoDB.
-pub async fn list_tables(
+pub async fn get_list_tables(
     client: &aws_sdk_dynamodb::Client,
 ) -> Result<Vec<String>, DynamoDbContextError> {
     Ok(client
@@ -1601,7 +1613,7 @@ pub async fn list_tables(
 
 /// Helper function to clear all the tables from the database
 pub async fn clear_tables(client: &aws_sdk_dynamodb::Client) -> Result<(), DynamoDbContextError> {
-    let tables = list_tables(client).await?;
+    let tables = get_list_tables(client).await?;
     for table in tables {
         client.delete_table().table_name(&table).send().await?;
     }

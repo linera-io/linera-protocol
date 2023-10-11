@@ -692,6 +692,13 @@ impl ScyllaDbClient {
         ScyllaDbClientInternal::delete_all(store_config).await
     }
 
+    /// Delete all the tables of a database
+    pub async fn list_tables(
+        store_config: ScyllaDbKvStoreConfig,
+    ) -> Result<Vec<String>, ScyllaDbContextError> {
+        ScyllaDbClientInternal::list_tables(store_config).await
+    }
+
     /// Deletes a single table from the database
     pub async fn delete_single(
         store_config: ScyllaDbKvStoreConfig,
