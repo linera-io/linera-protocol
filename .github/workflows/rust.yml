@@ -126,6 +126,9 @@ jobs:
       uses: arduino/setup-protoc@v1
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install cargo-sort
+      run: |
+        cargo install cargo-sort --locked
     - name: Check formatting
       run: |
         cargo +nightly fmt -- --check
@@ -152,3 +155,10 @@ jobs:
     - name: Run cargo check-all-features
       run: |
         cargo check-all-features --all-targets
+    - name: Check if Cargo.toml files are sorted
+      run: |
+        cargo sort -c -w
+    - name: Check if Cargo.toml files are sorted
+      run: |
+        cd examples
+        cargo sort -c -w
