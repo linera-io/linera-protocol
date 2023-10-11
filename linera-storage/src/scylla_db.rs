@@ -93,11 +93,11 @@ impl ScyllaDbStore<TestClock> {
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let (store, table_status) =
             ScyllaDbStoreInner::new_for_testing(store_config, wasm_runtime).await?;
-        let store_client = ScyllaDbStore {
+        let store = ScyllaDbStore {
             client: Arc::new(store),
             clock,
         };
-        Ok((store_client, table_status))
+        Ok((store, table_status))
     }
 }
 
@@ -107,11 +107,11 @@ impl ScyllaDbStore<WallClock> {
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, ScyllaDbContextError> {
         let store = ScyllaDbStoreInner::initialize(store_config, wasm_runtime).await?;
-        let store_client = ScyllaDbStore {
+        let store = ScyllaDbStore {
             client: Arc::new(store),
             clock: WallClock,
         };
-        Ok(store_client)
+        Ok(store)
     }
 
     pub async fn new(
@@ -119,10 +119,10 @@ impl ScyllaDbStore<WallClock> {
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<(Self, TableStatus), ScyllaDbContextError> {
         let (store, table_status) = ScyllaDbStoreInner::new(store_config, wasm_runtime).await?;
-        let store_client = ScyllaDbStore {
+        let store = ScyllaDbStore {
             client: Arc::new(store),
             clock: WallClock,
         };
-        Ok((store_client, table_status))
+        Ok((store, table_status))
     }
 }

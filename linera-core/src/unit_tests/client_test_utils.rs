@@ -659,10 +659,10 @@ impl StoreBuilder for MakeRocksDbStore {
             path_buf,
             common_config,
         };
-        let (store_client, _) =
+        let (store, _) =
             RocksDbStore::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
                 .await?;
-        Ok(store_client)
+        Ok(store)
     }
 
     fn clock(&self) -> &TestClock {
@@ -712,10 +712,10 @@ impl StoreBuilder for MakeDynamoDbStore {
             common_config,
         };
         self.instance_counter += 1;
-        let (store_client, _) =
+        let (store, _) =
             DynamoDbStore::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
                 .await?;
-        Ok(store_client)
+        Ok(store)
     }
 
     fn clock(&self) -> &TestClock {
@@ -775,10 +775,10 @@ impl StoreBuilder for MakeScyllaDbStore {
             table_name,
             common_config,
         };
-        let (store_client, _) =
+        let (store, _) =
             ScyllaDbStore::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
                 .await?;
-        Ok(store_client)
+        Ok(store)
     }
 
     fn clock(&self) -> &TestClock {
