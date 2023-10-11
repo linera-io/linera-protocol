@@ -424,17 +424,17 @@ macro_rules! impl_view_system_api_for_service {
 macro_rules! impl_view_system_api_for_contract {
     ($view_system_api:ident<$runtime:lifetime>) => {
         impl_view_system_api_for_contract!(
-            @generate $view_system_api<$runtime>, wasmtime::Trap, $runtime, <$runtime>
+            @generate $view_system_api<$runtime>, wasmtime::Trap, <$runtime>
         );
     };
 
     ($view_system_api:ty) => {
         impl_view_system_api_for_contract!(
-            @generate $view_system_api, wasmer::RuntimeError, 'static
+            @generate $view_system_api, wasmer::RuntimeError
         );
     };
 
-    (@generate $view_system_api:ty, $trap:ty, $runtime:lifetime $(, <$param:lifetime> )?) => {
+    (@generate $view_system_api:ty, $trap:ty $(, <$param:lifetime> )?) => {
         impl$(<$param>)? view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
