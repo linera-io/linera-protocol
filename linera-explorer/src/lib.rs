@@ -569,7 +569,8 @@ async fn page(
         "applications" => applications(node, chain_id).await,
         "application" => {
             let app_arg = find_arg(args, "app").context("unknown application")?;
-            let app = from_value::<Application>(parse(&app_arg)).unwrap();
+            let app =
+                from_value::<Application>(parse(&app_arg)).expect("cannot parse applications");
             application(app).await
         }
         "operation" => {
