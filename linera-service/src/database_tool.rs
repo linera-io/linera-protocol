@@ -3,6 +3,7 @@
 
 use linera_service::storage::StorageConfig;
 use linera_views::common::CommonStoreConfig;
+use std::process;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -98,18 +99,7 @@ enum DatabaseToolCommand {
     },
 }
 
-#[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
-    let env_filter = tracing_subscriber::EnvFilter::builder()
-        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
-        .from_env_lossy();
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_env_filter(env_filter)
-        .init();
-
-    let options = DatabaseToolOptions::from_args();
-
+async fn evaluate_options(options: DatabaseToolOptions) -> Result<(), anyhow::Error> {
     match options.command {
         DatabaseToolCommand::DeleteAll {
             storage_config,
@@ -165,9 +155,9 @@ async fn main() -> Result<(), anyhow::Error> {
                 .await
                 .expect("successful delete_all operation");
             if test {
-                tracing::error!("The database does exist");
+                process::exit(0);
             } else {
-                tracing::error!("The database does not exist");
+                process::exit(1);
             }
         }
         DatabaseToolCommand::Initialize {
@@ -191,4 +181,22 @@ async fn main() -> Result<(), anyhow::Error> {
     }
     tracing::info!("Successful execution of linera-db");
     Ok(())
+}
+
+#[tokio::main]
+async fn main() {
+    let env_filter = tracing_subscriber::EnvFilter::builder()
+        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+        .from_env_lossy();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(env_filter)
+        .init();
+
+    let options = DatabaseToolOptions::from_args();
+    let error_code = match evaluate_options(options).await {
+        Ok(_) => 0,
+        Err(_) => 2,
+    };
+    process::exit(error_code);
 }
