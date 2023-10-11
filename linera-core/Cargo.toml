@@ -24,8 +24,8 @@ scylladb = ["linera-views/scylladb", "linera-storage/scylladb"]
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
-async-trait = { workspace = true }
 async-graphql = { workspace = true }
+async-trait = { workspace = true }
 bcs = { workspace = true }
 dashmap = { workspace = true }
 futures = { workspace = true }
@@ -34,29 +34,29 @@ linera-chain = { workspace = true }
 linera-execution = { workspace = true }
 linera-storage = { workspace = true }
 linera-views = { workspace = true }
-tracing = { workspace = true }
 lru = { workspace = true }
 proptest = { workspace = true, optional = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true, optional = true }
-test-strategy = { workspace = true, optional = true }
 test-log = { workspace = true, optional = true }
+test-strategy = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
-criterion = { workspace = true, features = ["async_tokio"] }
 counter = { workspace = true }
-meta-counter = { workspace = true }
-reentrant-counter = { workspace = true }
+criterion = { workspace = true, features = ["async_tokio"] }
 fungible = { workspace = true }
 linera-core = { path = ".", default-features = false, features = ["test"] }
 linera-views = { workspace = true }
+meta-counter = { workspace = true }
 metrics = { workspace = true }
 metrics-util = { workspace = true }
+reentrant-counter = { workspace = true }
 serde_json = { workspace = true }
 social = { workspace = true }
 test-case = { workspace = true }

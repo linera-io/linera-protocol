@@ -23,7 +23,6 @@ metrics = ["dep:hex", "dep:metrics"]
 
 [dependencies]
 anyhow = { workspace = true }
-static_assertions = { workspace = true }
 async-lock = { workspace = true }
 async-trait = { workspace = true }
 bcs = { workspace = true }
@@ -32,12 +31,13 @@ generic-array = { workspace = true }
 hex = { workspace = true, optional = true }
 linera-base = { workspace = true }
 linera-views-derive = { workspace = true }
+linked-hash-map = { workspace = true }
 metrics = { workspace = true, optional = true }
 serde = { workspace = true }
 sha3 = { workspace = true }
-thiserror = { workspace = true }
-linked-hash-map = { workspace = true }
+static_assertions = { workspace = true }
 tempfile = { workspace = true }
+thiserror = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync"] }

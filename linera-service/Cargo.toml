@@ -28,8 +28,13 @@ async-graphql-axum = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true, features = ["ws", "headers"] }
 bcs = { workspace = true }
+cargo_toml = "0.15.3"
 chrono = { workspace = true }
 colored = { workspace = true }
+comfy-table = { workspace = true }
+current_platform = "0.2.0"
+dirs = { workspace = true }
+file-lock = "2.1.9"
 futures = { workspace = true }
 hex = { workspace = true }
 linera-base = { workspace = true }
@@ -41,10 +46,10 @@ linera-storage = { workspace = true }
 linera-views = { workspace = true }
 metrics-exporter-tcp = { workspace = true }
 once_cell = { workspace = true }
-reqwest = { workspace = true, features = ["json"] }
-tracing = { workspace = true }
 parse_duration = { workspace = true }
+prometheus = { workspace = true, optional = true }
 rand07 = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 structopt = { workspace = true }
@@ -56,15 +61,14 @@ toml = { workspace = true }
 tonic = { workspace = true }
 tonic-health = { workspace = true }
 tower-http = { workspace = true, features = ["cors"] }
+tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
-comfy-table = { workspace = true }
-dirs = { workspace = true }
-prometheus = { workspace = true, optional = true }
-file-lock = "2.1.9"
-current_platform = "0.2.0"
-cargo_toml = "0.15.3"
 
 [dev-dependencies]
+amm = { workspace = true }
+counter = { workspace = true }
+crowd-funding = { workspace = true }
+fungible = { workspace = true }
 linera-base = { workspace = true, features = ["test"] }
 linera-chain = { workspace = true, features = ["test"] }
 linera-core = { workspace = true, features = ["test"] }
@@ -73,17 +77,13 @@ linera-rpc = { workspace = true, features = ["test"] }
 linera-service = { workspace = true, features = ["test"] }
 linera-storage = { workspace = true, features = ["test"] }
 linera-views = { workspace = true, features = ["test"] }
+matching-engine = { workspace = true }
 proptest = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
+social = { workspace = true }
 test-log = { workspace = true, features = ["trace"] }
 test-strategy = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
-social = { workspace = true }
-counter = { workspace = true }
-fungible = { workspace = true }
-crowd-funding = { workspace = true }
-matching-engine = { workspace = true }
-amm = { workspace = true }
 
 [[bin]]
 name = "linera-db"

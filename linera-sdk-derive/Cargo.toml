@@ -7,13 +7,12 @@ repository = "https://github.com/linera-io/linera-protocol"
 homepage = "https://linera.io"
 license = "Apache-2.0"
 edition = "2021"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
 proc-macro = true
 
 [dependencies]
-syn = { workspace = true, features = ["full", "extra-traits"] }
-proc-macro2 = { workspace = true }
 convert_case = "0.6.0"
+proc-macro2 = { workspace = true }
+syn = { workspace = true, features = ["full", "extra-traits"] }

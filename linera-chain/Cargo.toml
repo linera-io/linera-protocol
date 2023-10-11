@@ -14,15 +14,15 @@ edition = "2021"
 test = ["tokio/macros", "linera-base/test", "linera-execution/test"]
 
 [dependencies]
-async-trait = { workspace = true }
-async-lock = { workspace = true }
 async-graphql = { workspace = true }
+async-lock = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
 linera-base = { workspace = true }
 linera-execution = { workspace = true }
 linera-views = { workspace = true, features = ["metrics"] }
-futures = { workspace = true }
-rand_distr = { workspace = true, features = ["serde1"] }
 rand_chacha = { workspace = true }
+rand_distr = { workspace = true, features = ["serde1"] }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
