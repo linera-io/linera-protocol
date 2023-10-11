@@ -318,6 +318,30 @@ impl FullStorageConfig {
             }
         }
     }
+
+    /// List all the tables of the database
+    pub async fn list_tables(self) -> Result<Vec<String>, ViewError> {
+        match self {
+            FullStorageConfig::Memory(_) => Err(ViewError::ContextError {
+                backend: "memory".to_string(),
+                error: "delete_single does not make sense for memory storage".to_string(),
+            }),
+            #[cfg(feature = "rocksdb")]
+            FullStorageConfig::RocksDb(_) => {
+                panic!("Currently the list_tables is not supported for RocksDb");
+            }
+            #[cfg(feature = "aws")]
+            FullStorageConfig::DynamoDb(store_config) => {
+                let tables = DynamoDbClient::list_tables(store_config).await?;
+                Ok(tables)
+            }
+            #[cfg(feature = "scylladb")]
+            FullStorageConfig::ScyllaDb(store_config) => {
+                let tables = ScyllaDbClient::list_tables(store_config).await?;
+                Ok(tables)
+            }
+        }
+    }
 }
 
 #[async_trait]

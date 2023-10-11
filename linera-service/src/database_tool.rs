@@ -96,6 +96,26 @@ enum DatabaseToolCommand {
         #[structopt(long, default_value = "1000")]
         cache_size: usize,
     },
+
+    /// List the tables of the database
+    #[structopt(name = "list_tables")]
+    ListTables {
+        /// Storage configuration for the blockchain history.
+        #[structopt(long = "storage")]
+        storage_config: String,
+
+        /// The maximal number of simultaneous queries to the database
+        #[structopt(long)]
+        max_concurrent_queries: Option<usize>,
+
+        /// The maximal number of simultaneous stream queries to the database
+        #[structopt(long, default_value = "10")]
+        max_stream_queries: usize,
+
+        /// The maximal number of entries in the storage cache.
+        #[structopt(long, default_value = "1000")]
+        cache_size: usize,
+    },
 }
 
 #[tokio::main]
@@ -187,6 +207,25 @@ async fn main() -> Result<(), anyhow::Error> {
                 .initialize()
                 .await
                 .expect("successful delete_all operation");
+        }
+        DatabaseToolCommand::ListTables {
+            storage_config,
+            max_concurrent_queries,
+            max_stream_queries,
+            cache_size,
+        } => {
+            let storage_config: StorageConfig = storage_config.parse()?;
+            let common_config = CommonStoreConfig {
+                max_concurrent_queries,
+                max_stream_queries,
+                cache_size,
+            };
+            let full_storage_config = storage_config.add_common_config(common_config).await?;
+            let tables = full_storage_config
+                .list_tables()
+                .await
+                .expect("successful list_tables operation");
+            println!("The list of tables is {:?}", tables);
         }
     }
     tracing::info!("Successful execution of linera-db");

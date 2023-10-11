@@ -491,15 +491,17 @@ impl ScyllaDbClientInternal {
         Ok(client)
     }
 
-    async fn list_tables(store_config: ScyllaDbKvStoreConfig) -> Result<Vec<String>, ScyllaDbContextError> {
+    async fn list_tables(
+        store_config: ScyllaDbKvStoreConfig,
+    ) -> Result<Vec<String>, ScyllaDbContextError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
             .await?;
-        let rows = session.query("DESCRIBE KEYSPACE kv",&[]).await?;
+        let rows = session.query("DESCRIBE KEYSPACE kv", &[]).await?;
         let mut tables = Vec::new();
         if let Some(rows) = rows.rows {
-            for row in rows.into_typed::<(String,String,String,String)>() {
+            for row in rows.into_typed::<(String, String, String, String)>() {
                 let value = row.unwrap();
                 if value.1 == "table" {
                     tables.push(value.2);

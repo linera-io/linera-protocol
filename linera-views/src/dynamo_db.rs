@@ -623,7 +623,9 @@ impl DynamoDbClientInternal {
         Ok(())
     }
 
-    async fn list_tables(store_config: DynamoDbKvStoreConfig) -> Result<Vec<String>, DynamoDbContextError> {
+    async fn list_tables(
+        store_config: DynamoDbKvStoreConfig,
+    ) -> Result<Vec<String>, DynamoDbContextError> {
         let client = Client::from_conf(store_config.config);
         get_list_tables(&client).await
     }
