@@ -109,7 +109,7 @@ impl ClientWrapper {
         let tmp = TempDir::new()?;
         let mut command = self.run().await?;
         assert!(command
-            .current_dir(tmp.path().canonicalize()?)
+            .current_dir(tmp.path())
             .kill_on_drop(true)
             .arg("project")
             .arg("new")
@@ -165,7 +165,7 @@ impl ClientWrapper {
         let path = util::resolve_binary("linera", env!("CARGO_PKG_NAME")).await?;
         let mut command = Command::new(path);
         command
-            .current_dir(&self.tmp_dir.path().canonicalize()?)
+            .current_dir(self.tmp_dir.path())
             .kill_on_drop(true)
             .args(["--wallet", &self.wallet])
             .args(["--storage", &self.storage])
@@ -620,9 +620,7 @@ impl LocalNetwork {
     async fn command_for_binary(&self, name: &'static str) -> Result<Command> {
         let path = util::resolve_binary(name, env!("CARGO_PKG_NAME")).await?;
         let mut command = Command::new(path);
-        command
-            .current_dir(&self.tmp_dir.path().canonicalize()?)
-            .kill_on_drop(true);
+        command.current_dir(self.tmp_dir.path()).kill_on_drop(true);
         Ok(command)
     }
 
@@ -644,11 +642,7 @@ impl LocalNetwork {
 
     fn configuration_string(&self, server_number: usize) -> Result<String> {
         let n = server_number;
-        let path = self
-            .tmp_dir
-            .path()
-            .canonicalize()?
-            .join(format!("validator_{n}.toml"));
+        let path = self.tmp_dir.path().join(format!("validator_{n}.toml"));
         let port = Self::proxy_port(n);
         let internal_port = Self::internal_port(n);
         let metrics_port = Self::metrics_port(n);
@@ -893,7 +887,7 @@ impl LocalNetwork {
         is_workspace: bool,
     ) -> Result<(PathBuf, PathBuf)> {
         assert!(Command::new("cargo")
-            .current_dir(self.tmp_dir.path().canonicalize()?)
+            .current_dir(self.tmp_dir.path())
             .arg("build")
             .arg("--release")
             .args(["--target", "wasm32-unknown-unknown"])

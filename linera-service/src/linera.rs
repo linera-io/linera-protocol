@@ -146,15 +146,7 @@ impl ClientContext {
             Some(path) => path.clone(),
             None => Self::create_default_wallet_path()?,
         };
-        let wallet_state = WalletState::from_file(&wallet_state_path).with_context(|| {
-            format!(
-                "Unable to read wallet at {:?}:",
-                &wallet_state_path.canonicalize().with_context(|| format!(
-                    "Unable to canonicalize wallet {:?}",
-                    &wallet_state_path
-                ))
-            )
-        })?;
+        let wallet_state = WalletState::from_file(&wallet_state_path)?;
         Ok(Self::configure(options, wallet_state))
     }
 
