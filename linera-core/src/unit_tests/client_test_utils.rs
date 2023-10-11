@@ -34,20 +34,20 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 #[cfg(feature = "rocksdb")]
 use {
-    linera_storage::RocksDbStoreClient, linera_views::rocks_db::create_rocks_db_common_config,
+    linera_storage::RocksDbStore, linera_views::rocks_db::create_rocks_db_common_config,
     linera_views::rocks_db::RocksDbKvStoreConfig, tokio::sync::Semaphore,
 };
 
 #[cfg(feature = "aws")]
 use {
-    linera_storage::DynamoDbStoreClient,
+    linera_storage::DynamoDbStore,
     linera_views::dynamo_db::DynamoDbKvStoreConfig,
     linera_views::dynamo_db::{create_dynamo_db_common_config, LocalStackTestContext},
 };
 
 #[cfg(feature = "scylladb")]
 use {
-    linera_storage::ScyllaDbStoreClient, linera_views::scylla_db::create_scylla_db_common_config,
+    linera_storage::ScyllaDbStore, linera_views::scylla_db::create_scylla_db_common_config,
     linera_views::scylla_db::ScyllaDbKvStoreConfig,
 };
 
@@ -626,29 +626,29 @@ impl MakeMemoryStoreClient {
 
 #[cfg(feature = "rocksdb")]
 #[derive(Default)]
-pub struct MakeRocksDbStoreClient {
+pub struct MakeRocksDbStore {
     temp_dirs: Vec<tempfile::TempDir>,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
 }
 
 #[cfg(feature = "rocksdb")]
-impl MakeRocksDbStoreClient {
-    /// Creates a [`MakeRocksDbStoreClient`] that uses the specified [`WasmRuntime`] to run Wasm
+impl MakeRocksDbStore {
+    /// Creates a [`MakeRocksDbStore`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        MakeRocksDbStoreClient {
+        MakeRocksDbStore {
             wasm_runtime: wasm_runtime.into(),
-            ..MakeRocksDbStoreClient::default()
+            ..MakeRocksDbStore::default()
         }
     }
 }
 
 #[cfg(feature = "rocksdb")]
 #[async_trait]
-impl StoreBuilder for MakeRocksDbStoreClient {
-    type Store = RocksDbStoreClient<TestClock>;
+impl StoreBuilder for MakeRocksDbStore {
+    type Store = RocksDbStore<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         let dir = tempfile::TempDir::new()?;
@@ -659,13 +659,10 @@ impl StoreBuilder for MakeRocksDbStoreClient {
             path_buf,
             common_config,
         };
-        let (store_client, _) = RocksDbStoreClient::new_for_testing(
-            store_config,
-            self.wasm_runtime,
-            self.clock.clone(),
-        )
-        .await?;
-        Ok(store_client)
+        let (store, _) =
+            RocksDbStore::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
+                .await?;
+        Ok(store)
     }
 
     fn clock(&self) -> &TestClock {
@@ -675,7 +672,7 @@ impl StoreBuilder for MakeRocksDbStoreClient {
 
 #[cfg(feature = "aws")]
 #[derive(Default)]
-pub struct MakeDynamoDbStoreClient {
+pub struct MakeDynamoDbStore {
     instance_counter: usize,
     localstack: Option<LocalStackTestContext>,
     wasm_runtime: Option<WasmRuntime>,
@@ -683,22 +680,22 @@ pub struct MakeDynamoDbStoreClient {
 }
 
 #[cfg(feature = "aws")]
-impl MakeDynamoDbStoreClient {
-    /// Creates a [`MakeDynamoDbStoreClient`] that uses the specified [`WasmRuntime`] to run Wasm
+impl MakeDynamoDbStore {
+    /// Creates a [`MakeDynamoDbStore`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        MakeDynamoDbStoreClient {
+        MakeDynamoDbStore {
             wasm_runtime: wasm_runtime.into(),
-            ..MakeDynamoDbStoreClient::default()
+            ..MakeDynamoDbStore::default()
         }
     }
 }
 
 #[cfg(feature = "aws")]
 #[async_trait]
-impl StoreBuilder for MakeDynamoDbStoreClient {
-    type Store = DynamoDbStoreClient<TestClock>;
+impl StoreBuilder for MakeDynamoDbStore {
+    type Store = DynamoDbStore<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         if self.localstack.is_none() {
@@ -715,13 +712,10 @@ impl StoreBuilder for MakeDynamoDbStoreClient {
             common_config,
         };
         self.instance_counter += 1;
-        let (store_client, _) = DynamoDbStoreClient::new_for_testing(
-            store_config,
-            self.wasm_runtime,
-            self.clock.clone(),
-        )
-        .await?;
-        Ok(store_client)
+        let (store, _) =
+            DynamoDbStore::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
+                .await?;
+        Ok(store)
     }
 
     fn clock(&self) -> &TestClock {
@@ -730,7 +724,7 @@ impl StoreBuilder for MakeDynamoDbStoreClient {
 }
 
 #[cfg(feature = "scylladb")]
-pub struct MakeScyllaDbStoreClient {
+pub struct MakeScyllaDbStore {
     instance_counter: usize,
     uri: String,
     wasm_runtime: Option<WasmRuntime>,
@@ -738,13 +732,13 @@ pub struct MakeScyllaDbStoreClient {
 }
 
 #[cfg(feature = "scylladb")]
-impl Default for MakeScyllaDbStoreClient {
+impl Default for MakeScyllaDbStore {
     fn default() -> Self {
         let instance_counter = 0;
         let uri = "localhost:9042".to_string();
         let wasm_runtime = None;
         let clock = TestClock::new();
-        MakeScyllaDbStoreClient {
+        MakeScyllaDbStore {
             instance_counter,
             uri,
             wasm_runtime,
@@ -754,22 +748,22 @@ impl Default for MakeScyllaDbStoreClient {
 }
 
 #[cfg(feature = "scylladb")]
-impl MakeScyllaDbStoreClient {
-    /// Creates a [`MakeScyllaDbStoreClient`] that uses the specified [`WasmRuntime`] to run Wasm
+impl MakeScyllaDbStore {
+    /// Creates a [`MakeScyllaDbStore`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
     #[allow(dead_code)]
     pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        MakeScyllaDbStoreClient {
+        MakeScyllaDbStore {
             wasm_runtime: wasm_runtime.into(),
-            ..MakeScyllaDbStoreClient::default()
+            ..MakeScyllaDbStore::default()
         }
     }
 }
 
 #[cfg(feature = "scylladb")]
 #[async_trait]
-impl StoreBuilder for MakeScyllaDbStoreClient {
-    type Store = ScyllaDbStoreClient<TestClock>;
+impl StoreBuilder for MakeScyllaDbStore {
+    type Store = ScyllaDbStore<TestClock>;
 
     async fn build(&mut self) -> Result<Self::Store, anyhow::Error> {
         self.instance_counter += 1;
@@ -781,13 +775,10 @@ impl StoreBuilder for MakeScyllaDbStoreClient {
             table_name,
             common_config,
         };
-        let (store_client, _) = ScyllaDbStoreClient::new_for_testing(
-            store_config,
-            self.wasm_runtime,
-            self.clock.clone(),
-        )
-        .await?;
-        Ok(store_client)
+        let (store, _) =
+            ScyllaDbStore::new_for_testing(store_config, self.wasm_runtime, self.clock.clone())
+                .await?;
+        Ok(store)
     }
 
     fn clock(&self) -> &TestClock {

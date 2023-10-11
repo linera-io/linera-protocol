@@ -38,13 +38,13 @@ use std::sync::Arc;
 use test_log::test;
 
 #[cfg(feature = "rocksdb")]
-use crate::client::client_test_utils::{MakeRocksDbStoreClient, ROCKS_DB_SEMAPHORE};
+use crate::client::client_test_utils::{MakeRocksDbStore, ROCKS_DB_SEMAPHORE};
 
 #[cfg(feature = "aws")]
-use crate::client::client_test_utils::MakeDynamoDbStoreClient;
+use crate::client::client_test_utils::MakeDynamoDbStore;
 
 #[cfg(feature = "scylladb")]
-use crate::client::client_test_utils::MakeScyllaDbStoreClient;
+use crate::client::client_test_utils::MakeScyllaDbStore;
 
 #[test(tokio::test)]
 pub async fn test_memory_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
@@ -56,21 +56,21 @@ pub async fn test_memory_initiating_valid_transfer_with_notifications() -> Resul
 #[test(tokio::test)]
 async fn test_rocks_db_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_initiating_valid_transfer_with_notifications(MakeRocksDbStoreClient::default()).await
+    run_test_initiating_valid_transfer_with_notifications(MakeRocksDbStore::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
 {
-    run_test_initiating_valid_transfer_with_notifications(MakeDynamoDbStoreClient::default()).await
+    run_test_initiating_valid_transfer_with_notifications(MakeDynamoDbStore::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_initiating_valid_transfer_with_notifications() -> Result<(), anyhow::Error>
 {
-    run_test_initiating_valid_transfer_with_notifications(MakeScyllaDbStoreClient::default()).await
+    run_test_initiating_valid_transfer_with_notifications(MakeScyllaDbStore::default()).await
 }
 
 async fn run_test_initiating_valid_transfer_with_notifications<B>(
@@ -135,19 +135,19 @@ async fn test_memory_claim_amount() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocks_db_claim_amount() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_claim_amount(MakeRocksDbStoreClient::default()).await
+    run_test_claim_amount(MakeRocksDbStore::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_claim_amount() -> Result<(), anyhow::Error> {
-    run_test_claim_amount(MakeDynamoDbStoreClient::default()).await
+    run_test_claim_amount(MakeDynamoDbStore::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_claim_amount() -> Result<(), anyhow::Error> {
-    run_test_claim_amount(MakeScyllaDbStoreClient::default()).await
+    run_test_claim_amount(MakeScyllaDbStore::default()).await
 }
 
 async fn run_test_claim_amount<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -225,19 +225,19 @@ async fn test_memory_rotate_key_pair() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocks_db_rotate_key_pair() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_rotate_key_pair(MakeRocksDbStoreClient::default()).await
+    run_test_rotate_key_pair(MakeRocksDbStore::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_rotate_key_pair() -> Result<(), anyhow::Error> {
-    run_test_rotate_key_pair(MakeDynamoDbStoreClient::default()).await
+    run_test_rotate_key_pair(MakeDynamoDbStore::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_rotate_key_pair() -> Result<(), anyhow::Error> {
-    run_test_rotate_key_pair(MakeScyllaDbStoreClient::default()).await
+    run_test_rotate_key_pair(MakeScyllaDbStore::default()).await
 }
 
 async fn run_test_rotate_key_pair<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -295,19 +295,19 @@ async fn test_memory_transfer_ownership() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocks_db_transfer_ownership() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_transfer_ownership(MakeRocksDbStoreClient::default()).await
+    run_test_transfer_ownership(MakeRocksDbStore::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_transfer_ownership() -> Result<(), anyhow::Error> {
-    run_test_transfer_ownership(MakeDynamoDbStoreClient::default()).await
+    run_test_transfer_ownership(MakeDynamoDbStore::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_transfer_ownership() -> Result<(), anyhow::Error> {
-    run_test_transfer_ownership(MakeScyllaDbStoreClient::default()).await
+    run_test_transfer_ownership(MakeScyllaDbStore::default()).await
 }
 
 async fn run_test_transfer_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -373,19 +373,19 @@ async fn test_memory_share_ownership() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocks_db_share_ownership() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_share_ownership(MakeRocksDbStoreClient::default()).await
+    run_test_share_ownership(MakeRocksDbStore::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_share_ownership() -> Result<(), anyhow::Error> {
-    run_test_share_ownership(MakeDynamoDbStoreClient::default()).await
+    run_test_share_ownership(MakeDynamoDbStore::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_share_ownership() -> Result<(), anyhow::Error> {
-    run_test_share_ownership(MakeScyllaDbStoreClient::default()).await
+    run_test_share_ownership(MakeScyllaDbStore::default()).await
 }
 
 async fn run_test_share_ownership<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -539,19 +539,19 @@ async fn test_memory_open_chain_then_close_it() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocks_db_open_chain_then_close_it() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_open_chain_then_close_it(MakeRocksDbStoreClient::default()).await
+    run_test_open_chain_then_close_it(MakeRocksDbStore::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_open_chain_then_close_it() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_close_it(MakeDynamoDbStoreClient::default()).await
+    run_test_open_chain_then_close_it(MakeDynamoDbStore::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_open_chain_then_close_it() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_close_it(MakeScyllaDbStoreClient::default()).await
+    run_test_open_chain_then_close_it(MakeScyllaDbStore::default()).await
 }
 
 async fn run_test_open_chain_then_close_it<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -600,19 +600,19 @@ async fn test_memory_transfer_then_open_chain() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocks_db_transfer_then_open_chain() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_transfer_then_open_chain(MakeRocksDbStoreClient::default()).await
+    run_test_transfer_then_open_chain(MakeRocksDbStore::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_transfer_then_open_chain() -> Result<(), anyhow::Error> {
-    run_test_transfer_then_open_chain(MakeDynamoDbStoreClient::default()).await
+    run_test_transfer_then_open_chain(MakeDynamoDbStore::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_transfer_then_open_chain() -> Result<(), anyhow::Error> {
-    run_test_transfer_then_open_chain(MakeScyllaDbStoreClient::default()).await
+    run_test_transfer_then_open_chain(MakeScyllaDbStore::default()).await
 }
 
 async fn run_test_transfer_then_open_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -699,19 +699,19 @@ async fn test_memory_open_chain_then_transfer() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocks_db_open_chain_then_transfer() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_open_chain_then_transfer(MakeRocksDbStoreClient::default()).await
+    run_test_open_chain_then_transfer(MakeRocksDbStore::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_open_chain_then_transfer() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_transfer(MakeDynamoDbStoreClient::default()).await
+    run_test_open_chain_then_transfer(MakeDynamoDbStore::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_open_chain_then_transfer() -> Result<(), anyhow::Error> {
-    run_test_open_chain_then_transfer(MakeScyllaDbStoreClient::default()).await
+    run_test_open_chain_then_transfer(MakeScyllaDbStore::default()).await
 }
 
 async fn run_test_open_chain_then_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -787,19 +787,19 @@ async fn test_memory_close_chain() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocks_db_close_chain() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_close_chain(MakeRocksDbStoreClient::default()).await
+    run_test_close_chain(MakeRocksDbStore::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_close_chain() -> Result<(), anyhow::Error> {
-    run_test_close_chain(MakeDynamoDbStoreClient::default()).await
+    run_test_close_chain(MakeDynamoDbStore::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_close_chain() -> Result<(), anyhow::Error> {
-    run_test_close_chain(MakeScyllaDbStoreClient::default()).await
+    run_test_close_chain(MakeScyllaDbStore::default()).await
 }
 
 async fn run_test_close_chain<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -862,19 +862,19 @@ async fn test_memory_initiating_valid_transfer_too_many_faults() -> Result<(), a
 #[test(tokio::test)]
 async fn test_rocks_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_initiating_valid_transfer_too_many_faults(MakeRocksDbStoreClient::default()).await
+    run_test_initiating_valid_transfer_too_many_faults(MakeRocksDbStore::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_too_many_faults(MakeDynamoDbStoreClient::default()).await
+    run_test_initiating_valid_transfer_too_many_faults(MakeDynamoDbStore::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_initiating_valid_transfer_too_many_faults() -> Result<(), anyhow::Error> {
-    run_test_initiating_valid_transfer_too_many_faults(MakeScyllaDbStoreClient::default()).await
+    run_test_initiating_valid_transfer_too_many_faults(MakeScyllaDbStore::default()).await
 }
 
 async fn run_test_initiating_valid_transfer_too_many_faults<B>(
@@ -924,19 +924,19 @@ async fn test_memory_bidirectional_transfer() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocks_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_bidirectional_transfer(MakeRocksDbStoreClient::default()).await
+    run_test_bidirectional_transfer(MakeRocksDbStore::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
-    run_test_bidirectional_transfer(MakeDynamoDbStoreClient::default()).await
+    run_test_bidirectional_transfer(MakeDynamoDbStore::default()).await
 }
 
 #[cfg(feature = "scylla")]
 #[test(tokio::test)]
 async fn test_scylla_db_bidirectional_transfer() -> Result<(), anyhow::Error> {
-    run_test_bidirectional_transfer(MakeScyllaDbStoreClient::default()).await
+    run_test_bidirectional_transfer(MakeScyllaDbStore::default()).await
 }
 
 async fn run_test_bidirectional_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -1054,19 +1054,19 @@ async fn test_memory_receiving_unconfirmed_transfer() -> Result<(), anyhow::Erro
 #[test(tokio::test)]
 async fn test_rocks_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_receiving_unconfirmed_transfer(MakeRocksDbStoreClient::default()).await
+    run_test_receiving_unconfirmed_transfer(MakeRocksDbStore::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer(MakeDynamoDbStoreClient::default()).await
+    run_test_receiving_unconfirmed_transfer(MakeDynamoDbStore::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_receiving_unconfirmed_transfer() -> Result<(), anyhow::Error> {
-    run_test_receiving_unconfirmed_transfer(MakeScyllaDbStoreClient::default()).await
+    run_test_receiving_unconfirmed_transfer(MakeScyllaDbStore::default()).await
 }
 
 async fn run_test_receiving_unconfirmed_transfer<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -1123,7 +1123,7 @@ async fn test_rocks_db_receiving_unconfirmed_transfer_with_lagging_sender_balanc
 ) -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
     run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-        MakeRocksDbStoreClient::default(),
+        MakeRocksDbStore::default(),
     )
     .await
 }
@@ -1133,7 +1133,7 @@ async fn test_rocks_db_receiving_unconfirmed_transfer_with_lagging_sender_balanc
 async fn test_dynamo_db_receiving_unconfirmed_transfer_with_lagging_sender_balances(
 ) -> Result<(), anyhow::Error> {
     run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-        MakeDynamoDbStoreClient::default(),
+        MakeDynamoDbStore::default(),
     )
     .await
 }
@@ -1143,7 +1143,7 @@ async fn test_dynamo_db_receiving_unconfirmed_transfer_with_lagging_sender_balan
 async fn test_scylla_db_receiving_unconfirmed_transfer_with_lagging_sender_balances(
 ) -> Result<(), anyhow::Error> {
     run_test_receiving_unconfirmed_transfer_with_lagging_sender_balances(
-        MakeScyllaDbStoreClient::default(),
+        MakeScyllaDbStore::default(),
     )
     .await
 }
@@ -1250,19 +1250,19 @@ async fn test_memory_change_voting_rights() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocks_db_change_voting_rights() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_change_voting_rights(MakeRocksDbStoreClient::default()).await
+    run_test_change_voting_rights(MakeRocksDbStore::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_change_voting_rights() -> Result<(), anyhow::Error> {
-    run_test_change_voting_rights(MakeDynamoDbStoreClient::default()).await
+    run_test_change_voting_rights(MakeDynamoDbStore::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_change_voting_rights() -> Result<(), anyhow::Error> {
-    run_test_change_voting_rights(MakeScyllaDbStoreClient::default()).await
+    run_test_change_voting_rights(MakeScyllaDbStore::default()).await
 }
 
 async fn run_test_change_voting_rights<B>(store_builder: B) -> Result<(), anyhow::Error>
@@ -1413,19 +1413,19 @@ async fn test_memory_request_leader_timeout() -> Result<(), anyhow::Error> {
 #[test(tokio::test)]
 async fn test_rocks_db_request_leader_timeout() -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
-    run_test_request_leader_timeout(MakeRocksDbStoreClient::default()).await
+    run_test_request_leader_timeout(MakeRocksDbStore::default()).await
 }
 
 #[cfg(feature = "aws")]
 #[test(tokio::test)]
 async fn test_dynamo_db_request_leader_timeout() -> Result<(), anyhow::Error> {
-    run_test_request_leader_timeout(MakeDynamoDbStoreClient::default()).await
+    run_test_request_leader_timeout(MakeDynamoDbStore::default()).await
 }
 
 #[cfg(feature = "scylladb")]
 #[test(tokio::test)]
 async fn test_scylla_db_request_leader_timeout() -> Result<(), anyhow::Error> {
-    run_test_request_leader_timeout(MakeScyllaDbStoreClient::default()).await
+    run_test_request_leader_timeout(MakeScyllaDbStore::default()).await
 }
 
 async fn run_test_request_leader_timeout<B>(store_builder: B) -> Result<(), anyhow::Error>
