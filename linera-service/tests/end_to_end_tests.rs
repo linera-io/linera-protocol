@@ -13,7 +13,7 @@ use linera_service::{
     util,
 };
 use linera_views::test_utils::get_table_name;
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 #[tokio::test]
 async fn test_resolve_binary() {
