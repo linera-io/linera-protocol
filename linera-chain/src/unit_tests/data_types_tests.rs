@@ -23,10 +23,10 @@ fn test_signed_values() {
     };
     let value = HashedValue::new_confirmed(executed_block);
 
-    let v = LiteVote::new(value.lite(), RoundNumber(0), &key1);
+    let v = LiteVote::new(value.lite(), RoundId::Fast, &key1);
     assert!(v.check().is_ok());
 
-    let mut v = LiteVote::new(value.lite(), RoundNumber(0), &key2);
+    let mut v = LiteVote::new(value.lite(), RoundId::Fast, &key2);
     v.validator = name1;
     assert!(v.check().is_err());
 }
@@ -51,11 +51,11 @@ fn test_certificates() {
     };
     let value = HashedValue::new_confirmed(executed_block);
 
-    let v1 = LiteVote::new(value.lite(), RoundNumber(0), &key1);
-    let v2 = LiteVote::new(value.lite(), RoundNumber(0), &key2);
-    let v3 = LiteVote::new(value.lite(), RoundNumber(0), &key3);
+    let v1 = LiteVote::new(value.lite(), RoundId::Fast, &key1);
+    let v2 = LiteVote::new(value.lite(), RoundId::Fast, &key2);
+    let v3 = LiteVote::new(value.lite(), RoundId::Fast, &key3);
 
-    let mut builder = SignatureAggregator::new(value.clone(), RoundNumber(0), &committee);
+    let mut builder = SignatureAggregator::new(value.clone(), RoundId::Fast, &committee);
     assert!(builder
         .append(v1.validator, v1.signature)
         .unwrap()
@@ -65,7 +65,7 @@ fn test_certificates() {
     c.signatures.pop();
     assert!(c.check(&committee).is_err());
 
-    let mut builder = SignatureAggregator::new(value, RoundNumber(0), &committee);
+    let mut builder = SignatureAggregator::new(value, RoundId::Fast, &committee);
     assert!(builder
         .append(v1.validator, v1.signature)
         .unwrap()

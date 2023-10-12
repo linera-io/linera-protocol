@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::{future, FutureExt};
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, BlockHeight, RoundNumber},
+    data_types::{ArithmeticError, BlockHeight, RoundId},
     doc_scalar, ensure,
     identifiers::{ChainId, Owner},
 };
@@ -68,7 +68,7 @@ pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: Lazy<HistogramVec> = Lazy::new(|| {
         "num_rounds_in_block_proposal",
         "Number of rounds in block proposal",
         // Can add labels here
-        &[]
+        &["round_type"]
     )
     .expect("Counter can be created")
 });
@@ -160,7 +160,7 @@ pub enum Reason {
     },
     NewRound {
         height: BlockHeight,
-        round: RoundNumber,
+        round: RoundId,
     },
 }
 
@@ -1052,7 +1052,7 @@ where
         chain.rollback();
         // Create the vote and store it in the chain state.
         let manager = chain.manager.get_mut();
-        let round = proposal.content.round.0 as f64;
+        let round = proposal.content.round;
         manager.create_vote(proposal, outcome, self.key_pair(), now);
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some(vote) = manager.pending() {
@@ -1063,8 +1063,8 @@ where
         // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
         let actions = self.create_network_actions(&mut chain).await?;
         NUM_ROUNDS_IN_BLOCK_PROPOSAL
-            .with_label_values(&[])
-            .observe(round);
+            .with_label_values(&[round.type_name()])
+            .observe(round.number() as f64);
         Ok((info, actions))
     }
 
@@ -1132,8 +1132,8 @@ where
 
         if !duplicated {
             NUM_ROUNDS_IN_CERTIFICATE
-                .with_label_values(&[log_str])
-                .observe(round.0 as f64);
+                .with_label_values(&[log_str, round.type_name()])
+                .observe(round.number() as f64);
             if confirmed_transactions > 0 {
                 TRANSACTION_COUNT
                     .with_label_values(&[])

@@ -5,7 +5,10 @@
 // Needed for arg_enum!
 #![allow(clippy::useless_vec)]
 
-use linera_base::identifiers::{ChainDescription, Destination};
+use linera_base::{
+    data_types::RoundId,
+    identifiers::{ChainDescription, Destination},
+};
 use linera_chain::{
     data_types::{CertificateValue, HashedValue, Medium},
     ChainManagerInfo,
@@ -29,6 +32,7 @@ fn get_registry() -> Result<Registry> {
     let samples = Samples::new();
     // 1. Record samples for types with custom deserializers.
     // 2. Trace the main entry point(s) + every enum separately.
+    tracer.trace_type::<RoundId>(&samples)?;
     tracer.trace_type::<Recipient>(&samples)?;
     tracer.trace_type::<SystemChannel>(&samples)?;
     tracer.trace_type::<SystemOperation>(&samples)?;

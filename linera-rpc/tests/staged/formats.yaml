@@ -55,7 +55,7 @@ BlockAndRound:
     - block:
         TYPENAME: Block
     - round:
-        TYPENAME: RoundNumber
+        TYPENAME: RoundId
 BlockHeight:
   NEWTYPESTRUCT: U64
 BlockHeightRange:
@@ -95,7 +95,7 @@ Certificate:
     - value:
         TYPENAME: CertificateValue
     - round:
-        TYPENAME: RoundNumber
+        TYPENAME: RoundId
     - signatures:
         SEQ:
           TUPLE:
@@ -233,7 +233,7 @@ ChainManagerInfo:
         OPTION:
           TYPENAME: CertificateValue
     - current_round:
-        TYPENAME: RoundNumber
+        TYPENAME: RoundId
     - leader:
         OPTION:
           TYPENAME: Owner
@@ -255,8 +255,7 @@ ChainOwnership:
             TUPLE:
               - TYPENAME: PublicKey
               - U64
-    - multi_leader_rounds:
-        TYPENAME: RoundNumber
+    - multi_leader_rounds: U32
 ChannelFullName:
   STRUCT:
     - application_id:
@@ -386,7 +385,7 @@ LiteCertificate:
     - value:
         TYPENAME: LiteValue
     - round:
-        TYPENAME: RoundNumber
+        TYPENAME: RoundId
     - signatures:
         SEQ:
           TUPLE:
@@ -403,7 +402,7 @@ LiteVote:
     - value:
         TYPENAME: LiteValue
     - round:
-        TYPENAME: RoundNumber
+        TYPENAME: RoundId
     - validator:
         TYPENAME: ValidatorName
     - signature:
@@ -587,8 +586,16 @@ ResourceControlPolicy:
     - maximum_bytes_written_per_block: U64
     - messages:
         TYPENAME: Amount
-RoundNumber:
-  NEWTYPESTRUCT: U32
+RoundId:
+  ENUM:
+    0:
+      Fast: UNIT
+    1:
+      MultiLeader:
+        NEWTYPE: U32
+    2:
+      SingleLeader:
+        NEWTYPE: U32
 RpcMessage:
   ENUM:
     0:
@@ -778,8 +785,7 @@ SystemOperation:
                 TUPLE:
                   - TYPENAME: PublicKey
                   - U64
-          - multi_leader_rounds:
-              TYPENAME: RoundNumber
+          - multi_leader_rounds: U32
     5:
       Subscribe:
         STRUCT:

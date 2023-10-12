@@ -1450,7 +1450,7 @@ where
     let owner_change_op = SystemOperation::ChangeOwnership {
         super_owners: Vec::new(),
         owners: vec![(pub_key0, 100), (pub_key1, 100)],
-        multi_leader_rounds: RoundNumber::ZERO,
+        multi_leader_rounds: 0,
     }
     .into();
     client.execute_operation(owner_change_op).await.unwrap();
@@ -1476,10 +1476,15 @@ where
             epoch: Epoch::ZERO
         }
     );
-    assert_eq!(certificate.round, RoundNumber(1));
+    assert_eq!(certificate.round, RoundId::SingleLeader(0));
 
     builder
-        .check_that_validators_are_in_round(chain_id, BlockHeight::from(1), RoundNumber(2), 3)
+        .check_that_validators_are_in_round(
+            chain_id,
+            BlockHeight::from(1),
+            RoundId::SingleLeader(1),
+            3,
+        )
         .await;
 
     Ok(())

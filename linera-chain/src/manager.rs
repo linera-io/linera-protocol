@@ -72,7 +72,7 @@ use crate::{
 };
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{BlockHeight, RoundNumber, Timestamp},
+    data_types::{ArithmeticError, BlockHeight, RoundId, Timestamp},
     doc_scalar, ensure,
     identifiers::{ChainId, Owner},
 };
@@ -168,10 +168,14 @@ impl ChainManager {
     /// Having a leader timeout certificate in any given round causes the next one to become
     /// current. Seeing a validated block certificate or a valid proposal in any round causes that
     /// round to become current, unless a higher one already is.
-    pub fn current_round(&self) -> RoundNumber {
+    pub fn current_round(&self) -> RoundId {
         self.leader_timeout
             .iter()
-            .map(|certificate| certificate.round.try_add_one().unwrap_or(RoundNumber::MAX))
+            .map(|certificate| {
+                self.ownership
+                    .next_round(certificate.round)
+                    .unwrap_or(RoundId::SingleLeader(u32::MAX))
+            })
             .chain(self.locked.iter().map(|certificate| certificate.round))
             .chain(self.proposed.iter().map(|proposal| proposal.content.round))
             .max()
@@ -204,11 +208,15 @@ impl ChainManager {
         }
         let expected_round = match validated {
             None => self.current_round(),
-            Some(cert) => cert.round.try_add_one()?.max(self.current_round()),
+            Some(cert) => self
+                .ownership
+                .next_round(cert.round)
+                .ok_or_else(|| ChainError::ArithmeticError(ArithmeticError::Overflow))?
+                .max(self.current_round()),
         };
         // In leader rotation mode, the round must equal the expected one exactly.
         // Only the first single-leader round can be entered at any time.
-        if self.is_super(owner) || new_round <= self.ownership.first_single_leader_round() {
+        if self.is_super(owner) || new_round <= RoundId::SingleLeader(0) {
             ensure!(
                 expected_round <= new_round,
                 ChainError::InsufficientRound(expected_round)
@@ -313,7 +321,7 @@ impl ChainManager {
         key_pair: Option<&KeyPair>,
         now: Timestamp,
     ) {
-        if let Ok(round) = proposal.content.round.try_sub_one() {
+        if let Some(round) = self.ownership.previous_round(proposal.content.round) {
             self.update_timeout(round, now);
         }
         // Record the proposed block, so it can be supplied to clients that request it.
@@ -332,7 +340,7 @@ impl ChainManager {
             let BlockAndRound { block, round } = proposal.content;
             let executed_block = outcome.with(block);
             // If this is a fast block, vote to confirm. Otherwise vote to validate.
-            let value = if round == RoundNumber::ZERO {
+            let value = if round.is_fast() {
                 HashedValue::new_confirmed(executed_block)
             } else {
                 HashedValue::new_validated(executed_block)
@@ -370,9 +378,13 @@ impl ChainManager {
     }
 
     /// Resets the timer if `round` has just ended.
-    fn update_timeout(&mut self, round: RoundNumber, now: Timestamp) {
+    fn update_timeout(&mut self, round: RoundId, now: Timestamp) {
         if self.current_round() <= round {
-            let factor = round.0.saturating_add(2);
+            let factor = if let RoundId::SingleLeader(r) = round {
+                r.saturating_add(2)
+            } else {
+                1
+            };
             let timeout = TIMEOUT.saturating_mul(factor);
             self.round_timeout = now.saturating_add(timeout);
         }
@@ -402,35 +414,39 @@ impl ChainManager {
         if let Some(public_key) = self.ownership.super_owners.get(&proposal.owner) {
             return Some(*public_key);
         }
-        if proposal.content.round == RoundNumber::ZERO {
-            return None; // Only super owners can propose in round 0.
+        match proposal.content.round {
+            RoundId::Fast => {
+                None // Only super owners can propose in round 0.
+            }
+            RoundId::MultiLeader(_) => {
+                // Not in leader rotation mode; any owner is allowed to propose.
+                self.ownership
+                    .owners
+                    .get(&proposal.owner)
+                    .map(|(public_key, _)| *public_key)
+            }
+            RoundId::SingleLeader(r) => {
+                let index = self.round_leader_index(r)?;
+                let (leader, (public_key, _)) = self.ownership.owners.iter().nth(index)?;
+                (*leader == proposal.owner).then_some(*public_key)
+            }
         }
-        if proposal.content.round <= self.ownership.multi_leader_rounds {
-            // Not in leader rotation mode; any owner is allowed to propose.
-            return self
-                .ownership
-                .owners
-                .get(&proposal.owner)
-                .map(|(public_key, _)| *public_key);
-        };
-        let index = self.round_leader_index(proposal.content.round)?;
-        let (leader, (public_key, _)) = self.ownership.owners.iter().nth(index)?;
-        (*leader == proposal.owner).then_some(*public_key)
     }
 
     /// Returns the leader who is allowed to propose a block in the given round, or `None` if every
     /// owner is allowed to propose. Exception: In round 0, only super owners can propose.
-    fn round_leader(&self, round: RoundNumber) -> Option<&Owner> {
-        if round <= self.ownership.multi_leader_rounds {
-            return None;
-        };
-        let index = self.round_leader_index(round)?;
-        self.ownership.owners.keys().nth(index)
+    fn round_leader(&self, round: RoundId) -> Option<&Owner> {
+        if let RoundId::SingleLeader(r) = round {
+            let index = self.round_leader_index(r)?;
+            self.ownership.owners.keys().nth(index)
+        } else {
+            None
+        }
     }
 
     /// Returns the index of the leader who is allowed to propose a block in the given round.
-    fn round_leader_index(&self, round: RoundNumber) -> Option<usize> {
-        let seed = u64::from(round.0).rotate_left(32).wrapping_add(self.seed);
+    fn round_leader_index(&self, round: u32) -> Option<usize> {
+        let seed = u64::from(round).rotate_left(32).wrapping_add(self.seed);
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         Some(self.distribution.as_ref()?.sample(&mut rng))
     }
@@ -461,7 +477,7 @@ pub struct ChainManagerInfo {
     /// The value we voted for, if requested.
     pub requested_pending_value: Option<HashedValue>,
     /// The current round, i.e. the lowest round where we can still vote to validate a block.
-    pub current_round: RoundNumber,
+    pub current_round: RoundId,
     /// The current leader, who is allowed to propose the next block.
     /// `None` if everyone is allowed to propose.
     pub leader: Option<Owner>,
@@ -505,7 +521,7 @@ impl ChainManagerInfo {
             .max_by_key(|cert| cert.round)
     }
 
-    pub fn next_round(&self) -> Option<RoundNumber> {
+    pub fn next_round(&self) -> Option<RoundId> {
         let proposal_round = self
             .requested_proposed
             .as_ref()
@@ -517,9 +533,9 @@ impl ChainManagerInfo {
         if proposal_round != Some(self.current_round) && locked_round != Some(self.current_round) {
             // There's no proposal or locked block yet in the current round.
             Some(self.current_round)
-        } else if self.current_round <= self.ownership.multi_leader_rounds {
+        } else if self.current_round.is_multi_leader() {
             // We're still in multi-leader mode, so we can propose in the next round at any time.
-            self.current_round.try_add_one().ok()
+            self.ownership.next_round(self.current_round)
         } else {
             // We're in single-leader mode, so the next proposal can only be made after the timeout.
             None

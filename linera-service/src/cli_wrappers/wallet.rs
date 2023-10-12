@@ -13,7 +13,7 @@ use async_graphql::InputType;
 use linera_base::{
     abi::ContractAbi,
     crypto::PublicKey,
-    data_types::{Amount, RoundNumber},
+    data_types::Amount,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_execution::Bytecode;
@@ -390,7 +390,7 @@ impl ClientWrapper {
         from: ChainId,
         to_public_keys: Vec<PublicKey>,
         weights: Vec<u64>,
-        multi_leader_rounds: RoundNumber,
+        multi_leader_rounds: u32,
     ) -> Result<(MessageId, ChainId)> {
         let mut command = self.command().await?;
         command

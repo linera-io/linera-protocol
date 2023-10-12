@@ -8,7 +8,7 @@ use crate::{
 };
 use futures::{future, StreamExt};
 use linera_base::{
-    data_types::{BlockHeight, RoundNumber},
+    data_types::{BlockHeight, RoundId},
     identifiers::{ChainDescription, ChainId, MessageId},
 };
 use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
@@ -40,7 +40,7 @@ pub enum CommunicateAction {
     AdvanceToNextBlockHeight(BlockHeight),
     RequestLeaderTimeout {
         height: BlockHeight,
-        round: RoundNumber,
+        round: RoundId,
         epoch: Epoch,
     },
 }

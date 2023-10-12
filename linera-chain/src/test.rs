@@ -5,7 +5,7 @@
 
 use linera_base::{
     crypto::KeyPair,
-    data_types::{Amount, BlockHeight, RoundNumber, Timestamp},
+    data_types::{Amount, BlockHeight, RoundId, Timestamp},
     identifiers::ChainId,
 };
 use linera_execution::{
@@ -69,11 +69,11 @@ pub trait BlockTestExt: Sized {
 
     /// Returns a block proposal in round 0 without any blobs or validated block.
     fn into_simple_proposal(self, key_pair: &KeyPair) -> BlockProposal {
-        self.into_proposal_with_round(key_pair, RoundNumber::ZERO)
+        self.into_proposal_with_round(key_pair, RoundId::Fast)
     }
 
     /// Returns a block proposal without any blobs or validated block.
-    fn into_proposal_with_round(self, key_pair: &KeyPair, round: RoundNumber) -> BlockProposal;
+    fn into_proposal_with_round(self, key_pair: &KeyPair, round: RoundId) -> BlockProposal;
 }
 
 impl BlockTestExt for Block {
@@ -106,7 +106,7 @@ impl BlockTestExt for Block {
         self
     }
 
-    fn into_proposal_with_round(self, key_pair: &KeyPair, round: RoundNumber) -> BlockProposal {
+    fn into_proposal_with_round(self, key_pair: &KeyPair, round: RoundId) -> BlockProposal {
         let content = BlockAndRound { block: self, round };
         BlockProposal::new(content, key_pair, vec![], None)
     }

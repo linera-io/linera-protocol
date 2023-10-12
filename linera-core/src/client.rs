@@ -21,7 +21,7 @@ use futures::{
 use linera_base::{
     abi::{Abi, ContractAbi},
     crypto::{CryptoHash, KeyPair, PublicKey},
-    data_types::{Amount, ArithmeticError, BlockHeight, RoundNumber, Timestamp},
+    data_types::{Amount, ArithmeticError, BlockHeight, Timestamp},
     ensure,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
@@ -730,14 +730,12 @@ where
             CommunicateAction::SubmitBlock(proposal) => {
                 let BlockAndRound { block, round } = proposal.content;
                 let (executed_block, _) = self.node_client.stage_block_execution(block).await?;
-                if round == RoundNumber::ZERO {
-                    (
-                        HashedValue::new_confirmed(executed_block),
-                        RoundNumber::ZERO,
-                    )
+                let value = if round.is_fast() {
+                    HashedValue::new_confirmed(executed_block)
                 } else {
-                    (HashedValue::new_validated(executed_block), round)
-                }
+                    HashedValue::new_validated(executed_block)
+                };
+                (value, round)
             }
             CommunicateAction::FinalizeBlock(validity_certificate) => {
                 let round = validity_certificate.round;
@@ -1218,7 +1216,7 @@ where
             .communicate_chain_updates(&committee, self.chain_id, submit_action)
             .await?
             .expect("a certificate");
-        let final_certificate = if proposal.content.round == RoundNumber::ZERO {
+        let final_certificate = if proposal.content.round.is_fast() {
             // Only one round-trip is needed
             certificate
         } else {
@@ -1495,7 +1493,7 @@ where
         self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
             super_owners: iter::once(new_public_key).collect(),
             owners: Vec::new(),
-            multi_leader_rounds: RoundNumber(2),
+            multi_leader_rounds: 2,
         }))
         .await
     }

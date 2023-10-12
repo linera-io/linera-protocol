@@ -9,7 +9,7 @@ use colored::Colorize;
 use futures::{lock::Mutex, StreamExt};
 use linera_base::{
     crypto::{CryptoRng, KeyPair, PublicKey},
-    data_types::{Amount, BlockHeight, RoundNumber, Timestamp},
+    data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{BytecodeId, ChainDescription, ChainId, MessageId},
 };
 use linera_chain::data_types::{Certificate, CertificateValue, ExecutedBlock};
@@ -326,7 +326,7 @@ impl ClientContext {
             let proposal = BlockProposal::new(
                 BlockAndRound {
                     block: block.clone(),
-                    round: RoundNumber::default(),
+                    round: linera_base::data_types::RoundId::Fast,
                 },
                 key_pair,
                 vec![],
@@ -360,7 +360,11 @@ impl ClientContext {
                 vote.validator,
             );
             let aggregator = aggregators.entry(chain_id).or_insert_with(|| {
-                SignatureAggregator::new(vote.value, RoundNumber(0), &committee)
+                SignatureAggregator::new(
+                    vote.value,
+                    linera_base::data_types::RoundId::Fast,
+                    &committee,
+                )
             });
             match aggregator.append(vote.validator, vote.signature) {
                 Ok(Some(certificate)) => {
@@ -752,7 +756,7 @@ enum ClientCommand {
         /// The number of rounds in which every owner can propose blocks, i.e. the first round
         /// number in which only a single designated leader is allowed to propose blocks.
         #[structopt(long = "multi-leader-rounds")]
-        multi_leader_rounds: Option<RoundNumber>,
+        multi_leader_rounds: Option<u32>,
     },
 
     /// Close (i.e. deactivate) an existing chain.
@@ -1279,7 +1283,7 @@ impl Runnable for Job {
                 } else {
                     public_keys.into_iter().zip(weights).collect()
                 };
-                let multi_leader_rounds = multi_leader_rounds.unwrap_or(RoundNumber::MAX);
+                let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
                 let ownership = ChainOwnership::multiple(owners, multi_leader_rounds);
                 let (message_id, certificate) = chain_client.open_chain(ownership).await.unwrap();
                 let time_total = time_start.elapsed().as_micros();

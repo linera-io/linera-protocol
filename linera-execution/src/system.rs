@@ -12,7 +12,7 @@ use async_graphql::Enum;
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, ArithmeticError, RoundNumber, Timestamp},
+    data_types::{Amount, ArithmeticError, Timestamp},
     ensure, hex_debug,
     identifiers::{BytecodeId, ChainDescription, ChainId, MessageId, Owner},
 };
@@ -126,7 +126,7 @@ pub enum SystemOperation {
         /// The regular owners, with their weights that determine how often they are round leader.
         owners: Vec<(PublicKey, u64)>,
         /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
-        multi_leader_rounds: RoundNumber,
+        multi_leader_rounds: u32,
     },
     /// Subscribes to a system channel.
     Subscribe {

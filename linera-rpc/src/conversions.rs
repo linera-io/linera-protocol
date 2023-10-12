@@ -8,7 +8,7 @@ use crate::{
 use ed25519::signature::Signature as edSignature;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
-    data_types::{BlockHeight, RoundNumber},
+    data_types::BlockHeight,
     ensure,
     identifiers::{ChainId, Owner},
 };
@@ -212,8 +212,9 @@ impl<'a> TryFrom<grpc::LiteCertificate> for HandleLiteCertificateRequest<'a> {
             chain_id: try_proto_convert(certificate.chain_id)?,
         };
         let signatures = bincode::deserialize(&certificate.signatures)?;
+        let round = bincode::deserialize(&certificate.round)?;
         Ok(Self {
-            certificate: LiteCertificate::new(value, RoundNumber(certificate.round), signatures),
+            certificate: LiteCertificate::new(value, round, signatures),
             wait_for_outgoing_messages: certificate.wait_for_outgoing_messages,
         })
     }
@@ -225,7 +226,7 @@ impl<'a> TryFrom<HandleLiteCertificateRequest<'a>> for grpc::LiteCertificate {
     fn try_from(request: HandleLiteCertificateRequest) -> Result<Self, Self::Error> {
         Ok(Self {
             hash: request.certificate.value.value_hash.as_bytes().to_vec(),
-            round: request.certificate.round.0,
+            round: bincode::serialize(&request.certificate.round)?,
             chain_id: Some(request.certificate.value.chain_id.into()),
             signatures: bincode::serialize(&request.certificate.signatures)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
@@ -244,8 +245,9 @@ impl TryFrom<grpc::Certificate> for HandleCertificateRequest {
         );
         let signatures = bincode::deserialize(&cert_request.signatures)?;
         let blobs = bincode::deserialize(&cert_request.blobs)?;
+        let round = bincode::deserialize(&cert_request.round)?;
         Ok(HandleCertificateRequest {
-            certificate: Certificate::new(value, RoundNumber(cert_request.round), signatures),
+            certificate: Certificate::new(value, round, signatures),
             wait_for_outgoing_messages: cert_request.wait_for_outgoing_messages,
             blobs,
         })
@@ -259,7 +261,7 @@ impl TryFrom<HandleCertificateRequest> for grpc::Certificate {
         Ok(Self {
             chain_id: Some(request.certificate.value().chain_id().into()),
             value: bincode::serialize(&request.certificate.value)?,
-            round: request.certificate.round.0,
+            round: bincode::serialize(&request.certificate.round)?,
             signatures: bincode::serialize(request.certificate.signatures())?,
             blobs: bincode::serialize(&request.blobs)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
@@ -448,7 +450,7 @@ pub mod tests {
     use super::*;
     use linera_base::{
         crypto::{BcsSignable, CryptoHash, KeyPair},
-        data_types::{Amount, Timestamp},
+        data_types::{Amount, RoundId, Timestamp},
     };
     use linera_chain::{
         data_types::{Block, BlockAndRound, ExecutedBlock, HashedValue},
@@ -585,7 +587,7 @@ pub mod tests {
                 value_hash: CryptoHash::new(&Foo("value".into())),
                 chain_id: ChainId::root(0),
             },
-            round: RoundNumber(2),
+            round: RoundId::MultiLeader(2),
             signatures: Cow::Owned(vec![(
                 ValidatorName::from(key_pair.public()),
                 Signature::new(&Foo("test".into()), &key_pair),
@@ -609,7 +611,7 @@ pub mod tests {
                 message_counts: vec![],
                 state_hash: CryptoHash::new(&Foo("test".into())),
             }),
-            RoundNumber(3),
+            RoundId::MultiLeader(3),
             vec![(
                 ValidatorName::from(key_pair.public()),
                 Signature::new(&Foo("test".into()), &key_pair),
@@ -660,7 +662,7 @@ pub mod tests {
         let block_proposal = BlockProposal {
             content: BlockAndRound {
                 block: get_block(),
-                round: RoundNumber::ZERO,
+                round: RoundId::SingleLeader(4),
             },
             owner: Owner::from(KeyPair::generate().public()),
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
@@ -677,7 +679,7 @@ pub mod tests {
                     message_counts: vec![],
                     state_hash: CryptoHash::new(&Foo("validated".into())),
                 }),
-                RoundNumber(3),
+                RoundId::SingleLeader(2),
                 vec![(
                     ValidatorName::from(key_pair.public()),
                     Signature::new(&Foo("signed".into()), &key_pair),
