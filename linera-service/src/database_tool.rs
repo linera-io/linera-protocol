@@ -265,7 +265,7 @@ async fn main() {
     let error_code = match evaluate_options(options).await {
         Ok(code) => code,
         Err(msg) => {
-            println!("Error is {:?}", msg);
+            tracing::error!("Error is {:?}", msg);
             2
         }
     };
