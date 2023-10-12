@@ -10,7 +10,7 @@ mod graphql;
 mod input_type;
 mod js_utils;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context as _, Result};
 use futures::prelude::*;
 use gql_service::{
     applications, applications::ApplicationsApplications as Application, block,
@@ -234,7 +234,7 @@ async fn block(node: &str, chain_id: ChainId, hash: Option<CryptoHash>) -> Resul
     let block = request::<gql_service::Block, _>(&client, node, variables)
         .await?
         .block
-        .ok_or_else(|| anyhow!("no block found"))?;
+        .context("no block found")?;
     let hash = block.hash;
     Ok((
         Page::Block(Box::new(block)),
@@ -306,7 +306,7 @@ async fn operation(
         request::<gql_operations::GetOperation, _>(&client, &operations_indexer, variables)
             .await?
             .operation
-            .ok_or_else(|| anyhow!("no operation found"))?;
+            .context("no operation found")?;
     Ok((
         Page::Operation(operation.clone()),
         format!(
@@ -567,13 +567,12 @@ async fn page(
         }
         "blocks" => blocks(node, chain_id, None, Some(20)).await,
         "applications" => applications(node, chain_id).await,
-        "application" => match find_arg(args, "app").map(|v| parse(&v)) {
-            None => Err(anyhow!("unknown application")),
-            Some(app_js) => {
-                let app = from_value::<Application>(app_js).unwrap();
-                application(app).await
-            }
-        },
+        "application" => {
+            let app_arg = find_arg(args, "app").context("unknown application")?;
+            let app =
+                from_value::<Application>(parse(&app_arg)).expect("cannot parse applications");
+            application(app).await
+        }
         "operation" => {
             let height = find_arg_map(args, "height", BlockHeight::from_str)?;
             let index = find_arg_map(args, "index", usize::from_str)?;
@@ -590,10 +589,10 @@ async fn page(
             }
         }
         "operations" => operations(indexer, chain_id).await,
-        "plugin" => match find_arg(args, "plugin") {
-            None => Err(anyhow!("unknown plugin")),
-            Some(name) => plugin(&name, indexer).await,
-        },
+        "plugin" => {
+            let name = find_arg(args, "plugin").context("unknown plugin")?;
+            plugin(&name, indexer).await
+        }
         "error" => {
             let msg = find_arg(args, "msg").unwrap_or("unknown error".to_string());
             Err(anyhow::Error::msg(msg))

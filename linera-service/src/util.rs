@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Context as _, Result};
 use std::path::PathBuf;
 use tokio::process::Command;
 use tracing::{debug, error};
@@ -42,18 +42,19 @@ pub async fn resolve_binary(name: &'static str, package: &'static str) -> Result
         .arg("--version")
         .output()
         .await
-        .map_err(|e| {
-            anyhow!(
-            "Failed to execute and retrieve version from the binary {name} in directory {}: {e}",
-            current_binary_path.display())
+        .with_context(|| {
+            format!(
+                "Failed to execute and retrieve version from the binary {name} in directory {}",
+                current_binary_path.display()
+            )
         })?
         .stdout;
     let found_version = String::from_utf8_lossy(&version_message)
         .trim()
         .split(' ')
         .last()
-        .ok_or_else(|| {
-            anyhow!(
+        .with_context(|| {
+            format!(
                 "Passing --version to the binary {name} in directory {} returned an empty result",
                 current_binary_path.display()
             )
