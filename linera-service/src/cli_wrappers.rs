@@ -11,11 +11,12 @@ use linera_base::{
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_execution::Bytecode;
-use serde::ser::Serialize;
+use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_json::{json, value::Value};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     env, fs,
+    marker::PhantomData,
     ops::RangeInclusive,
     path::{Path, PathBuf},
     process::Stdio,
@@ -946,14 +947,14 @@ impl NodeService {
         &self,
         chain_id: &ChainId,
         application_id: &ApplicationId<A>,
-    ) -> String {
+    ) -> ApplicationWrapper<A> {
         let application_id = application_id.forget_abi().to_string();
         let n_try = 30;
         for i in 0..n_try {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let values = self.try_get_applications_uri(chain_id).await;
             if let Some(link) = values.get(&application_id) {
-                return link.to_string();
+                return ApplicationWrapper::from(link.to_string());
             }
             warn!("Waiting for application {application_id:?} to be visible on chain {chain_id:?}");
         }
@@ -1075,5 +1076,67 @@ impl NodeService {
         );
         let data = self.query_node(&query).await;
         serde_json::from_value(data["requestApplication"].clone()).unwrap()
+    }
+}
+
+pub struct ApplicationWrapper<A> {
+    uri: String,
+    _phantom: PhantomData<A>,
+}
+
+impl<A> ApplicationWrapper<A> {
+    pub async fn raw_query(&self, query: impl AsRef<str>) -> Value {
+        let query = query.as_ref();
+        let client = reqwest::Client::new();
+        let response = client
+            .post(&self.uri)
+            .json(&json!({ "query": query }))
+            .send()
+            .await
+            .unwrap();
+        if !response.status().is_success() {
+            panic!(
+                "Query \"{}\" failed: {}",
+                query.get(..200).unwrap_or(query),
+                response.text().await.unwrap()
+            );
+        }
+        let value: Value = response.json().await.unwrap();
+        if let Some(errors) = value.get("errors") {
+            panic!(
+                "Query \"{}\" failed: {}",
+                query.get(..200).unwrap_or(query),
+                errors
+            );
+        }
+        value["data"].clone()
+    }
+
+    pub async fn query(&self, query: impl AsRef<str>) -> Value {
+        let query = query.as_ref();
+        self.raw_query(&format!("query {{ {query} }}")).await
+    }
+
+    pub async fn query_json<T: DeserializeOwned>(&self, query: impl AsRef<str>) -> T {
+        let query = query.as_ref().trim();
+        let name = query
+            .split_once(|ch: char| !ch.is_alphanumeric())
+            .map_or(query, |(name, _)| name);
+        let data = self.query(query).await;
+        serde_json::from_value(data[name].clone()).unwrap()
+    }
+
+    pub async fn mutate(&self, mutation: impl AsRef<str>) -> Value {
+        let mutation = mutation.as_ref();
+        self.raw_query(&format!("mutation {{ {mutation} }}")).await
+    }
+}
+
+impl<A> From<String> for ApplicationWrapper<A> {
+    fn from(uri: String) -> ApplicationWrapper<A> {
+        ApplicationWrapper {
+            uri,
+            _phantom: PhantomData,
+        }
     }
 }

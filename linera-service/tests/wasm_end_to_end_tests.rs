@@ -11,88 +11,23 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::ChainId,
 };
-use linera_service::cli_wrappers::{ClientWrapper, Database, LocalNetwork, Network};
+use linera_service::cli_wrappers::{
+    ApplicationWrapper, ClientWrapper, Database, LocalNetwork, Network,
+};
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, time::Duration};
 use tracing::{info, warn};
-
-struct Application {
-    uri: String,
-}
-
-impl From<String> for Application {
-    fn from(uri: String) -> Self {
-        Application { uri }
-    }
-}
-
-impl Application {
-    async fn query(&self, query: &str) -> Value {
-        let client = reqwest::Client::new();
-        let response = client
-            .post(&self.uri)
-            .json(&json!({ "query": query }))
-            .send()
-            .await
-            .unwrap();
-        if !response.status().is_success() {
-            panic!(
-                "Query \"{}\" failed: {}",
-                query.get(..200).unwrap_or(query),
-                response.text().await.unwrap()
-            );
-        }
-        let value: Value = response.json().await.unwrap();
-        if let Some(errors) = value.get("errors") {
-            panic!(
-                "Query \"{}\" failed: {}",
-                query.get(..200).unwrap_or(query),
-                errors
-            );
-        }
-        value["data"].clone()
-    }
-}
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> fungible::AccountOwner {
     let owner = client.get_owner().unwrap();
     fungible::AccountOwner::User(owner)
 }
 
-struct CounterApp(Application);
-
-impl From<String> for CounterApp {
-    fn from(uri: String) -> Self {
-        CounterApp(Application { uri })
-    }
-}
-
-impl CounterApp {
-    async fn get_value(&self) -> u64 {
-        let data = self.0.query("query { value }").await;
-        serde_json::from_value(data["value"].clone()).unwrap()
-    }
-
-    async fn increment_value(&self, increment: u64) {
-        let query = format!("mutation {{ increment(value: {})}}", increment);
-        self.0.query(&query).await;
-    }
-}
-
-struct FungibleApp(Application);
-
-impl From<String> for FungibleApp {
-    fn from(uri: String) -> Self {
-        FungibleApp(Application { uri })
-    }
-}
+struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
 
 impl FungibleApp {
     async fn get_amount(&self, account_owner: &fungible::AccountOwner) -> Amount {
-        let query = format!(
-            "query {{ accounts(accountOwner: {} ) }}",
-            account_owner.to_value()
-        );
+        let query = format!("accounts(accountOwner: {})", account_owner.to_value());
         let response_body = self.0.query(&query).await;
         serde_json::from_value(response_body["accounts"].clone()).unwrap_or_default()
     }
@@ -113,87 +48,29 @@ impl FungibleApp {
         amount_transfer: Amount,
         destination: fungible::Account,
     ) -> Value {
-        let query = format!(
-            "mutation {{ transfer(owner: {}, amount: \"{}\", targetAccount: {}) }}",
+        let mutation = format!(
+            "transfer(owner: {}, amount: \"{}\", targetAccount: {})",
             account_owner.to_value(),
             amount_transfer,
             destination.to_value(),
         );
-        self.0.query(&query).await
+        self.0.mutate(mutation).await
     }
 
     async fn claim(&self, source: fungible::Account, target: fungible::Account, amount: Amount) {
         // Claiming tokens from chain1 to chain2.
-        let query = format!(
-            "mutation {{ claim(sourceAccount: {}, amount: \"{}\", targetAccount: {}) }}",
+        let mutation = format!(
+            "claim(sourceAccount: {}, amount: \"{}\", targetAccount: {})",
             source.to_value(),
             amount,
             target.to_value()
         );
 
-        self.0.query(&query).await;
+        self.0.mutate(mutation).await;
     }
 }
 
-struct SocialApp(Application);
-
-impl From<String> for SocialApp {
-    fn from(uri: String) -> Self {
-        SocialApp(Application { uri })
-    }
-}
-
-impl SocialApp {
-    async fn subscribe(&self, chain_id: ChainId) -> Value {
-        let query = format!("mutation {{ requestSubscribe(field0: \"{chain_id}\") }}");
-        self.0.query(&query).await
-    }
-
-    async fn post(&self, text: &str) -> Value {
-        let query = format!("mutation {{ post(field0: \"{text}\") }}");
-        self.0.query(&query).await
-    }
-
-    async fn received_posts_keys(&self, count: u32) -> Value {
-        let query = format!("query {{ receivedPostsKeys(count: {count}) {{ author, index }} }}");
-        self.0.query(&query).await
-    }
-}
-
-struct CrowdFundingApp(Application);
-
-impl From<String> for CrowdFundingApp {
-    fn from(uri: String) -> Self {
-        CrowdFundingApp(Application { uri })
-    }
-}
-
-impl CrowdFundingApp {
-    async fn pledge_with_transfer(
-        &self,
-        account_owner: fungible::AccountOwner,
-        amount: Amount,
-    ) -> Value {
-        let query = format!(
-            "mutation {{ pledgeWithTransfer(owner: {}, amount: \"{}\") }}",
-            account_owner.to_value(),
-            amount,
-        );
-        self.0.query(&query).await
-    }
-
-    async fn collect(&self) -> Value {
-        self.0.query("mutation { collect }").await
-    }
-}
-
-struct MatchingEngineApp(Application);
-
-impl From<String> for MatchingEngineApp {
-    fn from(uri: String) -> Self {
-        MatchingEngineApp(Application { uri })
-    }
-}
+struct MatchingEngineApp(ApplicationWrapper<matching_engine::MatchingEngineAbi>);
 
 impl MatchingEngineApp {
     async fn get_account_info(
@@ -201,26 +78,20 @@ impl MatchingEngineApp {
         account_owner: &fungible::AccountOwner,
     ) -> Vec<matching_engine::OrderId> {
         let query = format!(
-            "query {{ accountInfo(accountOwner: {}) {{ orders }} }}",
+            "accountInfo(accountOwner: {}) {{ orders }}",
             account_owner.to_value()
         );
-        let response_body = self.0.query(&query).await;
+        let response_body = self.0.query(query).await;
         serde_json::from_value(response_body["accountInfo"]["orders"].clone()).unwrap()
     }
 
     async fn order(&self, order: matching_engine::Order) -> Value {
-        let query_string = format!("mutation {{ executeOrder(order: {}) }}", order.to_value());
-        self.0.query(&query_string).await
+        let mutation = format!("executeOrder(order: {})", order.to_value());
+        self.0.mutate(mutation).await
     }
 }
 
-struct AmmApp(Application);
-
-impl From<String> for AmmApp {
-    fn from(uri: String) -> Self {
-        AmmApp(Application { uri })
-    }
-}
+struct AmmApp(ApplicationWrapper<amm::AmmAbi>);
 
 impl AmmApp {
     async fn add_liquidity(
@@ -235,11 +106,8 @@ impl AmmApp {
             max_token1_amount,
         };
 
-        let query = format!(
-            "mutation {{ operation(operation: {}) }}",
-            operation.to_value(),
-        );
-        self.0.query(&query).await;
+        let mutation = format!("operation(operation: {})", operation.to_value(),);
+        self.0.mutate(mutation).await;
     }
 
     async fn remove_liquidity(
@@ -254,11 +122,8 @@ impl AmmApp {
             token_to_remove_amount,
         };
 
-        let query = format!(
-            "mutation {{ operation(operation: {}) }}",
-            operation.to_value(),
-        );
-        self.0.query(&query).await;
+        let mutation = format!("operation(operation: {})", operation.to_value(),);
+        self.0.mutate(mutation).await;
     }
 
     async fn swap(
@@ -273,11 +138,8 @@ impl AmmApp {
             input_amount,
         };
 
-        let query = format!(
-            "mutation {{ operation(operation: {}) }}",
-            operation.to_value(),
-        );
-        self.0.query(&query).await;
+        let mutation = format!("operation(operation: {})", operation.to_value(),);
+        self.0.mutate(mutation).await;
     }
 }
 
@@ -329,17 +191,15 @@ async fn run_wasm_end_to_end_counter(database: Database) {
         .unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
 
-    let application: CounterApp = node_service
-        .make_application(&chain, &application_id)
-        .await
-        .into();
+    let application = node_service.make_application(&chain, &application_id).await;
 
-    let counter_value = application.get_value().await;
+    let counter_value: u64 = application.query_json("value").await;
     assert_eq!(counter_value, original_counter_value);
 
-    application.increment_value(increment).await;
+    let mutation = format!("increment(value: {increment})");
+    application.mutate(mutation).await;
 
-    let counter_value = application.get_value().await;
+    let counter_value: u64 = application.query_json("value").await;
     assert_eq!(counter_value, original_counter_value + increment);
 
     node_service.assert_is_running();
@@ -391,17 +251,15 @@ async fn run_wasm_end_to_end_counter_publish_create(database: Database) {
         .unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
 
-    let application: CounterApp = node_service
-        .make_application(&chain, &application_id)
-        .await
-        .into();
+    let application = node_service.make_application(&chain, &application_id).await;
 
-    let counter_value = application.get_value().await;
+    let counter_value: u64 = application.query_json("value").await;
     assert_eq!(counter_value, original_counter_value);
 
-    application.increment_value(increment).await;
+    let mutation = format!("increment(value: {increment})");
+    application.mutate(mutation).await;
 
-    let counter_value = application.get_value().await;
+    let counter_value: u64 = application.query_json("value").await;
     assert_eq!(counter_value, original_counter_value + increment);
 
     node_service.assert_is_running();
@@ -464,22 +322,23 @@ async fn run_wasm_end_to_end_social_user_pub_sub(database: Database) {
         .request_application(&chain2, &application_id)
         .await;
 
-    let app2: SocialApp = node_service2
+    let app2 = node_service2
         .make_application(&chain2, &application_id)
-        .await
-        .into();
-    let hash = app2.subscribe(chain1).await;
+        .await;
+    let hash = app2
+        .mutate(format!("requestSubscribe(field0: \"{chain1}\")"))
+        .await;
 
     // The returned hash should now be the latest one.
     let query = format!("query {{ chain(chainId: \"{chain2}\") {{ tipState {{ blockHash }} }} }}");
     let response = node_service2.query_node(&query).await;
     assert_eq!(hash, response["chain"]["tipState"]["blockHash"]);
 
-    let app1: SocialApp = node_service1
+    let app1 = node_service1
         .make_application(&chain1, &application_id)
-        .await
-        .into();
-    app1.post("Linera Social is the new Mastodon!").await;
+        .await;
+    app1.mutate("post(field0: \"Linera Social is the new Mastodon!\")")
+        .await;
 
     // Instead of retrying, we could call `node_service1.process_inbox(chain1).await` here.
     // However, we prefer to test the notification system for a change.
@@ -489,7 +348,9 @@ async fn run_wasm_end_to_end_social_user_pub_sub(database: Database) {
     'success: {
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
-            let response = app2.received_posts_keys(5).await;
+            let response = app2
+                .query("receivedPostsKeys(count: 5) { author, index }")
+                .await;
             if response == expected_response {
                 info!("Confirmed post");
                 break 'success;
@@ -560,10 +421,11 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
     let mut node_service1 = client1.run_node_service(8080).await.unwrap();
     let mut node_service2 = client2.run_node_service(8081).await.unwrap();
 
-    let app1: FungibleApp = node_service1
-        .make_application(&chain1, &application_id)
-        .await
-        .into();
+    let app1 = FungibleApp(
+        node_service1
+            .make_application(&chain1, &application_id)
+            .await,
+    );
     app1.assert_balances([
         (account_owner1, Amount::from_tokens(5)),
         (account_owner2, Amount::from_tokens(2)),
@@ -589,10 +451,11 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
     .await;
 
     // Fungible didn't exist on chain2 initially but now it does and we can talk to it.
-    let app2: FungibleApp = node_service2
-        .make_application(&chain2, &application_id)
-        .await
-        .into();
+    let app2 = FungibleApp(
+        node_service2
+            .make_application(&chain2, &application_id)
+            .await,
+    );
 
     app2.assert_balances(BTreeMap::from([
         (account_owner1, Amount::ZERO),
@@ -693,10 +556,11 @@ async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
 
     let mut node_service = client1.run_node_service(8080).await.unwrap();
 
-    let app1: FungibleApp = node_service
-        .make_application(&chain1, &application_id)
-        .await
-        .into();
+    let app1 = FungibleApp(
+        node_service
+            .make_application(&chain1, &application_id)
+            .await,
+    );
     app1.assert_balances([
         (account_owner1, Amount::from_tokens(5)),
         (account_owner2, Amount::from_tokens(2)),
@@ -721,10 +585,11 @@ async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
     ])
     .await;
 
-    let app2: FungibleApp = node_service
-        .make_application(&chain2, &application_id)
-        .await
-        .into();
+    let app2 = FungibleApp(
+        node_service
+            .make_application(&chain2, &application_id)
+            .await,
+    );
     app2.assert_balances([(account_owner2, Amount::ONE)]).await;
 
     node_service.assert_is_running();
@@ -816,15 +681,15 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
     let mut node_service1 = client1.run_node_service(8080).await.unwrap();
     let mut node_service2 = client2.run_node_service(8081).await.unwrap();
 
-    let app_fungible1: FungibleApp = node_service1
-        .make_application(&chain1, &application_id_fungible)
-        .await
-        .into();
+    let app_fungible1 = FungibleApp(
+        node_service1
+            .make_application(&chain1, &application_id_fungible)
+            .await,
+    );
 
-    let app_crowd1: CrowdFundingApp = node_service1
+    let app_crowd1 = node_service1
         .make_application(&chain1, &application_id_crowd)
-        .await
-        .into();
+        .await;
 
     // Transferring tokens to user2 on chain2
     app_fungible1
@@ -843,21 +708,23 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
         .request_application(&chain2, &application_id_crowd)
         .await;
 
-    let app_crowd2: CrowdFundingApp = node_service2
+    let app_crowd2 = node_service2
         .make_application(&chain2, &application_id_crowd)
-        .await
-        .into();
+        .await;
 
     // Transferring
-    app_crowd2
-        .pledge_with_transfer(account_owner2, Amount::ONE)
-        .await;
+    let mutation = format!(
+        "pledgeWithTransfer(owner: {}, amount: \"{}\")",
+        account_owner2.to_value(),
+        Amount::ONE,
+    );
+    app_crowd2.mutate(mutation).await;
 
     // Make sure that the pledge is processed fast enough by client1.
     node_service1.process_inbox(&chain1).await;
 
     // Ending the campaign.
-    app_crowd1.collect().await;
+    app_crowd1.mutate("collect").await;
 
     // The rich gets their money back.
     app_fungible1
@@ -956,14 +823,8 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
     let mut node_service_a = client_a.run_node_service(8081).await.unwrap();
     let mut node_service_b = client_b.run_node_service(8082).await.unwrap();
 
-    let app_fungible0_a: FungibleApp = node_service_a
-        .make_application(&chain_a, &token0)
-        .await
-        .into();
-    let app_fungible1_b: FungibleApp = node_service_b
-        .make_application(&chain_b, &token1)
-        .await
-        .into();
+    let app_fungible0_a = FungibleApp(node_service_a.make_application(&chain_a, &token0).await);
+    let app_fungible1_b = FungibleApp(node_service_b.make_application(&chain_b, &token1).await);
     app_fungible0_a
         .assert_balances([
             (owner_a, Amount::from_tokens(10)),
@@ -982,17 +843,19 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
     node_service_admin
         .request_application(&chain_admin, &token0)
         .await;
-    let app_fungible0_admin: FungibleApp = node_service_admin
-        .make_application(&chain_admin, &token0)
-        .await
-        .into();
+    let app_fungible0_admin = FungibleApp(
+        node_service_admin
+            .make_application(&chain_admin, &token0)
+            .await,
+    );
     node_service_admin
         .request_application(&chain_admin, &token1)
         .await;
-    let app_fungible1_admin: FungibleApp = node_service_admin
-        .make_application(&chain_admin, &token1)
-        .await
-        .into();
+    let app_fungible1_admin = FungibleApp(
+        node_service_admin
+            .make_application(&chain_admin, &token1)
+            .await,
+    );
     app_fungible0_admin
         .assert_balances([
             (owner_a, Amount::ZERO),
@@ -1024,24 +887,27 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
             &[token0.forget_abi(), token1.forget_abi()],
         )
         .await;
-    let app_matching_admin: MatchingEngineApp = node_service_admin
-        .make_application(&chain_admin, &application_id_matching)
-        .await
-        .into();
+    let app_matching_admin = MatchingEngineApp(
+        node_service_admin
+            .make_application(&chain_admin, &application_id_matching)
+            .await,
+    );
     node_service_a
         .request_application(&chain_a, &application_id_matching)
         .await;
-    let app_matching_a: MatchingEngineApp = node_service_a
-        .make_application(&chain_a, &application_id_matching)
-        .await
-        .into();
+    let app_matching_a = MatchingEngineApp(
+        node_service_a
+            .make_application(&chain_a, &application_id_matching)
+            .await,
+    );
     node_service_b
         .request_application(&chain_b, &application_id_matching)
         .await;
-    let app_matching_b: MatchingEngineApp = node_service_b
-        .make_application(&chain_b, &application_id_matching)
-        .await
-        .into();
+    let app_matching_b = MatchingEngineApp(
+        node_service_b
+            .make_application(&chain_b, &application_id_matching)
+            .await,
+    );
 
     // Now creating orders
     for price in [1, 2] {
@@ -1218,14 +1084,16 @@ async fn run_wasm_end_to_end_amm(database: Database) {
         .await;
 
     // Create wrappers
-    let app_fungible0_admin: FungibleApp = node_service_admin
-        .make_application(&chain_admin, &token0)
-        .await
-        .into();
-    let app_fungible1_admin: FungibleApp = node_service_admin
-        .make_application(&chain_admin, &token1)
-        .await
-        .into();
+    let app_fungible0_admin = FungibleApp(
+        node_service_admin
+            .make_application(&chain_admin, &token0)
+            .await,
+    );
+    let app_fungible1_admin = FungibleApp(
+        node_service_admin
+            .make_application(&chain_admin, &token1)
+            .await,
+    );
 
     // Check initial balances
     app_fungible0_admin
@@ -1264,24 +1132,27 @@ async fn run_wasm_end_to_end_amm(database: Database) {
     let owner_amm = fungible::AccountOwner::Application(application_id_amm.forget_abi());
 
     // Create AMM wrappers
-    let app_amm_admin: AmmApp = node_service_admin
-        .make_application(&chain_admin, &application_id_amm)
-        .await
-        .into();
+    let app_amm_admin = AmmApp(
+        node_service_admin
+            .make_application(&chain_admin, &application_id_amm)
+            .await,
+    );
     node_service0
         .request_application(&chain0, &application_id_amm)
         .await;
-    let app_amm0: AmmApp = node_service0
-        .make_application(&chain0, &application_id_amm)
-        .await
-        .into();
+    let app_amm0 = AmmApp(
+        node_service0
+            .make_application(&chain0, &application_id_amm)
+            .await,
+    );
     node_service1
         .request_application(&chain1, &application_id_amm)
         .await;
-    let app_amm1: AmmApp = node_service1
-        .make_application(&chain1, &application_id_amm)
-        .await
-        .into();
+    let app_amm1 = AmmApp(
+        node_service1
+            .make_application(&chain1, &application_id_amm)
+            .await,
+    );
 
     // Initial balances for both tokens are 0
 
