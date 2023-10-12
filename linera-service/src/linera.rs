@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, bail, Context, Error};
+use anyhow::{bail, Context, Error};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
@@ -127,12 +127,11 @@ impl ClientContext {
             Some(path) => path.clone(),
             None => Self::create_default_wallet_path()?,
         };
-        if wallet_state_path.exists() {
-            bail!(
-                "Wallet already exists at {}. Aborting...",
-                wallet_state_path.display()
-            )
-        }
+        anyhow::ensure!(
+            !wallet_state_path.exists(),
+            "Wallet already exists at {}. Aborting...",
+            wallet_state_path.display()
+        );
         let mut wallet_state =
             WalletState::create(&wallet_state_path, genesis_config, testing_prng_seed)
                 .with_context(|| format!("Unable to create wallet at {:?}", &wallet_state_path))?;
@@ -193,9 +192,8 @@ impl ClientContext {
     }
 
     fn create_default_config_path() -> Result<PathBuf, anyhow::Error> {
-        let mut config_dir = dirs::config_dir().ok_or_else(|| {
-            anyhow!("Default configuration directory not supported. Please specify a path.")
-        })?;
+        let mut config_dir = dirs::config_dir()
+            .context("Default configuration directory not supported. Please specify a path.")?;
         config_dir.push("linera");
         if !config_dir.exists() {
             debug!("{} does not exist, creating...", config_dir.display());
@@ -1628,9 +1626,9 @@ impl Runnable for Job {
                 let admin_chain_id = context.wallet_state.genesis_admin_chain();
                 let query = ChainInfoQuery::new(admin_chain_id).with_committees();
                 let info = node_client.handle_chain_info_query(query).await?;
-                let Some(committee) = info.latest_committee() else {
-                    bail!("Invalid chain info response; missing latest committee");
-                };
+                let committee = info
+                    .latest_committee()
+                    .context("Invalid chain info response; missing latest committee")?;
                 let nodes = context.make_node_provider().make_nodes(committee)?;
 
                 // Download the parent chain.
