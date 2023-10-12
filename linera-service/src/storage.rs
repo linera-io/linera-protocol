@@ -308,6 +308,31 @@ impl FullStorageConfig {
             }
         }
     }
+
+    /// List all the tables of the database
+    pub async fn list_tables(self) -> Result<Vec<String>, ViewError> {
+        match self {
+            FullStorageConfig::Memory(_) => Err(ViewError::ContextError {
+                backend: "memory".to_string(),
+                error: "list_tables is not supported for the memory storage".to_string(),
+            }),
+            #[cfg(feature = "rocksdb")]
+            FullStorageConfig::RocksDb(_) => Err(ViewError::ContextError {
+                backend: "memory".to_string(),
+                error: "list_tables is not currently supported for the RocksDb storage".to_string(),
+            }),
+            #[cfg(feature = "aws")]
+            FullStorageConfig::DynamoDb(store_config) => {
+                let tables = DynamoDbClient::list_tables(store_config).await?;
+                Ok(tables)
+            }
+            #[cfg(feature = "scylladb")]
+            FullStorageConfig::ScyllaDb(store_config) => {
+                let tables = ScyllaDbClient::list_tables(store_config).await?;
+                Ok(tables)
+            }
+        }
+    }
 }
 
 #[async_trait]
