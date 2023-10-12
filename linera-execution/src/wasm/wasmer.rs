@@ -35,7 +35,7 @@ mod conversions_to_wit;
 mod guest_futures;
 
 use super::{
-    async_boundary::{HostFuture, WakerForwarder},
+    async_boundary::WakerForwarder,
     async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
@@ -48,7 +48,7 @@ use futures::{channel::mpsc, FutureExt, TryFutureExt};
 use linera_views::{batch::Batch, views::ViewError};
 use once_cell::sync::Lazy;
 use std::{marker::PhantomData, mem, sync::Arc, task::Poll};
-use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
+use tokio::sync::Mutex;
 use wasmer::{
     imports, wasmparser::Operator, CompilerConfig, Engine, EngineBuilder, Instance, Module,
     RuntimeError, Singlepass, Store,
@@ -380,41 +380,6 @@ impl<'runtime> common::Service for Service<'runtime> {
         future: &service::HandleQuery,
     ) -> Result<service::PollApplicationQueryResult, RuntimeError> {
         service::Service::handle_query_poll(&self.service, store, future)
-    }
-}
-
-/// Helper type with common functionality across the contract and service system API
-/// implementations.
-pub struct SystemApi<S> {
-    waker: WakerForwarder,
-    runtime: Arc<Mutex<Option<S>>>,
-}
-
-impl<Runtime> SystemApi<Runtime> {
-    /// Creates a new [`SystemApi`] instance, ensuring that the lifetime of the borrowed `runtime`
-    /// reference is respected.
-    ///
-    /// # Safety
-    ///
-    /// This method uses a [`mem::transmute`] call to erase the lifetime of the `runtime` reference.
-    /// However, this is safe because the lifetime is transfered to the returned [`RuntimeGuard`],
-    /// which removes the unsafe reference from memory when it is dropped, ensuring the lifetime is
-    /// respected.
-    ///
-    /// The [`RuntimeGuard`] instance must be kept alive while the `runtime` reference is still
-    /// expected to be alive and usable by the Wasm application.
-    pub fn new<'runtime>(
-        waker: WakerForwarder,
-        runtime: impl RemoveLifetime<WithoutLifetime = Runtime> + 'runtime,
-    ) -> (Self, RuntimeGuard<'runtime, Runtime>) {
-        let runtime = Arc::new(Mutex::new(Some(unsafe { runtime.remove_lifetime() })));
-
-        let guard = RuntimeGuard {
-            runtime: runtime.clone(),
-            _lifetime: PhantomData,
-        };
-
-        (SystemApi { waker, runtime }, guard)
     }
 }
 
