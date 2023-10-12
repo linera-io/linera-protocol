@@ -529,6 +529,28 @@ async fn run_project_publish(database: Database) {
     assert_eq!(node_service.try_get_applications_uri(&chain).await.len(), 1)
 }
 
+#[test_log::test(tokio::test)]
+async fn test_linera_net_up_simple() {
+    use std::{
+        io::Write,
+        process::{Command, Stdio},
+    };
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
+    // Using a relative path to test the resolution of other binaries in this case.
+    let mut command = Command::new("../target/debug/linera");
+    command.args(["net", "up"]);
+    let mut child = command.stdin(Stdio::piped()).spawn().unwrap();
+
+    let mut stdin = child.stdin.take().unwrap();
+    std::thread::spawn(move || {
+        stdin.write_all(b"\n").unwrap();
+    });
+
+    assert!(child.wait().unwrap().success());
+}
+
 #[cfg(feature = "rocksdb")]
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_example_publish() {
