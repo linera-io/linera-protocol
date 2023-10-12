@@ -832,7 +832,7 @@ struct QueryResults {
 // Inspired by https://depth-first.com/articles/2020/06/22/returning-rust-iterators/
 #[doc(hidden)]
 #[allow(clippy::type_complexity)]
-pub struct DynamoDbKeyBlockIterator<'a> {
+pub struct DynamoDbKeyIterator<'a> {
     prefix_len: usize,
     pos: usize,
     iters: Vec<
@@ -842,7 +842,7 @@ pub struct DynamoDbKeyBlockIterator<'a> {
     >,
 }
 
-impl<'a> Iterator for DynamoDbKeyBlockIterator<'a> {
+impl<'a> Iterator for DynamoDbKeyIterator<'a> {
     type Item = Result<&'a [u8], DynamoDbContextError>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -868,7 +868,7 @@ pub struct DynamoDbKeys {
 }
 
 impl KeyIterable<DynamoDbContextError> for DynamoDbKeys {
-    type Iterator<'a> = DynamoDbKeyBlockIterator<'a> where Self: 'a;
+    type Iterator<'a> = DynamoDbKeyIterator<'a> where Self: 'a;
 
     fn iterator(&self) -> Self::Iterator<'_> {
         let pos = 0;
@@ -877,7 +877,7 @@ impl KeyIterable<DynamoDbContextError> for DynamoDbKeys {
             let iter = response.items.iter().flatten();
             iters.push(iter);
         }
-        DynamoDbKeyBlockIterator {
+        DynamoDbKeyIterator {
             prefix_len: self.result_queries.prefix_len,
             pos,
             iters,

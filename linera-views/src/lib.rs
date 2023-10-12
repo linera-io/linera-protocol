@@ -58,6 +58,9 @@ pub mod batch;
 /// The definitions used for the `KeyValueStoreClient` and `Context`.
 pub mod common;
 
+/// The code for keeping track of reads and writes.
+pub mod storage_metric;
+
 /// The code for handling big values by splitting them into several small ones.
 pub mod value_splitting;
 
