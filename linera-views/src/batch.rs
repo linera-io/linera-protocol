@@ -110,8 +110,8 @@ impl UnorderedBatch {
         })
     }
 
-    /// From an `UnorderedBatch`, creates a [`UnorderedBatch`] that does contain
-    /// key_prefix_deletions that collide with a `key_prefix_deletions`.
+    /// From an `UnorderedBatch`, creates a [`UnorderedBatch`] doesn't contain
+    /// prefix deletions that collide with an insertion.
     /// This requires accessing the database to read them and translate them
     /// as collection of deletes.
     pub async fn expand_colliding_prefix_deletions<DB: DeletePrefixExpander>(
