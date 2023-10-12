@@ -3,6 +3,7 @@
 
 use linera_service::storage::StorageConfig;
 use linera_views::common::CommonStoreConfig;
+use std::process;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -77,6 +78,26 @@ enum DatabaseToolCommand {
         cache_size: usize,
     },
 
+    /// Check absence of a database
+    #[structopt(name = "check_absence")]
+    CheckAbsence {
+        /// Storage configuration for the blockchain history.
+        #[structopt(long = "storage")]
+        storage_config: String,
+
+        /// The maximal number of simultaneous queries to the database
+        #[structopt(long)]
+        max_concurrent_queries: Option<usize>,
+
+        /// The maximal number of simultaneous stream queries to the database
+        #[structopt(long, default_value = "10")]
+        max_stream_queries: usize,
+
+        /// The maximal number of entries in the storage cache.
+        #[structopt(long, default_value = "1000")]
+        cache_size: usize,
+    },
+
     /// Initialize a table in the database
     #[structopt(name = "initialize")]
     Initialize {
@@ -118,18 +139,7 @@ enum DatabaseToolCommand {
     },
 }
 
-#[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
-    let env_filter = tracing_subscriber::EnvFilter::builder()
-        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
-        .from_env_lossy();
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_env_filter(env_filter)
-        .init();
-
-    let options = DatabaseToolOptions::from_args();
-
+async fn evaluate_options(options: DatabaseToolOptions) -> Result<i32, anyhow::Error> {
     match options.command {
         DatabaseToolCommand::DeleteAll {
             storage_config,
@@ -144,10 +154,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 cache_size,
             };
             let full_storage_config = storage_config.add_common_config(common_config).await?;
-            full_storage_config
-                .delete_all()
-                .await
-                .expect("successful delete_all operation");
+            full_storage_config.delete_all().await?;
         }
         DatabaseToolCommand::DeleteSingle {
             storage_config,
@@ -162,10 +169,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 cache_size,
             };
             let full_storage_config = storage_config.add_common_config(common_config).await?;
-            full_storage_config
-                .delete_single()
-                .await
-                .expect("successful delete_all operation");
+            full_storage_config.delete_single().await?;
         }
         DatabaseToolCommand::CheckExistence {
             storage_config,
@@ -180,14 +184,35 @@ async fn main() -> Result<(), anyhow::Error> {
                 cache_size,
             };
             let full_storage_config = storage_config.add_common_config(common_config).await?;
-            let test = full_storage_config
-                .test_existence()
-                .await
-                .expect("successful delete_all operation");
+            let test = full_storage_config.test_existence().await?;
             if test {
-                tracing::error!("The database does exist");
+                tracing::info!("The database does exist");
+                return Ok(0);
             } else {
-                tracing::error!("The database does not exist");
+                tracing::info!("The database does not exist");
+                return Ok(1);
+            }
+        }
+        DatabaseToolCommand::CheckAbsence {
+            storage_config,
+            max_concurrent_queries,
+            max_stream_queries,
+            cache_size,
+        } => {
+            let storage_config: StorageConfig = storage_config.parse()?;
+            let common_config = CommonStoreConfig {
+                max_concurrent_queries,
+                max_stream_queries,
+                cache_size,
+            };
+            let full_storage_config = storage_config.add_common_config(common_config).await?;
+            let test = full_storage_config.test_existence().await?;
+            if test {
+                tracing::info!("The database does exist");
+                return Ok(1);
+            } else {
+                tracing::info!("The database does not exist");
+                return Ok(0);
             }
         }
         DatabaseToolCommand::Initialize {
@@ -203,10 +228,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 cache_size,
             };
             let full_storage_config = storage_config.add_common_config(common_config).await?;
-            full_storage_config
-                .initialize()
-                .await
-                .expect("successful delete_all operation");
+            full_storage_config.initialize().await?;
         }
         DatabaseToolCommand::ListTables {
             storage_config,
@@ -221,13 +243,31 @@ async fn main() -> Result<(), anyhow::Error> {
                 cache_size,
             };
             let full_storage_config = storage_config.add_common_config(common_config).await?;
-            let tables = full_storage_config
-                .list_tables()
-                .await
-                .expect("successful list_tables operation");
+            let tables = full_storage_config.list_tables().await?;
             println!("The list of tables is {:?}", tables);
         }
     }
     tracing::info!("Successful execution of linera-db");
-    Ok(())
+    Ok(0)
+}
+
+#[tokio::main]
+async fn main() {
+    let env_filter = tracing_subscriber::EnvFilter::builder()
+        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+        .from_env_lossy();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(env_filter)
+        .init();
+
+    let options = DatabaseToolOptions::from_args();
+    let error_code = match evaluate_options(options).await {
+        Ok(code) => code,
+        Err(msg) => {
+            tracing::error!("Error is {:?}", msg);
+            2
+        }
+    };
+    process::exit(error_code);
 }
