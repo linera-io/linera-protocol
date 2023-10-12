@@ -14,7 +14,8 @@ pub async fn resolve_binary(name: &'static str, package: &'static str) -> Result
         std::env::args()
             .next()
             .expect("args should start with the current binary path"),
-    );
+    )
+    .canonicalize()?;
     current_binary_path.pop();
 
     #[cfg(any(test, feature = "test"))]
@@ -38,6 +39,7 @@ pub async fn resolve_binary(name: &'static str, package: &'static str) -> Result
     }
 
     // Quick version check.
+    debug!("Checking the version of {}", path.display());
     let version_message = Command::new(&path)
         .arg("--version")
         .output()
@@ -67,6 +69,7 @@ pub async fn resolve_binary(name: &'static str, package: &'static str) -> Result
         );
         bail!("Incorrect version for binary {name}");
     }
+    debug!("{} has version {version}", path.display());
 
     Ok(path)
 }
