@@ -203,8 +203,8 @@ impl ScyllaDbClientInternal {
         //
         // Thus the batch is first simplified. Then when a put operation is colliding after
         // a delete prefix then we are accessing the prefix and removing the keys.
-        let unordered_batch = batch.simplify();
-        let unordered_batch = unordered_batch
+        let mut unordered_batch = batch.simplify();
+        unordered_batch
             .expand_colliding_prefix_deletions(client)
             .await?;
         let session = &client.0;

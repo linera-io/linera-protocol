@@ -27,7 +27,6 @@ use std::fmt::Debug;
 use crate::common::get_interval;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
-    mem,
     ops::Bound,
 };
 
@@ -115,43 +114,35 @@ impl UnorderedBatch {
     /// This requires accessing the database to read them and translate them
     /// as collection of deletes.
     pub async fn expand_colliding_prefix_deletions<DB: DeletePrefixExpander>(
-        mut self,
+        &mut self,
         db: &DB,
-    ) -> Result<UnorderedBatch, DB::Error> {
+    ) -> Result<(), DB::Error> {
         let inserted_keys = self
             .simple_unordered_batch
             .insertions
             .iter()
             .map(|x| x.0.clone())
             .collect::<BTreeSet<_>>();
-        let insertions = mem::take(&mut self.simple_unordered_batch.insertions);
-        let mut deletions = mem::take(&mut self.simple_unordered_batch.deletions);
         let mut key_prefix_deletions = Vec::new();
-        for key_prefix in self.key_prefix_deletions {
+        for key_prefix in &self.key_prefix_deletions {
             if inserted_keys
                 .range(get_interval(key_prefix.clone()))
                 .next()
                 .is_some()
             {
-                for short_key in db.expand_delete_prefix(&key_prefix).await?.iter() {
+                for short_key in db.expand_delete_prefix(key_prefix).await?.iter() {
                     let mut key = key_prefix.clone();
                     key.extend(short_key);
                     if !inserted_keys.contains(&key) {
-                        deletions.push(key);
+                        self.simple_unordered_batch.deletions.push(key);
                     }
                 }
             } else {
-                key_prefix_deletions.push(key_prefix);
+                key_prefix_deletions.push(key_prefix.to_vec());
             }
         }
-        let simple_unordered_batch = SimpleUnorderedBatch {
-            deletions,
-            insertions,
-        };
-        Ok(UnorderedBatch {
-            key_prefix_deletions,
-            simple_unordered_batch,
-        })
+        self.key_prefix_deletions = key_prefix_deletions;
+        Ok(())
     }
 }
 
@@ -454,22 +445,19 @@ mod tests {
             deletions: vec![],
         };
         let key_prefix_deletions = vec![vec![1, 2]];
-        let unordered_batch = UnorderedBatch {
+        let mut unordered_batch = UnorderedBatch {
             simple_unordered_batch,
             key_prefix_deletions,
         };
-        let unordered_batch_simp = unordered_batch
+        unordered_batch
             .expand_colliding_prefix_deletions(&context)
             .await
             .unwrap();
-        assert!(unordered_batch_simp
-            .simple_unordered_batch
-            .deletions
-            .is_empty());
+        assert!(unordered_batch.simple_unordered_batch.deletions.is_empty());
         assert_eq!(
-            unordered_batch_simp.simple_unordered_batch.insertions,
+            unordered_batch.simple_unordered_batch.insertions,
             insertions
         );
-        assert!(unordered_batch_simp.key_prefix_deletions.is_empty());
+        assert!(unordered_batch.key_prefix_deletions.is_empty());
     }
 }
