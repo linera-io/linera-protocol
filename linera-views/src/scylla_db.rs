@@ -12,10 +12,6 @@
 //! * [`KeyValueStoreClient`][trait1] for a database access.
 //! * [`Context`][trait2] for the context.
 //!
-//! Support for ScyllaDB is experimental and is still missing important features:
-//! TODO(#935): Read several keys at once
-//! TODO(#934): Journaling operations
-//!
 //! [trait1]: common::KeyValueStoreClient
 //! [trait2]: common::Context
 
@@ -205,7 +201,7 @@ impl ScyllaDbClientInternal {
         // Thus the batch is first simplified and then the DeletePrefix that collides are removed.
         let unordered_batch = batch.simplify();
         let unordered_batch = unordered_batch
-            .expand_colliding_delete_prefixes(client)
+            .expand_colliding_prefix_deletions(client)
             .await?;
         let session = &client.0;
         let table_name = &client.1;

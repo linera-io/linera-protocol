@@ -7,7 +7,7 @@ use linera_views::{
     key_value_store_view::ViewContainer,
     memory::{create_memory_client, create_memory_context},
     test_utils::{
-        get_random_byte_vector, get_random_key_prefix, get_random_key_value_vec_prefix,
+        get_random_byte_vector, get_random_key_prefix, get_random_key_values_prefix,
         get_small_key_space,
     },
     value_splitting::create_test_memory_client,
@@ -32,15 +32,15 @@ use linera_views::scylla_db::create_scylla_db_test_client;
 /// * `find_keys_by_prefix` / `find_key_values_by_prefix`
 /// * The ordering of keys returned by `find_keys_by_prefix` and `find_key_values_by_prefix`
 #[cfg(test)]
-async fn run_reads_vec<C: KeyValueStoreClient + Sync>(
+async fn run_reads<C: KeyValueStoreClient + Sync>(
     key_value_store: C,
-    key_value_vec: Vec<(Vec<u8>, Vec<u8>)>,
+    key_values: Vec<(Vec<u8>, Vec<u8>)>,
 ) {
     // We need a nontrivial key_prefix because dynamo requires a non-trivial prefix
     let mut batch = Batch::new();
     let mut keys = Vec::new();
     let mut set_keys = HashSet::new();
-    for (key, value) in &key_value_vec {
+    for (key, value) in &key_values {
         keys.push(&key[..]);
         set_keys.insert(&key[..]);
         batch.put_key_value_bytes(key.clone(), value.clone());
@@ -75,7 +75,7 @@ async fn run_reads_vec<C: KeyValueStoreClient + Sync>(
         }
         // Check the obtained values
         let mut set_key_value2 = HashSet::new();
-        for (key, value) in &key_value_vec {
+        for (key, value) in &key_values {
             if key.starts_with(key_prefix) {
                 set_key_value2.insert((&key[len_prefix..], &value[..]));
             }
@@ -87,7 +87,7 @@ async fn run_reads_vec<C: KeyValueStoreClient + Sync>(
     for _ in 0..10 {
         let mut keys = Vec::new();
         let mut values = Vec::new();
-        for (key, value) in &key_value_vec {
+        for (key, value) in &key_values {
             if rng.gen() {
                 // Put a key that is already present
                 keys.push(key.clone());
@@ -112,15 +112,15 @@ async fn run_reads_vec<C: KeyValueStoreClient + Sync>(
 }
 
 #[cfg(test)]
-fn get_random_key_value_vec1(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+fn get_random_key_values1(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     let key_prefix = vec![0];
     let n = 1000;
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
-    get_random_key_value_vec_prefix(&mut rng, key_prefix, 8, len_value, n)
+    get_random_key_values_prefix(&mut rng, key_prefix, 8, len_value, n)
 }
 
 #[cfg(test)]
-fn get_random_key_value_vec2(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+fn get_random_key_values2(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
     let key_prefix = vec![0];
     let n = 100;
@@ -141,8 +141,8 @@ fn get_random_key_value_vec2(len_value: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
 fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
     let mut scenarios = Vec::new();
     for len_value in [10, 100] {
-        scenarios.push(get_random_key_value_vec1(len_value));
-        scenarios.push(get_random_key_value_vec2(len_value));
+        scenarios.push(get_random_key_values1(len_value));
+        scenarios.push(get_random_key_values2(len_value));
     }
     scenarios
 }
@@ -151,7 +151,7 @@ fn get_random_test_scenarios() -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
 async fn test_reads_test_memory() {
     for scenario in get_random_test_scenarios() {
         let key_value_store = create_test_memory_client();
-        run_reads_vec(key_value_store, scenario).await;
+        run_reads(key_value_store, scenario).await;
     }
 }
 
@@ -159,7 +159,7 @@ async fn test_reads_test_memory() {
 async fn test_reads_memory() {
     for scenario in get_random_test_scenarios() {
         let key_value_store = create_memory_client();
-        run_reads_vec(key_value_store, scenario).await;
+        run_reads(key_value_store, scenario).await;
     }
 }
 
@@ -168,7 +168,7 @@ async fn test_reads_memory() {
 async fn test_reads_rocks_db() {
     for scenario in get_random_test_scenarios() {
         let key_value_store = create_rocks_db_test_client().await;
-        run_reads_vec(key_value_store, scenario).await;
+        run_reads(key_value_store, scenario).await;
     }
 }
 
@@ -177,7 +177,7 @@ async fn test_reads_rocks_db() {
 async fn test_reads_dynamodb() {
     for scenario in get_random_test_scenarios() {
         let key_value_store = create_dynamo_db_test_client().await;
-        run_reads_vec(key_value_store, scenario).await;
+        run_reads(key_value_store, scenario).await;
     }
 }
 
@@ -186,7 +186,7 @@ async fn test_reads_dynamodb() {
 async fn test_reads_scylla_db() {
     for scenario in get_random_test_scenarios() {
         let key_value_store = create_scylla_db_test_client().await;
-        run_reads_vec(key_value_store, scenario).await;
+        run_reads(key_value_store, scenario).await;
     }
 }
 
@@ -195,20 +195,20 @@ async fn test_reads_key_value_store_view_memory() {
     for scenario in get_random_test_scenarios() {
         let context = create_memory_context();
         let key_value_store = ViewContainer::new(context).await.unwrap();
-        run_reads_vec(key_value_store, scenario).await;
+        run_reads(key_value_store, scenario).await;
     }
 }
 
 #[tokio::test]
 async fn test_reads_memory_specific() {
     let key_value_store = create_memory_client();
-    let key_value_vec = vec![
+    let key_values = vec![
         (vec![0, 1, 255], Vec::new()),
         (vec![0, 1, 255, 37], Vec::new()),
         (vec![0, 2], Vec::new()),
         (vec![0, 2, 0], Vec::new()),
     ];
-    run_reads_vec(key_value_store, key_value_vec).await;
+    run_reads(key_value_store, key_values).await;
 }
 
 #[cfg(test)]

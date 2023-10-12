@@ -91,7 +91,7 @@ pub fn get_random_kset<R: RngCore>(rng: &mut R, n: usize, k: usize) -> Vec<usize
 /// pairs `(key, value)` with key obtained by appending 8 bytes at random to key_prefix
 /// and value obtained by appending 8 bytes to the trivial vector.
 /// We return n such `(key, value)` pairs which are all distinct
-pub fn get_random_key_value_vec_prefix<R: RngCore>(
+pub fn get_random_key_values_prefix<R: RngCore>(
     rng: &mut R,
     key_prefix: Vec<u8>,
     len_key: usize,
@@ -116,8 +116,8 @@ pub fn get_random_key_value_vec_prefix<R: RngCore>(
 
 /// Takes a random number generator rng, a number n and returns n random `(key, value)`
 /// which are all distinct with key and value being of length 8.
-pub fn get_random_key_value_vec<R: RngCore>(rng: &mut R, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
-    get_random_key_value_vec_prefix(rng, Vec::new(), 8, 8, n)
+pub fn get_random_key_values<R: RngCore>(rng: &mut R, n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+    get_random_key_values_prefix(rng, Vec::new(), 8, 8, n)
 }
 
 type VectorPutDelete = (Vec<(Vec<u8>, Vec<u8>)>, usize);
@@ -128,7 +128,7 @@ pub fn get_random_key_value_operations<R: RngCore>(
     n: usize,
     k: usize,
 ) -> VectorPutDelete {
-    let key_value_vector = get_random_key_value_vec_prefix(rng, Vec::new(), 8, 8, n);
+    let key_value_vector = get_random_key_values_prefix(rng, Vec::new(), 8, 8, n);
     (key_value_vector, k)
 }
 
