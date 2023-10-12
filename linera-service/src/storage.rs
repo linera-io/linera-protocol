@@ -324,12 +324,13 @@ impl FullStorageConfig {
         match self {
             FullStorageConfig::Memory(_) => Err(ViewError::ContextError {
                 backend: "memory".to_string(),
-                error: "delete_single does not make sense for memory storage".to_string(),
+                error: "list_tables is not supported for the memory storage".to_string(),
             }),
             #[cfg(feature = "rocksdb")]
-            FullStorageConfig::RocksDb(_) => {
-                panic!("Currently the list_tables is not supported for RocksDb");
-            }
+            FullStorageConfig::RocksDb(_) => Err(ViewError::ContextError {
+                backend: "memory".to_string(),
+                error: "list_tables is not currently supported for the RocksDb storage".to_string(),
+            }),
             #[cfg(feature = "aws")]
             FullStorageConfig::DynamoDb(store_config) => {
                 let tables = DynamoDbClient::list_tables(store_config).await?;
