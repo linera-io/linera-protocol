@@ -8,10 +8,8 @@ use super::{
     common::{ApplicationRuntimeContext, WasmRuntimeContext},
     ExecutionError,
 };
-use futures::{future::BoxFuture, ready, stream::StreamExt};
+use futures::{ready, stream::StreamExt};
 use std::{
-    any::type_name,
-    fmt::{self, Debug, Formatter},
     future::Future,
     marker::PhantomData,
     pin::Pin,
@@ -19,50 +17,6 @@ use std::{
     task::{Context, Poll, Waker},
 };
 use tokio::sync::Mutex;
-
-/// A host future that can be called by a Wasm guest module.
-pub struct HostFuture<'future, Output> {
-    future: Mutex<BoxFuture<'future, Output>>,
-}
-
-impl<Output> Debug for HostFuture<'_, Output> {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(
-            formatter,
-            "HostFuture<'_, {}> {{ .. }}",
-            type_name::<Output>()
-        )
-    }
-}
-
-impl<'future, Output> HostFuture<'future, Output> {
-    /// Wraps a given `future` so that it can be called from guest Wasm modules.
-    pub fn new(future: impl Future<Output = Output> + Send + 'future) -> Self {
-        HostFuture {
-            future: Mutex::new(Box::pin(future)),
-        }
-    }
-
-    /// Polls a future from a Wasm module.
-    ///
-    /// Requires the task [`Waker`] to have been saved in the provided `waker`. If it hasn't, or if
-    /// the waker for a task other than the task used to call the Wasm module code is provided, the
-    /// call may panic or the future may not be scheduled to resume afterwards, leading the module
-    /// to hang.
-    ///
-    /// # Panics
-    ///
-    /// If the `context` does not contain a valid exclusive task [`Waker`] reference, or if this
-    /// future is polled concurrently in different tasks.
-    pub fn poll(&self, waker: &mut WakerForwarder) -> Poll<Output> {
-        let mut future = self
-            .future
-            .try_lock()
-            .expect("Application can't call the future concurrently because it's single threaded");
-
-        waker.with_context(|context| future.as_mut().poll(context))
-    }
-}
 
 /// A future implemented in a Wasm module.
 pub enum GuestFuture<'context, Future, Application>
