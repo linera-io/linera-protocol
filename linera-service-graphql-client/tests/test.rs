@@ -145,11 +145,7 @@ async fn test_check_service_schema() {
         .await
         .unwrap();
     let mut command = Command::new(path);
-    let output = command
-        .current_dir(tmp_dir.path().canonicalize().unwrap())
-        .output()
-        .await
-        .unwrap();
+    let output = command.current_dir(tmp_dir.path()).output().await.unwrap();
     let service_schema = String::from_utf8(output.stdout).unwrap();
     let mut file_base = std::fs::File::open("gql/service_schema.graphql").unwrap();
     let mut graphql_schema = String::new();

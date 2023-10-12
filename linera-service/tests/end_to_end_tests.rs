@@ -13,7 +13,7 @@ use linera_service::{
     util,
 };
 use linera_views::common::get_table_name;
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 #[tokio::test]
 async fn test_resolve_binary() {
@@ -449,7 +449,11 @@ async fn run_project_new(database: Database) {
     let mut local_net = LocalNetwork::new(database, network, None, table_name, 0, 0).unwrap();
     let client = local_net.make_client(network);
 
-    let tmp_dir = client.project_new("init-test").await.unwrap();
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let linera_root = manifest_dir
+        .parent()
+        .expect("CARGO_MANIFEST_DIR should not be at the root");
+    let tmp_dir = client.project_new("init-test", linera_root).await.unwrap();
     let project_dir = tmp_dir.path().join("init-test");
     local_net
         .build_application(project_dir.as_path(), "init-test", false)
@@ -515,7 +519,11 @@ async fn run_project_publish(database: Database) {
     client.create_genesis_config().await.unwrap();
     local_net.run().await.unwrap();
 
-    let tmp_dir = client.project_new("init-test").await.unwrap();
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let linera_root = manifest_dir
+        .parent()
+        .expect("CARGO_MANIFEST_DIR should not be at the root");
+    let tmp_dir = client.project_new("init-test", linera_root).await.unwrap();
     let project_dir = tmp_dir.path().join("init-test");
 
     client

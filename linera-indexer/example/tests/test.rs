@@ -32,7 +32,7 @@ async fn run_indexer(tmp_dir: &Rc<TempDir>) -> Child {
         .unwrap();
     let mut command = Command::new(path);
     command
-        .current_dir(tmp_dir.path().canonicalize().unwrap())
+        .current_dir(tmp_dir.path())
         .kill_on_drop(true)
         .args(["run"]);
     let child = command.spawn().unwrap();

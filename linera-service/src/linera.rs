@@ -146,15 +146,7 @@ impl ClientContext {
             Some(path) => path.clone(),
             None => Self::create_default_wallet_path()?,
         };
-        let wallet_state = WalletState::from_file(&wallet_state_path).with_context(|| {
-            format!(
-                "Unable to read wallet at {:?}:",
-                &wallet_state_path.canonicalize().with_context(|| format!(
-                    "Unable to canonicalize wallet {:?}",
-                    &wallet_state_path
-                ))
-            )
-        })?;
+        let wallet_state = WalletState::from_file(&wallet_state_path)?;
         Ok(Self::configure(options, wallet_state))
     }
 
@@ -1069,7 +1061,14 @@ enum WalletCommand {
 #[derive(StructOpt)]
 enum ProjectCommand {
     /// Create a new Linera project.
-    New { path: PathBuf },
+    New {
+        /// The project name. A directory of the same name will be created in the current directory.
+        name: String,
+
+        /// Use the given clone of the Linera repository instead of remote crates.
+        #[structopt(long)]
+        linera_root: Option<PathBuf>,
+    },
 
     /// Test a Linera project.
     ///
@@ -1787,8 +1786,8 @@ async fn main() -> Result<(), anyhow::Error> {
         }
 
         ClientCommand::Project(project_command) => match project_command {
-            ProjectCommand::New { path } => {
-                Project::new(path.clone())?;
+            ProjectCommand::New { name, linera_root } => {
+                Project::create_new(name, linera_root.as_ref().map(AsRef::as_ref))?;
                 Ok(())
             }
             ProjectCommand::Test { path } => {

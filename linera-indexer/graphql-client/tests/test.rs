@@ -14,7 +14,7 @@ async fn test_check_indexer_schema() {
         .unwrap();
     let mut command = Command::new(path);
     let output = command
-        .current_dir(tmp_dir.path().canonicalize().unwrap())
+        .current_dir(tmp_dir.path())
         .arg("schema")
         .output()
         .await
@@ -38,7 +38,7 @@ async fn test_check_indexer_operations_schema() {
         .unwrap();
     let mut command = Command::new(path);
     let output = command
-        .current_dir(tmp_dir.path().canonicalize().unwrap())
+        .current_dir(tmp_dir.path())
         .args(["schema", "operations"])
         .output()
         .await
