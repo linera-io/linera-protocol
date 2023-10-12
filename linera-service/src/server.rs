@@ -16,12 +16,11 @@ use linera_rpc::{
     simple_network,
     transport::TransportProtocol,
 };
-#[cfg(feature = "prometheus-metrics")]
-use linera_service::prometheus_server;
 use linera_service::{
     config::{
         CommitteeConfig, Export, GenesisConfig, Import, ValidatorConfig, ValidatorServerConfig,
     },
+    prometheus_server,
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfig},
 };
 use linera_storage::Store;
@@ -160,23 +159,7 @@ impl ServerContext {
     fn start_metrics(host: &str, port: &u16) {
         match format!("{}:{}", host, port).parse::<SocketAddr>() {
             Err(err) => panic!("Invalid metrics address for {host}:{port}: {err}"),
-            #[cfg(not(feature = "prometheus-metrics"))]
-            Ok(address) => Self::start_metrics_impl(address),
-            #[cfg(feature = "prometheus-metrics")]
             Ok(address) => prometheus_server::start_metrics(address),
-        }
-    }
-
-    #[cfg(not(feature = "prometheus-metrics"))]
-    fn start_metrics_impl(address: SocketAddr) {
-        if let Err(error) = metrics_exporter_tcp::TcpBuilder::new()
-            .listen_address(address)
-            .install()
-        {
-            panic!(
-                "Could not install TCP metrics exporter in address: {:?}: {:?}",
-                address, error
-            );
         }
     }
 

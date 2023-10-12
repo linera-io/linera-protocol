@@ -22,10 +22,7 @@ members = [
         "linera-witty-macros",
         "linera-witty/test-modules",
 ]
-exclude = [
-        "examples",
-        "scripts",
-]
+exclude = ["examples", "scripts"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -66,9 +63,6 @@ hex = "0.4.3"
 http = "0.2.7"
 log = "0.4.17"
 lru = "0.9.0"
-metrics = "0.21.0"
-metrics-exporter-tcp = "0.8.0"
-metrics-util = "0.15.0"
 linked-hash-map = "0.5.3"
 once_cell = "1.17.1"
 parse_duration = "2.1.1"

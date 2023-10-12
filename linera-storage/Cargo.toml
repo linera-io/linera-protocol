@@ -12,7 +12,13 @@ edition = "2021"
 
 [features]
 default = ["wasmer", "rocksdb"]
-test = ["tokio/rt", "tokio/test-util", "tokio/time", "linera-execution/test", "linera-views/test"]
+test = [
+    "tokio/rt",
+    "tokio/test-util",
+    "tokio/time",
+    "linera-execution/test",
+    "linera-views/test",
+]
 wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
 aws = ["linera-views/aws"]
@@ -28,7 +34,8 @@ linera-base = { workspace = true }
 linera-chain = { workspace = true }
 linera-execution = { workspace = true }
 linera-views = { workspace = true, features = ["metrics"] }
-metrics = { workspace = true }
+once_cell = { workspace = true }
+prometheus = { workspace = true }
 serde = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }

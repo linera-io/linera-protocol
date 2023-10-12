@@ -128,7 +128,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let increment_counter = if root {
         quote! {
             linera_views::increment_counter(
-                linera_views::LOAD_VIEW_COUNTER,
+                &linera_views::LOAD_VIEW_COUNTER,
                 stringify!(#struct_name),
                 &context.base_key(),
             );
@@ -202,7 +202,7 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
             async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
                 use linera_views::{common::Context, batch::Batch, views::View};
                 linera_views::increment_counter(
-                    linera_views::SAVE_VIEW_COUNTER,
+                    &linera_views::SAVE_VIEW_COUNTER,
                     stringify!(#struct_name),
                     &self.context().base_key(),
                 );
@@ -739,7 +739,7 @@ pub mod tests {
                     ) -> Result<Self, linera_views::views::ViewError> {
                         use linera_views::{futures::join, common::Context};
                         linera_views::increment_counter(
-                            linera_views::LOAD_VIEW_COUNTER,
+                            &linera_views::LOAD_VIEW_COUNTER,
                             stringify!(TestView),
                             &context.base_key(),
                         );
@@ -859,7 +859,7 @@ pub mod tests {
                     async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
                         use linera_views::{common::Context, batch::Batch, views::View};
                         linera_views::increment_counter(
-                            linera_views::SAVE_VIEW_COUNTER,
+                            &linera_views::SAVE_VIEW_COUNTER,
                             stringify!(TestView),
                             &self.context().base_key(),
                         );

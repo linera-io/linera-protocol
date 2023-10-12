@@ -128,25 +128,45 @@ pub mod test_utils;
 /// Re-exports used by the derive macros of this library.
 #[doc(hidden)]
 pub use {
-    async_lock, async_trait::async_trait, futures, generic_array, linera_base::crypto, serde, sha3,
+    async_lock,
+    async_trait::async_trait,
+    futures, generic_array,
+    linera_base::crypto,
+    once_cell::sync::Lazy,
+    prometheus::{register_int_counter_vec, IntCounterVec},
+    serde, sha3,
 };
 
 /// Does nothing. Use the metrics feature to enable.
 #[cfg(not(feature = "metrics"))]
-pub fn increment_counter(_name: &str, _struct_name: &str, _base_key: &[u8]) {}
+pub fn increment_counter(_counter: &Lazy<IntCounterVec>, _struct_name: &str, _base_key: &[u8]) {}
 
 /// Increments the metrics counter with the given name, with the struct and base key as labels.
 #[cfg(feature = "metrics")]
-pub fn increment_counter(name: &'static str, struct_name: &str, base_key: &[u8]) {
+pub fn increment_counter(counter: &Lazy<IntCounterVec>, struct_name: &str, base_key: &[u8]) {
     let base_key = hex::encode(base_key);
-    let labels = [("type", struct_name.into()), ("base_key", base_key)];
-    metrics::increment_counter!(name, &labels,);
+    let labels = [struct_name, &base_key];
+    counter.with_label_values(&labels).inc();
 }
 
 /// The metric counting how often a view is read from storage.
-pub const LOAD_VIEW_COUNTER: &str = "load_view";
+pub static LOAD_VIEW_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "load_view",
+        "The metric counting how often a view is read from storage",
+        &["type", "base_key"]
+    )
+    .expect("Counter can be created")
+});
 /// The metric counting how often a view is written from storage.
-pub const SAVE_VIEW_COUNTER: &str = "save_view";
+pub static SAVE_VIEW_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "save_view",
+        "The metric counting how often a view is written from storage",
+        &["type", "base_key"]
+    )
+    .expect("Counter can be created")
+});
 
 #[cfg(all(feature = "aws", target_arch = "wasm32"))]
 compile_error!("Cannot build AWS features for the Wasm target");
