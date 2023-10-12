@@ -8,7 +8,7 @@ use linera_base::{
     abi::ContractAbi,
     crypto::PublicKey,
     data_types::RoundNumber,
-    identifiers::{ChainId, MessageId, Owner},
+    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_execution::Bytecode;
 use serde::ser::Serialize;
@@ -231,9 +231,9 @@ impl ClientWrapper {
         service: PathBuf,
         parameters: &A::Parameters,
         argument: &A::InitializationArgument,
-        required_application_ids: Vec<String>,
+        required_application_ids: &[ApplicationId],
         publisher: impl Into<Option<ChainId>>,
-    ) -> Result<String> {
+    ) -> Result<ApplicationId<A>> {
         let json_parameters = serde_json::to_string(parameters)?;
         let json_argument = serde_json::to_string(argument)?;
         let mut command = self.run().await?;
@@ -245,10 +245,14 @@ impl ClientWrapper {
             .args(["--json-argument", &json_argument]);
         if !required_application_ids.is_empty() {
             command.arg("--required-application-ids");
-            command.args(required_application_ids);
+            command.args(
+                required_application_ids
+                    .iter()
+                    .map(ApplicationId::to_string),
+            );
         }
         let stdout = Self::run_command(&mut command).await?;
-        Ok(stdout.trim().to_string())
+        Ok(stdout.trim().parse::<ApplicationId>()?.with_abi())
     }
 
     pub async fn publish_bytecode(
@@ -256,7 +260,7 @@ impl ClientWrapper {
         contract: PathBuf,
         service: PathBuf,
         publisher: impl Into<Option<ChainId>>,
-    ) -> Result<String> {
+    ) -> Result<BytecodeId> {
         let stdout = Self::run_command(
             self.run()
                 .await?
@@ -265,26 +269,26 @@ impl ClientWrapper {
                 .args(publisher.into().iter().map(ChainId::to_string)),
         )
         .await?;
-        Ok(stdout.trim().to_string())
+        Ok(stdout.trim().parse()?)
     }
 
     pub async fn create_application<A: ContractAbi>(
         &self,
-        bytecode_id: String,
+        bytecode_id: &BytecodeId,
         argument: &A::InitializationArgument,
         creator: impl Into<Option<ChainId>>,
-    ) -> Result<String> {
+    ) -> Result<ApplicationId<A>> {
         let json_argument = serde_json::to_string(argument)?;
         let stdout = Self::run_command(
             self.run()
                 .await?
                 .arg("create-application")
-                .arg(bytecode_id)
+                .arg(bytecode_id.to_string())
                 .args(["--json-argument", &json_argument])
                 .args(creator.into().iter().map(ChainId::to_string)),
         )
         .await?;
-        Ok(stdout.trim().to_string())
+        Ok(stdout.trim().parse::<ApplicationId>()?.with_abi())
     }
 
     pub async fn run_node_service(&self, port: impl Into<Option<u16>>) -> Result<NodeService> {
@@ -938,12 +942,17 @@ impl NodeService {
         self.query_node(&query).await;
     }
 
-    pub async fn make_application(&self, chain_id: &ChainId, application_id: &str) -> String {
+    pub async fn make_application<A: ContractAbi>(
+        &self,
+        chain_id: &ChainId,
+        application_id: &ApplicationId<A>,
+    ) -> String {
+        let application_id = application_id.forget_abi().to_string();
         let n_try = 30;
         for i in 0..n_try {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let values = self.try_get_applications_uri(chain_id).await;
-            if let Some(link) = values.get(application_id) {
+            if let Some(link) = values.get(&application_id) {
                 return link.to_string();
             }
             warn!("Waiting for application {application_id:?} to be visible on chain {chain_id:?}");
@@ -971,7 +980,7 @@ impl NodeService {
         chain_id: &ChainId,
         contract: PathBuf,
         service: PathBuf,
-    ) -> String {
+    ) -> BytecodeId {
         let contract_code = Bytecode::load_from_file(&contract).await.unwrap();
         let service_code = Bytecode::load_from_file(&service).await.unwrap();
         let query = format!(
@@ -981,7 +990,8 @@ impl NodeService {
             service_code.to_value(),
         );
         let data = self.query_node(&query).await;
-        serde_json::from_value(data["publishBytecode"].clone()).unwrap()
+        let bytecode_str = data["publishBytecode"].as_str().unwrap();
+        bytecode_str.parse().unwrap()
     }
 
     pub async fn query_node(&self, query: &str) -> Value {
@@ -1024,12 +1034,16 @@ impl NodeService {
     pub async fn create_application<A: ContractAbi>(
         &self,
         chain_id: &ChainId,
-        bytecode_id: String,
+        bytecode_id: &BytecodeId,
         parameters: &A::Parameters,
         argument: &A::InitializationArgument,
-        required_application_ids: Vec<String>,
-    ) -> String {
-        let json_required_applications_ids = required_application_ids.to_value();
+        required_application_ids: &[ApplicationId],
+    ) -> ApplicationId<A> {
+        let json_required_applications_ids = required_application_ids
+            .iter()
+            .map(ApplicationId::to_string)
+            .collect::<Vec<_>>()
+            .to_value();
         // Convert to `serde_json::Value` then `async_graphql::Value` via the trait `InputType`.
         let new_parameters = serde_json::to_value(parameters).unwrap().to_value();
         let new_argument = serde_json::to_value(argument).unwrap().to_value();
@@ -1043,10 +1057,16 @@ impl NodeService {
              }}"
         );
         let data = self.query_node(&query).await;
-        serde_json::from_value(data["createApplication"].clone()).unwrap()
+        let app_id_str = data["createApplication"].as_str().unwrap().trim();
+        app_id_str.parse::<ApplicationId>().unwrap().with_abi()
     }
 
-    pub async fn request_application(&self, chain_id: &ChainId, application_id: &str) -> String {
+    pub async fn request_application<A: ContractAbi>(
+        &self,
+        chain_id: &ChainId,
+        application_id: &ApplicationId<A>,
+    ) -> String {
+        let application_id = application_id.forget_abi();
         let query = format!(
             "mutation {{ requestApplication(\
                  chainId: \"{chain_id}\", \

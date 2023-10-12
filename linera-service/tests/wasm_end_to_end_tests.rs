@@ -9,7 +9,7 @@ use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{
     data_types::{Amount, Timestamp},
-    identifiers::{ApplicationId, ChainId},
+    identifiers::ChainId,
 };
 use linera_service::cli_wrappers::{ClientWrapper, Database, LocalNetwork, Network};
 use serde_json::{json, Value};
@@ -322,7 +322,7 @@ async fn run_wasm_end_to_end_counter(database: Database) {
             service,
             &(),
             &original_counter_value,
-            vec![],
+            &[],
             None,
         )
         .await
@@ -386,7 +386,7 @@ async fn run_wasm_end_to_end_counter_publish_create(database: Database) {
         .await
         .unwrap();
     let application_id = client
-        .create_application::<CounterAbi>(bytecode_id, &original_counter_value, None)
+        .create_application::<CounterAbi>(&bytecode_id, &original_counter_value, None)
         .await
         .unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
@@ -450,7 +450,7 @@ async fn run_wasm_end_to_end_social_user_pub_sub(database: Database) {
         .await
         .unwrap();
     let application_id = client1
-        .create_application::<SocialAbi>(bytecode_id, &(), None)
+        .create_application::<SocialAbi>(&bytecode_id, &(), None)
         .await
         .unwrap();
 
@@ -553,7 +553,7 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
     let state = InitialState { accounts };
     // Setting up the application and verifying
     let application_id = client1
-        .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, vec![], None)
+        .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, &[], None)
         .await
         .unwrap();
 
@@ -687,7 +687,7 @@ async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
     let state = InitialState { accounts };
     // Setting up the application and verifying
     let application_id = client1
-        .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, vec![], None)
+        .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, &[], None)
         .await
         .unwrap();
 
@@ -785,7 +785,7 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
             service_fungible,
             &(),
             &state_fungible,
-            vec![],
+            &[],
             None,
         )
         .await
@@ -805,12 +805,9 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
             contract_crowd,
             service_crowd,
             // TODO(#723): This hack will disappear soon.
-            &application_id_fungible
-                .parse::<ApplicationId>()
-                .unwrap()
-                .with_abi(),
+            &application_id_fungible,
             &state_crowd,
-            vec![application_id_fungible.clone()],
+            &[application_id_fungible.forget_abi()],
             None,
         )
         .await
@@ -931,24 +928,24 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
     };
 
     // Setting up the application fungible on chain_a and chain_b
-    let application_id_fungible0 = client_a
+    let token0 = client_a
         .publish_and_create::<FungibleTokenAbi>(
             contract_fungible.clone(),
             service_fungible.clone(),
             &(),
             &state_fungible0,
-            vec![],
+            &[],
             None,
         )
         .await
         .unwrap();
-    let application_id_fungible1 = client_b
+    let token1 = client_b
         .publish_and_create::<FungibleTokenAbi>(
             contract_fungible,
             service_fungible,
             &(),
             &state_fungible1,
-            vec![],
+            &[],
             None,
         )
         .await
@@ -960,11 +957,11 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
     let mut node_service_b = client_b.run_node_service(8082).await.unwrap();
 
     let app_fungible0_a: FungibleApp = node_service_a
-        .make_application(&chain_a, &application_id_fungible0)
+        .make_application(&chain_a, &token0)
         .await
         .into();
     let app_fungible1_b: FungibleApp = node_service_b
-        .make_application(&chain_b, &application_id_fungible1)
+        .make_application(&chain_b, &token1)
         .await
         .into();
     app_fungible0_a
@@ -983,17 +980,17 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
         .await;
 
     node_service_admin
-        .request_application(&chain_admin, &application_id_fungible0)
+        .request_application(&chain_admin, &token0)
         .await;
     let app_fungible0_admin: FungibleApp = node_service_admin
-        .make_application(&chain_admin, &application_id_fungible0)
+        .make_application(&chain_admin, &token0)
         .await
         .into();
     node_service_admin
-        .request_application(&chain_admin, &application_id_fungible1)
+        .request_application(&chain_admin, &token1)
         .await;
     let app_fungible1_admin: FungibleApp = node_service_admin
-        .make_application(&chain_admin, &application_id_fungible1)
+        .make_application(&chain_admin, &token1)
         .await
         .into();
     app_fungible0_admin
@@ -1012,14 +1009,6 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
         .await;
 
     // Setting up the application matching engine.
-    let token0 = application_id_fungible0
-        .parse::<ApplicationId>()
-        .unwrap()
-        .with_abi();
-    let token1 = application_id_fungible1
-        .parse::<ApplicationId>()
-        .unwrap()
-        .with_abi();
     let parameter = Parameters {
         tokens: [token0, token1],
     };
@@ -1029,13 +1018,10 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
     let application_id_matching = node_service_admin
         .create_application::<MatchingEngineAbi>(
             &chain_admin,
-            bytecode_id,
+            &bytecode_id,
             &parameter,
             &(),
-            vec![
-                application_id_fungible0.clone(),
-                application_id_fungible1.clone(),
-            ],
+            &[token0.forget_abi(), token1.forget_abi()],
         )
         .await;
     let app_matching_admin: MatchingEngineApp = node_service_admin
@@ -1212,32 +1198,32 @@ async fn run_wasm_end_to_end_amm(database: Database) {
         .publish_bytecode(&chain_admin, contract_fungible, service_fungible)
         .await;
 
-    let application_id_fungible0 = node_service_admin
+    let token0 = node_service_admin
         .create_application::<FungibleTokenAbi>(
             &chain_admin,
-            fungible_bytecode_id.clone(),
+            &fungible_bytecode_id,
             &(),
             &state_fungible0,
-            vec![],
+            &[],
         )
         .await;
-    let application_id_fungible1 = node_service_admin
+    let token1 = node_service_admin
         .create_application::<FungibleTokenAbi>(
             &chain_admin,
-            fungible_bytecode_id,
+            &fungible_bytecode_id,
             &(),
             &state_fungible1,
-            vec![],
+            &[],
         )
         .await;
 
     // Create wrappers
     let app_fungible0_admin: FungibleApp = node_service_admin
-        .make_application(&chain_admin, &application_id_fungible0)
+        .make_application(&chain_admin, &token0)
         .await
         .into();
     let app_fungible1_admin: FungibleApp = node_service_admin
-        .make_application(&chain_admin, &application_id_fungible1)
+        .make_application(&chain_admin, &token1)
         .await
         .into();
 
@@ -1257,14 +1243,6 @@ async fn run_wasm_end_to_end_amm(database: Database) {
         ])
         .await;
 
-    let token0 = application_id_fungible0
-        .parse::<ApplicationId>()
-        .unwrap()
-        .with_abi();
-    let token1 = application_id_fungible1
-        .parse::<ApplicationId>()
-        .unwrap()
-        .with_abi();
     let parameters = Parameters {
         tokens: [token0, token1],
     };
@@ -1276,21 +1254,14 @@ async fn run_wasm_end_to_end_amm(database: Database) {
     let application_id_amm = node_service_admin
         .create_application::<AmmAbi>(
             &chain_admin,
-            bytecode_id,
+            &bytecode_id,
             &parameters,
             &(),
-            vec![
-                application_id_fungible0.clone(),
-                application_id_fungible1.clone(),
-            ],
+            &[token0.forget_abi(), token1.forget_abi()],
         )
         .await;
-    let application_id_amm_struct = application_id_amm
-        .parse::<ApplicationId>()
-        .unwrap()
-        .with_abi();
 
-    let owner_amm = fungible::AccountOwner::Application(application_id_amm_struct);
+    let owner_amm = fungible::AccountOwner::Application(application_id_amm.forget_abi());
 
     // Create AMM wrappers
     let app_amm_admin: AmmApp = node_service_admin

@@ -72,7 +72,7 @@ async fn run_end_to_end_queries(database: Database) {
         accounts: BTreeMap::new(),
     };
     let application_id = client
-        .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, vec![], None)
+        .publish_and_create::<FungibleTokenAbi>(contract, service, &(), &state, &[], None)
         .await
         .unwrap();
 
@@ -105,7 +105,7 @@ async fn run_end_to_end_queries(database: Database) {
     .await
     .unwrap()
     .applications;
-    assert_eq!(applications[0].id, application_id);
+    assert_eq!(applications[0].id, application_id.forget_abi().to_string());
 
     // check blocks query
     let blocks = request::<Blocks, _>(
