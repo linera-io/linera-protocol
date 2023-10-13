@@ -244,7 +244,7 @@ where
                 .initialize_new(&mut self.store, (*context).into(), argument),
         )
         .err_into()
-        .and_then(|future| GuestFuture::new(Ok(future), self))
+        .and_then(|future| GuestFuture::new(future, self))
     }
 
     /// Calls the guest Wasm module's implementation of
@@ -272,7 +272,7 @@ where
             operation,
         ))
         .err_into()
-        .and_then(|future| GuestFuture::new(Ok(future), self))
+        .and_then(|future| GuestFuture::new(future, self))
     }
 
     /// Calls the guest Wasm module's implementation of
@@ -300,7 +300,7 @@ where
             message,
         ))
         .err_into()
-        .and_then(|future| GuestFuture::new(Ok(future), self))
+        .and_then(|future| GuestFuture::new(future, self))
     }
 
     /// Calls the guest Wasm module's implementation of
@@ -336,7 +336,7 @@ where
             &forwarded_sessions,
         ))
         .err_into()
-        .and_then(|future| GuestFuture::new(Ok(future), self))
+        .and_then(|future| GuestFuture::new(future, self))
     }
 
     /// Calls the guest Wasm module's implementation of
@@ -375,7 +375,7 @@ where
             &forwarded_sessions,
         ))
         .err_into()
-        .and_then(|future| GuestFuture::new(Ok(future), self))
+        .and_then(|future| GuestFuture::new(future, self))
     }
 }
 
@@ -406,7 +406,7 @@ where
             argument,
         ))
         .err_into()
-        .and_then(|future| GuestFuture::new(Ok(future), self))
+        .and_then(|future| GuestFuture::new(future, self))
     }
 }
 

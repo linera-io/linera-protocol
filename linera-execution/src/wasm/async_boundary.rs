@@ -19,41 +19,24 @@ use std::{
 use tokio::sync::Mutex;
 
 /// A future implemented in a Wasm module.
-pub enum GuestFuture<'context, Future, Application>
+pub struct GuestFuture<'context, Future, Application>
 where
     Application: ApplicationRuntimeContext,
 {
-    /// The Wasm module failed to create an instance of the future.
-    ///
-    /// The error will be returned when this [`GuestFuture`] is polled.
-    FailedToCreate(Option<Application::Error>),
+    /// A WIT resource type implementing a [`GuestFutureInterface`] so that it can be polled.
+    future: Future,
 
-    /// The Wasm future type and the runtime context to poll it.
-    Active {
-        /// A WIT resource type implementing a [`GuestFutureInterface`] so that it can be polled.
-        future: Future,
-
-        /// Types necessary to call the guest Wasm module in order to poll the future.
-        context: WasmRuntimeContext<'context, Application>,
-    },
+    /// Types necessary to call the guest Wasm module in order to poll the future.
+    context: WasmRuntimeContext<'context, Application>,
 }
 
 impl<'context, Future, Application> GuestFuture<'context, Future, Application>
 where
     Application: ApplicationRuntimeContext,
 {
-    /// Creates a [`GuestFuture`] instance with `creation_result` of a future resource type.
-    ///
-    /// If the guest resource type could not be created by the Wasm module, the error is stored so
-    /// that it can be returned when the [`GuestFuture`] is polled.
-    pub fn new(
-        creation_result: Result<Future, Application::Error>,
-        context: WasmRuntimeContext<'context, Application>,
-    ) -> Self {
-        match creation_result {
-            Ok(future) => GuestFuture::Active { future, context },
-            Err(error) => GuestFuture::FailedToCreate(Some(error)),
-        }
+    /// Creates a [`GuestFuture`] instance with a provided `future` and Wasm execution `context`.
+    pub fn new(future: Future, context: WasmRuntimeContext<'context, Application>) -> Self {
+        GuestFuture { future, context }
     }
 }
 
@@ -75,18 +58,12 @@ where
     /// [`WakerForwarder`], so that any host futures the guest calls can use the correct task
     /// context.
     fn poll(self: Pin<&mut Self>, task_context: &mut Context) -> Poll<Self::Output> {
-        match self.get_mut() {
-            GuestFuture::FailedToCreate(runtime_error) => {
-                let error = runtime_error.take().expect("Unexpected poll after error");
-                Poll::Ready(Err(error.into()))
-            }
-            GuestFuture::Active { future, context } => {
-                ready!(context.future_queue.poll_next_unpin(task_context));
+        let GuestFuture { future, context } = self.get_mut();
 
-                let _context_guard = context.waker_forwarder.forward(task_context);
-                future.poll(&context.application, &mut context.store)
-            }
-        }
+        ready!(context.future_queue.poll_next_unpin(task_context));
+
+        let _context_guard = context.waker_forwarder.forward(task_context);
+        future.poll(&context.application, &mut context.store)
     }
 }
 
