@@ -557,13 +557,23 @@ fn generate_specific_state_batch(key_prefix: &[u8], option: usize) -> StateBatch
         batch.delete_key(key3.clone());
         batch.put_key_value_bytes(key4, vec![23]);
     }
+    if option == 6 {
+        let key1 = get_key(key_prefix, vec![0]);
+        let key2 = get_key(key_prefix, vec![]);
+        key_values.push((key1, vec![33]));
+        batch.delete_key_prefix(key2);
+    }
     (key_values, batch)
 }
 
 #[cfg(test)]
 async fn run_writes_from_state<C: KeyValueStoreClient + Sync>(key_value_store: &C) {
-    for option in 0..6 {
-        let key_prefix = get_random_key_prefix();
+    for option in 0..7 {
+        let key_prefix = if option == 6 {
+            vec![255, 255, 255]
+        } else {
+            get_random_key_prefix()
+        };
         let state_batch = generate_specific_state_batch(&key_prefix, option);
         run_test_batch_from_state(key_value_store, key_prefix, state_batch).await;
     }
