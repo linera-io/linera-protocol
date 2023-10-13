@@ -276,10 +276,13 @@ impl WalletState {
     pub fn from_file(path: &Path) -> Result<Self, anyhow::Error> {
         let file = FileOptions::new().read(true).write(true);
         let block = false;
-        let file_lock = FileLock::lock(path, block, file).context(
-            "Error getting write lock to wallet. Please make sure a node service isn't \
-             running locally, only one client can use a wallet at a time.",
-        )?;
+        let file_lock = FileLock::lock(path, block, file).with_context(|| {
+            format!(
+                "Error getting write lock to wallet \"{}\". Please make sure the file exists \
+             and that it is not in use by another process already.",
+                path.display()
+            )
+        })?;
         let inner = serde_json::from_reader(BufReader::new(&file_lock.file))?;
         Ok(Self {
             inner,
@@ -295,10 +298,13 @@ impl WalletState {
     ) -> Result<Self, anyhow::Error> {
         let file = FileOptions::new().create(true).write(true).read(true);
         let block = false;
-        let file_lock = FileLock::lock(path, block, file).context(
-            "Error getting write lock to wallet. Please make sure a node service isn't \
-             running locally, only one client can use a wallet at a time.",
-        )?;
+        let file_lock = FileLock::lock(path, block, file).with_context(|| {
+            format!(
+                "Error getting write lock to wallet \"{}\". Please make sure the file exists \
+             and that it is not in use by another process already.",
+                path.display()
+            )
+        })?;
         let mut reader = BufReader::new(&file_lock.file);
         if reader.fill_buf()?.is_empty() {
             let inner = InnerWallet {
