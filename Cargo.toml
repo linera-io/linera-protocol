@@ -77,7 +77,7 @@ rand07 = { package = "rand", version = "0.7.3" }
 rand_chacha = "0.3.1"
 rand_distr = "0.4.3"
 reqwest = "0.11.14"
-rocksdb = "0.19.0"
+rocksdb = "0.21.0"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_bytes = "0.11.8"
 serde_json = "1.0.93"
