@@ -200,9 +200,6 @@ impl ScyllaDbClientInternal {
         // the delete takes priority. See the sentence "The first tie-breaking rule when two
         // cells have the same write timestamp is that dead cells win over live cells"
         // from https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
-        //
-        // Thus the batch is first simplified. Then when a put operation is colliding after
-        // a delete prefix then we are accessing the prefix and removing the keys.
         let mut unordered_batch = batch.simplify();
         unordered_batch
             .expand_colliding_prefix_deletions(client)
