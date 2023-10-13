@@ -69,15 +69,11 @@ static CONTRACT_CACHE: Lazy<Mutex<ModuleCache<CachedContractModule>>> = Lazy::ne
 static SERVICE_CACHE: Lazy<Mutex<ModuleCache<Module>>> = Lazy::new(Mutex::default);
 
 /// Type representing the [Wasmer](https://wasmer.io/) contract runtime.
-///
-/// The runtime has a lifetime so that it does not outlive the trait object used to export the
-/// system API.
-pub struct Contract<'runtime> {
+pub struct Contract {
     contract: contract::Contract,
-    _lifetime: PhantomData<&'runtime ()>,
 }
 
-impl<'runtime> ApplicationRuntimeContext for Contract<'runtime> {
+impl ApplicationRuntimeContext for Contract {
     type Store = Store;
     type Error = RuntimeError;
     type Extra = WasmerContractExtra;
@@ -99,12 +95,11 @@ impl<'runtime> ApplicationRuntimeContext for Contract<'runtime> {
 }
 
 /// Type representing the [Wasmer](https://wasmer.io/) service runtime.
-pub struct Service<'runtime> {
+pub struct Service {
     service: service::Service,
-    _lifetime: PhantomData<&'runtime ()>,
 }
 
-impl<'runtime> ApplicationRuntimeContext for Service<'runtime> {
+impl ApplicationRuntimeContext for Service {
     type Store = Store;
     type Error = RuntimeError;
     type Extra = ();
@@ -135,10 +130,10 @@ impl WasmApplication {
     }
 
     /// Prepares a runtime instance to call into the Wasm contract.
-    pub fn prepare_contract_runtime_with_wasmer<'runtime>(
+    pub fn prepare_contract_runtime_with_wasmer(
         (contract_engine, contract_module): &(Engine, Module),
         runtime: mpsc::UnboundedSender<ContractRequest>,
-    ) -> Result<WasmRuntimeContext<'static, Contract<'runtime>>, WasmExecutionError> {
+    ) -> Result<WasmRuntimeContext<Contract>, WasmExecutionError> {
         let mut store = Store::new(contract_engine);
         let mut imports = imports! {};
         let waker_forwarder = WakerForwarder::default();
@@ -160,10 +155,7 @@ impl WasmApplication {
         let (contract, instance) =
             contract::Contract::instantiate(&mut store, contract_module, &mut imports)
                 .map_err(WasmExecutionError::LoadContractModule)?;
-        let application = Contract {
-            contract,
-            _lifetime: PhantomData,
-        };
+        let application = Contract { contract };
 
         system_api_setup(&instance, &store).map_err(WasmExecutionError::LoadContractModule)?;
         views_api_setup(&instance, &store).map_err(WasmExecutionError::LoadContractModule)?;
@@ -178,10 +170,10 @@ impl WasmApplication {
     }
 
     /// Prepares a runtime instance to call into the Wasm service.
-    pub fn prepare_service_runtime_with_wasmer<'runtime>(
+    pub fn prepare_service_runtime_with_wasmer(
         service_module: &Module,
         runtime: mpsc::UnboundedSender<ServiceRequest>,
-    ) -> Result<WasmRuntimeContext<'static, Service<'runtime>>, WasmExecutionError> {
+    ) -> Result<WasmRuntimeContext<Service>, WasmExecutionError> {
         let mut store = Store::new(&*SERVICE_ENGINE);
         let mut imports = imports! {};
         let waker_forwarder = WakerForwarder::default();
@@ -195,10 +187,7 @@ impl WasmApplication {
         let (service, instance) =
             service::Service::instantiate(&mut store, service_module, &mut imports)
                 .map_err(WasmExecutionError::LoadServiceModule)?;
-        let application = Service {
-            service,
-            _lifetime: PhantomData,
-        };
+        let application = Service { service };
 
         system_api_setup(&instance, &store).map_err(WasmExecutionError::LoadServiceModule)?;
         views_api_setup(&instance, &store).map_err(WasmExecutionError::LoadServiceModule)?;
@@ -230,7 +219,7 @@ impl WasmApplication {
     }
 }
 
-impl<'runtime> common::Contract for Contract<'runtime> {
+impl common::Contract for Contract {
     type Initialize = contract::Initialize;
     type ExecuteOperation = contract::ExecuteOperation;
     type ExecuteMessage = contract::ExecuteMessage;
@@ -360,7 +349,7 @@ impl<'runtime> common::Contract for Contract<'runtime> {
     }
 }
 
-impl<'runtime> common::Service for Service<'runtime> {
+impl common::Service for Service {
     type HandleQuery = service::HandleQuery;
     type QueryContext = service::QueryContext;
     type PollApplicationQueryResult = service::PollApplicationQueryResult;
@@ -445,7 +434,7 @@ impl ContractSystemApi {
     }
 }
 
-impl_contract_system_api!(ContractSystemApi);
+impl_contract_system_api!(ContractSystemApi, wasmer::RuntimeError);
 
 /// Implementation to forward service system calls from the guest Wasm module to the host
 /// implementation.
@@ -515,8 +504,8 @@ impl ServiceViewSystemApi {
     }
 }
 
-impl_view_system_api_for_contract!(ContractViewSystemApi);
-impl_view_system_api_for_service!(ServiceViewSystemApi);
+impl_view_system_api_for_contract!(ContractViewSystemApi, wasmer::RuntimeError);
+impl_view_system_api_for_service!(ServiceViewSystemApi, wasmer::RuntimeError);
 
 /// Extra parameters necessary when cleaning up after contract execution.
 pub struct WasmerContractExtra {

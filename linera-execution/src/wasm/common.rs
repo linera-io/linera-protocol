@@ -194,7 +194,7 @@ pub trait Service: ApplicationRuntimeContext {
 }
 
 /// Wrapper around all types necessary to call an asynchronous method of a Wasm application.
-pub struct WasmRuntimeContext<'context, A>
+pub struct WasmRuntimeContext<A>
 where
     A: ApplicationRuntimeContext,
 {
@@ -206,7 +206,7 @@ where
     pub(crate) application: A,
 
     /// A queue of host futures called by the guest that must complete deterministically.
-    pub(crate) future_queue: HostFutureQueue<'context>,
+    pub(crate) future_queue: HostFutureQueue<'static>,
 
     /// The application's memory state.
     pub(crate) store: A::Store,
@@ -216,9 +216,9 @@ where
     pub(crate) extra: A::Extra,
 }
 
-impl<'context, A> WasmRuntimeContext<'context, A>
+impl<A> WasmRuntimeContext<A>
 where
-    A: Contract + Unpin + 'context,
+    A: Contract + Unpin,
 {
     /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::initialize`][`linera_execution::UserApplication::initialize`].
@@ -236,7 +236,7 @@ where
         mut self,
         context: &OperationContext,
         argument: &[u8],
-    ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> + 'context {
+    ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> {
         A::configure_fuel(&mut self);
 
         future::ready(
@@ -263,7 +263,7 @@ where
         mut self,
         context: &OperationContext,
         operation: &[u8],
-    ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> + 'context {
+    ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> {
         A::configure_fuel(&mut self);
 
         future::ready(self.application.execute_operation_new(
@@ -291,7 +291,7 @@ where
         mut self,
         context: &MessageContext,
         message: &[u8],
-    ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> + 'context {
+    ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> {
         A::configure_fuel(&mut self);
 
         future::ready(self.application.execute_message_new(
@@ -321,7 +321,7 @@ where
         context: &CalleeContext,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> impl Future<Output = Result<ApplicationCallResult, ExecutionError>> + 'context {
+    ) -> impl Future<Output = Result<ApplicationCallResult, ExecutionError>> {
         A::configure_fuel(&mut self);
 
         let forwarded_sessions: Vec<_> = forwarded_sessions
@@ -353,13 +353,13 @@ where
     ///     forwarded_sessions: Vec<SessionId>,
     /// ) -> Result<(SessionCallResult, Vec<u8>), ExecutionError>
     /// ```
-    pub fn handle_session_call<'session_state>(
+    pub fn handle_session_call(
         mut self,
         context: &CalleeContext,
-        session_state: &'session_state [u8],
+        session_state: &[u8],
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> impl Future<Output = Result<(SessionCallResult, Vec<u8>), ExecutionError>> + 'context {
+    ) -> impl Future<Output = Result<(SessionCallResult, Vec<u8>), ExecutionError>> {
         A::configure_fuel(&mut self);
 
         let forwarded_sessions: Vec<_> = forwarded_sessions
@@ -379,9 +379,9 @@ where
     }
 }
 
-impl<'context, A> WasmRuntimeContext<'context, A>
+impl<A> WasmRuntimeContext<A>
 where
-    A: Service + Unpin + 'context,
+    A: Service + Unpin,
 {
     /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::handle_query`][`linera_execution::UserApplication::handle_query`].
@@ -399,7 +399,7 @@ where
         mut self,
         context: &QueryContext,
         argument: &[u8],
-    ) -> impl Future<Output = Result<Vec<u8>, ExecutionError>> + 'context {
+    ) -> impl Future<Output = Result<Vec<u8>, ExecutionError>> {
         future::ready(self.application.handle_query_new(
             &mut self.store,
             (*context).into(),
@@ -410,7 +410,7 @@ where
     }
 }
 
-impl<A> Drop for WasmRuntimeContext<'_, A>
+impl<A> Drop for WasmRuntimeContext<A>
 where
     A: ApplicationRuntimeContext,
 {

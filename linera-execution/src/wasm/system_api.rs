@@ -5,18 +5,8 @@
 ///
 /// Generates the common code for contract system API types for all Wasm runtimes.
 macro_rules! impl_contract_system_api {
-    ($contract_system_api:ident<$runtime:lifetime>) => {
-        impl_contract_system_api!(
-            @generate $contract_system_api<$runtime>, wasmtime::Trap, $runtime, <$runtime>
-        );
-    };
-
-    ($contract_system_api:ident) => {
-        impl_contract_system_api!(@generate $contract_system_api, wasmer::RuntimeError, 'static);
-    };
-
-    (@generate $contract_system_api:ty, $trap:ty, $runtime:lifetime $(, <$param:lifetime> )?) => {
-        impl$(<$param>)? contract_system_api::ContractSystemApi for $contract_system_api {
+    ($contract_system_api:ident, $trap:ty) => {
+        impl contract_system_api::ContractSystemApi for $contract_system_api {
             type Error = ExecutionError;
 
             type Lock = Mutex<futures::channel::oneshot::Receiver<Result<(), ExecutionError>>>;
@@ -204,11 +194,7 @@ macro_rules! impl_contract_system_api {
 /// Generates the common code for service system API types for all Wasm runtimes.
 macro_rules! impl_service_system_api {
     ($service_system_api:ident, $trap:ty) => {
-        impl_service_system_api!(@generate $service_system_api, $trap, 'static);
-    };
-
-    (@generate $service_system_api:ty, $trap:ty, $runtime:lifetime $(, <$param:lifetime> )?) => {
-        impl$(<$param>)? service_system_api::ServiceSystemApi for $service_system_api {
+        impl service_system_api::ServiceSystemApi for $service_system_api {
             type Error = ExecutionError;
 
             type Load = Mutex<oneshot::Receiver<Vec<u8>>>;
@@ -406,24 +392,8 @@ macro_rules! impl_service_system_api {
 ///
 /// Generates the common code for view system API types for all Wasm runtimes.
 macro_rules! impl_view_system_api_for_service {
-    ($view_system_api:ident<$runtime:lifetime>) => {
-        impl_view_system_api_for_service!(
-            @generate $view_system_api<$runtime>, wasmtime::Trap, $runtime, <$runtime>
-        );
-    };
-
     ($view_system_api:ty, $trap:ty) => {
-        impl_view_system_api_for_service!(
-            @generate $view_system_api, $trap, 'static
-        );
-    };
-
-    ($view_system_api:ty) => {
-        impl_view_system_api_for_service!(@generate $view_system_api, wasmer::RuntimeError, 'static);
-    };
-
-    (@generate $view_system_api:ty, $trap:ty, $runtime:lifetime $(, <$param:lifetime> )?) => {
-        impl$(<$param>)? view_system_api::ViewSystemApi for $view_system_api {
+        impl view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
             type ReadKeyBytes = Mutex<oneshot::Receiver<Option<Vec<u8>>>>;
@@ -439,14 +409,12 @@ macro_rules! impl_view_system_api_for_service {
                 &mut self,
                 key: &[u8],
             ) -> Result<Self::ReadKeyBytes, Self::Error> {
-                Ok(Mutex::new(
-                    self.runtime.send_request(|response_sender| {
-                        ServiceRequest::Base(BaseRequest::ReadKeyBytes {
-                            key: key.to_owned(),
-                            response_sender,
-                        })
-                    }),
-                ))
+                Ok(Mutex::new(self.runtime.send_request(|response_sender| {
+                    ServiceRequest::Base(BaseRequest::ReadKeyBytes {
+                        key: key.to_owned(),
+                        response_sender,
+                    })
+                })))
             }
 
             fn read_key_bytes_poll(
@@ -457,7 +425,10 @@ macro_rules! impl_view_system_api_for_service {
                 let mut receiver = future
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`");
-                match self.waker().with_context(|context| receiver.poll_unpin(context)) {
+                match self
+                    .waker()
+                    .with_context(|context| receiver.poll_unpin(context))
+                {
                     Poll::Pending => Ok(PollReadKeyBytes::Pending),
                     Poll::Ready(Ok(opt_list)) => Ok(PollReadKeyBytes::Ready(opt_list)),
                     Poll::Ready(Err(_)) => panic!(
@@ -467,14 +438,12 @@ macro_rules! impl_view_system_api_for_service {
             }
 
             fn find_keys_new(&mut self, key_prefix: &[u8]) -> Result<Self::FindKeys, Self::Error> {
-                Ok(Mutex::new(
-                    self.runtime.send_request(|response_sender| {
-                        ServiceRequest::Base(BaseRequest::FindKeysByPrefix {
-                            key_prefix: key_prefix.to_owned(),
-                            response_sender,
-                        })
-                    }),
-                ))
+                Ok(Mutex::new(self.runtime.send_request(|response_sender| {
+                    ServiceRequest::Base(BaseRequest::FindKeysByPrefix {
+                        key_prefix: key_prefix.to_owned(),
+                        response_sender,
+                    })
+                })))
             }
 
             fn find_keys_poll(
@@ -485,7 +454,10 @@ macro_rules! impl_view_system_api_for_service {
                 let mut receiver = future
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`");
-                match self.waker().with_context(|context| receiver.poll_unpin(context)) {
+                match self
+                    .waker()
+                    .with_context(|context| receiver.poll_unpin(context))
+                {
                     Poll::Pending => Ok(PollFindKeys::Pending),
                     Poll::Ready(Ok(keys)) => Ok(PollFindKeys::Ready(keys)),
                     Poll::Ready(Err(_)) => panic!(
@@ -498,14 +470,12 @@ macro_rules! impl_view_system_api_for_service {
                 &mut self,
                 key_prefix: &[u8],
             ) -> Result<Self::FindKeyValues, Self::Error> {
-                Ok(Mutex::new(
-                    self.runtime.send_request(|response_sender| {
-                        ServiceRequest::Base(BaseRequest::FindKeyValuesByPrefix {
-                            key_prefix: key_prefix.to_owned(),
-                            response_sender,
-                        })
-                    }),
-                ))
+                Ok(Mutex::new(self.runtime.send_request(|response_sender| {
+                    ServiceRequest::Base(BaseRequest::FindKeyValuesByPrefix {
+                        key_prefix: key_prefix.to_owned(),
+                        response_sender,
+                    })
+                })))
             }
 
             fn find_key_values_poll(
@@ -516,7 +486,10 @@ macro_rules! impl_view_system_api_for_service {
                 let mut receiver = future
                     .try_lock()
                     .expect("Unexpected reentrant locking of `oneshot::Receiver`");
-                match self.waker().with_context(|context| receiver.poll_unpin(context)) {
+                match self
+                    .waker()
+                    .with_context(|context| receiver.poll_unpin(context))
+                {
                     Poll::Pending => Ok(PollFindKeyValues::Pending),
                     Poll::Ready(Ok(key_values)) => Ok(PollFindKeyValues::Ready(key_values)),
                     Poll::Ready(Err(_)) => panic!(
@@ -547,20 +520,8 @@ macro_rules! impl_view_system_api_for_service {
 ///
 /// Generates the common code for view system API types for all WASM runtimes.
 macro_rules! impl_view_system_api_for_contract {
-    ($view_system_api:ident<$runtime:lifetime>) => {
-        impl_view_system_api_for_contract!(
-            @generate $view_system_api<$runtime>, wasmtime::Trap, <$runtime>
-        );
-    };
-
-    ($view_system_api:ty) => {
-        impl_view_system_api_for_contract!(
-            @generate $view_system_api, wasmer::RuntimeError
-        );
-    };
-
-    (@generate $view_system_api:ty, $trap:ty $(, <$param:lifetime> )?) => {
-        impl$(<$param>)? view_system_api::ViewSystemApi for $view_system_api {
+    ($view_system_api:ty, $trap:ty) => {
+        impl view_system_api::ViewSystemApi for $view_system_api {
             type Error = ExecutionError;
 
             type ReadKeyBytes =

@@ -19,7 +19,7 @@ use std::{
 use tokio::sync::Mutex;
 
 /// A future implemented in a Wasm module.
-pub struct GuestFuture<'context, Future, Application>
+pub struct GuestFuture<Future, Application>
 where
     Application: ApplicationRuntimeContext,
 {
@@ -27,20 +27,20 @@ where
     future: Future,
 
     /// Types necessary to call the guest Wasm module in order to poll the future.
-    context: WasmRuntimeContext<'context, Application>,
+    context: WasmRuntimeContext<Application>,
 }
 
-impl<'context, Future, Application> GuestFuture<'context, Future, Application>
+impl<Future, Application> GuestFuture<Future, Application>
 where
     Application: ApplicationRuntimeContext,
 {
     /// Creates a [`GuestFuture`] instance with a provided `future` and Wasm execution `context`.
-    pub fn new(future: Future, context: WasmRuntimeContext<'context, Application>) -> Self {
+    pub fn new(future: Future, context: WasmRuntimeContext<Application>) -> Self {
         GuestFuture { future, context }
     }
 }
 
-impl<InnerFuture, Application> Future for GuestFuture<'_, InnerFuture, Application>
+impl<InnerFuture, Application> Future for GuestFuture<InnerFuture, Application>
 where
     InnerFuture: GuestFutureInterface<Application> + Unpin,
     Application: ApplicationRuntimeContext + Unpin,
