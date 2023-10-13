@@ -295,7 +295,7 @@ impl ScyllaDbClientInternal {
             None => {
                 let values = (key_prefix,);
                 let query = format!(
-                    "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
+                    "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
                     table_name
                 );
                 session.query(query, values).await?
