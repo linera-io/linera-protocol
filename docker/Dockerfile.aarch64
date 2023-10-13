@@ -49,10 +49,17 @@ RUN apt-get update && apt-get install -y \
 COPY --from=cacher /opt/linera/build/target target
 COPY --from=cacher /usr/local/cargo /usr/local/cargo
 
-RUN cargo build --release --target aarch64-unknown-linux-gnu --bin linera --bin linera-proxy --bin linera-server \
+RUN cargo build --release \
+    --target aarch64-unknown-linux-gnu \
+    --bin linera \
+    --bin linera-proxy \
+    --bin linera-server \
+    --bin linera-db \
+    --features scylladb \
     && strip target/aarch64-unknown-linux-gnu/release/linera \
     && strip target/aarch64-unknown-linux-gnu/release/linera-proxy \
     && strip target/aarch64-unknown-linux-gnu/release/linera-server
+    && strip target/aarch64-unknown-linux-gnu/release/linera-db
 
 # Stage 4 - Setup running environment for container
 FROM debian:latest
@@ -67,6 +74,7 @@ ENV BUILD_PATH=/opt/linera/build
 COPY --from=builder $BUILD_PATH/target/aarch64-unknown-linux-gnu/release/linera ./
 COPY --from=builder $BUILD_PATH/target/aarch64-unknown-linux-gnu/release/linera-server ./
 COPY --from=builder $BUILD_PATH/target/aarch64-unknown-linux-gnu/release/linera-proxy ./
+COPY --from=builder $BUILD_PATH/target/aarch64-unknown-linux-gnu/release/linera-db ./
 
 # Copying configuration files
 COPY --from=builder $BUILD_PATH/configuration/prod/validator_1.toml ./
@@ -74,6 +82,10 @@ COPY --from=builder $BUILD_PATH/configuration/prod/validator_1.toml ./
 # Copy entrypoint
 COPY docker/server-entrypoint.sh .
 RUN chmod +x server-entrypoint.sh
+
+# Copy init
+COPY docker/server-init.sh .
+RUN chmod +x server-init.sh
 
 # Create configuration files for the validator according to the validator's config file.
 # * Private server states are stored in `server*.json`.

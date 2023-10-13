@@ -103,9 +103,9 @@ fi
 helm uninstall linera-core --wait;
 
 if [ "$cloud_mode" = true ]; then
-    helm install linera-core . --values values-local-with-cloud-build.yaml --wait || exit 1;
+    helm install linera-core . --values values-local-with-cloud-build.yaml --wait --set installCRDs=true || exit 1;
 else
-    helm install linera-core . --values values-local.yaml --wait || exit 1;
+    helm install linera-core . --values values-local.yaml --wait --set installCRDs=true || exit 1;
 fi
 
 echo "Pods:";

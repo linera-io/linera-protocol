@@ -24,15 +24,6 @@ spec:
   selector:
     matchLabels:
       app: shards
-  volumeClaimTemplates:
-    - metadata:
-        name: rocksdb
-      spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: "standard"
-        resources:
-          requests:
-            storage: 100Mi
   template:
     metadata:
       labels:
@@ -45,9 +36,6 @@ spec:
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
           command: ["./server-entrypoint.sh"]
-          volumeMounts:
-          - name: rocksdb
-            mountPath: /usr/share/rocksdb
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
@@ -67,21 +55,12 @@ spec:
         - name: linera-server-initializer
           image: {{ .Values.lineraImage }}
           imagePullPolicy: {{ .Values.lineraImagePullPolicy }}
-          command: ["./linera-server"]
-          args:
-            [
-              "initialize",
-              "--storage",
-              "rocksdb:/usr/share/rocksdb/shard_data.db",
-              "--genesis",
-              "genesis.json",
-            ]
-          volumeMounts:
-          - name: rocksdb
-            mountPath: /usr/share/rocksdb
+          command: ["./server-init.sh"]
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}
+            - name: RUST_BACKTRACE
+              value: "1"
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
