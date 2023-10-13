@@ -12,7 +12,7 @@ use linera_service::{
     cli_wrappers::{Database, LocalNetwork, Network},
     util,
 };
-use linera_views::common::get_table_name;
+use linera_views::test_utils::get_table_name;
 use std::{path::PathBuf, time::Duration};
 
 #[tokio::test]

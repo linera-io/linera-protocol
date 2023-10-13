@@ -12,18 +12,14 @@
 //! * [`KeyValueStoreClient`][trait1] for a database access.
 //! * [`Context`][trait2] for the context.
 //!
-//! Support for ScyllaDB is experimental and is still missing important features:
-//! TODO(#935): Read several keys at once
-//! TODO(#934): Journaling operations
-//!
 //! [trait1]: common::KeyValueStoreClient
 //! [trait2]: common::Context
 
 #[cfg(any(test, feature = "test"))]
-use crate::{common::get_table_name, lru_caching::TEST_CACHE_SIZE};
+use crate::{lru_caching::TEST_CACHE_SIZE, test_utils::get_table_name};
 
 use crate::{
-    batch::{Batch, WriteOperation},
+    batch::{Batch, DeletePrefixExpander},
     common::{
         get_upper_bound_option, CommonStoreConfig, ContextFromDb, KeyValueStoreClient, TableStatus,
     },
@@ -34,6 +30,8 @@ use async_lock::{Semaphore, SemaphoreGuard};
 use async_trait::async_trait;
 use futures::future::join_all;
 use scylla::{
+    frame::request::batch::BatchType,
+    query::Query,
     transport::errors::{DbError, QueryError},
     IntoTypedRows, Session, SessionBuilder,
 };
@@ -45,7 +43,7 @@ use thiserror::Error;
 type ScyllaDbClientPair = (Session, String);
 
 /// We limit the number of connections that can be done for tests.
-pub const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 10;
+pub const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 1;
 
 /// The number of connections in the stream is limited for tests.
 pub const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
@@ -155,6 +153,14 @@ impl KeyValueStoreClient for ScyllaDbClientInternal {
     }
 }
 
+#[async_trait]
+impl DeletePrefixExpander for ScyllaDbClientPair {
+    type Error = ScyllaDbContextError;
+    async fn expand_delete_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
+        ScyllaDbClientInternal::find_keys_by_prefix_internal(self, key_prefix.to_vec()).await
+    }
+}
+
 impl ScyllaDbClientInternal {
     /// Obtains the semaphore lock on the database if needed.
     async fn acquire(&self) -> Option<SemaphoreGuard<'_>> {
@@ -173,7 +179,7 @@ impl ScyllaDbClientInternal {
         // Read the value of a key
         let values = (key,);
         let query = format!(
-            "SELECT v FROM kv.{} WHERE k = ? ALLOW FILTERING",
+            "SELECT v FROM kv.{} WHERE dummy = 0 AND k = ? ALLOW FILTERING",
             table_name
         );
         let rows = session.query(query, values).await?;
@@ -186,75 +192,57 @@ impl ScyllaDbClientInternal {
         Ok(None)
     }
 
-    async fn insert_key_value_internal(
-        client: &ScyllaDbClientPair,
-        key: Vec<u8>,
-        value: Vec<u8>,
-    ) -> Result<(), ScyllaDbContextError> {
-        let session = &client.0;
-        let table_name = &client.1;
-        let query = format!(
-            "INSERT INTO kv.{} (dummy, k, v) VALUES (0, ?, ?)",
-            table_name
-        );
-        let values = (key, value);
-        session.query(query, values).await?;
-        Ok(())
-    }
-
-    async fn delete_key_internal(
-        client: &ScyllaDbClientPair,
-        key: Vec<u8>,
-    ) -> Result<(), ScyllaDbContextError> {
-        let session = &client.0;
-        let table_name = &client.1;
-        let values = (key,);
-        let query = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k = ?", table_name);
-        session.query(query, values).await?;
-        Ok(())
-    }
-
-    async fn delete_key_prefix_internal(
-        client: &ScyllaDbClientPair,
-        key_prefix: Vec<u8>,
-    ) -> Result<(), ScyllaDbContextError> {
-        let session = &client.0;
-        let table_name = &client.1;
-        match get_upper_bound_option(&key_prefix) {
-            None => {
-                let values = (key_prefix,);
-                let query = format!("DELETE FROM kv.{} WHERE k >= ?", table_name);
-                session.query(query, values).await?;
-            }
-            Some(upper_bound) => {
-                let values = (key_prefix, upper_bound);
-                let query = format!(
-                    "DELETE FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ?",
-                    table_name
-                );
-                session.query(query, values).await?;
-            }
-        }
-        Ok(())
-    }
-
     async fn write_batch_internal(
         client: &ScyllaDbClientPair,
         batch: Batch,
     ) -> Result<(), ScyllaDbContextError> {
-        for ent in batch.operations {
-            match ent {
-                WriteOperation::Put { key, value } => {
-                    Self::insert_key_value_internal(client, key, value).await?;
+        // We cannot directly write the batch because if a delete is followed by a write then
+        // the delete takes priority. See the sentence "The first tie-breaking rule when two
+        // cells have the same write timestamp is that dead cells win over live cells"
+        // from https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
+        let mut unordered_batch = batch.simplify();
+        unordered_batch
+            .expand_colliding_prefix_deletions(client)
+            .await?;
+        let session = &client.0;
+        let table_name = &client.1;
+        let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Logged);
+        let mut batch_values = Vec::new();
+        let query1 = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k >= ?", table_name);
+        let query2 = format!(
+            "DELETE FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ?",
+            table_name
+        );
+        for key_prefix in unordered_batch.key_prefix_deletions {
+            match get_upper_bound_option(&key_prefix) {
+                None => {
+                    let values = vec![key_prefix];
+                    batch_values.push(values);
+                    batch_query.append_statement(Query::new(query1.clone()));
                 }
-                WriteOperation::Delete { key } => {
-                    Self::delete_key_internal(client, key).await?;
-                }
-                WriteOperation::DeletePrefix { key_prefix } => {
-                    Self::delete_key_prefix_internal(client, key_prefix).await?;
+                Some(upper_bound) => {
+                    let values = vec![key_prefix, upper_bound];
+                    batch_values.push(values);
+                    batch_query.append_statement(Query::new(query2.clone()));
                 }
             }
         }
+        let query3 = format!("DELETE FROM kv.{} WHERE dummy = 0 AND k = ?", table_name);
+        for key in unordered_batch.simple_unordered_batch.deletions {
+            let values = vec![key];
+            batch_values.push(values);
+            batch_query.append_statement(Query::new(query3.clone()));
+        }
+        let query4 = format!(
+            "INSERT INTO kv.{} (dummy, k, v) VALUES (0, ?, ?)",
+            table_name
+        );
+        for (key, value) in unordered_batch.simple_unordered_batch.insertions {
+            let values = vec![key, value];
+            batch_values.push(values);
+            batch_query.append_statement(Query::new(query4.clone()));
+        }
+        session.batch(&batch_query, batch_values).await?;
         Ok(())
     }
 
@@ -270,7 +258,7 @@ impl ScyllaDbClientInternal {
             None => {
                 let values = (key_prefix,);
                 let query = format!(
-                    "SELECT k FROM kv.{} WHERE k >= ? ALLOW FILTERING",
+                    "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
                     table_name
                 );
                 session.query(query, values).await?
@@ -278,7 +266,7 @@ impl ScyllaDbClientInternal {
             Some(upper_bound) => {
                 let values = (key_prefix, upper_bound);
                 let query = format!(
-                    "SELECT k FROM kv.{} WHERE k >= ? AND k < ? ALLOW FILTERING",
+                    "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
                     table_name
                 );
                 session.query(query, values).await?
@@ -307,7 +295,7 @@ impl ScyllaDbClientInternal {
             None => {
                 let values = (key_prefix,);
                 let query = format!(
-                    "SELECT k FROM kv.{} WHERE k >= ? ALLOW FILTERING",
+                    "SELECT k FROM kv.{} WHERE dummy = 0 AND k >= ? ALLOW FILTERING",
                     table_name
                 );
                 session.query(query, values).await?
@@ -315,7 +303,7 @@ impl ScyllaDbClientInternal {
             Some(upper_bound) => {
                 let values = (key_prefix, upper_bound);
                 let query = format!(
-                    "SELECT k,v FROM kv.{} WHERE k >= ? AND k < ? ALLOW FILTERING",
+                    "SELECT k,v FROM kv.{} WHERE dummy = 0 AND k >= ? AND k < ? ALLOW FILTERING",
                     table_name
                 );
                 session.query(query, values).await?

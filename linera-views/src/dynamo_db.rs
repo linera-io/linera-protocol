@@ -32,8 +32,8 @@ use thiserror::Error;
 
 #[cfg(any(test, feature = "test"))]
 use {
-    crate::common::get_table_name,
     crate::lru_caching::TEST_CACHE_SIZE,
+    crate::test_utils::get_table_name,
     anyhow::{Context, Error},
     aws_sdk_s3::Endpoint,
     aws_types::SdkConfig,

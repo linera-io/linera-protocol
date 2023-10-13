@@ -35,7 +35,7 @@ use tonic_health::proto::{
 use tracing::{info, warn};
 
 #[cfg(any(test, feature = "test"))]
-use linera_views::common::get_table_name;
+use linera_views::test_utils::get_table_name;
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
 /// to the binary when starting a server.

@@ -22,7 +22,7 @@ use linera_views::{
     register_view::RegisterView,
     set_view::SetView,
     test_utils::{
-        get_random_byte_vector, get_random_key_value_operations, get_random_key_value_vec,
+        get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
         random_shuffle, span_random_reordering_put_delete,
     },
     views::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},
@@ -38,12 +38,9 @@ use linera_views::rocks_db::{create_rocks_db_test_client, RocksDbClient, RocksDb
 
 #[cfg(feature = "aws")]
 use linera_views::{
-    common::{get_table_name, CommonStoreConfig},
-    dynamo_db::create_dynamo_db_common_config,
-    dynamo_db::DynamoDbContext,
-    dynamo_db::DynamoDbKvStoreConfig,
-    dynamo_db::LocalStackTestContext,
-    dynamo_db::TableName,
+    common::CommonStoreConfig, dynamo_db::create_dynamo_db_common_config,
+    dynamo_db::DynamoDbContext, dynamo_db::DynamoDbKvStoreConfig, dynamo_db::LocalStackTestContext,
+    dynamo_db::TableName, test_utils::get_table_name,
 };
 
 #[cfg(feature = "scylladb")]
@@ -1025,7 +1022,7 @@ async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) {
     let mut unord1_hashes = Vec::new();
     let mut unord2_hashes = Vec::new();
     let mut ord_hashes = Vec::new();
-    let key_value_vector = get_random_key_value_vec(rng, n);
+    let key_value_vector = get_random_key_values(rng, n);
     let info_op = get_random_key_value_operations(rng, n, k);
     let n_iter = 4;
     for _ in 0..n_iter {
@@ -1149,7 +1146,7 @@ async fn check_hash_memoization_persistence<S>(
 async fn check_hash_memoization_persistence_large() {
     let n = 100;
     let mut rng = rand::rngs::StdRng::seed_from_u64(2);
-    let key_value_vector = get_random_key_value_vec(&mut rng, n);
+    let key_value_vector = get_random_key_values(&mut rng, n);
     let mut store = MemoryTestStore::new().await;
     check_hash_memoization_persistence(&mut rng, &mut store, key_value_vector).await;
 }

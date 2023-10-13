@@ -108,6 +108,42 @@ impl UnorderedBatch {
             insertions,
         })
     }
+
+    /// From an `UnorderedBatch`, creates a [`UnorderedBatch`] doesn't contain
+    /// prefix deletions that collide with an insertion.
+    /// This requires accessing the database to read them and translate them
+    /// as collection of deletes.
+    pub async fn expand_colliding_prefix_deletions<DB: DeletePrefixExpander>(
+        &mut self,
+        db: &DB,
+    ) -> Result<(), DB::Error> {
+        let inserted_keys = self
+            .simple_unordered_batch
+            .insertions
+            .iter()
+            .map(|x| x.0.clone())
+            .collect::<BTreeSet<_>>();
+        let mut key_prefix_deletions = Vec::new();
+        for key_prefix in &self.key_prefix_deletions {
+            if inserted_keys
+                .range(get_interval(key_prefix.clone()))
+                .next()
+                .is_some()
+            {
+                for short_key in db.expand_delete_prefix(key_prefix).await?.iter() {
+                    let mut key = key_prefix.clone();
+                    key.extend(short_key);
+                    if !inserted_keys.contains(&key) {
+                        self.simple_unordered_batch.deletions.push(key);
+                    }
+                }
+            } else {
+                key_prefix_deletions.push(key_prefix.to_vec());
+            }
+        }
+        self.key_prefix_deletions = key_prefix_deletions;
+        Ok(())
+    }
 }
 
 /// Checks if `key` is matched by any prefix in `key_prefix_set`.
@@ -162,8 +198,8 @@ impl Batch {
     pub fn simplify(self) -> UnorderedBatch {
         let mut delete_and_insert_map = BTreeMap::new();
         let mut delete_prefix_set = BTreeSet::new();
-        for op in self.operations {
-            match op {
+        for operation in self.operations {
+            match operation {
                 WriteOperation::Delete { key } => {
                     // We delete a key. However if said key was already matched by a delete_prefix then
                     // nothing needs to be done.
@@ -319,7 +355,11 @@ impl DeletePrefixExpander for MemoryContext<()> {
 
 #[cfg(test)]
 mod tests {
-    use linera_views::{batch::Batch, common::Context, memory::create_memory_context};
+    use linera_views::{
+        batch::{Batch, SimpleUnorderedBatch, UnorderedBatch},
+        common::Context,
+        memory::create_memory_context,
+    };
 
     #[test]
     fn test_simplify_batch1() {
@@ -394,5 +434,30 @@ mod tests {
             vec![vec![1, 2, 3], vec![1, 2, 4], vec![1, 2, 5]]
         );
         assert!(simple_unordered_batch.insertions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_simplify_batch6() {
+        let context = create_memory_context();
+        let insertions = vec![(vec![1, 2, 3], vec![])];
+        let simple_unordered_batch = SimpleUnorderedBatch {
+            insertions: insertions.clone(),
+            deletions: vec![],
+        };
+        let key_prefix_deletions = vec![vec![1, 2]];
+        let mut unordered_batch = UnorderedBatch {
+            simple_unordered_batch,
+            key_prefix_deletions,
+        };
+        unordered_batch
+            .expand_colliding_prefix_deletions(&context)
+            .await
+            .unwrap();
+        assert!(unordered_batch.simple_unordered_batch.deletions.is_empty());
+        assert_eq!(
+            unordered_batch.simple_unordered_batch.insertions,
+            insertions
+        );
+        assert!(unordered_batch.key_prefix_deletions.is_empty());
     }
 }
