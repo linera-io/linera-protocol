@@ -125,7 +125,7 @@ impl FromStr for StorageConfig {
         if let Some(s) = input.strip_prefix(SCYLLA_DB) {
             let mut uri: Option<String> = None;
             let mut table_name: Option<String> = None;
-            let parse_error: &'static str = "Correct format is (https|http)://db_hostname:port.";
+            let parse_error: &'static str = "Correct format is tcp:db_hostname:port.";
             if !s.is_empty() {
                 let mut parts = s.split(':');
                 while let Some(part) = parts.next() {
