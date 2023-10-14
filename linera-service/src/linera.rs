@@ -1022,7 +1022,7 @@ enum NetCommand {
     Up {
         /// The number of extra wallets and user chains to initialise. Default is 0.
         #[structopt(default_value, long)]
-        wallets: usize,
+        extra_wallets: usize,
 
         /// The number of validators in the local test network. Default is 1.
         #[structopt(long, default_value = "1")]
@@ -1820,7 +1820,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
         ClientCommand::Net(net_command) => match net_command {
             NetCommand::Up {
-                wallets,
+                extra_wallets,
                 validators,
                 shards,
                 testing_prng_seed,
@@ -1861,9 +1861,9 @@ async fn main() -> Result<(), anyhow::Error> {
                     "\nA local test network was started using the following temporary directory:\n{}\n",
                     net.net_path().display()
                 );
-                let suffix = if *wallets > 0 {
+                let suffix = if *extra_wallets > 0 {
                     eprintln!("To use the initial wallet and the extra wallets of this test network, you may set \
-                               the environment variables LINERA_WALLET_$N and LINERA_STORAGE_$N (N = 0..{wallets}) as follows (on /dev/stdout), \
+                               the environment variables LINERA_WALLET_$N and LINERA_STORAGE_$N (N = 0..{extra_wallets}) as follows (on /dev/stdout), \
                                then use the option `--wallet-id $N` (or `-w $N` for short) to select a wallet in the linera tool.\n");
                     "_0"
                 } else {
@@ -1889,7 +1889,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 );
 
                 // Create the extra wallets.
-                for wallet in 1..=*wallets {
+                for wallet in 1..=*extra_wallets {
                     let extra_wallet = net.make_client(network);
                     extra_wallet.wallet_init(&[]).await?;
                     let unassigned_key = extra_wallet.keygen().await?;
