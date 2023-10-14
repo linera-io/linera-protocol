@@ -10,7 +10,9 @@ use async_lock::RwLock;
 use async_trait::async_trait;
 use std::sync::Arc;
 
-/// Array containing data for this client
+/// Array containing metric data for this client
+/// This can be used for storage-fees or for other
+/// benchmarking purposes.
 #[derive(Clone, Copy, Default, Debug, Eq, PartialEq)]
 pub struct MetricStat {
     /// The total number of read_key and read_multi_key
@@ -29,11 +31,11 @@ pub struct MetricStat {
     pub size_reads: usize,
 }
 
-/// The `MetricKeyValueClient` encapsulates a client and also measures the operations
-/// being done
+/// The `MetricKeyValueClient` encapsulates a client and creates a new one that
+/// measures the operations being done
 #[derive(Clone)]
 pub struct MetricKeyValueClient<K> {
-    /// The inner client that is called by the LRU cache one
+    /// The inner client that is called by the metric one
     pub client: K,
     /// The data contained in the running of this container
     pub metric_stat: Arc<RwLock<MetricStat>>,
@@ -44,7 +46,6 @@ impl<K> KeyValueStoreClient for MetricKeyValueClient<K>
 where
     K: KeyValueStoreClient + Send + Sync,
 {
-    // The LRU cache does not change the underlying client's size limit.
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
     type Error = K::Error;
     type Keys = K::Keys;
