@@ -1,15 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_trait::async_trait;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{KeyIterable, KeyValueIterable, KeyValueStoreClient},
-    memory::MemoryClient,
-    memory::create_memory_client,
+    memory::{create_memory_client, MemoryClient},
 };
-use std::sync::Arc;
 use async_lock::RwLock;
+use async_trait::async_trait;
+use std::sync::Arc;
 
 /// Array containing data for this client
 #[derive(Clone, Copy, Default, Debug, Eq, PartialEq)]
@@ -62,10 +61,10 @@ where
         match &read {
             None => {
                 metric_stat.n_miss_reads += 1;
-            },
+            }
             Some(value) => {
                 metric_stat.size_reads += value.len();
-            },
+            }
         }
         Ok(read)
     }
@@ -74,16 +73,17 @@ where
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        let multi_read = self.client.read_multi_key_bytes(keys).await?;
         let mut metric_stat = self.metric_stat.write().await;
+        metric_stat.n_reads += keys.len();
+        let multi_read = self.client.read_multi_key_bytes(keys).await?;
         for read in &multi_read {
             match read {
                 None => {
                     metric_stat.n_miss_reads += 1;
-                },
+                }
                 Some(value) => {
                     metric_stat.size_reads += value.len();
-                },
+                }
             }
         }
         Ok(multi_read)
@@ -118,15 +118,15 @@ where
                 WriteOperation::Delete { key } => {
                     metric_stat.n_deletes += 1;
                     metric_stat.size_writes += key.len();
-                },
+                }
                 WriteOperation::Put { key, value } => {
                     metric_stat.n_puts += 1;
                     metric_stat.size_writes += key.len() + value.len();
-                },
+                }
                 WriteOperation::DeletePrefix { key_prefix } => {
                     metric_stat.n_delete_prefix += 1;
                     metric_stat.size_writes += key_prefix.len();
-                },
+                }
             }
         }
         self.client.write_batch(batch, base_key).await
@@ -137,11 +137,16 @@ where
     }
 }
 
-
 #[derive(Clone)]
 /// A memory client implementing the metric
 pub struct MetricMemoryClient {
     client: MetricKeyValueClient<MemoryClient>,
+}
+
+impl Default for MetricMemoryClient {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MetricMemoryClient {
@@ -150,7 +155,10 @@ impl MetricMemoryClient {
         let client = create_memory_client();
         let metric_stat = MetricStat::default();
         let metric_stat = Arc::new(RwLock::new(metric_stat));
-        let client = MetricKeyValueClient { client, metric_stat };
+        let client = MetricKeyValueClient {
+            client,
+            metric_stat,
+        };
         MetricMemoryClient { client }
     }
 
@@ -184,10 +192,7 @@ impl KeyValueStoreClient for MetricMemoryClient {
         self.client.read_multi_key_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::Keys, Self::Error> {
+    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
         self.client.find_keys_by_prefix(key_prefix).await
     }
 
@@ -209,23 +214,128 @@ impl KeyValueStoreClient for MetricMemoryClient {
 
 #[cfg(test)]
 mod tests {
-    use linera_views::storage_metric::MetricStat;
-    use linera_views::batch::Batch;
-    use linera_views::storage_metric::MetricMemoryClient;
-    use linera_views::common::KeyValueStoreClient;
-    
-    #[tokio::test]
-    async fn test_metric1() {
+    use linera_views::{
+        batch::Batch,
+        common::KeyValueStoreClient,
+        storage_metric::{MetricMemoryClient, MetricStat},
+    };
+
+    async fn get_memory_test_state() -> MetricMemoryClient {
         let client = MetricMemoryClient::new();
         assert_eq!(client.metric().await, MetricStat::default());
         let mut batch = Batch::new();
-        batch.put_key_value_bytes(vec![1, 2, 3], vec![]);
-        batch.put_key_value_bytes(vec![1, 2, 4], vec![]);
-        batch.put_key_value_bytes(vec![1, 2, 5], vec![]);
-        batch.put_key_value_bytes(vec![1, 3, 3], vec![]);
-        batch.delete_key(vec![1,3,7]);
-        batch.delete_key_prefix(vec![2,3]);
+        batch.put_key_value_bytes(vec![1, 2, 3], vec![1]);
+        batch.put_key_value_bytes(vec![1, 2, 4], vec![2, 2]);
+        batch.put_key_value_bytes(vec![1, 2, 5], vec![3, 3, 3]);
+        batch.put_key_value_bytes(vec![1, 3, 3], vec![4, 4, 4, 4]);
+        batch.delete_key(vec![1, 3, 7]);
+        batch.delete_key_prefix(vec![2, 3]);
         client.write_batch(batch, &[]).await.unwrap();
-        assert_eq!(client.metric().await, MetricStat { n_reads: 0, n_miss_reads: 0, n_puts: 4, n_deletes: 1, n_delete_prefix: 1, size_writes: 17, size_reads: 0});
+        assert_eq!(
+            client.metric().await,
+            MetricStat {
+                n_reads: 0,
+                n_miss_reads: 0,
+                n_puts: 4,
+                n_deletes: 1,
+                n_delete_prefix: 1,
+                size_writes: 27,
+                size_reads: 0
+            }
+        );
+        client
+    }
+
+    #[tokio::test]
+    async fn test_metric_read_existing_key() {
+        let client = get_memory_test_state().await;
+        client.read_key_bytes(&[1, 3, 3]).await.unwrap();
+        assert_eq!(
+            client.metric().await,
+            MetricStat {
+                n_reads: 1,
+                n_miss_reads: 0,
+                n_puts: 4,
+                n_deletes: 1,
+                n_delete_prefix: 1,
+                size_writes: 27,
+                size_reads: 4
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn test_metric_read_missing_key() {
+        let client = get_memory_test_state().await;
+        client.read_key_bytes(&[1, 4, 4]).await.unwrap();
+        assert_eq!(
+            client.metric().await,
+            MetricStat {
+                n_reads: 1,
+                n_miss_reads: 1,
+                n_puts: 4,
+                n_deletes: 1,
+                n_delete_prefix: 1,
+                size_writes: 27,
+                size_reads: 0
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn test_metric_read_multi_key() {
+        let client = get_memory_test_state().await;
+        client
+            .read_multi_key_bytes(vec![vec![1, 3, 3], vec![1, 2, 5]])
+            .await
+            .unwrap();
+        assert_eq!(
+            client.metric().await,
+            MetricStat {
+                n_reads: 2,
+                n_miss_reads: 0,
+                n_puts: 4,
+                n_deletes: 1,
+                n_delete_prefix: 1,
+                size_writes: 27,
+                size_reads: 7
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn test_metric_find_keys() {
+        let client = get_memory_test_state().await;
+        client.find_keys_by_prefix(&[1, 2]).await.unwrap();
+        assert_eq!(
+            client.metric().await,
+            MetricStat {
+                n_reads: 0,
+                n_miss_reads: 0,
+                n_puts: 4,
+                n_deletes: 1,
+                n_delete_prefix: 1,
+                size_writes: 27,
+                size_reads: 3
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn test_metric_find_key_values() {
+        let client = get_memory_test_state().await;
+        client.find_key_values_by_prefix(&[1, 2]).await.unwrap();
+        assert_eq!(
+            client.metric().await,
+            MetricStat {
+                n_reads: 0,
+                n_miss_reads: 0,
+                n_puts: 4,
+                n_deletes: 1,
+                n_delete_prefix: 1,
+                size_writes: 27,
+                size_reads: 9
+            }
+        );
     }
 }
