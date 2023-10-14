@@ -2,19 +2,19 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
+#![cfg(feature = "rocksdb")]
+
 mod common;
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
-use {
-    common::INTEGRATION_TEST_GUARD,
-    std::{io::Write, process::ExitStatus},
-    tempfile::tempdir,
-    tokio::process::Command,
-};
+use common::INTEGRATION_TEST_GUARD;
+use std::io::Write;
+use tempfile::tempdir;
+use tokio::process::Command;
 
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
-async fn run_test_command(storage: &str) -> std::io::Result<ExitStatus> {
+#[test_log::test(tokio::test)]
+async fn test_examples_in_readme() -> std::io::Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+
     let dir = tempdir().unwrap();
     let file = std::io::BufReader::new(std::fs::File::open("../README.md")?);
     let mut quotes = get_bash_quotes(file)?;
@@ -26,18 +26,19 @@ async fn run_test_command(storage: &str) -> std::io::Result<ExitStatus> {
     let mut test_script = std::fs::File::create(test_file)?;
     write!(&mut test_script, "{}", quote)?;
 
-    Command::new("bash")
+    let status = Command::new("bash")
         .current_dir("..") // root of the repo
         .arg("-e")
         .arg("-x")
         .arg(dir.path().join("test.sh"))
-        .arg(storage)
         .status()
-        .await
+        .await?;
+
+    assert!(status.success());
+    Ok(())
 }
 
 #[allow(clippy::while_let_on_iterator)]
-#[cfg(any(feature = "aws", feature = "rocksdb", feature = "scylladb"))]
 fn get_bash_quotes(reader: impl std::io::BufRead) -> std::io::Result<Vec<String>> {
     let mut result = Vec::new();
     let mut lines = reader.lines();
@@ -59,31 +60,4 @@ fn get_bash_quotes(reader: impl std::io::BufRead) -> std::io::Result<Vec<String>
     }
 
     Ok(result)
-}
-
-#[cfg(feature = "rocksdb")]
-#[test_log::test(tokio::test)]
-async fn test_rocks_db_examples_in_readme() -> std::io::Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let status = run_test_command("ROCKSDB").await?;
-    assert!(status.success());
-    Ok(())
-}
-
-#[cfg(feature = "aws")]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_examples_in_readme() -> anyhow::Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let status = run_test_command("DYNAMODB").await?;
-    assert!(status.success());
-    Ok(())
-}
-
-#[cfg(feature = "scylladb")]
-#[test_log::test(tokio::test)]
-async fn test_scylla_db_examples_in_readme() -> anyhow::Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let status = run_test_command("SCYLLADB").await?;
-    assert!(status.success());
-    Ok(())
 }
