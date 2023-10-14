@@ -5,27 +5,29 @@ use async_trait::async_trait;
 use crate::{
     batch::{Batch, WriteOperation},
     common::{KeyIterable, KeyValueStoreClient},
+    memory::MemoryClient,
+    memory::create_memory_client,
 };
 use std::sync::Arc;
 use async_lock::RwLock;
 
 /// Array containing data for this client
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Copy, Default, Debug, Eq, PartialEq)]
 pub struct MetricStat {
     /// The total number of read_key and read_multi_key
-    n_reads: usize,
+    pub n_reads: usize,
     /// The number of missed cases in read_key and read_multi_key
-    n_miss_reads: usize,
+    pub n_miss_reads: usize,
     /// The number of Put in the batches
-    n_puts: usize,
+    pub n_puts: usize,
     /// The total number of Delete in the batches
-    n_deletes: usize,
+    pub n_deletes: usize,
     /// The total number of DeletePrefix in the batches
-    n_delete_prefix: usize,
+    pub n_delete_prefix: usize,
     /// The total data that went into the Batches
-    size_writes: usize,
+    pub size_writes: usize,
     /// The total data being read from
-    size_reads: usize,
+    pub size_reads: usize,
 }
 
 /// The `MetricKeyValueClient` encapsulates a client and also measures the operations
@@ -47,6 +49,15 @@ struct KeyIterableCounter<K, I> {
     _store_client: std::marker::PhantomData<K>,
 }
 
+/// The corresponding Iterator
+struct KeyIteratorCounter<'a, K, I> {
+    /// The counter
+    pub metric_stat: MetricStat,
+    /// The key iterator
+    pub iter: I,
+    _store_client: std::marker::PhantomData<&'a K>,
+}
+
 impl<K> KeyIterable<K::Error> for KeyIterableCounter<K, K::Keys>
 where
     K: KeyValueStoreClient,
@@ -61,15 +72,6 @@ where
         let metric_stat = self.metric_stat.clone();
         KeyIteratorCounter { metric_stat, iter, _store_client: std::marker::PhantomData }
     }
-}
-
-/// The corresponding Iterator
-struct KeyIteratorCounter<'a, K, I> {
-    /// The counter
-    pub metric_stat: MetricStat,
-    /// The key iterator
-    pub iter: I,
-    _store_client: std::marker::PhantomData<&'a K>,
 }
 
 impl<'a, K> Iterator for KeyIteratorCounter<'a, K, <<K as KeyValueStoreClient>::Keys as KeyIterable<K::Error>>::Iterator<'a>>
@@ -188,5 +190,98 @@ where
 
     async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
         self.client.clear_journal(base_key).await
+    }
+}
+
+
+#[derive(Clone)]
+/// A memory client implementing the metric
+pub struct MetricMemoryClient {
+    client: MetricKeyValueClient<MemoryClient>,
+}
+
+impl MetricMemoryClient {
+    /// Create a new client
+    pub fn new() -> Self {
+        let client = create_memory_client();
+        let metric_stat = MetricStat::default();
+        let metric_stat = Arc::new(RwLock::new(metric_stat));
+        let client = MetricKeyValueClient { client, metric_stat };
+        MetricMemoryClient { client }
+    }
+
+    /// Returning the current metric information
+    pub async fn metric(&self) -> MetricStat {
+        let metric_stat = &self.client.metric_stat;
+        let metric_stat = metric_stat.read().await;
+        *metric_stat
+    }
+}
+
+#[async_trait]
+impl KeyValueStoreClient for MetricMemoryClient {
+    const MAX_VALUE_SIZE: usize = usize::MAX;
+    type Error = <MetricKeyValueClient<MemoryClient> as KeyValueStoreClient>::Error;
+    type Keys = <MetricKeyValueClient<MemoryClient> as KeyValueStoreClient>::Keys;
+    type KeyValues = <MetricKeyValueClient<MemoryClient> as KeyValueStoreClient>::KeyValues;
+
+    fn max_stream_queries(&self) -> usize {
+        self.client.max_stream_queries()
+    }
+
+    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        self.client.read_key_bytes(key).await
+    }
+
+    async fn read_multi_key_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
+        self.client.read_multi_key_bytes(keys).await
+    }
+
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, Self::Error> {
+        self.client.find_keys_by_prefix(key_prefix).await
+    }
+
+    async fn find_key_values_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::KeyValues, Self::Error> {
+        self.client.find_key_values_by_prefix(key_prefix).await
+    }
+
+    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
+        self.client.write_batch(batch, base_key).await
+    }
+
+    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
+        self.client.clear_journal(base_key).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use linera_views::storage_metric::MetricStat;
+    use linera_views::batch::Batch;
+    use linera_views::storage_metric::MetricMemoryClient;
+    use linera_views::common::KeyValueStoreClient;
+    
+    #[tokio::test]
+    async fn test_metric1() {
+        let client = MetricMemoryClient::new();
+        assert_eq!(client.metric().await, MetricStat::default());
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(vec![1, 2, 3], vec![]);
+        batch.put_key_value_bytes(vec![1, 2, 4], vec![]);
+        batch.put_key_value_bytes(vec![1, 2, 5], vec![]);
+        batch.put_key_value_bytes(vec![1, 3, 3], vec![]);
+        batch.delete_key(vec![1,3,7]);
+        batch.delete_key_prefix(vec![2,3]);
+        client.write_batch(batch, &[]).await.unwrap();
+        assert_eq!(client.metric().await, MetricStat { n_reads: 0, n_miss_reads: 0, n_puts: 4, n_deletes: 1, n_delete_prefix: 1, size_writes: 17, size_reads: 0});
     }
 }
