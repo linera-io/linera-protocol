@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{KeyIterable, KeyValueStoreClient},
+    common::{KeyIterable, KeyValueIterable, KeyValueStoreClient},
     memory::MemoryClient,
     memory::create_memory_client,
 };
@@ -39,73 +39,6 @@ pub struct MetricKeyValueClient<K> {
     /// The data contained in the running of this container
     pub metric_stat: Arc<RwLock<MetricStat>>,
 }
-
-/// A container for a KeyIterable and a counter
-struct KeyIterableCounter<K, I> {
-    /// The counter
-    pub metric_stat: MetricStat,
-    /// The key iterable
-    pub key_iterable: I,
-    _store_client: std::marker::PhantomData<K>,
-}
-
-/// The corresponding Iterator
-struct KeyIteratorCounter<'a, K, I> {
-    /// The counter
-    pub metric_stat: MetricStat,
-    /// The key iterator
-    pub iter: I,
-    _store_client: std::marker::PhantomData<&'a K>,
-}
-
-impl<K> KeyIterable<K::Error> for KeyIterableCounter<K, K::Keys>
-where
-    K: KeyValueStoreClient,
-    <K as KeyValueStoreClient>::Keys: KeyIterable<<K as KeyValueStoreClient>::Error>
-{
-    type Iterator<'a> = KeyIteratorCounter<'a, K, <<K as KeyValueStoreClient>::Keys as KeyIterable<K::Error>>::Iterator<'a>>
-    where
-        Self: 'a;
-
-    fn iterator(&self) -> Self::Iterator<'_> {
-        let iter = self.key_iterable.iterator();
-        let metric_stat = self.metric_stat.clone();
-        KeyIteratorCounter { metric_stat, iter, _store_client: std::marker::PhantomData }
-    }
-}
-
-impl<'a, K> Iterator for KeyIteratorCounter<'a, K, <<K as KeyValueStoreClient>::Keys as KeyIterable<K::Error>>::Iterator<'a>>
-where
-    K: KeyValueStoreClient,
-    <K as KeyValueStoreClient>::Keys: KeyIterable<<K as KeyValueStoreClient>::Error>
-{
-    type Item = Result<&'a [u8], <K as KeyValueStoreClient>::Error>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next()
-    }
-}
-
-
-
-/*
-Two types:
----Standard case (Vec<Vec<u8>>):
-   * T1 : Vec<Vec<u8>>
-   * T2 : SimpleKeyIterator<'a, E>
----DynamoDb
-   * T1 : DynamoDbKeys
-   * T2 : DynamoDbKeyBlockIterator<'a>
----Our case here
-   * T1: KeyIterableCounter<K> (basically (metric_stat, K::Keys)
-   * T2: KeyIteratorCounter<K>
-
-The link is established via
-   T2 = T1::Iterator
-
- */
-
-
 
 #[async_trait]
 impl<K> KeyValueStoreClient for MetricKeyValueClient<K>
@@ -157,14 +90,25 @@ where
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
-        self.client.find_keys_by_prefix(key_prefix).await
+        let mut metric_stat = self.metric_stat.write().await;
+        let keys = self.client.find_keys_by_prefix(key_prefix).await?;
+        for key in keys.iterator() {
+            metric_stat.size_reads += key?.len();
+        }
+        Ok(keys)
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error> {
-        self.client.find_key_values_by_prefix(key_prefix).await
+        let mut metric_stat = self.metric_stat.write().await;
+        let key_values = self.client.find_key_values_by_prefix(key_prefix).await?;
+        for key_value in key_values.iterator() {
+            let key_value = key_value?;
+            metric_stat.size_reads += key_value.0.len() + key_value.1.len();
+        }
+        Ok(key_values)
     }
 
     async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
