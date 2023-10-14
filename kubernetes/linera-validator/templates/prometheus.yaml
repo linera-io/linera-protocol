@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    release: linera-core
+  name: shards
+spec:
+  endpoints:
+    - port: metrics
+      path: /metrics
+      scheme: http
+  jobLabel: shards
+  namespaceSelector:
+    matchNames:
+      - default
+  selector:
+    matchLabels:
+      app: shards
