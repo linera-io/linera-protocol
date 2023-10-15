@@ -356,7 +356,7 @@ macro_rules! impl_view_system_api {
                 &mut self,
                 key_prefix: &[u8],
             ) -> Result<Self::FindKeyValues, Self::Error> {
-                Ok(HostFuture::new(
+                Ok(self.new_host_future(
                     self.runtime()
                         .find_key_values_by_prefix(key_prefix.to_owned()),
                 ))
