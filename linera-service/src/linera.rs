@@ -42,15 +42,14 @@ use linera_views::{common::CommonStoreConfig, views::ViewError};
 use rand07::Rng;
 use serde_json::Value;
 use std::{
-    env, fs,
-    io::Read,
-    iter,
+    env, fs, iter,
     num::NonZeroU16,
     path::PathBuf,
     sync::Arc,
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
+use tokio::signal::unix;
 use tracing::{debug, info, warn};
 
 #[cfg(feature = "benchmark")]
@@ -1918,9 +1917,14 @@ async fn main() -> Result<(), anyhow::Error> {
                     );
                 }
 
-                eprintln!("\nREADY!\nPress ENTER to terminate the local test network and clean the temporary directory.");
-                std::io::stdin().bytes().next();
-                eprintln!("Done.");
+                eprintln!("\nREADY!\nPress ^C to terminate the local test network and clean the temporary directory.");
+                let mut sigint = unix::signal(unix::SignalKind::interrupt())?;
+                let mut sigterm = unix::signal(unix::SignalKind::terminate())?;
+                tokio::select! {
+                    _ = sigint.recv() => (),
+                    _ = sigterm.recv() => (),
+                }
+                eprintln!("\nDone.");
                 Ok(())
             }
         },
