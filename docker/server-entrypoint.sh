@@ -4,7 +4,7 @@
 ORDINAL="${HOSTNAME##*-}"
 
 exec ./linera-server run \
-  --storage rocksdb:/usr/share/rocksdb/shard_data.db \
+  --storage scylladb:tcp:scylladb.default.svc.cluster.local:9042 \
   --server server_1.json \
   --shard $ORDINAL \
   --genesis genesis.json
