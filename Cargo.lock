@@ -2762,6 +2762,8 @@ dependencies = [
  "linera-chain",
  "linera-execution",
  "linera-views",
+ "once_cell",
+ "prometheus",
  "rand_chacha 0.3.1",
  "rand_distr",
  "serde",

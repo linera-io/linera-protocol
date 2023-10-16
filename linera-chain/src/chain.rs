@@ -32,8 +32,20 @@ use linera_views::{
     set_view::SetView,
     views::{CryptoHashView, GraphQLView, RootView, View, ViewError},
 };
+use once_cell::sync::Lazy;
+use prometheus::{register_int_counter_vec, IntCounterVec};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
+
+pub static NUM_BLOCKS_EXECUTED: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "num_blocks_executed",
+        "Number of blocks executed",
+        // Can add labels here
+        &[]
+    )
+    .expect("Counter creation should not fail")
+});
 
 /// A view accessing the state of a chain.
 #[derive(Debug, RootView, GraphQLView)]
@@ -526,6 +538,9 @@ where
             block.height.try_add_one()?,
             now,
         )?;
+
+        // Log Prometheus metrics
+        NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
         Ok((messages, state_hash))
     }
 

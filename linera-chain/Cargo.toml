@@ -21,6 +21,8 @@ futures = { workspace = true }
 linera-base = { workspace = true }
 linera-execution = { workspace = true }
 linera-views = { workspace = true, features = ["metrics"] }
+once_cell = { workspace = true }
+prometheus = { workspace = true }
 rand_chacha = { workspace = true }
 rand_distr = { workspace = true, features = ["serde1"] }
 serde = { workspace = true }
