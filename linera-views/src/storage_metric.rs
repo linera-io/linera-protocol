@@ -74,9 +74,10 @@ where
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        let mut metric_stat = self.metric_stat.write().await;
-        metric_stat.n_reads += keys.len();
+        let n_keys = keys.len();
         let multi_read = self.client.read_multi_key_bytes(keys).await?;
+        let mut metric_stat = self.metric_stat.write().await;
+        metric_stat.n_reads += n_keys;
         for read in &multi_read {
             match read {
                 None => {
@@ -138,79 +139,22 @@ where
     }
 }
 
-#[derive(Clone)]
-/// A memory client implementing the metric
-pub struct MetricMemoryClient {
-    client: MetricKeyValueClient<MemoryClient>,
-}
-
-impl Default for MetricMemoryClient {
-    fn default() -> Self {
-        Self::new()
+/// Create a new client
+pub fn get_metric_memory_client() -> MetricKeyValueClient<MemoryClient> {
+    let client = create_memory_client();
+    let metric_stat = MetricStat::default();
+    let metric_stat = Arc::new(RwLock::new(metric_stat));
+    MetricKeyValueClient {
+        client,
+        metric_stat,
     }
 }
 
-impl MetricMemoryClient {
-    /// Create a new client
-    pub fn new() -> Self {
-        let client = create_memory_client();
-        let metric_stat = MetricStat::default();
-        let metric_stat = Arc::new(RwLock::new(metric_stat));
-        let client = MetricKeyValueClient {
-            client,
-            metric_stat,
-        };
-        MetricMemoryClient { client }
-    }
-
-    /// Returning the current metric information
-    pub async fn metric(&self) -> MetricStat {
-        let metric_stat = &self.client.metric_stat;
-        let metric_stat = metric_stat.read().await;
-        *metric_stat
-    }
-}
-
-#[async_trait]
-impl KeyValueStoreClient for MetricMemoryClient {
-    const MAX_VALUE_SIZE: usize = usize::MAX;
-    type Error = <MetricKeyValueClient<MemoryClient> as KeyValueStoreClient>::Error;
-    type Keys = <MetricKeyValueClient<MemoryClient> as KeyValueStoreClient>::Keys;
-    type KeyValues = <MetricKeyValueClient<MemoryClient> as KeyValueStoreClient>::KeyValues;
-
-    fn max_stream_queries(&self) -> usize {
-        self.client.max_stream_queries()
-    }
-
-    async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.client.read_key_bytes(key).await
-    }
-
-    async fn read_multi_key_bytes(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        self.client.read_multi_key_bytes(keys).await
-    }
-
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
-        self.client.find_keys_by_prefix(key_prefix).await
-    }
-
-    async fn find_key_values_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, Self::Error> {
-        self.client.find_key_values_by_prefix(key_prefix).await
-    }
-
-    async fn write_batch(&self, batch: Batch, base_key: &[u8]) -> Result<(), Self::Error> {
-        self.client.write_batch(batch, base_key).await
-    }
-
-    async fn clear_journal(&self, base_key: &[u8]) -> Result<(), Self::Error> {
-        self.client.clear_journal(base_key).await
-    }
+/// Returning the current metric information
+pub async fn metric(client: &MetricKeyValueClient<MemoryClient>) -> MetricStat {
+    let metric_stat = &client.metric_stat;
+    let metric_stat = metric_stat.read().await;
+    *metric_stat
 }
 
 #[cfg(test)]
@@ -218,12 +162,13 @@ mod tests {
     use linera_views::{
         batch::Batch,
         common::KeyValueStoreClient,
-        storage_metric::{MetricMemoryClient, MetricStat},
+        memory::MemoryClient,
+        storage_metric::{get_metric_memory_client, metric, MetricKeyValueClient, MetricStat},
     };
 
-    async fn get_memory_test_state() -> MetricMemoryClient {
-        let client = MetricMemoryClient::new();
-        assert_eq!(client.metric().await, MetricStat::default());
+    async fn get_memory_test_state() -> MetricKeyValueClient<MemoryClient> {
+        let client = get_metric_memory_client();
+        assert_eq!(metric(&client).await, MetricStat::default());
         let mut batch = Batch::new();
         batch.put_key_value_bytes(vec![1, 2, 3], vec![1]);
         batch.put_key_value_bytes(vec![1, 2, 4], vec![2, 2]);
@@ -233,7 +178,7 @@ mod tests {
         batch.delete_key_prefix(vec![2, 3]);
         client.write_batch(batch, &[]).await.unwrap();
         assert_eq!(
-            client.metric().await,
+            metric(&client).await,
             MetricStat {
                 n_reads: 0,
                 n_miss_reads: 0,
@@ -252,7 +197,7 @@ mod tests {
         let client = get_memory_test_state().await;
         client.read_key_bytes(&[1, 3, 3]).await.unwrap();
         assert_eq!(
-            client.metric().await,
+            metric(&client).await,
             MetricStat {
                 n_reads: 1,
                 n_miss_reads: 0,
@@ -270,7 +215,7 @@ mod tests {
         let client = get_memory_test_state().await;
         client.read_key_bytes(&[1, 4, 4]).await.unwrap();
         assert_eq!(
-            client.metric().await,
+            metric(&client).await,
             MetricStat {
                 n_reads: 1,
                 n_miss_reads: 1,
@@ -291,7 +236,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            client.metric().await,
+            metric(&client).await,
             MetricStat {
                 n_reads: 2,
                 n_miss_reads: 0,
@@ -309,7 +254,7 @@ mod tests {
         let client = get_memory_test_state().await;
         client.find_keys_by_prefix(&[1, 2]).await.unwrap();
         assert_eq!(
-            client.metric().await,
+            metric(&client).await,
             MetricStat {
                 n_reads: 0,
                 n_miss_reads: 0,
@@ -327,7 +272,7 @@ mod tests {
         let client = get_memory_test_state().await;
         client.find_key_values_by_prefix(&[1, 2]).await.unwrap();
         assert_eq!(
-            client.metric().await,
+            metric(&client).await,
             MetricStat {
                 n_reads: 0,
                 n_miss_reads: 0,
