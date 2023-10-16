@@ -546,8 +546,7 @@ async fn test_linera_net_up_simple() {
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
-    // Using a relative path to test the resolution of other binaries in this case.
-    let mut command = Command::new("../target/debug/linera");
+    let mut command = Command::new(env!("CARGO_BIN_EXE_linera"));
     command.args(["net", "up"]);
     let mut child = command.stdin(Stdio::piped()).spawn().unwrap();
 
