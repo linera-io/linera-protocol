@@ -11,11 +11,11 @@ use async_trait::async_trait;
 use std::sync::Arc;
 
 /// Array containing metric data for this client
-/// This can be used for storage-fees or for other
+/// This can be used for storage fees or for other
 /// benchmarking purposes.
 #[derive(Clone, Copy, Default, Debug, Eq, PartialEq)]
 pub struct MetricStat {
-    /// The total number of read_key and read_multi_key
+    /// The total number of keys read in calls to `read_key` and `read_multi_key`
     pub n_reads: usize,
     /// The number of missed cases in read_key and read_multi_key
     pub n_miss_reads: usize,
