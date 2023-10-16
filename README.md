@@ -42,12 +42,12 @@ source scripts/linera_net_helper.sh
 # Make sure to compile the Linera binaries.
 # cargo build -p linera-service --bins
 
-# Run a local test network with the default parameters and 1 extra user wallet.
+# Run a local test network with the default parameters and 0 extra user wallets.
 spawn_and_set_wallet_env_vars \
-    target/debug/linera net up --extra-wallets 1
+    target/debug/linera net up --extra-wallets 0
 
 # Initial client of the chains created at genesis.
-CLIENT=(target/debug/linera --wallet-id 0)
+CLIENT=(target/debug/linera --with-wallet 0)
 
 # Print the set of validators.
 ${CLIENT[@]} query-validators
