@@ -117,6 +117,8 @@ pub enum WasmExecutionError {
     WriteAttemptToReadOnlyStorage,
     #[error("Runtime failed to respond to application")]
     MissingRuntimeResponse,
+    #[error("Execution of guest future was aborted")]
+    Aborted,
 }
 
 #[async_trait]
