@@ -2834,6 +2834,7 @@ dependencies = [
  "linera-wit-bindgen-host-wasmtime-rust",
  "lru",
  "once_cell",
+ "prometheus",
  "serde",
  "serde_bytes",
  "serde_json",
