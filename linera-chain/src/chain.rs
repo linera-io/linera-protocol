@@ -32,8 +32,32 @@ use linera_views::{
     set_view::SetView,
     views::{CryptoHashView, GraphQLView, RootView, View, ViewError},
 };
+use once_cell::sync::Lazy;
+use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::{
+    collections::{BTreeMap, HashSet},
+    time::Instant,
+};
+
+pub static NUM_BLOCKS_EXECUTED: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "num_blocks_executed",
+        "Number of blocks executed",
+        // Can add labels here
+        &[]
+    )
+    .expect("Counter can be created")
+});
+pub static BLOCK_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "block_execution_latency",
+        "Block execution latency",
+        // Can add labels here
+        &[]
+    )
+    .expect("Counter can be created")
+});
 
 /// A view accessing the state of a chain.
 #[derive(Debug, RootView, GraphQLView)]
@@ -430,6 +454,8 @@ where
         block: &Block,
         now: Timestamp,
     ) -> Result<(Vec<OutgoingMessage>, CryptoHash), ChainError> {
+        let start_time = Instant::now();
+
         assert_eq!(block.chain_id, self.chain_id());
         let chain_id = self.chain_id();
         ensure!(
@@ -526,6 +552,12 @@ where
             block.height.try_add_one()?,
             now,
         )?;
+
+        // Log Prometheus metrics
+        NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
+        BLOCK_EXECUTION_LATENCY
+            .with_label_values(&[])
+            .observe(start_time.elapsed().as_secs_f64());
         Ok((messages, state_hash))
     }
 
