@@ -36,33 +36,31 @@ The Linera protocol repository is broken down into the following crates and subd
 ## Quickstart with the Linera service CLI
 
 ```bash
+# Make sure to compile the Linera binaries and add them in the $PATH.
+# cargo build -p linera-service --bins
+export PATH="$PWD/target/debug:$PATH"
+
 # Import the optional bash helper function `spawn_and_set_wallet_env_vars`.
 source scripts/linera_net_helper.sh
 
-# Make sure to compile the Linera binaries.
-# cargo build -p linera-service --bins
-
 # Run a local test network with the default parameters and 0 extra user wallets.
 spawn_and_set_wallet_env_vars \
-    target/debug/linera net up --extra-wallets 0
-
-# Initial client of the chains created at genesis.
-CLIENT=(target/debug/linera --with-wallet 0)
+    linera net up --extra-wallets 0
 
 # Print the set of validators.
-${CLIENT[@]} query-validators
+linera -w0 query-validators
 
 # Query some of the chains created at genesis
 CHAIN1="e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
 CHAIN2="256e1dbc00482ddd619c293cc0df94d366afe7980022bb22d99e33036fd465dd"
-${CLIENT[@]} query-balance "$CHAIN1"
-${CLIENT[@]} query-balance "$CHAIN2"
+linera -w0 query-balance "$CHAIN1"
+linera -w0 query-balance "$CHAIN2"
 
 # Transfer 10 units then 5 back
-${CLIENT[@]} transfer 10 --from "$CHAIN1" --to "$CHAIN2"
-${CLIENT[@]} transfer 5 --from "$CHAIN2" --to "$CHAIN1"
+linera -w0 transfer 10 --from "$CHAIN1" --to "$CHAIN2"
+linera -w0 transfer 5 --from "$CHAIN2" --to "$CHAIN1"
 
 # Query balances again
-${CLIENT[@]} query-balance "$CHAIN1"
-${CLIENT[@]} query-balance "$CHAIN2"
+linera -w0 query-balance "$CHAIN1"
+linera -w0 query-balance "$CHAIN2"
 ```
