@@ -1665,6 +1665,7 @@ dependencies = [
  "linera-storage",
  "linera-views",
  "lru",
+ "once_cell",
  "prometheus",
  "proptest",
  "rand 0.8.5",

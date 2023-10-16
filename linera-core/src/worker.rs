@@ -28,6 +28,8 @@ use linera_views::{
     views::{RootView, View, ViewError},
 };
 use lru::LruCache;
+use once_cell::sync::Lazy;
+use prometheus::{register_histogram_vec, HistogramVec};
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
@@ -50,6 +52,16 @@ use {
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
+
+pub static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "num_rounds_in_certificate",
+        "Number of rounds in certificate",
+        // Can add labels here
+        &["certificate_value"]
+    )
+    .expect("Counter can be created")
+});
 
 /// Interface provided by each physical shard (aka "worker") of a validator or a local node.
 /// * All commands return either the current chain info or an error.
@@ -1055,6 +1067,14 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
+        let certificate_value = match certificate.value() {
+            CertificateValue::ConfirmedBlock { .. } => "confirmed_block",
+            CertificateValue::ValidatedBlock { .. } => "validated_block",
+            CertificateValue::LeaderTimeout { .. } => "leader_timeout",
+        };
+        NUM_ROUNDS_IN_CERTIFICATE
+            .with_label_values(&[certificate_value])
+            .observe(certificate.round.0 as f64);
         ensure!(
             certificate.value().is_confirmed() || blobs.is_empty(),
             WorkerError::UnneededValue {

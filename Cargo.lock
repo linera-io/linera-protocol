@@ -2793,6 +2793,7 @@ dependencies = [
  "linera-views",
  "lru",
  "meta-counter",
+ "once_cell",
  "prometheus",
  "proptest",
  "rand 0.8.5",
