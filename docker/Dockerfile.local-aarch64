@@ -58,7 +58,7 @@ RUN cargo build --release \
     --features scylladb \
     && strip target/aarch64-unknown-linux-gnu/release/linera \
     && strip target/aarch64-unknown-linux-gnu/release/linera-proxy \
-    && strip target/aarch64-unknown-linux-gnu/release/linera-server
+    && strip target/aarch64-unknown-linux-gnu/release/linera-server \
     && strip target/aarch64-unknown-linux-gnu/release/linera-db
 
 # Stage 4 - Setup running environment for container
