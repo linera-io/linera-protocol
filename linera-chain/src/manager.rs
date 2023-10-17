@@ -216,7 +216,9 @@ impl ChainManager {
         };
         // In leader rotation mode, the round must equal the expected one exactly.
         // Only the first single-leader round can be entered at any time.
-        if self.is_super(owner) || new_round <= RoundId::SingleLeader(0) {
+        if self.is_super(owner)
+            || (new_round <= RoundId::SingleLeader(0) && !expected_round.is_fast())
+        {
             ensure!(
                 expected_round <= new_round,
                 ChainError::InsufficientRound(expected_round)
