@@ -12,14 +12,11 @@ use super::{
 use futures::{channel::oneshot, ready, stream::StreamExt, FutureExt};
 use std::{
     future::Future,
-    marker::PhantomData,
     mem,
     pin::Pin,
-    sync::Arc,
-    task::{Context, Poll, Waker},
+    task::{Context, Poll},
     thread,
 };
-use tokio::sync::Mutex;
 
 /// An actor that runs a future implemented in a Wasm module.
 ///
@@ -233,22 +230,4 @@ where
         application: &Application,
         store: &mut Application::Store,
     ) -> Poll<Result<Self::Output, ExecutionError>>;
-}
-
-/// A guard type responsible for ensuring the [`Waker`] stored in shared memory does not outlive
-/// the task [`Context`] it was obtained from.
-pub struct ActiveContextGuard<'context> {
-    waker: Arc<Mutex<Option<Waker>>>,
-    lifetime: PhantomData<&'context mut ()>,
-}
-
-impl Drop for ActiveContextGuard<'_> {
-    fn drop(&mut self) {
-        let mut waker_reference = self
-            .waker
-            .try_lock()
-            .expect("Unexpected concurrent task context access");
-
-        *waker_reference = None;
-    }
 }
