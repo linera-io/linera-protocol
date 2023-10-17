@@ -235,68 +235,6 @@ where
     ) -> Poll<Result<Self::Output, ExecutionError>>;
 }
 
-/// A type to keep track of a [`Waker`] so that it can be forwarded to any async code called from
-/// the guest Wasm module.
-///
-/// When a [`Future`] is polled, a [`Waker`] is used so that the task can be scheduled to be
-/// woken up and polled again if it's still awaiting something.
-///
-/// The problem is that calling a Wasm module from an async task can lead to that guest code
-/// calling back some host async code. A [`Context`] for the new host code must be created with the
-/// same [`Waker`] to ensure that the wake events are forwarded back correctly to the host code
-/// that called the guest.
-///
-/// Because the context has a lifetime and that forwarding lifetimes through the runtime calls is
-/// not possible, this type erases the lifetime of the context and stores it in an `Arc<Mutex<_>>`
-/// so that the context can be obtained again later. To ensure that this is safe, an
-/// [`ActiveContextGuard`] instance is used to remove the context from memory before the lifetime
-/// ends.
-#[derive(Clone, Default)]
-pub struct WakerForwarder(Arc<Mutex<Option<Waker>>>);
-
-impl WakerForwarder {
-    /// Forwards the waker from the task `context` into shared memory so that it can be obtained
-    /// later.
-    pub fn forward<'context>(&mut self, context: &mut Context) -> ActiveContextGuard<'context> {
-        let mut waker_reference = self
-            .0
-            .try_lock()
-            .expect("Unexpected concurrent task context access");
-
-        assert!(
-            waker_reference.is_none(),
-            "`WakerForwarder` accessed by concurrent tasks"
-        );
-
-        *waker_reference = Some(context.waker().clone());
-
-        ActiveContextGuard {
-            waker: self.0.clone(),
-            lifetime: PhantomData,
-        }
-    }
-
-    /// Runs a `closure` with a [`Context`] using the forwarded waker.
-    ///
-    /// # Panics
-    ///
-    /// If no waker has been forwarded.
-    pub fn with_context<Output>(&mut self, closure: impl FnOnce(&mut Context) -> Output) -> Output {
-        let waker_reference = self
-            .0
-            .try_lock()
-            .expect("Unexpected concurrent application call");
-
-        let mut context = Context::from_waker(
-            waker_reference
-                .as_ref()
-                .expect("Application called without an async task context"),
-        );
-
-        closure(&mut context)
-    }
-}
-
 /// A guard type responsible for ensuring the [`Waker`] stored in shared memory does not outlive
 /// the task [`Context`] it was obtained from.
 pub struct ActiveContextGuard<'context> {

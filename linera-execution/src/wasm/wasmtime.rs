@@ -39,7 +39,6 @@ use self::{
     service_system_api::ServiceSystemApiTables, view_system_api::ViewSystemApiTables,
 };
 use super::{
-    async_boundary::WakerForwarder,
     async_determinism::{HostFutureQueue, QueuedHostFutureFactory},
     common::{self, ApplicationRuntimeContext, WasmRuntimeContext},
     module_cache::ModuleCache,
@@ -148,9 +147,8 @@ impl WasmApplication {
         view_system_api::add_to_linker(&mut linker, ContractState::views_api)
             .map_err(WasmExecutionError::LoadContractModule)?;
 
-        let waker_forwarder = WakerForwarder::default();
         let (future_queue, queued_future_factory) = HostFutureQueue::new();
-        let state = ContractState::new(runtime, waker_forwarder.clone(), queued_future_factory);
+        let state = ContractState::new(runtime, queued_future_factory);
         let mut store = Store::new(&CONTRACT_ENGINE, state);
         let (contract, _instance) = contract::Contract::instantiate(
             &mut store,
@@ -162,7 +160,6 @@ impl WasmApplication {
         let application = Contract { contract };
 
         Ok(WasmRuntimeContext {
-            waker_forwarder,
             application,
             future_queue,
             store,
@@ -182,9 +179,8 @@ impl WasmApplication {
         view_system_api::add_to_linker(&mut linker, ServiceState::views_api)
             .map_err(WasmExecutionError::LoadServiceModule)?;
 
-        let waker_forwarder = WakerForwarder::default();
         let (future_queue, _queued_future_factory) = HostFutureQueue::new();
-        let state = ServiceState::new(runtime, waker_forwarder.clone());
+        let state = ServiceState::new(runtime);
         let mut store = Store::new(&SERVICE_ENGINE, state);
         let (service, _instance) = service::Service::instantiate(
             &mut store,
@@ -196,7 +192,6 @@ impl WasmApplication {
         let application = Service { service };
 
         Ok(WasmRuntimeContext {
-            waker_forwarder,
             application,
             future_queue,
             store,
@@ -224,16 +219,14 @@ pub struct ServiceState {
 impl ContractState {
     /// Creates a new instance of [`ContractState`].
     ///
-    /// Uses `runtime` to export the system API, and the `waker` to be able to correctly handle
-    /// asynchronous calls from the guest Wasm module.
+    /// Uses `runtime` to export the system API.
     pub fn new(
         runtime: mpsc::UnboundedSender<ContractRequest>,
-        waker: WakerForwarder,
         queued_future_factory: QueuedHostFutureFactory<'static>,
     ) -> Self {
         Self {
             data: ContractData::default(),
-            system_api: ContractSystemApi::new(runtime, waker, queued_future_factory),
+            system_api: ContractSystemApi::new(runtime, queued_future_factory),
             system_tables: ContractSystemApiTables::default(),
             views_tables: ViewSystemApiTables::default(),
         }
@@ -268,12 +261,11 @@ impl ContractState {
 impl ServiceState {
     /// Creates a new instance of [`ServiceState`].
     ///
-    /// Uses `runtime` to export the system API, and the `waker` to be able to correctly handle
-    /// asynchronous calls from the guest Wasm module.
-    pub fn new(runtime: mpsc::UnboundedSender<ServiceRequest>, waker: WakerForwarder) -> Self {
+    /// Uses `runtime` to export the system API.
+    pub fn new(runtime: mpsc::UnboundedSender<ServiceRequest>) -> Self {
         Self {
             data: ServiceData::default(),
-            system_api: ServiceSystemApi::new(waker, runtime),
+            system_api: ServiceSystemApi::new(runtime),
             system_tables: ServiceSystemApiTables::default(),
             views_tables: ViewSystemApiTables::default(),
         }
@@ -460,28 +452,19 @@ impl common::Service for Service {
 /// implementation.
 pub struct ContractSystemApi {
     runtime: mpsc::UnboundedSender<ContractRequest>,
-    waker: WakerForwarder,
     queued_future_factory: QueuedHostFutureFactory<'static>,
 }
 
 impl ContractSystemApi {
-    /// Creates a new [`ContractSystemApi`] instance using the provided asynchronous `waker` and
-    /// exporting the API from `runtime`.
+    /// Creates a new [`ContractSystemApi`] instance exporting the API from `runtime`.
     pub fn new(
         runtime: mpsc::UnboundedSender<ContractRequest>,
-        waker: WakerForwarder,
         queued_future_factory: QueuedHostFutureFactory<'static>,
     ) -> Self {
         ContractSystemApi {
             runtime,
-            waker,
             queued_future_factory,
         }
-    }
-
-    /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
-    fn waker(&mut self) -> &mut WakerForwarder {
-        &mut self.waker
     }
 }
 
@@ -492,19 +475,12 @@ impl_view_system_api_for_contract!(ContractSystemApi, wasmtime::Trap);
 /// implementation.
 pub struct ServiceSystemApi {
     runtime: mpsc::UnboundedSender<ServiceRequest>,
-    waker: WakerForwarder,
 }
 
 impl ServiceSystemApi {
-    /// Creates a new [`ServiceSystemApi`] instance using the provided asynchronous `waker` and
-    /// exporting the API from `runtime`.
-    pub fn new(waker: WakerForwarder, runtime: mpsc::UnboundedSender<ServiceRequest>) -> Self {
-        ServiceSystemApi { runtime, waker }
-    }
-
-    /// Returns the [`WakerForwarder`] to be used for asynchronous system calls.
-    fn waker(&mut self) -> &mut WakerForwarder {
-        &mut self.waker
+    /// Creates a new [`ServiceSystemApi`] instance exporting the API from `runtime`.
+    pub fn new(runtime: mpsc::UnboundedSender<ServiceRequest>) -> Self {
+        ServiceSystemApi { runtime }
     }
 }
 
