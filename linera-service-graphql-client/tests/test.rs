@@ -61,7 +61,7 @@ async fn run_end_to_end_queries(database: Database) {
     local_net.run().await.unwrap();
 
     let node_chains = {
-        let wallet = client.get_wallet();
+        let wallet = client.get_wallet().unwrap();
         (wallet.default_chain(), wallet.chain_ids())
     };
     let chain_id = node_chains.0.unwrap();
@@ -135,7 +135,7 @@ async fn run_end_to_end_queries(database: Database) {
     .unwrap()
     .block;
 
-    node_service.assert_is_running();
+    node_service.ensure_is_running().unwrap();
 }
 
 #[test_log::test(tokio::test)]

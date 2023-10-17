@@ -77,7 +77,7 @@ async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
     client_2.wallet_init(&[]).await.unwrap();
     local_net.run().await.unwrap();
 
-    let chain_1 = client.get_wallet().default_chain().unwrap();
+    let chain_1 = client.get_wallet().unwrap().default_chain().unwrap();
 
     let (node_service_2, chain_2) = match network {
         Network::Grpc => {
@@ -160,11 +160,12 @@ async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let response = node_service_2
-                .query_node(&format!(
+                .query_node(format!(
                     "query {{ chain(chainId:\"{chain_2}\") \
                     {{ executionState {{ system {{ balance }} }} }} }}"
                 ))
-                .await;
+                .await
+                .unwrap();
             if response["chain"]["executionState"]["system"]["balance"].as_str() == Some("8.") {
                 return;
             }
@@ -200,9 +201,10 @@ async fn run_open_chain_node_service(database: Database) {
     client.create_genesis_config().await.unwrap();
     local_net.run().await.unwrap();
 
-    let default_chain = client.get_wallet().default_chain().unwrap();
+    let default_chain = client.get_wallet().unwrap().default_chain().unwrap();
     let public_key = client
         .get_wallet()
+        .unwrap()
         .get(default_chain)
         .unwrap()
         .key_pair
@@ -220,7 +222,7 @@ async fn run_open_chain_node_service(database: Database) {
             publicKey:\"{public_key}\"\
         ) }}"
     );
-    node_service.query_node(&query).await;
+    node_service.query_node(query).await.unwrap();
 
     // Open another new chain.
     // This is a regression test; a PR had to be reverted because this was hanging:
@@ -231,7 +233,7 @@ async fn run_open_chain_node_service(database: Database) {
             publicKey:\"{public_key}\"\
         ) }}"
     );
-    let data = node_service.query_node(&query).await;
+    let data = node_service.query_node(query).await.unwrap();
     let new_chain: ChainId = serde_json::from_value(data["openChain"].clone()).unwrap();
 
     // Send 8 tokens to the new chain.
@@ -242,7 +244,7 @@ async fn run_open_chain_node_service(database: Database) {
             amount:\"8\"\
         ) }}"
     );
-    node_service.query_node(&query).await;
+    node_service.query_node(query).await.unwrap();
 
     // Send 4 tokens back.
     let query = format!(
@@ -252,23 +254,25 @@ async fn run_open_chain_node_service(database: Database) {
             amount:\"4\"\
         ) }}"
     );
-    node_service.query_node(&query).await;
+    node_service.query_node(query).await.unwrap();
 
     // Verify that the default chain now has 6 and the new one has 4 tokens.
     for i in 0..10 {
         tokio::time::sleep(Duration::from_secs(i)).await;
         let response1 = node_service
-            .query_node(&format!(
+            .query_node(format!(
                 "query {{ chain(chainId:\"{default_chain}\") \
                     {{ executionState {{ system {{ balance }} }} }} }}"
             ))
-            .await;
+            .await
+            .unwrap();
         let response2 = node_service
-            .query_node(&format!(
+            .query_node(format!(
                 "query {{ chain(chainId:\"{new_chain}\") \
                     {{ executionState {{ system {{ balance }} }} }} }}"
             ))
-            .await;
+            .await
+            .unwrap();
         if response1["chain"]["executionState"]["system"]["balance"].as_str() == Some("6.")
             && response2["chain"]["executionState"]["system"]["balance"].as_str() == Some("4.")
         {
@@ -317,10 +321,11 @@ async fn run_end_to_end_retry_notification_stream(database: Database) {
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
     let mut node_service2 = client2.run_node_service(8081).await.unwrap();
     let response = node_service2
-        .query_node(&format!(
+        .query_node(format!(
             "query {{ chain(chainId:\"{chain}\") {{ tipState {{ nextBlockHeight }} }} }}"
         ))
-        .await;
+        .await
+        .unwrap();
     assert_eq!(
         response["chain"]["tipState"]["nextBlockHeight"].as_u64(),
         Some(height)
@@ -341,10 +346,11 @@ async fn run_end_to_end_retry_notification_stream(database: Database) {
             tokio::time::sleep(Duration::from_secs(i)).await;
             height += 1;
             let response = node_service2
-                .query_node(&format!(
+                .query_node(format!(
                     "query {{ chain(chainId:\"{chain}\") {{ tipState {{ nextBlockHeight }} }} }}"
                 ))
-                .await;
+                .await
+                .unwrap();
             if response["chain"]["tipState"]["nextBlockHeight"].as_u64() == Some(height) {
                 break 'success;
             }
@@ -352,7 +358,7 @@ async fn run_end_to_end_retry_notification_stream(database: Database) {
         panic!("Failed to re-establish notification stream");
     }
 
-    node_service2.assert_is_running();
+    node_service2.ensure_is_running().unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -390,7 +396,7 @@ async fn run_end_to_end_multiple_wallets(database: Database) {
     local_net.run().await.unwrap();
 
     // Get some chain owned by Client 1.
-    let chain_1 = *client_1.get_wallet().chain_ids().first().unwrap();
+    let chain_1 = *client_1.get_wallet().unwrap().chain_ids().first().unwrap();
 
     // Generate a key for Client 2.
     let client_2_key = client_2.keygen().await.unwrap();
@@ -486,7 +492,8 @@ async fn run_project_test(database: Database) {
     let client = local_net.make_client(network);
     client
         .project_test(&LocalNetwork::example_path("counter").unwrap())
-        .await;
+        .await
+        .unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -530,11 +537,18 @@ async fn run_project_publish(database: Database) {
         .project_publish(project_dir, vec![], None, &())
         .await
         .unwrap();
-    let chain = client.get_wallet().default_chain().unwrap();
+    let chain = client.get_wallet().unwrap().default_chain().unwrap();
 
     let node_service = client.run_node_service(None).await.unwrap();
 
-    assert_eq!(node_service.try_get_applications_uri(&chain).await.len(), 1)
+    assert_eq!(
+        node_service
+            .try_get_applications_uri(&chain)
+            .await
+            .unwrap()
+            .len(),
+        1
+    )
 }
 
 #[test_log::test(tokio::test)]
@@ -622,11 +636,18 @@ async fn run_example_publish(database: Database) {
         .project_publish(example_dir, vec![], None, &0)
         .await
         .unwrap();
-    let chain = client.get_wallet().default_chain().unwrap();
+    let chain = client.get_wallet().unwrap().default_chain().unwrap();
 
     let node_service = client.run_node_service(None).await.unwrap();
 
-    assert_eq!(node_service.try_get_applications_uri(&chain).await.len(), 1)
+    assert_eq!(
+        node_service
+            .try_get_applications_uri(&chain)
+            .await
+            .unwrap()
+            .len(),
+        1
+    )
 }
 
 #[cfg(feature = "rocksdb")]
@@ -663,7 +684,7 @@ async fn run_end_to_end_open_multi_owner_chain(database: Database) {
     // Start local network.
     runner.run().await.unwrap();
 
-    let chain1 = *client1.get_wallet().chain_ids().first().unwrap();
+    let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
 
     // Generate keys for both clients.
     let client1_key = client1.keygen().await.unwrap();

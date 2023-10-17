@@ -28,7 +28,7 @@ struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
 impl FungibleApp {
     async fn get_amount(&self, account_owner: &fungible::AccountOwner) -> Amount {
         let query = format!("accounts(accountOwner: {})", account_owner.to_value());
-        let response_body = self.0.query(&query).await;
+        let response_body = self.0.query(&query).await.unwrap();
         serde_json::from_value(response_body["accounts"].clone()).unwrap_or_default()
     }
 
@@ -54,7 +54,7 @@ impl FungibleApp {
             amount_transfer,
             destination.to_value(),
         );
-        self.0.mutate(mutation).await
+        self.0.mutate(mutation).await.unwrap()
     }
 
     async fn claim(&self, source: fungible::Account, target: fungible::Account, amount: Amount) {
@@ -66,7 +66,7 @@ impl FungibleApp {
             target.to_value()
         );
 
-        self.0.mutate(mutation).await;
+        self.0.mutate(mutation).await.unwrap();
     }
 }
 
@@ -81,13 +81,13 @@ impl MatchingEngineApp {
             "accountInfo(accountOwner: {}) {{ orders }}",
             account_owner.to_value()
         );
-        let response_body = self.0.query(query).await;
+        let response_body = self.0.query(query).await.unwrap();
         serde_json::from_value(response_body["accountInfo"]["orders"].clone()).unwrap()
     }
 
     async fn order(&self, order: matching_engine::Order) -> Value {
         let mutation = format!("executeOrder(order: {})", order.to_value());
-        self.0.mutate(mutation).await
+        self.0.mutate(mutation).await.unwrap()
     }
 }
 
@@ -107,7 +107,7 @@ impl AmmApp {
         };
 
         let mutation = format!("operation(operation: {})", operation.to_value(),);
-        self.0.mutate(mutation).await;
+        self.0.mutate(mutation).await.unwrap();
     }
 
     async fn remove_liquidity(
@@ -123,7 +123,7 @@ impl AmmApp {
         };
 
         let mutation = format!("operation(operation: {})", operation.to_value(),);
-        self.0.mutate(mutation).await;
+        self.0.mutate(mutation).await.unwrap();
     }
 
     async fn swap(
@@ -139,7 +139,7 @@ impl AmmApp {
         };
 
         let mutation = format!("operation(operation: {})", operation.to_value(),);
-        self.0.mutate(mutation).await;
+        self.0.mutate(mutation).await.unwrap();
     }
 }
 
@@ -174,7 +174,7 @@ async fn run_wasm_end_to_end_counter(database: Database) {
 
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
-    let chain = client.get_wallet().default_chain().unwrap();
+    let chain = client.get_wallet().unwrap().default_chain().unwrap();
     local_net.run().await.unwrap();
     let (contract, service) = local_net.build_example("counter").await.unwrap();
 
@@ -191,18 +191,21 @@ async fn run_wasm_end_to_end_counter(database: Database) {
         .unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
 
-    let application = node_service.make_application(&chain, &application_id).await;
+    let application = node_service
+        .make_application(&chain, &application_id)
+        .await
+        .unwrap();
 
-    let counter_value: u64 = application.query_json("value").await;
+    let counter_value: u64 = application.query_json("value").await.unwrap();
     assert_eq!(counter_value, original_counter_value);
 
     let mutation = format!("increment(value: {increment})");
-    application.mutate(mutation).await;
+    application.mutate(mutation).await.unwrap();
 
-    let counter_value: u64 = application.query_json("value").await;
+    let counter_value: u64 = application.query_json("value").await.unwrap();
     assert_eq!(counter_value, original_counter_value + increment);
 
-    node_service.assert_is_running();
+    node_service.ensure_is_running().unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -237,7 +240,7 @@ async fn run_wasm_end_to_end_counter_publish_create(database: Database) {
 
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
-    let chain = client.get_wallet().default_chain().unwrap();
+    let chain = client.get_wallet().unwrap().default_chain().unwrap();
     local_net.run().await.unwrap();
     let (contract, service) = local_net.build_example("counter").await.unwrap();
 
@@ -251,18 +254,21 @@ async fn run_wasm_end_to_end_counter_publish_create(database: Database) {
         .unwrap();
     let mut node_service = client.run_node_service(None).await.unwrap();
 
-    let application = node_service.make_application(&chain, &application_id).await;
+    let application = node_service
+        .make_application(&chain, &application_id)
+        .await
+        .unwrap();
 
-    let counter_value: u64 = application.query_json("value").await;
+    let counter_value: u64 = application.query_json("value").await.unwrap();
     assert_eq!(counter_value, original_counter_value);
 
     let mutation = format!("increment(value: {increment})");
-    application.mutate(mutation).await;
+    application.mutate(mutation).await.unwrap();
 
-    let counter_value: u64 = application.query_json("value").await;
+    let counter_value: u64 = application.query_json("value").await.unwrap();
     assert_eq!(counter_value, original_counter_value + increment);
 
-    node_service.assert_is_running();
+    node_service.ensure_is_running().unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -301,7 +307,7 @@ async fn run_wasm_end_to_end_social_user_pub_sub(database: Database) {
     local_net.run().await.unwrap();
     let (contract, service) = local_net.build_example("social").await.unwrap();
 
-    let chain1 = client1.get_wallet().default_chain().unwrap();
+    let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await.unwrap();
     let bytecode_id = client1
         .publish_bytecode(contract, service, None)
@@ -315,30 +321,35 @@ async fn run_wasm_end_to_end_social_user_pub_sub(database: Database) {
     let mut node_service1 = client1.run_node_service(8080).await.unwrap();
     let mut node_service2 = client2.run_node_service(8081).await.unwrap();
 
-    node_service1.process_inbox(&chain1).await;
+    node_service1.process_inbox(&chain1).await.unwrap();
 
     // Request the application so chain 2 has it, too.
     node_service2
         .request_application(&chain2, &application_id)
-        .await;
+        .await
+        .unwrap();
 
     let app2 = node_service2
         .make_application(&chain2, &application_id)
-        .await;
+        .await
+        .unwrap();
     let hash = app2
         .mutate(format!("requestSubscribe(field0: \"{chain1}\")"))
-        .await;
+        .await
+        .unwrap();
 
     // The returned hash should now be the latest one.
     let query = format!("query {{ chain(chainId: \"{chain2}\") {{ tipState {{ blockHash }} }} }}");
-    let response = node_service2.query_node(&query).await;
+    let response = node_service2.query_node(&query).await.unwrap();
     assert_eq!(hash, response["chain"]["tipState"]["blockHash"]);
 
     let app1 = node_service1
         .make_application(&chain1, &application_id)
-        .await;
+        .await
+        .unwrap();
     app1.mutate("post(field0: \"Linera Social is the new Mastodon!\")")
-        .await;
+        .await
+        .unwrap();
 
     // Instead of retrying, we could call `node_service1.process_inbox(chain1).await` here.
     // However, we prefer to test the notification system for a change.
@@ -350,7 +361,8 @@ async fn run_wasm_end_to_end_social_user_pub_sub(database: Database) {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let response = app2
                 .query("receivedPostsKeys(count: 5) { author, index }")
-                .await;
+                .await
+                .unwrap();
             if response == expected_response {
                 info!("Confirmed post");
                 break 'success;
@@ -360,8 +372,8 @@ async fn run_wasm_end_to_end_social_user_pub_sub(database: Database) {
         panic!("Failed to confirm post");
     }
 
-    node_service1.assert_is_running();
-    node_service2.assert_is_running();
+    node_service1.ensure_is_running().unwrap();
+    node_service2.ensure_is_running().unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -400,7 +412,7 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
     local_net.run().await.unwrap();
     let (contract, service) = local_net.build_example("fungible").await.unwrap();
 
-    let chain1 = client1.get_wallet().default_chain().unwrap();
+    let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await.unwrap();
 
     // The players
@@ -424,7 +436,8 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
     let app1 = FungibleApp(
         node_service1
             .make_application(&chain1, &application_id)
-            .await,
+            .await
+            .unwrap(),
     );
     app1.assert_balances([
         (account_owner1, Amount::from_tokens(5)),
@@ -454,7 +467,8 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
     let app2 = FungibleApp(
         node_service2
             .make_application(&chain2, &application_id)
-            .await,
+            .await
+            .unwrap(),
     );
 
     app2.assert_balances(BTreeMap::from([
@@ -478,8 +492,8 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
     .await;
 
     // Make sure that the cross-chain communication happens fast enough.
-    node_service1.process_inbox(&chain1).await;
-    node_service2.process_inbox(&chain2).await;
+    node_service1.process_inbox(&chain1).await.unwrap();
+    node_service2.process_inbox(&chain2).await.unwrap();
 
     // Checking the final value
     app1.assert_balances([
@@ -493,8 +507,8 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
     ])
     .await;
 
-    node_service1.assert_is_running();
-    node_service2.assert_is_running();
+    node_service1.ensure_is_running().unwrap();
+    node_service2.ensure_is_running().unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -531,13 +545,13 @@ async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
     local_net.run().await.unwrap();
     let (contract, service) = local_net.build_example("fungible").await.unwrap();
 
-    let chain1 = client1.get_wallet().default_chain().unwrap();
+    let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = ChainId::root(2);
 
     // The players
     let account_owner1 = get_fungible_account_owner(&client1);
     let account_owner2 = {
-        let wallet = client1.get_wallet();
+        let wallet = client1.get_wallet().unwrap();
         let user_chain = wallet.get(chain2).unwrap();
         let public_key = user_chain.key_pair.as_ref().unwrap().public();
         fungible::AccountOwner::User(public_key.into())
@@ -559,7 +573,8 @@ async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
     let app1 = FungibleApp(
         node_service
             .make_application(&chain1, &application_id)
-            .await,
+            .await
+            .unwrap(),
     );
     app1.assert_balances([
         (account_owner1, Amount::from_tokens(5)),
@@ -588,11 +603,12 @@ async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
     let app2 = FungibleApp(
         node_service
             .make_application(&chain2, &application_id)
-            .await,
+            .await
+            .unwrap(),
     );
     app2.assert_balances([(account_owner2, Amount::ONE)]).await;
 
-    node_service.assert_is_running();
+    node_service.ensure_is_running().unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -632,7 +648,7 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
     local_net.run().await.unwrap();
     let (contract_fungible, service_fungible) = local_net.build_example("fungible").await.unwrap();
 
-    let chain1 = client1.get_wallet().default_chain().unwrap();
+    let chain1 = client1.get_wallet().unwrap().default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2).await.unwrap();
 
     // The players
@@ -684,12 +700,14 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
     let app_fungible1 = FungibleApp(
         node_service1
             .make_application(&chain1, &application_id_fungible)
-            .await,
+            .await
+            .unwrap(),
     );
 
     let app_crowd1 = node_service1
         .make_application(&chain1, &application_id_crowd)
-        .await;
+        .await
+        .unwrap();
 
     // Transferring tokens to user2 on chain2
     app_fungible1
@@ -706,11 +724,13 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
     // Register the campaign on chain2.
     node_service2
         .request_application(&chain2, &application_id_crowd)
-        .await;
+        .await
+        .unwrap();
 
     let app_crowd2 = node_service2
         .make_application(&chain2, &application_id_crowd)
-        .await;
+        .await
+        .unwrap();
 
     // Transferring
     let mutation = format!(
@@ -718,21 +738,21 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
         account_owner2.to_value(),
         Amount::ONE,
     );
-    app_crowd2.mutate(mutation).await;
+    app_crowd2.mutate(mutation).await.unwrap();
 
     // Make sure that the pledge is processed fast enough by client1.
-    node_service1.process_inbox(&chain1).await;
+    node_service1.process_inbox(&chain1).await.unwrap();
 
     // Ending the campaign.
-    app_crowd1.mutate("collect").await;
+    app_crowd1.mutate("collect").await.unwrap();
 
     // The rich gets their money back.
     app_fungible1
         .assert_balances([(account_owner1, Amount::from_tokens(6))])
         .await;
 
-    node_service1.assert_is_running();
-    node_service2.assert_is_running();
+    node_service1.ensure_is_running().unwrap();
+    node_service2.ensure_is_running().unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -776,7 +796,7 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
     let (contract_matching, service_matching) =
         local_net.build_example("matching-engine").await.unwrap();
 
-    let chain_admin = client_admin.get_wallet().default_chain().unwrap();
+    let chain_admin = client_admin.get_wallet().unwrap().default_chain().unwrap();
     let chain_a = client_admin.open_and_assign(&client_a).await.unwrap();
     let chain_b = client_admin.open_and_assign(&client_b).await.unwrap();
 
@@ -823,8 +843,18 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
     let mut node_service_a = client_a.run_node_service(8081).await.unwrap();
     let mut node_service_b = client_b.run_node_service(8082).await.unwrap();
 
-    let app_fungible0_a = FungibleApp(node_service_a.make_application(&chain_a, &token0).await);
-    let app_fungible1_b = FungibleApp(node_service_b.make_application(&chain_b, &token1).await);
+    let app_fungible0_a = FungibleApp(
+        node_service_a
+            .make_application(&chain_a, &token0)
+            .await
+            .unwrap(),
+    );
+    let app_fungible1_b = FungibleApp(
+        node_service_b
+            .make_application(&chain_b, &token1)
+            .await
+            .unwrap(),
+    );
     app_fungible0_a
         .assert_balances([
             (owner_a, Amount::from_tokens(10)),
@@ -842,19 +872,23 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
 
     node_service_admin
         .request_application(&chain_admin, &token0)
-        .await;
+        .await
+        .unwrap();
     let app_fungible0_admin = FungibleApp(
         node_service_admin
             .make_application(&chain_admin, &token0)
-            .await,
+            .await
+            .unwrap(),
     );
     node_service_admin
         .request_application(&chain_admin, &token1)
-        .await;
+        .await
+        .unwrap();
     let app_fungible1_admin = FungibleApp(
         node_service_admin
             .make_application(&chain_admin, &token1)
-            .await,
+            .await
+            .unwrap(),
     );
     app_fungible0_admin
         .assert_balances([
@@ -877,7 +911,8 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
     };
     let bytecode_id = node_service_admin
         .publish_bytecode(&chain_admin, contract_matching, service_matching)
-        .await;
+        .await
+        .unwrap();
     let application_id_matching = node_service_admin
         .create_application::<MatchingEngineAbi>(
             &chain_admin,
@@ -886,27 +921,33 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
             &(),
             &[token0.forget_abi(), token1.forget_abi()],
         )
-        .await;
+        .await
+        .unwrap();
     let app_matching_admin = MatchingEngineApp(
         node_service_admin
             .make_application(&chain_admin, &application_id_matching)
-            .await,
+            .await
+            .unwrap(),
     );
     node_service_a
         .request_application(&chain_a, &application_id_matching)
-        .await;
+        .await
+        .unwrap();
     let app_matching_a = MatchingEngineApp(
         node_service_a
             .make_application(&chain_a, &application_id_matching)
-            .await,
+            .await
+            .unwrap(),
     );
     node_service_b
         .request_application(&chain_b, &application_id_matching)
-        .await;
+        .await
+        .unwrap();
     let app_matching_b = MatchingEngineApp(
         node_service_b
             .make_application(&chain_b, &application_id_matching)
-            .await,
+            .await
+            .unwrap(),
     );
 
     // Now creating orders
@@ -932,9 +973,12 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
             })
             .await;
     }
-    node_service_admin.process_inbox(&chain_admin).await;
-    node_service_a.process_inbox(&chain_a).await;
-    node_service_b.process_inbox(&chain_b).await;
+    node_service_admin
+        .process_inbox(&chain_admin)
+        .await
+        .unwrap();
+    node_service_a.process_inbox(&chain_a).await.unwrap();
+    node_service_b.process_inbox(&chain_b).await.unwrap();
 
     // Now reading the order_ids
     let order_ids_a = app_matching_admin.get_account_info(&owner_a).await;
@@ -951,7 +995,10 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
                 .await;
         }
     }
-    node_service_admin.process_inbox(&chain_admin).await;
+    node_service_admin
+        .process_inbox(&chain_admin)
+        .await
+        .unwrap();
 
     // Check balances
     app_fungible0_a
@@ -979,9 +1026,9 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
         ])
         .await;
 
-    node_service_admin.assert_is_running();
-    node_service_a.assert_is_running();
-    node_service_b.assert_is_running();
+    node_service_admin.ensure_is_running().unwrap();
+    node_service_a.ensure_is_running().unwrap();
+    node_service_b.ensure_is_running().unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -1023,7 +1070,7 @@ async fn run_wasm_end_to_end_amm(database: Database) {
     let (contract_amm, service_amm) = local_net.build_example("amm").await.unwrap();
 
     // Admin chain
-    let chain_admin = client_admin.get_wallet().default_chain().unwrap();
+    let chain_admin = client_admin.get_wallet().unwrap().default_chain().unwrap();
 
     // User chains
     let chain0 = client_admin.open_and_assign(&client0).await.unwrap();
@@ -1062,7 +1109,8 @@ async fn run_wasm_end_to_end_amm(database: Database) {
     // the token0 and token1 amounts
     let fungible_bytecode_id = node_service_admin
         .publish_bytecode(&chain_admin, contract_fungible, service_fungible)
-        .await;
+        .await
+        .unwrap();
 
     let token0 = node_service_admin
         .create_application::<FungibleTokenAbi>(
@@ -1072,7 +1120,8 @@ async fn run_wasm_end_to_end_amm(database: Database) {
             &state_fungible0,
             &[],
         )
-        .await;
+        .await
+        .unwrap();
     let token1 = node_service_admin
         .create_application::<FungibleTokenAbi>(
             &chain_admin,
@@ -1081,18 +1130,21 @@ async fn run_wasm_end_to_end_amm(database: Database) {
             &state_fungible1,
             &[],
         )
-        .await;
+        .await
+        .unwrap();
 
     // Create wrappers
     let app_fungible0_admin = FungibleApp(
         node_service_admin
             .make_application(&chain_admin, &token0)
-            .await,
+            .await
+            .unwrap(),
     );
     let app_fungible1_admin = FungibleApp(
         node_service_admin
             .make_application(&chain_admin, &token1)
-            .await,
+            .await
+            .unwrap(),
     );
 
     // Check initial balances
@@ -1118,7 +1170,8 @@ async fn run_wasm_end_to_end_amm(database: Database) {
     // Create AMM application on Admin chain
     let bytecode_id = node_service_admin
         .publish_bytecode(&chain_admin, contract_amm, service_amm)
-        .await;
+        .await
+        .unwrap();
     let application_id_amm = node_service_admin
         .create_application::<AmmAbi>(
             &chain_admin,
@@ -1127,7 +1180,8 @@ async fn run_wasm_end_to_end_amm(database: Database) {
             &(),
             &[token0.forget_abi(), token1.forget_abi()],
         )
-        .await;
+        .await
+        .unwrap();
 
     let owner_amm = fungible::AccountOwner::Application(application_id_amm.forget_abi());
 
@@ -1135,23 +1189,28 @@ async fn run_wasm_end_to_end_amm(database: Database) {
     let app_amm_admin = AmmApp(
         node_service_admin
             .make_application(&chain_admin, &application_id_amm)
-            .await,
+            .await
+            .unwrap(),
     );
     node_service0
         .request_application(&chain0, &application_id_amm)
-        .await;
+        .await
+        .unwrap();
     let app_amm0 = AmmApp(
         node_service0
             .make_application(&chain0, &application_id_amm)
-            .await,
+            .await
+            .unwrap(),
     );
     node_service1
         .request_application(&chain1, &application_id_amm)
-        .await;
+        .await
+        .unwrap();
     let app_amm1 = AmmApp(
         node_service1
             .make_application(&chain1, &application_id_amm)
-            .await,
+            .await
+            .unwrap(),
     );
 
     // Initial balances for both tokens are 0
@@ -1212,7 +1271,10 @@ async fn run_wasm_end_to_end_amm(database: Database) {
         .await;
 
     app_amm1.swap(owner1, 0, Amount::from_tokens(50)).await;
-    node_service_admin.process_inbox(&chain_admin).await;
+    node_service_admin
+        .process_inbox(&chain_admin)
+        .await
+        .unwrap();
 
     app_fungible0_admin
         .assert_balances([
@@ -1254,7 +1316,10 @@ async fn run_wasm_end_to_end_amm(database: Database) {
         .await;
 
     app_amm1.swap(owner1, 0, Amount::from_tokens(50)).await;
-    node_service_admin.process_inbox(&chain_admin).await;
+    node_service_admin
+        .process_inbox(&chain_admin)
+        .await
+        .unwrap();
 
     app_fungible0_admin
         .assert_balances([
@@ -1274,7 +1339,10 @@ async fn run_wasm_end_to_end_amm(database: Database) {
         .await;
 
     app_amm0.swap(owner0, 1, Amount::from_tokens(50)).await;
-    node_service_admin.process_inbox(&chain_admin).await;
+    node_service_admin
+        .process_inbox(&chain_admin)
+        .await
+        .unwrap();
 
     app_fungible0_admin
         .assert_balances([
@@ -1293,7 +1361,7 @@ async fn run_wasm_end_to_end_amm(database: Database) {
         ])
         .await;
 
-    node_service_admin.assert_is_running();
-    node_service0.assert_is_running();
-    node_service1.assert_is_running();
+    node_service_admin.ensure_is_running().unwrap();
+    node_service0.ensure_is_running().unwrap();
+    node_service1.ensure_is_running().unwrap();
 }
