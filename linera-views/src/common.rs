@@ -165,6 +165,9 @@ pub trait KeyValueStoreClient {
     /// Returns type for key-value search operations.
     type KeyValues: KeyValueIterable<Self::Error>;
 
+    /// The maximal size of keys that can be stored.
+    fn max_key_size(&self) -> usize;
+
     /// Retrieve the number of stream queries.
     fn max_stream_queries(&self) -> usize;
 
@@ -314,6 +317,9 @@ pub trait Context {
 
     /// Returns type for key-value search operations.
     type KeyValues: KeyValueIterable<Self::Error>;
+
+    /// The maximal size of keys that can be stored.
+    fn max_key_size(&self) -> usize;
 
     /// Retrieve the number of stream queries.
     fn max_stream_queries(&self) -> usize;
@@ -495,6 +501,10 @@ where
     type Error = DB::Error;
     type Keys = DB::Keys;
     type KeyValues = DB::KeyValues;
+
+    fn max_key_size(&self) -> usize {
+        self.db.max_key_size()
+    }
 
     fn max_stream_queries(&self) -> usize {
         self.db.max_stream_queries()

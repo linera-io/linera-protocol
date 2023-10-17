@@ -43,10 +43,19 @@ use thiserror::Error;
 type ScyllaDbClientPair = (Session, String);
 
 /// We limit the number of connections that can be done for tests.
-pub const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 1;
+const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 1;
 
 /// The number of connections in the stream is limited for tests.
-pub const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
+const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
+
+/// The maximal size of an operation on ScyllaDB seems to be 16M
+/// https://www.scylladb.com/2019/03/27/best-practices-for-scylla-applications/
+/// "There is a hard limit at 16MB, and nothing bigger than that can arrive at once
+///  at the database at any particular time"
+/// So, we set up the maximal size of 15M for the values and 1M for the keys
+const MAX_VALUE_BYTES: usize = 15728640;
+const MAX_KEY_BYTES: usize = 1048576;
+
 
 /// The client itself and the keeping of the count of active connections.
 #[derive(Clone)]
@@ -99,10 +108,14 @@ impl From<ScyllaDbContextError> for crate::views::ViewError {
 
 #[async_trait]
 impl KeyValueStoreClient for ScyllaDbClientInternal {
-    const MAX_VALUE_SIZE: usize = usize::MAX;
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_BYTES;
     type Error = ScyllaDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    fn max_key_size(&self) -> usize {
+        MAX_KEY_BYTES
+    }
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -603,6 +616,10 @@ impl KeyValueStoreClient for ScyllaDbClient {
     type Error = <ScyllaDbClientInternal as KeyValueStoreClient>::Error;
     type Keys = <ScyllaDbClientInternal as KeyValueStoreClient>::Keys;
     type KeyValues = <ScyllaDbClientInternal as KeyValueStoreClient>::KeyValues;
+
+    fn max_key_size(&self) -> usize {
+        self.client.max_key_size()
+    }
 
     fn max_stream_queries(&self) -> usize {
         self.client.max_stream_queries()

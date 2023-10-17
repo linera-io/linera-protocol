@@ -51,6 +51,11 @@ where
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
+    fn max_key_size(&self) -> usize {
+        // We decrease by 4 because of the constraint
+        self.client.max_key_size() - 4
+    }
+
     fn max_stream_queries(&self) -> usize {
         self.client.max_stream_queries()
     }
@@ -290,6 +295,10 @@ impl KeyValueStoreClient for TestMemoryClientInternal {
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
+    fn max_key_size(&self) -> usize {
+        usize::MAX
+    }
+
     fn max_stream_queries(&self) -> usize {
         TEST_MEMORY_MAX_STREAM_QUERIES
     }
@@ -352,6 +361,10 @@ impl KeyValueStoreClient for TestMemoryClient {
     type Error = MemoryContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    fn max_key_size(&self) -> usize {
+        usize::MAX
+    }
 
     fn max_stream_queries(&self) -> usize {
         self.client.max_stream_queries()

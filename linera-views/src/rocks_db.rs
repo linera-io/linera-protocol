@@ -19,11 +19,15 @@ use thiserror::Error;
 use {crate::lru_caching::TEST_CACHE_SIZE, tempfile::TempDir};
 
 /// The number of streams for the test
-pub const TEST_ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
+const TEST_ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
 
 // The maximum size of values in RocksDB is 3 GB
 // That is 3221225472 and so for offset reason we decrease by 400
 const MAX_VALUE_SIZE: usize = 3221225072;
+
+// The maximum size of keys in RocksDB is 8 MB
+// 8388608 and so for offset reason we decrease by 400
+const MAX_KEY_SIZE: usize = 8388208;
 
 /// The RocksDB client that we use.
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
@@ -50,6 +54,10 @@ impl KeyValueStoreClient for RocksDbClientInternal {
     type Error = RocksDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    fn max_key_size(&self) -> usize {
+        MAX_KEY_SIZE
+    }
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -321,6 +329,10 @@ impl KeyValueStoreClient for RocksDbClient {
     type Error = RocksDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    fn max_key_size(&self) -> usize {
+        self.client.max_key_size()
+    }
 
     fn max_stream_queries(&self) -> usize {
         self.client.max_stream_queries()

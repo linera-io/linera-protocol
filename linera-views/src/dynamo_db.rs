@@ -170,14 +170,14 @@ const MAX_TRANSACT_WRITE_ITEM_BYTES: usize = 4194304;
 /// The DynamoDb database is potentially handling an infinite number of connections.
 /// However, for testing or some other purpose we really need to decrease the number of
 /// connections.
-pub const TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES: usize = 10;
+const TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
 /// The number of entries in a stream of the tests can be controlled by this parameter for tests.
-pub const TEST_DYNAMO_DB_MAX_STREAM_QUERIES: usize = 10;
+const TEST_DYNAMO_DB_MAX_STREAM_QUERIES: usize = 10;
 
 /// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 100.
 /// See <https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html>
-pub const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
+const MAX_TRANSACT_WRITE_ITEM_SIZE: usize = 100;
 
 /// Builds the key attributes for a table item.
 ///
@@ -1116,6 +1116,10 @@ impl KeyValueStoreClient for DynamoDbClientInternal {
     type Keys = DynamoDbKeys;
     type KeyValues = DynamoDbKeyValues;
 
+    fn max_key_size(&self) -> usize {
+        MAX_KEY_BYTES
+    }
+
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
     }
@@ -1189,6 +1193,10 @@ impl KeyValueStoreClient for DynamoDbClient {
     type Error = DynamoDbContextError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    fn max_key_size(&self) -> usize {
+        MAX_KEY_BYTES - 4
+    }
 
     fn max_stream_queries(&self) -> usize {
         self.client.max_stream_queries()

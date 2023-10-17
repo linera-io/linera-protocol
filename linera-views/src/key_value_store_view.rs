@@ -154,6 +154,10 @@ where
     C: Send + Context,
     ViewError: From<C::Error>,
 {
+    fn max_key_size(&self) -> usize {
+        let prefix_len = self.context.base_key().len();
+        self.context.max_key_size() - 1 - prefix_len
+    }
     /// Applies the function f over all indices. If the function f returns
     /// false, then the loop ends prematurely.
     /// ```rust
@@ -738,6 +742,7 @@ where
 #[derive(Debug, Clone)]
 pub struct ViewContainer<C> {
     view: Arc<RwLock<KeyValueStoreView<C>>>,
+    max_key_size: usize,
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -751,6 +756,10 @@ where
     type Error = ViewError;
     type Keys = Vec<Vec<u8>>;
     type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+
+    fn max_key_size(&self) -> usize {
+        self.max_key_size
+    }
 
     fn max_stream_queries(&self) -> usize {
         1
@@ -880,9 +889,9 @@ where
     /// Creates a [`ViewContainer`].
     pub async fn new(context: C) -> Result<Self, ViewError> {
         let view = KeyValueStoreView::load(context).await?;
-        Ok(Self {
-            view: Arc::new(RwLock::new(view)),
-        })
+        let max_key_size = view.max_key_size();
+        let view = Arc::new(RwLock::new(view));
+        Ok(Self { view, max_key_size })
     }
 }
 
