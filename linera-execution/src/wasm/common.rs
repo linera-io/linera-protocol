@@ -202,7 +202,7 @@ where
     pub(crate) application: A,
 
     /// A queue of host futures called by the guest that must complete deterministically.
-    pub(crate) future_queue: HostFutureQueue<'static>,
+    pub(crate) future_queue: HostFutureQueue,
 
     /// The application's memory state.
     pub(crate) store: A::Store,

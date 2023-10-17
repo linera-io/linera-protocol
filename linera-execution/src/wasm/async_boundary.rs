@@ -114,7 +114,7 @@ struct PollResponse<Output>(Poll<Result<Output, ExecutionError>>);
 /// Poll requests may not be sent to the implementation if it would cause non-deterministic
 /// execution (as controlled by the [`HostFutureQueue`]).
 pub struct PollSender<Output> {
-    host_future_queue: HostFutureQueue<'static>,
+    host_future_queue: HostFutureQueue,
     poll_request_sender: std::sync::mpsc::Sender<PollRequest<Output>>,
     state: PollSenderState<Output>,
 }
@@ -138,7 +138,7 @@ impl<Output> PollSender<Output> {
     ///
     /// Returns the new [`PollSender`] together with the receiver endpoint of the poll requests.
     fn new(
-        host_future_queue: HostFutureQueue<'static>,
+        host_future_queue: HostFutureQueue,
         poll_request_sender: std::sync::mpsc::Sender<PollRequest<Output>>,
     ) -> Self {
         PollSender {

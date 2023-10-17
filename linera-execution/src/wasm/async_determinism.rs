@@ -51,17 +51,17 @@ use std::{
 /// The [`HostFutureQueue`] runs that closure when it's time to complete the [`oneshot::Receiver`],
 /// ensuring that only one future is completed after each item produced by the
 /// [`HostFutureQueue`]'s implementation of [`Stream`].
-pub struct HostFutureQueue<'futures> {
-    new_futures: mpsc::UnboundedReceiver<BoxFuture<'futures, Box<dyn FnOnce() + Send>>>,
-    queue: FuturesOrdered<BoxFuture<'futures, Box<dyn FnOnce() + Send>>>,
+pub struct HostFutureQueue {
+    new_futures: mpsc::UnboundedReceiver<BoxFuture<'static, Box<dyn FnOnce() + Send>>>,
+    queue: FuturesOrdered<BoxFuture<'static, Box<dyn FnOnce() + Send>>>,
 }
 
-impl<'futures> HostFutureQueue<'futures> {
+impl HostFutureQueue {
     /// Creates a new [`HostFutureQueue`] and its associated [`QueuedHostFutureFactory`].
     ///
     /// An initial empty future is added to the queue so that the first time the queue is polled it
     /// returns an item, allowing the guest Wasm module to be polled for the first time.
-    pub fn new() -> (Self, QueuedHostFutureFactory<'futures>) {
+    pub fn new() -> (Self, QueuedHostFutureFactory) {
         let (sender, receiver) = mpsc::unbounded();
 
         let empty_completion: Box<dyn FnOnce() + Send> = Box::new(|| ());
@@ -107,7 +107,7 @@ impl<'futures> HostFutureQueue<'futures> {
     }
 }
 
-impl<'futures> Stream for HostFutureQueue<'futures> {
+impl Stream for HostFutureQueue {
     type Item = ();
 
     /// Polls the [`HostFutureQueue`], producing a `()` item if a future was completed.
@@ -148,11 +148,11 @@ impl<'futures> Stream for HostFutureQueue<'futures> {
 /// item before the guest Wasm module is polled, so that the created [`oneshot::Receiver`]s are
 /// only polled deterministically.
 #[derive(Clone)]
-pub struct QueuedHostFutureFactory<'futures> {
-    sender: mpsc::UnboundedSender<BoxFuture<'futures, Box<dyn FnOnce() + Send>>>,
+pub struct QueuedHostFutureFactory {
+    sender: mpsc::UnboundedSender<BoxFuture<'static, Box<dyn FnOnce() + Send>>>,
 }
 
-impl<'futures> QueuedHostFutureFactory<'futures> {
+impl QueuedHostFutureFactory {
     /// Enqueues a `future` in the associated [`HostFutureQueue`].
     ///
     /// Returns a [`oneshot::Receiver`] that can be passed to the guest Wasm module, and that will
@@ -169,7 +169,7 @@ impl<'futures> QueuedHostFutureFactory<'futures> {
     /// This function may panic if the corresponding [`HostFutureQueue`] has been dropped.
     pub fn enqueue<Output>(
         &mut self,
-        future: impl Future<Output = Output> + Send + 'futures,
+        future: impl Future<Output = Output> + Send + 'static,
     ) -> oneshot::Receiver<Output>
     where
         Output: Send + 'static,

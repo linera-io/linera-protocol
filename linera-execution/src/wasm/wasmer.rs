@@ -398,14 +398,14 @@ unsafe impl<'runtime> RemoveLifetime for &'runtime dyn ServiceRuntime {
 /// implementation.
 pub struct ContractSystemApi {
     runtime: mpsc::UnboundedSender<ContractRequest>,
-    queued_future_factory: QueuedHostFutureFactory<'static>,
+    queued_future_factory: QueuedHostFutureFactory,
 }
 
 impl ContractSystemApi {
     /// Creates a new [`ContractSystemApi`] instance.
     pub fn new(
         runtime: mpsc::UnboundedSender<ContractRequest>,
-        queued_future_factory: QueuedHostFutureFactory<'static>,
+        queued_future_factory: QueuedHostFutureFactory,
     ) -> Self {
         ContractSystemApi {
             runtime,
@@ -435,14 +435,14 @@ impl_service_system_api!(ServiceSystemApi, wasmer::RuntimeError);
 /// implementation.
 pub struct ContractViewSystemApi {
     runtime: mpsc::UnboundedSender<ContractRequest>,
-    queued_future_factory: QueuedHostFutureFactory<'static>,
+    queued_future_factory: QueuedHostFutureFactory,
 }
 
 impl ContractViewSystemApi {
     /// Creates a new [`ContractViewSystemApi`] instance.
     pub fn new(
         runtime: mpsc::UnboundedSender<ContractRequest>,
-        queued_future_factory: QueuedHostFutureFactory<'static>,
+        queued_future_factory: QueuedHostFutureFactory,
     ) -> Self {
         ContractViewSystemApi {
             runtime,
