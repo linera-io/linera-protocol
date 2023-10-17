@@ -42,15 +42,14 @@ use linera_views::{common::CommonStoreConfig, views::ViewError};
 use rand07::Rng;
 use serde_json::Value;
 use std::{
-    env, fs,
-    io::Read,
-    iter,
+    env, fs, iter,
     num::NonZeroU16,
     path::PathBuf,
     sync::Arc,
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
+use tokio::signal::unix;
 use tracing::{debug, info, warn};
 
 #[cfg(feature = "benchmark")]
@@ -587,6 +586,12 @@ struct ClientOptions {
     #[structopt(long = "storage")]
     storage_config: Option<String>,
 
+    /// Given an integer value N, read the wallet state and the wallet storage config from the
+    /// environment variables LINERA_WALLET_{N} and LINERA_STORAGE_{N} instead of
+    /// LINERA_WALLET and LINERA_STORAGE.
+    #[structopt(long, short = "w")]
+    with_wallet: Option<u32>,
+
     /// Timeout for sending queries (us)
     #[structopt(long, default_value = "4000000")]
     send_timeout_us: u64,
@@ -641,16 +646,20 @@ struct ClientOptions {
 
 impl ClientOptions {
     fn init() -> Result<Self, anyhow::Error> {
-        let mut client_options = ClientOptions::from_args();
-        let wallet_env_var = env::var("LINERA_WALLET").ok();
-        let storage_env_var = env::var("LINERA_STORAGE").ok();
-        if let (None, Some(wallet_path)) = (&client_options.wallet_state_path, wallet_env_var) {
-            client_options.wallet_state_path = Some(wallet_path.parse()?);
+        let mut options = ClientOptions::from_args();
+        let suffix = match options.with_wallet {
+            None => String::new(),
+            Some(n) => format!("_{}", n),
+        };
+        let wallet_env_var = env::var(format!("LINERA_WALLET{suffix}")).ok();
+        let storage_env_var = env::var(format!("LINERA_STORAGE{suffix}")).ok();
+        if let (None, Some(wallet_path)) = (&options.wallet_state_path, wallet_env_var) {
+            options.wallet_state_path = Some(wallet_path.parse()?);
         }
-        if let (None, Some(storage_path)) = (&client_options.storage_config, storage_env_var) {
-            client_options.storage_config = Some(storage_path.parse()?);
+        if let (None, Some(storage_path)) = (&options.storage_config, storage_env_var) {
+            options.storage_config = Some(storage_path.parse()?);
         }
-        Ok(client_options)
+        Ok(options)
     }
 
     async fn run_command_with_storage(self) -> Result<(), Error> {
@@ -1011,8 +1020,8 @@ enum NetCommand {
     /// Start a Local Linera Network
     Up {
         /// The number of extra wallets and user chains to initialise. Default is 0.
-        #[structopt(default_value, long)]
-        wallets: usize,
+        #[structopt(long)]
+        extra_wallets: Option<usize>,
 
         /// The number of validators in the local test network. Default is 1.
         #[structopt(long, default_value = "1")]
@@ -1810,7 +1819,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
         ClientCommand::Net(net_command) => match net_command {
             NetCommand::Up {
-                wallets,
+                extra_wallets,
                 validators,
                 shards,
                 testing_prng_seed,
@@ -1838,7 +1847,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 client1.create_genesis_config().await?;
                 let default_chain = client1
                     .default_chain()
-                    .expect("initialized client should always have default chain");
+                    .expect("Initialized clients should always have a default chain");
 
                 // Start the validators.
                 net.run().await?;
@@ -1848,50 +1857,80 @@ async fn main() -> Result<(), anyhow::Error> {
 
                 // Create the wallet for the initial "root" chains.
                 eprintln!(
-                    "\nA local Linera network was started using the following temporary directory:\n{}\n",
+                    "\nA local test network was started using the following temporary directory:\n{}\n",
                     net.net_path().display()
                 );
-                eprintln!("To use the initial wallet of this network, set the following environment variables:\n");
-                eprintln!(
+                let suffix = if let Some(extra_wallets) = *extra_wallets {
+                    eprintln!(
+                        "To use the initial wallet and the extra wallets of this test \
+                         network, you may set the environment variables LINERA_WALLET_$N \
+                         and LINERA_STORAGE_$N (N = 0..={extra_wallets}) as printed on \
+                         the standard output, then use the option `--with-wallet $N` (or \
+                         `-w $N` for short) to select a wallet in the linera tool.\n"
+                    );
+                    "_0"
+                } else {
+                    eprintln!("To use the initial wallet of this test network, you may set \
+                               the environment variables LINERA_WALLET and LINERA_STORAGE as follows.\n");
+                    ""
+                };
+                println!(
                     "{}",
                     format!(
-                        "export LINERA_WALLET=\"{}\"",
+                        "export LINERA_WALLET{suffix}=\"{}\"",
                         client1.wallet_path().display()
                     )
                     .bold()
                 );
-                eprintln!(
+                println!(
                     "{}",
-                    format!("export LINERA_STORAGE=\"{}\"\n", client1.storage_path()).bold()
+                    format!(
+                        "export LINERA_STORAGE{suffix}=\"{}\"\n",
+                        client1.storage_path()
+                    )
+                    .bold()
                 );
 
                 // Create the extra wallets.
-                for wallet in 0..*wallets {
-                    let extra_wallet = net.make_client(network);
-                    extra_wallet.wallet_init(&[]).await?;
-                    let unassigned_key = extra_wallet.keygen().await?;
-                    let new_chain_msg_id = client1
-                        .open_chain(default_chain, Some(unassigned_key))
-                        .await?
-                        .0;
-                    extra_wallet
-                        .assign(unassigned_key, new_chain_msg_id)
-                        .await?;
-                    eprintln!("\nExtra user wallet {}:", wallet + 1);
-                    eprintln!(
-                        "export LINERA_WALLET=\"{}\"",
-                        extra_wallet.wallet_path().display()
-                    );
-                    eprintln!(
-                        "export LINERA_STORAGE=\"{}\"\n",
-                        extra_wallet.storage_path()
-                    );
+                if let Some(extra_wallets) = *extra_wallets {
+                    for wallet in 1..=extra_wallets {
+                        let extra_wallet = net.make_client(network);
+                        extra_wallet.wallet_init(&[]).await?;
+                        let unassigned_key = extra_wallet.keygen().await?;
+                        let new_chain_msg_id = client1
+                            .open_chain(default_chain, Some(unassigned_key))
+                            .await?
+                            .0;
+                        extra_wallet
+                            .assign(unassigned_key, new_chain_msg_id)
+                            .await?;
+                        println!(
+                            "{}",
+                            format!(
+                                "export LINERA_WALLET_{wallet}=\"{}\"",
+                                extra_wallet.wallet_path().display(),
+                            )
+                            .bold()
+                        );
+                        println!(
+                            "{}",
+                            format!(
+                                "export LINERA_STORAGE_{wallet}=\"{}\"\n",
+                                extra_wallet.storage_path(),
+                            )
+                            .bold()
+                        );
+                    }
                 }
 
-                eprintln!("\nPress ENTER to terminate the local Linera network and clean the temporary directory.");
-                std::io::stdin().bytes().next();
-
-                eprintln!("Done.");
+                eprintln!("\nREADY!\nPress ^C to terminate the local test network and clean the temporary directory.");
+                let mut sigint = unix::signal(unix::SignalKind::interrupt())?;
+                let mut sigterm = unix::signal(unix::SignalKind::terminate())?;
+                tokio::select! {
+                    _ = sigint.recv() => (),
+                    _ = sigterm.recv() => (),
+                }
+                eprintln!("\nDone.");
                 Ok(())
             }
         },

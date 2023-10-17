@@ -35,120 +35,32 @@ The Linera protocol repository is broken down into the following crates and subd
 
 ## Quickstart with the Linera service CLI
 
-The following script can be run with `cargo test`.
-
 ```bash
-storage="ROCKSDB"
+# Make sure to compile the Linera binaries and add them in the $PATH.
+# cargo build -p linera-service --bins
+export PATH="$PWD/target/debug:$PATH"
 
-if [ $# -eq 1 ]
-then
-    if [ "$1" == 'DYNAMODB' ]
-    then
-        storage="DYNAMODB"
-    fi
-    if [ "$1" == 'SCYLLADB' ]
-    then
-        storage="SCYLLADB"
-    fi
-fi
+# Import the optional bash helper function `spawn_and_set_wallet_env_vars`.
+source scripts/linera_net_helper.sh
 
-# For debug builds:
-if [ "$storage" = "ROCKSDB" ]
-then
-    cargo build && cd target/debug
-elif [ "$storage" = "DYNAMODB" ]
-then
-    cargo build --features aws && cd target/debug
-elif [ "$storage" = "SCYLLADB" ]
-then
-    cargo build --features scylladb && cd target/debug
-fi
+# Run a local test network with the default parameters and 0 extra user wallets.
+spawn_and_set_wallet_env_vars \
+    linera net up --extra-wallets 0
 
-# For release builds:
-# cargo build --release && cd target/release
+# Print the set of validators.
+linera -w0 query-validators
 
-# Clean up data files
-rm -rf *.json *.txt *.db
-rm -rf linera.db
-if [ "$storage" = "ROCKSDB" ]
-then
-    rm -rf server_?_?.db
-elif [ "$storage" = "DYNAMODB" ]
-then
-    ./linera-db delete_all --storage dynamodb:table:localstack
-elif [ "$storage" = "SCYLLADB" ]
-then
-    ./linera-db delete_all --storage scylladb:
-fi
-
-
-
-
-# Make sure to clean up child processes on exit.
-trap 'kill $(jobs -p)' EXIT
-
-# Create configuration files for 4 validators with 4 shards each.
-# * Private server states are stored in `server*.json`.
-# * `committee.json` is the public description of the Linera committee.
-./linera-server generate --validators ../../configuration/local/validator_{1,2,3,4}.toml --committee committee.json
-
-# Command line prefix for client calls
-CLIENT=(./linera --storage rocksdb:linera.db --wallet wallet.json --max-pending-messages 10000)
-
-# Create configuration files for 10 user chains.
-# * Private chain states are stored in one local wallet `wallet.json`.
-# * `genesis.json` will contain the initial balances of chains as well as the initial committee.
-${CLIENT[@]} create-genesis-config 10 --genesis genesis.json --initial-funding 10 --committee committee.json
-
-# Start servers and create initial chains in DB
-for I in 1 2 3 4
-do
-    ./linera-proxy server_"$I".json &
-    if [ "$storage" = "ROCKSDB" ]
-    then
-        for J in $(seq 0 3)
-        do
-            ./linera-server initialize --storage rocksdb:server_"$I"_"$J".db --genesis genesis.json
-        done
-        for J in $(seq 0 3)
-        do
-            ./linera-server run --storage rocksdb:server_"$I"_"$J".db --server server_"$I".json --shard "$J" --genesis genesis.json &
-        done
-    elif [ "$storage" = "DYNAMODB" ]
-    then
-        ./linera-server initialize --storage dynamodb:server-"$I":localstack --genesis genesis.json
-        for J in $(seq 0 3)
-        do
-            ./linera-server run --storage dynamodb:server-"$I":localstack --server server_"$I".json --shard "$J" --genesis genesis.json &
-        done
-    elif [ "$storage" = "SCYLLADB" ]
-    then
-        ./linera-server initialize --storage scylladb:table_server_"$I" --genesis genesis.json
-        for J in $(seq 0 3)
-        do
-            ./linera-server run --storage scylladb:table_server_"$I" --server server_"$I".json --shard "$J" --genesis genesis.json &
-        done
-    fi
-done
-
-${CLIENT[@]} query-validators
-
-# Give some time for server startup
-sleep 5
-
-# Query balance for first and last user chain, root chains 0 and 9
+# Query some of the chains created at genesis
 CHAIN1="e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
 CHAIN2="256e1dbc00482ddd619c293cc0df94d366afe7980022bb22d99e33036fd465dd"
-${CLIENT[@]} query-balance "$CHAIN1"
-${CLIENT[@]} query-balance "$CHAIN2"
+linera -w0 query-balance "$CHAIN1"
+linera -w0 query-balance "$CHAIN2"
 
 # Transfer 10 units then 5 back
-${CLIENT[@]} transfer 10 --from "$CHAIN1" --to "$CHAIN2"
-${CLIENT[@]} transfer 5 --from "$CHAIN2" --to "$CHAIN1"
+linera -w0 transfer 10 --from "$CHAIN1" --to "$CHAIN2"
+linera -w0 transfer 5 --from "$CHAIN2" --to "$CHAIN1"
 
 # Query balances again
-${CLIENT[@]} query-balance "$CHAIN1"
-${CLIENT[@]} query-balance "$CHAIN2"
-
-cd ../..
+linera -w0 query-balance "$CHAIN1"
+linera -w0 query-balance "$CHAIN2"
 ```
