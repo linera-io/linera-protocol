@@ -78,12 +78,23 @@ pub static SERVER_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     )
     .expect("Counter can be created")
 });
+
 pub static SERVER_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "server_request_count",
         "Server request count",
         // Can add labels here
         &[]
+    )
+    .expect("Counter can be created")
+});
+
+pub static SERVER_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "server_request_success",
+        "Server request success",
+        // Can add labels here
+        &["method_name"]
     )
     .expect("Counter can be created")
 });
@@ -407,6 +418,9 @@ where
         Ok(Response::new(
             match self.state.clone().handle_block_proposal(proposal).await {
                 Ok((info, actions)) => {
+                    SERVER_REQUEST_SUCCESS
+                        .with_label_values(&["handle_block_proposal"])
+                        .inc();
                     self.handle_network_actions(actions);
                     info.try_into()?
                 }
@@ -436,6 +450,9 @@ where
             .await
         {
             Ok((info, actions)) => {
+                SERVER_REQUEST_SUCCESS
+                    .with_label_values(&["handle_lite_certificate"])
+                    .inc();
                 self.handle_network_actions(actions);
                 if let Some(receiver) = receiver {
                     if let Err(e) = receiver.await {
@@ -474,6 +491,9 @@ where
             .await
         {
             Ok((info, actions)) => {
+                SERVER_REQUEST_SUCCESS
+                    .with_label_values(&["handle_certificate"])
+                    .inc();
                 self.handle_network_actions(actions);
                 if let Some(receiver) = receiver {
                     if let Err(e) = receiver.await {
@@ -498,6 +518,9 @@ where
         debug!(?query, "Handling chain info query");
         match self.state.clone().handle_chain_info_query(query).await {
             Ok((info, actions)) => {
+                SERVER_REQUEST_SUCCESS
+                    .with_label_values(&["handle_chain_info_query"])
+                    .inc();
                 self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }
@@ -516,7 +539,12 @@ where
         let request = request.into_inner().try_into()?;
         debug!(?request, "Handling cross-chain request");
         match self.state.clone().handle_cross_chain_request(request).await {
-            Ok(actions) => self.handle_network_actions(actions),
+            Ok(actions) => {
+                SERVER_REQUEST_SUCCESS
+                    .with_label_values(&["handle_cross_chain_request"])
+                    .inc();
+                self.handle_network_actions(actions)
+            }
             Err(error) => {
                 error!(nickname = self.state.nickname(), %error, "Failed to handle cross-chain request");
             }
