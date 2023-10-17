@@ -3530,3 +3530,122 @@ where
     let (response, _) = worker.handle_chain_info_query(query_values).await.unwrap();
     assert_eq!(response.info.manager.requested_locked, Some(certificate));
 }
+
+#[test(tokio::test)]
+async fn test_memory_round_types() {
+    let store = MemoryStoreClient::make_test_store(None).await;
+    run_test_round_types(store).await;
+}
+
+#[cfg(feature = "rocksdb")]
+#[test(tokio::test)]
+async fn test_rocks_db_round_types() {
+    let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
+    let store = RocksDbStore::make_test_store(None).await;
+    run_test_round_types(store).await;
+}
+
+#[cfg(feature = "aws")]
+#[test(tokio::test)]
+async fn test_dynamo_db_round_types() {
+    let store = DynamoDbStore::make_test_store(None).await;
+    run_test_round_types(store).await;
+}
+
+#[cfg(feature = "scylladb")]
+#[test(tokio::test)]
+async fn test_scylla_db_round_types() {
+    let store = ScyllaDbStore::make_test_store(None).await;
+    run_test_round_types(store).await;
+}
+
+async fn run_test_round_types<C>(store: DbStore<C, TestClock>)
+where
+    C: KeyValueStoreClient + Clone + Send + Sync + 'static,
+    ViewError: From<<C as KeyValueStoreClient>::Error>,
+    <C as KeyValueStoreClient>::Error:
+        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+{
+    let chain_id = ChainId::root(0);
+    let key_pairs = generate_key_pairs(2);
+    let (pub_key0, pub_key1) = (key_pairs[0].public(), key_pairs[1].public());
+    let clock = store.clock.clone();
+    let balances = vec![(ChainDescription::Root(0), pub_key0, Amount::from_tokens(2))];
+    let (committee, mut worker) = init_worker_with_chains(store, balances).await;
+
+    // Add another owner and use the leader-based protocol in all rounds.
+    let block0 = make_first_block(chain_id).with_operation(SystemOperation::ChangeOwnership {
+        super_owners: vec![pub_key0],
+        owners: vec![(pub_key0, 100), (pub_key1, 100)],
+        multi_leader_rounds: 2,
+    });
+    let (executed_block0, _) = worker.stage_block_execution(block0).await.unwrap();
+    let value0 = HashedValue::new_confirmed(executed_block0);
+    let certificate0 = make_certificate(&committee, &worker, value0.clone());
+    let response = worker
+        .fully_handle_certificate(certificate0, vec![])
+        .await
+        .unwrap();
+
+    // The first round is the fast-block round, and owner 0 is a super owner.
+    assert_eq!(response.info.manager.current_round, RoundId::Fast);
+    assert_eq!(response.info.manager.next_round(), Some(RoundId::Fast));
+    assert_eq!(response.info.manager.leader, None);
+
+    // So owner 1 cannot propose a block in this round. And the next round hasn't started yet.
+    let proposal = make_child_block(&value0).into_proposal_with_round(&key_pairs[1], RoundId::Fast);
+    let result = worker.handle_block_proposal(proposal).await;
+    assert!(matches!(result, Err(WorkerError::InvalidOwner)));
+    let proposal =
+        make_child_block(&value0).into_proposal_with_round(&key_pairs[1], RoundId::MultiLeader(0));
+    let result = worker.handle_block_proposal(proposal).await;
+    assert!(matches!(result, Err(WorkerError::ChainError(ref error))
+        if matches!(**error, ChainError::WrongRound(RoundId::Fast))
+    ));
+
+    // The round hasn't timed out yet, so the validator won't sign a leader timeout vote yet.
+    let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
+    let (response, _) = worker.handle_chain_info_query(query).await.unwrap();
+    assert!(response.info.manager.timeout_vote.is_none());
+
+    // Set the clock to the end of the round.
+    clock.set(response.info.manager.round_timeout);
+
+    // Now the validator will sign a leader timeout vote.
+    let query = ChainInfoQuery::new(chain_id).with_leader_timeout();
+    let (response, _) = worker.handle_chain_info_query(query).await.unwrap();
+    let vote = response.info.manager.timeout_vote.clone().unwrap();
+    let value_timeout =
+        HashedValue::new_leader_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
+
+    // Once we provide the validator with a timeout certificate, the next round starts, where owner
+    // 0 happens to be the leader.
+    let certificate_timeout = vote
+        .with_value(value_timeout.clone())
+        .unwrap()
+        .into_certificate();
+    let (response, _) = worker
+        .handle_certificate(certificate_timeout, vec![], None)
+        .await
+        .unwrap();
+    assert_eq!(response.info.manager.current_round, RoundId::MultiLeader(0));
+    assert_eq!(
+        response.info.manager.next_round(),
+        Some(RoundId::MultiLeader(0))
+    );
+    assert_eq!(response.info.manager.leader, None);
+
+    // Now any owner can propose a block. And multi-leader rounds can be skipped without timeout.
+    let block1 = make_child_block(&value0);
+    let proposal1 = block1
+        .clone()
+        .into_proposal_with_round(&key_pairs[1], RoundId::MultiLeader(1));
+    let _ = worker.handle_block_proposal(proposal1).await.unwrap();
+    let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
+    let (response, _) = worker.handle_chain_info_query(query_values).await.unwrap();
+    assert_eq!(response.info.manager.current_round, RoundId::MultiLeader(1));
+    assert_eq!(
+        response.info.manager.next_round(),
+        Some(RoundId::SingleLeader(0))
+    );
+}
