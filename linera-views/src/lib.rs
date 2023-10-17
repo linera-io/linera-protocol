@@ -156,7 +156,7 @@ pub static LOAD_VIEW_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
         "The metric counting how often a view is read from storage",
         &["type", "base_key"]
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 /// The metric counting how often a view is written from storage.
 pub static SAVE_VIEW_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
@@ -165,7 +165,7 @@ pub static SAVE_VIEW_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
         "The metric counting how often a view is written from storage",
         &["type", "base_key"]
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 
 #[cfg(all(feature = "aws", target_arch = "wasm32"))]
