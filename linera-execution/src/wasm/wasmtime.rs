@@ -45,7 +45,10 @@ use super::{
     runtime_actor::{BaseRequest, ContractRequest, SendRequestExt, ServiceRequest},
     WasmApplication, WasmExecutionError,
 };
-use crate::{Bytecode, ExecutionError, SessionId};
+use crate::{
+    Bytecode, CalleeContext, ExecutionError, MessageContext, OperationContext, QueryContext,
+    SessionId,
+};
 use futures::{channel::mpsc, TryFutureExt};
 use linera_views::{batch::Batch, views::ViewError};
 use once_cell::sync::Lazy;
@@ -303,10 +306,6 @@ impl common::Contract for Contract {
     type ExecuteMessage = contract::ExecuteMessage;
     type HandleApplicationCall = contract::HandleApplicationCall;
     type HandleSessionCall = contract::HandleSessionCall;
-    type OperationContext = contract::OperationContext;
-    type MessageContext = contract::MessageContext;
-    type CalleeContext = contract::CalleeContext;
-    type SessionId = contract::SessionId;
     type PollExecutionResult = contract::PollExecutionResult;
     type PollApplicationCallResult = contract::PollApplicationCallResult;
     type PollSessionCallResult = contract::PollSessionCallResult;
@@ -326,10 +325,10 @@ impl common::Contract for Contract {
     fn initialize_new(
         &self,
         store: &mut Store<ContractState>,
-        context: contract::OperationContext,
+        context: OperationContext,
         argument: Vec<u8>,
     ) -> Result<contract::Initialize, Trap> {
-        contract::Contract::initialize_new(&self.contract, store, context, &argument)
+        contract::Contract::initialize_new(&self.contract, store, context.into(), &argument)
     }
 
     fn initialize_poll(
@@ -343,10 +342,10 @@ impl common::Contract for Contract {
     fn execute_operation_new(
         &self,
         store: &mut Store<ContractState>,
-        context: contract::OperationContext,
+        context: OperationContext,
         operation: Vec<u8>,
     ) -> Result<contract::ExecuteOperation, Trap> {
-        contract::Contract::execute_operation_new(&self.contract, store, context, &operation)
+        contract::Contract::execute_operation_new(&self.contract, store, context.into(), &operation)
     }
 
     fn execute_operation_poll(
@@ -360,10 +359,10 @@ impl common::Contract for Contract {
     fn execute_message_new(
         &self,
         store: &mut Store<ContractState>,
-        context: contract::MessageContext,
+        context: MessageContext,
         message: Vec<u8>,
     ) -> Result<contract::ExecuteMessage, Trap> {
-        contract::Contract::execute_message_new(&self.contract, store, context, &message)
+        contract::Contract::execute_message_new(&self.contract, store, context.into(), &message)
     }
 
     fn execute_message_poll(
@@ -377,14 +376,19 @@ impl common::Contract for Contract {
     fn handle_application_call_new(
         &self,
         store: &mut Store<ContractState>,
-        context: contract::CalleeContext,
+        context: CalleeContext,
         argument: Vec<u8>,
-        forwarded_sessions: Vec<contract::SessionId>,
+        forwarded_sessions: Vec<SessionId>,
     ) -> Result<contract::HandleApplicationCall, Trap> {
+        let forwarded_sessions: Vec<_> = forwarded_sessions
+            .into_iter()
+            .map(contract::SessionId::from)
+            .collect();
+
         contract::Contract::handle_application_call_new(
             &self.contract,
             store,
-            context,
+            context.into(),
             &argument,
             &forwarded_sessions,
         )
@@ -401,15 +405,20 @@ impl common::Contract for Contract {
     fn handle_session_call_new(
         &self,
         store: &mut Store<ContractState>,
-        context: contract::CalleeContext,
+        context: CalleeContext,
         session: Vec<u8>,
         argument: Vec<u8>,
-        forwarded_sessions: Vec<contract::SessionId>,
+        forwarded_sessions: Vec<SessionId>,
     ) -> Result<contract::HandleSessionCall, Trap> {
+        let forwarded_sessions: Vec<_> = forwarded_sessions
+            .into_iter()
+            .map(contract::SessionId::from)
+            .collect();
+
         contract::Contract::handle_session_call_new(
             &self.contract,
             store,
-            context,
+            context.into(),
             &session,
             &argument,
             &forwarded_sessions,
@@ -427,16 +436,15 @@ impl common::Contract for Contract {
 
 impl common::Service for Service {
     type HandleQuery = service::HandleQuery;
-    type QueryContext = service::QueryContext;
     type PollApplicationQueryResult = service::PollApplicationQueryResult;
 
     fn handle_query_new(
         &self,
         store: &mut Store<ServiceState>,
-        context: service::QueryContext,
+        context: QueryContext,
         argument: Vec<u8>,
     ) -> Result<service::HandleQuery, Trap> {
-        service::Service::handle_query_new(&self.service, store, context, &argument)
+        service::Service::handle_query_new(&self.service, store, context.into(), &argument)
     }
 
     fn handle_query_poll(

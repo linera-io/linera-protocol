@@ -61,18 +61,6 @@ pub trait Contract: ApplicationRuntimeContext {
         + Send
         + Unpin;
 
-    /// The WIT type equivalent for the [`OperationContext`].
-    type OperationContext: From<OperationContext>;
-
-    /// The WIT type equivalent for the [`MessageContext`].
-    type MessageContext: From<MessageContext>;
-
-    /// The WIT type equivalent for the [`CalleeContext`].
-    type CalleeContext: From<CalleeContext>;
-
-    /// The WIT type equivalent for the [`SessionId`].
-    type SessionId: From<SessionId>;
-
     /// The WIT type eqivalent for [`Poll<Result<RawExecutionResult<Vec<u8>>, String>>`].
     type PollExecutionResult;
 
@@ -89,7 +77,7 @@ pub trait Contract: ApplicationRuntimeContext {
     fn initialize_new(
         &self,
         store: &mut Self::Store,
-        context: Self::OperationContext,
+        context: OperationContext,
         argument: Vec<u8>,
     ) -> Result<Self::Initialize, Self::Error>;
 
@@ -104,7 +92,7 @@ pub trait Contract: ApplicationRuntimeContext {
     fn execute_operation_new(
         &self,
         store: &mut Self::Store,
-        context: Self::OperationContext,
+        context: OperationContext,
         operation: Vec<u8>,
     ) -> Result<Self::ExecuteOperation, Self::Error>;
 
@@ -119,7 +107,7 @@ pub trait Contract: ApplicationRuntimeContext {
     fn execute_message_new(
         &self,
         store: &mut Self::Store,
-        context: Self::MessageContext,
+        context: MessageContext,
         message: Vec<u8>,
     ) -> Result<Self::ExecuteMessage, Self::Error>;
 
@@ -134,9 +122,9 @@ pub trait Contract: ApplicationRuntimeContext {
     fn handle_application_call_new(
         &self,
         store: &mut Self::Store,
-        context: Self::CalleeContext,
+        context: CalleeContext,
         argument: Vec<u8>,
-        forwarded_sessions: Vec<Self::SessionId>,
+        forwarded_sessions: Vec<SessionId>,
     ) -> Result<Self::HandleApplicationCall, Self::Error>;
 
     /// Polls a user contract future that's handling a call from another contract.
@@ -151,10 +139,10 @@ pub trait Contract: ApplicationRuntimeContext {
     fn handle_session_call_new(
         &self,
         store: &mut Self::Store,
-        context: Self::CalleeContext,
+        context: CalleeContext,
         session_state: Vec<u8>,
         argument: Vec<u8>,
-        forwarded_sessions: Vec<Self::SessionId>,
+        forwarded_sessions: Vec<SessionId>,
     ) -> Result<Self::HandleSessionCall, Self::Error>;
 
     /// Polls a user contract future that's handling a session call from another contract.
@@ -171,9 +159,6 @@ pub trait Service: ApplicationRuntimeContext {
     /// [`handle_query`][crate::Service::handle_query] method.
     type HandleQuery: GuestFutureInterface<Self, Output = Vec<u8>> + Send + Unpin;
 
-    /// The WIT type equivalent for the [`QueryContext`].
-    type QueryContext: From<QueryContext>;
-
     /// The WIT type eqivalent for [`Poll<Result<Vec<u8>, String>>`].
     type PollApplicationQueryResult;
 
@@ -181,7 +166,7 @@ pub trait Service: ApplicationRuntimeContext {
     fn handle_query_new(
         &self,
         store: &mut Self::Store,
-        context: Self::QueryContext,
+        context: QueryContext,
         argument: Vec<u8>,
     ) -> Result<Self::HandleQuery, Self::Error>;
 
@@ -237,7 +222,7 @@ where
 
         future::ready(self.application.initialize_new(
             &mut self.store,
-            (*context).into(),
+            *context,
             argument.to_owned(),
         ))
         .err_into()
@@ -265,7 +250,7 @@ where
 
         future::ready(self.application.execute_operation_new(
             &mut self.store,
-            (*context).into(),
+            *context,
             operation.to_owned(),
         ))
         .err_into()
@@ -293,7 +278,7 @@ where
 
         future::ready(self.application.execute_message_new(
             &mut self.store,
-            (*context).into(),
+            *context,
             message.to_owned(),
         ))
         .err_into()
@@ -321,14 +306,9 @@ where
     ) -> impl Future<Output = Result<ApplicationCallResult, ExecutionError>> {
         A::configure_fuel(&mut self);
 
-        let forwarded_sessions: Vec<_> = forwarded_sessions
-            .into_iter()
-            .map(A::SessionId::from)
-            .collect();
-
         future::ready(self.application.handle_application_call_new(
             &mut self.store,
-            (*context).into(),
+            *context,
             argument.to_owned(),
             forwarded_sessions,
         ))
@@ -359,14 +339,9 @@ where
     ) -> impl Future<Output = Result<(SessionCallResult, Vec<u8>), ExecutionError>> {
         A::configure_fuel(&mut self);
 
-        let forwarded_sessions: Vec<_> = forwarded_sessions
-            .into_iter()
-            .map(A::SessionId::from)
-            .collect();
-
         future::ready(self.application.handle_session_call_new(
             &mut self.store,
-            (*context).into(),
+            *context,
             session_state.to_owned(),
             argument.to_owned(),
             forwarded_sessions,
@@ -399,7 +374,7 @@ where
     ) -> impl Future<Output = Result<Vec<u8>, ExecutionError>> {
         future::ready(self.application.handle_query_new(
             &mut self.store,
-            (*context).into(),
+            *context,
             argument.to_owned(),
         ))
         .err_into()

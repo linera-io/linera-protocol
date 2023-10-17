@@ -18,7 +18,11 @@ use super::{
     },
     service::{HandleQuery, PollApplicationQueryResult},
 };
-use crate::{ApplicationCallResult, RawExecutionResult, SessionCallResult};
+use crate::{
+    ApplicationCallResult, CalleeContext, MessageContext, OperationContext, QueryContext,
+    RawExecutionResult, SessionCallResult,
+};
+use linera_base::identifiers::SessionId;
 use std::task::Poll;
 
 /// Implements [`GuestFutureInterface`] for a `future` type implemented by a guest Wasm module.
@@ -79,7 +83,7 @@ macro_rules! impl_guest_future_interface {
 impl_guest_future_interface! {
     Initialize: {
         application_trait = Contract,
-        new_function = initialize_new(context: A::OperationContext, argument: Vec<u8>),
+        new_function = initialize_new(context: OperationContext, argument: Vec<u8>),
         poll_function = initialize_poll,
         poll_type = PollExecutionResult,
         output_type = RawExecutionResult<Vec<u8>>,
@@ -87,7 +91,7 @@ impl_guest_future_interface! {
 
     ExecuteOperation: {
         application_trait = Contract,
-        new_function = execute_operation_new(context: A::OperationContext, operation: Vec<u8>),
+        new_function = execute_operation_new(context: OperationContext, operation: Vec<u8>),
         poll_function = execute_operation_poll,
         poll_type = PollExecutionResult,
         output_type = RawExecutionResult<Vec<u8>>,
@@ -95,7 +99,7 @@ impl_guest_future_interface! {
 
     ExecuteMessage: {
         application_trait = Contract,
-        new_function = execute_message_new(context: A::MessageContext, message: Vec<u8>),
+        new_function = execute_message_new(context: MessageContext, message: Vec<u8>),
         poll_function = execute_message_poll,
         poll_type = PollExecutionResult,
         output_type = RawExecutionResult<Vec<u8>>,
@@ -104,9 +108,9 @@ impl_guest_future_interface! {
     HandleApplicationCall: {
         application_trait = Contract,
         new_function = handle_application_call_new(
-            context: A::CalleeContext,
+            context: CalleeContext,
             argument: Vec<u8>,
-            forwarded_sessions: Vec<A::SessionId>,
+            forwarded_sessions: Vec<SessionId>,
         ),
         poll_function = handle_application_call_poll,
         poll_type = PollApplicationCallResult,
@@ -116,10 +120,10 @@ impl_guest_future_interface! {
     HandleSessionCall: {
         application_trait = Contract,
         new_function = handle_session_call_new(
-            context: A::CalleeContext,
+            context: CalleeContext,
             session_state: Vec<u8>,
             argument: Vec<u8>,
-            forwarded_sessions: Vec<A::SessionId>,
+            forwarded_sessions: Vec<SessionId>,
         ),
         poll_function = handle_session_call_poll,
         poll_type = PollSessionCallResult,
@@ -128,7 +132,7 @@ impl_guest_future_interface! {
 
     HandleQuery: {
         application_trait = Service,
-        new_function = handle_query_new(context: A::QueryContext, query: Vec<u8>),
+        new_function = handle_query_new(context: QueryContext, query: Vec<u8>),
         poll_function = handle_query_poll,
         poll_type = PollApplicationQueryResult,
         output_type = Vec<u8>,
