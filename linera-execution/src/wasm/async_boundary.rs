@@ -13,9 +13,11 @@ use futures::{channel::oneshot, ready, stream::StreamExt, FutureExt};
 use std::{
     future::Future,
     marker::PhantomData,
+    mem,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll, Waker},
+    thread,
 };
 use tokio::sync::Mutex;
 
@@ -65,6 +67,83 @@ where
 
         let _context_guard = context.waker_forwarder.forward(task_context);
         future.poll(&context.application, &mut context.store)
+    }
+}
+
+/// An actor that runs a future implemented in a Wasm module.
+///
+/// The actor should run in its own separate thread, where it will block until it receives poll
+/// requests from a [`PollSender`].
+pub struct GuestFutureActor<Future, Application>
+where
+    Application: ApplicationRuntimeContext,
+    Future: GuestFutureInterface<Application>,
+{
+    future: Future,
+    context: WasmRuntimeContext<Application>,
+    poll_request_receiver: std::sync::mpsc::Receiver<PollRequest<Future::Output>>,
+}
+
+impl<Future, Application> GuestFutureActor<Future, Application>
+where
+    Application: ApplicationRuntimeContext + Send + 'static,
+    Future: GuestFutureInterface<Application> + Send + 'static,
+    Future::Output: Send,
+{
+    /// Spawns a new thread and runs the `future` in a [`GuestFutureActor`].
+    ///
+    /// Returns the [`PollSender`] which can be used in an asynchronous context to `await` the
+    /// result.
+    pub fn spawn(
+        future: Future,
+        mut context: WasmRuntimeContext<Application>,
+    ) -> PollSender<Future::Output> {
+        let (dummy_future_queue, _) = HostFutureQueue::new();
+        let host_future_queue = mem::replace(&mut context.future_queue, dummy_future_queue);
+
+        let (poll_request_sender, poll_request_receiver) = std::sync::mpsc::channel();
+        let poll_sender = PollSender::new(host_future_queue, poll_request_sender);
+        let actor = Self::new(future, context, poll_request_receiver);
+
+        thread::spawn(|| actor.run());
+
+        poll_sender
+    }
+
+    /// Creates a new [`GuestFutureActor`] to run `future` using a Wasm runtime `context`.
+    pub fn new(
+        future: Future,
+        context: WasmRuntimeContext<Application>,
+        poll_request_receiver: std::sync::mpsc::Receiver<PollRequest<Future::Output>>,
+    ) -> Self {
+        GuestFutureActor {
+            future,
+            context,
+            poll_request_receiver,
+        }
+    }
+
+    /// Executes the future, polling it as requested by the [`PollSender`] until it completes.
+    pub fn run(mut self) {
+        while let Ok(request) = self.poll_request_receiver.recv() {
+            let response = self
+                .future
+                .poll(&self.context.application, &mut self.context.store);
+            let mut finished = response.is_ready();
+
+            if request
+                .response_sender
+                .send(PollResponse(response))
+                .is_err()
+            {
+                tracing::debug!("Wasm guest future cancelled");
+                finished = true;
+            }
+
+            if finished {
+                break;
+            }
+        }
     }
 }
 
