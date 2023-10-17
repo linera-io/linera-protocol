@@ -390,7 +390,7 @@ where
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[test_log::test(tokio::test)]
 async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
     run_test_cross_chain_message(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
@@ -398,7 +398,7 @@ async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<()
 #[cfg(feature = "rocksdb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[test_log::test(tokio::test)]
 async fn test_rocks_db_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
     let _lock = ROCKS_DB_SEMAPHORE.acquire().await;
     run_test_cross_chain_message(MakeRocksDbStore::with_wasm_runtime(wasm_runtime)).await
@@ -407,7 +407,7 @@ async fn test_rocks_db_cross_chain_message(wasm_runtime: WasmRuntime) -> Result<
 #[cfg(feature = "aws")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[test_log::test(tokio::test)]
 async fn test_dynamo_db_cross_chain_message(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
@@ -417,7 +417,7 @@ async fn test_dynamo_db_cross_chain_message(
 #[cfg(feature = "scylladb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[test_log::test(tokio::test)]
 async fn test_scylla_db_cross_chain_message(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
@@ -582,7 +582,7 @@ where
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[test_log::test(tokio::test)]
 async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> Result<(), anyhow::Error> {
     run_test_user_pub_sub_channels(MakeMemoryStoreClient::with_wasm_runtime(wasm_runtime)).await
 }
@@ -590,7 +590,7 @@ async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> Result<
 #[cfg(feature = "rocksdb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[test_log::test(tokio::test)]
 async fn test_rocks_db_user_pub_sub_channels(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
@@ -601,7 +601,7 @@ async fn test_rocks_db_user_pub_sub_channels(
 #[cfg(feature = "aws")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[test_log::test(tokio::test)]
 async fn test_dynamo_db_user_pub_sub_channels(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {
@@ -611,7 +611,7 @@ async fn test_dynamo_db_user_pub_sub_channels(
 #[cfg(feature = "scylladb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[test_log::test(tokio::test)]
 async fn test_scylla_db_user_pub_sub_channels(
     wasm_runtime: WasmRuntime,
 ) -> Result<(), anyhow::Error> {

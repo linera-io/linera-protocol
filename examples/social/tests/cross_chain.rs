@@ -12,7 +12,7 @@ use social::Operation;
 ///
 /// Creates the application on chain2 indirectly from the subscription, then
 /// send a message to chain2 and see it received on chain1.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_cross_chain_posting() {
     let (validator, bytecode_id) = TestValidator::with_current_bytecode().await;
     let mut chain1 = validator.new_chain().await;
