@@ -90,7 +90,7 @@ pub trait Contract: ApplicationRuntimeContext {
         &self,
         store: &mut Self::Store,
         context: Self::OperationContext,
-        argument: &[u8],
+        argument: Vec<u8>,
     ) -> Result<Self::Initialize, Self::Error>;
 
     /// Polls a user contract future that's initializing the application.
@@ -105,7 +105,7 @@ pub trait Contract: ApplicationRuntimeContext {
         &self,
         store: &mut Self::Store,
         context: Self::OperationContext,
-        operation: &[u8],
+        operation: Vec<u8>,
     ) -> Result<Self::ExecuteOperation, Self::Error>;
 
     /// Polls a user contract future that's executing an operation.
@@ -120,7 +120,7 @@ pub trait Contract: ApplicationRuntimeContext {
         &self,
         store: &mut Self::Store,
         context: Self::MessageContext,
-        message: &[u8],
+        message: Vec<u8>,
     ) -> Result<Self::ExecuteMessage, Self::Error>;
 
     /// Polls a user contract future that's executing a message.
@@ -135,8 +135,8 @@ pub trait Contract: ApplicationRuntimeContext {
         &self,
         store: &mut Self::Store,
         context: Self::CalleeContext,
-        argument: &[u8],
-        forwarded_sessions: &[Self::SessionId],
+        argument: Vec<u8>,
+        forwarded_sessions: Vec<Self::SessionId>,
     ) -> Result<Self::HandleApplicationCall, Self::Error>;
 
     /// Polls a user contract future that's handling a call from another contract.
@@ -152,9 +152,9 @@ pub trait Contract: ApplicationRuntimeContext {
         &self,
         store: &mut Self::Store,
         context: Self::CalleeContext,
-        session_state: &[u8],
-        argument: &[u8],
-        forwarded_sessions: &[Self::SessionId],
+        session_state: Vec<u8>,
+        argument: Vec<u8>,
+        forwarded_sessions: Vec<Self::SessionId>,
     ) -> Result<Self::HandleSessionCall, Self::Error>;
 
     /// Polls a user contract future that's handling a session call from another contract.
@@ -182,7 +182,7 @@ pub trait Service: ApplicationRuntimeContext {
         &self,
         store: &mut Self::Store,
         context: Self::QueryContext,
-        argument: &[u8],
+        argument: Vec<u8>,
     ) -> Result<Self::HandleQuery, Self::Error>;
 
     /// Polls a user service future that's handling a query.
@@ -235,10 +235,11 @@ where
     ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> {
         A::configure_fuel(&mut self);
 
-        future::ready(
-            self.application
-                .initialize_new(&mut self.store, (*context).into(), argument),
-        )
+        future::ready(self.application.initialize_new(
+            &mut self.store,
+            (*context).into(),
+            argument.to_owned(),
+        ))
         .err_into()
         .and_then(move |future| GuestFutureActor::spawn(future, self))
     }
@@ -265,7 +266,7 @@ where
         future::ready(self.application.execute_operation_new(
             &mut self.store,
             (*context).into(),
-            operation,
+            operation.to_owned(),
         ))
         .err_into()
         .and_then(|future| GuestFutureActor::spawn(future, self))
@@ -293,7 +294,7 @@ where
         future::ready(self.application.execute_message_new(
             &mut self.store,
             (*context).into(),
-            message,
+            message.to_owned(),
         ))
         .err_into()
         .and_then(|future| GuestFutureActor::spawn(future, self))
@@ -328,8 +329,8 @@ where
         future::ready(self.application.handle_application_call_new(
             &mut self.store,
             (*context).into(),
-            argument,
-            &forwarded_sessions,
+            argument.to_owned(),
+            forwarded_sessions,
         ))
         .err_into()
         .and_then(|future| GuestFutureActor::spawn(future, self))
@@ -366,9 +367,9 @@ where
         future::ready(self.application.handle_session_call_new(
             &mut self.store,
             (*context).into(),
-            session_state,
-            argument,
-            &forwarded_sessions,
+            session_state.to_owned(),
+            argument.to_owned(),
+            forwarded_sessions,
         ))
         .err_into()
         .and_then(|future| GuestFutureActor::spawn(future, self))
@@ -399,7 +400,7 @@ where
         future::ready(self.application.handle_query_new(
             &mut self.store,
             (*context).into(),
-            argument,
+            argument.to_owned(),
         ))
         .err_into()
         .and_then(|future| GuestFutureActor::spawn(future, self))
