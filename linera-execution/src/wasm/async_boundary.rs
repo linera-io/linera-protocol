@@ -215,12 +215,22 @@ impl<Output> Future for PollSender<Output> {
 }
 
 /// Interface to poll a future implemented in a Wasm module.
-pub trait GuestFutureInterface<Application>
+pub trait GuestFutureInterface<Application>: Sized
 where
     Application: ApplicationRuntimeContext,
 {
+    /// The parameters necessary to initialize the future.
+    type Parameters;
+
     /// The output of the guest future.
     type Output;
+
+    /// Creates the guest future using the provided `parameters`.
+    fn new(
+        parameters: Self::Parameters,
+        application: &Application,
+        store: &mut Application::Store,
+    ) -> Result<Self, ExecutionError>;
 
     /// Polls the guest future to attempt to progress it.
     ///

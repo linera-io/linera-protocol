@@ -30,6 +30,9 @@ macro_rules! impl_guest_future_interface {
     (
         $( $future:ident : {
             application_trait = $trait:ident,
+            new_function = $new_func:ident(
+                $( $parameter_names:ident : $parameter_types:ty ),* $(,)?
+            ),
             poll_function = $poll_func:ident,
             poll_type = $poll_type:ident,
             output_type = $output:ty $(,)*
@@ -40,7 +43,17 @@ macro_rules! impl_guest_future_interface {
             where
                 A: $trait<$poll_type = $poll_type, $future = Self>,
             {
+                type Parameters = ($( $parameter_types, )*);
                 type Output = $output;
+
+                fn new(
+                    ($( $parameter_names, )*): Self::Parameters,
+                    application: &A,
+                    store: &mut A::Store,
+                ) -> Result<Self, ExecutionError> {
+                    application.$new_func(store, $( $parameter_names ),*)
+                        .map_err(|error| error.into())
+                }
 
                 fn poll(
                     &self,
@@ -66,6 +79,7 @@ macro_rules! impl_guest_future_interface {
 impl_guest_future_interface! {
     Initialize: {
         application_trait = Contract,
+        new_function = initialize_new(context: A::OperationContext, argument: Vec<u8>),
         poll_function = initialize_poll,
         poll_type = PollExecutionResult,
         output_type = RawExecutionResult<Vec<u8>>,
@@ -73,6 +87,7 @@ impl_guest_future_interface! {
 
     ExecuteOperation: {
         application_trait = Contract,
+        new_function = execute_operation_new(context: A::OperationContext, operation: Vec<u8>),
         poll_function = execute_operation_poll,
         poll_type = PollExecutionResult,
         output_type = RawExecutionResult<Vec<u8>>,
@@ -80,6 +95,7 @@ impl_guest_future_interface! {
 
     ExecuteMessage: {
         application_trait = Contract,
+        new_function = execute_message_new(context: A::MessageContext, message: Vec<u8>),
         poll_function = execute_message_poll,
         poll_type = PollExecutionResult,
         output_type = RawExecutionResult<Vec<u8>>,
@@ -87,6 +103,11 @@ impl_guest_future_interface! {
 
     HandleApplicationCall: {
         application_trait = Contract,
+        new_function = handle_application_call_new(
+            context: A::CalleeContext,
+            argument: Vec<u8>,
+            forwarded_sessions: Vec<A::SessionId>,
+        ),
         poll_function = handle_application_call_poll,
         poll_type = PollApplicationCallResult,
         output_type = ApplicationCallResult,
@@ -94,6 +115,12 @@ impl_guest_future_interface! {
 
     HandleSessionCall: {
         application_trait = Contract,
+        new_function = handle_session_call_new(
+            context: A::CalleeContext,
+            session_state: Vec<u8>,
+            argument: Vec<u8>,
+            forwarded_sessions: Vec<A::SessionId>,
+        ),
         poll_function = handle_session_call_poll,
         poll_type = PollSessionCallResult,
         output_type = (SessionCallResult, Vec<u8>),
@@ -101,6 +128,7 @@ impl_guest_future_interface! {
 
     HandleQuery: {
         application_trait = Service,
+        new_function = handle_query_new(context: A::QueryContext, query: Vec<u8>),
         poll_function = handle_query_poll,
         poll_type = PollApplicationQueryResult,
         output_type = Vec<u8>,
