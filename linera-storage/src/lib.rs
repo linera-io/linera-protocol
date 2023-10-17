@@ -57,7 +57,7 @@ pub static READ_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
         "The metric counting how often a value is read from storage",
         &["chain_id"]
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 /// The metric counting how often a value is written to storage.
 pub static WRITE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
@@ -66,7 +66,7 @@ pub static WRITE_VALUE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
         "The metric counting how often a value is written to storage",
         &["chain_id"]
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 /// The metric counting how often a certificate is read from storage.
 pub static READ_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
@@ -75,7 +75,7 @@ pub static READ_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
         "The metric counting how often a certificate is read from storage",
         &["chain_id"]
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 /// The metric counting how often a certificate is written to storage.
 pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
@@ -84,7 +84,7 @@ pub static WRITE_CERTIFICATE_COUNTER: Lazy<IntCounterVec> = Lazy::new(|| {
         "The metric counting how often a certificate is written to storage",
         &["chain_id"]
     )
-    .expect("Counter can be created")
+    .expect("Counter creation should not fail")
 });
 
 #[cfg(any(feature = "wasmer", feature = "wasmtime"))]
