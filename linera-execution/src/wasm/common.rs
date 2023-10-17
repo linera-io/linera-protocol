@@ -4,7 +4,7 @@
 //! Runtime independent code for interfacing with user applications in WebAssembly modules.
 
 use super::{
-    async_boundary::{GuestFuture, GuestFutureInterface, WakerForwarder},
+    async_boundary::{GuestFutureActor, GuestFutureInterface, WakerForwarder},
     async_determinism::HostFutureQueue,
     ExecutionError,
 };
@@ -218,7 +218,7 @@ where
 
 impl<A> WasmRuntimeContext<A>
 where
-    A: Contract + Unpin,
+    A: Contract + Send + Unpin + 'static,
 {
     /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::initialize`][`linera_execution::UserApplication::initialize`].
@@ -244,7 +244,7 @@ where
                 .initialize_new(&mut self.store, (*context).into(), argument),
         )
         .err_into()
-        .and_then(|future| GuestFuture::new(future, self))
+        .and_then(move |future| GuestFutureActor::spawn(future, self))
     }
 
     /// Calls the guest Wasm module's implementation of
@@ -272,7 +272,7 @@ where
             operation,
         ))
         .err_into()
-        .and_then(|future| GuestFuture::new(future, self))
+        .and_then(|future| GuestFutureActor::spawn(future, self))
     }
 
     /// Calls the guest Wasm module's implementation of
@@ -300,7 +300,7 @@ where
             message,
         ))
         .err_into()
-        .and_then(|future| GuestFuture::new(future, self))
+        .and_then(|future| GuestFutureActor::spawn(future, self))
     }
 
     /// Calls the guest Wasm module's implementation of
@@ -336,7 +336,7 @@ where
             &forwarded_sessions,
         ))
         .err_into()
-        .and_then(|future| GuestFuture::new(future, self))
+        .and_then(|future| GuestFutureActor::spawn(future, self))
     }
 
     /// Calls the guest Wasm module's implementation of
@@ -375,13 +375,13 @@ where
             &forwarded_sessions,
         ))
         .err_into()
-        .and_then(|future| GuestFuture::new(future, self))
+        .and_then(|future| GuestFutureActor::spawn(future, self))
     }
 }
 
 impl<A> WasmRuntimeContext<A>
 where
-    A: Service + Unpin,
+    A: Service + Send + Unpin + 'static,
 {
     /// Calls the guest Wasm module's implementation of
     /// [`UserApplication::handle_query`][`linera_execution::UserApplication::handle_query`].
@@ -406,7 +406,7 @@ where
             argument,
         ))
         .err_into()
-        .and_then(|future| GuestFuture::new(future, self))
+        .and_then(|future| GuestFutureActor::spawn(future, self))
     }
 }
 
