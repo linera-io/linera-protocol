@@ -21,55 +21,6 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-/// A future implemented in a Wasm module.
-pub struct GuestFuture<Future, Application>
-where
-    Application: ApplicationRuntimeContext,
-{
-    /// A WIT resource type implementing a [`GuestFutureInterface`] so that it can be polled.
-    future: Future,
-
-    /// Types necessary to call the guest Wasm module in order to poll the future.
-    context: WasmRuntimeContext<Application>,
-}
-
-impl<Future, Application> GuestFuture<Future, Application>
-where
-    Application: ApplicationRuntimeContext,
-{
-    /// Creates a [`GuestFuture`] instance with a provided `future` and Wasm execution `context`.
-    pub fn new(future: Future, context: WasmRuntimeContext<Application>) -> Self {
-        GuestFuture { future, context }
-    }
-}
-
-impl<InnerFuture, Application> Future for GuestFuture<InnerFuture, Application>
-where
-    InnerFuture: GuestFutureInterface<Application> + Unpin,
-    Application: ApplicationRuntimeContext + Unpin,
-    Application::Store: Unpin,
-    Application::Error: Unpin,
-    Application::Extra: Unpin,
-{
-    type Output = Result<InnerFuture::Output, ExecutionError>;
-
-    /// Polls the guest future after the [`HostFutureQueue`] in the [`WasmRuntimeContext`] indicates
-    /// that it's safe to do so without breaking determinism.
-    ///
-    /// Uses the runtime context to call the Wasm future's `poll` method, as implemented in the
-    /// [`GuestFutureInterface`]. The `task_context` is stored in the runtime context's
-    /// [`WakerForwarder`], so that any host futures the guest calls can use the correct task
-    /// context.
-    fn poll(self: Pin<&mut Self>, task_context: &mut Context) -> Poll<Self::Output> {
-        let GuestFuture { future, context } = self.get_mut();
-
-        ready!(context.future_queue.poll_next_unpin(task_context));
-
-        let _context_guard = context.waker_forwarder.forward(task_context);
-        future.poll(&context.application, &mut context.store)
-    }
-}
-
 /// An actor that runs a future implemented in a Wasm module.
 ///
 /// The actor should run in its own separate thread, where it will block until it receives poll
