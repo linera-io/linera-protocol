@@ -279,7 +279,7 @@ impl WalletState {
         let file_lock = FileLock::lock(path, block, file).with_context(|| {
             format!(
                 "Error getting write lock to wallet \"{}\". Please make sure the file exists \
-             and that it is not in use by another process already.",
+                 and that it is not in use by another process already.",
                 path.display()
             )
         })?;
@@ -301,7 +301,7 @@ impl WalletState {
         let file_lock = FileLock::lock(path, block, file).with_context(|| {
             format!(
                 "Error getting write lock to wallet \"{}\". Please make sure the file exists \
-             and that it is not in use by another process already.",
+                 and that it is not in use by another process already.",
                 path.display()
             )
         })?;

@@ -1861,9 +1861,13 @@ async fn main() -> Result<(), anyhow::Error> {
                     net.net_path().display()
                 );
                 let suffix = if let Some(extra_wallets) = *extra_wallets {
-                    eprintln!("To use the initial wallet and the extra wallets of this test network, you may set \
-                               the environment variables LINERA_WALLET_$N and LINERA_STORAGE_$N (N = 0..={extra_wallets}) as follows (on /dev/stdout), \
-                               then use the option `--with-wallet $N` (or `-w $N` for short) to select a wallet in the linera tool.\n");
+                    eprintln!(
+                        "To use the initial wallet and the extra wallets of this test \
+                         network, you may set the environment variables LINERA_WALLET_$N \
+                         and LINERA_STORAGE_$N (N = 0..={extra_wallets}) as printed on \
+                         the standard output, then use the option `--with-wallet $N` (or \
+                         `-w $N` for short) to select a wallet in the linera tool.\n"
+                    );
                     "_0"
                 } else {
                     eprintln!("To use the initial wallet of this test network, you may set \
