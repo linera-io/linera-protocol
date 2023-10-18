@@ -193,12 +193,12 @@ mod tests {
         batch::Batch,
         common::KeyValueStoreClient,
         memory::MemoryClient,
-        storage_metric::{get_metric_memory_client, metric, MetricKeyValueClient, MetricStat},
+        storage_metric::{get_metric_memory_client, MetricKeyValueClient, MetricStat},
     };
 
     async fn get_memory_test_state() -> MetricKeyValueClient<MemoryClient> {
         let client = get_metric_memory_client();
-        assert_eq!(metric(&client).await, MetricStat::default());
+        assert_eq!(client.metric(), MetricStat::default());
         let mut batch = Batch::new();
         batch.put_key_value_bytes(vec![1, 2, 3], vec![1]);
         batch.put_key_value_bytes(vec![1, 2, 4], vec![2, 2]);
@@ -208,7 +208,7 @@ mod tests {
         batch.delete_key_prefix(vec![2, 3]);
         client.write_batch(batch, &[]).await.unwrap();
         assert_eq!(
-            metric(&client).await,
+            client.metric(),
             MetricStat {
                 n_reads: 0,
                 n_miss_reads: 0,
@@ -227,7 +227,7 @@ mod tests {
         let client = get_memory_test_state().await;
         client.read_key_bytes(&[1, 3, 3]).await.unwrap();
         assert_eq!(
-            metric(&client).await,
+            client.metric(),
             MetricStat {
                 n_reads: 1,
                 n_miss_reads: 0,
@@ -245,7 +245,7 @@ mod tests {
         let client = get_memory_test_state().await;
         client.read_key_bytes(&[1, 4, 4]).await.unwrap();
         assert_eq!(
-            metric(&client).await,
+            client.metric(),
             MetricStat {
                 n_reads: 1,
                 n_miss_reads: 1,
@@ -266,7 +266,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            metric(&client).await,
+            client.metric(),
             MetricStat {
                 n_reads: 2,
                 n_miss_reads: 0,
@@ -284,7 +284,7 @@ mod tests {
         let client = get_memory_test_state().await;
         client.find_keys_by_prefix(&[1, 2]).await.unwrap();
         assert_eq!(
-            metric(&client).await,
+            client.metric(),
             MetricStat {
                 n_reads: 0,
                 n_miss_reads: 0,
@@ -302,7 +302,7 @@ mod tests {
         let client = get_memory_test_state().await;
         client.find_key_values_by_prefix(&[1, 2]).await.unwrap();
         assert_eq!(
-            metric(&client).await,
+            client.metric(),
             MetricStat {
                 n_reads: 0,
                 n_miss_reads: 0,
