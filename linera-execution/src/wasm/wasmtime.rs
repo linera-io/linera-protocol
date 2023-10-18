@@ -176,7 +176,7 @@ impl WasmApplication {
 
         Ok(WasmRuntimeContext {
             application,
-            future_queue,
+            future_queue: Some(future_queue),
             store,
             extra: (),
         })
@@ -194,7 +194,6 @@ impl WasmApplication {
         view_system_api::add_to_linker(&mut linker, ServiceState::views_api)
             .map_err(WasmExecutionError::LoadServiceModule)?;
 
-        let (future_queue, _queued_future_factory) = HostFutureQueue::new();
         let state = ServiceState::new(runtime);
         let mut store = Store::new(&SERVICE_ENGINE, state);
         let (service, _instance) = service::Service::instantiate(
@@ -208,7 +207,7 @@ impl WasmApplication {
 
         Ok(WasmRuntimeContext {
             application,
-            future_queue,
+            future_queue: None,
             store,
             extra: (),
         })

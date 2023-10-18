@@ -13,7 +13,6 @@ use futures::{channel::oneshot, ready, stream::StreamExt, FutureExt};
 use std::{
     future::Future,
     marker::PhantomData,
-    mem,
     pin::Pin,
     task::{Context, Poll},
     thread,
@@ -47,11 +46,8 @@ where
         parameters: Future::Parameters,
         mut context: WasmRuntimeContext<Application>,
     ) -> PollSender<Future::Output> {
-        let (dummy_future_queue, _) = HostFutureQueue::new();
-        let host_future_queue = mem::replace(&mut context.future_queue, dummy_future_queue);
-
         let (poll_request_sender, poll_request_receiver) = std::sync::mpsc::channel();
-        let poll_sender = PollSender::new(host_future_queue, poll_request_sender);
+        let poll_sender = PollSender::new(context.future_queue.take(), poll_request_sender);
         let actor = Self::new(context, poll_request_receiver);
 
         thread::spawn(|| actor.run(parameters));
@@ -143,7 +139,7 @@ struct PollResponse<Output>(Poll<Result<Output, ExecutionError>>);
 /// Poll requests may not be sent to the implementation if it would cause non-deterministic
 /// execution (as controlled by the [`HostFutureQueue`]).
 pub struct PollSender<Output> {
-    host_future_queue: HostFutureQueue,
+    host_future_queue: Option<HostFutureQueue>,
     poll_request_sender: std::sync::mpsc::Sender<PollRequest<Output>>,
     state: PollSenderState<Output>,
 }
@@ -167,7 +163,7 @@ impl<Output> PollSender<Output> {
     ///
     /// Returns the new [`PollSender`] together with the receiver endpoint of the poll requests.
     fn new(
-        host_future_queue: HostFutureQueue,
+        host_future_queue: Option<HostFutureQueue>,
         poll_request_sender: std::sync::mpsc::Sender<PollRequest<Output>>,
     ) -> Self {
         PollSender {
@@ -179,7 +175,9 @@ impl<Output> PollSender<Output> {
 
     /// Sends a poll request if allowed by the [`HostFutureQueue`].
     fn poll_start(&mut self, context: &mut Context) -> Poll<()> {
-        ready!(self.host_future_queue.poll_next_unpin(context));
+        if let Some(future_queue) = self.host_future_queue.as_mut() {
+            ready!(future_queue.poll_next_unpin(context));
+        }
 
         let (response_sender, response_receiver) = oneshot::channel();
         let _ = self

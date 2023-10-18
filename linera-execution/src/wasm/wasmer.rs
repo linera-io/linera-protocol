@@ -171,7 +171,7 @@ impl WasmApplication {
 
         Ok(WasmRuntimeContext {
             application,
-            future_queue,
+            future_queue: Some(future_queue),
             store,
             extra: WasmerContractExtra { runtime, instance },
         })
@@ -184,7 +184,6 @@ impl WasmApplication {
     ) -> Result<WasmRuntimeContext<Service>, WasmExecutionError> {
         let mut store = Store::new(&*SERVICE_ENGINE);
         let mut imports = imports! {};
-        let (future_queue, _queued_future_factory) = HostFutureQueue::new();
         let service_system_api = ServiceSystemApi::new(runtime.clone());
         let view_system_api = ServiceViewSystemApi::new(runtime);
         let system_api_setup =
@@ -201,7 +200,7 @@ impl WasmApplication {
 
         Ok(WasmRuntimeContext {
             application,
-            future_queue,
+            future_queue: None,
             store,
             extra: (),
         })
