@@ -35,30 +35,47 @@ pub trait ApplicationRuntimeContext: Sized {
 pub trait Contract: ApplicationRuntimeContext {
     /// The WIT type for the resource representing the guest future
     /// [`initialize`][crate::Contract::initialize] method.
-    type Initialize: GuestFutureInterface<Self, Output = RawExecutionResult<Vec<u8>>> + Send + Unpin;
+    type Initialize: GuestFutureInterface<
+            Self,
+            Output = RawExecutionResult<Vec<u8>>,
+            Parameters = (OperationContext, Vec<u8>),
+        > + Send
+        + Unpin;
 
     /// The WIT type for the resource representing the guest future
     /// [`execute_operation`][crate::Contract::execute_operation] method.
-    type ExecuteOperation: GuestFutureInterface<Self, Output = RawExecutionResult<Vec<u8>>>
-        + Send
+    type ExecuteOperation: GuestFutureInterface<
+            Self,
+            Output = RawExecutionResult<Vec<u8>>,
+            Parameters = (OperationContext, Vec<u8>),
+        > + Send
         + Unpin;
 
     /// The WIT type for the resource representing the guest future
     /// [`execute_message`][crate::Contract::execute_message] method.
-    type ExecuteMessage: GuestFutureInterface<Self, Output = RawExecutionResult<Vec<u8>>>
-        + Send
+    type ExecuteMessage: GuestFutureInterface<
+            Self,
+            Output = RawExecutionResult<Vec<u8>>,
+            Parameters = (MessageContext, Vec<u8>),
+        > + Send
         + Unpin;
 
     /// The WIT type for the resource representing the guest future
     /// [`handle_application_call`][crate::Contract::handle_application_call] method.
-    type HandleApplicationCall: GuestFutureInterface<Self, Output = ApplicationCallResult>
-        + Send
+    type HandleApplicationCall: GuestFutureInterface<
+            Self,
+            Output = ApplicationCallResult,
+            Parameters = (CalleeContext, Vec<u8>, Vec<SessionId>),
+        > + Send
         + Unpin;
 
     /// The WIT type for the resource representing the guest future
     /// [`handle_session_call`][crate::Contract::handle_session_call] method.
-    type HandleSessionCall: GuestFutureInterface<Self, Output = (SessionCallResult, Vec<u8>)>
-        + Send
+    type HandleSessionCall: GuestFutureInterface<
+            Self,
+            Output = (SessionCallResult, Vec<u8>),
+            Parameters = (CalleeContext, Vec<u8>, Vec<u8>, Vec<SessionId>),
+        > + Send
         + Unpin;
 
     /// The WIT type eqivalent for [`Poll<Result<RawExecutionResult<Vec<u8>>, String>>`].
@@ -157,7 +174,9 @@ pub trait Contract: ApplicationRuntimeContext {
 pub trait Service: ApplicationRuntimeContext {
     /// The WIT type for the resource representing the guest future
     /// [`handle_query`][crate::Service::handle_query] method.
-    type HandleQuery: GuestFutureInterface<Self, Output = Vec<u8>> + Send + Unpin;
+    type HandleQuery: GuestFutureInterface<Self, Output = Vec<u8>, Parameters = (QueryContext, Vec<u8>)>
+        + Send
+        + Unpin;
 
     /// The WIT type eqivalent for [`Poll<Result<Vec<u8>, String>>`].
     type PollApplicationQueryResult;
