@@ -339,6 +339,8 @@ ExecutedBlock:
     - messages:
         SEQ:
           TYPENAME: OutgoingMessage
+    - message_counts:
+        SEQ: U32
     - state_hash:
         TYPENAME: CryptoHash
 GenericApplicationId:

@@ -8,11 +8,11 @@ use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoHash, KeyPair, Signature},
     data_types::{BlockHeight, RoundNumber, Timestamp},
     doc_scalar, ensure,
-    identifiers::{ApplicationId, BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner},
+    identifiers::{ChainId, ChannelName, Destination, MessageId, Owner},
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    BytecodeLocation, GenericApplicationId, Message, Operation, SystemMessage,
+    BytecodeLocation, GenericApplicationId, Message, Operation,
 };
 use serde::{de::Deserializer, Deserialize, Serialize};
 use std::{
@@ -184,6 +184,10 @@ pub struct OutgoingMessage {
 pub struct ExecutedBlock {
     pub block: Block,
     pub messages: Vec<OutgoingMessage>,
+    /// For each transaction, the cumulative number of messages created by this and all previous
+    /// transactions, i.e. `message_counts[i]` is the index of the first message created by
+    /// transaction `i + 1` or later.
+    pub message_counts: Vec<u32>,
     pub state_hash: CryptoHash,
 }
 
@@ -548,53 +552,22 @@ impl CertificateValue {
 }
 
 impl ExecutedBlock {
-    /// Returns the IDs of all applications that were created in this block.
-    pub fn created_application_ids(&self) -> impl Iterator<Item = ApplicationId> + '_ {
-        self.enumerate_messages()
-            .filter_map(|(index, outgoing_message)| {
-                if let Message::System(SystemMessage::ApplicationCreated { bytecode_id }) =
-                    outgoing_message.message
-                {
-                    Some(ApplicationId {
-                        bytecode_id,
-                        creation: self.message_id(index),
-                    })
-                } else {
-                    None
-                }
-            })
-    }
-
-    /// Returns the IDs of all bytecodes that were published in this block.
-    pub fn published_bytecode_ids(&self) -> impl Iterator<Item = BytecodeId> + '_ {
-        self.enumerate_messages()
-            .filter_map(|(index, outgoing_message)| {
-                matches!(
-                    outgoing_message.message,
-                    Message::System(SystemMessage::BytecodePublished { .. })
-                )
-                .then(|| BytecodeId::new(self.message_id(index)))
-            })
-    }
-
-    /// Returns the IDs of all messages that created a new chain in this block.
-    ///
-    /// Given the creation message ID `id`, the chain description is `ChainDescription::Child(id)`,
-    /// and the chain ID is `ChainId::from(ChainDescription::Child(id))`.
-    pub fn open_chain_message_ids(&self) -> impl Iterator<Item = MessageId> + '_ {
-        self.enumerate_messages()
-            .filter_map(|(index, outgoing_message)| {
-                matches!(
-                    outgoing_message.message,
-                    Message::System(SystemMessage::OpenChain { .. })
-                )
-                .then(|| self.message_id(index))
-            })
-    }
-
-    /// Returns all pairs of a message index and its outgoing message.
-    fn enumerate_messages(&self) -> impl Iterator<Item = (u32, &OutgoingMessage)> + '_ {
-        (0..=u32::MAX).zip(&self.messages)
+    /// Returns the `message_index`th outgoing message created by the `operation_index`th operation,
+    /// or `None` if there is no such operation or message.
+    pub fn message_id_for_operation(
+        &self,
+        operation_index: usize,
+        message_index: u32,
+    ) -> Option<MessageId> {
+        let block = &self.block;
+        let transaction_index = block.incoming_messages.len().checked_add(operation_index)?;
+        let first_message_index = match transaction_index.checked_sub(1) {
+            None => 0,
+            Some(index) => *self.message_counts.get(index)?,
+        };
+        let index = first_message_index.checked_add(message_index)?;
+        let next_transaction_index = *self.message_counts.get(transaction_index)?;
+        (index < next_transaction_index).then_some(self.message_id(index))
     }
 
     /// Returns the message ID belonging to the `index`th outgoing message in this block.

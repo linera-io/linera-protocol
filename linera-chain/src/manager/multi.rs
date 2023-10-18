@@ -269,6 +269,7 @@ impl MultiOwnerManager {
         &mut self,
         proposal: BlockProposal,
         messages: Vec<OutgoingMessage>,
+        message_counts: Vec<u32>,
         state_hash: CryptoHash,
         key_pair: Option<&KeyPair>,
         now: Timestamp,
@@ -294,6 +295,7 @@ impl MultiOwnerManager {
             let executed_block = ExecutedBlock {
                 block,
                 messages,
+                message_counts,
                 state_hash,
             };
             let vote = Vote::new(HashedValue::new_validated(executed_block), round, key_pair);

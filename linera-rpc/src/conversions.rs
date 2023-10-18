@@ -607,6 +607,7 @@ pub mod tests {
             HashedValue::new_validated(ExecutedBlock {
                 block: get_block(),
                 messages: vec![],
+                message_counts: vec![],
                 state_hash: CryptoHash::new(&Foo("test".into())),
             }),
             RoundNumber(3),
@@ -618,6 +619,7 @@ pub mod tests {
         let blobs = vec![HashedValue::new_validated(ExecutedBlock {
             block: get_block(),
             messages: vec![],
+            message_counts: vec![],
             state_hash: CryptoHash::new(&Foo("also test".into())),
         })];
         let request = HandleCertificateRequest {
@@ -666,12 +668,14 @@ pub mod tests {
             blobs: vec![HashedValue::new_confirmed(ExecutedBlock {
                 block: get_block(),
                 messages: vec![],
+                message_counts: vec![],
                 state_hash: CryptoHash::new(&Foo("execution state".into())),
             })],
             validated: Some(Certificate::new(
                 HashedValue::new_validated(ExecutedBlock {
                     block: get_block(),
                     messages: vec![],
+                    message_counts: vec![],
                     state_hash: CryptoHash::new(&Foo("validated".into())),
                 }),
                 RoundNumber(3),

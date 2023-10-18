@@ -211,6 +211,11 @@ async fn make_transfer_certificate_for_epoch<S>(
         None => make_first_block(chain_id),
         Some(cert) => make_child_block(&cert.value),
     };
+    let message_counts = incoming_messages
+        .iter()
+        .map(|_| 0)
+        .chain(iter::once(1))
+        .collect();
     let block = Block {
         epoch,
         incoming_messages,
@@ -228,6 +233,7 @@ async fn make_transfer_certificate_for_epoch<S>(
     let value = HashedValue::new_confirmed(ExecutedBlock {
         block,
         messages,
+        message_counts,
         state_hash,
     });
     make_certificate(committee, worker, value)
@@ -479,6 +485,7 @@ where
         let value = HashedValue::new_confirmed(ExecutedBlock {
             block,
             messages: vec![],
+            message_counts: vec![],
             state_hash,
         });
         make_certificate(&committee, &worker, value)
@@ -744,6 +751,7 @@ where
                 direct_credit_message(ChainId::root(2), Amount::ONE),
                 direct_credit_message(ChainId::root(2), Amount::from_tokens(2)),
             ],
+            message_counts: vec![1, 2],
             state_hash: make_state_hash(SystemExecutionState {
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public()),
@@ -764,6 +772,7 @@ where
                 ChainId::root(2),
                 Amount::from_tokens(3),
             )],
+            message_counts: vec![1],
             state_hash: make_state_hash(SystemExecutionState {
                 committees: [(epoch, committee.clone())].into_iter().collect(),
                 ownership: ChainOwnership::single(sender_key_pair.public()),
@@ -1017,6 +1026,7 @@ where
             HashedValue::new_confirmed(ExecutedBlock {
                 block: block_proposal.content.block,
                 messages: vec![direct_credit_message(ChainId::root(3), Amount::ONE)],
+                message_counts: vec![0, 1],
                 state_hash: make_state_hash(SystemExecutionState {
                     committees: [(epoch, committee.clone())].into_iter().collect(),
                     ownership: ChainOwnership::single(recipient_key_pair.public()),
@@ -2364,6 +2374,7 @@ where
                     },
                 ),
             ],
+            message_counts: vec![2],
             state_hash: make_state_hash(SystemExecutionState {
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair.public()),
@@ -2423,6 +2434,7 @@ where
                 ),
                 direct_credit_message(user_id, Amount::from_tokens(2)),
             ],
+            message_counts: vec![1, 2],
             state_hash: make_state_hash(SystemExecutionState {
                 epoch: Some(Epoch::from(1)),
                 description: Some(ChainDescription::Root(0)),
@@ -2466,6 +2478,7 @@ where
                 user_id,
                 SystemMessage::Notify { id: user_id },
             )],
+            message_counts: vec![1],
             state_hash: make_state_hash(SystemExecutionState {
                 // The root chain knows both committees at the end.
                 committees: committees2.clone(),
@@ -2626,6 +2639,7 @@ where
                     },
                 }),
             messages: Vec::new(),
+            message_counts: vec![0, 0, 0, 0],
             state_hash: make_state_hash(SystemExecutionState {
                 subscriptions: [ChannelSubscription {
                     chain_id: admin_id,
@@ -2758,6 +2772,7 @@ where
             block: make_first_block(user_id)
                 .with_simple_transfer(Recipient::chain(admin_id), Amount::ONE),
             messages: vec![direct_credit_message(admin_id, Amount::ONE)],
+            message_counts: vec![1],
             state_hash: make_state_hash(SystemExecutionState {
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public()),
@@ -2789,6 +2804,7 @@ where
                     committees: committees2.clone(),
                 },
             )],
+            message_counts: vec![1],
             state_hash: make_state_hash(SystemExecutionState {
                 committees: committees2.clone(),
                 ownership: ChainOwnership::single(key_pair0.public()),
@@ -2903,6 +2919,7 @@ where
             block: make_first_block(user_id)
                 .with_simple_transfer(Recipient::chain(admin_id), Amount::ONE),
             messages: vec![direct_credit_message(admin_id, Amount::ONE)],
+            message_counts: vec![1],
             state_hash: make_state_hash(SystemExecutionState {
                 committees: committees.clone(),
                 ownership: ChainOwnership::single(key_pair1.public()),
@@ -2946,6 +2963,7 @@ where
                     },
                 ),
             ],
+            message_counts: vec![1, 2],
             state_hash: make_state_hash(SystemExecutionState {
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public()),
@@ -3009,6 +3027,7 @@ where
                     },
                 }),
             messages: Vec::new(),
+            message_counts: vec![0],
             state_hash: make_state_hash(SystemExecutionState {
                 committees: committees3.clone(),
                 ownership: ChainOwnership::single(key_pair0.public()),

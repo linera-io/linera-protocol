@@ -77,6 +77,7 @@ impl SingleOwnerManager {
         &mut self,
         proposal: BlockProposal,
         messages: Vec<OutgoingMessage>,
+        message_counts: Vec<u32>,
         state_hash: CryptoHash,
         key_pair: Option<&KeyPair>,
     ) {
@@ -90,6 +91,7 @@ impl SingleOwnerManager {
             let executed_block = ExecutedBlock {
                 block,
                 messages,
+                message_counts,
                 state_hash,
             };
             let value = HashedValue::from(CertificateValue::ConfirmedBlock { executed_block });

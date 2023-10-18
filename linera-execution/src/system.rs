@@ -35,6 +35,15 @@ use thiserror::Error;
 #[cfg(any(test, feature = "test"))]
 use {crate::applications::ApplicationRegistry, std::collections::BTreeSet};
 
+/// The relative index of the `OpenChain` message created by the `OpenChain` operation.
+pub static OPEN_CHAIN_MESSAGE_INDEX: u32 = 0;
+/// The relative index of the `ApplicationCreated` message created by the `CreateApplication`
+/// operation.
+pub static CREATE_APPLICATION_MESSAGE_INDEX: u32 = 0;
+/// The relative index of the `BytecodePublished` message created by the `PublishBytecode`
+/// operation.
+pub static PUBLISH_BYTECODE_MESSAGE_INDEX: u32 = 0;
+
 /// A view accessing the execution state of the system of a chain.
 #[derive(Debug, HashableView)]
 pub struct SystemExecutionStateView<C> {
@@ -518,6 +527,7 @@ where
                         subscription,
                     },
                 };
+                debug_assert_eq!(0, OPEN_CHAIN_MESSAGE_INDEX);
                 result.messages.extend([e1, e2]);
             }
             ChangeOwner { new_public_key } => {
@@ -728,6 +738,7 @@ where
                         operation_index: context.index,
                     },
                 };
+                debug_assert_eq!(0, PUBLISH_BYTECODE_MESSAGE_INDEX);
                 result.messages.push(message);
             }
             CreateApplication {
@@ -756,6 +767,7 @@ where
                         bytecode_id: *bytecode_id,
                     },
                 };
+                debug_assert_eq!(0, CREATE_APPLICATION_MESSAGE_INDEX);
                 result.messages.push(message);
                 new_application = Some((id, initialization_argument.clone()));
             }

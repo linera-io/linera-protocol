@@ -453,7 +453,7 @@ where
         &mut self,
         block: &Block,
         now: Timestamp,
-    ) -> Result<(Vec<OutgoingMessage>, CryptoHash), ChainError> {
+    ) -> Result<(Vec<OutgoingMessage>, Vec<u32>, CryptoHash), ChainError> {
         let start_time = Instant::now();
 
         assert_eq!(block.chain_id, self.chain_id());
@@ -488,6 +488,7 @@ where
         Self::sub_assign_fees(balance, pricing.storage_price(&block.operations)?)?;
 
         let mut messages = Vec::new();
+        let mut message_counts = Vec::new();
         let available_fuel = pricing.remaining_fuel(*balance);
         let mut remaining_fuel = available_fuel;
         for (index, message) in block.incoming_messages.iter().enumerate() {
@@ -513,6 +514,8 @@ where
                 })?;
             self.process_execution_results(&mut messages, context.height, results)
                 .await?;
+            message_counts
+                .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
         }
         // Second, execute the operations in the block and remember the recipients to notify.
         for (index, operation) in block.operations.iter().enumerate() {
@@ -535,6 +538,8 @@ where
                 })?;
             self.process_execution_results(&mut messages, context.height, results)
                 .await?;
+            message_counts
+                .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
         }
         let used_fuel = available_fuel.saturating_sub(remaining_fuel);
 
@@ -558,7 +563,7 @@ where
         BLOCK_EXECUTION_LATENCY
             .with_label_values(&[])
             .observe(start_time.elapsed().as_secs_f64());
-        Ok((messages, state_hash))
+        Ok((messages, message_counts, state_hash))
     }
 
     async fn process_execution_results(

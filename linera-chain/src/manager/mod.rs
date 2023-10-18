@@ -143,17 +143,23 @@ impl ChainManager {
         &mut self,
         proposal: BlockProposal,
         messages: Vec<OutgoingMessage>,
+        message_counts: Vec<u32>,
         state_hash: CryptoHash,
         key_pair: Option<&KeyPair>,
         now: Timestamp,
     ) {
         match self {
             ChainManager::Single(manager) => {
-                manager.create_vote(proposal, messages, state_hash, key_pair)
+                manager.create_vote(proposal, messages, message_counts, state_hash, key_pair)
             }
-            ChainManager::Multi(manager) => {
-                manager.create_vote(proposal, messages, state_hash, key_pair, now)
-            }
+            ChainManager::Multi(manager) => manager.create_vote(
+                proposal,
+                messages,
+                message_counts,
+                state_hash,
+                key_pair,
+                now,
+            ),
             ChainManager::None => panic!("unexpected chain manager"),
         }
     }
