@@ -12,6 +12,7 @@ use super::{
 use futures::{channel::oneshot, ready, stream::StreamExt, FutureExt};
 use std::{
     future::Future,
+    marker::PhantomData,
     mem,
     pin::Pin,
     task::{Context, Poll},
@@ -27,9 +28,9 @@ where
     Application: ApplicationRuntimeContext,
     Future: GuestFutureInterface<Application>,
 {
-    future: Future,
     context: WasmRuntimeContext<Application>,
     poll_request_receiver: std::sync::mpsc::Receiver<PollRequest<Future::Output>>,
+    _future_type: PhantomData<Future>,
 }
 
 impl<Future, Application> GuestFutureActor<Future, Application>
@@ -43,7 +44,7 @@ where
     /// Returns the [`PollSender`] which can be used in an asynchronous context to `await` the
     /// result.
     pub fn spawn(
-        future: Future,
+        parameters: Future::Parameters,
         mut context: WasmRuntimeContext<Application>,
     ) -> PollSender<Future::Output> {
         let (dummy_future_queue, _) = HostFutureQueue::new();
@@ -51,32 +52,42 @@ where
 
         let (poll_request_sender, poll_request_receiver) = std::sync::mpsc::channel();
         let poll_sender = PollSender::new(host_future_queue, poll_request_sender);
-        let actor = Self::new(future, context, poll_request_receiver);
+        let actor = Self::new(context, poll_request_receiver);
 
-        thread::spawn(|| actor.run());
+        thread::spawn(|| actor.run(parameters));
 
         poll_sender
     }
 
     /// Creates a new [`GuestFutureActor`] to run `future` using a Wasm runtime `context`.
     pub fn new(
-        future: Future,
         context: WasmRuntimeContext<Application>,
         poll_request_receiver: std::sync::mpsc::Receiver<PollRequest<Future::Output>>,
     ) -> Self {
         GuestFutureActor {
-            future,
             context,
             poll_request_receiver,
+            _future_type: PhantomData,
         }
     }
 
-    /// Executes the future, polling it as requested by the [`PollSender`] until it completes.
-    pub fn run(mut self) {
+    /// Creates and executes the `Future` instance, polling it as requested by the [`PollSender`]
+    /// until it completes.
+    pub fn run(mut self, parameters: Future::Parameters) {
+        match Future::new(
+            parameters,
+            &self.context.application,
+            &mut self.context.store,
+        ) {
+            Ok(future) => self.run_poll_loop(future),
+            Err(error) => self.notify_creation_error(error),
+        }
+    }
+
+    /// Executes the `future`, polling it as requested by the [`PollSender`] until it completes.
+    fn run_poll_loop(mut self, future: Future) {
         while let Ok(request) = self.poll_request_receiver.recv() {
-            let response = self
-                .future
-                .poll(&self.context.application, &mut self.context.store);
+            let response = future.poll(&self.context.application, &mut self.context.store);
             let mut finished = response.is_ready();
 
             if request
@@ -90,6 +101,22 @@ where
 
             if finished {
                 break;
+            }
+        }
+    }
+
+    /// Waits for the first poll request sent by the [`PollSender`], and immediately responds with
+    /// the error obtained when attempting to create the `Future` instance.
+    fn notify_creation_error(self, error: ExecutionError) {
+        if let Ok(request) = self.poll_request_receiver.recv() {
+            if request
+                .response_sender
+                .send(PollResponse(Poll::Ready(Err(error))))
+                .is_err()
+            {
+                tracing::debug!(
+                    "Wasm guest future cancelled before constructor error was reported"
+                );
             }
         }
     }
@@ -220,7 +247,7 @@ where
     Application: ApplicationRuntimeContext,
 {
     /// The parameters necessary to initialize the future.
-    type Parameters;
+    type Parameters: Send;
 
     /// The output of the guest future.
     type Output;

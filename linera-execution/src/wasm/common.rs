@@ -12,7 +12,6 @@ use crate::{
     ApplicationCallResult, CalleeContext, MessageContext, OperationContext, QueryContext,
     RawExecutionResult, SessionCallResult, SessionId,
 };
-use futures::{future, TryFutureExt};
 use std::future::Future;
 
 /// Types that are specific to the context of an application ready to be executedy by a WebAssembly
@@ -239,13 +238,7 @@ where
     ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> {
         A::configure_fuel(&mut self);
 
-        future::ready(self.application.initialize_new(
-            &mut self.store,
-            *context,
-            argument.to_owned(),
-        ))
-        .err_into()
-        .and_then(move |future| GuestFutureActor::spawn(future, self))
+        GuestFutureActor::<A::Initialize, A>::spawn((*context, argument.to_owned()), self)
     }
 
     /// Calls the guest Wasm module's implementation of
@@ -267,13 +260,7 @@ where
     ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> {
         A::configure_fuel(&mut self);
 
-        future::ready(self.application.execute_operation_new(
-            &mut self.store,
-            *context,
-            operation.to_owned(),
-        ))
-        .err_into()
-        .and_then(|future| GuestFutureActor::spawn(future, self))
+        GuestFutureActor::<A::ExecuteOperation, A>::spawn((*context, operation.to_owned()), self)
     }
 
     /// Calls the guest Wasm module's implementation of
@@ -295,13 +282,7 @@ where
     ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> {
         A::configure_fuel(&mut self);
 
-        future::ready(self.application.execute_message_new(
-            &mut self.store,
-            *context,
-            message.to_owned(),
-        ))
-        .err_into()
-        .and_then(|future| GuestFutureActor::spawn(future, self))
+        GuestFutureActor::<A::ExecuteMessage, A>::spawn((*context, message.to_owned()), self)
     }
 
     /// Calls the guest Wasm module's implementation of
@@ -325,14 +306,10 @@ where
     ) -> impl Future<Output = Result<ApplicationCallResult, ExecutionError>> {
         A::configure_fuel(&mut self);
 
-        future::ready(self.application.handle_application_call_new(
-            &mut self.store,
-            *context,
-            argument.to_owned(),
-            forwarded_sessions,
-        ))
-        .err_into()
-        .and_then(|future| GuestFutureActor::spawn(future, self))
+        GuestFutureActor::<A::HandleApplicationCall, A>::spawn(
+            (*context, argument.to_owned(), forwarded_sessions),
+            self,
+        )
     }
 
     /// Calls the guest Wasm module's implementation of
@@ -358,15 +335,15 @@ where
     ) -> impl Future<Output = Result<(SessionCallResult, Vec<u8>), ExecutionError>> {
         A::configure_fuel(&mut self);
 
-        future::ready(self.application.handle_session_call_new(
-            &mut self.store,
-            *context,
-            session_state.to_owned(),
-            argument.to_owned(),
-            forwarded_sessions,
-        ))
-        .err_into()
-        .and_then(|future| GuestFutureActor::spawn(future, self))
+        GuestFutureActor::<A::HandleSessionCall, A>::spawn(
+            (
+                *context,
+                session_state.to_owned(),
+                argument.to_owned(),
+                forwarded_sessions,
+            ),
+            self,
+        )
     }
 }
 
@@ -387,17 +364,11 @@ where
     /// ) -> Result<Vec<u8>, ExecutionError>
     /// ```
     pub fn handle_query(
-        mut self,
+        self,
         context: &QueryContext,
         argument: &[u8],
     ) -> impl Future<Output = Result<Vec<u8>, ExecutionError>> {
-        future::ready(self.application.handle_query_new(
-            &mut self.store,
-            *context,
-            argument.to_owned(),
-        ))
-        .err_into()
-        .and_then(|future| GuestFutureActor::spawn(future, self))
+        GuestFutureActor::<A::HandleQuery, A>::spawn((*context, argument.to_owned()), self)
     }
 }
 
