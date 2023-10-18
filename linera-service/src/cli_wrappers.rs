@@ -4,7 +4,7 @@
 //! Helper module to call the binaries of `linera-service` with appropriate command-line
 //! arguments.
 
-use crate::{config::WalletState, util};
+use crate::{config::WalletState, util, util::CommandExt};
 use anyhow::{anyhow, bail, Context, Result};
 use async_graphql::InputType;
 use linera_base::{
@@ -22,7 +22,6 @@ use std::{
     marker::PhantomData,
     ops::RangeInclusive,
     path::{Path, PathBuf},
-    process::Stdio,
     rc::Rc,
     str::FromStr,
     time::Duration,
@@ -108,16 +107,16 @@ impl ClientWrapper {
 
     pub async fn project_new(&self, project_name: &str, linera_root: &Path) -> Result<TempDir> {
         let tmp = TempDir::new()?;
-        let mut command = self.run().await?;
+        let mut command = self.command().await?;
         command
             .current_dir(tmp.path())
-            .kill_on_drop(true)
             .arg("project")
             .arg("new")
             .arg(project_name)
             .arg("--linera-root")
-            .arg(linera_root);
-        assert!(command.spawn()?.wait().await?.success());
+            .arg(linera_root)
+            .spawn_and_wait_for_stdout()
+            .await?;
         Ok(tmp)
     }
 
@@ -130,7 +129,7 @@ impl ClientWrapper {
     ) -> Result<String> {
         let json_parameters = serde_json::to_string(&())?;
         let json_argument = serde_json::to_string(argument)?;
-        let mut command = self.run().await?;
+        let mut command = self.command().await?;
         command
             .arg("project")
             .arg("publish-and-create")
@@ -142,34 +141,27 @@ impl ClientWrapper {
             command.arg("--required-application-ids");
             command.args(required_application_ids);
         }
-        let stdout = Self::run_command(&mut command).await?;
+        let stdout = command.spawn_and_wait_for_stdout().await?;
         Ok(stdout.trim().to_string())
     }
 
     pub async fn project_test(&self, path: &Path) -> Result<()> {
-        let status = self
-            .run()
+        self.command()
             .await
             .context("failed to create project test command")?
             .current_dir(path)
-            .kill_on_drop(true)
             .arg("project")
             .arg("test")
-            .spawn()
-            .context("failed to spawn project test command")?
-            .wait()
-            .await
-            .context("failed to run project test command")?;
-        anyhow::ensure!(status.success(), "project test command failed");
+            .spawn_and_wait_for_stdout()
+            .await?;
         Ok(())
     }
 
-    async fn run(&self) -> Result<Command> {
+    async fn command(&self) -> Result<Command> {
         let path = util::resolve_binary("linera", env!("CARGO_PKG_NAME")).await?;
         let mut command = Command::new(path);
         command
             .current_dir(self.tmp_dir.path())
-            .kill_on_drop(true)
             .args(["--wallet", &self.wallet])
             .args(["--storage", &self.storage])
             .args([
@@ -183,7 +175,7 @@ impl ClientWrapper {
     }
 
     pub async fn create_genesis_config(&self) -> Result<()> {
-        let mut command = self.run().await?;
+        let mut command = self.command().await?;
         command
             .args(["create-genesis-config", "10"])
             .args(["--initial-funding", "10"])
@@ -192,12 +184,12 @@ impl ClientWrapper {
         if let Some(seed) = self.testing_prng_seed {
             command.arg("--testing-prng-seed").arg(seed.to_string());
         }
-        assert!(command.spawn()?.wait().await?.success());
+        command.spawn_and_wait_for_stdout().await?;
         Ok(())
     }
 
     pub async fn wallet_init(&self, chain_ids: &[ChainId]) -> Result<()> {
-        let mut command = self.run().await?;
+        let mut command = self.command().await?;
         command
             .args(["wallet", "init"])
             .args(["--genesis", "genesis.json"]);
@@ -208,24 +200,8 @@ impl ClientWrapper {
             let ids = chain_ids.iter().map(ChainId::to_string);
             command.arg("--with-other-chains").args(ids);
         }
-        assert!(command.spawn()?.wait().await?.success());
+        command.spawn_and_wait_for_stdout().await?;
         Ok(())
-    }
-
-    async fn run_command(command: &mut Command) -> Result<String> {
-        let output = command
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?
-            .wait_with_output()
-            .await?;
-        assert!(
-            output.status.success(),
-            "Command {:?} failed; stderr:\n{}\n(end stderr)",
-            command,
-            String::from_utf8_lossy(&output.stderr),
-        );
-        Ok(String::from_utf8(output.stdout)?)
     }
 
     pub async fn publish_and_create<A: ContractAbi>(
@@ -239,7 +215,7 @@ impl ClientWrapper {
     ) -> Result<ApplicationId<A>> {
         let json_parameters = serde_json::to_string(parameters)?;
         let json_argument = serde_json::to_string(argument)?;
-        let mut command = self.run().await?;
+        let mut command = self.command().await?;
         command
             .arg("publish-and-create")
             .args([contract, service])
@@ -254,7 +230,7 @@ impl ClientWrapper {
                     .map(ApplicationId::to_string),
             );
         }
-        let stdout = Self::run_command(&mut command).await?;
+        let stdout = command.spawn_and_wait_for_stdout().await?;
         Ok(stdout.trim().parse::<ApplicationId>()?.with_abi())
     }
 
@@ -264,14 +240,14 @@ impl ClientWrapper {
         service: PathBuf,
         publisher: impl Into<Option<ChainId>>,
     ) -> Result<BytecodeId> {
-        let stdout = Self::run_command(
-            self.run()
-                .await?
-                .arg("publish-bytecode")
-                .args([contract, service])
-                .args(publisher.into().iter().map(ChainId::to_string)),
-        )
-        .await?;
+        let stdout = self
+            .command()
+            .await?
+            .arg("publish-bytecode")
+            .args([contract, service])
+            .args(publisher.into().iter().map(ChainId::to_string))
+            .spawn_and_wait_for_stdout()
+            .await?;
         Ok(stdout.trim().parse()?)
     }
 
@@ -282,28 +258,28 @@ impl ClientWrapper {
         creator: impl Into<Option<ChainId>>,
     ) -> Result<ApplicationId<A>> {
         let json_argument = serde_json::to_string(argument)?;
-        let stdout = Self::run_command(
-            self.run()
-                .await?
-                .arg("create-application")
-                .arg(bytecode_id.to_string())
-                .args(["--json-argument", &json_argument])
-                .args(creator.into().iter().map(ChainId::to_string)),
-        )
-        .await?;
+        let stdout = self
+            .command()
+            .await?
+            .arg("create-application")
+            .arg(bytecode_id.to_string())
+            .args(["--json-argument", &json_argument])
+            .args(creator.into().iter().map(ChainId::to_string))
+            .spawn_and_wait_for_stdout()
+            .await?;
         Ok(stdout.trim().parse::<ApplicationId>()?.with_abi())
     }
 
     pub async fn run_node_service(&self, port: impl Into<Option<u16>>) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
-        let mut command = self.run().await?;
+        let mut command = self.command().await?;
         command.arg("service");
         if let Ok(var) = env::var(CLIENT_SERVICE_ENV) {
             command.args(var.split_whitespace());
         }
         let child = command
             .args(["--port".to_string(), port.to_string()])
-            .spawn()?;
+            .spawn_into()?;
         let client = reqwest::Client::new();
         for i in 0..10 {
             tokio::time::sleep(Duration::from_secs(i)).await;
@@ -318,57 +294,52 @@ impl ClientWrapper {
                 warn!("Waiting for node service to start");
             }
         }
-        panic!("Failed to start node service");
+        bail!("Failed to start node service");
     }
 
     pub async fn query_validators(&self, chain_id: Option<ChainId>) -> Result<()> {
-        let mut command = self.run().await?;
+        let mut command = self.command().await?;
         command.arg("query-validators");
         if let Some(chain_id) = chain_id {
             command.arg(&chain_id.to_string());
         }
-        Self::run_command(&mut command).await?;
+        command.spawn_and_wait_for_stdout().await?;
         Ok(())
     }
 
     pub async fn query_balance(&self, chain_id: ChainId) -> Result<String> {
-        let stdout = Self::run_command(
-            self.run()
-                .await?
-                .arg("query-balance")
-                .arg(&chain_id.to_string()),
-        )
-        .await?;
+        let stdout = self
+            .command()
+            .await?
+            .arg("query-balance")
+            .arg(&chain_id.to_string())
+            .spawn_and_wait_for_stdout()
+            .await?;
         let amount = stdout.trim().to_string();
         Ok(amount)
     }
 
     pub async fn transfer(&self, amount: &str, from: ChainId, to: ChainId) -> Result<()> {
-        Self::run_command(
-            self.run()
-                .await?
-                .arg("transfer")
-                .arg(amount)
-                .args(["--from", &from.to_string()])
-                .args(["--to", &to.to_string()]),
-        )
-        .await?;
+        self.command()
+            .await?
+            .arg("transfer")
+            .arg(amount)
+            .args(["--from", &from.to_string()])
+            .args(["--to", &to.to_string()])
+            .spawn_and_wait_for_stdout()
+            .await?;
         Ok(())
     }
 
     #[cfg(benchmark)]
-    async fn benchmark(&self, max_in_flight: usize) {
-        assert!(self
-            .run()
+    async fn benchmark(&self, max_in_flight: usize) -> Result<()> {
+        self.command()
             .await
             .arg("benchmark")
             .args(["--max-in-flight", &max_in_flight.to_string()])
-            .spawn()
-            .unwrap()
-            .wait()
-            .await
-            .unwrap()
-            .success());
+            .spawn_and_wait_for_stdout()
+            .await?;
+        Ok(())
     }
 
     pub async fn open_chain(
@@ -376,7 +347,7 @@ impl ClientWrapper {
         from: ChainId,
         to_public_key: Option<PublicKey>,
     ) -> Result<(MessageId, ChainId)> {
-        let mut command = self.run().await?;
+        let mut command = self.command().await?;
         command
             .arg("open-chain")
             .args(["--from", &from.to_string()]);
@@ -385,7 +356,7 @@ impl ClientWrapper {
             command.args(["--to-public-key", &public_key.to_string()]);
         }
 
-        let stdout = Self::run_command(&mut command).await?;
+        let stdout = command.spawn_and_wait_for_stdout().await?;
         let mut split = stdout.split('\n');
         let message_id: MessageId = split.next().context("no message ID in output")?.parse()?;
         let chain_id = ChainId::from_str(split.next().context("no chain ID in output")?)?;
@@ -411,7 +382,7 @@ impl ClientWrapper {
         weights: Vec<u64>,
         multi_leader_rounds: RoundNumber,
     ) -> Result<(MessageId, ChainId)> {
-        let mut command = self.run().await?;
+        let mut command = self.command().await?;
         command
             .arg("open-multi-owner-chain")
             .args(["--from", &from.to_string()])
@@ -421,7 +392,7 @@ impl ClientWrapper {
             .args(weights.iter().map(u64::to_string))
             .args(["--multi-leader-rounds", &multi_leader_rounds.to_string()]);
 
-        let stdout = Self::run_command(&mut command).await?;
+        let stdout = command.spawn_and_wait_for_stdout().await?;
         let mut split = stdout.split('\n');
         let message_id: MessageId = split.next().context("no message ID in output")?.parse()?;
         let chain_id = ChainId::from_str(split.next().context("no chain ID in output")?)?;
@@ -456,31 +427,34 @@ impl ClientWrapper {
 
     pub async fn set_validator(&self, name: &str, port: usize, votes: usize) -> Result<()> {
         let address = format!("{}:127.0.0.1:{}", self.network.external_short(), port);
-        Self::run_command(
-            self.run()
-                .await?
-                .arg("set-validator")
-                .args(["--name", name])
-                .args(["--address", &address])
-                .args(["--votes", &votes.to_string()]),
-        )
-        .await?;
+        self.command()
+            .await?
+            .arg("set-validator")
+            .args(["--name", name])
+            .args(["--address", &address])
+            .args(["--votes", &votes.to_string()])
+            .spawn_and_wait_for_stdout()
+            .await?;
         Ok(())
     }
 
     pub async fn remove_validator(&self, name: &str) -> Result<()> {
-        Self::run_command(
-            self.run()
-                .await?
-                .arg("remove-validator")
-                .args(["--name", name]),
-        )
-        .await?;
+        self.command()
+            .await?
+            .arg("remove-validator")
+            .args(["--name", name])
+            .spawn_and_wait_for_stdout()
+            .await?;
         Ok(())
     }
 
     pub async fn keygen(&self) -> Result<PublicKey> {
-        let stdout = Self::run_command(self.run().await?.arg("keygen")).await?;
+        let stdout = self
+            .command()
+            .await?
+            .arg("keygen")
+            .spawn_and_wait_for_stdout()
+            .await?;
         Ok(PublicKey::from_str(stdout.trim())?)
     }
 
@@ -489,14 +463,14 @@ impl ClientWrapper {
     }
 
     pub async fn assign(&self, key: PublicKey, message_id: MessageId) -> Result<ChainId> {
-        let stdout = Self::run_command(
-            self.run()
-                .await?
-                .arg("assign")
-                .args(["--key", &key.to_string()])
-                .args(["--message-id", &message_id.to_string()]),
-        )
-        .await?;
+        let stdout = self
+            .command()
+            .await?
+            .arg("assign")
+            .args(["--key", &key.to_string()])
+            .args(["--message-id", &message_id.to_string()])
+            .spawn_and_wait_for_stdout()
+            .await?;
 
         let chain_id = ChainId::from_str(stdout.trim())?;
 
@@ -504,13 +478,12 @@ impl ClientWrapper {
     }
 
     pub async fn synchronize_balance(&self, chain_id: ChainId) -> Result<()> {
-        Self::run_command(
-            self.run()
-                .await?
-                .arg("sync-balance")
-                .arg(&chain_id.to_string()),
-        )
-        .await?;
+        self.command()
+            .await?
+            .arg("sync-balance")
+            .arg(&chain_id.to_string())
+            .spawn_and_wait_for_stdout()
+            .await?;
         Ok(())
     }
 }
@@ -619,7 +592,7 @@ impl LocalNetwork {
     async fn command_for_binary(&self, name: &'static str) -> Result<Command> {
         let path = util::resolve_binary(name, env!("CARGO_PKG_NAME")).await?;
         let mut command = Command::new(path);
-        command.current_dir(self.tmp_dir.path()).kill_on_drop(true);
+        command.current_dir(self.tmp_dir.path());
         Ok(command)
     }
 
@@ -694,30 +667,21 @@ impl LocalNetwork {
         }
         let output = command
             .args(["--committee", "committee.json"])
-            .stdout(Stdio::piped())
-            .spawn()?
-            .wait_with_output()
+            .spawn_and_wait_for_stdout()
             .await?;
-        assert!(output.status.success());
-        let output_str = String::from_utf8_lossy(output.stdout.as_slice());
-        Ok(output_str.split_whitespace().map(str::to_string).collect())
+        Ok(output.split_whitespace().map(str::to_string).collect())
     }
 
     pub async fn generate_validator_config(&self, i: usize) -> Result<String> {
-        let output = self
+        let stdout = self
             .command_for_binary("linera-server")
             .await?
             .arg("generate")
             .arg("--validators")
             .arg(&self.configuration_string(i)?)
-            .stdout(Stdio::piped())
-            .spawn()?
-            .wait_with_output()
+            .spawn_and_wait_for_stdout()
             .await?;
-        assert!(output.status.success());
-        Ok(String::from_utf8_lossy(output.stdout.as_slice())
-            .trim()
-            .to_string())
+        Ok(stdout.trim().to_string())
     }
 
     async fn run_proxy(&self, i: usize) -> Result<Child> {
@@ -725,7 +689,7 @@ impl LocalNetwork {
             .command_for_binary("linera-proxy")
             .await?
             .arg(format!("server_{}.json", i))
-            .spawn()?;
+            .spawn_into()?;
 
         match self.network {
             Network::Grpc => {
@@ -780,22 +744,21 @@ impl LocalNetwork {
                 if let Ok(var) = env::var(SERVER_ENV) {
                     command.args(var.split_whitespace());
                 }
-                let output = command
+                let result = command
                     .args(["--storage", &storage])
                     .args(["--genesis", "genesis.json"])
-                    .spawn()?
-                    .wait_with_output()
-                    .await?;
-                if output.status.success() {
+                    .spawn_and_wait_for_stdout()
+                    .await;
+                if result.is_ok() {
                     break;
                 }
                 warn!(
-                    "Failed to initialize storage={} using linera-server, i_try={}, output={:?}",
-                    storage, i_try, output
+                    "Failed to initialize storage={} using linera-server, i_try={}, error={:?}",
+                    storage, i_try, result
                 );
                 i_try += 1;
                 if i_try == max_try {
-                    panic!("Failed to initialize after {} attempts", max_try);
+                    bail!("Failed to initialize after {} attempts", max_try);
                 }
                 let one_second = std::time::Duration::from_millis(1000);
                 std::thread::sleep(one_second);
@@ -813,7 +776,7 @@ impl LocalNetwork {
             .args(["--server", &format!("server_{}.json", i)])
             .args(["--shard", &j.to_string()])
             .args(["--genesis", "genesis.json"])
-            .spawn()?;
+            .spawn_into()?;
 
         match self.network {
             Network::Grpc => {
@@ -878,18 +841,15 @@ impl LocalNetwork {
         name: &str,
         is_workspace: bool,
     ) -> Result<(PathBuf, PathBuf)> {
-        assert!(Command::new("cargo")
+        Command::new("cargo")
             .current_dir(self.tmp_dir.path())
             .arg("build")
             .arg("--release")
             .args(["--target", "wasm32-unknown-unknown"])
             .arg("--manifest-path")
             .arg(path.join("Cargo.toml"))
-            .stdout(Stdio::piped())
-            .spawn()?
-            .wait()
-            .await?
-            .success());
+            .spawn_and_wait_for_stdout()
+            .await?;
 
         let release_dir = match is_workspace {
             true => path.join("../target/wasm32-unknown-unknown/release"),
@@ -930,7 +890,7 @@ impl LocalNetwork {
     }
 
     pub fn example_path(name: &str) -> Result<PathBuf> {
-        Ok(env::current_dir().unwrap().join("../examples/").join(name))
+        Ok(env::current_dir()?.join("../examples/").join(name))
     }
 }
 
