@@ -5,7 +5,7 @@
 //! arguments.
 
 use crate::{config::WalletState, util};
-use anyhow::{Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use async_graphql::InputType;
 use linera_base::{
     abi::ContractAbi,
@@ -33,9 +33,6 @@ use tonic_health::proto::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
 use tracing::{info, warn};
-
-#[cfg(any(test, feature = "test"))]
-use linera_views::test_utils::get_table_name;
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
 /// to the binary when starting a server.
@@ -149,19 +146,22 @@ impl ClientWrapper {
         Ok(stdout.trim().to_string())
     }
 
-    pub async fn project_test(&self, path: &Path) {
-        let mut command = self.run().await.unwrap();
-        assert!(command
+    pub async fn project_test(&self, path: &Path) -> Result<()> {
+        let status = self
+            .run()
+            .await
+            .context("failed to create project test command")?
             .current_dir(path)
             .kill_on_drop(true)
             .arg("project")
             .arg("test")
             .spawn()
-            .unwrap()
+            .context("failed to spawn project test command")?
             .wait()
             .await
-            .unwrap()
-            .success());
+            .context("failed to run project test command")?;
+        anyhow::ensure!(status.success(), "project test command failed");
+        Ok(())
     }
 
     async fn run(&self) -> Result<Command> {
@@ -387,15 +387,15 @@ impl ClientWrapper {
 
         let stdout = Self::run_command(&mut command).await?;
         let mut split = stdout.split('\n');
-        let message_id: MessageId = split.next().context("no message found")?.parse()?;
-        let chain_id = ChainId::from_str(split.next().unwrap())?;
+        let message_id: MessageId = split.next().context("no message ID in output")?.parse()?;
+        let chain_id = ChainId::from_str(split.next().context("no chain ID in output")?)?;
 
         Ok((message_id, chain_id))
     }
 
     pub async fn open_and_assign(&self, client: &ClientWrapper) -> Result<ChainId> {
         let our_chain = self
-            .get_wallet()
+            .get_wallet()?
             .default_chain()
             .context("no default chain found")?;
         let key = client.keygen().await?;
@@ -423,14 +423,14 @@ impl ClientWrapper {
 
         let stdout = Self::run_command(&mut command).await?;
         let mut split = stdout.split('\n');
-        let message_id: MessageId = split.next().unwrap().parse()?;
-        let chain_id = ChainId::from_str(split.next().unwrap())?;
+        let message_id: MessageId = split.next().context("no message ID in output")?.parse()?;
+        let chain_id = ChainId::from_str(split.next().context("no chain ID in output")?)?;
 
         Ok((message_id, chain_id))
     }
 
-    pub fn get_wallet(&self) -> WalletState {
-        WalletState::from_file(self.wallet_path().as_path()).unwrap()
+    pub fn get_wallet(&self) -> Result<WalletState> {
+        WalletState::from_file(self.wallet_path().as_path())
     }
 
     pub fn wallet_path(&self) -> PathBuf {
@@ -442,14 +442,16 @@ impl ClientWrapper {
     }
 
     pub fn get_owner(&self) -> Option<Owner> {
-        let wallet = self.get_wallet();
+        let wallet = self.get_wallet().ok()?;
         let chain_id = wallet.default_chain()?;
         let public_key = wallet.get(chain_id)?.key_pair.as_ref()?.public();
         Some(public_key.into())
     }
 
     pub async fn is_chain_present_in_wallet(&self, chain: ChainId) -> bool {
-        self.get_wallet().get(chain).is_some()
+        self.get_wallet()
+            .ok()
+            .map_or(false, |wallet| wallet.get(chain).is_some())
     }
 
     pub async fn set_validator(&self, name: &str, port: usize, votes: usize) -> Result<()> {
@@ -483,7 +485,7 @@ impl ClientWrapper {
     }
 
     pub fn default_chain(&self) -> Option<ChainId> {
-        self.get_wallet().default_chain()
+        self.get_wallet().ok()?.default_chain()
     }
 
     pub async fn assign(&self, key: PublicKey, message_id: MessageId) -> Result<ChainId> {
@@ -534,15 +536,23 @@ impl Validator {
         self.servers.remove(index);
     }
 
-    fn assert_is_running(&mut self) {
-        if let Some(status) = self.proxy.try_wait().unwrap() {
-            assert!(status.success());
+    fn ensure_is_running(&mut self) -> Result<()> {
+        if let Some(status) = self
+            .proxy
+            .try_wait()
+            .context("failed waiting for proxy process")?
+        {
+            anyhow::ensure!(status.success(), "proxy returned status: {}", status);
         }
         for child in &mut self.servers {
-            if let Some(status) = child.try_wait().unwrap() {
-                assert!(status.success());
+            if let Some(status) = child
+                .try_wait()
+                .context("failed waiting for server process")?
+            {
+                anyhow::ensure!(status.success(), "server returned status: {}", status);
             }
         }
+        Ok(())
     }
 }
 
@@ -562,7 +572,9 @@ pub struct LocalNetwork {
 impl Drop for LocalNetwork {
     fn drop(&mut self) {
         for validator in self.local_net.values_mut() {
-            validator.assert_is_running();
+            if let Err(error) = validator.ensure_is_running() {
+                tracing::error!("validator not running when dropped: {}", error);
+            }
         }
     }
 }
@@ -588,26 +600,6 @@ impl LocalNetwork {
             set_init: HashSet::new(),
             tmp_dir: Rc::new(tempdir()?),
         })
-    }
-
-    #[cfg(any(test, feature = "test"))]
-    pub fn new_for_testing(database: Database, network: Network) -> Result<Self> {
-        let seed = 37;
-        let table_name = get_table_name();
-        let num_validators = 4;
-        let num_shards = match database {
-            Database::RocksDb => 1,
-            Database::DynamoDb => 4,
-            Database::ScyllaDb => 4,
-        };
-        Self::new(
-            database,
-            network,
-            Some(seed),
-            table_name,
-            num_validators,
-            num_shards,
-        )
     }
 
     pub fn make_client(&mut self, network: Network) -> ClientWrapper {
@@ -681,10 +673,12 @@ impl LocalNetwork {
             ));
         }
         fs::write(&path, content)?;
-        Ok(path
-            .into_os_string()
-            .into_string()
-            .expect("could not parse string into os string"))
+        path.into_os_string().into_string().map_err(|error| {
+            anyhow!(
+                "could not parse string into OS string: {}",
+                error.to_string_lossy()
+            )
+        })
     }
 
     pub async fn generate_initial_validator_config(&mut self) -> Result<Vec<String>> {
@@ -737,7 +731,7 @@ impl LocalNetwork {
             Network::Grpc => {
                 let port = Self::proxy_port(i);
                 let nickname = format!("validator proxy {i}");
-                Self::ensure_grpc_server_has_started(&nickname, port).await;
+                Self::ensure_grpc_server_has_started(&nickname, port).await?;
             }
             Network::Simple => {
                 info!("Letting validator proxy {i} start");
@@ -747,9 +741,9 @@ impl LocalNetwork {
         Ok(child)
     }
 
-    async fn ensure_grpc_server_has_started(nickname: &str, port: usize) {
+    async fn ensure_grpc_server_has_started(nickname: &str, port: usize) -> Result<()> {
         let connection = tonic::transport::Endpoint::new(format!("http://127.0.0.1:{port}"))
-            .expect("endpoint should always parse")
+            .context("endpoint should always parse")?
             .connect_lazy();
         let mut client = HealthClient::new(connection);
         for i in 0..10 {
@@ -757,12 +751,12 @@ impl LocalNetwork {
             let result = client.check(HealthCheckRequest::default()).await;
             if result.is_ok() && result.unwrap().get_ref().status() == ServingStatus::Serving {
                 info!("Successfully started {nickname}");
-                return;
+                return Ok(());
             } else {
                 warn!("Waiting for {nickname} to start");
             }
         }
-        panic!("Failed to start {nickname}");
+        bail!("Failed to start {nickname}");
     }
 
     async fn run_server(&mut self, i: usize, j: usize) -> Result<Child> {
@@ -825,7 +819,7 @@ impl LocalNetwork {
             Network::Grpc => {
                 let port = Self::shard_port(i, j);
                 let nickname = format!("validator server {i}:{j}");
-                Self::ensure_grpc_server_has_started(&nickname, port).await;
+                Self::ensure_grpc_server_has_started(&nickname, port).await?;
             }
             Network::Simple => {
                 info!("Letting validator server {i}:{j} start");
@@ -878,15 +872,6 @@ impl LocalNetwork {
         Ok(())
     }
 
-    pub async fn build_example(&self, name: &str) -> Result<(PathBuf, PathBuf)> {
-        self.build_application(Self::example_path(name)?.as_path(), name, true)
-            .await
-    }
-
-    pub fn example_path(name: &str) -> Result<PathBuf> {
-        Ok(env::current_dir().unwrap().join("../examples/").join(name))
-    }
-
     pub async fn build_application(
         &self,
         path: &Path,
@@ -918,6 +903,37 @@ impl LocalNetwork {
     }
 }
 
+#[cfg(any(test, feature = "test"))]
+impl LocalNetwork {
+    pub fn new_for_testing(database: Database, network: Network) -> Result<Self> {
+        let seed = 37;
+        let table_name = linera_views::test_utils::get_table_name();
+        let num_validators = 4;
+        let num_shards = match database {
+            Database::RocksDb => 1,
+            Database::DynamoDb => 4,
+            Database::ScyllaDb => 4,
+        };
+        Self::new(
+            database,
+            network,
+            Some(seed),
+            table_name,
+            num_validators,
+            num_shards,
+        )
+    }
+
+    pub async fn build_example(&self, name: &str) -> Result<(PathBuf, PathBuf)> {
+        self.build_application(Self::example_path(name)?.as_path(), name, true)
+            .await
+    }
+
+    pub fn example_path(name: &str) -> Result<PathBuf> {
+        Ok(env::current_dir().unwrap().join("../examples/").join(name))
+    }
+}
+
 pub struct NodeService {
     port: u16,
     child: Child,
@@ -928,46 +944,61 @@ impl NodeService {
         self.port
     }
 
-    pub fn assert_is_running(&mut self) {
-        if let Some(status) = self.child.try_wait().unwrap() {
-            assert!(status.success());
+    pub fn ensure_is_running(&mut self) -> Result<()> {
+        if let Some(status) = self
+            .child
+            .try_wait()
+            .context("failed waiting for child process")?
+        {
+            anyhow::ensure!(status.success(), "child returned status: {}", status);
         }
+        Ok(())
     }
 
-    pub async fn process_inbox(&self, chain_id: &ChainId) {
+    pub async fn process_inbox(&self, chain_id: &ChainId) -> Result<()> {
         let query = format!("mutation {{ processInbox(chainId: \"{chain_id}\") }}");
-        self.query_node(&query).await;
+        self.query_node(query).await?;
+        Ok(())
     }
 
     pub async fn make_application<A: ContractAbi>(
         &self,
         chain_id: &ChainId,
         application_id: &ApplicationId<A>,
-    ) -> ApplicationWrapper<A> {
+    ) -> Result<ApplicationWrapper<A>> {
         let application_id = application_id.forget_abi().to_string();
         let n_try = 30;
         for i in 0..n_try {
             tokio::time::sleep(Duration::from_secs(i)).await;
-            let values = self.try_get_applications_uri(chain_id).await;
+            let values = self.try_get_applications_uri(chain_id).await?;
             if let Some(link) = values.get(&application_id) {
-                return ApplicationWrapper::from(link.to_string());
+                return Ok(ApplicationWrapper::from(link.to_string()));
             }
             warn!("Waiting for application {application_id:?} to be visible on chain {chain_id:?}");
         }
-        panic!("Could not find application URI: {application_id} after {n_try} tries");
+        bail!("Could not find application URI: {application_id} after {n_try} tries");
     }
 
-    pub async fn try_get_applications_uri(&self, chain_id: &ChainId) -> HashMap<String, String> {
+    pub async fn try_get_applications_uri(
+        &self,
+        chain_id: &ChainId,
+    ) -> Result<HashMap<String, String>> {
         let query = format!("query {{ applications(chainId: \"{chain_id}\") {{ id link }}}}");
-        let data = self.query_node(&query).await;
+        let data = self.query_node(query).await?;
         data["applications"]
             .as_array()
-            .unwrap()
+            .context("missing applications in response")?
             .iter()
             .map(|a| {
-                let id = a["id"].as_str().unwrap().to_string();
-                let link = a["link"].as_str().unwrap().to_string();
-                (id, link)
+                let id = a["id"]
+                    .as_str()
+                    .context("missing id field in response")?
+                    .to_string();
+                let link = a["link"]
+                    .as_str()
+                    .context("missing link field in response")?
+                    .to_string();
+                Ok((id, link))
             })
             .collect()
     }
@@ -977,22 +1008,25 @@ impl NodeService {
         chain_id: &ChainId,
         contract: PathBuf,
         service: PathBuf,
-    ) -> BytecodeId {
-        let contract_code = Bytecode::load_from_file(&contract).await.unwrap();
-        let service_code = Bytecode::load_from_file(&service).await.unwrap();
+    ) -> Result<BytecodeId> {
+        let contract_code = Bytecode::load_from_file(&contract).await?;
+        let service_code = Bytecode::load_from_file(&service).await?;
         let query = format!(
             "mutation {{ publishBytecode(chainId: {}, contract: {}, service: {}) }}",
             chain_id.to_value(),
             contract_code.to_value(),
             service_code.to_value(),
         );
-        let data = self.query_node(&query).await;
-        let bytecode_str = data["publishBytecode"].as_str().unwrap();
-        bytecode_str.parse().unwrap()
+        let data = self.query_node(query).await?;
+        let bytecode_str = data["publishBytecode"]
+            .as_str()
+            .context("bytecode ID not found")?;
+        bytecode_str.parse().context("could not parse bytecode ID")
     }
 
-    pub async fn query_node(&self, query: &str) -> Value {
+    pub async fn query_node(&self, query: impl AsRef<str>) -> Result<Value> {
         let n_try = 30;
+        let query = query.as_ref();
         for i in 0..n_try {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let url = format!("http://localhost:{}/", self.port);
@@ -1002,15 +1036,17 @@ impl NodeService {
                 .json(&json!({ "query": query }))
                 .send()
                 .await
-                .unwrap();
-            if !response.status().is_success() {
-                panic!(
-                    "Query \"{}\" failed: {}",
-                    query.get(..200).unwrap_or(query),
-                    response.text().await.unwrap()
-                );
-            }
-            let value: Value = response.json().await.unwrap();
+                .context("failed to post query")?;
+            anyhow::ensure!(
+                response.status().is_success(),
+                "Query \"{}\" failed: {}",
+                query.get(..200).unwrap_or(query),
+                response
+                    .text()
+                    .await
+                    .unwrap_or_else(|error| format!("Could not get response text: {error}"))
+            );
+            let value: Value = response.json().await.context("invalid JSON")?;
             if let Some(errors) = value.get("errors") {
                 warn!(
                     "Query \"{}\" failed: {}",
@@ -1018,10 +1054,10 @@ impl NodeService {
                     errors
                 );
             } else {
-                return value["data"].clone();
+                return Ok(value["data"].clone());
             }
         }
-        panic!(
+        bail!(
             "Query \"{}\" failed after {} retries.",
             query.get(..200).unwrap_or(query),
             n_try
@@ -1035,15 +1071,19 @@ impl NodeService {
         parameters: &A::Parameters,
         argument: &A::InitializationArgument,
         required_application_ids: &[ApplicationId],
-    ) -> ApplicationId<A> {
+    ) -> Result<ApplicationId<A>> {
         let json_required_applications_ids = required_application_ids
             .iter()
             .map(ApplicationId::to_string)
             .collect::<Vec<_>>()
             .to_value();
         // Convert to `serde_json::Value` then `async_graphql::Value` via the trait `InputType`.
-        let new_parameters = serde_json::to_value(parameters).unwrap().to_value();
-        let new_argument = serde_json::to_value(argument).unwrap().to_value();
+        let new_parameters = serde_json::to_value(parameters)
+            .context("could not create parameters JSON")?
+            .to_value();
+        let new_argument = serde_json::to_value(argument)
+            .context("could not create argument JSON")?
+            .to_value();
         let query = format!(
             "mutation {{ createApplication(\
                  chainId: \"{chain_id}\",
@@ -1053,16 +1093,22 @@ impl NodeService {
                  requiredApplicationIds: {json_required_applications_ids}) \
              }}"
         );
-        let data = self.query_node(&query).await;
-        let app_id_str = data["createApplication"].as_str().unwrap().trim();
-        app_id_str.parse::<ApplicationId>().unwrap().with_abi()
+        let data = self.query_node(query).await?;
+        let app_id_str = data["createApplication"]
+            .as_str()
+            .context("missing createApplication string in response")?
+            .trim();
+        Ok(app_id_str
+            .parse::<ApplicationId>()
+            .context("invalid application ID")?
+            .with_abi())
     }
 
     pub async fn request_application<A: ContractAbi>(
         &self,
         chain_id: &ChainId,
         application_id: &ApplicationId<A>,
-    ) -> String {
+    ) -> Result<String> {
         let application_id = application_id.forget_abi();
         let query = format!(
             "mutation {{ requestApplication(\
@@ -1070,8 +1116,9 @@ impl NodeService {
                  applicationId: \"{application_id}\") \
              }}"
         );
-        let data = self.query_node(&query).await;
-        serde_json::from_value(data["requestApplication"].clone()).unwrap()
+        let data = self.query_node(query).await?;
+        serde_json::from_value(data["requestApplication"].clone())
+            .context("missing requestApplication field in response")
     }
 }
 
@@ -1081,7 +1128,7 @@ pub struct ApplicationWrapper<A> {
 }
 
 impl<A> ApplicationWrapper<A> {
-    pub async fn raw_query(&self, query: impl AsRef<str>) -> Value {
+    pub async fn raw_query(&self, query: impl AsRef<str>) -> Result<Value> {
         let query = query.as_ref();
         let client = reqwest::Client::new();
         let response = client
@@ -1089,40 +1136,43 @@ impl<A> ApplicationWrapper<A> {
             .json(&json!({ "query": query }))
             .send()
             .await
-            .unwrap();
-        if !response.status().is_success() {
-            panic!(
-                "Query \"{}\" failed: {}",
-                query.get(..200).unwrap_or(query),
-                response.text().await.unwrap()
-            );
-        }
-        let value: Value = response.json().await.unwrap();
+            .context("failed to post query")?;
+        anyhow::ensure!(
+            response.status().is_success(),
+            "Query \"{}\" failed: {}",
+            query.get(..200).unwrap_or(query),
+            response
+                .text()
+                .await
+                .unwrap_or_else(|error| format!("Could not get response text: {error}"))
+        );
+        let value: Value = response.json().await.context("invalid JSON")?;
         if let Some(errors) = value.get("errors") {
-            panic!(
+            bail!(
                 "Query \"{}\" failed: {}",
                 query.get(..200).unwrap_or(query),
                 errors
             );
         }
-        value["data"].clone()
+        Ok(value["data"].clone())
     }
 
-    pub async fn query(&self, query: impl AsRef<str>) -> Value {
+    pub async fn query(&self, query: impl AsRef<str>) -> Result<Value> {
         let query = query.as_ref();
         self.raw_query(&format!("query {{ {query} }}")).await
     }
 
-    pub async fn query_json<T: DeserializeOwned>(&self, query: impl AsRef<str>) -> T {
+    pub async fn query_json<T: DeserializeOwned>(&self, query: impl AsRef<str>) -> Result<T> {
         let query = query.as_ref().trim();
         let name = query
             .split_once(|ch: char| !ch.is_alphanumeric())
             .map_or(query, |(name, _)| name);
-        let data = self.query(query).await;
-        serde_json::from_value(data[name].clone()).unwrap()
+        let data = self.query(query).await?;
+        serde_json::from_value(data[name].clone())
+            .with_context(|| format!("{name} field missing in response"))
     }
 
-    pub async fn mutate(&self, mutation: impl AsRef<str>) -> Value {
+    pub async fn mutate(&self, mutation: impl AsRef<str>) -> Result<Value> {
         let mutation = mutation.as_ref();
         self.raw_query(&format!("mutation {{ {mutation} }}")).await
     }

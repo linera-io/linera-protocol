@@ -192,5 +192,5 @@ async fn run_end_to_end_operations_indexer(database: Database) {
     }
 
     indexer_running(&mut indexer);
-    node_service.assert_is_running();
+    node_service.ensure_is_running().unwrap();
 }
