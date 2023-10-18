@@ -74,6 +74,8 @@ where
     /// Creates and executes the `Future` instance, polling it as requested by the [`PollSender`]
     /// until it completes.
     pub fn run(mut self, parameters: Future::Parameters) {
+        Application::initialize(&mut self.context);
+
         match Future::new(
             parameters,
             &self.context.application,

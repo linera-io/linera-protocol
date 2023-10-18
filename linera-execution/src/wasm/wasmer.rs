@@ -81,6 +81,20 @@ impl ApplicationRuntimeContext for Contract {
     type Error = RuntimeError;
     type Extra = WasmerContractExtra;
 
+    fn initialize(context: &mut WasmRuntimeContext<Self>) {
+        let remaining_points = context
+            .extra
+            .runtime
+            .sync_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
+            .unwrap_or(0);
+
+        metering::set_remaining_points(
+            &mut context.store,
+            &context.extra.instance,
+            remaining_points,
+        );
+    }
+
     fn finalize(context: &mut WasmRuntimeContext<Self>) {
         let remaining_fuel =
             match metering::get_remaining_points(&mut context.store, &context.extra.instance) {
@@ -220,20 +234,6 @@ impl common::Contract for Contract {
     type PollExecutionResult = contract::PollExecutionResult;
     type PollApplicationCallResult = contract::PollApplicationCallResult;
     type PollSessionCallResult = contract::PollSessionCallResult;
-
-    fn configure_fuel(context: &mut WasmRuntimeContext<Self>) {
-        let remaining_points = context
-            .extra
-            .runtime
-            .sync_request(|response_sender| ContractRequest::RemainingFuel { response_sender })
-            .unwrap_or(0);
-
-        metering::set_remaining_points(
-            &mut context.store,
-            &context.extra.instance,
-            remaining_points,
-        );
-    }
 
     fn initialize_new(
         &self,

@@ -26,6 +26,9 @@ pub trait ApplicationRuntimeContext: Sized {
     /// Extra runtime-specific data.
     type Extra: Send + Unpin;
 
+    /// Initializes the runtime context, running any extra set-up operations.
+    fn initialize(_context: &mut WasmRuntimeContext<Self>) {}
+
     /// Finalizes the runtime context, running any extra clean-up operations.
     fn finalize(_context: &mut WasmRuntimeContext<Self>) {}
 }
@@ -85,9 +88,6 @@ pub trait Contract: ApplicationRuntimeContext {
 
     /// The WIT type eqivalent for [`Poll<Result<SessionCallResult, String>>`].
     type PollSessionCallResult;
-
-    /// Configures the amount of fuel available before executing the contract.
-    fn configure_fuel(context: &mut WasmRuntimeContext<Self>);
 
     /// Creates a new future for the user application to initialize itself on the owner chain.
     fn initialize_new(
@@ -232,12 +232,10 @@ where
     /// ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>
     /// ```
     pub fn initialize(
-        mut self,
+        self,
         context: &OperationContext,
         argument: &[u8],
     ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> {
-        A::configure_fuel(&mut self);
-
         GuestFutureActor::<A::Initialize, A>::spawn((*context, argument.to_owned()), self)
     }
 
@@ -254,12 +252,10 @@ where
     /// ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>
     /// ```
     pub fn execute_operation(
-        mut self,
+        self,
         context: &OperationContext,
         operation: &[u8],
     ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> {
-        A::configure_fuel(&mut self);
-
         GuestFutureActor::<A::ExecuteOperation, A>::spawn((*context, operation.to_owned()), self)
     }
 
@@ -276,12 +272,10 @@ where
     /// ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError>
     /// ```
     pub fn execute_message(
-        mut self,
+        self,
         context: &MessageContext,
         message: &[u8],
     ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> {
-        A::configure_fuel(&mut self);
-
         GuestFutureActor::<A::ExecuteMessage, A>::spawn((*context, message.to_owned()), self)
     }
 
@@ -299,13 +293,11 @@ where
     /// ) -> Result<ApplicationCallResult, ExecutionError>
     /// ```
     pub fn handle_application_call(
-        mut self,
+        self,
         context: &CalleeContext,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> impl Future<Output = Result<ApplicationCallResult, ExecutionError>> {
-        A::configure_fuel(&mut self);
-
         GuestFutureActor::<A::HandleApplicationCall, A>::spawn(
             (*context, argument.to_owned(), forwarded_sessions),
             self,
@@ -327,14 +319,12 @@ where
     /// ) -> Result<(SessionCallResult, Vec<u8>), ExecutionError>
     /// ```
     pub fn handle_session_call(
-        mut self,
+        self,
         context: &CalleeContext,
         session_state: &[u8],
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
     ) -> impl Future<Output = Result<(SessionCallResult, Vec<u8>), ExecutionError>> {
-        A::configure_fuel(&mut self);
-
         GuestFutureActor::<A::HandleSessionCall, A>::spawn(
             (
                 *context,
