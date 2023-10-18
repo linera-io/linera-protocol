@@ -9,18 +9,19 @@
 * `rustup target add wasm32-unknown-unknown`
 * Protoc
     - `brew install protobuf`
+
 ## Service
 
-* `brew install python3`
-* `python3 -mpip install localstack`
 * https://aws.amazon.com/cli/
 * https://docs.docker.com/desktop/mac/install/
 
 ## Additional tooling
 
 * `brew install gh`
-* `cargo install mdbook`
 * `cargo install cargo-rdme`
+* `cargo install cargo-sort`
+* `cargo install cargo-all-features`
+* `cargo install cargo-machete`
 
 # Installation for Linux
 
@@ -38,6 +39,9 @@
 * https://aws.amazon.com/cli/
 * https://docs.docker.com/engine/install/
 
-## Additional Tooling
+## Additional tooling
 
-* `cargo install mdbook`
+* `cargo install cargo-rdme`
+* `cargo install cargo-sort`
+* `cargo install cargo-all-features`
+* `cargo install cargo-machete`
