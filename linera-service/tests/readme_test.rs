@@ -27,7 +27,10 @@ async fn test_examples_in_readme() -> std::io::Result<()> {
     write!(&mut test_script, "{}", quote)?;
 
     let status = Command::new("bash")
-        .current_dir("..") // root of the repo
+        // Run from the root of the repo.
+        .current_dir("..")
+        // Increase log verbosity to verify that services can write to stderr.
+        .env("RUST_LOG", "linera_service=debug")
         .arg("-e")
         .arg("-x")
         .arg(dir.path().join("test.sh"))
