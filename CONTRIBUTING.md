@@ -10,7 +10,8 @@ ensure that your contributions will be accepted.
 * If your send a bug report, please ensure that your description is clear and has sufficient
 instructions to be able to reproduce the issue.
 
-## Pull Requests
+
+## Pull Requests (PRs)
 
 To make a contribution to the code after discussing it in a GitHub issue,
 
@@ -32,6 +33,7 @@ Only commits in a PR accepted by at least one team member should be pushed to th
 
 Please also make yourself familiar with the rest of the guidelines below.
 
+
 ## Naming conventions
 
 As usual in Rust, type names (struct, enum, traits) are compound words in [camel
@@ -52,15 +54,18 @@ However, single letter variables `i`, `x`, `n` are accepted for short-lived inte
 
 Prefer plural names for collections of objects: `let values = vec![1, 2, 3];`.
 
+
 ## API coding guidelines
 
 Contributions should generally follow the [Rust API guidelines](https://rust-lang.github.io/api-guidelines/checklist.html) whenever possible.
+
 
 ## Additional code style guidelines
 
 * Type annotations (such as `let x : t = ...;`, `Vec::<usize>::new()`) should be present only when required by the compiler.
 
 * Re-exports (`pub use foo = bar::foo`) should be limited to definitions that would be private otherwise.
+
 
 ## Formatting and linting
 
@@ -73,6 +78,18 @@ and format the code with
 cargo +nightly fmt
 ```
 (The nightly build is required notably for [rust-lang/rustfmt#4991](https://github.com/rust-lang/rustfmt/issues/4991).)
+
+
+## Command-line tools and services
+
+* All executables should use `StructOpt`. When tools call each other, the `--version` is
+  checked and must match the package version of the caller.
+
+* Only structured data should be printed to the standard output, preferably as newline-separated JSON values.
+
+* The preferred way to output to the standard error is to use the logging crate `tracing`.
+  See existing `main` functions for the necessary boilerplate.
+
 
 ## Managing cargo features and dependencies between crates
 
@@ -93,6 +110,7 @@ cargo install --git https://github.com/ma2bd/cargo-all-features --branch workspa
 cargo check-all-features --all-targets
 ```
 
+
 ## Dealing with test failures `test_format` after code changes
 
 Getting an error with the test in [`linera-rpc/tests/format.rs`](linera-rpc/tests/format.rs) ?
@@ -101,6 +119,7 @@ outdated. In the most case (but not always sadly), this can be fixed by running
 [`linera-rpc/generate-format.sh`](linera-rpc/generate-format.sh).
 
 See https://github.com/zefchain/serde-reflection for more context.
+
 
 ## Wasm support
 
@@ -136,6 +155,7 @@ cargo build --release --target wasm32-unknown-unknown
 ```
 The Rust flags are suggested to reduce the size of the Wasm bytecodes.
 
+
 ## Debugging techniques
 
 The debugging of tests can be complicated and some tools can help this.
@@ -151,7 +171,7 @@ command added just before the line declaring the test
 If the test lasts longer than the fixed time then it fails. The unit of time is milisecond, so the `600000` corresponds
 to `600` seconds and so to `10` minutes.
 
-## Tracking simultaneous threads in `tokio`
+### Tracking simultaneous threads in `tokio`
 
 The running of what is going on in `tokio` based programs can be difficult. The [tokio-console](https://crates.io/crates/tokio-console) crates allows to see
 the different threads going on. See [documentation of the user interface of tokio-console](https://docs.rs/tokio-console/0.1.9/tokio_console/) for more details.
@@ -170,11 +190,13 @@ A simple way to use this on a laptop is the following:
 For example if the test blocks, it will show the line in question with `block_on`.
 See the documentation of `tokio-console` for more details.
 
+
 ## Adding dependencies to third-party crates
 
 Given the nature of the project, every dependency will be eventually tracked and audited.
 Please be mindful about adding new dependencies to crates that are large and/or unlikely to be
 already vetted by the Rust community.
+
 
 ## License and copyright
 
@@ -187,6 +209,7 @@ New files should be copyrighted by "Zefchain Labs, Inc" (the legal entity behind
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 ```
+
 
 ## Reviewer Checklist
 

@@ -1164,7 +1164,7 @@ impl Runnable for Job {
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
-                info!("{:?}", certificate);
+                debug!("{:?}", certificate);
                 context.update_wallet_from_client(&mut chain_client).await;
                 context.save_wallet();
             }
@@ -1187,7 +1187,7 @@ impl Runnable for Job {
                 let (message_id, certificate) = chain_client.open_chain(ownership).await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
-                info!("{:#?}", certificate);
+                debug!("{:?}", certificate);
                 context.update_wallet_from_client(&mut chain_client).await;
                 let id = ChainId::child(message_id);
                 let timestamp = match certificate.value() {
@@ -1229,7 +1229,7 @@ impl Runnable for Job {
                 let (message_id, certificate) = chain_client.open_chain(ownership).await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
-                info!("{:#?}", certificate);
+                debug!("{:?}", certificate);
                 context.update_wallet_from_client(&mut chain_client).await;
                 // No key pair. This chain can be assigned explicitly using the assign command.
                 let key_pair = None;
@@ -1255,7 +1255,7 @@ impl Runnable for Job {
                 let certificate = chain_client.close_chain().await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Operation confirmed after {} us", time_total);
-                info!("{:?}", certificate);
+                debug!("{:?}", certificate);
                 context.update_wallet_from_client(&mut chain_client).await;
                 context.save_wallet();
             }
@@ -1361,7 +1361,7 @@ impl Runnable for Job {
                         if let Some(messages) = messages {
                             pricing.messages = messages;
                         }
-                        println!(
+                        info!(
                             "Pricing:\n\
                             {:.2} base cost per block\n\
                             {:.2} per unit of fuel used in executing user operations and messages\n\
@@ -1619,7 +1619,7 @@ impl Runnable for Job {
                     .request_application(application_id, target_chain_id)
                     .await
                     .unwrap();
-                info!("{:?}", certificate);
+                debug!("{:?}", certificate);
                 context.update_wallet_from_client(&mut chain_client).await;
                 context.save_wallet();
             }

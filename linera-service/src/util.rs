@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{bail, Context as _, Result};
-use std::path::{Path, PathBuf};
+use async_trait::async_trait;
+use std::{
+    path::{Path, PathBuf},
+    process::Stdio,
+};
 use tokio::process::Command;
 use tracing::{debug, error};
 
@@ -90,4 +94,51 @@ pub async fn resolve_binary_in_same_directory_as<P: AsRef<Path>>(
     debug!("{} has version {version}", binary.display());
 
     Ok(binary)
+}
+
+/// Extension trait for [`tokio::process::Command`].
+#[async_trait]
+pub trait CommandExt: std::fmt::Debug {
+    /// Similar to [`tokio::process::Command::spawn`] but sets `kill_on_drop` to `true`.
+    /// Errors are tagged with a description of the command.
+    fn spawn_into(&mut self) -> anyhow::Result<tokio::process::Child>;
+
+    /// Similar to [`tokio::process::Command::output`] but does not capture `stderr` and
+    /// returns the `stdout` as a string. Errors are tagged with a description of the
+    /// command.
+    async fn spawn_and_wait_for_stdout(&mut self) -> anyhow::Result<String>;
+
+    /// Description used for error reporting.
+    fn description(&self) -> String {
+        format!("While executing {:?}", self)
+    }
+}
+
+#[async_trait]
+impl CommandExt for tokio::process::Command {
+    fn spawn_into(&mut self) -> anyhow::Result<tokio::process::Child> {
+        self.kill_on_drop(true);
+        debug!("Spawning {:?}", self);
+        let child = tokio::process::Command::spawn(self).with_context(|| self.description())?;
+        Ok(child)
+    }
+
+    async fn spawn_and_wait_for_stdout(&mut self) -> anyhow::Result<String> {
+        debug!("Spawning and waiting for {:?}", self);
+        self.stdout(Stdio::piped());
+        self.stderr(Stdio::inherit());
+
+        let child = self.spawn().with_context(|| self.description())?;
+        let output = child
+            .wait_with_output()
+            .await
+            .with_context(|| self.description())?;
+        anyhow::ensure!(
+            output.status.success(),
+            "{}: got non-zero error code {}",
+            self.description(),
+            output.status
+        );
+        String::from_utf8(output.stdout).with_context(|| self.description())
+    }
 }
