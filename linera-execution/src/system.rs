@@ -1000,30 +1000,34 @@ mod tests {
 
     impl BcsSignable for Dummy {}
 
-    #[tokio::test]
-    async fn bytecode_message_index() {
+    /// Returns an execution state view and a matching operation context, for epoch 1, with root
+    /// chain 0 as the admin ID and one empty committee.
+    async fn new_view_and_context() -> (
+        ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>,
+        OperationContext,
+    ) {
         let description = ChainDescription::Root(5);
-        let chain_id = ChainId::from(description);
+        let context = OperationContext {
+            chain_id: ChainId::from(description),
+            authenticated_signer: None,
+            height: BlockHeight::from(7),
+            index: 2,
+            next_message_index: 3,
+        };
         let state = SystemExecutionState {
             description: Some(description),
+            epoch: Some(Epoch(1)),
+            admin_id: Some(ChainId::root(0)),
+            committees: BTreeMap::new(),
             ..SystemExecutionState::default()
         };
-        let mut view =
-            ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-                state,
-            )
-            .await;
+        let view = ExecutionStateView::from_system_state(state).await;
+        (view, context)
+    }
 
-        let height = BlockHeight::from(7);
-        let next_message_index = 8;
-        let operation_index = 2;
-        let context = OperationContext {
-            chain_id,
-            authenticated_signer: None,
-            height,
-            index: operation_index,
-            next_message_index,
-        };
+    #[tokio::test]
+    async fn bytecode_message_index() {
+        let (mut view, context) = new_view_and_context().await;
         let operation = SystemOperation::PublishBytecode {
             contract: Bytecode::new(vec![]),
             service: Bytecode::new(vec![]),
@@ -1034,6 +1038,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(new_application, None);
+        let operation_index = context.index;
         assert_eq!(
             result.messages[PUBLISH_BYTECODE_MESSAGE_INDEX as usize].message,
             SystemMessage::BytecodePublished { operation_index }
@@ -1042,31 +1047,9 @@ mod tests {
 
     #[tokio::test]
     async fn application_message_index() {
-        let description = ChainDescription::Root(5);
-        let chain_id = ChainId::from(description);
-        let state = SystemExecutionState {
-            description: Some(description),
-            ..SystemExecutionState::default()
-        };
-        let mut view =
-            ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-                state,
-            )
-            .await;
-
-        let height = BlockHeight::from(7);
-        let next_message_index = 8;
-        let operation_index = 2;
-        let context = OperationContext {
-            chain_id,
-            authenticated_signer: None,
-            height,
-            index: operation_index,
-            next_message_index,
-        };
-
+        let (mut view, context) = new_view_and_context().await;
         let bytecode_id = BytecodeId::new(MessageId {
-            chain_id,
+            chain_id: context.chain_id,
             height: BlockHeight::from(5),
             index: 0,
         });
@@ -1095,9 +1078,9 @@ mod tests {
             SystemMessage::ApplicationCreated
         );
         let creation = MessageId {
-            chain_id,
-            height,
-            index: next_message_index + CREATE_APPLICATION_MESSAGE_INDEX,
+            chain_id: context.chain_id,
+            height: context.height,
+            index: context.next_message_index + CREATE_APPLICATION_MESSAGE_INDEX,
         };
         let id = ApplicationId {
             bytecode_id,
@@ -1108,34 +1091,10 @@ mod tests {
 
     #[tokio::test]
     async fn open_chain_message_index() {
-        let description = ChainDescription::Root(6);
-        let epoch = Epoch(1);
-        let admin_id = ChainId::root(0);
-        let chain_id = ChainId::from(description);
-        let committees = BTreeMap::new();
-        let state = SystemExecutionState {
-            description: Some(description),
-            epoch: Some(epoch),
-            admin_id: Some(admin_id),
-            committees: committees.clone(),
-            ..SystemExecutionState::default()
-        };
-        let mut view =
-            ExecutionStateView::<MemoryContext<TestExecutionRuntimeContext>>::from_system_state(
-                state,
-            )
-            .await;
-
-        let height = BlockHeight::from(2);
-        let next_message_index = 5;
-        let operation_index = 8;
-        let context = OperationContext {
-            chain_id,
-            authenticated_signer: None,
-            height,
-            index: operation_index,
-            next_message_index,
-        };
+        let (mut view, context) = new_view_and_context().await;
+        let epoch = view.system.epoch.get().unwrap();
+        let admin_id = view.system.admin_id.get().unwrap();
+        let committees = view.system.committees.get().clone();
         let ownership = ChainOwnership::single(KeyPair::generate().public());
         let operation = SystemOperation::OpenChain {
             ownership: ownership.clone(),
