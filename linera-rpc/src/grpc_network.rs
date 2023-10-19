@@ -44,7 +44,7 @@ use linera_core::{
 use linera_storage::Store;
 use linera_views::views::ViewError;
 use once_cell::sync::Lazy;
-use prometheus::{register_histogram_vec, HistogramVec};
+use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
 use rand::Rng;
 use std::{
     fmt::Debug,
@@ -73,6 +73,15 @@ pub static SERVER_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "server_request_latency",
         "Server request latency",
+        // Can add labels here
+        &[]
+    )
+    .expect("Counter can be created")
+});
+pub static SERVER_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "server_request_count",
+        "Server request count",
         // Can add labels here
         &[]
     )
@@ -157,6 +166,7 @@ where
             SERVER_REQUEST_LATENCY
                 .with_label_values(&[])
                 .observe(start.elapsed().as_secs_f64());
+            SERVER_REQUEST_COUNT.with_label_values(&[]).inc();
             Ok(response)
         }
         .boxed()
