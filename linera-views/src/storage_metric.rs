@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// This can be used for storage fees or for other
 /// benchmarking purposes.
 #[derive(Clone, Default, Debug)]
-pub struct AtomicMetricStat {
+pub struct AtomicMetricCounters {
     /// The total number of keys read in calls to `read_key` and `read_multi_key`
     pub n_reads: Arc<AtomicUsize>,
     /// The number of missed cases in read_key and read_multi_key
@@ -26,9 +26,9 @@ pub struct AtomicMetricStat {
     /// The total number of DeletePrefix in the batches
     pub n_delete_prefix: Arc<AtomicUsize>,
     /// The total data that went into the Batches
-    pub size_writes: Arc<AtomicUsize>,
+    pub bytes_written: Arc<AtomicUsize>,
     /// The total data being read from
-    pub size_reads: Arc<AtomicUsize>,
+    pub bytes_read: Arc<AtomicUsize>,
     /// The maximal key size
     pub max_key_size: Arc<AtomicUsize>,
     /// The maximal value size
@@ -39,7 +39,7 @@ pub struct AtomicMetricStat {
 /// This can be used for storage fees or for other
 /// benchmarking purposes.
 #[derive(Clone, Copy, Default, Debug, Eq, PartialEq)]
-pub struct MetricStat {
+pub struct MetricCounters {
     /// The total number of keys read in calls to `read_key` and `read_multi_key`
     pub n_reads: usize,
     /// The number of missed cases in read_key and read_multi_key
@@ -51,9 +51,9 @@ pub struct MetricStat {
     /// The total number of DeletePrefix in the batches
     pub n_delete_prefix: usize,
     /// The total data that went into the Batches
-    pub size_writes: usize,
+    pub bytes_written: usize,
     /// The total data being read from
-    pub size_reads: usize,
+    pub bytes_read: usize,
     /// The maximal key size
     pub max_key_size: usize,
     /// The maximal value size
@@ -71,7 +71,7 @@ pub struct MetricKeyValueClient<K> {
     /// The inner client that is called by the metric one
     pub client: K,
     /// The data contained in the running of this container
-    pub metric_stat: AtomicMetricStat,
+    pub metric_counters: AtomicMetricCounters,
 }
 
 #[async_trait]
@@ -90,15 +90,15 @@ where
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let read = self.client.read_key_bytes(key).await?;
-        self.metric_stat.max_key_size.fetch_max(key.len(), Ordering::Relaxed);
-        self.metric_stat.n_reads.fetch_add(1, Ordering::Relaxed);
+        self.metric_counters.max_key_size.fetch_max(key.len(), Ordering::Relaxed);
+        self.metric_counters.n_reads.fetch_add(1, Ordering::Relaxed);
         match &read {
             None => {
-                self.metric_stat.n_miss_reads.fetch_add(1, Ordering::Relaxed);
+                self.metric_counters.n_miss_reads.fetch_add(1, Ordering::Relaxed);
             }
             Some(value) => {
-                self.metric_stat.size_reads.fetch_add(value.len(), Ordering::Relaxed);
-                self.metric_stat.max_value_size.fetch_max(value.len(), Ordering::Relaxed);
+                self.metric_counters.bytes_read.fetch_add(value.len(), Ordering::Relaxed);
+                self.metric_counters.max_value_size.fetch_max(value.len(), Ordering::Relaxed);
             }
         }
         Ok(read)
@@ -110,18 +110,18 @@ where
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         let n_keys = keys.len();
         for key in &keys {
-            self.metric_stat.max_key_size.fetch_max(key.len(), Ordering::Relaxed);
+            self.metric_counters.max_key_size.fetch_max(key.len(), Ordering::Relaxed);
         }
         let multi_read = self.client.read_multi_key_bytes(keys).await?;
-        self.metric_stat.n_reads.fetch_add(n_keys, Ordering::Relaxed);
+        self.metric_counters.n_reads.fetch_add(n_keys, Ordering::Relaxed);
         for read in &multi_read {
             match read {
                 None => {
-                    self.metric_stat.n_miss_reads.fetch_add(1, Ordering::Relaxed);
+                    self.metric_counters.n_miss_reads.fetch_add(1, Ordering::Relaxed);
                 }
                 Some(value) => {
-                    self.metric_stat.size_reads.fetch_add(value.len(), Ordering::Relaxed);
-                    self.metric_stat.max_value_size.fetch_max(value.len(), Ordering::Relaxed);
+                    self.metric_counters.bytes_read.fetch_add(value.len(), Ordering::Relaxed);
+                    self.metric_counters.max_value_size.fetch_max(value.len(), Ordering::Relaxed);
                 }
             }
         }
@@ -132,8 +132,8 @@ where
         let keys = self.client.find_keys_by_prefix(key_prefix).await?;
         for key in keys.iterator() {
             let key_len = key?.len();
-            self.metric_stat.size_reads.fetch_add(key_len, Ordering::Relaxed);
-            self.metric_stat.max_key_size.fetch_max(key_len, Ordering::Relaxed);
+            self.metric_counters.bytes_read.fetch_add(key_len, Ordering::Relaxed);
+            self.metric_counters.max_key_size.fetch_max(key_len, Ordering::Relaxed);
         }
         Ok(keys)
     }
@@ -145,9 +145,9 @@ where
         let key_values = self.client.find_key_values_by_prefix(key_prefix).await?;
         for key_value in key_values.iterator() {
             let key_value = key_value?;
-            self.metric_stat.size_reads.fetch_add(key_value.0.len() + key_value.1.len(), Ordering::Relaxed);
-            self.metric_stat.max_key_size.fetch_max(key_value.0.len(), Ordering::Relaxed);
-            self.metric_stat.max_value_size.fetch_max(key_value.1.len(), Ordering::Relaxed);
+            self.metric_counters.bytes_read.fetch_add(key_value.0.len() + key_value.1.len(), Ordering::Relaxed);
+            self.metric_counters.max_key_size.fetch_max(key_value.0.len(), Ordering::Relaxed);
+            self.metric_counters.max_value_size.fetch_max(key_value.1.len(), Ordering::Relaxed);
         }
         Ok(key_values)
     }
@@ -156,19 +156,19 @@ where
         for operation in &batch.operations {
             match operation {
                 WriteOperation::Delete { key } => {
-                    self.metric_stat.n_deletes.fetch_add(1, Ordering::Relaxed);
-                    self.metric_stat.size_writes.fetch_add(key.len(), Ordering::Relaxed);
-                    self.metric_stat.max_key_size.fetch_max(key.len(), Ordering::Relaxed);
+                    self.metric_counters.n_deletes.fetch_add(1, Ordering::Relaxed);
+                    self.metric_counters.bytes_written.fetch_add(key.len(), Ordering::Relaxed);
+                    self.metric_counters.max_key_size.fetch_max(key.len(), Ordering::Relaxed);
                 }
                 WriteOperation::Put { key, value } => {
-                    self.metric_stat.n_puts.fetch_add(1, Ordering::Relaxed);
-                    self.metric_stat.size_writes.fetch_add(key.len() + value.len(), Ordering::Relaxed);
-                    self.metric_stat.max_key_size.fetch_max(key.len(), Ordering::Relaxed);
-                    self.metric_stat.max_value_size.fetch_max(value.len(), Ordering::Relaxed);
+                    self.metric_counters.n_puts.fetch_add(1, Ordering::Relaxed);
+                    self.metric_counters.bytes_written.fetch_add(key.len() + value.len(), Ordering::Relaxed);
+                    self.metric_counters.max_key_size.fetch_max(key.len(), Ordering::Relaxed);
+                    self.metric_counters.max_value_size.fetch_max(value.len(), Ordering::Relaxed);
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    self.metric_stat.n_delete_prefix.fetch_add(1, Ordering::Relaxed);
-                    self.metric_stat.size_writes.fetch_add(key_prefix.len(), Ordering::Relaxed);
+                    self.metric_counters.n_delete_prefix.fetch_add(1, Ordering::Relaxed);
+                    self.metric_counters.bytes_written.fetch_add(key_prefix.len(), Ordering::Relaxed);
                 }
             }
         }
@@ -185,17 +185,17 @@ where
     K: KeyValueStoreClient + Send + Sync,
 {
     /// Returning the current metric information
-    pub fn metric(&self) -> MetricStat {
-        let n_reads = self.metric_stat.n_reads.load(Ordering::Relaxed);
-        let n_miss_reads = self.metric_stat.n_miss_reads.load(Ordering::Relaxed);
-        let n_puts = self.metric_stat.n_puts.load(Ordering::Relaxed);
-        let n_deletes = self.metric_stat.n_deletes.load(Ordering::Relaxed);
-        let n_delete_prefix = self.metric_stat.n_delete_prefix.load(Ordering::Relaxed);
-        let size_writes = self.metric_stat.size_writes.load(Ordering::Relaxed);
-        let size_reads = self.metric_stat.size_reads.load(Ordering::Relaxed);
-        let max_key_size = self.metric_stat.max_key_size.load(Ordering::Relaxed);
-        let max_value_size = self.metric_stat.max_value_size.load(Ordering::Relaxed);
-        MetricStat { n_reads, n_miss_reads, n_puts, n_deletes, n_delete_prefix, size_writes, size_reads, max_key_size, max_value_size }
+    pub fn metric(&self) -> MetricCounters {
+        let n_reads = self.metric_counters.n_reads.load(Ordering::Relaxed);
+        let n_miss_reads = self.metric_counters.n_miss_reads.load(Ordering::Relaxed);
+        let n_puts = self.metric_counters.n_puts.load(Ordering::Relaxed);
+        let n_deletes = self.metric_counters.n_deletes.load(Ordering::Relaxed);
+        let n_delete_prefix = self.metric_counters.n_delete_prefix.load(Ordering::Relaxed);
+        let bytes_written = self.metric_counters.bytes_written.load(Ordering::Relaxed);
+        let bytes_read = self.metric_counters.bytes_read.load(Ordering::Relaxed);
+        let max_key_size = self.metric_counters.max_key_size.load(Ordering::Relaxed);
+        let max_value_size = self.metric_counters.max_value_size.load(Ordering::Relaxed);
+        MetricCounters { n_reads, n_miss_reads, n_puts, n_deletes, n_delete_prefix, bytes_written, bytes_read, max_key_size, max_value_size }
     }
 }
 
@@ -203,10 +203,10 @@ where
 /// Create a new client
 pub fn get_metric_memory_client() -> MetricKeyValueClient<MemoryClient> {
     let client = create_memory_client();
-    let metric_stat = AtomicMetricStat::default();
+    let metric_counters = AtomicMetricCounters::default();
     MetricKeyValueClient {
         client,
-        metric_stat,
+        metric_counters,
     }
 }
 
@@ -216,12 +216,12 @@ mod tests {
         batch::Batch,
         common::KeyValueStoreClient,
         memory::MemoryClient,
-        storage_metric::{get_metric_memory_client, MetricKeyValueClient, MetricStat},
+        storage_metric::{get_metric_memory_client, MetricKeyValueClient, MetricCounters},
     };
 
     async fn get_memory_test_state() -> MetricKeyValueClient<MemoryClient> {
         let client = get_metric_memory_client();
-        assert_eq!(client.metric(), MetricStat::default());
+        assert_eq!(client.metric(), MetricCounters::default());
         let mut batch = Batch::new();
         batch.put_key_value_bytes(vec![1, 2, 3], vec![1]);
         batch.put_key_value_bytes(vec![1, 2, 4], vec![2, 2]);
@@ -232,14 +232,14 @@ mod tests {
         client.write_batch(batch, &[]).await.unwrap();
         assert_eq!(
             client.metric(),
-            MetricStat {
+            MetricCounters {
                 n_reads: 0,
                 n_miss_reads: 0,
                 n_puts: 4,
                 n_deletes: 1,
                 n_delete_prefix: 1,
-                size_writes: 27,
-                size_reads: 0,
+                bytes_written: 27,
+                bytes_read: 0,
                 max_key_size: 3,
                 max_value_size: 4,
             }
@@ -253,14 +253,14 @@ mod tests {
         client.read_key_bytes(&[1, 3, 3]).await.unwrap();
         assert_eq!(
             client.metric(),
-            MetricStat {
+            MetricCounters {
                 n_reads: 1,
                 n_miss_reads: 0,
                 n_puts: 4,
                 n_deletes: 1,
                 n_delete_prefix: 1,
-                size_writes: 27,
-                size_reads: 4,
+                bytes_written: 27,
+                bytes_read: 4,
                 max_key_size: 3,
                 max_value_size: 4,
             }
@@ -273,14 +273,14 @@ mod tests {
         client.read_key_bytes(&[1, 4, 4, 4]).await.unwrap();
         assert_eq!(
             client.metric(),
-            MetricStat {
+            MetricCounters {
                 n_reads: 1,
                 n_miss_reads: 1,
                 n_puts: 4,
                 n_deletes: 1,
                 n_delete_prefix: 1,
-                size_writes: 27,
-                size_reads: 0,
+                bytes_written: 27,
+                bytes_read: 0,
                 max_key_size: 4,
                 max_value_size: 4,
             }
@@ -296,14 +296,14 @@ mod tests {
             .unwrap();
         assert_eq!(
             client.metric(),
-            MetricStat {
+            MetricCounters {
                 n_reads: 2,
                 n_miss_reads: 0,
                 n_puts: 4,
                 n_deletes: 1,
                 n_delete_prefix: 1,
-                size_writes: 27,
-                size_reads: 7,
+                bytes_written: 27,
+                bytes_read: 7,
                 max_key_size: 3,
                 max_value_size: 4,
             }
@@ -316,14 +316,14 @@ mod tests {
         client.find_keys_by_prefix(&[1, 2]).await.unwrap();
         assert_eq!(
             client.metric(),
-            MetricStat {
+            MetricCounters {
                 n_reads: 0,
                 n_miss_reads: 0,
                 n_puts: 4,
                 n_deletes: 1,
                 n_delete_prefix: 1,
-                size_writes: 27,
-                size_reads: 3,
+                bytes_written: 27,
+                bytes_read: 3,
                 max_key_size: 3,
                 max_value_size: 4,
             }
@@ -336,14 +336,14 @@ mod tests {
         client.find_key_values_by_prefix(&[1, 2]).await.unwrap();
         assert_eq!(
             client.metric(),
-            MetricStat {
+            MetricCounters {
                 n_reads: 0,
                 n_miss_reads: 0,
                 n_puts: 4,
                 n_deletes: 1,
                 n_delete_prefix: 1,
-                size_writes: 27,
-                size_reads: 9,
+                bytes_written: 27,
+                bytes_read: 9,
                 max_key_size: 3,
                 max_value_size: 4,
             }
