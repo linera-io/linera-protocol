@@ -1361,7 +1361,7 @@ impl Runnable for Job {
                         if let Some(messages) = messages {
                             pricing.messages = messages;
                         }
-                        println!(
+                        info!(
                             "Pricing:\n\
                             {:.2} base cost per block\n\
                             {:.2} per unit of fuel used in executing user operations and messages\n\
