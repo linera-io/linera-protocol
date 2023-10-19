@@ -3,8 +3,8 @@
 
 use crate::{
     data_types::{
-        Block, ChainAndHeight, ChannelFullName, Event, IncomingMessage, Medium, Origin,
-        OutgoingMessage, Target,
+        Block, BlockExecutionOutcome, ChainAndHeight, ChannelFullName, Event, IncomingMessage,
+        Medium, Origin, OutgoingMessage, Target,
     },
     inbox::{InboxError, InboxStateView},
     outbox::OutboxStateView,
@@ -453,7 +453,7 @@ where
         &mut self,
         block: &Block,
         now: Timestamp,
-    ) -> Result<(Vec<OutgoingMessage>, Vec<u32>, CryptoHash), ChainError> {
+    ) -> Result<BlockExecutionOutcome, ChainError> {
         let start_time = Instant::now();
 
         assert_eq!(block.chain_id, self.chain_id());
@@ -563,7 +563,11 @@ where
         BLOCK_EXECUTION_LATENCY
             .with_label_values(&[])
             .observe(start_time.elapsed().as_secs_f64());
-        Ok((messages, message_counts, state_hash))
+        Ok(BlockExecutionOutcome {
+            messages,
+            message_counts,
+            state_hash,
+        })
     }
 
     async fn process_execution_results(

@@ -387,7 +387,7 @@ where
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
             is_skippable: false,
-            message: Message::System(SystemMessage::ApplicationCreated { bytecode_id }),
+            message: Message::System(SystemMessage::ApplicationCreated),
         }],
         message_counts: vec![0, 1],
         state_hash: creator_state.crypto_hash().await?,

@@ -191,6 +191,17 @@ pub struct ExecutedBlock {
     pub state_hash: CryptoHash,
 }
 
+/// The messages and the state hash resulting from a block's execution.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+pub struct BlockExecutionOutcome {
+    pub messages: Vec<OutgoingMessage>,
+    /// For each transaction, the cumulative number of messages created by this and all previous
+    /// transactions, i.e. `message_counts[i]` is the index of the first message created by
+    /// transaction `i + 1` or later.
+    pub message_counts: Vec<u32>,
+    pub state_hash: CryptoHash,
+}
+
 /// A statement to be certified by the validators.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
 pub enum CertificateValue {
@@ -567,7 +578,11 @@ impl ExecutedBlock {
         };
         let index = first_message_index.checked_add(message_index)?;
         let next_transaction_index = *self.message_counts.get(transaction_index)?;
-        (index < next_transaction_index).then_some(self.message_id(index))
+        if index < next_transaction_index {
+            Some(self.message_id(index))
+        } else {
+            None
+        }
     }
 
     /// Returns the message ID belonging to the `index`th outgoing message in this block.
@@ -576,6 +591,22 @@ impl ExecutedBlock {
             chain_id: self.block.chain_id,
             height: self.block.height,
             index,
+        }
+    }
+}
+
+impl BlockExecutionOutcome {
+    pub fn with(self, block: Block) -> ExecutedBlock {
+        let BlockExecutionOutcome {
+            messages,
+            message_counts,
+            state_hash,
+        } = self;
+        ExecutedBlock {
+            block,
+            messages,
+            message_counts,
+            state_hash,
         }
     }
 }
