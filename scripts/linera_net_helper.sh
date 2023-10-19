@@ -14,7 +14,11 @@ function spawn_and_set_wallet_env_vars() {
 
     trap 'jobs -p | xargs -r kill && rm -rf "$DIR"' EXIT
 
-    "$@" 2> >(tee "$ERR") 1>"$OUT" &
+    (
+        # Ignoring SIGPIPE to keep `tee` alive after `sed` exits below, closing $ERR.
+        trap '' PIPE
+        "$@" 2> >(tee "$ERR" 2>/dev/null) 1>"$OUT" &
+    )
 
     sed -n '/^READY!/q' <"$ERR" || exit 1
 
