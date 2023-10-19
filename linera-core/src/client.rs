@@ -22,7 +22,7 @@ use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Amount, ArithmeticError, BlockHeight, RoundNumber, Timestamp},
     ensure,
-    identifiers::{BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_chain::{
     data_types::{
@@ -33,7 +33,10 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    system::{Account, AdminOperation, Recipient, SystemChannel, SystemOperation, UserData},
+    system::{
+        Account, AdminOperation, Recipient, SystemChannel, SystemOperation, UserData,
+        CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX, PUBLISH_BYTECODE_MESSAGE_INDEX,
+    },
     Bytecode, ChainOwnership, Message, Operation, Query, Response, SystemMessage, SystemQuery,
     SystemResponse, UserApplicationId,
 };
@@ -1570,12 +1573,14 @@ where
                 })],
             )
             .await?;
-        // The second last message created the new chain.
+        // The first message of the only operation created the new chain.
         let message_id = certificate
             .value()
             .executed_block()
-            .and_then(|executed_block| executed_block.open_chain_message_ids().next())
-            .ok_or_else(|| ChainClientError::InternalError("Failed to open a new chain"))?;
+            .and_then(|executed_block| {
+                executed_block.message_id_for_operation(0, OPEN_CHAIN_MESSAGE_INDEX)
+            })
+            .ok_or_else(|| ChainClientError::InternalError("Failed to create new chain"))?;
         Ok((message_id, certificate))
     }
 
@@ -1597,13 +1602,15 @@ where
                 service,
             }))
             .await?;
-        // The last message published the bytecode.
-        let id = certificate
+        // The first message of the only operation published the bytecode.
+        let message_id = certificate
             .value()
             .executed_block()
-            .and_then(|executed_block| executed_block.published_bytecode_ids().next())
+            .and_then(|executed_block| {
+                executed_block.message_id_for_operation(0, PUBLISH_BYTECODE_MESSAGE_INDEX)
+            })
             .ok_or_else(|| ChainClientError::InternalError("Failed to publish bytecode"))?;
-        Ok((id, certificate))
+        Ok((BytecodeId::new(message_id), certificate))
     }
 
     /// Creates an application by instantiating some bytecode.
@@ -1643,12 +1650,18 @@ where
                 required_application_ids,
             }))
             .await?;
-        // The last message created the application.
-        let id = certificate
+        // The first message of the only operation created the application.
+        let creation = certificate
             .value()
             .executed_block()
-            .and_then(|executed_block| executed_block.created_application_ids().next())
+            .and_then(|executed_block| {
+                executed_block.message_id_for_operation(0, CREATE_APPLICATION_MESSAGE_INDEX)
+            })
             .ok_or_else(|| ChainClientError::InternalError("Failed to create application"))?;
+        let id = ApplicationId {
+            creation,
+            bytecode_id,
+        };
         Ok((id, certificate))
     }
 

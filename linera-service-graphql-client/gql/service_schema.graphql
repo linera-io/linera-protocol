@@ -245,6 +245,12 @@ A block, together with the messages and the state hash resulting from its execut
 type ExecutedBlock {
 	block: Block!
 	messages: [OutgoingMessage!]!
+	"""
+	For each transaction, the cumulative number of messages created by this and all previous
+	transactions, i.e. `message_counts[i]` is the index of the first message created by
+	transaction `i + 1` or later.
+	"""
+	messageCounts: [Int!]!
 	stateHash: CryptoHash!
 }
 

@@ -53,13 +53,13 @@
 use super::Outcome;
 use crate::{
     data_types::{
-        BlockAndRound, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedValue,
-        LiteVote, OutgoingMessage, Vote,
+        BlockAndRound, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
+        HashedValue, LiteVote, Vote,
     },
     ChainError,
 };
 use linera_base::{
-    crypto::{CryptoHash, KeyPair, PublicKey},
+    crypto::{KeyPair, PublicKey},
     data_types::{BlockHeight, RoundNumber, Timestamp},
     ensure,
     identifiers::{ChainId, Owner},
@@ -268,8 +268,7 @@ impl MultiOwnerManager {
     pub fn create_vote(
         &mut self,
         proposal: BlockProposal,
-        messages: Vec<OutgoingMessage>,
-        state_hash: CryptoHash,
+        outcome: BlockExecutionOutcome,
         key_pair: Option<&KeyPair>,
         now: Timestamp,
     ) {
@@ -291,11 +290,7 @@ impl MultiOwnerManager {
         if let Some(key_pair) = key_pair {
             // Vote to validate.
             let BlockAndRound { block, round } = proposal.content;
-            let executed_block = ExecutedBlock {
-                block,
-                messages,
-                state_hash,
-            };
+            let executed_block = outcome.with(block);
             let vote = Vote::new(HashedValue::new_validated(executed_block), round, key_pair);
             self.pending = Some(vote);
         }

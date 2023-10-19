@@ -167,6 +167,7 @@ mod from {
             let block::BlockBlockValueExecutedBlock {
                 block,
                 messages,
+                message_counts,
                 state_hash,
             } = val;
             let messages: Vec<OutgoingMessage> =
@@ -174,6 +175,7 @@ mod from {
             ExecutedBlock {
                 block: block.into(),
                 messages,
+                message_counts: message_counts.into_iter().map(|c| c as u32).collect(),
                 state_hash,
             }
         }

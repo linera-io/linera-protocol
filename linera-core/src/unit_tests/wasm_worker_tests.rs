@@ -149,6 +149,7 @@ where
             is_skippable: false,
             message: Message::System(publish_message.clone()),
         }],
+        message_counts: vec![1],
         state_hash: publisher_state_hash,
     });
     let publish_certificate = make_certificate(&committee, &worker, publish_block_proposal);
@@ -208,6 +209,7 @@ where
             is_skippable: false,
             message: Message::System(broadcast_message.clone()),
         }],
+        message_counts: vec![1],
         state_hash: publisher_state_hash,
     });
     let broadcast_certificate = make_certificate(&committee, &worker, broadcast_block_proposal);
@@ -257,6 +259,7 @@ where
             is_skippable: false,
             message: Message::System(subscribe_message.clone()),
         }],
+        message_counts: vec![1],
         state_hash: creator_state.crypto_hash().await?,
     });
     let subscribe_certificate = make_certificate(&committee, &worker, subscribe_block_proposal);
@@ -301,6 +304,7 @@ where
                 id: creator_chain.into(),
             }),
         }],
+        message_counts: vec![1],
         state_hash: publisher_state_hash,
     });
     let accept_certificate = make_certificate(&committee, &worker, accept_block_proposal);
@@ -383,8 +387,9 @@ where
             destination: Destination::Recipient(creator_chain.into()),
             authenticated_signer: None,
             is_skippable: false,
-            message: Message::System(SystemMessage::ApplicationCreated { bytecode_id }),
+            message: Message::System(SystemMessage::ApplicationCreated),
         }],
+        message_counts: vec![0, 1],
         state_hash: creator_state.crypto_hash().await?,
     });
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
@@ -431,6 +436,7 @@ where
     let run_block_proposal = HashedValue::new_confirmed(ExecutedBlock {
         block: run_block,
         messages: vec![],
+        message_counts: vec![0],
         state_hash: creator_state.crypto_hash().await?,
     });
     let run_certificate = make_certificate(&committee, &worker, run_block_proposal);

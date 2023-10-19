@@ -35,6 +35,15 @@ use thiserror::Error;
 #[cfg(any(test, feature = "test"))]
 use {crate::applications::ApplicationRegistry, std::collections::BTreeSet};
 
+/// The relative index of the `OpenChain` message created by the `OpenChain` operation.
+pub static OPEN_CHAIN_MESSAGE_INDEX: u32 = 0;
+/// The relative index of the `ApplicationCreated` message created by the `CreateApplication`
+/// operation.
+pub static CREATE_APPLICATION_MESSAGE_INDEX: u32 = 0;
+/// The relative index of the `BytecodePublished` message created by the `PublishBytecode`
+/// operation.
+pub static PUBLISH_BYTECODE_MESSAGE_INDEX: u32 = 0;
+
 /// A view accessing the execution state of the system of a chain.
 #[derive(Debug, HashableView)]
 pub struct SystemExecutionStateView<C> {
@@ -204,7 +213,7 @@ pub enum SystemMessage {
     /// Notifies that a new application bytecode was published.
     BytecodePublished { operation_index: u32 },
     /// Notifies that a new application was created.
-    ApplicationCreated { bytecode_id: BytecodeId },
+    ApplicationCreated,
     /// Shares the locations of published bytecodes.
     BytecodeLocations {
         locations: Vec<(BytecodeId, BytecodeLocation)>,
@@ -247,7 +256,7 @@ impl SystemMessage {
             | SystemMessage::SetCommittees { .. }
             | SystemMessage::Subscribe { .. }
             | SystemMessage::Unsubscribe { .. }
-            | SystemMessage::ApplicationCreated { .. }
+            | SystemMessage::ApplicationCreated
             | SystemMessage::Notify { .. }
             | SystemMessage::RequestApplication(_) => Box::new(iter::empty()),
         }
@@ -752,9 +761,7 @@ where
                     destination: Destination::Recipient(context.chain_id),
                     authenticated: false,
                     is_skippable: false,
-                    message: SystemMessage::ApplicationCreated {
-                        bytecode_id: *bytecode_id,
-                    },
+                    message: SystemMessage::ApplicationCreated,
                 };
                 result.messages.push(message);
                 new_application = Some((id, initialization_argument.clone()));
@@ -887,7 +894,7 @@ where
                     self.registry.register_published_bytecode(*id, *location)?;
                 }
             }
-            ApplicationCreated { .. } | Notify { .. } => (),
+            ApplicationCreated | Notify { .. } => (),
             OpenChain { .. } => {
                 // This special message is executed immediately when cross-chain requests are received.
             }
@@ -974,5 +981,141 @@ where
             balance: *self.balance.get(),
         };
         Ok(response)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ExecutionStateView, TestExecutionRuntimeContext};
+    use linera_base::{
+        crypto::{BcsSignable, KeyPair},
+        data_types::BlockHeight,
+        identifiers::ApplicationId,
+    };
+    use linera_views::memory::MemoryContext;
+
+    #[derive(Deserialize, Serialize)]
+    pub struct Dummy;
+
+    impl BcsSignable for Dummy {}
+
+    /// Returns an execution state view and a matching operation context, for epoch 1, with root
+    /// chain 0 as the admin ID and one empty committee.
+    async fn new_view_and_context() -> (
+        ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>,
+        OperationContext,
+    ) {
+        let description = ChainDescription::Root(5);
+        let context = OperationContext {
+            chain_id: ChainId::from(description),
+            authenticated_signer: None,
+            height: BlockHeight::from(7),
+            index: 2,
+            next_message_index: 3,
+        };
+        let state = SystemExecutionState {
+            description: Some(description),
+            epoch: Some(Epoch(1)),
+            admin_id: Some(ChainId::root(0)),
+            committees: BTreeMap::new(),
+            ..SystemExecutionState::default()
+        };
+        let view = ExecutionStateView::from_system_state(state).await;
+        (view, context)
+    }
+
+    #[tokio::test]
+    async fn bytecode_message_index() {
+        let (mut view, context) = new_view_and_context().await;
+        let operation = SystemOperation::PublishBytecode {
+            contract: Bytecode::new(vec![]),
+            service: Bytecode::new(vec![]),
+        };
+        let (result, new_application) = view
+            .system
+            .execute_operation(&context, &operation)
+            .await
+            .unwrap();
+        assert_eq!(new_application, None);
+        let operation_index = context.index;
+        assert_eq!(
+            result.messages[PUBLISH_BYTECODE_MESSAGE_INDEX as usize].message,
+            SystemMessage::BytecodePublished { operation_index }
+        );
+    }
+
+    #[tokio::test]
+    async fn application_message_index() {
+        let (mut view, context) = new_view_and_context().await;
+        let bytecode_id = BytecodeId::new(MessageId {
+            chain_id: context.chain_id,
+            height: BlockHeight::from(5),
+            index: 0,
+        });
+        let location = BytecodeLocation {
+            certificate_hash: CryptoHash::new(&Dummy),
+            operation_index: 1,
+        };
+        view.system
+            .registry
+            .register_published_bytecode(bytecode_id, location)
+            .unwrap();
+
+        let operation = SystemOperation::CreateApplication {
+            bytecode_id,
+            parameters: vec![],
+            initialization_argument: vec![],
+            required_application_ids: vec![],
+        };
+        let (result, new_application) = view
+            .system
+            .execute_operation(&context, &operation)
+            .await
+            .unwrap();
+        assert_eq!(
+            result.messages[CREATE_APPLICATION_MESSAGE_INDEX as usize].message,
+            SystemMessage::ApplicationCreated
+        );
+        let creation = MessageId {
+            chain_id: context.chain_id,
+            height: context.height,
+            index: context.next_message_index + CREATE_APPLICATION_MESSAGE_INDEX,
+        };
+        let id = ApplicationId {
+            bytecode_id,
+            creation,
+        };
+        assert_eq!(new_application, Some((id, vec![])));
+    }
+
+    #[tokio::test]
+    async fn open_chain_message_index() {
+        let (mut view, context) = new_view_and_context().await;
+        let epoch = view.system.epoch.get().unwrap();
+        let admin_id = view.system.admin_id.get().unwrap();
+        let committees = view.system.committees.get().clone();
+        let ownership = ChainOwnership::single(KeyPair::generate().public());
+        let operation = SystemOperation::OpenChain {
+            ownership: ownership.clone(),
+            committees: committees.clone(),
+            epoch,
+            admin_id,
+        };
+        let (result, new_application) = view
+            .system
+            .execute_operation(&context, &operation)
+            .await
+            .unwrap();
+        assert_eq!(new_application, None);
+        assert_eq!(
+            result.messages[OPEN_CHAIN_MESSAGE_INDEX as usize].message,
+            SystemMessage::OpenChain {
+                ownership,
+                committees,
+                admin_id,
+                epoch
+            }
+        );
     }
 }

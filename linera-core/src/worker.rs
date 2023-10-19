@@ -176,6 +176,8 @@ pub enum WorkerError {
     IncorrectStateHash,
     #[error("The given messages are not what we computed after executing the block")]
     IncorrectMessages,
+    #[error("The given message counts are not what we computed after executing the block")]
+    IncorrectMessageCounts,
     #[error("The timestamp of a Tick operation is in the future.")]
     InvalidTimestamp,
     #[error("We don't have the value for the certificate.")]
@@ -364,13 +366,8 @@ where
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
         let now = self.storage.current_time();
-        let (messages, state_hash) = chain.execute_block(&block, now).await?;
+        let executed_block = chain.execute_block(&block, now).await?.with(block);
         let response = ChainInfoResponse::new(&chain, None);
-        let executed_block = ExecutedBlock {
-            block,
-            messages,
-            state_hash,
-        };
         // Do not save the new state.
         Ok((executed_block, response))
     }
@@ -501,6 +498,7 @@ where
         let ExecutedBlock {
             block,
             messages,
+            message_counts,
             state_hash,
         } = executed_block;
         let mut chain = self.storage.load_active_chain(block.chain_id).await?;
@@ -559,13 +557,17 @@ where
         chain.remove_events_from_inboxes(block).await?;
         // We should always agree on the messages and state hash.
         let now = self.storage.current_time();
-        let (verified_messages, verified_state_hash) = chain.execute_block(block, now).await?;
+        let verified_outcome = chain.execute_block(block, now).await?;
         ensure!(
-            *messages == verified_messages,
+            *messages == verified_outcome.messages,
             WorkerError::IncorrectMessages
         );
         ensure!(
-            *state_hash == verified_state_hash,
+            *message_counts == verified_outcome.message_counts,
+            WorkerError::IncorrectMessageCounts
+        );
+        ensure!(
+            *state_hash == verified_outcome.state_hash,
             WorkerError::IncorrectStateHash
         );
         // Advance to next block height.
@@ -1007,17 +1009,14 @@ where
             tokio::time::sleep(Duration::from_micros(time_till_block)).await;
         }
         let now = self.storage.current_time();
-        let (messages, state_hash) = {
-            let (messages, state_hash) = chain.execute_block(block, now).await?;
-            // Verify that the resulting chain would have no unconfirmed incoming messages.
-            chain.validate_incoming_messages().await?;
-            // Reset all the staged changes as we were only validating things.
-            chain.rollback();
-            (messages, state_hash)
-        };
+        let outcome = chain.execute_block(block, now).await?;
+        // Verify that the resulting chain would have no unconfirmed incoming messages.
+        chain.validate_incoming_messages().await?;
+        // Reset all the staged changes as we were only validating things.
+        chain.rollback();
         // Create the vote and store it in the chain state.
         let manager = chain.manager.get_mut();
-        manager.create_vote(proposal, messages, state_hash, self.key_pair(), now);
+        manager.create_vote(proposal, outcome, self.key_pair(), now);
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some(vote) = manager.pending() {
             self.cache_recent_value(Cow::Borrowed(&vote.value)).await;

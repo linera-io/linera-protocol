@@ -339,6 +339,8 @@ ExecutedBlock:
     - messages:
         SEQ:
           TYPENAME: OutgoingMessage
+    - message_counts:
+        SEQ: U32
     - state_hash:
         TYPENAME: CryptoHash
 GenericApplicationId:
@@ -729,10 +731,7 @@ SystemMessage:
         STRUCT:
           - operation_index: U32
     7:
-      ApplicationCreated:
-        STRUCT:
-          - bytecode_id:
-              TYPENAME: BytecodeId
+      ApplicationCreated: UNIT
     8:
       BytecodeLocations:
         STRUCT:

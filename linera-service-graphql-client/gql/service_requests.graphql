@@ -38,6 +38,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
           isSkippable
           message
         }
+        messageCounts
         stateHash
       }
     }
