@@ -29,6 +29,10 @@ pub struct AtomicMetricStat {
     pub size_writes: Arc<AtomicUsize>,
     /// The total data being read from
     pub size_reads: Arc<AtomicUsize>,
+    /// The maximal key size
+    pub max_key_size: Arc<AtomicUsize>,
+    /// The maximal value size
+    pub max_value_size: Arc<AtomicUsize>,
 }
 
 /// Array containing metric data for this client
@@ -50,6 +54,10 @@ pub struct MetricStat {
     pub size_writes: usize,
     /// The total data being read from
     pub size_reads: usize,
+    /// The maximal key size
+    pub max_key_size: usize,
+    /// The maximal value size
+    pub max_value_size: usize,
 }
 
 
@@ -82,6 +90,7 @@ where
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let read = self.client.read_key_bytes(key).await?;
+        self.metric_stat.max_key_size.fetch_max(key.len(), Ordering::Relaxed);
         self.metric_stat.n_reads.fetch_add(1, Ordering::Relaxed);
         match &read {
             None => {
@@ -89,6 +98,7 @@ where
             }
             Some(value) => {
                 self.metric_stat.size_reads.fetch_add(value.len(), Ordering::Relaxed);
+                self.metric_stat.max_value_size.fetch_max(value.len(), Ordering::Relaxed);
             }
         }
         Ok(read)
@@ -99,6 +109,9 @@ where
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
         let n_keys = keys.len();
+        for key in &keys {
+            self.metric_stat.max_key_size.fetch_max(key.len(), Ordering::Relaxed);
+        }
         let multi_read = self.client.read_multi_key_bytes(keys).await?;
         self.metric_stat.n_reads.fetch_add(n_keys, Ordering::Relaxed);
         for read in &multi_read {
@@ -108,6 +121,7 @@ where
                 }
                 Some(value) => {
                     self.metric_stat.size_reads.fetch_add(value.len(), Ordering::Relaxed);
+                    self.metric_stat.max_value_size.fetch_max(value.len(), Ordering::Relaxed);
                 }
             }
         }
@@ -117,7 +131,9 @@ where
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
         let keys = self.client.find_keys_by_prefix(key_prefix).await?;
         for key in keys.iterator() {
-            self.metric_stat.size_reads.fetch_add(key?.len(), Ordering::Relaxed);
+            let key_len = key?.len();
+            self.metric_stat.size_reads.fetch_add(key_len, Ordering::Relaxed);
+            self.metric_stat.max_key_size.fetch_max(key_len, Ordering::Relaxed);
         }
         Ok(keys)
     }
@@ -130,6 +146,8 @@ where
         for key_value in key_values.iterator() {
             let key_value = key_value?;
             self.metric_stat.size_reads.fetch_add(key_value.0.len() + key_value.1.len(), Ordering::Relaxed);
+            self.metric_stat.max_key_size.fetch_max(key_value.0.len(), Ordering::Relaxed);
+            self.metric_stat.max_value_size.fetch_max(key_value.1.len(), Ordering::Relaxed);
         }
         Ok(key_values)
     }
@@ -140,13 +158,16 @@ where
                 WriteOperation::Delete { key } => {
                     self.metric_stat.n_deletes.fetch_add(1, Ordering::Relaxed);
                     self.metric_stat.size_writes.fetch_add(key.len(), Ordering::Relaxed);
+                    self.metric_stat.max_key_size.fetch_max(key.len(), Ordering::Relaxed);
                 }
                 WriteOperation::Put { key, value } => {
                     self.metric_stat.n_puts.fetch_add(1, Ordering::Relaxed);
                     self.metric_stat.size_writes.fetch_add(key.len() + value.len(), Ordering::Relaxed);
+                    self.metric_stat.max_key_size.fetch_max(key.len(), Ordering::Relaxed);
+                    self.metric_stat.max_value_size.fetch_max(value.len(), Ordering::Relaxed);
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    self.metric_stat.n_deletes.fetch_add(1, Ordering::Relaxed);
+                    self.metric_stat.n_delete_prefix.fetch_add(1, Ordering::Relaxed);
                     self.metric_stat.size_writes.fetch_add(key_prefix.len(), Ordering::Relaxed);
                 }
             }
@@ -172,7 +193,9 @@ where
         let n_delete_prefix = self.metric_stat.n_delete_prefix.load(Ordering::Relaxed);
         let size_writes = self.metric_stat.size_writes.load(Ordering::Relaxed);
         let size_reads = self.metric_stat.size_reads.load(Ordering::Relaxed);
-        MetricStat { n_reads, n_miss_reads, n_puts, n_deletes, n_delete_prefix, size_writes, size_reads }
+        let max_key_size = self.metric_stat.max_key_size.load(Ordering::Relaxed);
+        let max_value_size = self.metric_stat.max_value_size.load(Ordering::Relaxed);
+        MetricStat { n_reads, n_miss_reads, n_puts, n_deletes, n_delete_prefix, size_writes, size_reads, max_key_size, max_value_size }
     }
 }
 
@@ -216,7 +239,9 @@ mod tests {
                 n_deletes: 1,
                 n_delete_prefix: 1,
                 size_writes: 27,
-                size_reads: 0
+                size_reads: 0,
+                max_key_size: 3,
+                max_value_size: 4,
             }
         );
         client
@@ -235,7 +260,9 @@ mod tests {
                 n_deletes: 1,
                 n_delete_prefix: 1,
                 size_writes: 27,
-                size_reads: 4
+                size_reads: 4,
+                max_key_size: 3,
+                max_value_size: 4,
             }
         );
     }
@@ -243,7 +270,7 @@ mod tests {
     #[tokio::test]
     async fn test_metric_read_missing_key() {
         let client = get_memory_test_state().await;
-        client.read_key_bytes(&[1, 4, 4]).await.unwrap();
+        client.read_key_bytes(&[1, 4, 4, 4]).await.unwrap();
         assert_eq!(
             client.metric(),
             MetricStat {
@@ -253,7 +280,9 @@ mod tests {
                 n_deletes: 1,
                 n_delete_prefix: 1,
                 size_writes: 27,
-                size_reads: 0
+                size_reads: 0,
+                max_key_size: 4,
+                max_value_size: 4,
             }
         );
     }
@@ -274,7 +303,9 @@ mod tests {
                 n_deletes: 1,
                 n_delete_prefix: 1,
                 size_writes: 27,
-                size_reads: 7
+                size_reads: 7,
+                max_key_size: 3,
+                max_value_size: 4,
             }
         );
     }
@@ -292,7 +323,9 @@ mod tests {
                 n_deletes: 1,
                 n_delete_prefix: 1,
                 size_writes: 27,
-                size_reads: 3
+                size_reads: 3,
+                max_key_size: 3,
+                max_value_size: 4,
             }
         );
     }
@@ -310,7 +343,9 @@ mod tests {
                 n_deletes: 1,
                 n_delete_prefix: 1,
                 size_writes: 27,
-                size_reads: 9
+                size_reads: 9,
+                max_key_size: 3,
+                max_value_size: 4,
             }
         );
     }
