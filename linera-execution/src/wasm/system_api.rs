@@ -204,107 +204,130 @@ macro_rules! impl_contract_system_api {
 /// Generates the common code for service system API types for all Wasm runtimes.
 macro_rules! impl_service_system_api {
     ($service_system_api:ident<$runtime:lifetime>) => {
-        impl_service_system_api!(@generate $service_system_api<$runtime>, $runtime, <$runtime>);
+        impl_service_system_api!(
+            @generate $service_system_api<$runtime>, wasmtime::Trap, $runtime, <$runtime>
+        );
     };
 
     ($service_system_api:ident) => {
-        impl_service_system_api!(@generate $service_system_api, 'static);
+        impl_service_system_api!(@generate $service_system_api, wasmer::RuntimeError, 'static);
     };
 
-    (@generate $service_system_api:ty, $runtime:lifetime $(, <$param:lifetime> )?) => {
+    (@generate $service_system_api:ty, $trap:ty, $runtime:lifetime $(, <$param:lifetime> )?) => {
         impl$(<$param>)? service_system_api::ServiceSystemApi for $service_system_api {
+            type Error = ExecutionError;
+
             type Load = HostFuture<$runtime, Result<Vec<u8>, ExecutionError>>;
             type Lock = HostFuture<$runtime, Result<(), ExecutionError>>;
             type Unlock = HostFuture<$runtime, Result<(), ExecutionError>>;
             type TryQueryApplication = HostFuture<$runtime, Result<Vec<u8>, ExecutionError>>;
 
-            fn chain_id(&mut self) -> service_system_api::ChainId {
-                self.runtime().chain_id().into()
+            fn error_to_trap(&mut self, error: Self::Error) -> $trap {
+                error.into()
             }
 
-            fn application_id(&mut self) -> service_system_api::ApplicationId {
-                self.runtime().application_id().into()
+            fn chain_id(&mut self) -> Result<service_system_api::ChainId, Self::Error> {
+                Ok(self.runtime().chain_id().into())
             }
 
-            fn application_parameters(&mut self) -> Vec<u8> {
-                self.runtime().application_parameters()
+            fn application_id(&mut self) -> Result<service_system_api::ApplicationId, Self::Error> {
+                Ok(self.runtime().application_id().into())
             }
 
-            fn read_system_balance(&mut self) -> service_system_api::Amount {
-                self.runtime().read_system_balance().into()
+            fn application_parameters(&mut self) -> Result<Vec<u8>, Self::Error> {
+                Ok(self.runtime().application_parameters())
             }
 
-            fn read_system_timestamp(&mut self) -> service_system_api::Timestamp {
-                self.runtime().read_system_timestamp().micros()
+            fn read_system_balance(&mut self) -> Result<service_system_api::Amount, Self::Error> {
+                Ok(self.runtime().read_system_balance().into())
             }
 
-            fn load_new(&mut self) -> Self::Load {
-                HostFuture::new(self.runtime().try_read_my_state())
+            fn read_system_timestamp(
+                &mut self,
+            ) -> Result<service_system_api::Timestamp, Self::Error> {
+                Ok(self.runtime().read_system_timestamp().micros())
             }
 
-            fn load_poll(&mut self, future: &Self::Load) -> service_system_api::PollLoad {
+            fn load_new(&mut self) -> Result<Self::Load, Self::Error> {
+                Ok(HostFuture::new(self.runtime().try_read_my_state()))
+            }
+
+            fn load_poll(
+                &mut self,
+                future: &Self::Load,
+            ) -> Result<service_system_api::PollLoad, Self::Error> {
                 use service_system_api::PollLoad;
-                match future.poll(&mut *self.waker()) {
+                Ok(match future.poll(&mut *self.waker()) {
                     Poll::Pending => PollLoad::Pending,
                     Poll::Ready(Ok(bytes)) => PollLoad::Ready(Ok(bytes)),
                     Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
-                }
+                })
             }
 
-            fn lock_new(&mut self) -> Self::Lock {
-                HostFuture::new(self.runtime().lock_view_user_state())
+            fn lock_new(&mut self) -> Result<Self::Lock, Self::Error> {
+                Ok(HostFuture::new(self.runtime().lock_view_user_state()))
             }
 
-            fn lock_poll(&mut self, future: &Self::Lock) -> service_system_api::PollLock {
+            fn lock_poll(
+                &mut self,
+                future: &Self::Lock,
+            ) -> Result<service_system_api::PollLock, Self::Error> {
                 use service_system_api::PollLock;
-                match future.poll(&mut *self.waker()) {
+                Ok(match future.poll(&mut *self.waker()) {
                     Poll::Pending => PollLock::Pending,
                     Poll::Ready(Ok(())) => PollLock::Ready(Ok(())),
                     Poll::Ready(Err(error)) => PollLock::Ready(Err(error.to_string())),
-                }
+                })
             }
 
-            fn unlock_new(&mut self) -> Self::Unlock {
-                HostFuture::new(self.runtime().unlock_view_user_state())
+            fn unlock_new(&mut self) -> Result<Self::Unlock, Self::Error> {
+                Ok(HostFuture::new(self.runtime().unlock_view_user_state()))
             }
 
-            fn unlock_poll(&mut self, future: &Self::Lock) -> service_system_api::PollUnlock {
+            fn unlock_poll(
+                &mut self,
+                future: &Self::Lock,
+            ) -> Result<service_system_api::PollUnlock, Self::Error> {
                 use service_system_api::PollUnlock;
-                match future.poll(&mut *self.waker()) {
+                Ok(match future.poll(&mut *self.waker()) {
                     Poll::Pending => PollUnlock::Pending,
                     Poll::Ready(Ok(())) => PollUnlock::Ready(Ok(())),
                     Poll::Ready(Err(error)) => PollUnlock::Ready(Err(error.to_string())),
-                }
+                })
             }
 
             fn try_query_application_new(
                 &mut self,
                 application: service_system_api::ApplicationId,
                 argument: &[u8],
-            ) -> Self::TryQueryApplication {
+            ) -> Result<Self::TryQueryApplication, Self::Error> {
                 let runtime = self.runtime();
                 let argument = Vec::from(argument);
 
-                HostFuture::new(async move {
+                Ok(HostFuture::new(async move {
                     runtime
                         .try_query_application(application.into(), &argument)
                         .await
-                })
+                }))
             }
 
             fn try_query_application_poll(
                 &mut self,
                 future: &Self::TryQueryApplication,
-            ) -> service_system_api::PollLoad {
+            ) -> Result<service_system_api::PollLoad, Self::Error> {
                 use service_system_api::PollLoad;
-                match future.poll(&mut *self.waker()) {
+                Ok(match future.poll(&mut *self.waker()) {
                     Poll::Pending => PollLoad::Pending,
                     Poll::Ready(Ok(result)) => PollLoad::Ready(Ok(result)),
                     Poll::Ready(Err(error)) => PollLoad::Ready(Err(error.to_string())),
-                }
+                })
             }
 
-            fn log(&mut self, message: &str, level: service_system_api::LogLevel) {
+            fn log(
+                &mut self,
+                message: &str,
+                level: service_system_api::LogLevel,
+            ) -> Result<(), Self::Error> {
                 match level {
                     service_system_api::LogLevel::Trace => tracing::trace!("{message}"),
                     service_system_api::LogLevel::Debug => tracing::debug!("{message}"),
@@ -312,6 +335,8 @@ macro_rules! impl_service_system_api {
                     service_system_api::LogLevel::Warn => tracing::warn!("{message}"),
                     service_system_api::LogLevel::Error => tracing::error!("{message}"),
                 }
+
+                Ok(())
             }
         }
     };

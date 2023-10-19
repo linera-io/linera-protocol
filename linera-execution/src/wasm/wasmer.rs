@@ -10,7 +10,10 @@ wit_bindgen_host_wasmer_rust::export!({
 });
 
 // Export the system interface used by a user service.
-wit_bindgen_host_wasmer_rust::export!("service_system_api.wit");
+wit_bindgen_host_wasmer_rust::export!({
+    custom_error: true,
+    paths: ["service_system_api.wit"],
+});
 
 // Export the system interface used by views.
 wit_bindgen_host_wasmer_rust::export!({
