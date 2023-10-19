@@ -7,7 +7,7 @@
 mod common;
 
 use common::INTEGRATION_TEST_GUARD;
-use linera_base::identifiers::ChainId;
+use linera_base::{data_types::Amount, identifiers::ChainId};
 use linera_service::{
     cli_wrappers::{Database, LocalNetwork, Network},
     util,
@@ -87,7 +87,7 @@ async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
         }
         Network::Simple => {
             client
-                .transfer("10", ChainId::root(9), ChainId::root(8))
+                .transfer(Amount::from_tokens(10), ChainId::root(9), ChainId::root(8))
                 .await
                 .unwrap();
             (None, ChainId::root(9))
@@ -97,19 +97,34 @@ async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
     client.query_validators(None).await.unwrap();
 
     // Query balance for first and last user chain
-    assert_eq!(client.query_balance(chain_1).await.unwrap(), "10.");
-    assert_eq!(client.query_balance(chain_2).await.unwrap(), "0.");
+    assert_eq!(
+        client.query_balance(chain_1).await.unwrap(),
+        Amount::from_tokens(10)
+    );
+    assert_eq!(
+        client.query_balance(chain_2).await.unwrap(),
+        Amount::from_tokens(0)
+    );
 
     // Transfer 3 units
-    client.transfer("3", chain_1, chain_2).await.unwrap();
+    client
+        .transfer(Amount::from_tokens(3), chain_1, chain_2)
+        .await
+        .unwrap();
 
     // Restart first shard (dropping it kills the process)
     local_net.kill_server(4, 0).unwrap();
     local_net.start_server(4, 0).await.unwrap();
 
     // Query balances again
-    assert_eq!(client.query_balance(chain_1).await.unwrap(), "7.");
-    assert_eq!(client.query_balance(chain_2).await.unwrap(), "3.");
+    assert_eq!(
+        client.query_balance(chain_1).await.unwrap(),
+        Amount::from_tokens(7)
+    );
+    assert_eq!(
+        client.query_balance(chain_2).await.unwrap(),
+        Amount::from_tokens(3)
+    );
 
     #[cfg(benchmark)]
     {
@@ -152,9 +167,15 @@ async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
         local_net.remove_validator(i + 1).unwrap();
     }
 
-    client.transfer("5", chain_1, chain_2).await.unwrap();
+    client
+        .transfer(Amount::from_tokens(5), chain_1, chain_2)
+        .await
+        .unwrap();
     client.synchronize_balance(chain_2).await.unwrap();
-    assert_eq!(client.query_balance(chain_2).await.unwrap(), "8.");
+    assert_eq!(
+        client.query_balance(chain_2).await.unwrap(),
+        Amount::from_tokens(8)
+    );
 
     if let Some(node_service_2) = node_service_2 {
         for i in 0..10 {
@@ -340,7 +361,7 @@ async fn run_end_to_end_retry_notification_stream(database: Database) {
         for i in 0..10 {
             // Add a new block on the chain, triggering a notification.
             client1
-                .transfer("1", chain, ChainId::root(9))
+                .transfer(Amount::from_tokens(1), chain, ChainId::root(9))
                 .await
                 .unwrap();
             tokio::time::sleep(Duration::from_secs(i)).await;
@@ -414,21 +435,42 @@ async fn run_end_to_end_multiple_wallets(database: Database) {
     );
 
     // Check initial balance of Chain 1.
-    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), "10.");
+    assert_eq!(
+        client_1.query_balance(chain_1).await.unwrap(),
+        Amount::from_tokens(10)
+    );
 
     // Transfer 5 units from Chain 1 to Chain 2.
-    client_1.transfer("5", chain_1, chain_2).await.unwrap();
+    client_1
+        .transfer(Amount::from_tokens(5), chain_1, chain_2)
+        .await
+        .unwrap();
     client_2.synchronize_balance(chain_2).await.unwrap();
 
-    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), "5.");
-    assert_eq!(client_2.query_balance(chain_2).await.unwrap(), "5.");
+    assert_eq!(
+        client_1.query_balance(chain_1).await.unwrap(),
+        Amount::from_tokens(5)
+    );
+    assert_eq!(
+        client_2.query_balance(chain_2).await.unwrap(),
+        Amount::from_tokens(5)
+    );
 
     // Transfer 2 units from Chain 2 to Chain 1.
-    client_2.transfer("2", chain_2, chain_1).await.unwrap();
+    client_2
+        .transfer(Amount::from_tokens(2), chain_2, chain_1)
+        .await
+        .unwrap();
     client_1.synchronize_balance(chain_1).await.unwrap();
 
-    assert_eq!(client_1.query_balance(chain_1).await.unwrap(), "7.");
-    assert_eq!(client_2.query_balance(chain_2).await.unwrap(), "3.");
+    assert_eq!(
+        client_1.query_balance(chain_1).await.unwrap(),
+        Amount::from_tokens(7)
+    );
+    assert_eq!(
+        client_2.query_balance(chain_2).await.unwrap(),
+        Amount::from_tokens(3)
+    );
 }
 
 #[cfg(feature = "rocksdb")]
@@ -714,20 +756,47 @@ async fn run_end_to_end_open_multi_owner_chain(database: Database) {
     );
 
     // Transfer 6 units from Chain 1 to Chain 2.
-    client1.transfer("6", chain1, chain2).await.unwrap();
+    client1
+        .transfer(Amount::from_tokens(6), chain1, chain2)
+        .await
+        .unwrap();
     client2.synchronize_balance(chain2).await.unwrap();
 
-    assert_eq!(client1.query_balance(chain1).await.unwrap(), "4.");
-    assert_eq!(client1.query_balance(chain2).await.unwrap(), "6.");
-    assert_eq!(client2.query_balance(chain2).await.unwrap(), "6.");
+    assert_eq!(
+        client1.query_balance(chain1).await.unwrap(),
+        Amount::from_tokens(4)
+    );
+    assert_eq!(
+        client1.query_balance(chain2).await.unwrap(),
+        Amount::from_tokens(6)
+    );
+    assert_eq!(
+        client2.query_balance(chain2).await.unwrap(),
+        Amount::from_tokens(6)
+    );
 
     // Transfer 2 + 1 units from Chain 2 to Chain 1 using both clients.
-    client2.transfer("2", chain2, chain1).await.unwrap();
-    client1.transfer("1", chain2, chain1).await.unwrap();
+    client2
+        .transfer(Amount::from_tokens(2), chain2, chain1)
+        .await
+        .unwrap();
+    client1
+        .transfer(Amount::from_tokens(1), chain2, chain1)
+        .await
+        .unwrap();
     client1.synchronize_balance(chain1).await.unwrap();
     client2.synchronize_balance(chain2).await.unwrap();
 
-    assert_eq!(client1.query_balance(chain1).await.unwrap(), "7.");
-    assert_eq!(client1.query_balance(chain2).await.unwrap(), "3.");
-    assert_eq!(client2.query_balance(chain2).await.unwrap(), "3.");
+    assert_eq!(
+        client1.query_balance(chain1).await.unwrap(),
+        Amount::from_tokens(7)
+    );
+    assert_eq!(
+        client1.query_balance(chain2).await.unwrap(),
+        Amount::from_tokens(3)
+    );
+    assert_eq!(
+        client2.query_balance(chain2).await.unwrap(),
+        Amount::from_tokens(3)
+    );
 }

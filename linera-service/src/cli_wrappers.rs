@@ -10,7 +10,7 @@ use async_graphql::InputType;
 use linera_base::{
     abi::ContractAbi,
     crypto::PublicKey,
-    data_types::RoundNumber,
+    data_types::{Amount, RoundNumber},
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_execution::Bytecode;
@@ -307,7 +307,7 @@ impl ClientWrapper {
         Ok(())
     }
 
-    pub async fn query_balance(&self, chain_id: ChainId) -> Result<String> {
+    pub async fn query_balance(&self, chain_id: ChainId) -> Result<Amount> {
         let stdout = self
             .command()
             .await?
@@ -315,15 +315,18 @@ impl ClientWrapper {
             .arg(&chain_id.to_string())
             .spawn_and_wait_for_stdout()
             .await?;
-        let amount = stdout.trim().to_string();
+        let amount = stdout
+            .trim()
+            .parse()
+            .context("error while parsing the result of `linera query-balance`")?;
         Ok(amount)
     }
 
-    pub async fn transfer(&self, amount: &str, from: ChainId, to: ChainId) -> Result<()> {
+    pub async fn transfer(&self, amount: Amount, from: ChainId, to: ChainId) -> Result<()> {
         self.command()
             .await?
             .arg("transfer")
-            .arg(amount)
+            .arg(amount.to_string())
             .args(["--from", &from.to_string()])
             .args(["--to", &to.to_string()])
             .spawn_and_wait_for_stdout()
@@ -477,14 +480,19 @@ impl ClientWrapper {
         Ok(chain_id)
     }
 
-    pub async fn synchronize_balance(&self, chain_id: ChainId) -> Result<()> {
-        self.command()
+    pub async fn synchronize_balance(&self, chain_id: ChainId) -> Result<Amount> {
+        let stdout = self
+            .command()
             .await?
             .arg("sync-balance")
             .arg(&chain_id.to_string())
             .spawn_and_wait_for_stdout()
             .await?;
-        Ok(())
+        let amount = stdout
+            .trim()
+            .parse()
+            .context("error while parsing the result of `linera sync-balance`")?;
+        Ok(amount)
     }
 }
 
