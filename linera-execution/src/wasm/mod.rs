@@ -32,6 +32,7 @@ use crate::{
     SessionCallResult, SessionId, UserApplication, WasmRuntime,
 };
 use async_trait::async_trait;
+use futures::future;
 use std::{path::Path, sync::Arc};
 use thiserror::Error;
 
@@ -133,27 +134,24 @@ impl UserApplication for WasmApplication {
         let context = *context;
         let argument = argument.to_owned();
 
-        let wasm_task = match self {
+        let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
-                let instance =
-                    Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?;
-
-                tokio::spawn(async move { instance.initialize(&context, &argument).await })
+                Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?
+                    .initialize(&context, &argument)
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { contract, .. } => {
-                let instance =
-                    Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?;
-
-                tokio::spawn(async move { instance.initialize(&context, &argument).await })
+                Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?
+                    .initialize(&context, &argument)
             }
         };
 
-        runtime_actor.run().await?;
-        wasm_task
-            .await
-            .expect("Panic while running Wasm guest instance")
+        let (runtime_result, wasm_result) =
+            future::join(runtime_actor.run(), wasm_result_receiver).await;
+
+        runtime_result?;
+        wasm_result
     }
 
     async fn execute_operation(
@@ -166,27 +164,24 @@ impl UserApplication for WasmApplication {
         let context = *context;
         let operation = operation.to_owned();
 
-        let wasm_task = match self {
+        let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
-                let instance =
-                    Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?;
-
-                tokio::spawn(async move { instance.execute_operation(&context, &operation).await })
+                Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?
+                    .execute_operation(&context, &operation)
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { contract, .. } => {
-                let instance =
-                    Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?;
-
-                tokio::spawn(async move { instance.execute_operation(&context, &operation).await })
+                Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?
+                    .execute_operation(&context, &operation)
             }
         };
 
-        runtime_actor.run().await?;
-        wasm_task
-            .await
-            .expect("Panic while running Wasm guest instance")
+        let (runtime_result, wasm_result) =
+            future::join(runtime_actor.run(), wasm_result_receiver).await;
+
+        runtime_result?;
+        wasm_result
     }
 
     async fn execute_message(
@@ -199,27 +194,24 @@ impl UserApplication for WasmApplication {
         let context = *context;
         let message = message.to_owned();
 
-        let wasm_task = match self {
+        let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
-                let instance =
-                    Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?;
-
-                tokio::spawn(async move { instance.execute_message(&context, &message).await })
+                Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?
+                    .execute_message(&context, &message)
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { contract, .. } => {
-                let instance =
-                    Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?;
-
-                tokio::spawn(async move { instance.execute_message(&context, &message).await })
+                Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?
+                    .execute_message(&context, &message)
             }
         };
 
-        runtime_actor.run().await?;
-        wasm_task
-            .await
-            .expect("Panic while running Wasm guest instance")
+        let (runtime_result, wasm_result) =
+            future::join(runtime_actor.run(), wasm_result_receiver).await;
+
+        runtime_result?;
+        wasm_result
     }
 
     async fn handle_application_call(
@@ -233,35 +225,24 @@ impl UserApplication for WasmApplication {
         let context = *context;
         let argument = argument.to_owned();
 
-        let wasm_task = match self {
+        let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
-                let instance =
-                    Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?;
-
-                tokio::spawn(async move {
-                    instance
-                        .handle_application_call(&context, &argument, forwarded_sessions)
-                        .await
-                })
+                Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?
+                    .handle_application_call(&context, &argument, forwarded_sessions)
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { contract, .. } => {
-                let instance =
-                    Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?;
-
-                tokio::spawn(async move {
-                    instance
-                        .handle_application_call(&context, &argument, forwarded_sessions)
-                        .await
-                })
+                Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?
+                    .handle_application_call(&context, &argument, forwarded_sessions)
             }
         };
 
-        runtime_actor.run().await?;
-        wasm_task
-            .await
-            .expect("Panic while running Wasm guest instance")
+        let (runtime_result, wasm_result) =
+            future::join(runtime_actor.run(), wasm_result_receiver).await;
+
+        runtime_result?;
+        wasm_result
     }
 
     async fn handle_session_call(
@@ -277,45 +258,35 @@ impl UserApplication for WasmApplication {
         let argument = argument.to_owned();
         let initial_session_state = session_state.to_owned();
 
-        let wasm_task = match self {
+        let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
-                let instance =
-                    Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?;
-
-                tokio::spawn(async move {
-                    instance
-                        .handle_session_call(
-                            &context,
-                            &initial_session_state,
-                            &argument,
-                            forwarded_sessions,
-                        )
-                        .await
-                })
+                Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?
+                    .handle_session_call(
+                        &context,
+                        &initial_session_state,
+                        &argument,
+                        forwarded_sessions,
+                    )
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { contract, .. } => {
-                let instance =
-                    Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?;
-
-                tokio::spawn(async move {
-                    instance
-                        .handle_session_call(
-                            &context,
-                            &initial_session_state,
-                            &argument,
-                            forwarded_sessions,
-                        )
-                        .await
-                })
+                Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?
+                    .handle_session_call(
+                        &context,
+                        &initial_session_state,
+                        &argument,
+                        forwarded_sessions,
+                    )
             }
         };
 
-        runtime_actor.run().await?;
-        let (result, updated_session_state) = wasm_task
-            .await
-            .expect("Panic while running Wasm guest instance")?;
+        let (runtime_result, wasm_result) =
+            future::join(runtime_actor.run(), wasm_result_receiver).await;
+
+        runtime_result?;
+
+        let (result, updated_session_state) = wasm_result?;
         *session_state = updated_session_state;
         Ok(result)
     }
@@ -330,27 +301,24 @@ impl UserApplication for WasmApplication {
         let context = *context;
         let argument = argument.to_owned();
 
-        let wasm_task = match self {
+        let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { service, .. } => {
-                let instance =
-                    Self::prepare_service_runtime_with_wasmtime(service, runtime_requests)?;
-
-                tokio::spawn(async move { instance.handle_query(&context, &argument).await })
+                Self::prepare_service_runtime_with_wasmtime(service, runtime_requests)?
+                    .handle_query(&context, &argument)
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { service, .. } => {
-                let instance =
-                    Self::prepare_service_runtime_with_wasmer(service, runtime_requests)?;
-
-                tokio::spawn(async move { instance.handle_query(&context, &argument).await })
+                Self::prepare_service_runtime_with_wasmer(service, runtime_requests)?
+                    .handle_query(&context, &argument)
             }
         };
 
-        runtime_actor.run().await?;
-        wasm_task
-            .await
-            .expect("Panic while running Wasm guest instance")
+        let (runtime_result, wasm_result) =
+            future::join(runtime_actor.run(), wasm_result_receiver).await;
+
+        runtime_result?;
+        wasm_result
     }
 }
 
