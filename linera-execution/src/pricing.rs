@@ -16,8 +16,16 @@ pub struct Pricing {
     pub certificate: Amount,
     /// The price per unit of fuel used when executing messages and operations for user applications.
     pub fuel: Amount,
-    /// The cost to store a block's operations and incoming messages, per byte.
-    pub storage: Amount,
+    /// The cost to read data per operation
+    pub storage_n_read: Amount,
+    /// The cost to read data per byte
+    pub storage_byte_read: Amount,
+    /// The cost to store data per byte
+    pub storage_byte_write: Amount,
+    /// The maximum data to read
+    pub maximum_byte_read: usize,
+    /// The maximum data to write
+    pub maximum_byte_write: usize,
     /// The cost to store and send cross-chain messages, per byte.
     pub messages: Amount,
 }
@@ -36,7 +44,7 @@ impl Pricing {
     pub fn storage_price(&self, data: &impl Serialize) -> Result<Amount, PricingError> {
         let size =
             u128::try_from(bcs::serialized_size(data)?).map_err(|_| ArithmeticError::Overflow)?;
-        Ok(self.storage.try_mul(size)?)
+        Ok(self.storage_byte_write.try_mul(size)?)
     }
 
     pub fn fuel_price(&self, fuel: u64) -> Result<Amount, PricingError> {
@@ -57,7 +65,11 @@ impl Pricing {
         Pricing {
             certificate: Amount::ZERO,
             fuel: Amount::from_atto(1_000_000_000_000),
-            storage: Amount::ZERO,
+            storage_n_read: Amount::ZERO,
+            storage_byte_read: Amount::ZERO,
+            storage_byte_write: Amount::ZERO,
+            maximum_byte_read: usize::MAX,
+            maximum_byte_write: usize::MAX,
             messages: Amount::ZERO,
         }
     }
@@ -71,7 +83,11 @@ impl Pricing {
         Pricing {
             certificate: Amount::from_milli(1),
             fuel: Amount::from_atto(1_000_000_000_000),
-            storage: Amount::ZERO,
+            storage_n_read: Amount::ZERO,
+            storage_byte_read: Amount::ZERO,
+            storage_byte_write: Amount::ZERO,
+            maximum_byte_read: usize::MAX,
+            maximum_byte_write: usize::MAX,
             messages: Amount::ZERO,
         }
     }
@@ -82,7 +98,11 @@ impl Pricing {
         Pricing {
             certificate: Amount::from_milli(1),
             fuel: Amount::from_atto(1_000_000_000),
-            storage: Amount::from_atto(1_000),
+            storage_n_read: Amount::ZERO,
+            storage_byte_read: Amount::from_atto(100),
+            storage_byte_write: Amount::from_atto(1_000),
+            maximum_byte_read: usize::MAX,
+            maximum_byte_write: usize::MAX,
             messages: Amount::from_atto(1),
         }
     }
