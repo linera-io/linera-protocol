@@ -129,6 +129,10 @@ impl ApplicationRuntimeContext for Service {
     type Store = Store<ServiceState>;
     type Error = Trap;
     type Extra = ();
+
+    fn initialize(_context: &mut WasmRuntimeContext<Self>) {}
+
+    fn finalize(_context: &mut WasmRuntimeContext<Self>) {}
 }
 
 impl WasmApplication {

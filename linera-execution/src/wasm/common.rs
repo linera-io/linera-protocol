@@ -26,10 +26,10 @@ pub trait ApplicationRuntimeContext: Sized {
     type Extra: Send + Unpin;
 
     /// Initializes the runtime context, running any extra set-up operations.
-    fn initialize(_context: &mut WasmRuntimeContext<Self>) {}
+    fn initialize(context: &mut WasmRuntimeContext<Self>);
 
     /// Finalizes the runtime context, running any extra clean-up operations.
-    fn finalize(_context: &mut WasmRuntimeContext<Self>) {}
+    fn finalize(context: &mut WasmRuntimeContext<Self>);
 }
 
 /// Common interface to calling a user contract in a WebAssembly module.
