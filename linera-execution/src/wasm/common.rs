@@ -25,11 +25,11 @@ pub trait ApplicationRuntimeContext: Sized {
     /// Extra runtime-specific data.
     type Extra: Send + Unpin;
 
-    /// Initializes the runtime context, running any extra set-up operations.
-    fn initialize_context(context: &mut WasmRuntimeContext<Self>);
+    /// Configures the fuel available for execution.
+    fn configure_initial_fuel(context: &mut WasmRuntimeContext<Self>);
 
-    /// Finalizes the runtime context, running any extra clean-up operations.
-    fn finalize_context(context: &mut WasmRuntimeContext<Self>);
+    /// Persists the remaining fuel after execution.
+    fn persist_remaining_fuel(context: &mut WasmRuntimeContext<Self>);
 }
 
 /// Common interface to calling a user contract in a WebAssembly module.
@@ -210,6 +210,7 @@ where
     pub(crate) store: A::Store,
 
     /// Guard type to clean up any host state after the call to the Wasm application finishes.
+    #[allow(dead_code)]
     pub(crate) extra: A::Extra,
 }
 
@@ -361,6 +362,6 @@ where
     A: ApplicationRuntimeContext,
 {
     fn drop(&mut self) {
-        A::finalize_context(self);
+        A::persist_remaining_fuel(self);
     }
 }
