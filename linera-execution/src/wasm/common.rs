@@ -4,7 +4,7 @@
 //! Runtime independent code for interfacing with user applications in WebAssembly modules.
 
 use super::{
-    async_boundary::{GuestFutureActor, GuestFutureInterface},
+    async_boundary::{GuestFutureActor, GuestFutureInterface, PollSender},
     async_determinism::HostFutureQueue,
     ExecutionError,
 };
@@ -12,7 +12,6 @@ use crate::{
     ApplicationCallResult, CalleeContext, MessageContext, OperationContext, QueryContext,
     RawExecutionResult, SessionCallResult, SessionId,
 };
-use std::future::Future;
 
 /// Types that are specific to the context of an application ready to be executedy by a WebAssembly
 /// runtime.
@@ -235,7 +234,7 @@ where
         self,
         context: &OperationContext,
         argument: &[u8],
-    ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> {
+    ) -> PollSender<RawExecutionResult<Vec<u8>>> {
         GuestFutureActor::<A::Initialize, A>::spawn((*context, argument.to_owned()), self)
     }
 
@@ -255,7 +254,7 @@ where
         self,
         context: &OperationContext,
         operation: &[u8],
-    ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> {
+    ) -> PollSender<RawExecutionResult<Vec<u8>>> {
         GuestFutureActor::<A::ExecuteOperation, A>::spawn((*context, operation.to_owned()), self)
     }
 
@@ -275,7 +274,7 @@ where
         self,
         context: &MessageContext,
         message: &[u8],
-    ) -> impl Future<Output = Result<RawExecutionResult<Vec<u8>>, ExecutionError>> {
+    ) -> PollSender<RawExecutionResult<Vec<u8>>> {
         GuestFutureActor::<A::ExecuteMessage, A>::spawn((*context, message.to_owned()), self)
     }
 
@@ -297,7 +296,7 @@ where
         context: &CalleeContext,
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> impl Future<Output = Result<ApplicationCallResult, ExecutionError>> {
+    ) -> PollSender<ApplicationCallResult> {
         GuestFutureActor::<A::HandleApplicationCall, A>::spawn(
             (*context, argument.to_owned(), forwarded_sessions),
             self,
@@ -324,7 +323,7 @@ where
         session_state: &[u8],
         argument: &[u8],
         forwarded_sessions: Vec<SessionId>,
-    ) -> impl Future<Output = Result<(SessionCallResult, Vec<u8>), ExecutionError>> {
+    ) -> PollSender<(SessionCallResult, Vec<u8>)> {
         GuestFutureActor::<A::HandleSessionCall, A>::spawn(
             (
                 *context,
@@ -353,11 +352,7 @@ where
     ///     argument: &[u8],
     /// ) -> Result<Vec<u8>, ExecutionError>
     /// ```
-    pub fn handle_query(
-        self,
-        context: &QueryContext,
-        argument: &[u8],
-    ) -> impl Future<Output = Result<Vec<u8>, ExecutionError>> {
+    pub fn handle_query(self, context: &QueryContext, argument: &[u8]) -> PollSender<Vec<u8>> {
         GuestFutureActor::<A::HandleQuery, A>::spawn((*context, argument.to_owned()), self)
     }
 }
