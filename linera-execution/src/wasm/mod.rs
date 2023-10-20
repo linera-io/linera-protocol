@@ -131,19 +131,17 @@ impl UserApplication for WasmApplication {
         argument: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
-        let context = *context;
-        let argument = argument.to_owned();
 
         let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
                 Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?
-                    .initialize(&context, &argument)
+                    .initialize(context, argument)
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { contract, .. } => {
                 Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?
-                    .initialize(&context, &argument)
+                    .initialize(context, argument)
             }
         };
 
@@ -161,19 +159,17 @@ impl UserApplication for WasmApplication {
         operation: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
-        let context = *context;
-        let operation = operation.to_owned();
 
         let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
                 Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?
-                    .execute_operation(&context, &operation)
+                    .execute_operation(context, operation)
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { contract, .. } => {
                 Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?
-                    .execute_operation(&context, &operation)
+                    .execute_operation(context, operation)
             }
         };
 
@@ -191,19 +187,17 @@ impl UserApplication for WasmApplication {
         message: &[u8],
     ) -> Result<RawExecutionResult<Vec<u8>>, ExecutionError> {
         let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
-        let context = *context;
-        let message = message.to_owned();
 
         let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
                 Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?
-                    .execute_message(&context, &message)
+                    .execute_message(context, message)
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { contract, .. } => {
                 Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?
-                    .execute_message(&context, &message)
+                    .execute_message(context, message)
             }
         };
 
@@ -222,19 +216,17 @@ impl UserApplication for WasmApplication {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<ApplicationCallResult, ExecutionError> {
         let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
-        let context = *context;
-        let argument = argument.to_owned();
 
         let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
                 Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?
-                    .handle_application_call(&context, &argument, forwarded_sessions)
+                    .handle_application_call(context, argument, forwarded_sessions)
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { contract, .. } => {
                 Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?
-                    .handle_application_call(&context, &argument, forwarded_sessions)
+                    .handle_application_call(context, argument, forwarded_sessions)
             }
         };
 
@@ -254,30 +246,17 @@ impl UserApplication for WasmApplication {
         forwarded_sessions: Vec<SessionId>,
     ) -> Result<SessionCallResult, ExecutionError> {
         let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
-        let context = *context;
-        let argument = argument.to_owned();
-        let initial_session_state = session_state.to_owned();
 
         let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { contract, .. } => {
                 Self::prepare_contract_runtime_with_wasmtime(contract, runtime_requests)?
-                    .handle_session_call(
-                        &context,
-                        &initial_session_state,
-                        &argument,
-                        forwarded_sessions,
-                    )
+                    .handle_session_call(context, &*session_state, argument, forwarded_sessions)
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { contract, .. } => {
                 Self::prepare_contract_runtime_with_wasmer(contract, runtime_requests)?
-                    .handle_session_call(
-                        &context,
-                        &initial_session_state,
-                        &argument,
-                        forwarded_sessions,
-                    )
+                    .handle_session_call(context, &*session_state, argument, forwarded_sessions)
             }
         };
 
@@ -298,19 +277,17 @@ impl UserApplication for WasmApplication {
         argument: &[u8],
     ) -> Result<Vec<u8>, ExecutionError> {
         let (runtime_actor, runtime_requests) = RuntimeActor::new(runtime);
-        let context = *context;
-        let argument = argument.to_owned();
 
         let wasm_result_receiver = match self {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { service, .. } => {
                 Self::prepare_service_runtime_with_wasmtime(service, runtime_requests)?
-                    .handle_query(&context, &argument)
+                    .handle_query(context, argument)
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { service, .. } => {
                 Self::prepare_service_runtime_with_wasmer(service, runtime_requests)?
-                    .handle_query(&context, &argument)
+                    .handle_query(context, argument)
             }
         };
 
