@@ -563,6 +563,9 @@ where
         Self::sub_assign_fees(balance, credit)?;
         Self::sub_assign_fees(balance, pricing.fuel_price(used_fuel)?)?;
         Self::sub_assign_fees(balance, pricing.messages_price(&messages)?)?;
+        Self::sub_assign_fees(balance, pricing.storage_n_read_price(&runtime_meter.n_read)?)?;
+        Self::sub_assign_fees(balance, pricing.storage_byte_read_price(&runtime_meter.bytes_read)?)?;
+        Self::sub_assign_fees(balance, pricing.storage_byte_write_price(&runtime_meter.bytes_write)?)?;
 
         // Recompute the state hash.
         let state_hash = self.execution_state.crypto_hash().await?;
