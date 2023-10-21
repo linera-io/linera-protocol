@@ -304,7 +304,7 @@ pub trait Service: WithServiceAbi + ServiceAbi {
     async fn handle_application_query(
         self: Arc<Self>,
         context: &QueryContext,
-        argument: Self::Query,
+        query: Self::Query,
     ) -> Result<Self::QueryResponse, Self::Error>;
 
     /// Retrieves the parameters of the application.

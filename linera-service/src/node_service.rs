@@ -756,7 +756,7 @@ where
         let Some(client) = self.clients.client_lock(&chain_id).await else {
             return Err(NodeServiceError::UnknownChainId);
         };
-        let response = client.query_application(&query).await?;
+        let response = client.handle_application_query(&query).await?;
         let user_response_bytes = match response {
             Response::System(_) => unreachable!("cannot get a system response for a user query"),
             Response::User(user) => user,

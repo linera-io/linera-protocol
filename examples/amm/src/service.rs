@@ -20,7 +20,7 @@ impl Service for Amm {
     type Error = AmmError;
     type Storage = ViewStateStorage<Self>;
 
-    async fn query_application(
+    async fn handle_application_query(
         self: Arc<Self>,
         _context: &QueryContext,
         request: Request,

@@ -415,25 +415,25 @@ impl<'runtime> common::Contract for Contract<'runtime> {
 }
 
 impl<'runtime> common::Service for Service<'runtime> {
-    type QueryApplication = service::QueryApplication;
+    type HandleApplicationQuery = service::HandleApplicationQuery;
     type QueryContext = service::QueryContext;
     type PollQuery = service::PollQuery;
 
-    fn query_application_new(
+    fn handle_application_query_new(
         &self,
         store: &mut Store<ServiceState<'runtime>>,
         context: service::QueryContext,
         argument: &[u8],
-    ) -> Result<service::QueryApplication, Trap> {
-        service::Service::query_application_new(&self.service, store, context, argument)
+    ) -> Result<service::HandleApplicationQuery, Trap> {
+        service::Service::handle_application_query_new(&self.service, store, context, argument)
     }
 
-    fn query_application_poll(
+    fn handle_application_query_poll(
         &self,
         store: &mut Store<ServiceState<'runtime>>,
-        future: &service::QueryApplication,
+        future: &service::HandleApplicationQuery,
     ) -> Result<service::PollQuery, Trap> {
-        service::Service::query_application_poll(&self.service, store, future)
+        service::Service::handle_application_query_poll(&self.service, store, future)
     }
 }
 

@@ -340,7 +340,7 @@ where
         }
     }
 
-    pub async fn query_application(
+    pub async fn handle_application_query(
         &mut self,
         context: &QueryContext,
         query: &Query,
@@ -348,7 +348,7 @@ where
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match query {
             Query::System(query) => {
-                let response = self.system.query_application(context, query).await?;
+                let response = self.system.handle_application_query(context, query).await?;
                 Ok(Response::System(response))
             }
             Query::User {
@@ -384,7 +384,7 @@ where
                 );
                 // Run the query.
                 let response = application
-                    .query_application(context, &runtime, bytes)
+                    .handle_application_query(context, &runtime, bytes)
                     .await?;
                 // Check that applications were correctly stacked and unstacked.
                 assert_eq!(applications.len(), 1);

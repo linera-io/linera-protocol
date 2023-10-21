@@ -85,7 +85,7 @@ pub fn current_system_time() -> Timestamp {
 }
 
 /// Queries another application.
-pub async fn query_application(
+pub async fn handle_application_query(
     application: ApplicationId,
     argument: &[u8],
 ) -> Result<Vec<u8>, String> {

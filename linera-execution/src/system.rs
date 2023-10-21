@@ -971,7 +971,7 @@ where
         self.timestamp.set(timestamp);
     }
 
-    pub async fn query_application(
+    pub async fn handle_application_query(
         &mut self,
         context: &QueryContext,
         _query: &SystemQuery,

@@ -438,7 +438,7 @@ fn mock_query() {
     };
     let query = vec![17, 23, 31, 37];
 
-    let response = service::system_api::query_application(application_id, &query)
+    let response = service::system_api::handle_application_query(application_id, &query)
         .now_or_never()
         .expect("Mock session call should return immediately");
 

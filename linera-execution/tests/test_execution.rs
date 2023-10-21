@@ -170,7 +170,7 @@ impl UserApplication for TestApplication {
     }
 
     /// Returns the application state.
-    async fn query_application(
+    async fn handle_application_query(
         &self,
         _context: &QueryContext,
         runtime: &dyn ServiceRuntime,
@@ -241,7 +241,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
     };
     assert_eq!(
-        view.query_application(
+        view.handle_application_query(
             &context,
             &Query::User {
                 application_id: app_id,

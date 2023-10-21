@@ -429,7 +429,7 @@ where
             signer: None,
         });
         let value = code
-            .query_application(&query_context, self, argument)
+            .handle_application_query(&query_context, self, argument)
             .await?;
         self.applications_mut().pop();
         Ok(value)
