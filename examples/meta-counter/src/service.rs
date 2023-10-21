@@ -40,7 +40,7 @@ impl Service for MetaCounter {
         request: Request,
     ) -> Result<Response, Self::Error> {
         let argument = serde_json::to_vec(&request).unwrap();
-        let value = system_api::handle_application_query(Self::counter_id()?, &argument)
+        let value = system_api::query_application(Self::counter_id()?, &argument)
             .await
             .map_err(|_| Error::InternalQuery)?;
         let response = serde_json::from_slice(&value).unwrap();
