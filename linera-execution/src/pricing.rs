@@ -41,7 +41,19 @@ impl Pricing {
         Ok(self.messages.try_mul(size)?)
     }
 
-    pub fn storage_price(&self, data: &impl Serialize) -> Result<Amount, PricingError> {
+    pub fn storage_n_read_price(&self, data: &impl Serialize) -> Result<Amount, PricingError> {
+        let size =
+            u128::try_from(bcs::serialized_size(data)?).map_err(|_| ArithmeticError::Overflow)?;
+        Ok(self.storage_n_read.try_mul(size)?)
+    }
+
+    pub fn storage_byte_read_price(&self, data: &impl Serialize) -> Result<Amount, PricingError> {
+        let size =
+            u128::try_from(bcs::serialized_size(data)?).map_err(|_| ArithmeticError::Overflow)?;
+        Ok(self.storage_byte_read.try_mul(size)?)
+    }
+
+    pub fn storage_byte_write_price(&self, data: &impl Serialize) -> Result<Amount, PricingError> {
         let size =
             u128::try_from(bcs::serialized_size(data)?).map_err(|_| ArithmeticError::Overflow)?;
         Ok(self.storage_byte_write.try_mul(size)?)

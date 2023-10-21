@@ -495,8 +495,8 @@ where
 
         balance.try_add_assign(credit)?;
         Self::sub_assign_fees(balance, pricing.certificate_price())?;
-        Self::sub_assign_fees(balance, pricing.storage_price(&block.incoming_messages)?)?;
-        Self::sub_assign_fees(balance, pricing.storage_price(&block.operations)?)?;
+        Self::sub_assign_fees(balance, pricing.storage_byte_write_price(&block.incoming_messages)?)?;
+        Self::sub_assign_fees(balance, pricing.storage_byte_write_price(&block.operations)?)?;
 
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();

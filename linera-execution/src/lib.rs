@@ -89,6 +89,10 @@ pub enum ExecutionError {
     ApplicationIsInUse,
     #[error("Attempted to get an entry that is not locked")]
     ApplicationStateNotLocked,
+    #[error("Excessive readings from storage")]
+    ExcessiveRead,
+    #[error("Excessive writings to storage")]
+    ExcessiveWrite,
 
     #[error("Bytecode ID {0:?} is invalid")]
     InvalidBytecodeId(BytecodeId),
