@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_execution::{
     ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, Operation, OperationContext,
-    Query, QueryContext, RawExecutionResult, Response, SystemExecutionState,
+    Query, QueryContext, RawExecutionResult, Response, RuntimeMeter, SystemExecutionState,
     TestExecutionRuntimeContext, WasmApplication, WasmRuntime,
 };
 use linera_views::{memory::MemoryContext, views::View};
@@ -70,13 +70,14 @@ async fn test_fuel_for_counter_wasm_application(
     };
     let increments = [2_u64, 9, 7, 1000];
     let available_fuel = 10_000_000;
-    let mut remaining_fuel = available_fuel;
+    let mut runtime_meter = RuntimeMeter::default();
+    runtime_meter.remaining_fuel = available_fuel;
     for increment in &increments {
         let result = view
             .execute_operation(
                 &context,
                 &Operation::user(app_id, increment).unwrap(),
-                &mut remaining_fuel,
+                &mut runtime_meter,
             )
             .await?;
         assert_eq!(
@@ -88,7 +89,7 @@ async fn test_fuel_for_counter_wasm_application(
         );
     }
 
-    assert_eq!(available_fuel - remaining_fuel, expected_fuel);
+    assert_eq!(available_fuel - runtime_meter.remaining_fuel, expected_fuel);
 
     let context = QueryContext {
         chain_id: ChainId::root(0),

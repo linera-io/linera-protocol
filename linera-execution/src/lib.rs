@@ -50,6 +50,44 @@ use serde::{Deserialize, Serialize};
 use std::{io, path::Path, str::FromStr, sync::Arc};
 use thiserror::Error;
 
+/// The entries of the runtime related to fuel and storage
+#[derive(Copy, Debug, Clone)]
+pub struct RuntimeMeter {
+    /// The remaining fuel
+    pub remaining_fuel: u64,
+    /// The number of read operations
+    pub n_read: u64,
+    /// The bytes that have been read
+    pub bytes_read: u64,
+    /// The bytes that have been written
+    pub bytes_write: u64,
+    /// The maximum size of read allowed
+    pub maximum_bytes_read: u64,
+    /// The maximum size of write allowed
+    pub maximum_bytes_write: u64,
+}
+
+#[cfg(any(test, feature = "test"))]
+pub fn get_default_runtime_meter() -> RuntimeMeter {
+    let mut runtime_meter = RuntimeMeter::default();
+    runtime_meter.remaining_fuel = 10_000_000;
+    runtime_meter
+}
+
+
+
+impl Default for RuntimeMeter {
+    fn default() -> Self {
+        RuntimeMeter { remaining_fuel: 0,
+                       n_read: 0,
+                       bytes_read: 0,
+                       bytes_write: 0,
+                       maximum_bytes_read: u64::MAX,
+                       maximum_bytes_write: u64::MAX }
+    }
+}
+
+
 /// An implementation of [`UserApplication`]
 pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;
 
@@ -315,6 +353,9 @@ pub struct CallResult {
 pub trait ContractRuntime: BaseRuntime {
     /// Returns the amount of execution fuel remaining before execution is aborted.
     fn remaining_fuel(&self) -> u64;
+
+    /// Returns the remaining fuel as well as the storage related information on the state
+    fn runtime_meter(&self) -> RuntimeMeter;
 
     /// Sets the amount of execution fuel remaining before execution is aborted.
     fn set_remaining_fuel(&self, remaining_fuel: u64);

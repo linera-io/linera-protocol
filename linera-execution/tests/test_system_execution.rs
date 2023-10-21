@@ -9,6 +9,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, MessageId},
 };
 use linera_execution::{
+    get_default_runtime_meter,
     system::{Account, Recipient, UserData},
     ExecutionResult, ExecutionStateView, Message, MessageContext, Operation, OperationContext,
     Query, QueryContext, RawExecutionResult, Response, SystemExecutionState, SystemMessage,
@@ -38,8 +39,9 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
+    let mut runtime_meter = get_default_runtime_meter();
     let results = view
-        .execute_operation(&context, &Operation::System(operation), &mut 10_000_000)
+        .execute_operation(&context, &Operation::System(operation), &mut runtime_meter)
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::ZERO);
@@ -77,8 +79,9 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         },
         authenticated_signer: None,
     };
+    let mut runtime_meter = get_default_runtime_meter();
     let results = view
-        .execute_message(&context, &Message::System(message), &mut 10_000_000)
+        .execute_message(&context, &Message::System(message), &mut runtime_meter)
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::from_tokens(4));

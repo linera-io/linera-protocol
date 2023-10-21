@@ -25,6 +25,7 @@ use linera_chain::{
     test::{make_child_block, make_first_block, BlockTestExt},
 };
 use linera_execution::{
+    get_default_runtime_meter,
     committee::Epoch,
     system::{SystemChannel, SystemMessage, SystemOperation},
     Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, ExecutionStateView,
@@ -422,6 +423,7 @@ where
         index: 0,
         next_message_index: 0,
     };
+    let mut runtime_meter = get_default_runtime_meter();
     creator_state
         .execute_operation(
             &operation_context,
@@ -429,7 +431,7 @@ where
                 application_id,
                 bytes: user_operation,
             },
-            &mut 10_000_000,
+            &mut runtime_meter,
         )
         .await?;
     creator_state.system.timestamp.set(Timestamp::from(5));

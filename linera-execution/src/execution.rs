@@ -6,7 +6,8 @@ use crate::{
     system::SystemExecutionStateView,
     ContractRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Message,
     MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
-    RawOutgoingMessage, Response, SystemMessage, UserApplicationDescription, UserApplicationId,
+    RawOutgoingMessage, Response, RuntimeMeter, SystemMessage, UserApplicationDescription,
+    UserApplicationId,
 };
 use linera_base::{
     ensure,
@@ -128,7 +129,13 @@ where
             .user_applications()
             .insert(application_id, application);
 
-        self.run_user_action(application_id, chain_id, action, &mut 10_000_000)
+        let mut runtime_meter = RuntimeMeter { remaining_fuel: 10_000_000,
+                                               n_read: 0,
+                                               bytes_read: 0,
+                                               bytes_write: 0,
+                                               maximum_bytes_read: u64::MAX,
+                                               maximum_bytes_write: u64::MAX };
+        self.run_user_action(application_id, chain_id, action, &mut runtime_meter)
             .await?;
 
         Ok(())
@@ -163,7 +170,7 @@ where
         application_id: UserApplicationId,
         chain_id: ChainId,
         action: UserAction<'_>,
-        remaining_fuel: &mut u64,
+        runtime_meter: &mut RuntimeMeter,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         // Try to load the application. This may fail if the corresponding
         // bytecode-publishing certificate doesn't exist yet on this validator.
@@ -192,7 +199,7 @@ where
             self,
             &mut session_manager,
             &mut results,
-            *remaining_fuel,
+            *runtime_meter,
         );
         // Make the call to user code.
         let call_result = match action {
@@ -219,7 +226,10 @@ where
         };
         // Set the authenticated signer to be used in outgoing messages.
         result.authenticated_signer = signer;
-        *remaining_fuel = runtime.remaining_fuel();
+        *runtime_meter = runtime.runtime_meter();
+        WASM_FUEL_USED_PER_BLOCK
+            .with_label_values(&[])
+            .observe((initial_remaining_fuel - *remaining_fuel) as f64);
 
         // Check that applications were correctly stacked and unstacked.
         assert_eq!(applications.len(), 1);
@@ -259,7 +269,7 @@ where
         &mut self,
         context: &OperationContext,
         operation: &Operation,
-        remaining_fuel: &mut u64,
+        runtime_meter: &mut RuntimeMeter,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
@@ -275,7 +285,7 @@ where
                             application_id,
                             context.chain_id,
                             user_action,
-                            remaining_fuel,
+                            runtime_meter,
                         )
                         .await?,
                     );
@@ -290,7 +300,7 @@ where
                     *application_id,
                     context.chain_id,
                     UserAction::Operation(context, bytes),
-                    remaining_fuel,
+                    runtime_meter,
                 )
                 .await
             }
@@ -301,7 +311,7 @@ where
         &mut self,
         context: &MessageContext,
         message: &Message,
-        remaining_fuel: &mut u64,
+        runtime_meter: &mut RuntimeMeter,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
@@ -317,7 +327,7 @@ where
                     *application_id,
                     context.chain_id,
                     UserAction::Message(context, bytes),
-                    remaining_fuel,
+                    runtime_meter,
                 )
                 .await
             }
@@ -358,13 +368,14 @@ where
                     parameters: description.parameters,
                     signer: None,
                 }];
+                let runtime_meter = RuntimeMeter::default();
                 let runtime = ExecutionRuntime::new(
                     context.chain_id,
                     &mut applications,
                     self,
                     &mut session_manager,
                     &mut results,
-                    0,
+                    runtime_meter,
                 );
                 // Run the query.
                 let response = application.handle_query(context, &runtime, bytes).await?;

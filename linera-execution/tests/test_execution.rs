@@ -42,7 +42,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
-
+    let mut runtime_meter = get_default_runtime_meter();
     let result = view
         .execute_operation(
             &context,
@@ -50,7 +50,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
                 application_id: app_id,
                 bytes: vec![],
             },
-            &mut 10_000_000,
+            &mut runtime_meter,
         )
         .await;
 
@@ -211,6 +211,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         authenticated_signer: Some(owner),
         next_message_index: 0,
     };
+    let mut runtime_meter = get_default_runtime_meter();
     let result = view
         .execute_operation(
             &context,
@@ -218,7 +219,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 application_id: app_id,
                 bytes: vec![1],
             },
-            &mut 10_000_000,
+            &mut runtime_meter,
         )
         .await
         .unwrap();
@@ -281,7 +282,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
         authenticated_signer: Some(owner),
         next_message_index: 0,
     };
-
+    let mut runtime_meter = get_default_runtime_meter();
     let result = view
         .execute_operation(
             &context,
@@ -289,7 +290,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
                 application_id: app_id,
                 bytes: vec![],
             },
-            &mut 10_000_000,
+            &mut runtime_meter,
         )
         .await;
 

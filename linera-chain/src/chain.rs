@@ -22,7 +22,7 @@ use linera_execution::{
     system::{Account, SystemMessage},
     ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, GenericApplicationId, Message,
     MessageContext, OperationContext, Query, QueryContext, RawExecutionResult, RawOutgoingMessage,
-    Response, UserApplicationDescription, UserApplicationId,
+    Response, RuntimeMeter, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     common::Context,
@@ -501,7 +501,12 @@ where
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
         let available_fuel = pricing.remaining_fuel(*balance);
-        let mut remaining_fuel = available_fuel;
+        let n_read = 0;
+        let bytes_read = 0;
+        let bytes_write = 0;
+        let maximum_bytes_read = 0;
+        let maximum_bytes_write = 0;
+        let mut runtime_meter = RuntimeMeter { remaining_fuel: available_fuel, n_read, bytes_read, bytes_write, maximum_bytes_read, maximum_bytes_write };
         for (index, message) in block.incoming_messages.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             // Execute the received message.
@@ -518,7 +523,7 @@ where
             };
             let results = self
                 .execution_state
-                .execute_message(&context, &message.event.message, &mut remaining_fuel)
+                .execute_message(&context, &message.event.message, &mut runtime_meter)
                 .await
                 .map_err(|err| {
                     ChainError::ExecutionError(err, ChainExecutionContext::IncomingMessage(index))
@@ -542,7 +547,7 @@ where
             };
             let results = self
                 .execution_state
-                .execute_operation(&context, operation, &mut remaining_fuel)
+                .execute_operation(&context, operation, &mut runtime_meter)
                 .await
                 .map_err(|err| {
                     ChainError::ExecutionError(err, ChainExecutionContext::Operation(index))
@@ -552,7 +557,7 @@ where
             message_counts
                 .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
         }
-        let used_fuel = available_fuel.saturating_sub(remaining_fuel);
+        let used_fuel = available_fuel.saturating_sub(runtime_meter.remaining_fuel);
 
         let balance = self.execution_state.system.balance.get_mut();
         Self::sub_assign_fees(balance, credit)?;

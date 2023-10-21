@@ -3,8 +3,8 @@
 
 use crate::{
     execution::ExecutionStateView, BaseRuntime, CallResult, ContractRuntime, ExecutionError,
-    ExecutionResult, ExecutionRuntimeContext, ServiceRuntime, SessionId, UserApplicationCode,
-    UserApplicationDescription, UserApplicationId,
+    ExecutionResult, ExecutionRuntimeContext, RuntimeMeter, ServiceRuntime, SessionId,
+    UserApplicationCode, UserApplicationDescription, UserApplicationId,
 };
 use async_lock::{Mutex, MutexGuard, MutexGuardArc, RwLockWriteGuardArc};
 use async_trait::async_trait;
@@ -33,18 +33,22 @@ use std::{
 /// Runtime data tracked during the execution of a transaction.
 #[derive(Debug, Clone)]
 pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
+    /// The amount of fuel available for executing the application.
+    remaining_fuel: Arc<AtomicU64>,
     /// the number of read
     n_read: Arc<AtomicU64>,
     /// the total size being read
     bytes_read: Arc<AtomicU64>,
     /// the total size being write
     bytes_write: Arc<AtomicU64>,
+    /// The maximum size of read allowed
+    maximum_bytes_read: u64,
+    /// The maximum size of write allowed
+    maximum_bytes_write: u64,
     /// The current chain ID.
     chain_id: ChainId,
     /// The current stack of application descriptions.
     applications: Arc<Mutex<&'a mut Vec<ApplicationStatus>>>,
-    /// The amount of fuel available for executing the application.
-    remaining_fuel: Arc<AtomicU64>,
     /// The storage view on the execution state.
     execution_state: Arc<Mutex<&'a mut ExecutionStateView<C>>>,
     /// All the sessions and their IDs.
@@ -105,19 +109,23 @@ where
         execution_state: &'a mut ExecutionStateView<C>,
         session_manager: &'a mut SessionManager,
         execution_results: &'a mut Vec<ExecutionResult>,
-        fuel: u64,
+        runtime_meter: RuntimeMeter,
     ) -> Self {
         assert_eq!(chain_id, execution_state.context().extra().chain_id());
-        let n_read = Arc::new(AtomicU64::new(0));
-        let bytes_read = Arc::new(AtomicU64::new(0));
-        let bytes_write = Arc::new(AtomicU64::new(0));
+        let n_read = Arc::new(AtomicU64::new(runtime_meter.n_read));
+        let bytes_read = Arc::new(AtomicU64::new(runtime_meter.bytes_read));
+        let bytes_write = Arc::new(AtomicU64::new(runtime_meter.bytes_write));
+        let maximum_bytes_read = runtime_meter.maximum_bytes_read;
+        let maximum_bytes_write = runtime_meter.maximum_bytes_write;
         Self {
             n_read,
             bytes_read,
             bytes_write,
+            maximum_bytes_read,
+            maximum_bytes_write,
             chain_id,
             applications: Arc::new(Mutex::new(applications)),
-            remaining_fuel: Arc::new(AtomicU64::new(fuel)),
+            remaining_fuel: Arc::new(AtomicU64::new(runtime_meter.remaining_fuel)),
             execution_state: Arc::new(Mutex::new(execution_state)),
             session_manager: Arc::new(Mutex::new(session_manager)),
             active_simple_user_states: Arc::default(),
@@ -469,6 +477,16 @@ where
 {
     fn remaining_fuel(&self) -> u64 {
         self.remaining_fuel.load(Ordering::Acquire)
+    }
+
+    fn runtime_meter(&self) -> RuntimeMeter {
+        let remaining_fuel = self.remaining_fuel.load(Ordering::Acquire);
+        let n_read = self.n_read.load(Ordering::Acquire);
+        let bytes_read = self.bytes_read.load(Ordering::Acquire);
+        let bytes_write = self.bytes_write.load(Ordering::Acquire);
+        let maximum_bytes_read = self.maximum_bytes_read;
+        let maximum_bytes_write = self.maximum_bytes_write;
+        RuntimeMeter { remaining_fuel, n_read, bytes_read, bytes_write, maximum_bytes_read, maximum_bytes_write }
     }
 
     fn set_remaining_fuel(&self, remaining_fuel: u64) {
