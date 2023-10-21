@@ -227,6 +227,12 @@ where
         // Set the authenticated signer to be used in outgoing messages.
         result.authenticated_signer = signer;
         *runtime_meter = runtime.runtime_meter();
+        if runtime_meter.bytes_read > runtime_meter.maximum_bytes_read {
+            return Err(ExecutionError::ExcessiveRead);
+        }
+        if runtime_meter.bytes_write > runtime_meter.maximum_bytes_write {
+            return Err(ExecutionError::ExcessiveWrite);
+        }
         WASM_FUEL_USED_PER_BLOCK
             .with_label_values(&[])
             .observe((initial_remaining_fuel - *remaining_fuel) as f64);
