@@ -63,10 +63,9 @@ jobs:
         run: |
           kubectl get pods | grep validator | awk '{ print $1 }' | xargs -I % kubectl port-forward % 19100:19100 &
       - name: Send sync-balance request
-        # TODO(#1003): Stop using sleep as a workaround for shards initialization delay
         run: |
           cd target/release
-          sleep 15 && ./linera --wallet /tmp/wallet.json --storage rocksdb:/tmp/linera.db sync-balance
+          ./linera --wallet /tmp/wallet.json --storage rocksdb:/tmp/linera.db sync-balance
       - name: Print client test logs
         # Always here means that this will run even if previous steps fail, same for the ones below
         if: always()
