@@ -98,7 +98,7 @@ where
     /// Polls the future export from the guest.
     ///
     /// This is called from the host.
-    pub fn poll(&self) -> wit_types::PollQuery {
+    pub fn poll(&self) -> wit_types::PollApplicationQueryResult {
         self.future.poll()
     }
 }

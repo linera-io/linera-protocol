@@ -32,7 +32,7 @@ macro_rules! service {
             service::HandleApplicationQuery<$application>(
                 context: $crate::service::wit_types::QueryContext,
                 argument: Vec<u8>,
-            ) -> PollQuery
+            ) -> PollApplicationQueryResult
         }
 
         /// Stub of a `main` entrypoint so that the binary doesn't fail to compile on targets other

@@ -58,7 +58,7 @@ macro_rules! contract {
                 context: $crate::contract::wit_types::CalleeContext,
                 argument: Vec<u8>,
                 forwarded_sessions: Vec<$crate::contract::wit_types::SessionId>,
-            ) -> PollCallApplication
+            ) -> PollApplicationCallResult
         }
 
         $crate::instance_exported_future! {
@@ -67,7 +67,7 @@ macro_rules! contract {
                 session: Vec<u8>,
                 argument: Vec<u8>,
                 forwarded_sessions: Vec<$crate::contract::wit_types::SessionId>,
-            ) -> PollCallSession
+            ) -> PollSessionCallResult
         }
 
         /// Stub of a `main` entrypoint so that the binary doesn't fail to compile on targets other

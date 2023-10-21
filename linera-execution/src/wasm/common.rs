@@ -76,10 +76,10 @@ pub trait Contract: ApplicationRuntimeContext {
     type PollExecutionResult;
 
     /// The WIT type eqivalent for [`Poll<Result<ApplicationCallResult, String>>`].
-    type PollCallApplication;
+    type PollApplicationCallResult;
 
     /// The WIT type eqivalent for [`Poll<Result<SessionCallResult, String>>`].
-    type PollCallSession;
+    type PollSessionCallResult;
 
     /// Creates a new future for the user application to initialize itself on the owner chain.
     fn initialize_new(
@@ -140,7 +140,7 @@ pub trait Contract: ApplicationRuntimeContext {
         &self,
         store: &mut Self::Store,
         future: &Self::HandleApplicationCall,
-    ) -> Result<Self::PollCallApplication, Self::Error>;
+    ) -> Result<Self::PollApplicationCallResult, Self::Error>;
 
     /// Creates a new future for the user contract to handle a session call from another
     /// contract.
@@ -158,7 +158,7 @@ pub trait Contract: ApplicationRuntimeContext {
         &self,
         store: &mut Self::Store,
         future: &Self::HandleSessionCall,
-    ) -> Result<Self::PollCallSession, Self::Error>;
+    ) -> Result<Self::PollSessionCallResult, Self::Error>;
 }
 
 /// Common interface to calling a user service in a WebAssembly module.
@@ -171,7 +171,7 @@ pub trait Service: ApplicationRuntimeContext {
     type QueryContext: From<QueryContext>;
 
     /// The WIT type eqivalent for [`Poll<Result<Vec<u8>, String>>`].
-    type PollQuery;
+    type PollApplicationQueryResult;
 
     /// Creates a new future for the user application to handle a query.
     fn handle_application_query_new(
@@ -186,7 +186,7 @@ pub trait Service: ApplicationRuntimeContext {
         &self,
         store: &mut Self::Store,
         future: &Self::HandleApplicationQuery,
-    ) -> Result<Self::PollQuery, Self::Error>;
+    ) -> Result<Self::PollApplicationQueryResult, Self::Error>;
 }
 
 /// Wrapper around all types necessary to call an asynchronous method of a Wasm application.

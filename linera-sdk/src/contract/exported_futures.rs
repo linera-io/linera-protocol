@@ -308,7 +308,7 @@ where
     /// Polls the future export from the guest.
     ///
     /// This is called from the host.
-    pub fn poll(&self) -> wit_types::PollCallApplication {
+    pub fn poll(&self) -> wit_types::PollApplicationCallResult {
         self.future.poll()
     }
 }
@@ -377,7 +377,7 @@ where
     /// Polls the future export from the guest.
     ///
     /// This is called from the host.
-    pub fn poll(&self) -> wit_types::PollCallSession {
+    pub fn poll(&self) -> wit_types::PollSessionCallResult {
         self.future.poll()
     }
 }

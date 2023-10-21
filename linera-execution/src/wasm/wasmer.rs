@@ -244,8 +244,8 @@ impl<'runtime> common::Contract for Contract<'runtime> {
     type CalleeContext = contract::CalleeContext;
     type SessionId = contract::SessionId;
     type PollExecutionResult = contract::PollExecutionResult;
-    type PollCallApplication = contract::PollCallApplication;
-    type PollCallSession = contract::PollCallSession;
+    type PollApplicationCallResult = contract::PollApplicationCallResult;
+    type PollSessionCallResult = contract::PollSessionCallResult;
 
     fn initialize_new(
         &self,
@@ -318,7 +318,7 @@ impl<'runtime> common::Contract for Contract<'runtime> {
         &self,
         store: &mut Store,
         future: &contract::HandleApplicationCall,
-    ) -> Result<contract::PollCallApplication, RuntimeError> {
+    ) -> Result<contract::PollApplicationCallResult, RuntimeError> {
         contract::Contract::handle_application_call_poll(&self.contract, store, future)
     }
 
@@ -344,7 +344,7 @@ impl<'runtime> common::Contract for Contract<'runtime> {
         &self,
         store: &mut Store,
         future: &contract::HandleSessionCall,
-    ) -> Result<contract::PollCallSession, RuntimeError> {
+    ) -> Result<contract::PollSessionCallResult, RuntimeError> {
         contract::Contract::handle_session_call_poll(&self.contract, store, future)
     }
 }
@@ -352,7 +352,7 @@ impl<'runtime> common::Contract for Contract<'runtime> {
 impl<'runtime> common::Service for Service<'runtime> {
     type HandleApplicationQuery = service::HandleApplicationQuery;
     type QueryContext = service::QueryContext;
-    type PollQuery = service::PollQuery;
+    type PollApplicationQueryResult = service::PollApplicationQueryResult;
 
     fn handle_application_query_new(
         &self,
@@ -367,7 +367,7 @@ impl<'runtime> common::Service for Service<'runtime> {
         &self,
         store: &mut Store,
         future: &service::HandleApplicationQuery,
-    ) -> Result<service::PollQuery, RuntimeError> {
+    ) -> Result<service::PollApplicationQueryResult, RuntimeError> {
         service::Service::handle_application_query_poll(&self.service, store, future)
     }
 }

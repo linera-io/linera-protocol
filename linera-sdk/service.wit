@@ -4,7 +4,7 @@ resource handle-application-query {
         argument: list<u8>,
     ) -> handle-application-query
 
-    poll: func() -> poll-query
+    poll: func() -> poll-application-query-result
 }
 
 record query-context {
@@ -13,7 +13,7 @@ record query-context {
 
 type chain-id = crypto-hash
 
-variant poll-query {
+variant poll-application-query-result {
     pending,
     ready(result<list<u8>, string>),
 }
