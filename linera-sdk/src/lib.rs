@@ -301,7 +301,7 @@ pub trait Service: WithServiceAbi + ServiceAbi {
     type Storage: ServiceStateStorage;
 
     /// Executes a read-only query on the state of this application.
-    async fn query_application(
+    async fn handle_application_query(
         self: Arc<Self>,
         context: &QueryContext,
         argument: Self::Query,
