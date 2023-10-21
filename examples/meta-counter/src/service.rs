@@ -19,7 +19,7 @@ use thiserror::Error;
 linera_sdk::service!(MetaCounter);
 
 impl MetaCounter {
-    fn counter_id() -> Result<ApplicationId, Error> {
+    fn counter_id() -> Result<ApplicationId<counter::CounterAbi>, Error> {
         let parameters = system_api::current_application_parameters();
         serde_json::from_slice(&parameters).map_err(|_| Error::Parameters)
     }
@@ -39,20 +39,15 @@ impl Service for MetaCounter {
         _context: &QueryContext,
         request: Request,
     ) -> Result<Response, Self::Error> {
-        let argument = serde_json::to_vec(&request).unwrap();
-        let value = system_api::query_application(Self::counter_id()?, &argument)
-            .await
-            .map_err(|_| Error::InternalQuery)?;
-        let response = serde_json::from_slice(&value).unwrap();
-        Ok(response)
+        Self::query_application(Self::counter_id()?, &request).await
     }
 }
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Internal query failed")]
-    InternalQuery,
+    #[error("Internal query failed: {0}")]
+    InternalQuery(String),
 
     #[error("Invalid application parameters")]
     Parameters,
@@ -60,4 +55,10 @@ pub enum Error {
     /// Invalid query argument in meta-counter app: could not deserialize GraphQL request.
     #[error("Invalid query argument in meta-counter app: could not deserialize GraphQL request.")]
     InvalidQuery(#[from] serde_json::Error),
+}
+
+impl From<String> for Error {
+    fn from(s: String) -> Self {
+        Self::InternalQuery(s)
+    }
 }
