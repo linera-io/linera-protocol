@@ -36,7 +36,7 @@ where
     }
 }
 
-/// Loads the service state, without locking it for writes.
+/// Loads the application state (and locks it for writes).
 pub(crate) async fn lock_and_load_view<State: View<ViewStorageContext>>() -> State {
     let future = wit::Lock::new();
     future::poll_fn(|_context| -> Poll<Result<(), ViewError>> { future.poll().into() })
@@ -45,7 +45,7 @@ pub(crate) async fn lock_and_load_view<State: View<ViewStorageContext>>() -> Sta
     load_view_using::<State>().await
 }
 
-/// Loads the service state, without locking it for writes.
+/// Unlocks the service state previously loaded.
 pub(crate) async fn unlock_view() {
     let future = wit::Unlock::new();
     future::poll_fn(|_context| future.poll().into()).await;
