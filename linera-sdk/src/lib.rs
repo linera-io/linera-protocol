@@ -326,7 +326,7 @@ pub trait Service: WithServiceAbi + ServiceAbi {
 
     /// Retrieves the parameters of the application.
     fn parameters() -> Result<Self::Parameters, Self::Error> {
-        let bytes = crate::contract::system_api::current_application_parameters();
+        let bytes = crate::service::system_api::current_application_parameters();
         let parameters = serde_json::from_slice(&bytes)?;
         Ok(parameters)
     }

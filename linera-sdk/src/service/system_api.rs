@@ -70,7 +70,7 @@ pub fn current_application_id() -> ApplicationId {
 }
 
 /// Retrieves the current application parameters.
-pub fn current_application_parameters() -> Vec<u8> {
+pub(crate) fn current_application_parameters() -> Vec<u8> {
     wit::application_parameters()
 }
 
