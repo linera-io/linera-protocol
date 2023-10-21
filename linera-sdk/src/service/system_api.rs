@@ -15,7 +15,7 @@ use serde::de::DeserializeOwned;
 use std::{fmt, future::Future, task::Poll};
 
 /// Loads the application state, without locking it for writes.
-pub async fn load<State>() -> State
+pub(crate) async fn load<State>() -> State
 where
     State: Default + DeserializeOwned,
 {
@@ -37,7 +37,7 @@ where
 }
 
 /// Loads the service state, without locking it for writes.
-pub async fn lock_and_load_view<State: View<ViewStorageContext>>() -> State {
+pub(crate) async fn lock_and_load_view<State: View<ViewStorageContext>>() -> State {
     let future = wit::Lock::new();
     future::poll_fn(|_context| -> Poll<Result<(), ViewError>> { future.poll().into() })
         .await
@@ -46,13 +46,13 @@ pub async fn lock_and_load_view<State: View<ViewStorageContext>>() -> State {
 }
 
 /// Loads the service state, without locking it for writes.
-pub async fn unlock_view() {
+pub(crate) async fn unlock_view() {
     let future = wit::Unlock::new();
     future::poll_fn(|_context| future.poll().into()).await;
 }
 
 /// Helper function to load the service state or create a new one if it doesn't exist.
-pub async fn load_view_using<State: View<ViewStorageContext>>() -> State {
+pub(crate) async fn load_view_using<State: View<ViewStorageContext>>() -> State {
     let context = ViewStorageContext::default();
     State::load(context)
         .await
