@@ -33,6 +33,12 @@ use std::{
 /// Runtime data tracked during the execution of a transaction.
 #[derive(Debug, Clone)]
 pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
+    /// the number of read
+    n_read: Arc<AtomicU64>,
+    /// the total size being read
+    bytes_read: Arc<AtomicU64>,
+    /// the total size being write
+    bytes_write: Arc<AtomicU64>,
     /// The current chain ID.
     chain_id: ChainId,
     /// The current stack of application descriptions.
@@ -102,7 +108,13 @@ where
         fuel: u64,
     ) -> Self {
         assert_eq!(chain_id, execution_state.context().extra().chain_id());
+        let n_read = Arc::new(AtomicU64::new(0));
+        let bytes_read = Arc::new(AtomicU64::new(0));
+        let bytes_write = Arc::new(AtomicU64::new(0));
         Self {
+            n_read,
+            bytes_read,
+            bytes_write,
             chain_id,
             applications: Arc::new(Mutex::new(applications)),
             remaining_fuel: Arc::new(AtomicU64::new(fuel)),
@@ -366,7 +378,7 @@ where
         match self
             .active_view_user_states_mut()
             .await
-            .get(&self.application_id())
+            .get_mut(&self.application_id())
         {
             Some(view) => Ok(view.get(&key).await?),
             None => Err(ExecutionError::ApplicationStateNotLocked),
@@ -381,9 +393,16 @@ where
         match self
             .active_view_user_states_mut()
             .await
-            .get(&self.application_id())
+            .get_mut(&self.application_id())
         {
-            Some(view) => Ok(view.find_keys_by_prefix(&key_prefix).await?),
+            Some(view) => {
+                let keys = view.find_keys_by_prefix(&key_prefix).await?;
+                self.n_read.fetch_add(1, Ordering::Relaxed);
+                for key in &keys {
+                    self.bytes_read.fetch_add(key.len() as u64, Ordering::Relaxed);
+                }
+                Ok(keys)
+            },
             None => Err(ExecutionError::ApplicationStateNotLocked),
         }
     }
@@ -396,9 +415,16 @@ where
         match self
             .active_view_user_states_mut()
             .await
-            .get(&self.application_id())
+            .get_mut(&self.application_id())
         {
-            Some(view) => Ok(view.find_key_values_by_prefix(&key_prefix).await?),
+            Some(view) => {
+                let key_values = view.find_key_values_by_prefix(&key_prefix).await?;
+                for (key, value) in &key_values {
+                    let size = key.len() + value.len();
+                    self.bytes_read.fetch_add(size as u64, Ordering::Relaxed);
+                }
+                Ok(key_values)
+            },
             None => Err(ExecutionError::ApplicationStateNotLocked),
         }
     }
@@ -483,6 +509,8 @@ where
     }
 
     async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
+        let size = batch.size() as u64;
+        self.bytes_write.fetch_add(size, Ordering::Relaxed);
         // Write the batch and make the view available again.
         match self
             .active_view_user_states_mut()

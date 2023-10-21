@@ -401,8 +401,7 @@ where
             return Ok(None);
         }
         let key = self.context.base_tag_index(KeyTag::Index as u8, index);
-        let value = self.context.read_key_bytes(&key).await?;
-        Ok(value)
+        Ok(self.context.read_key_bytes(&key).await?)
     }
 
     /// Obtains the values of a range of indices

@@ -171,6 +171,25 @@ impl Batch {
         Self::default()
     }
 
+    /// The total size of the batch
+    pub fn size(&self) -> usize {
+        let mut size = 0;
+        for operation in &self.operations {
+            match operation {
+                WriteOperation::Delete { key } => {
+                    size += key.len();
+                }
+                WriteOperation::Put { key, value } => {
+                    size += key.len() + value.len();
+                }
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    size += key_prefix.len();
+                }
+            }
+        }
+        size
+    }
+
     /// Builds a batch from a builder function.
     pub async fn build<F>(builder: F) -> Result<Self, ViewError>
     where
