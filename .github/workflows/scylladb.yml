@@ -45,6 +45,10 @@ jobs:
       uses: arduino/setup-protoc@v1
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build example applications
+      run: |
+        cd examples
+        cargo build --locked --release --target wasm32-unknown-unknown
     - name: Build
       run: |
         cargo build --locked --features scylladb
