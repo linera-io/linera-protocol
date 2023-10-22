@@ -25,8 +25,8 @@ use linera_chain::{
     test::{make_child_block, make_first_block, BlockTestExt},
 };
 use linera_execution::{
-    get_default_runtime_meter,
     committee::Epoch,
+    get_default_runtime_meter,
     system::{SystemChannel, SystemMessage, SystemOperation},
     Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, ExecutionStateView,
     GenericApplicationId, Message, Operation, OperationContext, SystemExecutionState,

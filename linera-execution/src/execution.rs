@@ -129,12 +129,14 @@ where
             .user_applications()
             .insert(application_id, application);
 
-        let mut runtime_meter = RuntimeMeter { remaining_fuel: 10_000_000,
-                                               n_read: 0,
-                                               bytes_read: 0,
-                                               bytes_write: 0,
-                                               maximum_bytes_read: u64::MAX,
-                                               maximum_bytes_write: u64::MAX };
+        let mut runtime_meter = RuntimeMeter {
+            remaining_fuel: 10_000_000,
+            n_read: 0,
+            bytes_read: 0,
+            bytes_write: 0,
+            maximum_bytes_read: u64::MAX,
+            maximum_bytes_write: u64::MAX,
+        };
         self.run_user_action(application_id, chain_id, action, &mut runtime_meter)
             .await?;
 
@@ -172,6 +174,7 @@ where
         action: UserAction<'_>,
         runtime_meter: &mut RuntimeMeter,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
+        let initial_remaining_fuel = runtime_meter.remaining_fuel;
         // Try to load the application. This may fail if the corresponding
         // bytecode-publishing certificate doesn't exist yet on this validator.
         let description = self
@@ -231,11 +234,15 @@ where
             return Err(ExecutionError::ExcessiveRead);
         }
         if runtime_meter.bytes_write > runtime_meter.maximum_bytes_write {
+            println!(
+                "bytes_write={:?} maximum_bytes_write={:?}",
+                runtime_meter.bytes_write, runtime_meter.maximum_bytes_write
+            );
             return Err(ExecutionError::ExcessiveWrite);
         }
         WASM_FUEL_USED_PER_BLOCK
             .with_label_values(&[])
-            .observe((initial_remaining_fuel - *remaining_fuel) as f64);
+            .observe((initial_remaining_fuel - runtime_meter.remaining_fuel) as f64);
 
         // Check that applications were correctly stacked and unstacked.
         assert_eq!(applications.len(), 1);

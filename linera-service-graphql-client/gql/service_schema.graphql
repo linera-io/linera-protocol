@@ -432,9 +432,25 @@ input Pricing {
 	"""
 	fuel: Amount!
 	"""
-	The cost to store a block's operations and incoming messages, per byte.
+	The cost to read data per operation
 	"""
-	storage: Amount!
+	storageNRead: Amount!
+	"""
+	The cost to read data per byte
+	"""
+	storageBytesRead: Amount!
+	"""
+	The cost to store data per byte
+	"""
+	storageBytesWrite: Amount!
+	"""
+	The maximum data to read
+	"""
+	maximumBytesRead: Int!
+	"""
+	The maximum data to write
+	"""
+	maximumBytesWrite: Int!
 	"""
 	The cost to store and send cross-chain messages, per byte.
 	"""

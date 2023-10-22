@@ -69,24 +69,24 @@ pub struct RuntimeMeter {
 
 #[cfg(any(test, feature = "test"))]
 pub fn get_default_runtime_meter() -> RuntimeMeter {
-    let mut runtime_meter = RuntimeMeter::default();
-    runtime_meter.remaining_fuel = 10_000_000;
-    runtime_meter
-}
-
-
-
-impl Default for RuntimeMeter {
-    fn default() -> Self {
-        RuntimeMeter { remaining_fuel: 0,
-                       n_read: 0,
-                       bytes_read: 0,
-                       bytes_write: 0,
-                       maximum_bytes_read: u64::MAX,
-                       maximum_bytes_write: u64::MAX }
+    RuntimeMeter {
+        remaining_fuel: 10_000_000,
+        ..Default::default()
     }
 }
 
+impl Default for RuntimeMeter {
+    fn default() -> Self {
+        RuntimeMeter {
+            remaining_fuel: 0,
+            n_read: 0,
+            bytes_read: 0,
+            bytes_write: 0,
+            maximum_bytes_read: u64::MAX,
+            maximum_bytes_write: u64::MAX,
+        }
+    }
+}
 
 /// An implementation of [`UserApplication`]
 pub type UserApplicationCode = Arc<dyn UserApplication + Send + Sync + 'static>;

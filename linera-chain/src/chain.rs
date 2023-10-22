@@ -495,8 +495,14 @@ where
 
         balance.try_add_assign(credit)?;
         Self::sub_assign_fees(balance, pricing.certificate_price())?;
-        Self::sub_assign_fees(balance, pricing.storage_byte_write_price(&block.incoming_messages)?)?;
-        Self::sub_assign_fees(balance, pricing.storage_byte_write_price(&block.operations)?)?;
+        Self::sub_assign_fees(
+            balance,
+            pricing.storage_bytes_write_price(&block.incoming_messages)?,
+        )?;
+        Self::sub_assign_fees(
+            balance,
+            pricing.storage_bytes_write_price(&block.operations)?,
+        )?;
 
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
@@ -504,9 +510,16 @@ where
         let n_read = 0;
         let bytes_read = 0;
         let bytes_write = 0;
-        let maximum_bytes_read = 0;
-        let maximum_bytes_write = 0;
-        let mut runtime_meter = RuntimeMeter { remaining_fuel: available_fuel, n_read, bytes_read, bytes_write, maximum_bytes_read, maximum_bytes_write };
+        let maximum_bytes_read = pricing.maximum_bytes_read;
+        let maximum_bytes_write = pricing.maximum_bytes_write;
+        let mut runtime_meter = RuntimeMeter {
+            remaining_fuel: available_fuel,
+            n_read,
+            bytes_read,
+            bytes_write,
+            maximum_bytes_read,
+            maximum_bytes_write,
+        };
         for (index, message) in block.incoming_messages.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             // Execute the received message.
@@ -563,9 +576,18 @@ where
         Self::sub_assign_fees(balance, credit)?;
         Self::sub_assign_fees(balance, pricing.fuel_price(used_fuel)?)?;
         Self::sub_assign_fees(balance, pricing.messages_price(&messages)?)?;
-        Self::sub_assign_fees(balance, pricing.storage_n_read_price(&runtime_meter.n_read)?)?;
-        Self::sub_assign_fees(balance, pricing.storage_byte_read_price(&runtime_meter.bytes_read)?)?;
-        Self::sub_assign_fees(balance, pricing.storage_byte_write_price(&runtime_meter.bytes_write)?)?;
+        Self::sub_assign_fees(
+            balance,
+            pricing.storage_n_read_price(&runtime_meter.n_read)?,
+        )?;
+        Self::sub_assign_fees(
+            balance,
+            pricing.storage_bytes_read_price(&runtime_meter.bytes_read)?,
+        )?;
+        Self::sub_assign_fees(
+            balance,
+            pricing.storage_bytes_write_price(&runtime_meter.bytes_write)?,
+        )?;
 
         // Recompute the state hash.
         let state_hash = self.execution_state.crypto_hash().await?;

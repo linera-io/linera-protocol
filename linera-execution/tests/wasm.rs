@@ -70,8 +70,10 @@ async fn test_fuel_for_counter_wasm_application(
     };
     let increments = [2_u64, 9, 7, 1000];
     let available_fuel = 10_000_000;
-    let mut runtime_meter = RuntimeMeter::default();
-    runtime_meter.remaining_fuel = available_fuel;
+    let mut runtime_meter = RuntimeMeter {
+        remaining_fuel: available_fuel,
+        ..Default::default()
+    };
     for increment in &increments {
         let result = view
             .execute_operation(

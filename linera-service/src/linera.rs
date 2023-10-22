@@ -815,19 +815,19 @@ enum ClientCommand {
 
         /// Set the price per byte to read data per byte
         #[structopt(long)]
-        storage_byte_read: Option<Amount>,
+        storage_bytes_read: Option<Amount>,
 
         /// Set the price per byte to write data per byte
         #[structopt(long)]
-        storage_byte_write: Option<Amount>,
+        storage_bytes_write: Option<Amount>,
 
         /// Set the maximum quantity of data to read
         #[structopt(long)]
-        maximum_byte_read: Option<usize>,
+        maximum_bytes_read: Option<u64>,
 
         /// Set the maximum quantity of data to write
         #[structopt(long)]
-        maximum_byte_write: Option<usize>,
+        maximum_bytes_write: Option<u64>,
 
         /// Set the price per byte to store and send outgoing cross-chain messages.
         #[structopt(long)]
@@ -887,19 +887,19 @@ enum ClientCommand {
 
         /// Set the price per byte to read data
         #[structopt(long, default_value = "0")]
-        storage_byte_read_price: Amount,
+        storage_bytes_read_price: Amount,
 
         /// Set the price per byte to write data
         #[structopt(long, default_value = "0")]
-        storage_byte_write_price: Amount,
+        storage_bytes_write_price: Amount,
 
         /// Set the maximum read data
         #[structopt(long)]
-        maximum_byte_read_price: Option<usize>,
+        maximum_bytes_read_price: Option<u64>,
 
         /// Set the maximum write data
         #[structopt(long)]
-        maximum_byte_write_price: Option<usize>,
+        maximum_bytes_write_price: Option<u64>,
 
         /// Set the price per byte to store and send outgoing cross-chain messages.
         #[structopt(long, default_value = "0")]
@@ -1383,10 +1383,10 @@ impl Runnable for Job {
                         certificate,
                         fuel,
                         storage_n_read,
-                        storage_byte_read,
-                        storage_byte_write,
-                        maximum_byte_read,
-                        maximum_byte_write,
+                        storage_bytes_read,
+                        storage_bytes_write,
+                        maximum_bytes_read,
+                        maximum_bytes_write,
                         messages,
                     } => {
                         if let Some(certificate) = certificate {
@@ -1398,17 +1398,17 @@ impl Runnable for Job {
                         if let Some(storage_n_read) = storage_n_read {
                             pricing.storage_n_read = storage_n_read;
                         }
-                        if let Some(storage_byte_read) = storage_byte_read {
-                            pricing.storage_byte_read = storage_byte_read;
+                        if let Some(storage_bytes_read) = storage_bytes_read {
+                            pricing.storage_bytes_read = storage_bytes_read;
                         }
-                        if let Some(storage_byte_write) = storage_byte_write {
-                            pricing.storage_byte_write = storage_byte_write;
+                        if let Some(storage_bytes_write) = storage_bytes_write {
+                            pricing.storage_bytes_write = storage_bytes_write;
                         }
-                        if let Some(maximum_byte_read) = maximum_byte_read {
-                            pricing.maximum_byte_read = maximum_byte_read;
+                        if let Some(maximum_bytes_read) = maximum_bytes_read {
+                            pricing.maximum_bytes_read = maximum_bytes_read;
                         }
-                        if let Some(maximum_byte_write) = maximum_byte_write {
-                            pricing.maximum_byte_write = maximum_byte_write;
+                        if let Some(maximum_bytes_write) = maximum_bytes_write {
+                            pricing.maximum_bytes_write = maximum_bytes_write;
                         }
                         if let Some(messages) = messages {
                             pricing.messages = messages;
@@ -1426,19 +1426,19 @@ impl Runnable for Job {
                             pricing.certificate,
                             pricing.fuel,
                             pricing.storage_n_read,
-                            pricing.storage_byte_read,
-                            pricing.storage_byte_write,
-                            pricing.maximum_byte_read,
-                            pricing.maximum_byte_write,
+                            pricing.storage_bytes_read,
+                            pricing.storage_bytes_write,
+                            pricing.maximum_bytes_read,
+                            pricing.maximum_bytes_write,
                             pricing.messages
                         );
                         if certificate.is_none()
                             && fuel.is_none()
                             && storage_n_read.is_none()
-                            && storage_byte_read.is_none()
-                            && storage_byte_write.is_none()
-                            && maximum_byte_read.is_none()
-                            && maximum_byte_write.is_none()
+                            && storage_bytes_read.is_none()
+                            && storage_bytes_write.is_none()
+                            && maximum_bytes_read.is_none()
+                            && maximum_bytes_write.is_none()
                             && messages.is_none()
                         {
                             return Ok(());
@@ -1812,31 +1812,31 @@ async fn main() -> Result<(), anyhow::Error> {
             certificate_price,
             fuel_price,
             storage_n_read_price,
-            storage_byte_read_price,
-            storage_byte_write_price,
-            maximum_byte_read_price,
-            maximum_byte_write_price,
+            storage_bytes_read_price,
+            storage_bytes_write_price,
+            maximum_bytes_read_price,
+            maximum_bytes_write_price,
             messages_price,
             testing_prng_seed,
         } => {
             let committee_config = CommitteeConfig::read(committee_config_path)
                 .expect("Unable to read committee config file");
-            let maximum_byte_read = match *maximum_byte_read_price {
+            let maximum_bytes_read = match *maximum_bytes_read_price {
                 Some(value) => value,
-                None => usize::MAX,
+                None => u64::MAX,
             };
-            let maximum_byte_write = match *maximum_byte_write_price {
+            let maximum_bytes_write = match *maximum_bytes_write_price {
                 Some(value) => value,
-                None => usize::MAX,
+                None => u64::MAX,
             };
             let pricing = Pricing {
                 certificate: *certificate_price,
                 fuel: *fuel_price,
                 storage_n_read: *storage_n_read_price,
-                storage_byte_read: *storage_byte_read_price,
-                storage_byte_write: *storage_byte_write_price,
-                maximum_byte_read,
-                maximum_byte_write,
+                storage_bytes_read: *storage_bytes_read_price,
+                storage_bytes_write: *storage_bytes_write_price,
+                maximum_bytes_read,
+                maximum_bytes_write,
                 messages: *messages_price,
             };
             let mut genesis_config =

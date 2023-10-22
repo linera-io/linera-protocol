@@ -590,8 +590,14 @@ Pricing:
         TYPENAME: Amount
     - fuel:
         TYPENAME: Amount
-    - storage:
+    - storage_n_read:
         TYPENAME: Amount
+    - storage_bytes_read:
+        TYPENAME: Amount
+    - storage_bytes_write:
+        TYPENAME: Amount
+    - maximum_bytes_read: U64
+    - maximum_bytes_write: U64
     - messages:
         TYPENAME: Amount
 PublicKey:

@@ -407,10 +407,11 @@ where
                 let keys = view.find_keys_by_prefix(&key_prefix).await?;
                 self.n_read.fetch_add(1, Ordering::Relaxed);
                 for key in &keys {
-                    self.bytes_read.fetch_add(key.len() as u64, Ordering::Relaxed);
+                    self.bytes_read
+                        .fetch_add(key.len() as u64, Ordering::Relaxed);
                 }
                 Ok(keys)
-            },
+            }
             None => Err(ExecutionError::ApplicationStateNotLocked),
         }
     }
@@ -432,7 +433,7 @@ where
                     self.bytes_read.fetch_add(size as u64, Ordering::Relaxed);
                 }
                 Ok(key_values)
-            },
+            }
             None => Err(ExecutionError::ApplicationStateNotLocked),
         }
     }
@@ -486,7 +487,14 @@ where
         let bytes_write = self.bytes_write.load(Ordering::Acquire);
         let maximum_bytes_read = self.maximum_bytes_read;
         let maximum_bytes_write = self.maximum_bytes_write;
-        RuntimeMeter { remaining_fuel, n_read, bytes_read, bytes_write, maximum_bytes_read, maximum_bytes_write }
+        RuntimeMeter {
+            remaining_fuel,
+            n_read,
+            bytes_read,
+            bytes_write,
+            maximum_bytes_read,
+            maximum_bytes_write,
+        }
     }
 
     fn set_remaining_fuel(&self, remaining_fuel: u64) {
