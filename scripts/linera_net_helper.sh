@@ -1,6 +1,3 @@
-# Copyright (c) Zefchain Labs, Inc.
-# SPDX-License-Identifier: Apache-2.0
-
 # Runs a command such as `linera net up` in the background.
 # - Records stdout
 # - Waits for the background process to print READY! on stderr

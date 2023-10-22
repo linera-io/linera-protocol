@@ -40,10 +40,11 @@ The Linera protocol repository is broken down into the following crates and subd
 # cargo build -p linera-service --bins
 export PATH="$PWD/target/debug:$PATH"
 
-# Import the optional bash helper function `spawn_and_set_wallet_env_vars`.
-source scripts/linera_net_helper.sh
+# Import the optional helper function `spawn_and_set_wallet_env_vars`.
+source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 
 # Run a local test network with the default parameters and 0 extra user wallets.
+# This will set environment variables LINERA_{WALLET,STORAGE}_0 referenced by -w0 below.
 spawn_and_set_wallet_env_vars \
     linera net up --extra-wallets 0
 
