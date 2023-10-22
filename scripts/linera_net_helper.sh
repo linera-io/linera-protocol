@@ -3,7 +3,7 @@
 # - Waits for the background process to print READY! on stderr
 # - Then executes the bash command recorded from stdout
 # - Returns without killing the process
-function spawn_and_set_wallet_env_vars() {
+function linera_spawn_and_read_wallet_variables() {
     DIR=$(mktemp -d "${TMPDIR:-.}tmp-XXXXX") || exit 1
     OUT="$DIR/out"
     ERR="$DIR/err"

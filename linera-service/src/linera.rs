@@ -1941,7 +1941,7 @@ async fn main() -> Result<(), anyhow::Error> {
             NetCommand::Helper => {
                 info!("You may append the following script to your `~/.bash_profile` or `source` it when needed.");
                 info!(
-                    "This will install a function `spawn_and_set_wallet_env_vars` to facilitate \
+                    "This will install a function `linera_spawn_and_read_wallet_variables` to facilitate \
                        testing with a local Linera network"
                 );
                 println!("{}", include_str!("../template/linera_net_helper.sh"));
