@@ -234,10 +234,6 @@ where
             return Err(ExecutionError::ExcessiveRead);
         }
         if runtime_meter.bytes_write > runtime_meter.maximum_bytes_write {
-            println!(
-                "bytes_write={:?} maximum_bytes_write={:?}",
-                runtime_meter.bytes_write, runtime_meter.maximum_bytes_write
-            );
             return Err(ExecutionError::ExcessiveWrite);
         }
         WASM_FUEL_USED_PER_BLOCK

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// A collection of costs associated with blocks in validators.
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Serialize, Deserialize, InputObject)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, InputObject)]
 pub struct Pricing {
     /// The base price for each certificate, to compensate for the communication and signing
     /// overhead.
@@ -28,6 +28,21 @@ pub struct Pricing {
     pub maximum_bytes_write: u64,
     /// The cost to store and send cross-chain messages, per byte.
     pub messages: Amount,
+}
+
+impl Default for Pricing {
+    fn default() -> Self {
+        Pricing {
+            certificate: Amount::default(),
+            fuel: Amount::default(),
+            storage_n_read: Amount::default(),
+            storage_bytes_read: Amount::default(),
+            storage_bytes_write: Amount::default(),
+            maximum_bytes_read: u64::MAX,
+            maximum_bytes_write: u64::MAX,
+            messages: Amount::default(),
+        }
+    }
 }
 
 impl Pricing {
