@@ -68,10 +68,12 @@ pub struct RuntimeMeter {
 }
 
 #[cfg(any(test, feature = "test"))]
-pub fn get_default_runtime_meter() -> RuntimeMeter {
-    RuntimeMeter {
-        remaining_fuel: 10_000_000,
-        ..Default::default()
+impl RuntimeMeter {
+    pub fn new_for_testing() -> RuntimeMeter {
+        RuntimeMeter {
+            remaining_fuel: 10_000_000,
+            ..Default::default()
+        }
     }
 }
 

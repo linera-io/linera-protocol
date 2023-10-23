@@ -26,10 +26,9 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::Epoch,
-    get_default_runtime_meter,
     system::{SystemChannel, SystemMessage, SystemOperation},
     Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, ExecutionStateView,
-    GenericApplicationId, Message, Operation, OperationContext, SystemExecutionState,
+    GenericApplicationId, Message, Operation, OperationContext, RuntimeMeter, SystemExecutionState,
     UserApplicationDescription, UserApplicationId, WasmApplication, WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, Store};
@@ -423,7 +422,7 @@ where
         index: 0,
         next_message_index: 0,
     };
-    let mut runtime_meter = get_default_runtime_meter();
+    let mut runtime_meter = RuntimeMeter::new_for_testing();
     creator_state
         .execute_operation(
             &operation_context,
