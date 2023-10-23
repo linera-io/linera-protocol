@@ -889,7 +889,7 @@ enum ClientCommand {
         raw: bool,
     },
 
-    /// Run a GraphQL service on the local node of a given chain.
+    /// Run a GraphQL service to explore and extend the chains of the wallet.
     Service {
         #[structopt(flatten)]
         config: ChainListenerConfig,
