@@ -23,7 +23,7 @@ impl Service for MetaCounter {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
 
-    async fn handle_application_query(
+    async fn handle_query(
         self: Arc<Self>,
         _context: &QueryContext,
         request: Request,

@@ -236,7 +236,7 @@ impl UserApplication for WasmApplication {
         Ok(result)
     }
 
-    async fn handle_application_query(
+    async fn handle_query(
         &self,
         context: &QueryContext,
         runtime: &dyn ServiceRuntime,
@@ -246,13 +246,13 @@ impl UserApplication for WasmApplication {
             #[cfg(feature = "wasmtime")]
             WasmApplication::Wasmtime { service, .. } => {
                 Self::prepare_service_runtime_with_wasmtime(service, runtime)?
-                    .handle_application_query(context, argument)
+                    .handle_query(context, argument)
                     .await?
             }
             #[cfg(feature = "wasmer")]
             WasmApplication::Wasmer { service, .. } => {
                 Self::prepare_service_runtime_with_wasmer(service, runtime)?
-                    .handle_application_query(context, argument)
+                    .handle_query(context, argument)
                     .await?
             }
         };

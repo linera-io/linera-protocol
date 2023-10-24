@@ -1,8 +1,8 @@
-resource handle-application-query {
+resource handle-query {
     static new: func(
         context: query-context,
         argument: list<u8>,
-    ) -> handle-application-query
+    ) -> handle-query
 
     poll: func() -> poll-application-query-result
 }

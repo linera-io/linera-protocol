@@ -23,7 +23,7 @@ impl Service for Counter {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
 
-    async fn handle_application_query(
+    async fn handle_query(
         self: Arc<Self>,
         _context: &QueryContext,
         request: Request,
@@ -83,7 +83,7 @@ mod tests {
         let request = Request::new("{ value }");
 
         let result = counter
-            .handle_application_query(&dummy_query_context(), request)
+            .handle_query(&dummy_query_context(), request)
             .now_or_never()
             .expect("Query should not await anything");
 

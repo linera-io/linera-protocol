@@ -19,7 +19,7 @@ use std::{marker::PhantomData, sync::Arc};
 /// The storage APIs used by a service.
 pub trait ServiceStateStorage {
     /// Loads the application state and run the given query.
-    fn handle_application_query(
+    fn handle_query(
         context: wit_types::QueryContext,
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<Vec<u8>, String>>;
@@ -29,7 +29,7 @@ impl<Application> ServiceStateStorage for SimpleStateStorage<Application>
 where
     Application: Service + Default + DeserializeOwned + Serialize,
 {
-    fn handle_application_query(
+    fn handle_query(
         context: wit_types::QueryContext,
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<Vec<u8>, String>> {
@@ -38,7 +38,7 @@ where
             let argument: Application::Query =
                 serde_json::from_slice(&argument).map_err(|e| e.to_string())?;
             let query_response = application
-                .handle_application_query(&context.into(), argument)
+                .handle_query(&context.into(), argument)
                 .await
                 .map_err(|error| error.to_string())?;
             serde_json::to_vec(&query_response).map_err(|e| e.to_string())
@@ -50,7 +50,7 @@ impl<Application> ServiceStateStorage for ViewStateStorage<Application>
 where
     Application: Service + RootView<ViewStorageContext>,
 {
-    fn handle_application_query(
+    fn handle_query(
         context: wit_types::QueryContext,
         argument: Vec<u8>,
     ) -> ExportedFuture<Result<Vec<u8>, String>> {
@@ -58,9 +58,7 @@ where
             let application: Arc<Application> = Arc::new(system_api::lock_and_load_view().await);
             let argument: Application::Query =
                 serde_json::from_slice(&argument).map_err(|e| e.to_string())?;
-            let result = application
-                .handle_application_query(&context.into(), argument)
-                .await;
+            let result = application.handle_query(&context.into(), argument).await;
             if result.is_ok() {
                 system_api::unlock_view().await;
             }
@@ -71,16 +69,16 @@ where
 }
 
 /// Future implementation exported from the guest to allow the host to call
-/// [`Service::handle_application_query`].
+/// [`Service::handle_query`].
 ///
 /// Loads the `Application` state and calls its
-/// [`handle_application_query`][Service::handle_application_query] method.
-pub struct HandleApplicationQuery<Application> {
+/// [`handle_query`][Service::handle_query] method.
+pub struct HandleQuery<Application> {
     future: ExportedFuture<Result<Vec<u8>, String>>,
     _application: PhantomData<Application>,
 }
 
-impl<Application> HandleApplicationQuery<Application>
+impl<Application> HandleQuery<Application>
 where
     Application: Service,
 {
@@ -89,8 +87,8 @@ where
     /// This is called from the host.
     pub fn new(context: wit_types::QueryContext, query: Vec<u8>) -> Self {
         ServiceLogger::install();
-        HandleApplicationQuery {
-            future: Application::Storage::handle_application_query(context, query),
+        HandleQuery {
+            future: Application::Storage::handle_query(context, query),
             _application: PhantomData,
         }
     }

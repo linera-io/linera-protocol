@@ -25,7 +25,7 @@ impl Service for MatchingEngine {
     type Error = MatchingEngineError;
     type Storage = ViewStateStorage<Self>;
 
-    async fn handle_application_query(
+    async fn handle_query(
         self: Arc<Self>,
         _context: &QueryContext,
         request: Request,

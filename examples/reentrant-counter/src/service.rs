@@ -22,7 +22,7 @@ impl Service for ReentrantCounter {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 
-    async fn handle_application_query(
+    async fn handle_query(
         self: Arc<Self>,
         _context: &QueryContext,
         _argument: (),
@@ -61,7 +61,7 @@ mod tests {
         counter.value.set(value);
         let counter = Arc::new(counter);
         let result = counter
-            .handle_application_query(&dummy_query_context(), ())
+            .handle_query(&dummy_query_context(), ())
             .now_or_never()
             .expect("Query should not await anything");
 

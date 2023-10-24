@@ -25,11 +25,11 @@ macro_rules! service {
 
         /// Marks the service type to be exported.
         impl $crate::service::wit_types::Service for $application {
-            type HandleApplicationQuery = HandleApplicationQuery;
+            type HandleQuery = HandleQuery;
         }
 
         $crate::instance_exported_future! {
-            service::HandleApplicationQuery<$application>(
+            service::HandleQuery<$application>(
                 context: $crate::service::wit_types::QueryContext,
                 argument: Vec<u8>,
             ) -> PollApplicationQueryResult

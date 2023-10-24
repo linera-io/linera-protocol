@@ -16,7 +16,7 @@ use super::{
         ExecuteMessage, ExecuteOperation, HandleApplicationCall, HandleSessionCall, Initialize,
         PollApplicationCallResult, PollExecutionResult, PollSessionCallResult,
     },
-    service::{HandleApplicationQuery, PollApplicationQueryResult},
+    service::{HandleQuery, PollApplicationQueryResult},
 };
 use crate::{ApplicationCallResult, RawExecutionResult, SessionCallResult};
 use std::task::Poll;
@@ -62,5 +62,5 @@ impl_guest_future_interface! {
     ExecuteMessage: execute_message_poll -> PollExecutionResult -> Contract => RawExecutionResult<Vec<u8>>,
     HandleApplicationCall: handle_application_call_poll -> PollApplicationCallResult -> Contract => ApplicationCallResult,
     HandleSessionCall: handle_session_call_poll -> PollSessionCallResult -> Contract => (SessionCallResult, Vec<u8>),
-    HandleApplicationQuery: handle_application_query_poll -> PollApplicationQueryResult -> Service => Vec<u8>,
+    HandleQuery: handle_query_poll -> PollApplicationQueryResult -> Service => Vec<u8>,
 }
