@@ -1040,6 +1040,10 @@ enum NetCommand {
         #[structopt(long, default_value = "table_default")]
         table_name: String,
     },
+
+    /// Print a bash helper script to make `linera net up` easier to use. The script is
+    /// meant to be installed in `~/.bash_profile` or sourced when needed.
+    Helper,
 }
 
 #[derive(StructOpt)]
@@ -1931,6 +1935,16 @@ async fn main() -> Result<(), anyhow::Error> {
                     _ = sigterm.recv() => (),
                 }
                 eprintln!("\nDone.");
+                Ok(())
+            }
+
+            NetCommand::Helper => {
+                info!("You may append the following script to your `~/.bash_profile` or `source` it when needed.");
+                info!(
+                    "This will install a function `linera_spawn_and_read_wallet_variables` to facilitate \
+                       testing with a local Linera network"
+                );
+                println!("{}", include_str!("../template/linera_net_helper.sh"));
                 Ok(())
             }
         },
