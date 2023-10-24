@@ -133,9 +133,11 @@ export LINERA_STORAGE="rocksdb:/tmp/linera.db"
 
 # Get the Grafana pod name
 grafana_pod_name=$(kubectl get pods | grep grafana | awk '{ print $1 }')
+grafana_pass=$( kubectl get secret linera-core-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo)
 echo -e "\nTo access Grafana, you need to port forward yourself, that won't be done here. Run:"
-echo -e "kubectl port-forward $grafana_pod_name 3000\n"
-
+echo -e "kubectl port-forward $grafana_pod_name 3000"
+echo -e "Grafana Username: admin"
+echo -e "Granfa Password: $grafana_pass"
 # Get the Validator pod name
 validator_pod_name=$(kubectl get pods | grep validator | awk '{ print $1 }')
 echo -e "\nTo port forward yourself, run:"
