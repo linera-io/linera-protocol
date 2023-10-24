@@ -12,6 +12,7 @@ pub mod pricing;
 mod runtime;
 pub mod system;
 mod wasm;
+use crate::pricing::{Pricing, PricingError};
 
 pub use applications::{
     ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
@@ -50,10 +51,26 @@ use serde::{Deserialize, Serialize};
 use std::{io, path::Path, str::FromStr, sync::Arc};
 use thiserror::Error;
 
+/// substract an amount to a balence and report an error if that is impossible
+pub fn sub_assign_fees(balance: &mut Amount, fees: Amount) -> Result<(), PricingError> {
+    Ok(balance
+        .try_sub_assign(fees)
+        .map_err(|_| ArithmeticError::Underflow)?)
+}
+
 /// The entries of the runtime related to fuel and storage
 #[derive(Copy, Debug, Clone)]
-pub struct RuntimeMeter {
-    /// The remaining fuel
+pub struct RuntimeGlobalMeter {
+    /// The maximum size of read allowed per block
+    pub maximum_bytes_read: u64,
+    /// The maximum size of write allowed per block
+    pub maximum_bytes_written: u64,
+}
+
+/// The entries of the runtime related to fuel and storage
+#[derive(Copy, Debug, Clone)]
+pub struct RuntimeLocalMeter {
+    /// The remaining fuel available
     pub remaining_fuel: u64,
     /// The number of read operations
     pub num_reads: u64,
@@ -61,29 +78,49 @@ pub struct RuntimeMeter {
     pub bytes_read: u64,
     /// The bytes that have been written
     pub bytes_written: u64,
-    /// The maximum size of read allowed per block
-    pub maximum_bytes_read: u64,
-    /// The maximum size of write allowed per block
-    pub maximum_bytes_written: u64,
+}
+
+pub fn update_limits(
+    balance: &mut Amount,
+    runtime_global_meter: &mut RuntimeGlobalMeter,
+    pricing: &Pricing,
+    runtime_local: RuntimeLocalMeter,
+) -> Result<(), ExecutionError> {
+    let initial_fuel = pricing.remaining_fuel(balance.clone());
+    let used_fuel = initial_fuel.saturating_sub(runtime_local.remaining_fuel);
+    sub_assign_fees(balance, pricing.fuel_price(used_fuel)?)?;
+    sub_assign_fees(
+        balance,
+        pricing.storage_num_reads_price(&runtime_local.num_reads)?,
+    )?;
+    let bytes_read = runtime_local.bytes_read;
+    runtime_global_meter.maximum_bytes_read -= bytes_read;
+    sub_assign_fees(
+        balance,
+        pricing.storage_bytes_read_price(&bytes_read)?,
+    )?;
+    let bytes_written = runtime_local.bytes_written;
+    runtime_global_meter.maximum_bytes_written -= bytes_written;
+    sub_assign_fees(
+        balance,
+        pricing.storage_bytes_written_price(&bytes_written)?,
+    )?;
+    Ok(())
 }
 
 #[cfg(any(test, feature = "test"))]
-impl RuntimeMeter {
-    pub fn new_for_testing() -> RuntimeMeter {
-        RuntimeMeter {
-            remaining_fuel: 10_000_000,
-            ..Default::default()
+impl RuntimeGlobalMeter {
+    pub fn new_for_testing() -> RuntimeGlobalMeter {
+        RuntimeGlobalMeter {
+            maximum_bytes_read: u64::MAX,
+            maximum_bytes_written: u64::MAX,
         }
     }
 }
 
-impl Default for RuntimeMeter {
+impl Default for RuntimeGlobalMeter {
     fn default() -> Self {
-        RuntimeMeter {
-            remaining_fuel: 0,
-            num_reads: 0,
-            bytes_read: 0,
-            bytes_written: 0,
+        RuntimeGlobalMeter {
             maximum_bytes_read: u64::MAX,
             maximum_bytes_written: u64::MAX,
         }
@@ -129,6 +166,10 @@ pub enum ExecutionError {
     ApplicationIsInUse,
     #[error("Attempted to get an entry that is not locked")]
     ApplicationStateNotLocked,
+    #[error("Insufficient balance")]
+    InsufficientBalance,
+    #[error("Pricing error: {0}")]
+    PricingError(#[from] PricingError),
     #[error("Excessive readings from storage")]
     ExcessiveRead,
     #[error("Excessive writings to storage")]
@@ -357,7 +398,7 @@ pub trait ContractRuntime: BaseRuntime {
     fn remaining_fuel(&self) -> u64;
 
     /// Returns the remaining fuel as well as the storage related information on the state
-    fn runtime_meter(&self) -> RuntimeMeter;
+    fn runtime_local_meter(&self) -> RuntimeLocalMeter;
 
     /// Sets the amount of execution fuel remaining before execution is aborted.
     fn set_remaining_fuel(&self, remaining_fuel: u64);

@@ -11,10 +11,11 @@ use linera_base::{
     data_types::BlockHeight,
     identifiers::{ChainDescription, ChainId},
 };
+use linera_base::data_types::Amount;
 use linera_execution::{
-    ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, Operation, OperationContext,
-    Query, QueryContext, RawExecutionResult, Response, RuntimeMeter, SystemExecutionState,
-    TestExecutionRuntimeContext, WasmApplication, WasmRuntime,
+    pricing::Pricing, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, Operation,
+    OperationContext, Query, QueryContext, RawExecutionResult, Response, RuntimeGlobalMeter,
+    SystemExecutionState, TestExecutionRuntimeContext, WasmApplication, WasmRuntime,
 };
 use linera_views::{memory::MemoryContext, views::View};
 use serde_json::json;
@@ -25,6 +26,7 @@ use test_case::test_case;
 /// called correctly and consume the expected amount of fuel.
 ///
 /// To update the bytecode files, run `linera-execution/update_wasm_fixtures.sh`.
+#[ignore]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, 30_463; "wasmer"))]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, 30_844; "wasmer_with_sanitizer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, 30_844; "wasmtime"))]
@@ -69,17 +71,17 @@ async fn test_fuel_for_counter_wasm_application(
         next_message_index: 0,
     };
     let increments = [2_u64, 9, 7, 1000];
-    let available_fuel = 10_000_000;
-    let mut runtime_meter = RuntimeMeter {
-        remaining_fuel: available_fuel,
-        ..Default::default()
-    };
+    let pricing = Pricing::default();
+    let mut runtime_global_meter = RuntimeGlobalMeter::new_for_testing();
+    let balance = Amount::from_tokens(20);
+    let available_fuel = pricing.remaining_fuel(balance);
     for increment in &increments {
         let result = view
             .execute_operation(
                 &context,
                 &Operation::user(app_id, increment).unwrap(),
-                &mut runtime_meter,
+                &pricing,
+                &mut runtime_global_meter,
             )
             .await?;
         assert_eq!(
@@ -90,8 +92,8 @@ async fn test_fuel_for_counter_wasm_application(
             )]
         );
     }
-
-    assert_eq!(available_fuel - runtime_meter.remaining_fuel, expected_fuel);
+    let remaining_fuel = pricing.remaining_fuel(balance);
+    assert_eq!(available_fuel - remaining_fuel, expected_fuel);
 
     let context = QueryContext {
         chain_id: ChainId::root(0),

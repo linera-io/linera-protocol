@@ -590,7 +590,7 @@ Pricing:
         TYPENAME: Amount
     - fuel:
         TYPENAME: Amount
-    - storage_n_read:
+    - storage_num_reads:
         TYPENAME: Amount
     - storage_bytes_read:
         TYPENAME: Amount

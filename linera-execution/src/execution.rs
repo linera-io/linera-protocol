@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    update_limits,
     runtime::{ApplicationStatus, ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
     ContractRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Message,
-    MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
-    RawOutgoingMessage, Response, RuntimeMeter, SystemMessage, UserApplicationDescription,
-    UserApplicationId,
+    MessageContext, Operation, OperationContext, Pricing, Query, QueryContext, RawExecutionResult,
+    RawOutgoingMessage, Response, RuntimeGlobalMeter, SystemMessage,
+    UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
     ensure,
@@ -129,16 +130,16 @@ where
             .user_applications()
             .insert(application_id, application);
 
-        let mut runtime_meter = RuntimeMeter {
-            remaining_fuel: 10_000_000,
-            num_reads: 0,
-            bytes_read: 0,
-            bytes_written: 0,
-            maximum_bytes_read: u64::MAX,
-            maximum_bytes_written: u64::MAX,
-        };
-        self.run_user_action(application_id, chain_id, action, &mut runtime_meter)
-            .await?;
+        let mut runtime_global_meter = RuntimeGlobalMeter::new_for_testing();
+        let pricing = Pricing::default();
+        self.run_user_action(
+            application_id,
+            chain_id,
+            action,
+            &pricing,
+            &mut runtime_global_meter,
+        )
+        .await?;
 
         Ok(())
     }
@@ -172,9 +173,11 @@ where
         application_id: UserApplicationId,
         chain_id: ChainId,
         action: UserAction<'_>,
-        runtime_meter: &mut RuntimeMeter,
+        pricing: &Pricing,
+        runtime_global_meter: &mut RuntimeGlobalMeter,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
-        let initial_remaining_fuel = runtime_meter.remaining_fuel;
+        let balance = *self.system.balance.get();
+        let initial_remaining_fuel = pricing.remaining_fuel(balance);
         // Try to load the application. This may fail if the corresponding
         // bytecode-publishing certificate doesn't exist yet on this validator.
         let description = self
@@ -202,7 +205,8 @@ where
             self,
             &mut session_manager,
             &mut results,
-            *runtime_meter,
+            initial_remaining_fuel,
+            *runtime_global_meter,
         );
         // Make the call to user code.
         let call_result = match action {
@@ -229,16 +233,12 @@ where
         };
         // Set the authenticated signer to be used in outgoing messages.
         result.authenticated_signer = signer;
-        *runtime_meter = runtime.runtime_meter();
-        if runtime_meter.bytes_read > runtime_meter.maximum_bytes_read {
-            return Err(ExecutionError::ExcessiveRead);
-        }
-        if runtime_meter.bytes_written > runtime_meter.maximum_bytes_written {
-            return Err(ExecutionError::ExcessiveWrite);
-        }
-        WASM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
-            .observe((initial_remaining_fuel - runtime_meter.remaining_fuel) as f64);
+        let runtime_local_meter = runtime.runtime_local_meter();
+        let balance = self.system.balance.get_mut();
+        update_limits(balance, runtime_global_meter, pricing, runtime_local_meter)?;
+        WASM_FUEL_USED_PER_BLOCK.with_label_values(&[]).observe(
+            (initial_remaining_fuel - pricing.remaining_fuel(balance.clone())) as f64,
+        );
 
         // Check that applications were correctly stacked and unstacked.
         assert_eq!(applications.len(), 1);
@@ -278,7 +278,8 @@ where
         &mut self,
         context: &OperationContext,
         operation: &Operation,
-        runtime_meter: &mut RuntimeMeter,
+        pricing: &Pricing,
+        runtime_global_meter: &mut RuntimeGlobalMeter,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
@@ -294,7 +295,8 @@ where
                             application_id,
                             context.chain_id,
                             user_action,
-                            runtime_meter,
+                            pricing,
+                            runtime_global_meter,
                         )
                         .await?,
                     );
@@ -309,7 +311,8 @@ where
                     *application_id,
                     context.chain_id,
                     UserAction::Operation(context, bytes),
-                    runtime_meter,
+                    pricing,
+                    runtime_global_meter,
                 )
                 .await
             }
@@ -320,7 +323,8 @@ where
         &mut self,
         context: &MessageContext,
         message: &Message,
-        runtime_meter: &mut RuntimeMeter,
+        pricing: &Pricing,
+        runtime_global_meter: &mut RuntimeGlobalMeter,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
@@ -336,7 +340,8 @@ where
                     *application_id,
                     context.chain_id,
                     UserAction::Message(context, bytes),
-                    runtime_meter,
+                    pricing,
+                    runtime_global_meter,
                 )
                 .await
             }
@@ -377,14 +382,16 @@ where
                     parameters: description.parameters,
                     signer: None,
                 }];
-                let runtime_meter = RuntimeMeter::default();
+                let runtime_global_meter = RuntimeGlobalMeter::default();
+                let remaining_fuel = 0;
                 let runtime = ExecutionRuntime::new(
                     context.chain_id,
                     &mut applications,
                     self,
                     &mut session_manager,
                     &mut results,
-                    runtime_meter,
+                    remaining_fuel,
+                    runtime_global_meter,
                 );
                 // Run the query.
                 let response = application.handle_query(context, &runtime, bytes).await?;

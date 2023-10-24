@@ -19,10 +19,11 @@ use linera_base::{
     identifiers::{ChainId, Destination, MessageId},
 };
 use linera_execution::{
+    sub_assign_fees,
     system::{Account, SystemMessage},
     ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, GenericApplicationId, Message,
     MessageContext, OperationContext, Query, QueryContext, RawExecutionResult, RawOutgoingMessage,
-    Response, RuntimeMeter, UserApplicationDescription, UserApplicationId,
+    Response, RuntimeGlobalMeter, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     common::Context,
@@ -494,29 +495,22 @@ where
         let balance = self.execution_state.system.balance.get_mut();
 
         balance.try_add_assign(credit)?;
-        Self::sub_assign_fees(balance, pricing.certificate_price())?;
-        Self::sub_assign_fees(
+        sub_assign_fees(balance, pricing.certificate_price())?;
+        sub_assign_fees(
             balance,
             pricing.storage_bytes_written_price(&block.incoming_messages)?,
         )?;
-        Self::sub_assign_fees(
+        sub_assign_fees(
             balance,
             pricing.storage_bytes_written_price(&block.operations)?,
         )?;
 
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
-        let available_fuel = pricing.remaining_fuel(*balance);
-        let num_reads = 0;
-        let bytes_read = 0;
-        let bytes_written = 0;
+        //        let available_fuel = pricing.remaining_fuel(*balance);
         let maximum_bytes_read = pricing.maximum_bytes_read;
         let maximum_bytes_written = pricing.maximum_bytes_written;
-        let mut runtime_meter = RuntimeMeter {
-            remaining_fuel: available_fuel,
-            num_reads,
-            bytes_read,
-            bytes_written,
+        let mut runtime_global_meter = RuntimeGlobalMeter {
             maximum_bytes_read,
             maximum_bytes_written,
         };
@@ -536,7 +530,12 @@ where
             };
             let results = self
                 .execution_state
-                .execute_message(&context, &message.event.message, &mut runtime_meter)
+                .execute_message(
+                    &context,
+                    &message.event.message,
+                    &pricing,
+                    &mut runtime_global_meter,
+                )
                 .await
                 .map_err(|err| {
                     ChainError::ExecutionError(err, ChainExecutionContext::IncomingMessage(index))
@@ -560,7 +559,7 @@ where
             };
             let results = self
                 .execution_state
-                .execute_operation(&context, operation, &mut runtime_meter)
+                .execute_operation(&context, operation, &pricing, &mut runtime_global_meter)
                 .await
                 .map_err(|err| {
                     ChainError::ExecutionError(err, ChainExecutionContext::Operation(index))
@@ -570,24 +569,8 @@ where
             message_counts
                 .push(u32::try_from(messages.len()).map_err(|_| ArithmeticError::Overflow)?);
         }
-        let used_fuel = available_fuel.saturating_sub(runtime_meter.remaining_fuel);
-
         let balance = self.execution_state.system.balance.get_mut();
-        Self::sub_assign_fees(balance, credit)?;
-        Self::sub_assign_fees(balance, pricing.fuel_price(used_fuel)?)?;
-        Self::sub_assign_fees(balance, pricing.messages_price(&messages)?)?;
-        Self::sub_assign_fees(
-            balance,
-            pricing.storage_num_reads_price(&runtime_meter.num_reads)?,
-        )?;
-        Self::sub_assign_fees(
-            balance,
-            pricing.storage_bytes_read_price(&runtime_meter.bytes_read)?,
-        )?;
-        Self::sub_assign_fees(
-            balance,
-            pricing.storage_bytes_written_price(&runtime_meter.bytes_written)?,
-        )?;
+        sub_assign_fees(balance, credit)?;
 
         // Recompute the state hash.
         let state_hash = self.execution_state.crypto_hash().await?;
@@ -789,11 +772,5 @@ where
             }
         }
         Ok(())
-    }
-
-    fn sub_assign_fees(balance: &mut Amount, fees: Amount) -> Result<(), ChainError> {
-        balance
-            .try_sub_assign(fees)
-            .map_err(|_| ChainError::InsufficientBalance)
     }
 }

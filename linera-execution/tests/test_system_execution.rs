@@ -9,9 +9,10 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, MessageId},
 };
 use linera_execution::{
+    pricing::Pricing,
     system::{Account, Recipient, UserData},
     ExecutionResult, ExecutionStateView, Message, MessageContext, Operation, OperationContext,
-    Query, QueryContext, RawExecutionResult, Response, RuntimeMeter, SystemExecutionState,
+    Query, QueryContext, RawExecutionResult, Response, RuntimeGlobalMeter, SystemExecutionState,
     SystemMessage, SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
 };
 use linera_views::memory::MemoryContext;
@@ -38,9 +39,15 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
-    let mut runtime_meter = RuntimeMeter::new_for_testing();
+    let mut runtime_global_meter = RuntimeGlobalMeter::new_for_testing();
+    let pricing = Pricing::default();
     let results = view
-        .execute_operation(&context, &Operation::System(operation), &mut runtime_meter)
+        .execute_operation(
+            &context,
+            &Operation::System(operation),
+            &pricing,
+            &mut runtime_global_meter,
+        )
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::ZERO);
@@ -78,9 +85,15 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         },
         authenticated_signer: None,
     };
-    let mut runtime_meter = RuntimeMeter::new_for_testing();
+    let mut runtime_global_meter = RuntimeGlobalMeter::new_for_testing();
+    let pricing = Pricing::default();
     let results = view
-        .execute_message(&context, &Message::System(message), &mut runtime_meter)
+        .execute_message(
+            &context,
+            &Message::System(message),
+            &pricing,
+            &mut runtime_global_meter,
+        )
         .await
         .unwrap();
     assert_eq!(view.system.balance.get(), &Amount::from_tokens(4));

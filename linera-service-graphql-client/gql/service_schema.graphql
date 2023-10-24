@@ -434,7 +434,7 @@ input Pricing {
 	"""
 	The cost to read data per operation
 	"""
-	storageNRead: Amount!
+	storageNumReads: Amount!
 	"""
 	The cost to read data per byte
 	"""
@@ -442,15 +442,15 @@ input Pricing {
 	"""
 	The cost to store data per byte
 	"""
-	storageBytesWrite: Amount!
+	storageBytesWritten: Amount!
 	"""
-	The maximum data to read
+	The maximum data to read per block
 	"""
 	maximumBytesRead: Int!
 	"""
-	The maximum data to write
+	The maximum data to write per block
 	"""
-	maximumBytesWrite: Int!
+	maximumBytesWritten: Int!
 	"""
 	The cost to store and send cross-chain messages, per byte.
 	"""

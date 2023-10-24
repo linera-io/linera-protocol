@@ -3,8 +3,8 @@
 
 use crate::{
     execution::ExecutionStateView, BaseRuntime, CallResult, ContractRuntime, ExecutionError,
-    ExecutionResult, ExecutionRuntimeContext, RuntimeMeter, ServiceRuntime, SessionId,
-    UserApplicationCode, UserApplicationDescription, UserApplicationId,
+    ExecutionResult, ExecutionRuntimeContext, RuntimeGlobalMeter, RuntimeLocalMeter, ServiceRuntime,
+    SessionId, UserApplicationCode, UserApplicationDescription, UserApplicationId,
 };
 use async_lock::{Mutex, MutexGuard, MutexGuardArc, RwLockWriteGuardArc};
 use async_trait::async_trait;
@@ -109,15 +109,18 @@ where
         execution_state: &'a mut ExecutionStateView<C>,
         session_manager: &'a mut SessionManager,
         execution_results: &'a mut Vec<ExecutionResult>,
-        runtime_meter: RuntimeMeter,
+        fuel: u64,
+        runtime_global_meter: RuntimeGlobalMeter,
     ) -> Self {
         assert_eq!(chain_id, execution_state.context().extra().chain_id());
-        let num_reads = Arc::new(AtomicU64::new(runtime_meter.num_reads));
-        let bytes_read = Arc::new(AtomicU64::new(runtime_meter.bytes_read));
-        let bytes_written = Arc::new(AtomicU64::new(runtime_meter.bytes_written));
-        let maximum_bytes_read = runtime_meter.maximum_bytes_read;
-        let maximum_bytes_written = runtime_meter.maximum_bytes_written;
+        let remaining_fuel = Arc::new(AtomicU64::new(fuel));
+        let num_reads = Arc::new(AtomicU64::new(0));
+        let bytes_read = Arc::new(AtomicU64::new(0));
+        let bytes_written = Arc::new(AtomicU64::new(0));
+        let maximum_bytes_read = runtime_global_meter.maximum_bytes_read;
+        let maximum_bytes_written = runtime_global_meter.maximum_bytes_written;
         Self {
+            remaining_fuel,
             num_reads,
             bytes_read,
             bytes_written,
@@ -125,7 +128,6 @@ where
             maximum_bytes_written,
             chain_id,
             applications: Arc::new(Mutex::new(applications)),
-            remaining_fuel: Arc::new(AtomicU64::new(runtime_meter.remaining_fuel)),
             execution_state: Arc::new(Mutex::new(execution_state)),
             session_manager: Arc::new(Mutex::new(session_manager)),
             active_simple_user_states: Arc::default(),
@@ -388,7 +390,19 @@ where
             .await
             .get(&self.application_id())
         {
-            Some(view) => Ok(view.get(&key).await?),
+            Some(view) => {
+                let result = view.get(&key).await?;
+                self.num_reads.fetch_add(1, Ordering::Relaxed);
+                if let Some(value) = &result {
+                    self.bytes_read
+                        .fetch_add(value.len() as u64, Ordering::Relaxed);
+                }
+                let bytes_read = self.bytes_read.load(Ordering::Acquire);
+                if bytes_read > self.maximum_bytes_read {
+                    return Err(ExecutionError::ExcessiveRead);
+                }
+                Ok(result)
+            }
             None => Err(ExecutionError::ApplicationStateNotLocked),
         }
     }
@@ -406,9 +420,15 @@ where
             Some(view) => {
                 let keys = view.find_keys_by_prefix(&key_prefix).await?;
                 self.num_reads.fetch_add(1, Ordering::Relaxed);
+                let mut read_size = 0;
                 for key in &keys {
-                    self.bytes_read
-                        .fetch_add(key.len() as u64, Ordering::Relaxed);
+                    read_size += key.len();
+                }
+                self.bytes_read
+                    .fetch_add(read_size as u64, Ordering::Relaxed);
+                let bytes_read = self.bytes_read.load(Ordering::Acquire);
+                if bytes_read > self.maximum_bytes_read {
+                    return Err(ExecutionError::ExcessiveRead);
                 }
                 Ok(keys)
             }
@@ -428,9 +448,15 @@ where
         {
             Some(view) => {
                 let key_values = view.find_key_values_by_prefix(&key_prefix).await?;
+                let mut read_size = 0;
                 for (key, value) in &key_values {
-                    let size = key.len() + value.len();
-                    self.bytes_read.fetch_add(size as u64, Ordering::Relaxed);
+                    read_size += key.len() + value.len();
+                }
+                self.bytes_read
+                    .fetch_add(read_size as u64, Ordering::Relaxed);
+                let bytes_read = self.bytes_read.load(Ordering::Acquire);
+                if bytes_read > self.maximum_bytes_read {
+                    return Err(ExecutionError::ExcessiveRead);
                 }
                 Ok(key_values)
             }
@@ -480,20 +506,16 @@ where
         self.remaining_fuel.load(Ordering::Acquire)
     }
 
-    fn runtime_meter(&self) -> RuntimeMeter {
+    fn runtime_local_meter(&self) -> RuntimeLocalMeter {
         let remaining_fuel = self.remaining_fuel.load(Ordering::Acquire);
         let num_reads = self.num_reads.load(Ordering::Acquire);
         let bytes_read = self.bytes_read.load(Ordering::Acquire);
         let bytes_written = self.bytes_written.load(Ordering::Acquire);
-        let maximum_bytes_read = self.maximum_bytes_read;
-        let maximum_bytes_written = self.maximum_bytes_written;
-        RuntimeMeter {
+        RuntimeLocalMeter {
             remaining_fuel,
             num_reads,
             bytes_read,
             bytes_written,
-            maximum_bytes_read,
-            maximum_bytes_written,
         }
     }
 
@@ -537,6 +559,10 @@ where
     async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
         let size = batch.size() as u64;
         self.bytes_written.fetch_add(size, Ordering::Relaxed);
+        let bytes_written = self.bytes_written.load(Ordering::Acquire);
+        if bytes_written > self.maximum_bytes_written {
+            return Err(ExecutionError::ExcessiveWrite);
+        }
         // Write the batch and make the view available again.
         match self
             .active_view_user_states_mut()
