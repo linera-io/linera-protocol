@@ -206,6 +206,9 @@ async fn run_wasm_end_to_end_counter(database: Database) {
     assert_eq!(counter_value, original_counter_value + increment);
 
     node_service.ensure_is_running().unwrap();
+
+    local_net.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -269,6 +272,9 @@ async fn run_wasm_end_to_end_counter_publish_create(database: Database) {
     assert_eq!(counter_value, original_counter_value + increment);
 
     node_service.ensure_is_running().unwrap();
+
+    local_net.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -374,6 +380,9 @@ async fn run_wasm_end_to_end_social_user_pub_sub(database: Database) {
 
     node_service1.ensure_is_running().unwrap();
     node_service2.ensure_is_running().unwrap();
+
+    local_net.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -509,6 +518,9 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
 
     node_service1.ensure_is_running().unwrap();
     node_service2.ensure_is_running().unwrap();
+
+    local_net.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -609,6 +621,9 @@ async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
     app2.assert_balances([(account_owner2, Amount::ONE)]).await;
 
     node_service.ensure_is_running().unwrap();
+
+    local_net.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -753,6 +768,9 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
 
     node_service1.ensure_is_running().unwrap();
     node_service2.ensure_is_running().unwrap();
+
+    local_net.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -1029,6 +1047,9 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
     node_service_admin.ensure_is_running().unwrap();
     node_service_a.ensure_is_running().unwrap();
     node_service_b.ensure_is_running().unwrap();
+
+    local_net.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -1364,4 +1385,7 @@ async fn run_wasm_end_to_end_amm(database: Database) {
     node_service_admin.ensure_is_running().unwrap();
     node_service0.ensure_is_running().unwrap();
     node_service1.ensure_is_running().unwrap();
+
+    local_net.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }

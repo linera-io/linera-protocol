@@ -4,7 +4,11 @@
 //! Helper module to call the binaries of `linera-service` with appropriate command-line
 //! arguments.
 
-use crate::{config::WalletState, util, util::CommandExt};
+use crate::{
+    config::WalletState,
+    util,
+    util::{ChildExt, CommandExt},
+};
 use anyhow::{anyhow, bail, Context, Result};
 use async_graphql::InputType;
 use linera_base::{
@@ -289,7 +293,7 @@ impl ClientWrapper {
                 .await;
             if request.is_ok() {
                 info!("Node service has started");
-                return Ok(NodeService { port, child });
+                return Ok(NodeService::new(port, child));
             } else {
                 warn!("Waiting for node service to start");
             }
@@ -509,29 +513,37 @@ impl Validator {
         }
     }
 
+    async fn terminate(mut self) -> Result<()> {
+        self.proxy
+            .kill()
+            .await
+            .context("terminating validator proxy")?;
+        for mut server in self.servers {
+            server
+                .kill()
+                .await
+                .context("terminating validator server")?;
+        }
+        Ok(())
+    }
+
     fn add_server(&mut self, server: Child) {
         self.servers.push(server)
     }
 
-    fn kill_server(&mut self, index: usize) {
-        self.servers.remove(index);
+    async fn terminate_server(&mut self, index: usize) -> Result<()> {
+        let mut server = self.servers.remove(index);
+        server
+            .kill()
+            .await
+            .context("terminating validator server")?;
+        Ok(())
     }
 
     fn ensure_is_running(&mut self) -> Result<()> {
-        if let Some(status) = self
-            .proxy
-            .try_wait()
-            .context("failed waiting for proxy process")?
-        {
-            anyhow::ensure!(status.success(), "proxy returned status: {}", status);
-        }
+        self.proxy.ensure_is_running()?;
         for child in &mut self.servers {
-            if let Some(status) = child
-                .try_wait()
-                .context("failed waiting for server process")?
-            {
-                anyhow::ensure!(status.success(), "server returned status: {}", status);
-            }
+            child.ensure_is_running()?;
         }
         Ok(())
     }
@@ -548,16 +560,6 @@ pub struct LocalNetwork {
     table_name: String,
     set_init: HashSet<(usize, usize)>,
     tmp_dir: Rc<TempDir>,
-}
-
-impl Drop for LocalNetwork {
-    fn drop(&mut self) {
-        for validator in self.local_net.values_mut() {
-            if let Err(error) = validator.ensure_is_running() {
-                tracing::error!("validator not running when dropped: {}", error);
-            }
-        }
-    }
 }
 
 impl LocalNetwork {
@@ -581,6 +583,21 @@ impl LocalNetwork {
             set_init: HashSet::new(),
             tmp_dir: Rc::new(tempdir()?),
         })
+    }
+
+    pub async fn terminate(mut self) -> Result<()> {
+        let validators = std::mem::take(&mut self.local_net);
+        for (_, validator) in validators {
+            validator.terminate().await.context("in local network")?
+        }
+        Ok(())
+    }
+
+    pub fn ensure_is_running(&mut self) -> Result<()> {
+        for validator in self.local_net.values_mut() {
+            validator.ensure_is_running().context("in local network")?
+        }
+        Ok(())
     }
 
     pub fn make_client(&mut self, network: Network) -> ClientWrapper {
@@ -814,11 +831,12 @@ impl LocalNetwork {
         self.tmp_dir.path()
     }
 
-    pub fn kill_server(&mut self, i: usize, j: usize) -> Result<()> {
+    pub async fn terminate_server(&mut self, i: usize, j: usize) -> Result<()> {
         self.local_net
             .get_mut(&i)
             .context("server not found")?
-            .kill_server(j);
+            .terminate_server(j)
+            .await?;
         Ok(())
     }
 
@@ -914,19 +932,20 @@ pub struct NodeService {
 }
 
 impl NodeService {
+    fn new(port: u16, child: Child) -> Self {
+        Self { port, child }
+    }
+
+    pub async fn terminate(mut self) -> Result<()> {
+        self.child.kill().await.context("terminating node service")
+    }
+
     pub fn port(&self) -> u16 {
         self.port
     }
 
     pub fn ensure_is_running(&mut self) -> Result<()> {
-        if let Some(status) = self
-            .child
-            .try_wait()
-            .context("failed waiting for child process")?
-        {
-            anyhow::ensure!(status.success(), "child returned status: {}", status);
-        }
-        Ok(())
+        self.child.ensure_is_running()
     }
 
     pub async fn process_inbox(&self, chain_id: &ChainId) -> Result<()> {

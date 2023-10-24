@@ -2014,10 +2014,16 @@ async fn main() -> Result<(), anyhow::Error> {
                 eprintln!("\nREADY!\nPress ^C to terminate the local test network and clean the temporary directory.");
                 let mut sigint = unix::signal(unix::SignalKind::interrupt())?;
                 let mut sigterm = unix::signal(unix::SignalKind::terminate())?;
+                let mut sigpipe = unix::signal(unix::SignalKind::pipe())?;
+                let mut sighup = unix::signal(unix::SignalKind::hangup())?;
                 tokio::select! {
                     _ = sigint.recv() => (),
                     _ = sigterm.recv() => (),
+                    _ = sigpipe.recv() => (),
+                    _ = sighup.recv() => (),
                 }
+                eprintln!("\nTerminating the local test network...");
+                net.terminate().await?;
                 eprintln!("\nDone.");
                 Ok(())
             }

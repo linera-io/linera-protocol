@@ -113,7 +113,7 @@ async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
         .unwrap();
 
     // Restart first shard (dropping it kills the process)
-    local_net.kill_server(4, 0).unwrap();
+    local_net.terminate_server(4, 0).await.unwrap();
     local_net.start_server(4, 0).await.unwrap();
 
     // Query balances again
@@ -193,6 +193,9 @@ async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
         }
         panic!("Failed to receive new block");
     }
+
+    local_net.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -297,6 +300,8 @@ async fn run_open_chain_node_service(database: Database) {
         if response1["chain"]["executionState"]["system"]["balance"].as_str() == Some("6.")
             && response2["chain"]["executionState"]["system"]["balance"].as_str() == Some("4.")
         {
+            local_net.ensure_is_running().unwrap();
+            local_net.terminate().await.unwrap();
             return;
         }
     }
@@ -380,6 +385,9 @@ async fn run_end_to_end_retry_notification_stream(database: Database) {
     }
 
     node_service2.ensure_is_running().unwrap();
+
+    local_net.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -471,6 +479,9 @@ async fn run_end_to_end_multiple_wallets(database: Database) {
         client_2.query_balance(chain_2).await.unwrap(),
         Amount::from_tokens(3)
     );
+
+    local_net.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -507,6 +518,9 @@ async fn run_project_new(database: Database) {
         .build_application(project_dir.as_path(), "init-test", false)
         .await
         .unwrap();
+
+    local_net.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -590,7 +604,10 @@ async fn run_project_publish(database: Database) {
             .unwrap()
             .len(),
         1
-    )
+    );
+
+    local_net.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }
 
 #[test_log::test(tokio::test)]
@@ -689,7 +706,10 @@ async fn run_example_publish(database: Database) {
             .unwrap()
             .len(),
         1
-    )
+    );
+
+    local_net.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }
 
 #[cfg(feature = "rocksdb")]
@@ -714,17 +734,17 @@ async fn run_end_to_end_open_multi_owner_chain(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
-    let mut runner = LocalNetwork::new_for_testing(database, Network::Grpc).unwrap();
-    let client1 = runner.make_client(Network::Grpc);
-    let client2 = runner.make_client(Network::Grpc);
+    let mut local_net = LocalNetwork::new_for_testing(database, Network::Grpc).unwrap();
+    let client1 = local_net.make_client(Network::Grpc);
+    let client2 = local_net.make_client(Network::Grpc);
 
     // Create initial server and client config.
-    runner.generate_initial_validator_config().await.unwrap();
+    local_net.generate_initial_validator_config().await.unwrap();
     client1.create_genesis_config().await.unwrap();
     client2.wallet_init(&[]).await.unwrap();
 
     // Start local network.
-    runner.run().await.unwrap();
+    local_net.run().await.unwrap();
 
     let chain1 = *client1.get_wallet().unwrap().chain_ids().first().unwrap();
 
@@ -799,4 +819,7 @@ async fn run_end_to_end_open_multi_owner_chain(database: Database) {
         client2.query_balance(chain2).await.unwrap(),
         Amount::from_tokens(3)
     );
+
+    local_net.ensure_is_running().unwrap();
+    local_net.terminate().await.unwrap();
 }
