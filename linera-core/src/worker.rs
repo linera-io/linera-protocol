@@ -28,6 +28,8 @@ use linera_views::{
     views::{RootView, View, ViewError},
 };
 use lru::LruCache;
+use once_cell::sync::Lazy;
+use prometheus::{register_histogram_vec, HistogramVec};
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
@@ -50,6 +52,16 @@ use {
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
+
+pub static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "num_rounds_in_certificate",
+        "Number of rounds in certificate",
+        // Can add labels here
+        &["certificate_value"]
+    )
+    .expect("Counter can be created")
+});
 
 /// Interface provided by each physical shard (aka "worker") of a validator or a local node.
 /// * All commands return either the current chain info or an error.
@@ -654,7 +666,7 @@ where
     async fn process_validated_block(
         &mut self,
         certificate: Certificate,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+    ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         let block = match certificate.value() {
             CertificateValue::ValidatedBlock {
                 executed_block: ExecutedBlock { block, .. },
@@ -685,7 +697,11 @@ where
             || chain.manager.get().check_validated_block(&certificate)? == ChainManagerOutcome::Skip
         {
             // If we just processed the same pending block, return the chain info unchanged.
-            return Ok((ChainInfoResponse::new(&chain, self.key_pair()), actions));
+            return Ok((
+                ChainInfoResponse::new(&chain, self.key_pair()),
+                actions,
+                true,
+            ));
         }
         self.cache_validated(&certificate.value).await;
         let current_round = chain.manager.get().current_round();
@@ -706,7 +722,7 @@ where
             })
         }
         self.cache_validated(&certificate.value).await;
-        Ok((info, actions))
+        Ok((info, actions, false))
     }
 
     /// Processes a leader timeout issued from a multi-owner chain.
@@ -1060,10 +1076,15 @@ where
                 value_hash: blobs[0].hash(),
             }
         );
+
+        let certificate_for_logging = certificate.clone();
+        let mut duplicated = false;
         let (info, actions) = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                self.process_validated_block(certificate).await?
+                let (info, actions, d) = self.process_validated_block(certificate).await?;
+                duplicated = d;
+                (info, actions)
             }
             CertificateValue::ConfirmedBlock { .. } => {
                 // Execute the confirmed block.
@@ -1079,6 +1100,12 @@ where
                 self.process_leader_timeout(certificate).await?
             }
         };
+
+        if !duplicated {
+            NUM_ROUNDS_IN_CERTIFICATE
+                .with_label_values(&[certificate_for_logging.value().to_log_str()])
+                .observe(certificate_for_logging.round.0 as f64);
+        }
         Ok((info, actions))
     }
 

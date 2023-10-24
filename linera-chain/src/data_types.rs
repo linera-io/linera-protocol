@@ -560,6 +560,14 @@ impl CertificateValue {
         self.executed_block()
             .map(|executed_block| &executed_block.block)
     }
+
+    pub fn to_log_str(&self) -> &str {
+        match self {
+            CertificateValue::ConfirmedBlock { .. } => "confirmed_block",
+            CertificateValue::ValidatedBlock { .. } => "validated_block",
+            CertificateValue::LeaderTimeout { .. } => "leader_timeout",
+        }
+    }
 }
 
 impl ExecutedBlock {
