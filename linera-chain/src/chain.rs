@@ -497,28 +497,28 @@ where
         Self::sub_assign_fees(balance, pricing.certificate_price())?;
         Self::sub_assign_fees(
             balance,
-            pricing.storage_bytes_write_price(&block.incoming_messages)?,
+            pricing.storage_bytes_written_price(&block.incoming_messages)?,
         )?;
         Self::sub_assign_fees(
             balance,
-            pricing.storage_bytes_write_price(&block.operations)?,
+            pricing.storage_bytes_written_price(&block.operations)?,
         )?;
 
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
         let available_fuel = pricing.remaining_fuel(*balance);
-        let n_read = 0;
+        let num_reads = 0;
         let bytes_read = 0;
-        let bytes_write = 0;
+        let bytes_written = 0;
         let maximum_bytes_read = pricing.maximum_bytes_read;
-        let maximum_bytes_write = pricing.maximum_bytes_write;
+        let maximum_bytes_written = pricing.maximum_bytes_written;
         let mut runtime_meter = RuntimeMeter {
             remaining_fuel: available_fuel,
-            n_read,
+            num_reads,
             bytes_read,
-            bytes_write,
+            bytes_written,
             maximum_bytes_read,
-            maximum_bytes_write,
+            maximum_bytes_written,
         };
         for (index, message) in block.incoming_messages.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
@@ -578,7 +578,7 @@ where
         Self::sub_assign_fees(balance, pricing.messages_price(&messages)?)?;
         Self::sub_assign_fees(
             balance,
-            pricing.storage_n_read_price(&runtime_meter.n_read)?,
+            pricing.storage_num_reads_price(&runtime_meter.num_reads)?,
         )?;
         Self::sub_assign_fees(
             balance,
@@ -586,7 +586,7 @@ where
         )?;
         Self::sub_assign_fees(
             balance,
-            pricing.storage_bytes_write_price(&runtime_meter.bytes_write)?,
+            pricing.storage_bytes_written_price(&runtime_meter.bytes_written)?,
         )?;
 
         // Recompute the state hash.

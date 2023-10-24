@@ -594,10 +594,10 @@ Pricing:
         TYPENAME: Amount
     - storage_bytes_read:
         TYPENAME: Amount
-    - storage_bytes_write:
+    - storage_bytes_written:
         TYPENAME: Amount
     - maximum_bytes_read: U64
-    - maximum_bytes_write: U64
+    - maximum_bytes_written: U64
     - messages:
         TYPENAME: Amount
 PublicKey:

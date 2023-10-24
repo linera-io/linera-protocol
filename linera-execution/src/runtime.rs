@@ -36,15 +36,15 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     /// The amount of fuel available for executing the application.
     remaining_fuel: Arc<AtomicU64>,
     /// the number of read
-    n_read: Arc<AtomicU64>,
+    num_reads: Arc<AtomicU64>,
     /// the total size being read
     bytes_read: Arc<AtomicU64>,
     /// the total size being write
-    bytes_write: Arc<AtomicU64>,
+    bytes_written: Arc<AtomicU64>,
     /// The maximum size of read allowed
     maximum_bytes_read: u64,
     /// The maximum size of write allowed
-    maximum_bytes_write: u64,
+    maximum_bytes_written: u64,
     /// The current chain ID.
     chain_id: ChainId,
     /// The current stack of application descriptions.
@@ -112,17 +112,17 @@ where
         runtime_meter: RuntimeMeter,
     ) -> Self {
         assert_eq!(chain_id, execution_state.context().extra().chain_id());
-        let n_read = Arc::new(AtomicU64::new(runtime_meter.n_read));
+        let num_reads = Arc::new(AtomicU64::new(runtime_meter.num_reads));
         let bytes_read = Arc::new(AtomicU64::new(runtime_meter.bytes_read));
-        let bytes_write = Arc::new(AtomicU64::new(runtime_meter.bytes_write));
+        let bytes_written = Arc::new(AtomicU64::new(runtime_meter.bytes_written));
         let maximum_bytes_read = runtime_meter.maximum_bytes_read;
-        let maximum_bytes_write = runtime_meter.maximum_bytes_write;
+        let maximum_bytes_written = runtime_meter.maximum_bytes_written;
         Self {
-            n_read,
+            num_reads,
             bytes_read,
-            bytes_write,
+            bytes_written,
             maximum_bytes_read,
-            maximum_bytes_write,
+            maximum_bytes_written,
             chain_id,
             applications: Arc::new(Mutex::new(applications)),
             remaining_fuel: Arc::new(AtomicU64::new(runtime_meter.remaining_fuel)),
@@ -386,7 +386,7 @@ where
         match self
             .active_view_user_states_mut()
             .await
-            .get_mut(&self.application_id())
+            .get(&self.application_id())
         {
             Some(view) => Ok(view.get(&key).await?),
             None => Err(ExecutionError::ApplicationStateNotLocked),
@@ -401,11 +401,11 @@ where
         match self
             .active_view_user_states_mut()
             .await
-            .get_mut(&self.application_id())
+            .get(&self.application_id())
         {
             Some(view) => {
                 let keys = view.find_keys_by_prefix(&key_prefix).await?;
-                self.n_read.fetch_add(1, Ordering::Relaxed);
+                self.num_reads.fetch_add(1, Ordering::Relaxed);
                 for key in &keys {
                     self.bytes_read
                         .fetch_add(key.len() as u64, Ordering::Relaxed);
@@ -424,7 +424,7 @@ where
         match self
             .active_view_user_states_mut()
             .await
-            .get_mut(&self.application_id())
+            .get(&self.application_id())
         {
             Some(view) => {
                 let key_values = view.find_key_values_by_prefix(&key_prefix).await?;
@@ -482,18 +482,18 @@ where
 
     fn runtime_meter(&self) -> RuntimeMeter {
         let remaining_fuel = self.remaining_fuel.load(Ordering::Acquire);
-        let n_read = self.n_read.load(Ordering::Acquire);
+        let num_reads = self.num_reads.load(Ordering::Acquire);
         let bytes_read = self.bytes_read.load(Ordering::Acquire);
-        let bytes_write = self.bytes_write.load(Ordering::Acquire);
+        let bytes_written = self.bytes_written.load(Ordering::Acquire);
         let maximum_bytes_read = self.maximum_bytes_read;
-        let maximum_bytes_write = self.maximum_bytes_write;
+        let maximum_bytes_written = self.maximum_bytes_written;
         RuntimeMeter {
             remaining_fuel,
-            n_read,
+            num_reads,
             bytes_read,
-            bytes_write,
+            bytes_written,
             maximum_bytes_read,
-            maximum_bytes_write,
+            maximum_bytes_written,
         }
     }
 
@@ -536,7 +536,7 @@ where
 
     async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
         let size = batch.size() as u64;
-        self.bytes_write.fetch_add(size, Ordering::Relaxed);
+        self.bytes_written.fetch_add(size, Ordering::Relaxed);
         // Write the batch and make the view available again.
         match self
             .active_view_user_states_mut()

@@ -811,7 +811,7 @@ enum ClientCommand {
 
         /// Set the price per byte to read data per operation
         #[structopt(long)]
-        storage_n_read: Option<Amount>,
+        storage_num_reads: Option<Amount>,
 
         /// Set the price per byte to read data per byte
         #[structopt(long)]
@@ -819,15 +819,15 @@ enum ClientCommand {
 
         /// Set the price per byte to write data per byte
         #[structopt(long)]
-        storage_bytes_write: Option<Amount>,
+        storage_bytes_written: Option<Amount>,
 
-        /// Set the maximum quantity of data to read
+        /// Set the maximum quantity of data to read per block
         #[structopt(long)]
         maximum_bytes_read: Option<u64>,
 
-        /// Set the maximum quantity of data to write
+        /// Set the maximum quantity of data to write per block
         #[structopt(long)]
-        maximum_bytes_write: Option<u64>,
+        maximum_bytes_written: Option<u64>,
 
         /// Set the price per byte to store and send outgoing cross-chain messages.
         #[structopt(long)]
@@ -883,7 +883,7 @@ enum ClientCommand {
 
         /// Set the price per operation to read data
         #[structopt(long, default_value = "0")]
-        storage_n_read_price: Amount,
+        storage_num_reads_price: Amount,
 
         /// Set the price per byte to read data
         #[structopt(long, default_value = "0")]
@@ -891,15 +891,15 @@ enum ClientCommand {
 
         /// Set the price per byte to write data
         #[structopt(long, default_value = "0")]
-        storage_bytes_write_price: Amount,
+        storage_bytes_written_price: Amount,
 
-        /// Set the maximum read data
+        /// Set the maximum read data per block
         #[structopt(long)]
         maximum_bytes_read_price: Option<u64>,
 
-        /// Set the maximum write data
+        /// Set the maximum write data per block
         #[structopt(long)]
-        maximum_bytes_write_price: Option<u64>,
+        maximum_bytes_written_price: Option<u64>,
 
         /// Set the price per byte to store and send outgoing cross-chain messages.
         #[structopt(long, default_value = "0")]
@@ -1382,11 +1382,11 @@ impl Runnable for Job {
                     Pricing {
                         certificate,
                         fuel,
-                        storage_n_read,
+                        storage_num_reads,
                         storage_bytes_read,
-                        storage_bytes_write,
+                        storage_bytes_written,
                         maximum_bytes_read,
-                        maximum_bytes_write,
+                        maximum_bytes_written,
                         messages,
                     } => {
                         if let Some(certificate) = certificate {
@@ -1395,20 +1395,20 @@ impl Runnable for Job {
                         if let Some(fuel) = fuel {
                             pricing.fuel = fuel;
                         }
-                        if let Some(storage_n_read) = storage_n_read {
-                            pricing.storage_n_read = storage_n_read;
+                        if let Some(storage_num_reads) = storage_num_reads {
+                            pricing.storage_num_reads = storage_num_reads;
                         }
                         if let Some(storage_bytes_read) = storage_bytes_read {
                             pricing.storage_bytes_read = storage_bytes_read;
                         }
-                        if let Some(storage_bytes_write) = storage_bytes_write {
-                            pricing.storage_bytes_write = storage_bytes_write;
+                        if let Some(storage_bytes_written) = storage_bytes_written {
+                            pricing.storage_bytes_written = storage_bytes_written;
                         }
                         if let Some(maximum_bytes_read) = maximum_bytes_read {
                             pricing.maximum_bytes_read = maximum_bytes_read;
                         }
-                        if let Some(maximum_bytes_write) = maximum_bytes_write {
-                            pricing.maximum_bytes_write = maximum_bytes_write;
+                        if let Some(maximum_bytes_written) = maximum_bytes_written {
+                            pricing.maximum_bytes_written = maximum_bytes_written;
                         }
                         if let Some(messages) = messages {
                             pricing.messages = messages;
@@ -1419,26 +1419,26 @@ impl Runnable for Job {
                             {:.2} per unit of fuel used in the read per operation\n\
                             {:.2} per unit of fuel used in the read per byte\n\
                             {:.2} per unit of fuel used in the write per byte\n\
-                            {:.2} maximum number bytes read\n\
-                            {:.2} maximum number bytes written\n\
+                            {:.2} maximum number bytes read per block\n\
+                            {:.2} maximum number bytes written per block\n\
                             {:.2} per byte of operations and incoming messages\n\
                             {:.2} per byte of outgoing messages",
                             pricing.certificate,
                             pricing.fuel,
-                            pricing.storage_n_read,
+                            pricing.storage_num_reads,
                             pricing.storage_bytes_read,
-                            pricing.storage_bytes_write,
+                            pricing.storage_bytes_written,
                             pricing.maximum_bytes_read,
-                            pricing.maximum_bytes_write,
+                            pricing.maximum_bytes_written,
                             pricing.messages
                         );
                         if certificate.is_none()
                             && fuel.is_none()
-                            && storage_n_read.is_none()
+                            && storage_num_reads.is_none()
                             && storage_bytes_read.is_none()
-                            && storage_bytes_write.is_none()
+                            && storage_bytes_written.is_none()
                             && maximum_bytes_read.is_none()
-                            && maximum_bytes_write.is_none()
+                            && maximum_bytes_written.is_none()
                             && messages.is_none()
                         {
                             return Ok(());
@@ -1811,11 +1811,11 @@ async fn main() -> Result<(), anyhow::Error> {
             num,
             certificate_price,
             fuel_price,
-            storage_n_read_price,
+            storage_num_reads_price,
             storage_bytes_read_price,
-            storage_bytes_write_price,
+            storage_bytes_written_price,
             maximum_bytes_read_price,
-            maximum_bytes_write_price,
+            maximum_bytes_written_price,
             messages_price,
             testing_prng_seed,
         } => {
@@ -1825,18 +1825,18 @@ async fn main() -> Result<(), anyhow::Error> {
                 Some(value) => value,
                 None => u64::MAX,
             };
-            let maximum_bytes_write = match *maximum_bytes_write_price {
+            let maximum_bytes_written = match *maximum_bytes_written_price {
                 Some(value) => value,
                 None => u64::MAX,
             };
             let pricing = Pricing {
                 certificate: *certificate_price,
                 fuel: *fuel_price,
-                storage_n_read: *storage_n_read_price,
+                storage_num_reads: *storage_num_reads_price,
                 storage_bytes_read: *storage_bytes_read_price,
-                storage_bytes_write: *storage_bytes_write_price,
+                storage_bytes_written: *storage_bytes_written_price,
                 maximum_bytes_read,
-                maximum_bytes_write,
+                maximum_bytes_written,
                 messages: *messages_price,
             };
             let mut genesis_config =

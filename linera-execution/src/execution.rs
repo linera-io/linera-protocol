@@ -131,11 +131,11 @@ where
 
         let mut runtime_meter = RuntimeMeter {
             remaining_fuel: 10_000_000,
-            n_read: 0,
+            num_reads: 0,
             bytes_read: 0,
-            bytes_write: 0,
+            bytes_written: 0,
             maximum_bytes_read: u64::MAX,
-            maximum_bytes_write: u64::MAX,
+            maximum_bytes_written: u64::MAX,
         };
         self.run_user_action(application_id, chain_id, action, &mut runtime_meter)
             .await?;
@@ -233,7 +233,7 @@ where
         if runtime_meter.bytes_read > runtime_meter.maximum_bytes_read {
             return Err(ExecutionError::ExcessiveRead);
         }
-        if runtime_meter.bytes_write > runtime_meter.maximum_bytes_write {
+        if runtime_meter.bytes_written > runtime_meter.maximum_bytes_written {
             return Err(ExecutionError::ExcessiveWrite);
         }
         WASM_FUEL_USED_PER_BLOCK

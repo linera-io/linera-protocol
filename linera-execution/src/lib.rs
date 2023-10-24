@@ -56,15 +56,15 @@ pub struct RuntimeMeter {
     /// The remaining fuel
     pub remaining_fuel: u64,
     /// The number of read operations
-    pub n_read: u64,
+    pub num_reads: u64,
     /// The bytes that have been read
     pub bytes_read: u64,
     /// The bytes that have been written
-    pub bytes_write: u64,
-    /// The maximum size of read allowed
+    pub bytes_written: u64,
+    /// The maximum size of read allowed per block
     pub maximum_bytes_read: u64,
-    /// The maximum size of write allowed
-    pub maximum_bytes_write: u64,
+    /// The maximum size of write allowed per block
+    pub maximum_bytes_written: u64,
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -81,11 +81,11 @@ impl Default for RuntimeMeter {
     fn default() -> Self {
         RuntimeMeter {
             remaining_fuel: 0,
-            n_read: 0,
+            num_reads: 0,
             bytes_read: 0,
-            bytes_write: 0,
+            bytes_written: 0,
             maximum_bytes_read: u64::MAX,
-            maximum_bytes_write: u64::MAX,
+            maximum_bytes_written: u64::MAX,
         }
     }
 }
