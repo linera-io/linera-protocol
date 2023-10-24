@@ -149,13 +149,13 @@ where
         self.context().extra().chain_id()
     }
 
-    pub async fn query_application(&mut self, query: &Query) -> Result<Response, ChainError> {
+    pub async fn handle_query(&mut self, query: &Query) -> Result<Response, ChainError> {
         let context = QueryContext {
             chain_id: self.chain_id(),
         };
         let response = self
             .execution_state
-            .query_application(&context, query)
+            .handle_query(&context, query)
             .await
             .map_err(|error| ChainError::ExecutionError(error, ChainExecutionContext::Query))?;
         Ok(response)

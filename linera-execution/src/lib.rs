@@ -159,7 +159,7 @@ pub trait UserApplication {
     /// # Note
     ///
     /// This is not meant to be metered and may not be exposed by all validators.
-    async fn query_application(
+    async fn handle_query(
         &self,
         context: &QueryContext,
         runtime: &dyn ServiceRuntime,

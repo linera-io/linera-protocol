@@ -25,14 +25,14 @@ macro_rules! service {
 
         /// Marks the service type to be exported.
         impl $crate::service::wit_types::Service for $application {
-            type QueryApplication = QueryApplication;
+            type HandleQuery = HandleQuery;
         }
 
         $crate::instance_exported_future! {
-            service::QueryApplication<$application>(
+            service::HandleQuery<$application>(
                 context: $crate::service::wit_types::QueryContext,
                 argument: Vec<u8>,
-            ) -> PollQuery
+            ) -> PollApplicationQueryResult
         }
 
         /// Stub of a `main` entrypoint so that the binary doesn't fail to compile on targets other

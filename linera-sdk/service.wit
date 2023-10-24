@@ -1,10 +1,10 @@
-resource query-application {
+resource handle-query {
     static new: func(
         context: query-context,
         argument: list<u8>,
-    ) -> query-application
+    ) -> handle-query
 
-    poll: func() -> poll-query
+    poll: func() -> poll-application-query-result
 }
 
 record query-context {
@@ -13,7 +13,7 @@ record query-context {
 
 type chain-id = crypto-hash
 
-variant poll-query {
+variant poll-application-query-result {
     pending,
     ready(result<list<u8>, string>),
 }

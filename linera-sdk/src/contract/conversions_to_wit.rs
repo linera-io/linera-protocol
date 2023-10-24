@@ -211,7 +211,7 @@ where
 
 impl<Message, Value, SessionState>
     From<Poll<Result<ApplicationCallResult<Message, Value, SessionState>, String>>>
-    for wit_types::PollCallApplication
+    for wit_types::PollApplicationCallResult
 where
     Message: Serialize + DeserializeOwned + Debug,
     Value: Serialize,
@@ -220,29 +220,29 @@ where
     fn from(
         poll: Poll<Result<ApplicationCallResult<Message, Value, SessionState>, String>>,
     ) -> Self {
-        use wit_types::PollCallApplication;
+        use wit_types::PollApplicationCallResult;
         match poll {
-            Poll::Pending => PollCallApplication::Pending,
-            Poll::Ready(Ok(result)) => PollCallApplication::Ready(Ok(result.into())),
-            Poll::Ready(Err(message)) => PollCallApplication::Ready(Err(message)),
+            Poll::Pending => PollApplicationCallResult::Pending,
+            Poll::Ready(Ok(result)) => PollApplicationCallResult::Ready(Ok(result.into())),
+            Poll::Ready(Err(message)) => PollApplicationCallResult::Ready(Err(message)),
         }
     }
 }
 
 impl<Message, Value, SessionState>
     From<Poll<Result<SessionCallResult<Message, Value, SessionState>, String>>>
-    for wit_types::PollCallSession
+    for wit_types::PollSessionCallResult
 where
     Message: Serialize + DeserializeOwned + Debug,
     Value: Serialize,
     SessionState: Serialize,
 {
     fn from(poll: Poll<Result<SessionCallResult<Message, Value, SessionState>, String>>) -> Self {
-        use wit_types::PollCallSession;
+        use wit_types::PollSessionCallResult;
         match poll {
-            Poll::Pending => PollCallSession::Pending,
-            Poll::Ready(Ok(result)) => PollCallSession::Ready(Ok(result.into())),
-            Poll::Ready(Err(message)) => PollCallSession::Ready(Err(message)),
+            Poll::Pending => PollSessionCallResult::Pending,
+            Poll::Ready(Ok(result)) => PollSessionCallResult::Ready(Ok(result.into())),
+            Poll::Ready(Err(message)) => PollSessionCallResult::Ready(Err(message)),
         }
     }
 }

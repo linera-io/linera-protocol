@@ -76,10 +76,10 @@ pub trait Contract: ApplicationRuntimeContext {
     type PollExecutionResult;
 
     /// The WIT type eqivalent for [`Poll<Result<ApplicationCallResult, String>>`].
-    type PollCallApplication;
+    type PollApplicationCallResult;
 
     /// The WIT type eqivalent for [`Poll<Result<SessionCallResult, String>>`].
-    type PollCallSession;
+    type PollSessionCallResult;
 
     /// Creates a new future for the user application to initialize itself on the owner chain.
     fn initialize_new(
@@ -140,7 +140,7 @@ pub trait Contract: ApplicationRuntimeContext {
         &self,
         store: &mut Self::Store,
         future: &Self::HandleApplicationCall,
-    ) -> Result<Self::PollCallApplication, Self::Error>;
+    ) -> Result<Self::PollApplicationCallResult, Self::Error>;
 
     /// Creates a new future for the user contract to handle a session call from another
     /// contract.
@@ -158,35 +158,35 @@ pub trait Contract: ApplicationRuntimeContext {
         &self,
         store: &mut Self::Store,
         future: &Self::HandleSessionCall,
-    ) -> Result<Self::PollCallSession, Self::Error>;
+    ) -> Result<Self::PollSessionCallResult, Self::Error>;
 }
 
 /// Common interface to calling a user service in a WebAssembly module.
 pub trait Service: ApplicationRuntimeContext {
     /// The WIT type for the resource representing the guest future
-    /// [`query_application`][crate::Service::query_application] method.
-    type QueryApplication: GuestFutureInterface<Self, Output = Vec<u8>> + Send + Unpin;
+    /// [`handle_query`][crate::Service::handle_query] method.
+    type HandleQuery: GuestFutureInterface<Self, Output = Vec<u8>> + Send + Unpin;
 
     /// The WIT type equivalent for the [`QueryContext`].
     type QueryContext: From<QueryContext>;
 
     /// The WIT type eqivalent for [`Poll<Result<Vec<u8>, String>>`].
-    type PollQuery;
+    type PollApplicationQueryResult;
 
     /// Creates a new future for the user application to handle a query.
-    fn query_application_new(
+    fn handle_query_new(
         &self,
         store: &mut Self::Store,
         context: Self::QueryContext,
         argument: &[u8],
-    ) -> Result<Self::QueryApplication, Self::Error>;
+    ) -> Result<Self::HandleQuery, Self::Error>;
 
     /// Polls a user service future that's handling a query.
-    fn query_application_poll(
+    fn handle_query_poll(
         &self,
         store: &mut Self::Store,
-        future: &Self::QueryApplication,
-    ) -> Result<Self::PollQuery, Self::Error>;
+        future: &Self::HandleQuery,
+    ) -> Result<Self::PollApplicationQueryResult, Self::Error>;
 }
 
 /// Wrapper around all types necessary to call an asynchronous method of a Wasm application.
@@ -377,25 +377,25 @@ where
     A: Service,
 {
     /// Calls the guest Wasm module's implementation of
-    /// [`UserApplication::query_application`][`linera_execution::UserApplication::query_application`].
+    /// [`UserApplication::handle_query`][`linera_execution::UserApplication::handle_query`].
     ///
     /// This method returns a [`Future`][`std::future::Future`], and is equivalent to
     ///
     /// ```ignore
-    /// pub async fn query_application(
+    /// pub async fn handle_query(
     ///     mut self,
     ///     context: &QueryContext,
     ///     argument: &[u8],
     /// ) -> Result<Vec<u8>, ExecutionError>
     /// ```
-    pub fn query_application(
+    pub fn handle_query(
         mut self,
         context: &QueryContext,
         argument: &[u8],
-    ) -> GuestFuture<'context, A::QueryApplication, A> {
+    ) -> GuestFuture<'context, A::HandleQuery, A> {
         let future =
             self.application
-                .query_application_new(&mut self.store, (*context).into(), argument);
+                .handle_query_new(&mut self.store, (*context).into(), argument);
 
         GuestFuture::new(future, self)
     }

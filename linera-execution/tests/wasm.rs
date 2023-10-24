@@ -25,10 +25,10 @@ use test_case::test_case;
 /// called correctly and consume the expected amount of fuel.
 ///
 /// To update the bytecode files, run `linera-execution/update_wasm_fixtures.sh`.
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, 30_138; "wasmer"))]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, 30_453; "wasmer_with_sanitizer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, 30_453; "wasmtime"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer, 30_453; "wasmtime_with_sanitizer"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, 30_463; "wasmer"))]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, 30_844; "wasmer_with_sanitizer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, 30_844; "wasmtime"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::WasmtimeWithSanitizer, 30_844; "wasmtime_with_sanitizer"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_fuel_for_counter_wasm_application(
     wasm_runtime: WasmRuntime,
@@ -99,7 +99,7 @@ async fn test_fuel_for_counter_wasm_application(
     );
     let request = async_graphql::Request::new("query { value }");
     let Response::User(serialized_value) = view
-        .query_application(&context, &Query::user(app_id, &request).unwrap())
+        .handle_query(&context, &Query::user(app_id, &request).unwrap())
         .await?
     else {
         panic!("unexpected response")

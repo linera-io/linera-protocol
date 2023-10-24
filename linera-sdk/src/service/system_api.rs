@@ -15,7 +15,7 @@ use serde::de::DeserializeOwned;
 use std::{fmt, future::Future, task::Poll};
 
 /// Loads the application state, without locking it for writes.
-pub async fn load<State>() -> State
+pub(crate) async fn load<State>() -> State
 where
     State: Default + DeserializeOwned,
 {
@@ -36,8 +36,8 @@ where
     }
 }
 
-/// Loads the service state, without locking it for writes.
-pub async fn lock_and_load_view<State: View<ViewStorageContext>>() -> State {
+/// Loads the application state (and locks it for writes).
+pub(crate) async fn lock_and_load_view<State: View<ViewStorageContext>>() -> State {
     let future = wit::Lock::new();
     future::poll_fn(|_context| -> Poll<Result<(), ViewError>> { future.poll().into() })
         .await
@@ -45,14 +45,14 @@ pub async fn lock_and_load_view<State: View<ViewStorageContext>>() -> State {
     load_view_using::<State>().await
 }
 
-/// Loads the service state, without locking it for writes.
-pub async fn unlock_view() {
+/// Unlocks the service state previously loaded.
+pub(crate) async fn unlock_view() {
     let future = wit::Unlock::new();
     future::poll_fn(|_context| future.poll().into()).await;
 }
 
 /// Helper function to load the service state or create a new one if it doesn't exist.
-pub async fn load_view_using<State: View<ViewStorageContext>>() -> State {
+pub(crate) async fn load_view_using<State: View<ViewStorageContext>>() -> State {
     let context = ViewStorageContext::default();
     State::load(context)
         .await
@@ -70,7 +70,7 @@ pub fn current_application_id() -> ApplicationId {
 }
 
 /// Retrieves the current application parameters.
-pub fn current_application_parameters() -> Vec<u8> {
+pub(crate) fn current_application_parameters() -> Vec<u8> {
     wit::application_parameters()
 }
 
@@ -85,7 +85,7 @@ pub fn current_system_time() -> Timestamp {
 }
 
 /// Queries another application.
-pub async fn query_application(
+pub(crate) async fn query_application(
     application: ApplicationId,
     argument: &[u8],
 ) -> Result<Vec<u8>, String> {

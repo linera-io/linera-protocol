@@ -27,7 +27,7 @@ impl Service for CrowdFunding {
     type Error = Error;
     type Storage = ViewStateStorage<Self>;
 
-    async fn query_application(
+    async fn handle_query(
         self: Arc<Self>,
         _context: &QueryContext,
         request: Request,

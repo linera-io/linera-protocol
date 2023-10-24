@@ -8,22 +8,11 @@ mod state;
 use self::state::MetaCounter;
 use async_graphql::{Request, Response};
 use async_trait::async_trait;
-use linera_sdk::{
-    base::{ApplicationId, WithServiceAbi},
-    service::system_api,
-    QueryContext, Service, SimpleStateStorage,
-};
+use linera_sdk::{base::WithServiceAbi, QueryContext, Service, SimpleStateStorage};
 use std::sync::Arc;
 use thiserror::Error;
 
 linera_sdk::service!(MetaCounter);
-
-impl MetaCounter {
-    fn counter_id() -> Result<ApplicationId, Error> {
-        let parameters = system_api::current_application_parameters();
-        serde_json::from_slice(&parameters).map_err(|_| Error::Parameters)
-    }
-}
 
 impl WithServiceAbi for MetaCounter {
     type Abi = meta_counter::MetaCounterAbi;
@@ -34,25 +23,21 @@ impl Service for MetaCounter {
     type Error = Error;
     type Storage = SimpleStateStorage<Self>;
 
-    async fn query_application(
+    async fn handle_query(
         self: Arc<Self>,
         _context: &QueryContext,
         request: Request,
     ) -> Result<Response, Self::Error> {
-        let argument = serde_json::to_vec(&request).unwrap();
-        let value = system_api::query_application(Self::counter_id()?, &argument)
-            .await
-            .map_err(|_| Error::InternalQuery)?;
-        let response = serde_json::from_slice(&value).unwrap();
-        Ok(response)
+        let counter_id = Self::parameters()?;
+        Self::query_application(counter_id, &request).await
     }
 }
 
 /// An error that can occur during the contract execution.
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Internal query failed")]
-    InternalQuery,
+    #[error("Internal query failed: {0}")]
+    InternalQuery(String),
 
     #[error("Invalid application parameters")]
     Parameters,
@@ -60,4 +45,10 @@ pub enum Error {
     /// Invalid query argument in meta-counter app: could not deserialize GraphQL request.
     #[error("Invalid query argument in meta-counter app: could not deserialize GraphQL request.")]
     InvalidQuery(#[from] serde_json::Error),
+}
+
+impl From<String> for Error {
+    fn from(s: String) -> Self {
+        Self::InternalQuery(s)
+    }
 }

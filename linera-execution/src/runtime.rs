@@ -428,9 +428,7 @@ where
             parameters: description.parameters,
             signer: None,
         });
-        let value = code
-            .query_application(&query_context, self, argument)
-            .await?;
+        let value = code.handle_query(&query_context, self, argument).await?;
         self.applications_mut().pop();
         Ok(value)
     }

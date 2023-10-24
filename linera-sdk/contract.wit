@@ -32,7 +32,7 @@ resource handle-application-call {
         forwarded-sessions: list<session-id>,
     ) -> handle-application-call
 
-    poll: func() -> poll-call-application
+    poll: func() -> poll-application-call-result
 }
 
 resource handle-session-call {
@@ -43,7 +43,7 @@ resource handle-session-call {
         forwarded-sessions: list<session-id>,
     ) -> handle-session-call
 
-    poll: func() -> poll-call-session
+    poll: func() -> poll-session-call-result
 }
 
 record operation-context {
@@ -87,12 +87,12 @@ variant poll-execution-result {
     ready(result<execution-result, string>),
 }
 
-variant poll-call-application {
+variant poll-application-call-result {
     pending,
     ready(result<application-call-result, string>),
 }
 
-variant poll-call-session {
+variant poll-session-call-result {
     pending,
     ready(result<session-call-result, string>),
 }

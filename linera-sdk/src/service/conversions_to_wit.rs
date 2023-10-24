@@ -48,13 +48,13 @@ impl From<CryptoHash> for wit_types::CryptoHash {
     }
 }
 
-impl From<Poll<Result<Vec<u8>, String>>> for wit_types::PollQuery {
+impl From<Poll<Result<Vec<u8>, String>>> for wit_types::PollApplicationQueryResult {
     fn from(poll: Poll<Result<Vec<u8>, String>>) -> Self {
-        use wit_types::PollQuery;
+        use wit_types::PollApplicationQueryResult;
         match poll {
-            Poll::Pending => PollQuery::Pending,
-            Poll::Ready(Ok(response)) => PollQuery::Ready(Ok(response)),
-            Poll::Ready(Err(message)) => PollQuery::Ready(Err(message)),
+            Poll::Pending => PollApplicationQueryResult::Pending,
+            Poll::Ready(Ok(response)) => PollApplicationQueryResult::Ready(Ok(response)),
+            Poll::Ready(Err(message)) => PollApplicationQueryResult::Ready(Err(message)),
         }
     }
 }
