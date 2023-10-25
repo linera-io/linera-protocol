@@ -167,11 +167,15 @@ impl Project {
     }
 
     fn create_rust_toolchain(project_root: &Path) -> Result<()> {
-        let toolchain_path = project_root.join("rust-toolchain");
         Self::write_string_to_file(
-            &toolchain_path,
+            &project_root.join("rust-toolchain"),
             include_str!("../template/rust-toolchain.template"),
-        )
+        )?;
+        Self::write_string_to_file(
+            &project_root.join("rust-toolchain.toml"),
+            include_str!("../template/rust-toolchain.toml.template"),
+        )?;
+        Ok(())
     }
 
     fn create_state_file(source_directory: &Path) -> Result<()> {
