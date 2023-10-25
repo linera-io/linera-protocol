@@ -22,7 +22,9 @@ use crate::{
 use async_trait::async_trait;
 use futures::{
     channel::{mpsc, mpsc::Receiver, oneshot::Sender},
-    future, stream, FutureExt, StreamExt,
+    future,
+    future::BoxFuture,
+    stream, FutureExt, StreamExt,
 };
 use grpc::{
     chain_info_result::Inner,
@@ -41,12 +43,15 @@ use linera_core::{
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;
+use once_cell::sync::Lazy;
+use prometheus::{register_histogram_vec, HistogramVec};
 use rand::Rng;
 use std::{
     fmt::Debug,
     iter,
     net::{AddrParseError, SocketAddr},
     str::FromStr,
+    task::{Context, Poll},
     time::Duration,
 };
 use thiserror::Error;
@@ -55,13 +60,24 @@ use tokio::{
     task::{JoinError, JoinHandle},
 };
 use tonic::{
-    transport::{Channel, Server},
+    transport::{Body, Channel, Server},
     Code, Request, Response, Status,
 };
+use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, error, info, instrument, warn};
 
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
 type NotificationSender = mpsc::Sender<Notification>;
+
+pub static SERVER_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "server_request_latency",
+        "Server request latency",
+        // Can add labels here
+        &[]
+    )
+    .expect("Counter can be created")
+});
 
 #[derive(Clone)]
 pub struct GrpcServer<S> {
@@ -102,6 +118,49 @@ pub enum GrpcError {
 
     #[error(transparent)]
     InvalidUri(#[from] http::uri::InvalidUri),
+}
+
+#[derive(Clone)]
+pub struct PrometheusMetricsMiddlewareLayer;
+
+#[derive(Clone)]
+pub struct PrometheusMetricsMiddlewareService<T> {
+    service: T,
+}
+
+impl<S> Layer<S> for PrometheusMetricsMiddlewareLayer {
+    type Service = PrometheusMetricsMiddlewareService<S>;
+
+    fn layer(&self, service: S) -> Self::Service {
+        PrometheusMetricsMiddlewareService { service }
+    }
+}
+
+impl<S> Service<tonic::codegen::http::Request<Body>> for PrometheusMetricsMiddlewareService<S>
+where
+    S::Future: Send + 'static,
+    S: Service<tonic::codegen::http::Request<Body>> + std::marker::Send,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = BoxFuture<'static, Result<S::Response, S::Error>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.service.poll_ready(cx)
+    }
+
+    fn call(&mut self, request: http::Request<Body>) -> Self::Future {
+        let start = std::time::Instant::now();
+        let future = self.service.call(request);
+        async move {
+            let response = future.await?;
+            SERVER_REQUEST_LATENCY
+                .with_label_values(&[])
+                .observe(start.elapsed().as_secs_f64());
+            Ok(response)
+        }
+        .boxed()
+    }
 }
 
 impl<S> GrpcServer<S>
@@ -179,6 +238,11 @@ where
 
         let handle = tokio::spawn(
             Server::builder()
+                .layer(
+                    ServiceBuilder::new()
+                        .layer(PrometheusMetricsMiddlewareLayer)
+                        .into_inner(),
+                )
                 .add_service(health_service)
                 .add_service(worker_node)
                 .serve_with_shutdown(server_address, receiver.map(|_| ())),
