@@ -3097,6 +3097,7 @@ dependencies = [
  "social",
  "structopt",
  "tempfile",
+ "test-case",
  "test-log",
  "test-strategy",
  "thiserror",
