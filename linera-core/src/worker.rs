@@ -29,7 +29,7 @@ use linera_views::{
 };
 use lru::LruCache;
 use once_cell::sync::Lazy;
-use prometheus::{register_histogram_vec, HistogramVec};
+use prometheus::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
@@ -67,6 +67,16 @@ pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "num_rounds_in_block_proposal",
         "Number of rounds in block proposal",
+        // Can add labels here
+        &[]
+    )
+    .expect("Counter can be created")
+});
+
+pub static TRANSACTION_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "transaction_count",
+        "Transaction count",
         // Can add labels here
         &[]
     )
@@ -1093,6 +1103,7 @@ where
 
         let round = certificate.round;
         let log_str = certificate.value().to_log_str();
+        let mut confirmed_transactions: u64 = 0;
         let mut duplicated = false;
         let (info, actions) = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
@@ -1101,7 +1112,10 @@ where
                 duplicated = d;
                 (info, actions)
             }
-            CertificateValue::ConfirmedBlock { .. } => {
+            CertificateValue::ConfirmedBlock { executed_block } => {
+                confirmed_transactions = (executed_block.block.incoming_messages.len()
+                    + executed_block.block.operations.len())
+                    as u64;
                 // Execute the confirmed block.
                 self.process_confirmed_block(
                     certificate,
@@ -1120,6 +1134,11 @@ where
             NUM_ROUNDS_IN_CERTIFICATE
                 .with_label_values(&[log_str])
                 .observe(round.0 as f64);
+            if confirmed_transactions > 0 {
+                TRANSACTION_COUNT
+                    .with_label_values(&[])
+                    .inc_by(confirmed_transactions);
+            }
         }
         Ok((info, actions))
     }
