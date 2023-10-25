@@ -45,8 +45,7 @@ source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 
 # Run a local test network with the default parameters and 0 extra user wallets.
 # This will set environment variables LINERA_{WALLET,STORAGE}_0 referenced by -w0 below.
-linera_spawn_and_read_wallet_variables \
-    linera net up --extra-wallets 0
+linera_spawn_and_read_wallet_variables linera net up --extra-wallets 0
 
 # Print the set of validators.
 linera -w0 query-validators
