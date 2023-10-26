@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    update_limits,
     runtime::{ApplicationStatus, ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
     ContractRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Message,
@@ -235,7 +234,7 @@ where
         result.authenticated_signer = signer;
         let runtime_counts = runtime.runtime_counts();
         let balance = self.system.balance.get_mut();
-        update_limits(balance, runtime_limits, pricing, runtime_counts)?;
+        runtime_limits.update_limits(balance, pricing, runtime_counts)?;
         WASM_FUEL_USED_PER_BLOCK.with_label_values(&[]).observe(
             (initial_remaining_fuel - pricing.remaining_fuel(balance.clone())) as f64,
         );

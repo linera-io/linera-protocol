@@ -77,6 +77,41 @@ impl Default for RuntimeLimits {
     }
 }
 
+impl RuntimeLimits {
+    /// Update the limits for the maximum and update the balance.
+    /// The substraction are guaranteed to work correctly and the
+    /// checks are occurring in the runtime.
+    pub fn update_limits(
+        &mut self,
+        balance: &mut Amount,
+        pricing: &Pricing,
+        runtime_counts: RuntimeCounts,
+    ) -> Result<(), ExecutionError> {
+        let initial_fuel = pricing.remaining_fuel(balance.clone());
+        let used_fuel = initial_fuel.saturating_sub(runtime_counts.remaining_fuel);
+        sub_assign_fees(balance, pricing.fuel_price(used_fuel)?)?;
+        sub_assign_fees(
+            balance,
+            pricing.storage_num_reads_price(&runtime_counts.num_reads)?,
+        )?;
+        let bytes_read = runtime_counts.bytes_read;
+        self.maximum_bytes_read -= bytes_read;
+        sub_assign_fees(
+            balance,
+            pricing.storage_bytes_read_price(&bytes_read)?,
+        )?;
+        let bytes_written = runtime_counts.bytes_written;
+        self.maximum_bytes_written -= bytes_written;
+        sub_assign_fees(
+            balance,
+            pricing.storage_bytes_written_price(&bytes_written)?,
+        )?;
+        Ok(())
+    }
+}
+
+
+
 /// The entries of the runtime related to fuel and storage
 #[derive(Copy, Debug, Clone)]
 pub struct RuntimeCounts {
@@ -88,34 +123,6 @@ pub struct RuntimeCounts {
     pub bytes_read: u64,
     /// The bytes that have been written
     pub bytes_written: u64,
-}
-
-pub fn update_limits(
-    balance: &mut Amount,
-    runtime_limits: &mut RuntimeLimits,
-    pricing: &Pricing,
-    runtime_counts: RuntimeCounts,
-) -> Result<(), ExecutionError> {
-    let initial_fuel = pricing.remaining_fuel(balance.clone());
-    let used_fuel = initial_fuel.saturating_sub(runtime_counts.remaining_fuel);
-    sub_assign_fees(balance, pricing.fuel_price(used_fuel)?)?;
-    sub_assign_fees(
-        balance,
-        pricing.storage_num_reads_price(&runtime_counts.num_reads)?,
-    )?;
-    let bytes_read = runtime_counts.bytes_read;
-    runtime_limits.maximum_bytes_read -= bytes_read;
-    sub_assign_fees(
-        balance,
-        pricing.storage_bytes_read_price(&bytes_read)?,
-    )?;
-    let bytes_written = runtime_counts.bytes_written;
-    runtime_limits.maximum_bytes_written -= bytes_written;
-    sub_assign_fees(
-        balance,
-        pricing.storage_bytes_written_price(&bytes_written)?,
-    )?;
-    Ok(())
 }
 
 /// An implementation of [`UserApplication`]
@@ -157,8 +164,6 @@ pub enum ExecutionError {
     ApplicationIsInUse,
     #[error("Attempted to get an entry that is not locked")]
     ApplicationStateNotLocked,
-    #[error("Insufficient balance")]
-    InsufficientBalance,
     #[error("Pricing error: {0}")]
     PricingError(#[from] PricingError),
     #[error("Excessive readings from storage")]
