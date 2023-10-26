@@ -35,11 +35,11 @@ use std::{
 pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     /// The amount of fuel available for executing the application.
     remaining_fuel: Arc<AtomicU64>,
-    /// the number of read
+    /// The number of reads
     num_reads: Arc<AtomicU64>,
     /// the total size being read
     bytes_read: Arc<AtomicU64>,
-    /// the total size being write
+    /// The total size being written
     bytes_written: Arc<AtomicU64>,
     /// The maximum size of read allowed
     maximum_bytes_read: u64,

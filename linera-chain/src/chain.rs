@@ -507,7 +507,6 @@ where
 
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
-        //        let available_fuel = pricing.remaining_fuel(*balance);
         let maximum_bytes_read = pricing.maximum_bytes_read;
         let maximum_bytes_written = pricing.maximum_bytes_written;
         let mut runtime_limits = RuntimeLimits {

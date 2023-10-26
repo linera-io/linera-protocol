@@ -51,7 +51,7 @@ use serde::{Deserialize, Serialize};
 use std::{io, path::Path, str::FromStr, sync::Arc};
 use thiserror::Error;
 
-/// substract an amount to a balence and report an error if that is impossible
+/// Substracts an amount from a balance and reports an error if that is impossible
 pub fn sub_assign_fees(balance: &mut Amount, fees: Amount) -> Result<(), PricingError> {
     Ok(balance
         .try_sub_assign(fees)
@@ -67,6 +67,7 @@ pub struct RuntimeLimits {
     pub maximum_bytes_written: u64,
 }
 
+#[cfg(any(test, feature = "test"))]
 impl Default for RuntimeLimits {
     fn default() -> Self {
         RuntimeLimits {
