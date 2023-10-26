@@ -3,3 +3,17 @@
 lineraImage: linera-test:latest
 lineraImagePullPolicy: Never
 logLevel: "debug"
+
+loki-stack:
+  loki:
+    enabled: true
+    isDefault: false
+    persistence:
+      enabled: true
+      size: 1Gi
+  promtail:
+    enabled: true
+    config:
+      clients:
+        - url: http://linera-core-loki:3100/loki/api/v1/push
+
