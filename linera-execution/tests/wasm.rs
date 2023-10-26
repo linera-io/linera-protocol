@@ -69,8 +69,10 @@ async fn test_fuel_for_counter_wasm_application(
         next_message_index: 0,
     };
     let increments = [2_u64, 9, 7, 1000];
-    let mut policy = ResourceControlPolicy::default();
-    policy.fuel = Amount::from_atto(1);
+    let policy = ResourceControlPolicy {
+        fuel: Amount::from_atto(1),
+        ..ResourceControlPolicy::default()
+    };
     let mut runtime_limits = RuntimeLimits::default();
     let amount = Amount::from_tokens(1);
     let available_fuel = policy.remaining_fuel(amount);

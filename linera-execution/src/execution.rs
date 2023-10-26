@@ -237,7 +237,7 @@ where
         runtime_limits.update_limits(balance, policy, runtime_counts)?;
         WASM_FUEL_USED_PER_BLOCK
             .with_label_values(&[])
-            .observe((initial_remaining_fuel - policy.remaining_fuel(balance.clone())) as f64);
+            .observe((initial_remaining_fuel - policy.remaining_fuel(*balance)) as f64);
 
         // Check that applications were correctly stacked and unstacked.
         assert_eq!(applications.len(), 1);

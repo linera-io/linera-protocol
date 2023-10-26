@@ -584,7 +584,20 @@ OutgoingMessage:
 Owner:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
-ResourceControlPolicy
+PublicKey:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+Recipient:
+  ENUM:
+    0:
+      Burn: UNIT
+    1:
+      Account:
+        NEWTYPE:
+          TYPENAME: Account
+ResourceControlPolicy:
   STRUCT:
     - certificate:
         TYPENAME: Amount
@@ -600,19 +613,6 @@ ResourceControlPolicy
     - maximum_bytes_written: U64
     - messages:
         TYPENAME: Amount
-PublicKey:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 32
-Recipient:
-  ENUM:
-    0:
-      Burn: UNIT
-    1:
-      Account:
-        NEWTYPE:
-          TYPENAME: Account
 RoundNumber:
   NEWTYPESTRUCT: U32
 RpcMessage:

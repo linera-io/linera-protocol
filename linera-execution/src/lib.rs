@@ -87,7 +87,7 @@ impl RuntimeLimits {
         policy: &ResourceControlPolicy,
         runtime_counts: RuntimeCounts,
     ) -> Result<(), ExecutionError> {
-        let initial_fuel = policy.remaining_fuel(balance.clone());
+        let initial_fuel = policy.remaining_fuel(*balance);
         let used_fuel = initial_fuel.saturating_sub(runtime_counts.remaining_fuel);
         sub_assign_fees(balance, policy.fuel_price(used_fuel)?)?;
         sub_assign_fees(
