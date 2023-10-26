@@ -99,6 +99,16 @@ pub static SERVER_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter can be created")
 });
 
+pub static SERVER_REQUEST_ERROR: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "server_request_error",
+        "Server request error",
+        // Can add labels here
+        &["method_name"]
+    )
+    .expect("Counter can be created")
+});
+
 #[derive(Clone)]
 pub struct GrpcServer<S> {
     state: WorkerState<S>,
@@ -425,6 +435,9 @@ where
                     info.try_into()?
                 }
                 Err(error) => {
+                    SERVER_REQUEST_ERROR
+                        .with_label_values(&["handle_block_proposal"])
+                        .inc();
                     warn!(nickname = self.state.nickname(), %error, "Failed to handle block proposal");
                     NodeError::from(error).try_into()?
                 }
@@ -462,6 +475,9 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
+                SERVER_REQUEST_ERROR
+                    .with_label_values(&["handle_lite_certificate"])
+                    .inc();
                 if let WorkerError::MissingCertificateValue = &error {
                     debug!(nickname = self.state.nickname(), %error, "Failed to handle lite certificate");
                 } else {
@@ -503,6 +519,9 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
+                SERVER_REQUEST_ERROR
+                    .with_label_values(&["handle_certificate"])
+                    .inc();
                 error!(nickname = self.state.nickname(), %error, "Failed to handle certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -525,6 +544,9 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
+                SERVER_REQUEST_ERROR
+                    .with_label_values(&["handle_chain_info_query"])
+                    .inc();
                 error!(nickname = self.state.nickname(), %error, "Failed to handle chain info query");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -546,6 +568,9 @@ where
                 self.handle_network_actions(actions)
             }
             Err(error) => {
+                SERVER_REQUEST_ERROR
+                    .with_label_values(&["handle_cross_chain_request"])
+                    .inc();
                 error!(nickname = self.state.nickname(), %error, "Failed to handle cross-chain request");
             }
         }
