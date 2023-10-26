@@ -15,8 +15,9 @@ use linera_rpc::{
 use linera_service::{
     config::{Import, ValidatorServerConfig},
     grpc_proxy::GrpcProxy,
+    prometheus_server,
 };
-use std::{path::PathBuf, time::Duration};
+use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use structopt::StructOpt;
 use tracing::{error, info, instrument};
 
@@ -135,10 +136,13 @@ impl MessageHandler for SimpleProxy {
 }
 
 impl SimpleProxy {
-    #[instrument(skip_all, fields(port = self.public_config.port), err)]
+    #[instrument(skip_all, fields(port = self.public_config.port, metrics_port = self.internal_config.metrics_port), err)]
     async fn run(self) -> Result<()> {
         info!("Starting simple server");
         let address = self.get_listen_address(self.public_config.port);
+
+        Self::start_metrics(&self.get_listen_address(self.internal_config.metrics_port));
+
         self.public_config
             .protocol
             .spawn_server(&address, self)
@@ -146,6 +150,13 @@ impl SimpleProxy {
             .join()
             .await?;
         Ok(())
+    }
+
+    pub fn start_metrics(address: &String) {
+        match address.parse::<SocketAddr>() {
+            Err(err) => panic!("Invalid metrics address for {address}: {err}"),
+            Ok(address) => prometheus_server::start_metrics(address),
+        }
     }
 
     fn get_listen_address(&self, port: u16) -> String {

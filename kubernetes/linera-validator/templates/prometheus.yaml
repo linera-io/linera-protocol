@@ -16,3 +16,22 @@ spec:
   selector:
     matchLabels:
       app: shards
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    release: linera-core
+  name: validator-1
+spec:
+  endpoints:
+  - port: metrics
+    path: /metrics
+    scheme: http
+  jobLabel: validator-1
+  namespaceSelector:
+    matchNames:
+    - default
+  selector:
+    matchLabels:
+      app: validator-1

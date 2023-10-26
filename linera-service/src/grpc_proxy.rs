@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::prometheus_server;
 use anyhow::Result;
 use async_trait::async_trait;
 use linera_base::identifiers::ChainId;
@@ -67,6 +68,10 @@ impl GrpcProxy {
         SocketAddr::from(([0, 0, 0, 0], self.0.public_config.port))
     }
 
+    fn metrics_address(&self) -> SocketAddr {
+        SocketAddr::from(([0, 0, 0, 0], self.0.internal_config.metrics_port))
+    }
+
     fn internal_address(&self) -> SocketAddr {
         SocketAddr::from(([0, 0, 0, 0], self.0.internal_config.port))
     }
@@ -92,9 +97,12 @@ impl GrpcProxy {
 
     /// Runs the proxy. If either the public server or private server dies for whatever
     /// reason we'll kill the proxy.
-    #[instrument(skip_all, fields(public_address = %self.public_address(), internal_address = %self.internal_address()), err)]
+    #[instrument(skip_all, fields(public_address = %self.public_address(), internal_address = %self.internal_address(), metrics_address = %self.metrics_address()), err)]
     pub async fn run(self) -> Result<()> {
         info!("Starting gRPC server");
+
+        prometheus_server::start_metrics(self.metrics_address());
+
         let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
         health_reporter
             .set_serving::<ValidatorNodeServer<GrpcProxy>>()
@@ -106,6 +114,7 @@ impl GrpcProxy {
             .add_service(health_service)
             .add_service(self.as_validator_node())
             .serve(self.public_address());
+
         select! {
             internal_res = internal_server => internal_res?,
             public_res = public_server => public_res?,

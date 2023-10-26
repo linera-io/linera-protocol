@@ -1,6 +1,8 @@
 server_config_path = "server_1.json"
 host = "34.151.215.158"
 port = 19100
+metrics_host = "validator-1"
+metrics_port = 21100
 internal_host = "validator-1"
 internal_port = 20100
 external_protocol = "Grpc"

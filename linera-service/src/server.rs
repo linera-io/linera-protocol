@@ -228,6 +228,12 @@ struct ValidatorOptions {
     /// The port of the validator
     port: u16,
 
+    /// The host for the metrics endpoint
+    metrics_host: String,
+
+    /// The port for the metrics endpoint
+    metrics_port: u16,
+
     /// The host of the proxy in the internal network.
     internal_host: String,
 
@@ -258,6 +264,8 @@ fn make_server_config<R: CryptoRng>(
         shards: options.shards,
         host: options.internal_host,
         port: options.internal_port,
+        metrics_host: options.metrics_host,
+        metrics_port: options.metrics_port,
     };
     let key = KeyPair::generate_from(rng);
     let name = ValidatorName(key.public());
@@ -379,6 +387,7 @@ async fn main() {
         .with_writer(std::io::stderr)
         .with_env_filter(env_filter)
         .init();
+
     let options = ServerOptions::from_args();
 
     match options.command {
@@ -493,6 +502,8 @@ mod test {
             port = 9000
             internal_host = "internal_host"
             internal_port = 10000
+            metrics_host = "metrics_host"
+            metrics_port = 5000
             external_protocol = { Simple = "Tcp" }
             internal_protocol = { Simple = "Udp" }
 
@@ -519,6 +530,8 @@ mod test {
                 port: 9000,
                 internal_host: "internal_host".into(),
                 internal_port: 10000,
+                metrics_host: "metrics_host".into(),
+                metrics_port: 5000,
                 shards: vec![
                     ShardConfig {
                         host: "host1".into(),
