@@ -12,7 +12,7 @@ use linera_execution::{
     pricing::Pricing,
     system::{Account, Recipient, UserData},
     ExecutionResult, ExecutionStateView, Message, MessageContext, Operation, OperationContext,
-    Query, QueryContext, RawExecutionResult, Response, RuntimeGlobalMeter, SystemExecutionState,
+    Query, QueryContext, RawExecutionResult, Response, RuntimeLimits, SystemExecutionState,
     SystemMessage, SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
 };
 use linera_views::memory::MemoryContext;
@@ -39,14 +39,14 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
-    let mut runtime_global_meter = RuntimeGlobalMeter::new_for_testing();
+    let mut runtime_limits = RuntimeLimits::new_for_testing();
     let pricing = Pricing::default();
     let results = view
         .execute_operation(
             &context,
             &Operation::System(operation),
             &pricing,
-            &mut runtime_global_meter,
+            &mut runtime_limits,
         )
         .await
         .unwrap();
@@ -85,14 +85,14 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         },
         authenticated_signer: None,
     };
-    let mut runtime_global_meter = RuntimeGlobalMeter::new_for_testing();
+    let mut runtime_limits = RuntimeLimits::new_for_testing();
     let pricing = Pricing::default();
     let results = view
         .execute_message(
             &context,
             &Message::System(message),
             &pricing,
-            &mut runtime_global_meter,
+            &mut runtime_limits,
         )
         .await
         .unwrap();

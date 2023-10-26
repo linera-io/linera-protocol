@@ -7,7 +7,7 @@ use crate::{
     system::SystemExecutionStateView,
     ContractRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Message,
     MessageContext, Operation, OperationContext, Pricing, Query, QueryContext, RawExecutionResult,
-    RawOutgoingMessage, Response, RuntimeGlobalMeter, SystemMessage,
+    RawOutgoingMessage, Response, RuntimeLimits, SystemMessage,
     UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
@@ -130,14 +130,14 @@ where
             .user_applications()
             .insert(application_id, application);
 
-        let mut runtime_global_meter = RuntimeGlobalMeter::new_for_testing();
+        let mut runtime_limits = RuntimeLimits::new_for_testing();
         let pricing = Pricing::default();
         self.run_user_action(
             application_id,
             chain_id,
             action,
             &pricing,
-            &mut runtime_global_meter,
+            &mut runtime_limits,
         )
         .await?;
 
@@ -174,7 +174,7 @@ where
         chain_id: ChainId,
         action: UserAction<'_>,
         pricing: &Pricing,
-        runtime_global_meter: &mut RuntimeGlobalMeter,
+        runtime_limits: &mut RuntimeLimits,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         let balance = *self.system.balance.get();
         let initial_remaining_fuel = pricing.remaining_fuel(balance);
@@ -206,7 +206,7 @@ where
             &mut session_manager,
             &mut results,
             initial_remaining_fuel,
-            *runtime_global_meter,
+            *runtime_limits,
         );
         // Make the call to user code.
         let call_result = match action {
@@ -235,7 +235,7 @@ where
         result.authenticated_signer = signer;
         let runtime_local_meter = runtime.runtime_local_meter();
         let balance = self.system.balance.get_mut();
-        update_limits(balance, runtime_global_meter, pricing, runtime_local_meter)?;
+        update_limits(balance, runtime_limits, pricing, runtime_local_meter)?;
         WASM_FUEL_USED_PER_BLOCK.with_label_values(&[]).observe(
             (initial_remaining_fuel - pricing.remaining_fuel(balance.clone())) as f64,
         );
@@ -279,7 +279,7 @@ where
         context: &OperationContext,
         operation: &Operation,
         pricing: &Pricing,
-        runtime_global_meter: &mut RuntimeGlobalMeter,
+        runtime_limits: &mut RuntimeLimits,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
@@ -296,7 +296,7 @@ where
                             context.chain_id,
                             user_action,
                             pricing,
-                            runtime_global_meter,
+                            runtime_limits,
                         )
                         .await?,
                     );
@@ -312,7 +312,7 @@ where
                     context.chain_id,
                     UserAction::Operation(context, bytes),
                     pricing,
-                    runtime_global_meter,
+                    runtime_limits,
                 )
                 .await
             }
@@ -324,7 +324,7 @@ where
         context: &MessageContext,
         message: &Message,
         pricing: &Pricing,
-        runtime_global_meter: &mut RuntimeGlobalMeter,
+        runtime_limits: &mut RuntimeLimits,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
@@ -341,7 +341,7 @@ where
                     context.chain_id,
                     UserAction::Message(context, bytes),
                     pricing,
-                    runtime_global_meter,
+                    runtime_limits,
                 )
                 .await
             }
@@ -382,7 +382,7 @@ where
                     parameters: description.parameters,
                     signer: None,
                 }];
-                let runtime_global_meter = RuntimeGlobalMeter::default();
+                let runtime_limits = RuntimeLimits::default();
                 let remaining_fuel = 0;
                 let runtime = ExecutionRuntime::new(
                     context.chain_id,
@@ -391,7 +391,7 @@ where
                     &mut session_manager,
                     &mut results,
                     remaining_fuel,
-                    runtime_global_meter,
+                    runtime_limits,
                 );
                 // Run the query.
                 let response = application.handle_query(context, &runtime, bytes).await?;

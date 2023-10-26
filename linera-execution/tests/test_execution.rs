@@ -42,7 +42,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
-    let mut runtime_global_meter = RuntimeGlobalMeter::new_for_testing();
+    let mut runtime_limits = RuntimeLimits::new_for_testing();
     let pricing = Pricing::default();
     let result = view
         .execute_operation(
@@ -52,7 +52,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
                 bytes: vec![],
             },
             &pricing,
-            &mut runtime_global_meter,
+            &mut runtime_limits,
         )
         .await;
 
@@ -213,7 +213,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         authenticated_signer: Some(owner),
         next_message_index: 0,
     };
-    let mut runtime_global_meter = RuntimeGlobalMeter::new_for_testing();
+    let mut runtime_limits = RuntimeLimits::new_for_testing();
     let pricing = Pricing::default();
     let result = view
         .execute_operation(
@@ -223,7 +223,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 bytes: vec![1],
             },
             &pricing,
-            &mut runtime_global_meter,
+            &mut runtime_limits,
         )
         .await
         .unwrap();
@@ -286,7 +286,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
         authenticated_signer: Some(owner),
         next_message_index: 0,
     };
-    let mut runtime_global_meter = RuntimeGlobalMeter::new_for_testing();
+    let mut runtime_limits = RuntimeLimits::new_for_testing();
     let pricing = Pricing::default();
     let result = view
         .execute_operation(
@@ -296,7 +296,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
                 bytes: vec![],
             },
             &pricing,
-            &mut runtime_global_meter,
+            &mut runtime_limits,
         )
         .await;
 

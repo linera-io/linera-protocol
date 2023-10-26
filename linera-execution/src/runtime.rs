@@ -3,7 +3,7 @@
 
 use crate::{
     execution::ExecutionStateView, BaseRuntime, CallResult, ContractRuntime, ExecutionError,
-    ExecutionResult, ExecutionRuntimeContext, RuntimeGlobalMeter, RuntimeLocalMeter, ServiceRuntime,
+    ExecutionResult, ExecutionRuntimeContext, RuntimeLimits, RuntimeLocalMeter, ServiceRuntime,
     SessionId, UserApplicationCode, UserApplicationDescription, UserApplicationId,
 };
 use async_lock::{Mutex, MutexGuard, MutexGuardArc, RwLockWriteGuardArc};
@@ -110,15 +110,15 @@ where
         session_manager: &'a mut SessionManager,
         execution_results: &'a mut Vec<ExecutionResult>,
         fuel: u64,
-        runtime_global_meter: RuntimeGlobalMeter,
+        runtime_limits: RuntimeLimits,
     ) -> Self {
         assert_eq!(chain_id, execution_state.context().extra().chain_id());
         let remaining_fuel = Arc::new(AtomicU64::new(fuel));
         let num_reads = Arc::new(AtomicU64::new(0));
         let bytes_read = Arc::new(AtomicU64::new(0));
         let bytes_written = Arc::new(AtomicU64::new(0));
-        let maximum_bytes_read = runtime_global_meter.maximum_bytes_read;
-        let maximum_bytes_written = runtime_global_meter.maximum_bytes_written;
+        let maximum_bytes_read = runtime_limits.maximum_bytes_read;
+        let maximum_bytes_written = runtime_limits.maximum_bytes_written;
         Self {
             remaining_fuel,
             num_reads,

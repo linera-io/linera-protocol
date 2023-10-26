@@ -29,7 +29,7 @@ use linera_execution::{
     pricing::Pricing,
     system::{SystemChannel, SystemMessage, SystemOperation},
     Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, ExecutionStateView,
-    GenericApplicationId, Message, Operation, OperationContext, RuntimeGlobalMeter,
+    GenericApplicationId, Message, Operation, OperationContext, RuntimeLimits,
     SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmApplication,
     WasmRuntime,
 };
@@ -424,7 +424,7 @@ where
         index: 0,
         next_message_index: 0,
     };
-    let mut runtime_global_meter = RuntimeGlobalMeter::new_for_testing();
+    let mut runtime_limits = RuntimeLimits::new_for_testing();
     let pricing = Pricing::default();
     creator_state
         .execute_operation(
@@ -434,7 +434,7 @@ where
                 bytes: user_operation,
             },
             &pricing,
-            &mut runtime_global_meter,
+            &mut runtime_limits,
         )
         .await?;
     creator_state.system.timestamp.set(Timestamp::from(5));

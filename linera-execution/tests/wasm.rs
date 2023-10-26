@@ -14,7 +14,7 @@ use linera_base::{
 use linera_base::data_types::Amount;
 use linera_execution::{
     pricing::Pricing, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, Operation,
-    OperationContext, Query, QueryContext, RawExecutionResult, Response, RuntimeGlobalMeter,
+    OperationContext, Query, QueryContext, RawExecutionResult, Response, RuntimeLimits,
     SystemExecutionState, TestExecutionRuntimeContext, WasmApplication, WasmRuntime,
 };
 use linera_views::{memory::MemoryContext, views::View};
@@ -72,7 +72,7 @@ async fn test_fuel_for_counter_wasm_application(
     };
     let increments = [2_u64, 9, 7, 1000];
     let pricing = Pricing::default();
-    let mut runtime_global_meter = RuntimeGlobalMeter::new_for_testing();
+    let mut runtime_limits = RuntimeLimits::new_for_testing();
     let balance = Amount::from_tokens(20);
     let available_fuel = pricing.remaining_fuel(balance);
     for increment in &increments {
@@ -81,7 +81,7 @@ async fn test_fuel_for_counter_wasm_application(
                 &context,
                 &Operation::user(app_id, increment).unwrap(),
                 &pricing,
-                &mut runtime_global_meter,
+                &mut runtime_limits,
             )
             .await?;
         assert_eq!(

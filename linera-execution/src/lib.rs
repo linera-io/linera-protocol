@@ -60,7 +60,7 @@ pub fn sub_assign_fees(balance: &mut Amount, fees: Amount) -> Result<(), Pricing
 
 /// The entries of the runtime related to fuel and storage
 #[derive(Copy, Debug, Clone)]
-pub struct RuntimeGlobalMeter {
+pub struct RuntimeLimits {
     /// The maximum size of read allowed per block
     pub maximum_bytes_read: u64,
     /// The maximum size of write allowed per block
@@ -82,7 +82,7 @@ pub struct RuntimeLocalMeter {
 
 pub fn update_limits(
     balance: &mut Amount,
-    runtime_global_meter: &mut RuntimeGlobalMeter,
+    runtime_limits: &mut RuntimeLimits,
     pricing: &Pricing,
     runtime_local: RuntimeLocalMeter,
 ) -> Result<(), ExecutionError> {
@@ -94,13 +94,13 @@ pub fn update_limits(
         pricing.storage_num_reads_price(&runtime_local.num_reads)?,
     )?;
     let bytes_read = runtime_local.bytes_read;
-    runtime_global_meter.maximum_bytes_read -= bytes_read;
+    runtime_limits.maximum_bytes_read -= bytes_read;
     sub_assign_fees(
         balance,
         pricing.storage_bytes_read_price(&bytes_read)?,
     )?;
     let bytes_written = runtime_local.bytes_written;
-    runtime_global_meter.maximum_bytes_written -= bytes_written;
+    runtime_limits.maximum_bytes_written -= bytes_written;
     sub_assign_fees(
         balance,
         pricing.storage_bytes_written_price(&bytes_written)?,
@@ -109,18 +109,18 @@ pub fn update_limits(
 }
 
 #[cfg(any(test, feature = "test"))]
-impl RuntimeGlobalMeter {
-    pub fn new_for_testing() -> RuntimeGlobalMeter {
-        RuntimeGlobalMeter {
+impl RuntimeLimits {
+    pub fn new_for_testing() -> RuntimeLimits {
+        RuntimeLimits {
             maximum_bytes_read: u64::MAX,
             maximum_bytes_written: u64::MAX,
         }
     }
 }
 
-impl Default for RuntimeGlobalMeter {
+impl Default for RuntimeLimits {
     fn default() -> Self {
-        RuntimeGlobalMeter {
+        RuntimeLimits {
             maximum_bytes_read: u64::MAX,
             maximum_bytes_written: u64::MAX,
         }

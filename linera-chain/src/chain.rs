@@ -23,7 +23,7 @@ use linera_execution::{
     system::{Account, SystemMessage},
     ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, GenericApplicationId, Message,
     MessageContext, OperationContext, Query, QueryContext, RawExecutionResult, RawOutgoingMessage,
-    Response, RuntimeGlobalMeter, UserApplicationDescription, UserApplicationId,
+    Response, RuntimeLimits, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     common::Context,
@@ -510,7 +510,7 @@ where
         //        let available_fuel = pricing.remaining_fuel(*balance);
         let maximum_bytes_read = pricing.maximum_bytes_read;
         let maximum_bytes_written = pricing.maximum_bytes_written;
-        let mut runtime_global_meter = RuntimeGlobalMeter {
+        let mut runtime_limits = RuntimeLimits {
             maximum_bytes_read,
             maximum_bytes_written,
         };
@@ -534,7 +534,7 @@ where
                     &context,
                     &message.event.message,
                     &pricing,
-                    &mut runtime_global_meter,
+                    &mut runtime_limits,
                 )
                 .await
                 .map_err(|err| {
@@ -559,7 +559,7 @@ where
             };
             let results = self
                 .execution_state
-                .execute_operation(&context, operation, &pricing, &mut runtime_global_meter)
+                .execute_operation(&context, operation, &pricing, &mut runtime_limits)
                 .await
                 .map_err(|err| {
                     ChainError::ExecutionError(err, ChainExecutionContext::Operation(index))
