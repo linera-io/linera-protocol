@@ -58,7 +58,7 @@ pub fn sub_assign_fees(balance: &mut Amount, fees: Amount) -> Result<(), Pricing
         .map_err(|_| ArithmeticError::Underflow)?)
 }
 
-/// The entries of the runtime related to fuel and storage
+/// The entries of the runtime related to storage
 #[derive(Copy, Debug, Clone)]
 pub struct RuntimeLimits {
     /// The maximum size of read allowed per block
