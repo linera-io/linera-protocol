@@ -62,6 +62,7 @@ pub static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
     )
     .expect("Counter can be created")
 });
+
 pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "num_rounds_in_block_proposal",

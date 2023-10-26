@@ -3,3 +3,20 @@
 lineraImage: us-docker.pkg.dev/linera-io-dev/linera-docker-repo/linera-test-local:latest
 lineraImagePullPolicy: Never
 logLevel: "debug"
+
+loki-stack:
+  loki:
+    enabled: true
+    persistence:
+      enabled: true
+      size: 1Gi
+  grafana:
+    enabled: true
+    sidecar:
+      datasources:
+        enabled: true
+  promtail:
+    enabled: true
+    config:
+      clients:
+        - url: http://linera-core-loki:3100/loki/api/v1/push

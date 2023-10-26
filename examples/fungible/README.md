@@ -34,30 +34,43 @@ The WebAssembly binaries for the bytecode can be built and published using [step
 book](https://linera-io.github.io/linera-documentation/getting_started/first_app.html),
 summarized below.
 
-First setup a local network with two wallets, and keep it running in a separate terminal:
+Before getting started, make sure that the binary tools `linera*` corresponding to
+your version of `linera-sdk` are in your PATH. For scripting purposes, we also assume
+that the BASH function `linera_spawn_and_read_wallet_variables` is defined.
+
+From the root of Linera repository, this can be achieved as follows:
 
 ```bash
-./scripts/run_local.sh
+export PATH="$PWD/target/debug:$PATH"
+source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
-Compile the `fungible` application WebAssembly binaries, and publish them as an application
+You may also use `cargo install linera-service` and append the output of
+`linera net helper` to your `~.bash_profile`.
+
+Now, we are ready to set up a local network with an initial wallet owning several initial
+chains. In a new BASH shell, enter:
+
+```bash
+linera_spawn_and_read_wallet_variables linera net up --testing-prng-seed 37
+```
+
+A new test network is now running and the environment variables LINERA_WALLET and
+LINERA_STORAGE are now be defined for the duration of the shell session. We used the
+test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
+presentation.
+
+Now, compile the `fungible` application WebAssembly binaries, and publish them as an application
 bytecode:
 
 ```bash
-alias linera="$PWD/target/debug/linera"
-export LINERA_WALLET="$PWD/target/debug/wallet.json"
-export LINERA_STORAGE="rocksdb:$(dirname "$LINERA_WALLET")/linera.db"
+(cd examples/fungible && cargo build --release)
 
-cd examples/fungible && cargo build --release && cd ../..
-linera publish-bytecode \
-examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm
+BYTECODE_ID=$(linera publish-bytecode \
+    examples/target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm)
 ```
 
-This will output the new bytecode ID, e.g.:
-
-```rust
-e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000
-```
+Here, we stored the new bytecode ID in a variable `BYTECODE_ID` to be reused it later.
 
 ## Creating a Token
 
@@ -67,7 +80,7 @@ additional tokens can be minted and added to the application. The initial state 
 that specifies the accounts that start with tokens.
 
 In order to select the accounts to have initial tokens, the command below can be used to list
-the chains created for the test:
+the chains created for the test in the default wallet:
 
 ```bash
 linera wallet show
@@ -77,22 +90,27 @@ A table will be shown with the chains registered in the wallet and their meta-da
 chain should be highlighted in green. Each chain has an `Owner` field, and that is what is used
 for the account.
 
-The example below creates a token application where two accounts start with the minted tokens,
-one with 100 of them and another with 200 of them:
+Let's define some variables corresponding to these values. (Note that owner addresses
+would not be predictable without `--testing-prng-seed` above.)
 
 ```bash
-linera create-application e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000 \
-    --json-argument '{ "accounts": {
-        "User:445991f46ae490fe207e60c95d0ed95bf4e7ed9c270d4fd4fa555587c2604fe1": "100.",
-        "User:c2f98d76c332bf809d7f91671eb76e5839c02d5896209881368da5838d85c83f": "200."
-    } }'
+CHAIN_1=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65  # default chain for the wallet
+OWNER_1=e814a7bdae091daf4a110ef5340396998e538c47c6e7d101027a225523985316  # owner of chain 1
+CHAIN_2=256e1dbc00482ddd619c293cc0df94d366afe7980022bb22d99e33036fd465dd  # another chain in the wallet
+OWNER_2=0d677b87f1bc6e12442f98c06b9c105fbebf6bb21d885739e23c315956c7d7f3  # owner of chain 2
 ```
 
-This will output the application ID for the newly created token, e.g.:
+The example below creates a token application on the default chain CHAIN_1 and gives the owner 100 tokens:
 
-```rust
-e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65010000000000000001000000e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65030000000000000000000000
+```bash
+APP_ID=$(linera create-application $BYTECODE_ID \
+    --json-argument "{ \"accounts\": {
+        \"User:$OWNER_1\": \"100.\"
+    } }" \
+)
 ```
+
+This will store the application ID in a new variable `APP_ID`.
 
 ## Using the Token Application
 
@@ -100,10 +118,11 @@ Before using the token, a source and target address should be selected. The sour
 should ideally be on the default chain (used to create the token) and one of the accounts chosen
 for the initial state, because it will already have some initial tokens to send.
 
-First, a node service has to be started:
+First, a node service for the current wallet has to be started:
 
 ```bash
-linera service --port 8080 &
+PORT=8080
+linera service --port $PORT &
 ```
 
 Then the web frontend:
@@ -111,20 +130,27 @@ Then the web frontend:
 ```bash
 cd examples/fungible/web-frontend
 npm install
-npm start
+
+# Start the server but not open the web page right away.
+BROWSER=none npm start &
 ```
 
-The web UI can then be opened by navigating to
-`http://localhost:3000/$CHAIN_ID?app=$APPLICATION_ID&owner=$SOURCE_ACCOUNT&port=$PORT`, where:
+Web UIs for specific accounts can be opened by navigating URLs of the form
+`http://localhost:3000/$CHAIN?app=$APP_ID&owner=$OWNER&port=$PORT` where
+- the path is the ID of the chain where the account is located.
+- the argument `app` is the token application ID obtained when creating the token.
+- `owner` is the address of the chosen user account (owner must be have permissions to create blocks in the given chain).
+- `port` is the port of the wallet service (the wallet must know the secret key of `owner`).
 
-- `$CHAIN_ID` is the ID of the chain where we registered the application.
-- `$APPLICATION_ID` is the token application ID obtained when creating the token.
-- `$SOURCE_ACCOUNT` is the owner of the chosen sender account.
-- `$PORT` is the port the sender wallet service is listening to.
+In this example, two web pages for OWNER_1 and OWNER_2 can be opened by navigating these URLs:
 
-Two browser instances can be opened, one for the sender account and one for the receiver
-account. In the sender account browser, the target chain ID and account can be specified, as
-well as the amount to send. Once sent, the balance on the receiver account browser should
-automatically update.
+```bash
+echo "http://localhost:3000/$CHAIN_1?app=$APP_ID&owner=$OWNER_1&port=$PORT"
+echo "http://localhost:3000/$CHAIN_1?app=$APP_ID&owner=$OWNER_2&port=$PORT"
+```
+
+OWNER_2 doesn't have the applications loaded initially. Using the first page to
+transfer tokens from OWNER_1 to OWNER_2 at CHAIN_2 will instantly update the UI of the
+second page.
 
 <!-- cargo-rdme end -->

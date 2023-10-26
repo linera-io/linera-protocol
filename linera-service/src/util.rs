@@ -142,3 +142,65 @@ impl CommandExt for tokio::process::Command {
         String::from_utf8(output.stdout).with_context(|| self.description())
     }
 }
+
+#[cfg(any(test, feature = "test"))]
+use {
+    std::io::Write,
+    tempfile::{tempdir, TempDir},
+};
+
+#[cfg(any(test, feature = "test"))]
+pub struct QuotedBashScript {
+    tmp_dir: TempDir,
+    path: PathBuf,
+}
+
+#[cfg(any(test, feature = "test"))]
+impl QuotedBashScript {
+    pub fn from_markdown<P: AsRef<Path>>(source_path: P) -> Result<Self, std::io::Error> {
+        let file = std::io::BufReader::new(std::fs::File::open(source_path.as_ref())?);
+        let tmp_dir = tempdir()?;
+        let quotes = Self::read_bash_quotes(file)?;
+
+        let path = tmp_dir.path().join("test.sh");
+
+        let mut test_script = std::fs::File::create(&path)?;
+        for quote in quotes {
+            writeln!(&mut test_script, "{}", quote)?;
+        }
+
+        Ok(Self { tmp_dir, path })
+    }
+
+    pub fn tmp_dir(&self) -> &Path {
+        self.tmp_dir.as_ref()
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    #[allow(clippy::while_let_on_iterator)]
+    fn read_bash_quotes(reader: impl std::io::BufRead) -> std::io::Result<Vec<String>> {
+        let mut result = Vec::new();
+        let mut lines = reader.lines();
+
+        while let Some(line) = lines.next() {
+            let line = line?;
+            if line.starts_with("```bash") {
+                let mut quote = String::new();
+                while let Some(line) = lines.next() {
+                    let line = line?;
+                    if line.starts_with("```") {
+                        break;
+                    }
+                    quote += &line;
+                    quote += "\n";
+                }
+                result.push(quote);
+            }
+        }
+
+        Ok(result)
+    }
+}
