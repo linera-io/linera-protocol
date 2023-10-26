@@ -2983,6 +2983,8 @@ dependencies = [
  "linera-rpc",
  "linera-storage",
  "linera-views",
+ "once_cell",
+ "prometheus",
  "proptest",
  "prost",
  "rand 0.8.5",
@@ -2998,6 +3000,7 @@ dependencies = [
  "tonic",
  "tonic-build",
  "tonic-health",
+ "tower",
  "tracing",
 ]
 

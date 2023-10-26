@@ -63,6 +63,16 @@ pub static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Counter can be created")
 });
 
+pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "num_rounds_in_block_proposal",
+        "Number of rounds in block proposal",
+        // Can add labels here
+        &[]
+    )
+    .expect("Counter can be created")
+});
+
 /// Interface provided by each physical shard (aka "worker") of a validator or a local node.
 /// * All commands return either the current chain info or an error.
 /// * Repeating commands produces no changes and returns no error.
@@ -1032,6 +1042,7 @@ where
         chain.rollback();
         // Create the vote and store it in the chain state.
         let manager = chain.manager.get_mut();
+        let round = proposal.content.round.0 as f64;
         manager.create_vote(proposal, outcome, self.key_pair(), now);
         // Cache the value we voted on, so the client doesn't have to send it again.
         if let Some(vote) = manager.pending() {
@@ -1041,6 +1052,9 @@ where
         chain.save().await?;
         // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
         let actions = self.create_network_actions(&mut chain).await?;
+        NUM_ROUNDS_IN_BLOCK_PROPOSAL
+            .with_label_values(&[])
+            .observe(round);
         Ok((info, actions))
     }
 

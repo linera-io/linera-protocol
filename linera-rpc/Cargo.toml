@@ -29,6 +29,8 @@ linera-core = { workspace = true }
 linera-execution = { workspace = true }
 linera-storage = { workspace = true }
 linera-views = { workspace = true }
+once_cell = { workspace = true }
+prometheus = { workspace = true }
 proptest = { workspace = true, optional = true }
 prost = { workspace = true }
 rand = { workspace = true }
@@ -39,6 +41,7 @@ tokio = { workspace = true }
 tokio-util = { workspace = true, features = ["codec", "net"] }
 tonic = { workspace = true }
 tonic-health = { workspace = true }
+tower = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
