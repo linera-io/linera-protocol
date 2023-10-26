@@ -12,7 +12,7 @@ use linera_base::{
     identifiers::ChainId,
 };
 use linera_service::cli_wrappers::{
-    ApplicationWrapper, ClientWrapper, Database, LocalNetwork, Network,
+    ApplicationWrapper, ClientWrapper, Database, LocalNet, Network,
 };
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, time::Duration};
@@ -166,7 +166,7 @@ async fn run_wasm_end_to_end_counter(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
+    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
     let client = local_net.make_client(network);
 
     let original_counter_value = 35;
@@ -235,7 +235,7 @@ async fn run_wasm_end_to_end_counter_publish_create(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
+    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
     let client = local_net.make_client(network);
 
     let original_counter_value = 35;
@@ -300,7 +300,7 @@ async fn run_wasm_end_to_end_social_user_pub_sub(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
+    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
     let client1 = local_net.make_client(network);
     let client2 = local_net.make_client(network);
 
@@ -409,7 +409,7 @@ async fn run_wasm_end_to_end_fungible(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
+    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
     let client1 = local_net.make_client(network);
     let client2 = local_net.make_client(network);
 
@@ -547,7 +547,7 @@ async fn run_wasm_end_to_end_same_wallet_fungible(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
+    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
     let client1 = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
@@ -651,7 +651,7 @@ async fn run_wasm_end_to_end_crowd_funding(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
+    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
     let client1 = local_net.make_client(network);
     let client2 = local_net.make_client(network);
 
@@ -798,7 +798,7 @@ async fn run_wasm_end_to_end_matching_engine(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
+    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
     let client_admin = local_net.make_client(network);
     let client_a = local_net.make_client(network);
     let client_b = local_net.make_client(network);
@@ -1076,7 +1076,7 @@ async fn run_wasm_end_to_end_amm(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
+    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
     let client_admin = local_net.make_client(network);
     let client0 = local_net.make_client(network);
     let client1 = local_net.make_client(network);

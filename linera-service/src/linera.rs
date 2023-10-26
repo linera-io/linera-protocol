@@ -31,7 +31,7 @@ use linera_execution::{
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_service::{
     chain_listener::{self, ChainListenerConfig},
-    cli_wrappers::{Database, LocalNetwork, Network},
+    cli_wrappers::{Database, LocalNet, Network},
     config::{CommitteeConfig, Export, GenesisConfig, Import, UserChain, WalletState},
     node_service::NodeService,
     project::{self, Project},
@@ -1920,7 +1920,7 @@ async fn main() -> Result<(), anyhow::Error> {
                     panic!("The local test network must have at least one shard per validator.");
                 }
                 let network = Network::Grpc;
-                let mut net = LocalNetwork::new(
+                let mut net = LocalNet::new(
                     Database::RocksDb,
                     network,
                     *testing_prng_seed,

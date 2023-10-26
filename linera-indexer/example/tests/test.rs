@@ -9,7 +9,7 @@ use linera_indexer_graphql_client::{
     operations::{get_operation, GetOperation, OperationKey},
 };
 use linera_service::{
-    cli_wrappers::{Database, LocalNetwork, Network},
+    cli_wrappers::{Database, LocalNet, Network},
     util::resolve_binary,
 };
 use linera_service_graphql_client::{block, request, transfer, Block, Transfer};
@@ -98,7 +98,7 @@ async fn run_end_to_end_operations_indexer(database: Database) {
     // launching network, service and indexer
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
+    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
     let client = local_net.make_client(network);
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();

@@ -549,7 +549,7 @@ impl Validator {
     }
 }
 
-pub struct LocalNetwork {
+pub struct LocalNet {
     database: Database,
     network: Network,
     testing_prng_seed: Option<u64>,
@@ -562,7 +562,7 @@ pub struct LocalNetwork {
     tmp_dir: Rc<TempDir>,
 }
 
-impl LocalNetwork {
+impl LocalNet {
     pub fn new(
         database: Database,
         network: Network,
@@ -896,7 +896,7 @@ impl LocalNetwork {
 }
 
 #[cfg(any(test, feature = "test"))]
-impl LocalNetwork {
+impl LocalNet {
     pub fn new_for_testing(database: Database, network: Network) -> Result<Self> {
         let seed = 37;
         let table_name = linera_views::test_utils::get_table_name();

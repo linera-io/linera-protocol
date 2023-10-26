@@ -9,7 +9,7 @@ mod common;
 use common::INTEGRATION_TEST_GUARD;
 use linera_base::{data_types::Amount, identifiers::ChainId};
 use linera_service::{
-    cli_wrappers::{Database, LocalNetwork, Network},
+    cli_wrappers::{Database, LocalNet, Network},
     util,
 };
 use linera_views::test_utils::get_table_name;
@@ -68,7 +68,7 @@ async fn test_scylla_db_end_to_end_reconfiguration_simple() {
 
 async fn run_end_to_end_reconfiguration(database: Database, network: Network) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
+    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
     let client = local_net.make_client(network);
     let client_2 = local_net.make_client(network);
 
@@ -219,7 +219,7 @@ async fn test_scylla_db_open_chain_node_service() {
 async fn run_open_chain_node_service(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
+    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
     let client = local_net.make_client(network);
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
@@ -330,7 +330,7 @@ async fn run_end_to_end_retry_notification_stream(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
+    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
     let client1 = local_net.make_client(network);
     let client2 = local_net.make_client(network);
 
@@ -412,7 +412,7 @@ async fn run_end_to_end_multiple_wallets(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create local_net and two clients.
-    let mut local_net = LocalNetwork::new_for_testing(database, Network::Grpc).unwrap();
+    let mut local_net = LocalNet::new_for_testing(database, Network::Grpc).unwrap();
     let client_1 = local_net.make_client(Network::Grpc);
     let client_2 = local_net.make_client(Network::Grpc);
 
@@ -505,7 +505,7 @@ async fn test_scylla_db_project_new() {
 async fn run_project_new(database: Database) {
     let network = Network::Grpc;
     let table_name = get_table_name();
-    let mut local_net = LocalNetwork::new(database, network, None, table_name, 0, 0).unwrap();
+    let mut local_net = LocalNet::new(database, network, None, table_name, 0, 0).unwrap();
     let client = local_net.make_client(network);
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -544,10 +544,10 @@ async fn test_scylla_db_project_test() {
 async fn run_project_test(database: Database) {
     let network = Network::Grpc;
     let table_name = get_table_name();
-    let mut local_net = LocalNetwork::new(database, network, None, table_name, 0, 0).unwrap();
+    let mut local_net = LocalNet::new(database, network, None, table_name, 0, 0).unwrap();
     let client = local_net.make_client(network);
     client
-        .project_test(&LocalNetwork::example_path("counter").unwrap())
+        .project_test(&LocalNet::example_path("counter").unwrap())
         .await
         .unwrap();
 }
@@ -575,7 +575,7 @@ async fn run_project_publish(database: Database) {
 
     let network = Network::Grpc;
     let table_name = get_table_name();
-    let mut local_net = LocalNetwork::new(database, network, Some(37), table_name, 1, 1).unwrap();
+    let mut local_net = LocalNet::new(database, network, Some(37), table_name, 1, 1).unwrap();
     let client = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
@@ -683,14 +683,14 @@ async fn run_example_publish(database: Database) {
 
     let network = Network::Grpc;
     let table_name = get_table_name();
-    let mut local_net = LocalNetwork::new(database, network, Some(37), table_name, 1, 1).unwrap();
+    let mut local_net = LocalNet::new(database, network, Some(37), table_name, 1, 1).unwrap();
     let client = local_net.make_client(network);
 
     local_net.generate_initial_validator_config().await.unwrap();
     client.create_genesis_config().await.unwrap();
     local_net.run().await.unwrap();
 
-    let example_dir = LocalNetwork::example_path("counter").unwrap();
+    let example_dir = LocalNet::example_path("counter").unwrap();
     client
         .project_publish(example_dir, vec![], None, &0)
         .await
@@ -734,7 +734,7 @@ async fn run_end_to_end_open_multi_owner_chain(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     // Create runner and two clients.
-    let mut local_net = LocalNetwork::new_for_testing(database, Network::Grpc).unwrap();
+    let mut local_net = LocalNet::new_for_testing(database, Network::Grpc).unwrap();
     let client1 = local_net.make_client(Network::Grpc);
     let client2 = local_net.make_client(Network::Grpc);
 

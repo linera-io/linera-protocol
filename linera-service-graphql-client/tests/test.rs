@@ -6,7 +6,7 @@
 use fungible::{FungibleTokenAbi, InitialState};
 use linera_base::{data_types::Amount, identifiers::ChainId};
 use linera_service::{
-    cli_wrappers::{Database, LocalNetwork, Network},
+    cli_wrappers::{Database, LocalNet, Network},
     util::resolve_binary,
 };
 use linera_service_graphql_client::{
@@ -53,7 +53,7 @@ async fn test_scylla_db_end_to_end_queries() {
 async fn run_end_to_end_queries(database: Database) {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let network = Network::Grpc;
-    let mut local_net = LocalNetwork::new_for_testing(database, network).unwrap();
+    let mut local_net = LocalNet::new_for_testing(database, network).unwrap();
     let client = local_net.make_client(network);
     local_net.generate_initial_validator_config().await.unwrap();
 
