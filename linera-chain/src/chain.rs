@@ -49,6 +49,7 @@ pub static NUM_BLOCKS_EXECUTED: Lazy<IntCounterVec> = Lazy::new(|| {
     )
     .expect("Counter creation should not fail")
 });
+
 pub static BLOCK_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "block_execution_latency",
@@ -57,6 +58,16 @@ pub static BLOCK_EXECUTION_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
         &[]
     )
     .expect("Counter creation should not fail")
+});
+
+pub static WASM_FUEL_USED_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "wasm_fuel_used_per_block",
+        "Wasm fuel used per block",
+        // Can add labels here
+        &[]
+    )
+    .expect("Counter can be created")
 });
 
 /// A view accessing the state of a chain.
@@ -563,6 +574,9 @@ where
         BLOCK_EXECUTION_LATENCY
             .with_label_values(&[])
             .observe(start_time.elapsed().as_secs_f64());
+        WASM_FUEL_USED_PER_BLOCK
+            .with_label_values(&[])
+            .observe(used_fuel as f64);
         Ok(BlockExecutionOutcome {
             messages,
             message_counts,

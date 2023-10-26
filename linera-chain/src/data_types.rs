@@ -561,7 +561,7 @@ impl CertificateValue {
             .map(|executed_block| &executed_block.block)
     }
 
-    pub fn to_log_str(&self) -> &str {
+    pub fn to_log_str(&self) -> &'static str {
         match self {
             CertificateValue::ConfirmedBlock { .. } => "confirmed_block",
             CertificateValue::ValidatedBlock { .. } => "validated_block",
