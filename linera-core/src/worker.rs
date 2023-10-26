@@ -1077,7 +1077,8 @@ where
             }
         );
 
-        let certificate_for_logging = certificate.clone();
+        let round = certificate.round;
+        let log_str = certificate.value().to_log_str();
         let mut duplicated = false;
         let (info, actions) = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
@@ -1103,8 +1104,8 @@ where
 
         if !duplicated {
             NUM_ROUNDS_IN_CERTIFICATE
-                .with_label_values(&[certificate_for_logging.value().to_log_str()])
-                .observe(certificate_for_logging.round.0 as f64);
+                .with_label_values(&[log_str])
+                .observe(round.0 as f64);
         }
         Ok((info, actions))
     }
