@@ -130,7 +130,7 @@ where
             .user_applications()
             .insert(application_id, application);
 
-        let mut runtime_limits = RuntimeLimits::new_for_testing();
+        let mut runtime_limits = RuntimeLimits::default();
         let pricing = Pricing::default();
         self.run_user_action(
             application_id,

@@ -72,7 +72,7 @@ async fn test_fuel_for_counter_wasm_application(
     };
     let increments = [2_u64, 9, 7, 1000];
     let pricing = Pricing::default();
-    let mut runtime_limits = RuntimeLimits::new_for_testing();
+    let mut runtime_limits = RuntimeLimits::default();
     let balance = Amount::from_tokens(20);
     let available_fuel = pricing.remaining_fuel(balance);
     for increment in &increments {

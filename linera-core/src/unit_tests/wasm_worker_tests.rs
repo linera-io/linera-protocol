@@ -424,7 +424,7 @@ where
         index: 0,
         next_message_index: 0,
     };
-    let mut runtime_limits = RuntimeLimits::new_for_testing();
+    let mut runtime_limits = RuntimeLimits::default();
     let pricing = Pricing::default();
     creator_state
         .execute_operation(

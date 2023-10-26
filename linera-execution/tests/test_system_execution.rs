@@ -39,7 +39,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
-    let mut runtime_limits = RuntimeLimits::new_for_testing();
+    let mut runtime_limits = RuntimeLimits::default();
     let pricing = Pricing::default();
     let results = view
         .execute_operation(
@@ -85,7 +85,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         },
         authenticated_signer: None,
     };
-    let mut runtime_limits = RuntimeLimits::new_for_testing();
+    let mut runtime_limits = RuntimeLimits::default();
     let pricing = Pricing::default();
     let results = view
         .execute_message(

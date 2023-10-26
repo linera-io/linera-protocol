@@ -67,6 +67,15 @@ pub struct RuntimeLimits {
     pub maximum_bytes_written: u64,
 }
 
+impl Default for RuntimeLimits {
+    fn default() -> Self {
+        RuntimeLimits {
+            maximum_bytes_read: u64::MAX,
+            maximum_bytes_written: u64::MAX,
+        }
+    }
+}
+
 /// The entries of the runtime related to fuel and storage
 #[derive(Copy, Debug, Clone)]
 pub struct RuntimeLocalMeter {
@@ -106,25 +115,6 @@ pub fn update_limits(
         pricing.storage_bytes_written_price(&bytes_written)?,
     )?;
     Ok(())
-}
-
-#[cfg(any(test, feature = "test"))]
-impl RuntimeLimits {
-    pub fn new_for_testing() -> RuntimeLimits {
-        RuntimeLimits {
-            maximum_bytes_read: u64::MAX,
-            maximum_bytes_written: u64::MAX,
-        }
-    }
-}
-
-impl Default for RuntimeLimits {
-    fn default() -> Self {
-        RuntimeLimits {
-            maximum_bytes_read: u64::MAX,
-            maximum_bytes_written: u64::MAX,
-        }
-    }
 }
 
 /// An implementation of [`UserApplication`]
