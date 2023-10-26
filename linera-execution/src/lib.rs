@@ -71,8 +71,8 @@ pub struct RuntimeLimits {
 impl Default for RuntimeLimits {
     fn default() -> Self {
         RuntimeLimits {
-            maximum_bytes_read: u64::MAX,
-            maximum_bytes_written: u64::MAX,
+            maximum_bytes_read: u64::MAX / 2,
+            maximum_bytes_written: u64::MAX / 2,
         }
     }
 }

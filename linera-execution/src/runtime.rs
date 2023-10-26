@@ -314,6 +314,47 @@ where
     }
 }
 
+impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W> {
+    fn increment_check(
+        atomic: &Arc<AtomicU64>,
+        increment: u64,
+        upper_limit: u64,
+        error: ExecutionError,
+    ) -> Result<(), ExecutionError> {
+        if increment >= u64::MAX / 2 {
+            return Err(error);
+        }
+        atomic.fetch_add(increment, Ordering::Relaxed);
+        let bytes = atomic.load(Ordering::Acquire);
+        if bytes >= upper_limit {
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn increment_bytes_read(
+        &self,
+        atomic: &Arc<AtomicU64>,
+        increment: u64,
+    ) -> Result<(), ExecutionError> {
+        Self::increment_check(
+            atomic,
+            increment,
+            self.maximum_bytes_read,
+            ExecutionError::ExcessiveRead,
+        )
+    }
+
+    fn increment_bytes_written(&self, increment: u64) -> Result<(), ExecutionError> {
+        Self::increment_check(
+            &self.bytes_written,
+            increment,
+            self.maximum_bytes_written,
+            ExecutionError::ExcessiveWrite,
+        )
+    }
+}
+
 #[async_trait]
 impl<'a, C, const W: bool> BaseRuntime for ExecutionRuntime<'a, C, W>
 where
@@ -392,14 +433,9 @@ where
         {
             Some(view) => {
                 let result = view.get(&key).await?;
-                self.num_reads.fetch_add(1, Ordering::Relaxed);
+                self.increment_bytes_read(&self.num_reads, 1)?;
                 if let Some(value) = &result {
-                    self.bytes_read
-                        .fetch_add(value.len() as u64, Ordering::Relaxed);
-                }
-                let bytes_read = self.bytes_read.load(Ordering::Acquire);
-                if bytes_read > self.maximum_bytes_read {
-                    return Err(ExecutionError::ExcessiveRead);
+                    self.increment_bytes_read(&self.bytes_read, value.len() as u64)?;
                 }
                 Ok(result)
             }
@@ -419,17 +455,12 @@ where
         {
             Some(view) => {
                 let keys = view.find_keys_by_prefix(&key_prefix).await?;
-                self.num_reads.fetch_add(1, Ordering::Relaxed);
+                self.increment_bytes_read(&self.num_reads, 1)?;
                 let mut read_size = 0;
                 for key in &keys {
                     read_size += key.len();
                 }
-                self.bytes_read
-                    .fetch_add(read_size as u64, Ordering::Relaxed);
-                let bytes_read = self.bytes_read.load(Ordering::Acquire);
-                if bytes_read > self.maximum_bytes_read {
-                    return Err(ExecutionError::ExcessiveRead);
-                }
+                self.increment_bytes_read(&self.bytes_read, read_size as u64)?;
                 Ok(keys)
             }
             None => Err(ExecutionError::ApplicationStateNotLocked),
@@ -448,16 +479,12 @@ where
         {
             Some(view) => {
                 let key_values = view.find_key_values_by_prefix(&key_prefix).await?;
+                self.increment_bytes_read(&self.num_reads, 1)?;
                 let mut read_size = 0;
                 for (key, value) in &key_values {
                     read_size += key.len() + value.len();
                 }
-                self.bytes_read
-                    .fetch_add(read_size as u64, Ordering::Relaxed);
-                let bytes_read = self.bytes_read.load(Ordering::Acquire);
-                if bytes_read > self.maximum_bytes_read {
-                    return Err(ExecutionError::ExcessiveRead);
-                }
+                self.increment_bytes_read(&self.bytes_read, read_size as u64)?;
                 Ok(key_values)
             }
             None => Err(ExecutionError::ApplicationStateNotLocked),
@@ -558,11 +585,7 @@ where
 
     async fn write_batch_and_unlock(&self, batch: Batch) -> Result<(), ExecutionError> {
         let size = batch.size() as u64;
-        self.bytes_written.fetch_add(size, Ordering::Relaxed);
-        let bytes_written = self.bytes_written.load(Ordering::Acquire);
-        if bytes_written > self.maximum_bytes_written {
-            return Err(ExecutionError::ExcessiveWrite);
-        }
+        self.increment_bytes_written(size)?;
         // Write the batch and make the view available again.
         match self
             .active_view_user_states_mut()

@@ -38,8 +38,8 @@ impl Default for ResourceControlPolicy {
             storage_num_reads: Amount::default(),
             storage_bytes_read: Amount::default(),
             storage_bytes_written: Amount::default(),
-            maximum_bytes_read: u64::MAX,
-            maximum_bytes_written: u64::MAX,
+            maximum_bytes_read: u64::MAX / 2,
+            maximum_bytes_written: u64::MAX / 2,
             messages: Amount::default(),
         }
     }
@@ -98,8 +98,8 @@ impl ResourceControlPolicy {
             storage_num_reads: Amount::ZERO,
             storage_bytes_read: Amount::ZERO,
             storage_bytes_written: Amount::ZERO,
-            maximum_bytes_read: u64::MAX,
-            maximum_bytes_written: u64::MAX,
+            maximum_bytes_read: u64::MAX / 2,
+            maximum_bytes_written: u64::MAX / 2,
             messages: Amount::ZERO,
         }
     }
