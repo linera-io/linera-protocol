@@ -1416,12 +1416,12 @@ impl Runnable for Job {
                         info!(
                             "Pricing:\n\
                             {:.2} base cost per block\n\
-                            {:.2} per unit of fuel used in the read per operation\n\
-                            {:.2} per unit of fuel used in the read per byte\n\
-                            {:.2} per unit of fuel used in the write per byte\n\
+                            {:.2} per byte of operations and incoming messages\n\
+                            {:.2} per byte operation\n\
+                            {:.2} per bytes read\n\
+                            {:.2} per bytes written\n\
                             {:.2} maximum number bytes read per block\n\
                             {:.2} maximum number bytes written per block\n\
-                            {:.2} per byte of operations and incoming messages\n\
                             {:.2} per byte of outgoing messages",
                             pricing.certificate,
                             pricing.fuel,
