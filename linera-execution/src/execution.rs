@@ -20,8 +20,6 @@ use linera_views::{
     views::{View, ViewError},
 };
 use linera_views_derive::CryptoHashView;
-use once_cell::sync::Lazy;
-use prometheus::{register_histogram_vec, HistogramVec};
 
 #[cfg(any(test, feature = "test"))]
 use {
@@ -31,16 +29,6 @@ use {
     std::collections::BTreeMap,
     std::sync::Arc,
 };
-
-pub static WASM_FUEL_USED_PER_BLOCK: Lazy<HistogramVec> = Lazy::new(|| {
-    register_histogram_vec!(
-        "wasm_fuel_used_per_block",
-        "Wasm fuel used per block",
-        // Can add labels here
-        &[]
-    )
-    .expect("Counter can be created")
-});
 
 /// A view accessing the execution state of a chain.
 #[derive(Debug, CryptoHashView)]
@@ -177,7 +165,6 @@ where
         action: UserAction<'_>,
         remaining_fuel: &mut u64,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
-        let initial_remaining_fuel = *remaining_fuel;
         // Try to load the application. This may fail if the corresponding
         // bytecode-publishing certificate doesn't exist yet on this validator.
         let description = self
@@ -233,9 +220,6 @@ where
         // Set the authenticated signer to be used in outgoing messages.
         result.authenticated_signer = signer;
         *remaining_fuel = runtime.remaining_fuel();
-        WASM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
-            .observe((initial_remaining_fuel - *remaining_fuel) as f64);
 
         // Check that applications were correctly stacked and unstacked.
         assert_eq!(applications.len(), 1);
