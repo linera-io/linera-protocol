@@ -16,8 +16,8 @@ use linera_base::{
 };
 use linera_chain::data_types::{CertificateValue, OutgoingMessage};
 use linera_execution::{
-    policy::ResourceControlPolicy, Bytecode, Message, Operation, SystemMessage, UserApplicationDescription,
-    WasmRuntime,
+    policy::ResourceControlPolicy, Bytecode, Message, Operation, SystemMessage,
+    UserApplicationDescription, WasmRuntime,
 };
 use linera_storage::Store;
 use linera_views::views::ViewError;

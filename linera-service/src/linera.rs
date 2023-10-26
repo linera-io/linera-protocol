@@ -1335,7 +1335,9 @@ impl Runnable for Job {
                 context.save_wallet();
             }
 
-            command @ (SetValidator { .. } | RemoveValidator { .. } | ResourceControlPolicy { .. }) => {
+            command @ (SetValidator { .. }
+            | RemoveValidator { .. }
+            | ResourceControlPolicy { .. }) => {
                 info!("Starting operations to change validator set");
                 let time_start = Instant::now();
 

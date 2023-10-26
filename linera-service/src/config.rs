@@ -442,7 +442,11 @@ impl Import for GenesisConfig {}
 impl Export for GenesisConfig {}
 
 impl GenesisConfig {
-    pub fn new(committee: CommitteeConfig, admin_id: ChainId, policy: ResourceControlPolicy) -> Self {
+    pub fn new(
+        committee: CommitteeConfig,
+        admin_id: ChainId,
+        policy: ResourceControlPolicy,
+    ) -> Self {
         Self {
             committee,
             admin_id,

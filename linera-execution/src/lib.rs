@@ -12,7 +12,7 @@ pub mod policy;
 mod runtime;
 pub mod system;
 mod wasm;
-use crate::policy::{ResourceControlPolicy, PricingError};
+use crate::policy::{PricingError, ResourceControlPolicy};
 
 pub use applications::{
     ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
@@ -96,21 +96,13 @@ impl RuntimeLimits {
         )?;
         let bytes_read = runtime_counts.bytes_read;
         self.maximum_bytes_read -= bytes_read;
-        sub_assign_fees(
-            balance,
-            policy.storage_bytes_read_price(&bytes_read)?,
-        )?;
+        sub_assign_fees(balance, policy.storage_bytes_read_price(&bytes_read)?)?;
         let bytes_written = runtime_counts.bytes_written;
         self.maximum_bytes_written -= bytes_written;
-        sub_assign_fees(
-            balance,
-            policy.storage_bytes_written_price(&bytes_written)?,
-        )?;
+        sub_assign_fees(balance, policy.storage_bytes_written_price(&bytes_written)?)?;
         Ok(())
     }
 }
-
-
 
 /// The entries of the runtime related to fuel and storage
 #[derive(Copy, Debug, Clone)]

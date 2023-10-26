@@ -8,13 +8,12 @@ mod utils;
 use self::utils::create_dummy_user_application_description;
 use counter::CounterAbi;
 use linera_base::{
-    data_types::BlockHeight,
+    data_types::{Amount, BlockHeight},
     identifiers::{ChainDescription, ChainId},
 };
-use linera_base::data_types::Amount;
 use linera_execution::{
-    policy::ResourceControlPolicy, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, Operation,
-    OperationContext, Query, QueryContext, RawExecutionResult, Response, RuntimeLimits,
+    policy::ResourceControlPolicy, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView,
+    Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response, RuntimeLimits,
     SystemExecutionState, TestExecutionRuntimeContext, WasmApplication, WasmRuntime,
 };
 use linera_views::{memory::MemoryContext, views::View};
@@ -26,7 +25,6 @@ use test_case::test_case;
 /// called correctly and consume the expected amount of fuel.
 ///
 /// To update the bytecode files, run `linera-execution/update_wasm_fixtures.sh`.
-#[ignore]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer, 30_463; "wasmer"))]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::WasmerWithSanitizer, 30_844; "wasmer_with_sanitizer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime, 30_844; "wasmtime"))]
@@ -71,10 +69,12 @@ async fn test_fuel_for_counter_wasm_application(
         next_message_index: 0,
     };
     let increments = [2_u64, 9, 7, 1000];
-    let policy = ResourceControlPolicy::default();
+    let mut policy = ResourceControlPolicy::default();
+    policy.fuel = Amount::from_atto(1);
     let mut runtime_limits = RuntimeLimits::default();
-    let balance = Amount::from_tokens(20);
-    let available_fuel = policy.remaining_fuel(balance);
+    let amount = Amount::from_tokens(1);
+    let available_fuel = policy.remaining_fuel(amount);
+    *view.system.balance.get_mut() = amount;
     for increment in &increments {
         let result = view
             .execute_operation(
@@ -92,7 +92,8 @@ async fn test_fuel_for_counter_wasm_application(
             )]
         );
     }
-    let remaining_fuel = policy.remaining_fuel(balance);
+    let balance = view.system.balance.get();
+    let remaining_fuel = policy.remaining_fuel(*balance);
     assert_eq!(available_fuel - remaining_fuel, expected_fuel);
 
     let context = QueryContext {

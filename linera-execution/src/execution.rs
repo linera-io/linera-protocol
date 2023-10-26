@@ -5,8 +5,8 @@ use crate::{
     runtime::{ApplicationStatus, ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
     ContractRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Message,
-    MessageContext, Operation, OperationContext, ResourceControlPolicy, Query, QueryContext, RawExecutionResult,
-    RawOutgoingMessage, Response, RuntimeLimits, SystemMessage,
+    MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
+    RawOutgoingMessage, ResourceControlPolicy, Response, RuntimeLimits, SystemMessage,
     UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
@@ -235,9 +235,9 @@ where
         let runtime_counts = runtime.runtime_counts();
         let balance = self.system.balance.get_mut();
         runtime_limits.update_limits(balance, policy, runtime_counts)?;
-        WASM_FUEL_USED_PER_BLOCK.with_label_values(&[]).observe(
-            (initial_remaining_fuel - policy.remaining_fuel(balance.clone())) as f64,
-        );
+        WASM_FUEL_USED_PER_BLOCK
+            .with_label_values(&[])
+            .observe((initial_remaining_fuel - policy.remaining_fuel(balance.clone())) as f64);
 
         // Check that applications were correctly stacked and unstacked.
         assert_eq!(applications.len(), 1);

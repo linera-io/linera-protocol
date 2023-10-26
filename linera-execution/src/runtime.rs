@@ -3,7 +3,7 @@
 
 use crate::{
     execution::ExecutionStateView, BaseRuntime, CallResult, ContractRuntime, ExecutionError,
-    ExecutionResult, ExecutionRuntimeContext, RuntimeLimits, RuntimeCounts, ServiceRuntime,
+    ExecutionResult, ExecutionRuntimeContext, RuntimeCounts, RuntimeLimits, ServiceRuntime,
     SessionId, UserApplicationCode, UserApplicationDescription, UserApplicationId,
 };
 use async_lock::{Mutex, MutexGuard, MutexGuardArc, RwLockWriteGuardArc};

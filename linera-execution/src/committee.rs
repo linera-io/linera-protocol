@@ -211,10 +211,7 @@ impl<'a> From<&'a Committee> for CommitteeFull<'a> {
 
 impl From<CommitteeMinimal<'static>> for Committee {
     fn from(committee_min: CommitteeMinimal) -> Committee {
-        let CommitteeMinimal {
-            validators,
-            policy,
-        } = committee_min;
+        let CommitteeMinimal { validators, policy } = committee_min;
         Committee::new(validators.into_owned(), policy.into_owned())
     }
 }
@@ -290,7 +287,10 @@ impl Epoch {
 }
 
 impl Committee {
-    pub fn new(validators: BTreeMap<ValidatorName, ValidatorState>, policy: ResourceControlPolicy) -> Self {
+    pub fn new(
+        validators: BTreeMap<ValidatorName, ValidatorState>,
+        policy: ResourceControlPolicy,
+    ) -> Self {
         let total_votes = validators.values().fold(0, |sum, state| sum + state.votes);
         // Let N = 3f + 1 + k such that 0 <= k <= 2. (Notably ⌊k / 3⌋ = 0 and ⌊(2 - k) / 3⌋ = 0.)
         // The following thresholds verify:
