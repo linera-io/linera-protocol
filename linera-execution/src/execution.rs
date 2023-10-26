@@ -233,9 +233,9 @@ where
         };
         // Set the authenticated signer to be used in outgoing messages.
         result.authenticated_signer = signer;
-        let runtime_local_meter = runtime.runtime_local_meter();
+        let runtime_counts = runtime.runtime_counts();
         let balance = self.system.balance.get_mut();
-        update_limits(balance, runtime_limits, pricing, runtime_local_meter)?;
+        update_limits(balance, runtime_limits, pricing, runtime_counts)?;
         WASM_FUEL_USED_PER_BLOCK.with_label_values(&[]).observe(
             (initial_remaining_fuel - pricing.remaining_fuel(balance.clone())) as f64,
         );

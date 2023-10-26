@@ -3,7 +3,7 @@
 
 use crate::{
     execution::ExecutionStateView, BaseRuntime, CallResult, ContractRuntime, ExecutionError,
-    ExecutionResult, ExecutionRuntimeContext, RuntimeLimits, RuntimeLocalMeter, ServiceRuntime,
+    ExecutionResult, ExecutionRuntimeContext, RuntimeLimits, RuntimeCounts, ServiceRuntime,
     SessionId, UserApplicationCode, UserApplicationDescription, UserApplicationId,
 };
 use async_lock::{Mutex, MutexGuard, MutexGuardArc, RwLockWriteGuardArc};
@@ -506,12 +506,12 @@ where
         self.remaining_fuel.load(Ordering::Acquire)
     }
 
-    fn runtime_local_meter(&self) -> RuntimeLocalMeter {
+    fn runtime_counts(&self) -> RuntimeCounts {
         let remaining_fuel = self.remaining_fuel.load(Ordering::Acquire);
         let num_reads = self.num_reads.load(Ordering::Acquire);
         let bytes_read = self.bytes_read.load(Ordering::Acquire);
         let bytes_written = self.bytes_written.load(Ordering::Acquire);
-        RuntimeLocalMeter {
+        RuntimeCounts {
             remaining_fuel,
             num_reads,
             bytes_read,

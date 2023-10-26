@@ -78,7 +78,7 @@ impl Default for RuntimeLimits {
 
 /// The entries of the runtime related to fuel and storage
 #[derive(Copy, Debug, Clone)]
-pub struct RuntimeLocalMeter {
+pub struct RuntimeCounts {
     /// The remaining fuel available
     pub remaining_fuel: u64,
     /// The number of read operations
@@ -93,22 +93,22 @@ pub fn update_limits(
     balance: &mut Amount,
     runtime_limits: &mut RuntimeLimits,
     pricing: &Pricing,
-    runtime_local: RuntimeLocalMeter,
+    runtime_counts: RuntimeCounts,
 ) -> Result<(), ExecutionError> {
     let initial_fuel = pricing.remaining_fuel(balance.clone());
-    let used_fuel = initial_fuel.saturating_sub(runtime_local.remaining_fuel);
+    let used_fuel = initial_fuel.saturating_sub(runtime_counts.remaining_fuel);
     sub_assign_fees(balance, pricing.fuel_price(used_fuel)?)?;
     sub_assign_fees(
         balance,
-        pricing.storage_num_reads_price(&runtime_local.num_reads)?,
+        pricing.storage_num_reads_price(&runtime_counts.num_reads)?,
     )?;
-    let bytes_read = runtime_local.bytes_read;
+    let bytes_read = runtime_counts.bytes_read;
     runtime_limits.maximum_bytes_read -= bytes_read;
     sub_assign_fees(
         balance,
         pricing.storage_bytes_read_price(&bytes_read)?,
     )?;
-    let bytes_written = runtime_local.bytes_written;
+    let bytes_written = runtime_counts.bytes_written;
     runtime_limits.maximum_bytes_written -= bytes_written;
     sub_assign_fees(
         balance,
@@ -388,7 +388,7 @@ pub trait ContractRuntime: BaseRuntime {
     fn remaining_fuel(&self) -> u64;
 
     /// Returns the remaining fuel as well as the storage related information on the state
-    fn runtime_local_meter(&self) -> RuntimeLocalMeter;
+    fn runtime_counts(&self) -> RuntimeCounts;
 
     /// Sets the amount of execution fuel remaining before execution is aborted.
     fn set_remaining_fuel(&self, remaining_fuel: u64);
