@@ -58,7 +58,7 @@ pub static NUM_ROUNDS_IN_CERTIFICATE: Lazy<HistogramVec> = Lazy::new(|| {
         "num_rounds_in_certificate",
         "Number of rounds in certificate",
         // Can add labels here
-        &["certificate_value"]
+        &["certificate_value", "round_type"]
     )
     .expect("Counter can be created")
 });
