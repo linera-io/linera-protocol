@@ -479,7 +479,7 @@ where
             return Err(ChainError::InactiveChain(chain_id));
         };
 
-        let pricing = committee.pricing().clone();
+        let policy = committee.policy().clone();
         let credit: Amount = block
             .incoming_messages
             .iter()
@@ -495,20 +495,20 @@ where
         let balance = self.execution_state.system.balance.get_mut();
 
         balance.try_add_assign(credit)?;
-        sub_assign_fees(balance, pricing.certificate_price())?;
+        sub_assign_fees(balance, policy.certificate_price())?;
         sub_assign_fees(
             balance,
-            pricing.storage_bytes_written_price(&block.incoming_messages)?,
+            policy.storage_bytes_written_price(&block.incoming_messages)?,
         )?;
         sub_assign_fees(
             balance,
-            pricing.storage_bytes_written_price(&block.operations)?,
+            policy.storage_bytes_written_price(&block.operations)?,
         )?;
 
         let mut messages = Vec::new();
         let mut message_counts = Vec::new();
-        let maximum_bytes_read = pricing.maximum_bytes_read;
-        let maximum_bytes_written = pricing.maximum_bytes_written;
+        let maximum_bytes_read = policy.maximum_bytes_read;
+        let maximum_bytes_written = policy.maximum_bytes_written;
         let mut runtime_limits = RuntimeLimits {
             maximum_bytes_read,
             maximum_bytes_written,
@@ -532,7 +532,7 @@ where
                 .execute_message(
                     &context,
                     &message.event.message,
-                    &pricing,
+                    &policy,
                     &mut runtime_limits,
                 )
                 .await
@@ -558,7 +558,7 @@ where
             };
             let results = self
                 .execution_state
-                .execute_operation(&context, operation, &pricing, &mut runtime_limits)
+                .execute_operation(&context, operation, &policy, &mut runtime_limits)
                 .await
                 .map_err(|err| {
                     ChainError::ExecutionError(err, ChainExecutionContext::Operation(index))

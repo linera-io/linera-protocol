@@ -1,3 +1,4 @@
+
 // Copyright (c) Facebook, Inc. and its affiliates.
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -26,7 +27,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::Epoch,
-    pricing::Pricing,
+    policy::ResourceControlPolicy,
     system::{SystemChannel, SystemMessage, SystemOperation},
     Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, ExecutionStateView,
     GenericApplicationId, Message, Operation, OperationContext, RuntimeLimits,
@@ -425,7 +426,7 @@ where
         next_message_index: 0,
     };
     let mut runtime_limits = RuntimeLimits::default();
-    let pricing = Pricing::default();
+    let policy = ResourceControlPolicy::default();
     creator_state
         .execute_operation(
             &operation_context,
@@ -433,7 +434,7 @@ where
                 application_id,
                 bytes: user_operation,
             },
-            &pricing,
+            &policy,
             &mut runtime_limits,
         )
         .await?;

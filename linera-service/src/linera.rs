@@ -24,7 +24,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
-    pricing::Pricing,
+    policy::ResourceControlPolicy,
     system::{Account, UserData},
     Bytecode, ChainOwnership, UserApplicationId, WasmRuntime, WithWasmDefault,
 };
@@ -799,8 +799,8 @@ enum ClientCommand {
         name: ValidatorName,
     },
 
-    /// View or update the pricing.
-    Pricing {
+    /// View or update the resource control policy
+    ResourceControlPolicy {
         /// Set the base price for each certificate.
         #[structopt(long)]
         certificate: Option<Amount>,
@@ -1335,7 +1335,7 @@ impl Runnable for Job {
                 context.save_wallet();
             }
 
-            command @ (SetValidator { .. } | RemoveValidator { .. } | Pricing { .. }) => {
+            command @ (SetValidator { .. } | RemoveValidator { .. } | ResourceControlPolicy { .. }) => {
                 info!("Starting operations to change validator set");
                 let time_start = Instant::now();
 
@@ -1357,7 +1357,7 @@ impl Runnable for Job {
 
                 // Create the new committee.
                 let mut committee = chain_client.local_committee().await.unwrap();
-                let mut pricing = committee.pricing().clone();
+                let mut policy = committee.policy().clone();
                 let mut validators = committee.validators().clone();
                 match command {
                     SetValidator {
@@ -1379,7 +1379,7 @@ impl Runnable for Job {
                             return Ok(());
                         }
                     }
-                    Pricing {
+                    ResourceControlPolicy {
                         certificate,
                         fuel,
                         storage_num_reads,
@@ -1390,47 +1390,47 @@ impl Runnable for Job {
                         messages,
                     } => {
                         if let Some(certificate) = certificate {
-                            pricing.certificate = certificate;
+                            policy.certificate = certificate;
                         }
                         if let Some(fuel) = fuel {
-                            pricing.fuel = fuel;
+                            policy.fuel = fuel;
                         }
                         if let Some(storage_num_reads) = storage_num_reads {
-                            pricing.storage_num_reads = storage_num_reads;
+                            policy.storage_num_reads = storage_num_reads;
                         }
                         if let Some(storage_bytes_read) = storage_bytes_read {
-                            pricing.storage_bytes_read = storage_bytes_read;
+                            policy.storage_bytes_read = storage_bytes_read;
                         }
                         if let Some(storage_bytes_written) = storage_bytes_written {
-                            pricing.storage_bytes_written = storage_bytes_written;
+                            policy.storage_bytes_written = storage_bytes_written;
                         }
                         if let Some(maximum_bytes_read) = maximum_bytes_read {
-                            pricing.maximum_bytes_read = maximum_bytes_read;
+                            policy.maximum_bytes_read = maximum_bytes_read;
                         }
                         if let Some(maximum_bytes_written) = maximum_bytes_written {
-                            pricing.maximum_bytes_written = maximum_bytes_written;
+                            policy.maximum_bytes_written = maximum_bytes_written;
                         }
                         if let Some(messages) = messages {
-                            pricing.messages = messages;
+                            policy.messages = messages;
                         }
                         info!(
-                            "Pricing:\n\
+                            "ResourceControlPolicy:\n\
                             {:.2} base cost per block\n\
-                            {:.2} per byte of operations and incoming messages\n\
-                            {:.2} per byte operation\n\
-                            {:.2} per bytes read\n\
-                            {:.2} per bytes written\n\
+                            {:.2} cost per byte of operations and incoming messages\n\
+                            {:.2} cost per byte operation\n\
+                            {:.2} cost per bytes read\n\
+                            {:.2} cost per bytes written\n\
+                            {:.2} per byte of outgoing messages\n\
                             {:.2} maximum number bytes read per block\n\
-                            {:.2} maximum number bytes written per block\n\
-                            {:.2} per byte of outgoing messages",
-                            pricing.certificate,
-                            pricing.fuel,
-                            pricing.storage_num_reads,
-                            pricing.storage_bytes_read,
-                            pricing.storage_bytes_written,
-                            pricing.maximum_bytes_read,
-                            pricing.maximum_bytes_written,
-                            pricing.messages
+                            {:.2} maximum number bytes written per block",
+                            policy.certificate,
+                            policy.fuel,
+                            policy.storage_num_reads,
+                            policy.storage_bytes_read,
+                            policy.storage_bytes_written,
+                            policy.messages,
+                            policy.maximum_bytes_read,
+                            policy.maximum_bytes_written
                         );
                         if certificate.is_none()
                             && fuel.is_none()
@@ -1446,7 +1446,7 @@ impl Runnable for Job {
                     }
                     _ => unreachable!(),
                 }
-                committee = Committee::new(validators, pricing);
+                committee = Committee::new(validators, policy);
                 let certificate = chain_client.stage_new_committee(committee).await.unwrap();
                 context.update_wallet_from_client(&mut chain_client).await;
                 info!("Staging committee:\n{:?}", certificate);
@@ -1829,7 +1829,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 Some(value) => value,
                 None => u64::MAX,
             };
-            let pricing = Pricing {
+            let policy = ResourceControlPolicy {
                 certificate: *certificate_price,
                 fuel: *fuel_price,
                 storage_num_reads: *storage_num_reads_price,
@@ -1840,7 +1840,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 messages: *messages_price,
             };
             let mut genesis_config =
-                GenesisConfig::new(committee_config, ChainId::root(*admin_root), pricing);
+                GenesisConfig::new(committee_config, ChainId::root(*admin_root), policy);
             let timestamp = start_timestamp
                 .map(|st| {
                     Timestamp::from(

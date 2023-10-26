@@ -16,7 +16,7 @@ use linera_base::{
 };
 use linera_chain::data_types::{CertificateValue, OutgoingMessage};
 use linera_execution::{
-    pricing::Pricing, Bytecode, Message, Operation, SystemMessage, UserApplicationDescription,
+    policy::ResourceControlPolicy, Bytecode, Message, Operation, SystemMessage, UserApplicationDescription,
     WasmRuntime,
 };
 use linera_storage::Store;
@@ -73,7 +73,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
-        .with_pricing(Pricing::all_categories());
+        .with_policy(ResourceControlPolicy::all_categories());
     let mut publisher = builder
         .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
         .await?;
@@ -190,7 +190,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
-        .with_pricing(Pricing::all_categories());
+        .with_policy(ResourceControlPolicy::all_categories());
     // Will publish the bytecodes.
     let mut publisher = builder
         .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
@@ -328,7 +328,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
-        .with_pricing(Pricing::all_categories());
+        .with_policy(ResourceControlPolicy::all_categories());
     // Will publish the bytecodes.
     let mut publisher = builder
         .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
@@ -431,7 +431,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
-        .with_pricing(Pricing::all_categories());
+        .with_policy(ResourceControlPolicy::all_categories());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
         .await?;
@@ -625,7 +625,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
-        .with_pricing(Pricing::all_categories());
+        .with_policy(ResourceControlPolicy::all_categories());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(0), Amount::ONE)
         .await?;

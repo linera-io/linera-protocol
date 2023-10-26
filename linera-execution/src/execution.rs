@@ -5,7 +5,7 @@ use crate::{
     runtime::{ApplicationStatus, ExecutionRuntime, SessionManager},
     system::SystemExecutionStateView,
     ContractRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Message,
-    MessageContext, Operation, OperationContext, Pricing, Query, QueryContext, RawExecutionResult,
+    MessageContext, Operation, OperationContext, ResourceControlPolicy, Query, QueryContext, RawExecutionResult,
     RawOutgoingMessage, Response, RuntimeLimits, SystemMessage,
     UserApplicationDescription, UserApplicationId,
 };
@@ -130,12 +130,12 @@ where
             .insert(application_id, application);
 
         let mut runtime_limits = RuntimeLimits::default();
-        let pricing = Pricing::default();
+        let policy = ResourceControlPolicy::default();
         self.run_user_action(
             application_id,
             chain_id,
             action,
-            &pricing,
+            &policy,
             &mut runtime_limits,
         )
         .await?;
@@ -172,11 +172,11 @@ where
         application_id: UserApplicationId,
         chain_id: ChainId,
         action: UserAction<'_>,
-        pricing: &Pricing,
+        policy: &ResourceControlPolicy,
         runtime_limits: &mut RuntimeLimits,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         let balance = *self.system.balance.get();
-        let initial_remaining_fuel = pricing.remaining_fuel(balance);
+        let initial_remaining_fuel = policy.remaining_fuel(balance);
         // Try to load the application. This may fail if the corresponding
         // bytecode-publishing certificate doesn't exist yet on this validator.
         let description = self
@@ -234,9 +234,9 @@ where
         result.authenticated_signer = signer;
         let runtime_counts = runtime.runtime_counts();
         let balance = self.system.balance.get_mut();
-        runtime_limits.update_limits(balance, pricing, runtime_counts)?;
+        runtime_limits.update_limits(balance, policy, runtime_counts)?;
         WASM_FUEL_USED_PER_BLOCK.with_label_values(&[]).observe(
-            (initial_remaining_fuel - pricing.remaining_fuel(balance.clone())) as f64,
+            (initial_remaining_fuel - policy.remaining_fuel(balance.clone())) as f64,
         );
 
         // Check that applications were correctly stacked and unstacked.
@@ -277,7 +277,7 @@ where
         &mut self,
         context: &OperationContext,
         operation: &Operation,
-        pricing: &Pricing,
+        policy: &ResourceControlPolicy,
         runtime_limits: &mut RuntimeLimits,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
@@ -294,7 +294,7 @@ where
                             application_id,
                             context.chain_id,
                             user_action,
-                            pricing,
+                            policy,
                             runtime_limits,
                         )
                         .await?,
@@ -310,7 +310,7 @@ where
                     *application_id,
                     context.chain_id,
                     UserAction::Operation(context, bytes),
-                    pricing,
+                    policy,
                     runtime_limits,
                 )
                 .await
@@ -322,7 +322,7 @@ where
         &mut self,
         context: &MessageContext,
         message: &Message,
-        pricing: &Pricing,
+        policy: &ResourceControlPolicy,
         runtime_limits: &mut RuntimeLimits,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
@@ -339,7 +339,7 @@ where
                     *application_id,
                     context.chain_id,
                     UserAction::Message(context, bytes),
-                    pricing,
+                    policy,
                     runtime_limits,
                 )
                 .await

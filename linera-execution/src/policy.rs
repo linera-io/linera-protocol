@@ -10,7 +10,7 @@ use thiserror::Error;
 
 /// A collection of costs associated with blocks in validators.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, InputObject)]
-pub struct Pricing {
+pub struct ResourceControlPolicy {
     /// The base price for each certificate, to compensate for the communication and signing
     /// overhead.
     pub certificate: Amount,
@@ -30,9 +30,9 @@ pub struct Pricing {
     pub messages: Amount,
 }
 
-impl Default for Pricing {
+impl Default for ResourceControlPolicy {
     fn default() -> Self {
-        Pricing {
+        ResourceControlPolicy {
             certificate: Amount::default(),
             fuel: Amount::default(),
             storage_num_reads: Amount::default(),
@@ -45,7 +45,7 @@ impl Default for Pricing {
     }
 }
 
-impl Pricing {
+impl ResourceControlPolicy {
     pub fn certificate_price(&self) -> Amount {
         self.certificate
     }
@@ -92,7 +92,7 @@ impl Pricing {
     /// This can be used in tests that need whole numbers in their chain balance and don't expect
     /// to execute any Wasm code.
     pub fn only_fuel() -> Self {
-        Pricing {
+        ResourceControlPolicy {
             certificate: Amount::ZERO,
             fuel: Amount::from_atto(1_000_000_000_000),
             storage_num_reads: Amount::ZERO,
@@ -110,7 +110,7 @@ impl Pricing {
     /// This can be used in tests that don't expect to execute any Wasm code, and that keep track of
     /// how many certificates were created.
     pub fn fuel_and_certificate() -> Self {
-        Pricing {
+        ResourceControlPolicy {
             certificate: Amount::from_milli(1),
             fuel: Amount::from_atto(1_000_000_000_000),
             storage_num_reads: Amount::ZERO,
@@ -125,7 +125,7 @@ impl Pricing {
     #[cfg(any(test, feature = "test"))]
     /// Creates a pricing where all categories have a small non-zero cost.
     pub fn all_categories() -> Self {
-        Pricing {
+        ResourceControlPolicy {
             certificate: Amount::from_milli(1),
             fuel: Amount::from_atto(1_000_000_000),
             storage_num_reads: Amount::ZERO,

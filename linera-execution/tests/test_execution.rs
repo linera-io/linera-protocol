@@ -12,7 +12,7 @@ use linera_base::{
     data_types::BlockHeight,
     identifiers::{ChainDescription, ChainId, Owner, SessionId},
 };
-use linera_execution::{pricing::Pricing, *};
+use linera_execution::{policy::ResourceControlPolicy, *};
 use linera_views::{batch::Batch, common::Context, memory::MemoryContext, views::View};
 use std::sync::Arc;
 
@@ -43,7 +43,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         next_message_index: 0,
     };
     let mut runtime_limits = RuntimeLimits::default();
-    let pricing = Pricing::default();
+    let policy = ResourceControlPolicy::default();
     let result = view
         .execute_operation(
             &context,
@@ -51,7 +51,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
                 application_id: app_id,
                 bytes: vec![],
             },
-            &pricing,
+            &policy,
             &mut runtime_limits,
         )
         .await;
@@ -214,7 +214,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         next_message_index: 0,
     };
     let mut runtime_limits = RuntimeLimits::default();
-    let pricing = Pricing::default();
+    let policy = ResourceControlPolicy::default();
     let result = view
         .execute_operation(
             &context,
@@ -222,7 +222,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 application_id: app_id,
                 bytes: vec![1],
             },
-            &pricing,
+            &policy,
             &mut runtime_limits,
         )
         .await
@@ -287,7 +287,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
         next_message_index: 0,
     };
     let mut runtime_limits = RuntimeLimits::default();
-    let pricing = Pricing::default();
+    let policy = ResourceControlPolicy::default();
     let result = view
         .execute_operation(
             &context,
@@ -295,7 +295,7 @@ async fn test_simple_user_operation_with_leaking_session() -> anyhow::Result<()>
                 application_id: app_id,
                 bytes: vec![],
             },
-            &pricing,
+            &policy,
             &mut runtime_limits,
         )
         .await;

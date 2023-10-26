@@ -28,7 +28,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    pricing::Pricing,
+    policy::ResourceControlPolicy,
     system::{Account, Recipient, SystemOperation, UserData},
     ChainOwnership, ExecutionError, Operation, SystemExecutionError, SystemQuery, SystemResponse,
 };
@@ -82,7 +82,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
-        .with_pricing(Pricing::fuel_and_certificate());
+        .with_policy(ResourceControlPolicy::fuel_and_certificate());
     let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
@@ -157,7 +157,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
-        .with_pricing(Pricing::only_fuel());
+        .with_policy(ResourceControlPolicy::only_fuel());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
@@ -247,7 +247,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
-        .with_pricing(Pricing::fuel_and_certificate());
+        .with_policy(ResourceControlPolicy::fuel_and_certificate());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
@@ -317,7 +317,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
-        .with_pricing(Pricing::fuel_and_certificate());
+        .with_policy(ResourceControlPolicy::fuel_and_certificate());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
@@ -809,7 +809,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
-        .with_pricing(Pricing::all_categories());
+        .with_policy(ResourceControlPolicy::all_categories());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
@@ -1076,7 +1076,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
-        .with_pricing(Pricing::fuel_and_certificate());
+        .with_policy(ResourceControlPolicy::fuel_and_certificate());
     let mut client1 = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
         .await?;
@@ -1280,7 +1280,7 @@ where
 
     // Create a new committee.
     let validators = builder.initial_committee.validators().clone();
-    let committee = Committee::new(validators, Pricing::only_fuel());
+    let committee = Committee::new(validators, ResourceControlPolicy::only_fuel());
     admin.stage_new_committee(committee).await.unwrap();
     assert_eq!(admin.next_block_height, BlockHeight::from(1));
     assert!(admin.pending_block.is_none());
@@ -1387,7 +1387,7 @@ where
 {
     let mut builder = TestBuilder::new(store_builder, 4, 1)
         .await?
-        .with_pricing(Pricing::fuel_and_certificate());
+        .with_policy(ResourceControlPolicy::fuel_and_certificate());
     let mut sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
         .await?;

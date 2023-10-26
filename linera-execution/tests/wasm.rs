@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_base::data_types::Amount;
 use linera_execution::{
-    pricing::Pricing, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, Operation,
+    policy::ResourceControlPolicy, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, Operation,
     OperationContext, Query, QueryContext, RawExecutionResult, Response, RuntimeLimits,
     SystemExecutionState, TestExecutionRuntimeContext, WasmApplication, WasmRuntime,
 };
@@ -71,16 +71,16 @@ async fn test_fuel_for_counter_wasm_application(
         next_message_index: 0,
     };
     let increments = [2_u64, 9, 7, 1000];
-    let pricing = Pricing::default();
+    let policy = ResourceControlPolicy::default();
     let mut runtime_limits = RuntimeLimits::default();
     let balance = Amount::from_tokens(20);
-    let available_fuel = pricing.remaining_fuel(balance);
+    let available_fuel = policy.remaining_fuel(balance);
     for increment in &increments {
         let result = view
             .execute_operation(
                 &context,
                 &Operation::user(app_id, increment).unwrap(),
-                &pricing,
+                &policy,
                 &mut runtime_limits,
             )
             .await?;
@@ -92,7 +92,7 @@ async fn test_fuel_for_counter_wasm_application(
             )]
         );
     }
-    let remaining_fuel = pricing.remaining_fuel(balance);
+    let remaining_fuel = policy.remaining_fuel(balance);
     assert_eq!(available_fuel - remaining_fuel, expected_fuel);
 
     let context = QueryContext {

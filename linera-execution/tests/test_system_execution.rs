@@ -9,7 +9,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, MessageId},
 };
 use linera_execution::{
-    pricing::Pricing,
+    policy::ResourceControlPolicy,
     system::{Account, Recipient, UserData},
     ExecutionResult, ExecutionStateView, Message, MessageContext, Operation, OperationContext,
     Query, QueryContext, RawExecutionResult, Response, RuntimeLimits, SystemExecutionState,
@@ -40,12 +40,12 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         next_message_index: 0,
     };
     let mut runtime_limits = RuntimeLimits::default();
-    let pricing = Pricing::default();
+    let policy = ResourceControlPolicy::default();
     let results = view
         .execute_operation(
             &context,
             &Operation::System(operation),
-            &pricing,
+            &policy,
             &mut runtime_limits,
         )
         .await
@@ -86,12 +86,12 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         authenticated_signer: None,
     };
     let mut runtime_limits = RuntimeLimits::default();
-    let pricing = Pricing::default();
+    let policy = ResourceControlPolicy::default();
     let results = view
         .execute_message(
             &context,
             &Message::System(message),
-            &pricing,
+            &policy,
             &mut runtime_limits,
         )
         .await

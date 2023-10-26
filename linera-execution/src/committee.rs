@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::pricing::Pricing;
+use crate::policy::ResourceControlPolicy;
 use async_graphql::InputObject;
 use linera_base::{
     crypto::{CryptoError, PublicKey},
@@ -108,8 +108,8 @@ pub struct Committee {
     quorum_threshold: u64,
     /// The threshold to prove the validity of a statement.
     validity_threshold: u64,
-    /// The pricing agreed on for this epoch.
-    pricing: Pricing,
+    /// The policy agreed on for this epoch.
+    policy: ResourceControlPolicy,
 }
 
 impl Serialize for Committee {
@@ -147,14 +147,14 @@ struct CommitteeFull<'a> {
     total_votes: u64,
     quorum_threshold: u64,
     validity_threshold: u64,
-    pricing: Cow<'a, Pricing>,
+    policy: Cow<'a, ResourceControlPolicy>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "Committee")]
 struct CommitteeMinimal<'a> {
     validators: Cow<'a, BTreeMap<ValidatorName, ValidatorState>>,
-    pricing: Cow<'a, Pricing>,
+    policy: Cow<'a, ResourceControlPolicy>,
 }
 
 impl TryFrom<CommitteeFull<'static>> for Committee {
@@ -166,9 +166,9 @@ impl TryFrom<CommitteeFull<'static>> for Committee {
             total_votes,
             quorum_threshold,
             validity_threshold,
-            pricing,
+            policy,
         } = committee_full;
-        let committee = Committee::new(validators.into_owned(), pricing.into_owned());
+        let committee = Committee::new(validators.into_owned(), policy.into_owned());
         if total_votes != committee.total_votes {
             Err(format!(
                 "invalid committee: total_votes is {}; should be {}",
@@ -197,14 +197,14 @@ impl<'a> From<&'a Committee> for CommitteeFull<'a> {
             total_votes,
             quorum_threshold,
             validity_threshold,
-            pricing,
+            policy,
         } = committee;
         CommitteeFull {
             validators: Cow::Borrowed(validators),
             total_votes: *total_votes,
             quorum_threshold: *quorum_threshold,
             validity_threshold: *validity_threshold,
-            pricing: Cow::Borrowed(pricing),
+            policy: Cow::Borrowed(policy),
         }
     }
 }
@@ -213,9 +213,9 @@ impl From<CommitteeMinimal<'static>> for Committee {
     fn from(committee_min: CommitteeMinimal) -> Committee {
         let CommitteeMinimal {
             validators,
-            pricing,
+            policy,
         } = committee_min;
-        Committee::new(validators.into_owned(), pricing.into_owned())
+        Committee::new(validators.into_owned(), policy.into_owned())
     }
 }
 
@@ -226,11 +226,11 @@ impl<'a> From<&'a Committee> for CommitteeMinimal<'a> {
             total_votes: _,
             quorum_threshold: _,
             validity_threshold: _,
-            pricing,
+            policy,
         } = committee;
         CommitteeMinimal {
             validators: Cow::Borrowed(validators),
-            pricing: Cow::Borrowed(pricing),
+            policy: Cow::Borrowed(policy),
         }
     }
 }
@@ -290,7 +290,7 @@ impl Epoch {
 }
 
 impl Committee {
-    pub fn new(validators: BTreeMap<ValidatorName, ValidatorState>, pricing: Pricing) -> Self {
+    pub fn new(validators: BTreeMap<ValidatorName, ValidatorState>, policy: ResourceControlPolicy) -> Self {
         let total_votes = validators.values().fold(0, |sum, state| sum + state.votes);
         // Let N = 3f + 1 + k such that 0 <= k <= 2. (Notably ⌊k / 3⌋ = 0 and ⌊(2 - k) / 3⌋ = 0.)
         // The following thresholds verify:
@@ -304,7 +304,7 @@ impl Committee {
             total_votes,
             quorum_threshold,
             validity_threshold,
-            pricing,
+            policy,
         }
     }
 
@@ -322,7 +322,7 @@ impl Committee {
                 )
             })
             .collect();
-        Committee::new(map, Pricing::default())
+        Committee::new(map, ResourceControlPolicy::default())
     }
 
     pub fn weight(&self, author: &ValidatorName) -> u64 {
@@ -354,7 +354,7 @@ impl Committee {
         self.total_votes
     }
 
-    pub fn pricing(&self) -> &Pricing {
-        &self.pricing
+    pub fn policy(&self) -> &ResourceControlPolicy {
+        &self.policy
     }
 }

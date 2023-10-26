@@ -8,11 +8,11 @@ pub mod committee;
 mod execution;
 mod graphql;
 mod ownership;
-pub mod pricing;
+pub mod policy;
 mod runtime;
 pub mod system;
 mod wasm;
-use crate::pricing::{Pricing, PricingError};
+use crate::policy::{ResourceControlPolicy, PricingError};
 
 pub use applications::{
     ApplicationRegistryView, BytecodeLocation, GenericApplicationId, UserApplicationDescription,
@@ -84,27 +84,27 @@ impl RuntimeLimits {
     pub fn update_limits(
         &mut self,
         balance: &mut Amount,
-        pricing: &Pricing,
+        policy: &ResourceControlPolicy,
         runtime_counts: RuntimeCounts,
     ) -> Result<(), ExecutionError> {
-        let initial_fuel = pricing.remaining_fuel(balance.clone());
+        let initial_fuel = policy.remaining_fuel(balance.clone());
         let used_fuel = initial_fuel.saturating_sub(runtime_counts.remaining_fuel);
-        sub_assign_fees(balance, pricing.fuel_price(used_fuel)?)?;
+        sub_assign_fees(balance, policy.fuel_price(used_fuel)?)?;
         sub_assign_fees(
             balance,
-            pricing.storage_num_reads_price(&runtime_counts.num_reads)?,
+            policy.storage_num_reads_price(&runtime_counts.num_reads)?,
         )?;
         let bytes_read = runtime_counts.bytes_read;
         self.maximum_bytes_read -= bytes_read;
         sub_assign_fees(
             balance,
-            pricing.storage_bytes_read_price(&bytes_read)?,
+            policy.storage_bytes_read_price(&bytes_read)?,
         )?;
         let bytes_written = runtime_counts.bytes_written;
         self.maximum_bytes_written -= bytes_written;
         sub_assign_fees(
             balance,
-            pricing.storage_bytes_written_price(&bytes_written)?,
+            policy.storage_bytes_written_price(&bytes_written)?,
         )?;
         Ok(())
     }

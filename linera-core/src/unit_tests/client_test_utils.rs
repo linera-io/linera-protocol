@@ -18,7 +18,7 @@ use linera_base::{
 use linera_chain::data_types::{BlockProposal, Certificate, HashedValue, LiteCertificate};
 use linera_execution::{
     committee::{Committee, ValidatorName},
-    pricing::Pricing,
+    policy::ResourceControlPolicy,
     WasmRuntime,
 };
 use linera_storage::{MemoryStoreClient, Store, TestClock};
@@ -413,9 +413,9 @@ where
         })
     }
 
-    pub fn with_pricing(mut self, pricing: Pricing) -> Self {
+    pub fn with_policy(mut self, policy: ResourceControlPolicy) -> Self {
         let validators = self.initial_committee.validators().clone();
-        self.initial_committee = Committee::new(validators, pricing);
+        self.initial_committee = Committee::new(validators, policy);
         self
     }
 

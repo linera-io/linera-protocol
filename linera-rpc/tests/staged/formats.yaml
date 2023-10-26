@@ -268,8 +268,8 @@ Committee:
             TYPENAME: ValidatorName
           VALUE:
             TYPENAME: ValidatorState
-    - pricing:
-        TYPENAME: Pricing
+    - policy:
+        TYPENAME: ResourceControlPolicy
 CrossChainRequest:
   ENUM:
     0:
@@ -584,7 +584,7 @@ OutgoingMessage:
 Owner:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
-Pricing:
+ResourceControlPolicy
   STRUCT:
     - certificate:
         TYPENAME: Amount

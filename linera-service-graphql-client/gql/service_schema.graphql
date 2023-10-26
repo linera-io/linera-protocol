@@ -209,9 +209,9 @@ input Committee {
 	"""
 	validityThreshold: Int!
 	"""
-	The pricing agreed on for this epoch.
+	The policy agreed on for this epoch.
 	"""
-	pricing: Pricing!
+	policy: ResourceControlPolicy!
 }
 
 """
@@ -419,9 +419,27 @@ The owner of a chain. This is currently the hash of the owner's public key used 
 scalar Owner
 
 """
+A signature public key
+"""
+scalar PublicKey
+
+type QueryRoot {
+	chain(chainId: ChainId!): ChainStateExtendedView!
+	applications(chainId: ChainId!): [ApplicationOverview!]!
+	chains: Chains!
+	block(hash: CryptoHash, chainId: ChainId!): HashedValue
+	blocks(from: CryptoHash, chainId: ChainId!, limit: Int): [HashedValue!]!
+}
+
+"""
+The recipient of a transfer
+"""
+scalar Recipient
+
+"""
 A collection of costs associated with blocks in validators.
 """
-input Pricing {
+input ResourceControlPolicy {
 	"""
 	The base price for each certificate, to compensate for the communication and signing
 	overhead.
@@ -456,24 +474,6 @@ input Pricing {
 	"""
 	messages: Amount!
 }
-
-"""
-A signature public key
-"""
-scalar PublicKey
-
-type QueryRoot {
-	chain(chainId: ChainId!): ChainStateExtendedView!
-	applications(chainId: ChainId!): [ApplicationOverview!]!
-	chains: Chains!
-	block(hash: CryptoHash, chainId: ChainId!): HashedValue
-	blocks(from: CryptoHash, chainId: ChainId!, limit: Int): [HashedValue!]!
-}
-
-"""
-The recipient of a transfer
-"""
-scalar Recipient
 
 """
 A number to identify successive attempts to decide a value in a consensus protocol.

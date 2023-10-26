@@ -18,7 +18,7 @@ use linera_base::{
     data_types::{ArithmeticError, BlockHeight, RoundNumber, Timestamp},
     identifiers::ChainId,
 };
-use linera_execution::{pricing::PricingError, ExecutionError};
+use linera_execution::{policy::PricingError, ExecutionError};
 use linera_views::views::ViewError;
 pub use manager::{
     ChainManager, ChainManagerInfo, MultiOwnerManagerInfo, Outcome as ChainManagerOutcome,
