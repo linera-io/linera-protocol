@@ -59,6 +59,16 @@ pub static PROXY_REQUEST_COUNT: Lazy<IntCounterVec> = Lazy::new(|| {
     .expect("Counter can be created")
 });
 
+pub static PROXY_REQUEST_SUCCESS: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "proxy_request_success",
+        "Proxy request success",
+        // Can add labels here
+        &["method_name"]
+    )
+    .expect("Counter can be created")
+});
+
 #[derive(Clone)]
 pub struct PrometheusMetricsMiddlewareLayer;
 
@@ -218,6 +228,21 @@ impl GrpcProxy {
             .map_err(|_| Status::internal("could not connect to shard"))?;
         Ok((client, inner))
     }
+
+    fn log_and_return_proxy_request_outcome(
+        result: Result<Response<ChainInfoResult>, Status>,
+        method_name: &str,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        match result {
+            Ok(chain_info_result) => {
+                PROXY_REQUEST_SUCCESS
+                    .with_label_values(&[method_name])
+                    .inc();
+                Ok(chain_info_result)
+            }
+            Err(status) => Err(status),
+        }
+    }
 }
 
 #[async_trait]
@@ -230,7 +255,10 @@ impl ValidatorNode for GrpcProxy {
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.client_for_proxy_worker(request).await?;
-        client.handle_block_proposal(inner).await
+        Self::log_and_return_proxy_request_outcome(
+            client.handle_block_proposal(inner).await,
+            "handle_block_proposal",
+        )
     }
 
     #[instrument(skip_all, err(Display))]
@@ -239,7 +267,10 @@ impl ValidatorNode for GrpcProxy {
         request: Request<LiteCertificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.client_for_proxy_worker(request).await?;
-        client.handle_lite_certificate(inner).await
+        Self::log_and_return_proxy_request_outcome(
+            client.handle_lite_certificate(inner).await,
+            "handle_lite_certificate",
+        )
     }
 
     #[instrument(skip_all, err(Display))]
@@ -248,7 +279,10 @@ impl ValidatorNode for GrpcProxy {
         request: Request<Certificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.client_for_proxy_worker(request).await?;
-        client.handle_certificate(inner).await
+        Self::log_and_return_proxy_request_outcome(
+            client.handle_certificate(inner).await,
+            "handle_certificate",
+        )
     }
 
     #[instrument(skip_all, err(Display))]
@@ -257,7 +291,10 @@ impl ValidatorNode for GrpcProxy {
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.client_for_proxy_worker(request).await?;
-        client.handle_chain_info_query(inner).await
+        Self::log_and_return_proxy_request_outcome(
+            client.handle_chain_info_query(inner).await,
+            "handle_chain_info_query",
+        )
     }
 
     #[instrument(skip_all, err(Display))]
