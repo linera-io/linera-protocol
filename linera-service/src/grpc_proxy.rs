@@ -4,6 +4,7 @@
 use crate::prometheus_server;
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::{future::BoxFuture, FutureExt};
 use linera_base::identifiers::ChainId;
 use linera_core::notifier::Notifier;
 use linera_rpc::{
@@ -20,14 +21,76 @@ use linera_rpc::{
     },
     grpc_pool::ConnectionPool,
 };
-use std::{fmt::Debug, net::SocketAddr, sync::Arc, time::Duration};
+use once_cell::sync::Lazy;
+use prometheus::{register_histogram_vec, HistogramVec};
+use std::{
+    fmt::Debug,
+    net::SocketAddr,
+    sync::Arc,
+    task::{Context, Poll},
+    time::Duration,
+};
 use tokio::select;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
-    transport::{Channel, Server},
+    transport::{Body, Channel, Server},
     Request, Response, Status,
 };
+use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument};
+
+pub static PROXY_REQUEST_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "proxy_request_latency",
+        "Proxy request latency",
+        // Can add labels here
+        &[]
+    )
+    .expect("Counter can be created")
+});
+
+#[derive(Clone)]
+pub struct PrometheusMetricsMiddlewareLayer;
+
+#[derive(Clone)]
+pub struct PrometheusMetricsMiddlewareService<T> {
+    service: T,
+}
+
+impl<S> Layer<S> for PrometheusMetricsMiddlewareLayer {
+    type Service = PrometheusMetricsMiddlewareService<S>;
+
+    fn layer(&self, service: S) -> Self::Service {
+        PrometheusMetricsMiddlewareService { service }
+    }
+}
+
+impl<S> Service<tonic::codegen::http::Request<Body>> for PrometheusMetricsMiddlewareService<S>
+where
+    S::Future: Send + 'static,
+    S: Service<tonic::codegen::http::Request<Body>> + std::marker::Send,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = BoxFuture<'static, Result<S::Response, S::Error>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.service.poll_ready(cx)
+    }
+
+    fn call(&mut self, request: http::Request<Body>) -> Self::Future {
+        let start = std::time::Instant::now();
+        let future = self.service.call(request);
+        async move {
+            let response = future.await?;
+            PROXY_REQUEST_LATENCY
+                .with_label_values(&[])
+                .observe(start.elapsed().as_secs_f64());
+            Ok(response)
+        }
+        .boxed()
+    }
+}
 
 #[derive(Clone)]
 pub struct GrpcProxy(Arc<GrpcProxyInner>);
@@ -111,6 +174,11 @@ impl GrpcProxy {
             .add_service(self.as_notifier_service())
             .serve(self.internal_address());
         let public_server = Server::builder()
+            .layer(
+                ServiceBuilder::new()
+                    .layer(PrometheusMetricsMiddlewareLayer)
+                    .into_inner(),
+            )
             .add_service(health_service)
             .add_service(self.as_validator_node())
             .serve(self.public_address());
