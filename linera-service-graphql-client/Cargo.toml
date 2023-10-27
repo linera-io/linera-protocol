@@ -1,6 +1,6 @@
 [package]
 name = "linera-service-graphql-client"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2021"
 description = "A GraphQL client for Linera node service"
 readme = "README.md"
