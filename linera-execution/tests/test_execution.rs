@@ -241,7 +241,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
     };
     assert_eq!(
-        view.handle_query(
+        view.query_application(
             &context,
             &Query::User {
                 application_id: app_id,
