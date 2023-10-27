@@ -10,7 +10,7 @@ use async_lock::{Mutex, MutexGuard, MutexGuardArc, RwLockWriteGuardArc};
 use async_trait::async_trait;
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::Timestamp,
+    data_types::{ArithmeticError, Timestamp},
     ensure, hex_debug,
     identifiers::{ChainId, Owner},
 };
@@ -41,10 +41,8 @@ pub(crate) struct ExecutionRuntime<'a, C, const WRITABLE: bool> {
     bytes_read: Arc<AtomicU64>,
     /// The total size being written
     bytes_written: Arc<AtomicU64>,
-    /// The maximum size of read allowed
-    maximum_bytes_read: u64,
-    /// The maximum size of write allowed
-    maximum_bytes_written: u64,
+    /// The runtime limits
+    runtime_limits: RuntimeLimits,
     /// The current chain ID.
     chain_id: ChainId,
     /// The current stack of application descriptions.
@@ -117,15 +115,12 @@ where
         let num_reads = Arc::new(AtomicU64::new(0));
         let bytes_read = Arc::new(AtomicU64::new(0));
         let bytes_written = Arc::new(AtomicU64::new(0));
-        let maximum_bytes_read = runtime_limits.maximum_bytes_read;
-        let maximum_bytes_written = runtime_limits.maximum_bytes_written;
         Self {
             remaining_fuel,
             num_reads,
             bytes_read,
             bytes_written,
-            maximum_bytes_read,
-            maximum_bytes_written,
+            runtime_limits,
             chain_id,
             applications: Arc::new(Mutex::new(applications)),
             execution_state: Arc::new(Mutex::new(execution_state)),
@@ -315,43 +310,43 @@ where
 }
 
 impl<'a, C, const W: bool> ExecutionRuntime<'a, C, W> {
-    fn increment_check(
-        atomic: &Arc<AtomicU64>,
-        increment: u64,
-        upper_limit: u64,
-        error: ExecutionError,
-    ) -> Result<(), ExecutionError> {
-        if increment >= u64::MAX / 2 {
-            return Err(error);
-        }
-        atomic.fetch_add(increment, Ordering::Relaxed);
-        let bytes = atomic.load(Ordering::Acquire);
-        if bytes >= upper_limit {
-            return Err(error);
+    fn increment_num_reads(&self) -> Result<(), ExecutionError> {
+        self.num_reads.fetch_add(1, Ordering::Relaxed);
+        let bytes = self.num_reads.load(Ordering::Acquire);
+        if bytes >= self.runtime_limits.max_budget_num_reads {
+            return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
         }
         Ok(())
     }
 
-    fn increment_bytes_read(
-        &self,
-        atomic: &Arc<AtomicU64>,
-        increment: u64,
-    ) -> Result<(), ExecutionError> {
-        Self::increment_check(
-            atomic,
-            increment,
-            self.maximum_bytes_read,
-            ExecutionError::ExcessiveRead,
-        )
+    fn increment_bytes_read(&self, increment: u64) -> Result<(), ExecutionError> {
+        if increment >= u64::MAX / 2 {
+            return Err(ExecutionError::ExcessiveRead);
+        }
+        self.bytes_read.fetch_add(increment, Ordering::Relaxed);
+        let bytes = self.bytes_read.load(Ordering::Acquire);
+        if bytes >= self.runtime_limits.max_budget_bytes_read {
+            return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
+        }
+        if bytes >= self.runtime_limits.maximum_bytes_read {
+            return Err(ExecutionError::ExcessiveRead);
+        }
+        Ok(())
     }
 
     fn increment_bytes_written(&self, increment: u64) -> Result<(), ExecutionError> {
-        Self::increment_check(
-            &self.bytes_written,
-            increment,
-            self.maximum_bytes_written,
-            ExecutionError::ExcessiveWrite,
-        )
+        if increment >= u64::MAX / 2 {
+            return Err(ExecutionError::ExcessiveWrite);
+        }
+        self.bytes_written.fetch_add(increment, Ordering::Relaxed);
+        let bytes = self.bytes_written.load(Ordering::Acquire);
+        if bytes >= self.runtime_limits.max_budget_bytes_written {
+            return Err(ExecutionError::ArithmeticError(ArithmeticError::Overflow));
+        }
+        if bytes >= self.runtime_limits.maximum_bytes_written {
+            return Err(ExecutionError::ExcessiveWrite);
+        }
+        Ok(())
     }
 }
 
@@ -433,9 +428,9 @@ where
         {
             Some(view) => {
                 let result = view.get(&key).await?;
-                self.increment_bytes_read(&self.num_reads, 1)?;
+                self.increment_num_reads()?;
                 if let Some(value) = &result {
-                    self.increment_bytes_read(&self.bytes_read, value.len() as u64)?;
+                    self.increment_bytes_read(value.len() as u64)?;
                 }
                 Ok(result)
             }
@@ -455,12 +450,12 @@ where
         {
             Some(view) => {
                 let keys = view.find_keys_by_prefix(&key_prefix).await?;
-                self.increment_bytes_read(&self.num_reads, 1)?;
+                self.increment_num_reads()?;
                 let mut read_size = 0;
                 for key in &keys {
                     read_size += key.len();
                 }
-                self.increment_bytes_read(&self.bytes_read, read_size as u64)?;
+                self.increment_bytes_read(read_size as u64)?;
                 Ok(keys)
             }
             None => Err(ExecutionError::ApplicationStateNotLocked),
@@ -479,12 +474,12 @@ where
         {
             Some(view) => {
                 let key_values = view.find_key_values_by_prefix(&key_prefix).await?;
-                self.increment_bytes_read(&self.num_reads, 1)?;
+                self.increment_num_reads()?;
                 let mut read_size = 0;
                 for (key, value) in &key_values {
                     read_size += key.len() + value.len();
                 }
-                self.increment_bytes_read(&self.bytes_read, read_size as u64)?;
+                self.increment_bytes_read(read_size as u64)?;
                 Ok(key_values)
             }
             None => Err(ExecutionError::ApplicationStateNotLocked),

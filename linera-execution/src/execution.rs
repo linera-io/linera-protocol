@@ -6,8 +6,8 @@ use crate::{
     system::SystemExecutionStateView,
     ContractRuntime, ExecutionError, ExecutionResult, ExecutionRuntimeContext, Message,
     MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionResult,
-    RawOutgoingMessage, ResourceControlPolicy, Response, RuntimeLimits, SystemMessage,
-    UserApplicationDescription, UserApplicationId,
+    RawOutgoingMessage, ResourceControlPolicy, Response, RuntimeLimits, RuntimeTracker,
+    SystemMessage, UserApplicationDescription, UserApplicationId,
 };
 use linera_base::{
     ensure,
@@ -129,14 +129,14 @@ where
             .user_applications()
             .insert(application_id, application);
 
-        let mut runtime_limits = RuntimeLimits::default();
+        let mut runtime_tracker = RuntimeTracker::default();
         let policy = ResourceControlPolicy::default();
         self.run_user_action(
             application_id,
             chain_id,
             action,
             &policy,
-            &mut runtime_limits,
+            &mut runtime_tracker,
         )
         .await?;
 
@@ -173,10 +173,11 @@ where
         chain_id: ChainId,
         action: UserAction<'_>,
         policy: &ResourceControlPolicy,
-        runtime_limits: &mut RuntimeLimits,
+        runtime_tracker: &mut RuntimeTracker,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
-        let balance = *self.system.balance.get();
-        let initial_remaining_fuel = policy.remaining_fuel(balance);
+        let balance = self.system.balance.get();
+        let runtime_limits = runtime_tracker.limits(policy, balance);
+        let initial_remaining_fuel = policy.remaining_fuel(*balance);
         // Try to load the application. This may fail if the corresponding
         // bytecode-publishing certificate doesn't exist yet on this validator.
         let description = self
@@ -205,7 +206,7 @@ where
             &mut session_manager,
             &mut results,
             initial_remaining_fuel,
-            *runtime_limits,
+            runtime_limits,
         );
         // Make the call to user code.
         let call_result = match action {
@@ -234,10 +235,7 @@ where
         result.authenticated_signer = signer;
         let runtime_counts = runtime.runtime_counts();
         let balance = self.system.balance.get_mut();
-        runtime_limits.update_limits(balance, policy, runtime_counts)?;
-        WASM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
-            .observe((initial_remaining_fuel - policy.remaining_fuel(*balance)) as f64);
+        runtime_tracker.update_limits(balance, policy, runtime_counts)?;
 
         // Check that applications were correctly stacked and unstacked.
         assert_eq!(applications.len(), 1);
@@ -278,7 +276,7 @@ where
         context: &OperationContext,
         operation: &Operation,
         policy: &ResourceControlPolicy,
-        runtime_limits: &mut RuntimeLimits,
+        runtime_tracker: &mut RuntimeTracker,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
@@ -295,7 +293,7 @@ where
                             context.chain_id,
                             user_action,
                             policy,
-                            runtime_limits,
+                            runtime_tracker,
                         )
                         .await?,
                     );
@@ -311,7 +309,7 @@ where
                     context.chain_id,
                     UserAction::Operation(context, bytes),
                     policy,
-                    runtime_limits,
+                    runtime_tracker,
                 )
                 .await
             }
@@ -323,7 +321,7 @@ where
         context: &MessageContext,
         message: &Message,
         policy: &ResourceControlPolicy,
-        runtime_limits: &mut RuntimeLimits,
+        runtime_tracker: &mut RuntimeTracker,
     ) -> Result<Vec<ExecutionResult>, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
@@ -340,7 +338,7 @@ where
                     context.chain_id,
                     UserAction::Message(context, bytes),
                     policy,
-                    runtime_limits,
+                    runtime_tracker,
                 )
                 .await
             }

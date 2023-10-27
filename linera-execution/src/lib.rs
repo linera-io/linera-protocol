@@ -61,6 +61,29 @@ pub fn sub_assign_fees(balance: &mut Amount, fees: Amount) -> Result<(), Pricing
 /// The entries of the runtime related to storage
 #[derive(Copy, Debug, Clone)]
 pub struct RuntimeLimits {
+    /// maximum_budget for reading
+    pub max_budget_num_reads: u64,
+    /// maximum budget of bytes read
+    pub max_budget_bytes_read: u64,
+    /// maximum budget of bytes written
+    pub max_budget_bytes_written: u64,
+    /// The maximum size of read allowed per block
+    pub maximum_bytes_read: u64,
+    /// The maximum size of write allowed per block
+    pub maximum_bytes_written: u64,
+}
+
+/// The entries of the runtime related to storage
+#[derive(Copy, Debug, Clone)]
+pub struct RuntimeTracker {
+    /// The used fuel in the computation
+    pub used_fuel: u64,
+    /// The number of reads in the computation
+    pub num_reads: u64,
+    /// The total number of bytes read
+    pub bytes_read: u64,
+    /// The total number of bytes written
+    pub bytes_written: u64,
     /// The maximum size of read allowed per block
     pub maximum_bytes_read: u64,
     /// The maximum size of write allowed per block
@@ -68,16 +91,32 @@ pub struct RuntimeLimits {
 }
 
 #[cfg(any(test, feature = "test"))]
-impl Default for RuntimeLimits {
+impl Default for RuntimeTracker {
     fn default() -> Self {
-        RuntimeLimits {
+        RuntimeTracker {
+            used_fuel: 0,
+            num_reads: 0,
+            bytes_read: 0,
+            bytes_written: 0,
             maximum_bytes_read: u64::MAX / 2,
             maximum_bytes_written: u64::MAX / 2,
         }
     }
 }
 
-impl RuntimeLimits {
+impl Default for RuntimeLimits {
+    fn default() -> Self {
+        RuntimeLimits {
+            max_budget_num_reads: u64::MAX / 2,
+            max_budget_bytes_read: u64::MAX / 2,
+            max_budget_bytes_written: u64::MAX / 2,
+            maximum_bytes_read: u64::MAX / 2,
+            maximum_bytes_written: u64::MAX / 2,
+        }
+    }
+}
+
+impl RuntimeTracker {
     /// Update the limits for the maximum and update the balance.
     /// The substraction are guaranteed to work correctly and the
     /// checks are occurring in the runtime.
@@ -87,20 +126,45 @@ impl RuntimeLimits {
         policy: &ResourceControlPolicy,
         runtime_counts: RuntimeCounts,
     ) -> Result<(), ExecutionError> {
+        // The fuel being used
         let initial_fuel = policy.remaining_fuel(*balance);
         let used_fuel = initial_fuel.saturating_sub(runtime_counts.remaining_fuel);
+        self.used_fuel += used_fuel;
         sub_assign_fees(balance, policy.fuel_price(used_fuel)?)?;
+        // The number of reads
         sub_assign_fees(
             balance,
             policy.storage_num_reads_price(&runtime_counts.num_reads)?,
         )?;
+        self.num_reads += runtime_counts.num_reads;
+        // The number of bytes read
         let bytes_read = runtime_counts.bytes_read;
         self.maximum_bytes_read -= bytes_read;
+        self.bytes_read += runtime_counts.bytes_read;
         sub_assign_fees(balance, policy.storage_bytes_read_price(&bytes_read)?)?;
+        // The number of bytes written
         let bytes_written = runtime_counts.bytes_written;
         self.maximum_bytes_written -= bytes_written;
+        self.bytes_written += bytes_written;
         sub_assign_fees(balance, policy.storage_bytes_written_price(&bytes_written)?)?;
         Ok(())
+    }
+
+    /// Obtain the limits for the running of the system
+    pub fn limits(&self, policy: &ResourceControlPolicy, balance: &Amount) -> RuntimeLimits {
+        let max_budget_num_reads =
+            u64::try_from(balance.saturating_div(policy.storage_num_reads)).unwrap_or(u64::MAX);
+        let max_budget_bytes_read =
+            u64::try_from(balance.saturating_div(policy.storage_bytes_read)).unwrap_or(u64::MAX);
+        let max_budget_bytes_written =
+            u64::try_from(balance.saturating_div(policy.storage_bytes_read)).unwrap_or(u64::MAX);
+        RuntimeLimits {
+            max_budget_num_reads,
+            max_budget_bytes_read,
+            max_budget_bytes_written,
+            maximum_bytes_read: self.maximum_bytes_read,
+            maximum_bytes_written: self.maximum_bytes_written,
+        }
     }
 }
 

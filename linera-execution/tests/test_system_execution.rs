@@ -12,7 +12,7 @@ use linera_execution::{
     policy::ResourceControlPolicy,
     system::{Account, Recipient, UserData},
     ExecutionResult, ExecutionStateView, Message, MessageContext, Operation, OperationContext,
-    Query, QueryContext, RawExecutionResult, Response, RuntimeLimits, SystemExecutionState,
+    Query, QueryContext, RawExecutionResult, Response, RuntimeTracker, SystemExecutionState,
     SystemMessage, SystemOperation, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
 };
 use linera_views::memory::MemoryContext;
@@ -39,14 +39,14 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         authenticated_signer: None,
         next_message_index: 0,
     };
-    let mut runtime_limits = RuntimeLimits::default();
+    let mut runtime_tracker = RuntimeTracker::default();
     let policy = ResourceControlPolicy::default();
     let results = view
         .execute_operation(
             &context,
             &Operation::System(operation),
             &policy,
-            &mut runtime_limits,
+            &mut runtime_tracker,
         )
         .await
         .unwrap();
@@ -85,14 +85,14 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         },
         authenticated_signer: None,
     };
-    let mut runtime_limits = RuntimeLimits::default();
+    let mut runtime_tracker = RuntimeTracker::default();
     let policy = ResourceControlPolicy::default();
     let results = view
         .execute_message(
             &context,
             &Message::System(message),
             &policy,
-            &mut runtime_limits,
+            &mut runtime_tracker,
         )
         .await
         .unwrap();

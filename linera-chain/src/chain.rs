@@ -23,7 +23,7 @@ use linera_execution::{
     system::{Account, SystemMessage},
     ExecutionResult, ExecutionRuntimeContext, ExecutionStateView, GenericApplicationId, Message,
     MessageContext, OperationContext, Query, QueryContext, RawExecutionResult, RawOutgoingMessage,
-    Response, RuntimeLimits, UserApplicationDescription, UserApplicationId,
+    Response, RuntimeTracker, UserApplicationDescription, UserApplicationId,
 };
 use linera_views::{
     common::Context,
@@ -509,7 +509,11 @@ where
         let mut message_counts = Vec::new();
         let maximum_bytes_read = policy.maximum_bytes_read;
         let maximum_bytes_written = policy.maximum_bytes_written;
-        let mut runtime_limits = RuntimeLimits {
+        let mut runtime_track = RuntimeTracker {
+            used_fuel: 0,
+            num_reads: 0,
+            bytes_read: 0,
+            bytes_written: 0,
             maximum_bytes_read,
             maximum_bytes_written,
         };
@@ -533,7 +537,7 @@ where
                     &context,
                     &message.event.message,
                     &policy,
-                    &mut runtime_limits,
+                    &mut runtime_track,
                 )
                 .await
                 .map_err(|err| {
@@ -558,7 +562,7 @@ where
             };
             let results = self
                 .execution_state
-                .execute_operation(&context, operation, &policy, &mut runtime_limits)
+                .execute_operation(&context, operation, &policy, &mut runtime_track)
                 .await
                 .map_err(|err| {
                     ChainError::ExecutionError(err, ChainExecutionContext::Operation(index))
@@ -588,7 +592,7 @@ where
             .observe(start_time.elapsed().as_secs_f64());
         WASM_FUEL_USED_PER_BLOCK
             .with_label_values(&[])
-            .observe(used_fuel as f64);
+            .observe(runtime_track.used_fuel as f64);
         Ok(BlockExecutionOutcome {
             messages,
             message_counts,

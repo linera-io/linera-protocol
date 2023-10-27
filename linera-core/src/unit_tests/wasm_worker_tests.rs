@@ -29,7 +29,7 @@ use linera_execution::{
     policy::ResourceControlPolicy,
     system::{SystemChannel, SystemMessage, SystemOperation},
     Bytecode, BytecodeLocation, ChainOwnership, ChannelSubscription, ExecutionStateView,
-    GenericApplicationId, Message, Operation, OperationContext, RuntimeLimits,
+    GenericApplicationId, Message, Operation, OperationContext, RuntimeTracker,
     SystemExecutionState, UserApplicationDescription, UserApplicationId, WasmApplication,
     WasmRuntime,
 };
@@ -424,7 +424,7 @@ where
         index: 0,
         next_message_index: 0,
     };
-    let mut runtime_limits = RuntimeLimits::default();
+    let mut runtime_tracker = RuntimeTracker::default();
     let policy = ResourceControlPolicy::default();
     creator_state
         .execute_operation(
@@ -434,7 +434,7 @@ where
                 bytes: user_operation,
             },
             &policy,
-            &mut runtime_limits,
+            &mut runtime_tracker,
         )
         .await?;
     creator_state.system.timestamp.set(Timestamp::from(5));

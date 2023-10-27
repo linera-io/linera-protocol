@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_execution::{
     policy::ResourceControlPolicy, ExecutionResult, ExecutionRuntimeContext, ExecutionStateView,
-    Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response, RuntimeLimits,
+    Operation, OperationContext, Query, QueryContext, RawExecutionResult, Response, RuntimeTracker,
     SystemExecutionState, TestExecutionRuntimeContext, WasmApplication, WasmRuntime,
 };
 use linera_views::{memory::MemoryContext, views::View};
@@ -73,7 +73,7 @@ async fn test_fuel_for_counter_wasm_application(
         fuel: Amount::from_atto(1),
         ..ResourceControlPolicy::default()
     };
-    let mut runtime_limits = RuntimeLimits::default();
+    let mut runtime_tracker = RuntimeTracker::default();
     let amount = Amount::from_tokens(1);
     let available_fuel = policy.remaining_fuel(amount);
     *view.system.balance.get_mut() = amount;
@@ -83,7 +83,7 @@ async fn test_fuel_for_counter_wasm_application(
                 &context,
                 &Operation::user(app_id, increment).unwrap(),
                 &policy,
-                &mut runtime_limits,
+                &mut runtime_tracker,
             )
             .await?;
         assert_eq!(
