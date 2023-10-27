@@ -9,7 +9,7 @@ function linera_spawn_and_read_wallet_variables() {
     # When the shell exits, we will clean up the top-level jobs (if any), the temporary
     # directory, and the main process. Handling future top-level jobs here is useful
     # because calling `trap` again will be replace this handler.
-    trap 'jobs -p | xargs -r kill && rm -rf "$LINERA_TMP_DIR"' EXIT
+    trap 'jobs -p | xargs -r kill; rm -rf "$LINERA_TMP_DIR"' EXIT
 
     LINERA_TMP_OUT="$LINERA_TMP_DIR/out"
     LINERA_TMP_ERR="$LINERA_TMP_DIR/err"
