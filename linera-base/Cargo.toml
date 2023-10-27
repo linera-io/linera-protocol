@@ -1,6 +1,6 @@
 [package]
 name = "linera-base"
-version = "0.4.1"
+version = "0.5.0"
 description = "Base definitions, including cryptography, used by the Linera protocol."
 authors = ["Linera <contact@linera.io>"]
 readme = "README.md"
