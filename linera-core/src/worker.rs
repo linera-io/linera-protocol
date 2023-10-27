@@ -427,13 +427,13 @@ where
     }
 
     /// Executes a [`Query`] for an application's state on a specific chain.
-    pub async fn handle_query(
+    pub async fn query_application(
         &mut self,
         chain_id: ChainId,
         query: &Query,
     ) -> Result<Response, WorkerError> {
         let mut chain = self.storage.load_active_chain(chain_id).await?;
-        let response = chain.handle_query(query).await?;
+        let response = chain.query_application(query).await?;
         Ok(response)
     }
 

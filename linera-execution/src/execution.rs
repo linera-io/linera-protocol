@@ -324,7 +324,7 @@ where
         }
     }
 
-    pub async fn handle_query(
+    pub async fn query_application(
         &mut self,
         context: &QueryContext,
         query: &Query,

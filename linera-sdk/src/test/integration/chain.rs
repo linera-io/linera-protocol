@@ -470,7 +470,7 @@ impl ActiveChain {
             .validator
             .worker()
             .await
-            .handle_query(
+            .query_application(
                 self.id(),
                 &Query::User {
                     application_id: application_id.forget_abi(),

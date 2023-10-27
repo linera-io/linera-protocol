@@ -1344,8 +1344,11 @@ where
     }
 
     /// Queries an application.
-    pub async fn handle_query(&self, query: &Query) -> Result<Response, ChainClientError> {
-        let response = self.node_client.handle_query(self.chain_id, query).await?;
+    pub async fn query_application(&self, query: &Query) -> Result<Response, ChainClientError> {
+        let response = self
+            .node_client
+            .query_application(self.chain_id, query)
+            .await?;
         Ok(response)
     }
 
@@ -1356,7 +1359,7 @@ where
     ) -> Result<SystemResponse, ChainClientError> {
         let response = self
             .node_client
-            .handle_query(self.chain_id, &Query::System(query))
+            .query_application(self.chain_id, &Query::System(query))
             .await?;
         match response {
             Response::System(response) => Ok(response),
@@ -1373,7 +1376,10 @@ where
         query: &A::Query,
     ) -> Result<A::QueryResponse, ChainClientError> {
         let query = Query::user(application_id, query)?;
-        let response = self.node_client.handle_query(self.chain_id, &query).await?;
+        let response = self
+            .node_client
+            .query_application(self.chain_id, &query)
+            .await?;
         match response {
             Response::User(response) => Ok(serde_json::from_slice(&response)?),
             _ => Err(ChainClientError::InternalError(

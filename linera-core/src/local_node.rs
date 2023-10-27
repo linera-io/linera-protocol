@@ -238,13 +238,13 @@ where
         Ok(self.handle_chain_info_query(query).await?.info)
     }
 
-    pub async fn handle_query(
+    pub async fn query_application(
         &self,
         chain_id: ChainId,
         query: &Query,
     ) -> Result<Response, LocalNodeError> {
         let mut node = self.node.lock().await;
-        let response = node.state.handle_query(chain_id, query).await?;
+        let response = node.state.query_application(chain_id, query).await?;
         Ok(response)
     }
 

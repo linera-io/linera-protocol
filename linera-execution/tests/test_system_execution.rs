@@ -101,7 +101,7 @@ async fn test_simple_system_query() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
     };
     let response = view
-        .handle_query(&context, &Query::System(SystemQuery))
+        .query_application(&context, &Query::System(SystemQuery))
         .await
         .unwrap();
     assert_eq!(
