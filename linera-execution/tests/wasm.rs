@@ -75,7 +75,6 @@ async fn test_fuel_for_counter_wasm_application(
     };
     let mut runtime_tracker = RuntimeTracker::default();
     let amount = Amount::from_tokens(1);
-    let available_fuel = policy.remaining_fuel(amount);
     *view.system.balance.get_mut() = amount;
     for increment in &increments {
         let result = view
@@ -94,9 +93,7 @@ async fn test_fuel_for_counter_wasm_application(
             )]
         );
     }
-    let balance = view.system.balance.get();
-    let remaining_fuel = policy.remaining_fuel(*balance);
-    assert_eq!(available_fuel - remaining_fuel, expected_fuel);
+    assert_eq!(runtime_tracker.used_fuel, expected_fuel);
 
     let context = QueryContext {
         chain_id: ChainId::root(0),

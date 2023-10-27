@@ -498,11 +498,11 @@ where
         sub_assign_fees(balance, policy.certificate_price())?;
         sub_assign_fees(
             balance,
-            policy.storage_bytes_written_price(&block.incoming_messages)?,
+            policy.storage_bytes_written_price_raw(&block.incoming_messages)?,
         )?;
         sub_assign_fees(
             balance,
-            policy.storage_bytes_written_price(&block.operations)?,
+            policy.storage_bytes_written_price_raw(&block.operations)?,
         )?;
 
         let mut messages = Vec::new();
