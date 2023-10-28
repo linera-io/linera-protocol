@@ -2,15 +2,18 @@
 
 ## Basics
 
+* Xcode command line tools
+    - `xcode-select --install`
 * Homebrew
-    - If possible, in user land e.g. in `$HOME/git/homebrew`
+    - If possible, install in user land e.g. in `$HOME/git/homebrew`
     - See https://docs.brew.sh/Installation#untar-anywhere
-* `brew install rustup-init`
-* `rustup target add wasm32-unknown-unknown`
+* Rust
+    - `brew install rustup-init`
+    - `rustup target add wasm32-unknown-unknown`
 * Protoc
     - `brew install protobuf`
 
-## Service
+## Services
 
 * https://aws.amazon.com/cli/
 * https://docs.docker.com/desktop/mac/install/
@@ -27,14 +30,17 @@
 
 ## Basics
 
-* `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-* `rustup target add wasm32-unknown-unknown`
+* Rust
+    - `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+    - `rustup target add wasm32-unknown-unknown`
 * Protoc
     - `curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.11/protoc-21.11-linux-x86_64.zip`
     - `unzip protoc-21.11-linux-x86_64.zip -d $HOME/.local`
     - If `~/.local` is not in your path, add it: `export PATH="$PATH:$HOME/.local/bin"`
 
-## Service
+Alternatively, we have added experimental Nix support (see `flake.nix`).
+
+## Services
 
 * https://aws.amazon.com/cli/
 * https://docs.docker.com/engine/install/
