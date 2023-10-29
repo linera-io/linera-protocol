@@ -79,6 +79,10 @@ pub enum ViewError {
         error: String,
     },
 
+    /// The key must not be too long
+    #[error("The key must not be too long")]
+    KeyTooLong,
+
     /// Errors can happen within the Wasm guest and have to be transmitted within the Host/Guest where only elementary types can pass.
     #[error("Following error occurs in wasm code: {0}")]
     WasmHostGuestError(String),

@@ -795,6 +795,9 @@ impl DynamoDbClientInternal {
         key_prefix: &[u8],
         start_key_map: Option<HashMap<String, AttributeValue>>,
     ) -> Result<QueryOutput, DynamoDbContextError> {
+        if key_prefix.len() > MAX_KEY_BYTES {
+            return Err(DynamoDbContextError::KeyTooLong);
+        }
         let _guard = self.acquire().await;
         let response = self
             .client

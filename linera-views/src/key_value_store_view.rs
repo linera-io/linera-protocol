@@ -394,6 +394,9 @@ where
     /// # })
     /// ```
     pub async fn get(&self, index: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
+        if index.len() > self.max_key_size() {
+            return Err(ViewError::KeyTooLong);
+        }
         if let Some(update) = self.updates.get(index) {
             let value = match update {
                 Update::Removed => None,
@@ -427,7 +430,11 @@ where
         let mut result = Vec::with_capacity(indices.len());
         let mut missed_indices = Vec::new();
         let mut vector_query = Vec::new();
+        let max_key_size = self.max_key_size();
         for (i, index) in indices.into_iter().enumerate() {
+            if index.len() > max_key_size {
+                return Err(ViewError::KeyTooLong);
+            }
             if let Some(update) = self.updates.get(&index) {
                 let value = match update {
                     Update::Removed => None,
@@ -528,6 +535,9 @@ where
     /// # })
     /// ```
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
+        if key_prefix.len() > self.max_key_size() {
+            return Err(ViewError::KeyTooLong);
+        }
         let len = key_prefix.len();
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut keys = Vec::new();
@@ -597,6 +607,9 @@ where
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
+        if key_prefix.len() > self.max_key_size() {
+            return Err(ViewError::KeyTooLong);
+        }
         let len = key_prefix.len();
         let key_prefix_full = self.context.base_tag_index(KeyTag::Index as u8, key_prefix);
         let mut key_values = Vec::new();
@@ -668,9 +681,13 @@ where
     /// ```
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
         *self.hash.get_mut() = None;
+        let max_key_size = self.max_key_size();
         for op in batch.operations {
             match op {
                 WriteOperation::Delete { key } => {
+                    if key.len() > max_key_size {
+                        return Err(ViewError::KeyTooLong);
+                    }
                     if self.was_cleared {
                         self.updates.remove(&key);
                     } else {
@@ -678,9 +695,15 @@ where
                     }
                 }
                 WriteOperation::Put { key, value } => {
+                    if key.len() > max_key_size {
+                        return Err(ViewError::KeyTooLong);
+                    }
                     self.updates.insert(key, Update::Set(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
+                    if key_prefix.len() > max_key_size {
+                        return Err(ViewError::KeyTooLong);
+                    }
                     self.delete_prefix(key_prefix);
                 }
             }

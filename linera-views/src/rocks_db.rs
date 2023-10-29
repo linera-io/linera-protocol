@@ -64,6 +64,9 @@ impl KeyValueStoreClient for RocksDbClientInternal {
     }
 
     async fn read_key_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbContextError> {
+        if key.len() > MAX_KEY_SIZE {
+            return Err(RocksDbContextError::KeyTooLong);
+        }
         let client = self.clone();
         let key = key.to_vec();
         Ok(tokio::task::spawn_blocking(move || client.db.get(&key)).await??)
@@ -73,6 +76,11 @@ impl KeyValueStoreClient for RocksDbClientInternal {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbContextError> {
+        for key in &keys {
+            if key.len() > MAX_KEY_SIZE {
+                return Err(RocksDbContextError::KeyTooLong);
+            }
+        }
         let client = self.clone();
         let entries = tokio::task::spawn_blocking(move || client.db.multi_get(&keys)).await?;
         Ok(entries.into_iter().collect::<Result<_, _>>()?)
@@ -82,6 +90,9 @@ impl KeyValueStoreClient for RocksDbClientInternal {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::Keys, RocksDbContextError> {
+        if key_prefix.len() > MAX_KEY_SIZE {
+            return Err(RocksDbContextError::KeyTooLong);
+        }
         let client = self.clone();
         let prefix = key_prefix.to_vec();
         let len = prefix.len();
@@ -108,6 +119,9 @@ impl KeyValueStoreClient for RocksDbClientInternal {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, RocksDbContextError> {
+        if key_prefix.len() > MAX_KEY_SIZE {
+            return Err(RocksDbContextError::KeyTooLong);
+        }
         let client = self.clone();
         let prefix = key_prefix.to_vec();
         let len = prefix.len();
@@ -163,9 +177,22 @@ impl KeyValueStoreClient for RocksDbClientInternal {
             let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
             for operation in batch.operations {
                 match operation {
-                    WriteOperation::Delete { key } => inner_batch.delete(&key),
-                    WriteOperation::Put { key, value } => inner_batch.put(&key, value),
+                    WriteOperation::Delete { key } => {
+                        if key.len() > MAX_KEY_SIZE {
+                            return Err(RocksDbContextError::KeyTooLong);
+                        }
+                        inner_batch.delete(&key)
+                    },
+                    WriteOperation::Put { key, value } => {
+                        if key.len() > MAX_KEY_SIZE {
+                            return Err(RocksDbContextError::KeyTooLong);
+                        }
+                        inner_batch.put(&key, value)
+                    },
                     WriteOperation::DeletePrefix { key_prefix } => {
+                        if key_prefix.len() > MAX_KEY_SIZE {
+                            return Err(RocksDbContextError::KeyTooLong);
+                        }
                         if let Excluded(upper_bound) = get_upper_bound(&key_prefix) {
                             inner_batch.delete_range(key_prefix, upper_bound);
                         }
@@ -401,6 +428,10 @@ pub enum RocksDbContextError {
     /// RocksDb error.
     #[error("RocksDb error: {0}")]
     RocksDb(#[from] rocksdb::Error),
+
+    /// The key must have at most 8M
+    #[error("The key must have at most 8M")]
+    KeyTooLong,
 
     /// Missing database
     #[error("Missing database")]
