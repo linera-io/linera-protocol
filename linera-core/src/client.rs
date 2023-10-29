@@ -13,6 +13,7 @@ use crate::{
     },
 };
 use futures::{
+    channel::mpsc,
     future,
     lock::Mutex,
     stream::{self, FuturesUnordered, StreamExt},
@@ -47,12 +48,10 @@ use std::{
     collections::{hash_map, BTreeMap, HashMap},
     iter,
     num::NonZeroUsize,
-    pin::Pin,
     sync::Arc,
     time::Duration,
 };
 use thiserror::Error;
-use tokio_stream::Stream;
 use tracing::{debug, error, info};
 
 #[cfg(any(test, feature = "test"))]
@@ -619,7 +618,7 @@ where
 
     async fn update_streams(
         this: &Arc<Mutex<Self>>,
-        streams: &mut HashMap<ValidatorName, Pin<Box<dyn Stream<Item = Notification> + Send>>>,
+        streams: &mut HashMap<ValidatorName, mpsc::UnboundedReceiver<Notification>>,
     ) -> Result<(), ChainClientError>
     where
         P: Send + 'static,
@@ -646,16 +645,22 @@ where
             };
             let this = this.clone();
             let local_node = local_node.clone();
-            let stream = stream.filter(move |notification| {
-                Box::pin(Self::process_notification(
-                    this.clone(),
-                    name,
-                    node.clone(),
-                    local_node.clone(),
-                    notification.clone(),
-                ))
-            });
-            entry.insert(Box::pin(stream));
+            let (sender, receiver) = mpsc::unbounded();
+            tokio::spawn(
+                stream
+                    .filter(move |notification| {
+                        Self::process_notification(
+                            this.clone(),
+                            name,
+                            node.clone(),
+                            local_node.clone(),
+                            notification.clone(),
+                        )
+                    })
+                    .map(Ok)
+                    .forward(sender),
+            );
+            entry.insert(receiver);
         }
         Ok(())
     }
