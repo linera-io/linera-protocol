@@ -14,6 +14,7 @@ use crate::{
 };
 use async_lock::Mutex;
 use futures::{
+    channel::mpsc,
     future,
     stream::{self, FuturesUnordered, StreamExt},
 };
@@ -47,12 +48,10 @@ use std::{
     collections::{hash_map, BTreeMap, HashMap},
     iter,
     num::NonZeroUsize,
-    pin::Pin,
     sync::Arc,
     time::Duration,
 };
 use thiserror::Error;
-use tokio_stream::Stream;
 use tracing::{debug, error, info};
 
 #[cfg(any(test, feature = "test"))]
@@ -619,7 +618,7 @@ where
 
     async fn update_streams(
         this: &Arc<Mutex<Self>>,
-        streams: &mut HashMap<ValidatorName, Pin<Box<dyn Stream<Item = Notification> + Send>>>,
+        streams: &mut HashMap<ValidatorName, mpsc::UnboundedReceiver<Notification>>,
     ) -> Result<(), ChainClientError>
     where
         P: Send + 'static,
@@ -637,7 +636,7 @@ where
             let hash_map::Entry::Vacant(entry) = streams.entry(name) else {
                 continue;
             };
-            let stream = match node.subscribe(vec![chain_id]).await {
+            let mut stream = match node.subscribe(vec![chain_id]).await {
                 Err(e) => {
                     info!("Could not connect to validator {name}: {e:?}");
                     continue;
@@ -646,16 +645,26 @@ where
             };
             let this = this.clone();
             let local_node = local_node.clone();
-            let stream = stream.filter(move |notification| {
-                Box::pin(Self::process_notification(
-                    this.clone(),
-                    name,
-                    node.clone(),
-                    local_node.clone(),
-                    notification.clone(),
-                ))
+            let (sender, receiver) = mpsc::unbounded();
+            tokio::spawn(async move {
+                while let Some(notification) = stream.next().await {
+                    let accept = Self::process_notification(
+                        this.clone(),
+                        name,
+                        node.clone(),
+                        local_node.clone(),
+                        notification.clone(),
+                    )
+                    .await;
+
+                    if accept {
+                        let Ok(()) = sender.unbounded_send(notification) else {
+                            break;
+                        };
+                    }
+                }
             });
-            entry.insert(Box::pin(stream));
+            entry.insert(receiver);
         }
         Ok(())
     }
